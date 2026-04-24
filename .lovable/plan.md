@@ -1,27 +1,38 @@
-## Contexto
+## Objetivo
 
-Hoje a classificação trata QUALQUER tag contendo a string "ANAMNESE" como sinal válido de ANAMNESE — incluindo `ANAMNESE-INCOMPLETA` e `ANAMNESE-INCOMPLETO`. Resultado: leads que **só preencheram parte do formulário** estão sendo contados como ANAMNESE no funil, inflando o canal.
+Tornar a classificação de canal **estritamente baseada em tags + compra A010**. Remover qualquer atribuição automática vinda de:
+- Nome da pipeline / origem (ex: `PILOTO ANAMNESE / INDICAÇÃO`)
+- Fallback "passou por R1 → ANAMNESE"
 
-### Diagnóstico (abril/2026, BU Incorporador)
-| Combinação de tags | Qtd deals | Como deve ser tratado |
-|---|---|---|
-| Só `ANAMNESE-INCOMPLETA` | **1.076** | NÃO é ANAMNESE → vira OUTROS (ou A010 se houver compra recente) |
-| `ANAMNESE-INCOMPLETA` + `ANAMNESE` | **547** | É ANAMNESE COMPLETA ✓ |
-| `ANAMNESE-INCOMPLETA` + `ANAMNESE-INSTA` | **33** | É ANAMNESE-INSTA COMPLETA ✓ |
-| Só `ANAMNESE` (sem incompleta) | 11 | É ANAMNESE ✓ |
-| Só `ANAMNESE-INSTA` | 1 | É ANAMNESE ✓ |
-| Sem nenhuma tag de anamnese | 1.223 | OUTROS / A010 conforme demais regras |
+## Regras finais de classificação
 
-**Regra confirmada pelo usuário:** uma anamnese só é "completa" quando o lead tem a tag `ANAMNESE` (ou `ANAMNESE-INSTA`/`LIVE`/`LANÇAMENTO`). A tag `ANAMNESE-INCOMPLETA` sozinha indica formulário abandonado e **não conta como canal ANAMNESE**.
+Hierarquia única (mesma no SQL e no TS):
+
+1. **A010** — compra A010 (`hubla_transactions` com `product_category = 'a010'` e `sale_status = 'completed'`) realizada **≤ 30 dias** antes da criação do deal.
+2. **ANAMNESE** —
+   - Tem tag válida (`ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`) **E** nenhuma das tags consideradas contém `INCOMPLET`; **OU**
+   - Tem compra A010 antiga (> 30 dias).
+3. **OUTROS** — qualquer outro caso. Inclui:
+   - Lead com **só** `ANAMNESE-INCOMPLETA`
+   - Lead em pipeline `PILOTO ANAMNESE / INDICAÇÃO` **sem** tag válida
+   - Lead que passou por R1 mas não tem tag nem compra A010
+
+> Origem/pipeline **não classifica mais** o canal.
 
 ## Mudanças
 
-### A) SQL — RPC `get_channel_funnel_metrics` (nova migration)
-Hoje (linha 37 da migration `20260424144922`):
+### A) SQL — nova migration: `get_channel_funnel_metrics`
+
+Atualmente a função considera `origin.name` como sinal de ANAMNESE. Remover:
+
+**Remover** (linhas que olham `crm_origins.name`):
 ```sql
-WHERE UPPER(t.val) ~ '(ANAMNESE|LIVE|LAN[CÇ]AMENTO)'
+OR (UPPER(o.name) ~ '(ANAMNESE|LIVE|LAN[CÇ]AMENTO)' AND UPPER(o.name) NOT LIKE '%INCOMPLET%')
 ```
-Esta regex captura `ANAMNESE-INCOMPLETA`. Precisa virar:
+
+**Remover** também o sinal vindo de `lead_channel`/origin para anamnese — a única fonte passa a ser a CTE de tags (já corrigida no passo anterior, que exclui `INCOMPLET`).
+
+A CTE de tags continua como na última migration:
 ```sql
 WHERE (
   UPPER(t.val) IN ('ANAMNESE','ANAMNESE-INSTA','LIVE','LEAD-LIVE','LANÇAMENTO','LANCAMENTO','LEAD-LANÇAMENTO','LEAD-LANCAMENTO')
@@ -29,46 +40,58 @@ WHERE (
 )
 AND UPPER(t.val) NOT LIKE '%INCOMPLET%'
 ```
-Mesma correção precisa ser aplicada na verificação de `origin.name` e `lead_channel` (linhas 39-40), embora origens dificilmente tenham "INCOMPLETA".
 
-Afeta: **Entradas, R1 Agend., R1 Realiz., No-Show, Contrato Pago** das colunas A010 / ANAMNESE / OUTROS.
+A regra A010 ≤30d permanece inalterada. Resultado: ~1.065 leads do `PILOTO ANAMNESE / INDICAÇÃO` que só têm `ANAMNESE-INCOMPLETA` migram de **ANAMNESE → OUTROS**.
 
 ### B) TS — `src/hooks/useChannelFunnelReport.ts`
-Função `classifyChannelWith30dRule` (linha 109) tem o mesmo bug na linha 119:
-```ts
-tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))
-```
 
-Substituir por uma verificação que:
-1. Normaliza cada tag (uppercase, trim).
-2. Considera sinal de ANAMNESE apenas se a tag for **exatamente** `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`, ou começar com `LIVE`.
-3. **Ignora explicitamente** qualquer tag que contenha `INCOMPLET` (cobre `INCOMPLETA` e `INCOMPLETO`).
+Em `classifyChannelWith30dRule`:
 
-Afeta: **R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana, Venda Final, Faturamento** (carrinho + parceria).
+1. **Remover** o uso de `originName` na decisão de canal (parâmetro pode permanecer, mas não influencia mais a classificação).
+2. **Remover** o fallback final que retornava `ANAMNESE` quando `reachedR1 === true` sem outros sinais.
+3. Manter:
+   - Regra A010 ≤30d → `'A010'`
+   - Tag válida (whitelist) sem `INCOMPLET` → `'ANAMNESE'`
+   - Compra A010 >30d → `'ANAMNESE'`
+4. Default final → `'OUTROS'`.
 
-### C) UI — tooltip
-Atualizar o cabeçalho/tooltip da coluna ANAMNESE em `src/components/relatorios/ChannelFunnelTable.tsx` para deixar explícito:
-> "ANAMNESE: leads com tag `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE` ou `LANÇAMENTO`. Leads com **apenas** `ANAMNESE-INCOMPLETA` (formulário abandonado) NÃO contam aqui."
+Helpers `isAnamneseTag` continuam válidos. Adicionar comentário explícito de que origem/pipeline não classifica mais.
+
+### C) UI — `src/components/relatorios/ChannelFunnelTable.tsx`
+
+Atualizar tooltips das colunas e da legenda do canal:
+> "ANAMNESE: leads com tag `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE` ou `LANÇAMENTO` (forms completos), OU compra A010 com mais de 30 dias. Pipeline/origem **não** classifica mais. Forms abandonados (`ANAMNESE-INCOMPLETA`) caem em OUTROS."
+>
+> "OUTROS: leads sem tag válida e sem compra A010 — incluindo formulários de anamnese abandonados e leads do pipeline Piloto Anamnese sem tag completa."
 
 ### D) Memória
-Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5` registrando que `ANAMNESE-INCOMPLETA` é tag-ruído e não classifica canal.
 
-## Resultado esperado
+Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5`:
+- Classificação de canal é **exclusivamente por tag + compra A010 (regra 30d)**.
+- Origem/pipeline **não** classifica canal.
+- Não há fallback "passou por R1 → ANAMNESE".
+- Tags com substring `INCOMPLET` são ruído e ignoradas.
 
-Em abril/2026:
-- **OUTROS** vai aumentar (recebe os ~1.076 deals que tinham SÓ `ANAMNESE-INCOMPLETA`), salvo aqueles que forem reclassificados como **A010** pela regra de compra ≤30d.
-- **ANAMNESE** vai reduzir: passa a contar apenas ~582 deals com `ANAMNESE` ou `ANAMNESE-INSTA` "real" (incompleta + completa).
-- **A010** permanece com a mesma lógica (compra fresca <30d).
+## Impacto esperado (abril/2026, BU Incorporador)
+
+| Canal | Antes | Depois (estimado) |
+|---|---|---|
+| ANAMNESE | 1.897 | ~830 (perde os ~1.065 do pipeline sem tag válida) |
+| A010 | 585 | ~585 (regra 30d intacta) |
+| OUTROS | 157 | ~1.222 |
+
+Métricas afetadas em todas as colunas: Entradas, R1 Agend., R1 Realiz., No-Show, R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana, Venda Final, Faturamento, Contrato Pago.
 
 ## Arquivos afetados
 
-1. **Nova migration SQL** — corrigir regex em `get_channel_funnel_metrics`.
-2. **`src/hooks/useChannelFunnelReport.ts`** — refinar `classifyChannelWith30dRule` para excluir `INCOMPLETA`.
-3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — tooltip da coluna ANAMNESE.
-4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar ruído de `ANAMNESE-INCOMPLETA`.
+1. **Nova migration SQL** — remover sinal de `origin.name` e `lead_channel` em `get_channel_funnel_metrics`.
+2. **`src/hooks/useChannelFunnelReport.ts`** — remover fallback de R1 e uso de `originName` na classificação.
+3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — tooltips atualizados.
+4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar regra final.
 
-## Confirmações
+## Validação após deploy
 
-1. Tags consideradas **válidas para ANAMNESE**: `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`. Tudo que contiver `INCOMPLET` é ignorado. **Ok?**
-2. Lead com **só** `ANAMNESE-INCOMPLETA` (sem outra tag) e **sem compra A010 recente** → cai em **OUTROS**. **Ok?**
-3. Lead com `ANAMNESE-INCOMPLETA` + `ANAMNESE` continua sendo **ANAMNESE** (anamnese completa). **Ok?**
+Rodar consulta para abril/2026:
+- Confirmar que canal **OUTROS** absorve os deals do `PILOTO ANAMNESE` sem tag válida.
+- Confirmar que ANAMNESE só conta deals com tag whitelist (sem `INCOMPLET`) ou compra A010 >30d.
+- Confirmar que A010 mantém os ~585 deals com compra ≤30d.
