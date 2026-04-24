@@ -1,4 +1,4 @@
-import { Calendar, CheckCircle, XCircle, TrendingUp, FileText, RotateCcw } from "lucide-react";
+import { Calendar, CalendarCheck, CheckCircle, XCircle, TrendingUp, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
@@ -11,6 +11,7 @@ export interface MeetingSummaryV2 {
   primeiroAgendamento: number;
   reagendamento: number;
   totalAgendamentos: number;
+  r1Agendada: number;
   noShows: number;
   realizadas: number;
   contratos: number;
@@ -44,6 +45,7 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
         primeiroAgendamento: summary.reunioesAgendadas,
         reagendamento: 0,
         totalAgendamentos: summary.reunioesAgendadas,
+        r1Agendada: summary.reunioesAgendadas,
         noShows: summary.noShows,
         realizadas: summary.reunioesRealizadas,
         contratos: 0,
@@ -55,12 +57,20 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
 
   const cards = [
     {
-      title: "Total Agendamentos",
+      title: "Agendamentos",
       value: normalizedSummary.totalAgendamentos,
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: `1º Agendamento: ${normalizedSummary.primeiroAgendamento}\nReagendamento: ${normalizedSummary.reagendamento}`
+      tooltip: "Reuniões CRIADAS no período (data do agendamento feito pelo SDR)"
+    },
+    {
+      title: "R1 Agendada",
+      value: normalizedSummary.r1Agendada,
+      icon: CalendarCheck,
+      color: "text-cyan-500",
+      bgColor: "bg-cyan-500/10",
+      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)"
     },
     {
       title: "Realizadas",
@@ -84,7 +94,7 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Realizadas / Total Agendamentos × 100"
+      tooltip: "Realizadas / R1 Agendada × 100"
     },
     {
       title: "Contratos",
@@ -101,7 +111,7 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
         {visibleCards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
