@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO, subMonths, addMonths } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO, subMonths, addMonths, format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +22,7 @@ import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable"
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
+import { SdrContractsListModal } from "@/components/sdr/SdrContractsListModal";
 
 import {
   useSdrPerformanceData,
@@ -41,6 +44,7 @@ export default function SdrMeetingsDetailPage() {
 
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [contractsOpen, setContractsOpen] = useState(false);
 
   // Initial dates from URL
   const initialDates = useMemo(() => {
@@ -111,6 +115,25 @@ export default function SdrMeetingsDetailPage() {
   });
   const allMeetings = allMeetingsQuery.data || [];
 
+  // Resolve sdrId by email for the contracts modal
+  const { data: sdrRow } = useQuery({
+    queryKey: ["sdr-id-by-email", sdrEmail],
+    queryFn: async () => {
+      if (!sdrEmail) return null;
+      const { data } = await supabase
+        .from("sdr")
+        .select("id")
+        .eq("email", sdrEmail)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!sdrEmail,
+    staleTime: 5 * 60_000,
+  });
+
+  // Selected month for the contracts modal: derived from the active period (endDate)
+  const anoMes = useMemo(() => format(endDate, "yyyy-MM"), [endDate]);
+
   const handleBack = () => {
     const params = new URLSearchParams();
     params.set("preset", preset);
@@ -164,7 +187,13 @@ export default function SdrMeetingsDetailPage() {
 
           {/* KPI Cards + Projection side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-            <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
+            <SdrDetailKPICards
+              metrics={perfData.metrics}
+              isLoading={perfData.isLoading}
+              onMetricClick={(key) => {
+                if (key === "contratos") setContractsOpen(true);
+              }}
+            />
             <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
           </div>
 
@@ -195,6 +224,14 @@ export default function SdrMeetingsDetailPage() {
       </Tabs>
 
       <SdrMeetingActionsDrawer meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onRefresh={() => { perfData.refetch(); allMeetingsQuery.refetch(); }} />
+
+      <SdrContractsListModal
+        open={contractsOpen}
+        onClose={() => setContractsOpen(false)}
+        sdrId={sdrRow?.id}
+        sdrName={perfData.sdrInfo?.name || sdrEmail.split("@")[0]}
+        anoMes={anoMes}
+      />
     </div>
   );
 }
