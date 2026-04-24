@@ -77,11 +77,16 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background min-w-[160px]">Canal</TableHead>
+                    <TableHead className="sticky left-0 bg-background min-w-[160px]">
+                      <HeaderWithInfo
+                        label="Canal"
+                        info="ANAMNESE: leads com tag ANAMNESE, ANAMNESE-INSTA, LIVE ou LANÇAMENTO (anamnese completa). Leads com APENAS a tag ANAMNESE-INCOMPLETA (formulário abandonado) NÃO contam como ANAMNESE — caem em OUTROS (ou A010 se houver compra A010 nos últimos 30 dias)."
+                      />
+                    </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Entradas"
-                        info="Deals criados no período (crm_deals.created_at), filtrados pela BU. Classificados pelas tags do deal."
+                        info="Deals criados no período (crm_deals.created_at), filtrados pela BU. Classificados pelas tags do deal. Tag ANAMNESE-INCOMPLETA isolada não conta como ANAMNESE (formulário abandonado)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
@@ -101,7 +106,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui A000-Contrato, renovações, Club isolado, A010, Vitalício, e clientes que já eram parceiros nos últimos 12 meses. Bruto = reference_price. Líquido = valor recebido no Hubla. Canal (regra dos 30 dias): (1) compra A010 ≤30 dias antes da venda → A010, mesmo com tag Anamnese; (2) tags LIVE/ANAMNESE/ANAMNESE-INSTA/LANÇAMENTO → ANAMNESE; (3) compra A010 >30 dias → ANAMNESE (lead reciclado); (4) só tag A010 sem compra → A010; (5) sem nenhum sinal → OUTROS."
+                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui A000-Contrato, renovações, Club isolado, A010, Vitalício, e clientes que já eram parceiros nos últimos 12 meses. Bruto = reference_price. Líquido = valor recebido no Hubla. Canal (regra dos 30 dias): (1) compra A010 ≤30 dias antes da venda → A010, mesmo com tag Anamnese; (2) tags LIVE/ANAMNESE/ANAMNESE-INSTA/LANÇAMENTO (completas — INCOMPLETA não conta) → ANAMNESE; (3) compra A010 >30 dias → ANAMNESE (lead reciclado); (4) só tag A010 sem compra → A010; (5) sem nenhum sinal → OUTROS."
                       />
                     </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>
