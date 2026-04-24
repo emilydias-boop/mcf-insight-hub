@@ -66,6 +66,11 @@ interface ChannelMetricsResponse {
 interface CarrinhoFunnelRow {
   deal_id: string | null;
   r2_status_name: string | null;
+  meeting_status: string | null;
+  attendee_status: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  attendee_phone: string | null;
 }
 
 function normalizeFunnelChannel(raw: string): string {
@@ -168,6 +173,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         (data || []).forEach((r: any) => all.push({
           deal_id: r.deal_id,
           r2_status_name: r.r2_status_name,
+          meeting_status: r.meeting_status,
+          attendee_status: r.attendee_status,
+          contact_email: r.contact_email,
+          contact_phone: r.contact_phone,
+          attendee_phone: r.attendee_phone,
         }));
       }
       return all;
