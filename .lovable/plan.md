@@ -1,59 +1,68 @@
-# Correção de Fuso Horário em `useCloserAgendaMetrics`
+## 🧹 Plano de Limpeza — Risco Zero
 
-## 🎯 Problema identificado
+Verificação cruzada (`rg`) confirma que **nenhum dos itens abaixo é importado/referenciado** em qualquer lugar do código frontend ativo. A integração Clint foi oficialmente encerrada em 05/04/2026 (leads chegam via Hubla webhook direto).
 
-O hook `src/hooks/useCloserAgendaMetrics.ts` (usado nas páginas de detalhe individual de SDR/Closer) constrói filtros de data como strings literais:
+---
 
-```ts
-.gte('scheduled_at', `${startDate}T00:00:00`)
-.lte('scheduled_at', `${endDate}T23:59:59`)
-.gte('contract_paid_at', `${startDate}T00:00:00`)
-.lte('contract_paid_at', `${endDate}T23:59:59`)
-```
+### 🗑️ 1. Edge Functions Clint (9 funções, ~150KB)
 
-O Postgres interpreta essas strings sem timezone como **UTC**. Como o Brasil está em **UTC-3**, qualquer evento entre **21:00 e 23:59 BRT** é deslocado para o dia seguinte nos filtros mensais — exatamente o caso da Rosemeire (paga 23/04 às 22:18 BRT = 24/04 01:18 UTC).
+Remover do filesystem **e** deletar do Supabase via `delete_edge_functions`:
 
-Os demais hooks do painel (`useR1CloserMetrics`, `useR2MeetingSlotsKPIs`) e as RPCs (`get_sdr_metrics_from_agenda`, `get_sdr_meetings_from_agenda`) **já tratam corretamente** o fuso BRT. Essa é a única fonte de divergência detectada.
+- `supabase/functions/clint-api/`
+- `supabase/functions/clint-webhook-handler/`
+- `supabase/functions/sync-clint-data/`
+- `supabase/functions/sync-contacts/`
+- `supabase/functions/sync-deals/`
+- `supabase/functions/sync-deals-from-agenda/` *(órfã no frontend)*
+- `supabase/functions/sync-link-contacts/`
+- `supabase/functions/sync-origins-stages/`
+- `supabase/functions/sync-by-origin/`
+- `supabase/functions/import-contacts-csv/` *(import CSV Clint, sem uso)*
+- `supabase/functions/import-deals-csv/` *(import CSV Clint, sem uso)*
 
-## 🔧 Mudanças
+**Limpar 11 entradas correspondentes em `supabase/config.toml`.**
 
-### Arquivo único: `src/hooks/useCloserAgendaMetrics.ts`
+---
 
-1. Importar `addHours` do `date-fns`.
+### 🗑️ 2. Componentes Clint órfãos
 
-2. Substituir as strings `yyyy-MM-dd` por timestamps ISO ajustados para BRT:
+- `src/components/crm/SyncControls.tsx` *(card "Desativado")*
+- `src/components/crm/SyncMonitor.tsx` *(monitor de jobs Clint)*
+- `src/components/crm/CronJobSetup.tsx` *(card "Desativado")*
 
-```ts
-const monthStart = startOfMonth(monthDate);
-const monthEnd = endOfMonth(monthDate);
-const startISO = addHours(monthStart, 3).toISOString();           // 00:00 BRT
-const endEnd = new Date(monthEnd); endEnd.setHours(23,59,59,999);
-const endISO = addHours(endEnd, 3).toISOString();                  // 23:59:59.999 BRT
-```
+---
 
-3. Atualizar as 8 ocorrências de filtros que hoje usam `${startDate}T00:00:00` / `${endDate}T23:59:59`:
-   - `meeting_slots.scheduled_at` (bloco 4 — range principal)
-   - `meeting_slot_attendees.contract_paid_at` (bloco 6 — contratos por data de pagamento)
-   - `meeting_slots.scheduled_at` no fallback de contratos sem timestamp
-   - `meeting_slots.scheduled_at` na busca de R2 via `r1DealIds`
-   - `meeting_slots.scheduled_at` na busca direta de R2 do closer
+### 🗑️ 3. Hooks Clint órfãos
 
-   Todas passam a usar `startISO` / `endISO`.
+- `src/hooks/useClintFunnel.ts`
+- `src/hooks/useClintFunnelByLeadType.ts`
 
-4. Sem alteração de lógica de negócio — apenas a janela temporal. Outside, partner e atribuição permanecem idênticos.
+⚠️ **Antes de deletar `useClintFunnelByLeadType.ts`**, vou reconfirmar que `FunilDuplo.tsx` (que o usa) também está órfão. Se `FunilDuplo` ainda for usado em algum dashboard, mantenho o hook.
 
-## ✅ Validação esperada
+---
 
-- O contrato da **Rosemeire (23/04 22:18 BRT)** passa a ser atribuído ao dia 23/04 nas métricas individuais.
-- Métricas individuais passam a bater com o painel agregado, que já está em BRT.
-- Sem risco para fechamentos: eventos em horário comercial (09–18 BRT) já caíam corretos em ambos os fusos.
+### 🗑️ 4. Páginas placeholder vazias
 
-## 📁 Arquivos afetados
+- `src/pages/Index.tsx` *("Welcome to Your Blank App" — sem rota)*
+- `src/pages/bu-consorcio/CRM.tsx` *(`return null` — sem rota)*
 
-- `src/hooks/useCloserAgendaMetrics.ts` (único)
+---
 
-## 🚫 Fora de escopo
+### ✅ O que NÃO será mexido
 
-- RPCs SQL (já com `AT TIME ZONE 'America/Sao_Paulo'`)
-- Hooks `useR1CloserMetrics`, `useR2MeetingSlotsKPIs` (já com `addHours(date, 3)`)
-- Outros painéis não relacionados ao detalhe individual
+- Campo `clint_id` em `crm_contacts` (referência histórica, conforme memória).
+- Tabelas `crm_origins`, `crm_stages`, `crm_groups`, `sync_jobs` (usadas por outras partes do CRM).
+- `reprocess-failed-webhooks` (mantida — pode reprocessar webhooks Hubla).
+- Hooks/componentes que **podem** estar sendo usados via dynamic import (Fase 2/3 — não incluído).
+
+---
+
+### 📋 Execução
+
+1. Reconfirmar uso de `FunilDuplo.tsx` (decide se hook B fica/sai).
+2. Deletar 11 pastas de edge functions + chamar `delete_edge_functions` com a lista.
+3. Limpar `supabase/config.toml` removendo as 11 seções `[functions.<nome>]`.
+4. Deletar 3 componentes + 1-2 hooks + 2 páginas.
+5. Rodar build mental check (TypeScript) — nenhum import quebrado esperado pois já validamos via `rg`.
+
+**Estimativa:** ~180KB de código removido, ~14 arquivos deletados, zero impacto funcional.
