@@ -101,7 +101,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui: A000-Contrato (parcela mensal), renovações (A006, A009-Renovação), Club isolado, A010, Vitalício e produtos auxiliares. Também exclui clientes que já eram parceiros nos últimos 12 meses (recompras/upsells). Bruto = reference_price configurado em Produtos. Líquido = valor recebido no Hubla. Canal: A010/ANAMNESE quando o lead foi reconhecido em R1 (via tags ou pipeline); OUTROS quando comprou sem passar pelo funil."
+                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui A000-Contrato, renovações, Club isolado, A010, Vitalício, e clientes que já eram parceiros nos últimos 12 meses. Bruto = reference_price. Líquido = valor recebido no Hubla. Canal (regra dos 30 dias): (1) compra A010 ≤30 dias antes da venda → A010, mesmo com tag Anamnese; (2) tags LIVE/ANAMNESE/ANAMNESE-INSTA/LANÇAMENTO → ANAMNESE; (3) compra A010 >30 dias → ANAMNESE (lead reciclado); (4) só tag A010 sem compra → A010; (5) sem nenhum sinal → OUTROS."
                       />
                     </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>
