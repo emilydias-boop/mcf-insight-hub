@@ -511,14 +511,29 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       slot.contratoPago = c.contratos || 0;
     });
 
-    // Carrinho — Aprovado / Reprovado / Próxima semana (deduplicado por deal)
-    // Como a RPC nova não retorna deal_id por canal, contamos no balde "OUTROS" os
-    // sem mapeamento; o Carrinho é uma visão complementar e o número agregado é o que importa.
+    // Carrinho — R2 Agendada/Realizada + Aprovado/Reprovado/Próxima semana
+    // Distribuído por canal usando o mapa deal_id → canal (tags/origem do deal).
+    // Deduplicado por deal_id (cada lead conta uma vez).
     const seenCarrinho = new Set<string>();
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const slot = get('OUTROS'); // sem deal->channel map aqui; soma vai para Total
+      const channel = dealChannelMap.get(c.deal_id) || 'OUTROS';
+      const slot = get(channel);
+
+      // R2 Agendadas: todos exceto cancelados/reagendados
+      const attStatus = (c.attendee_status || '').toLowerCase();
+      const meetingStatus = (c.meeting_status || '').toLowerCase();
+      const isCancelled = attStatus === 'cancelled' || attStatus === 'rescheduled';
+      if (!isCancelled) slot.r2Agendada++;
+
+      // R2 Realizadas: completed / contract_paid / refunded
+      if (
+        attStatus === 'completed' || attStatus === 'contract_paid' || attStatus === 'refunded' ||
+        meetingStatus === 'completed'
+      ) slot.r2Realizada++;
+
+      // Status do carrinho (Aprovado / Reprovado / Próxima Semana)
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
       else if (status.includes('próxima') || status.includes('proxima') || status.includes('next')) slot.proximaSemana++;
@@ -576,7 +591,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [channelMetrics, carrinhoRows, parceriaConversions]);
+  }, [channelMetrics, carrinhoRows, parceriaConversions, dealChannelMap]);
 
   return {
     rows,
