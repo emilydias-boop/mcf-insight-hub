@@ -416,6 +416,76 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
+  // 2c. Índice de classificação por canal para os deals do Carrinho.
+  // Reaproveita a mesma lógica de tags/origem que classifica Venda Final.
+  // Indexado por deal_id (vem direto do RPC do carrinho).
+  const carrinhoDealIds = useMemo(
+    () => Array.from(new Set(carrinhoRows.map(c => c.deal_id).filter(Boolean) as string[])),
+    [carrinhoRows]
+  );
+
+  const { data: dealChannelMap = new Map<string, string>() } = useQuery<Map<string, string>>({
+    queryKey: ['funnel-carrinho-deal-channels', carrinhoDealIds.join(',')],
+    queryFn: async () => {
+      const m = new Map<string, string>();
+      if (carrinhoDealIds.length === 0) return m;
+
+      // Busca tags + origem dos deals do carrinho em lotes
+      const deals: Array<{ id: string; tags: any[] | null; origin_id: string | null }> = [];
+      const chunkSize = 200;
+      for (let i = 0; i < carrinhoDealIds.length; i += chunkSize) {
+        const chunk = carrinhoDealIds.slice(i, i + chunkSize);
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .select('id, tags, origin_id')
+          .in('id', chunk);
+        if (error) {
+          console.warn('[useChannelFunnelReport] deal channels query error', error);
+          continue;
+        }
+        deals.push(...((data as any[]) || []));
+      }
+
+      // Resolve nomes de origens
+      const originIds = new Set<string>();
+      deals.forEach(d => { if (d.origin_id) originIds.add(d.origin_id); });
+      const originNameById = new Map<string, string>();
+      if (originIds.size > 0) {
+        const { data: origins } = await supabase
+          .from('crm_origins')
+          .select('id, name')
+          .in('id', Array.from(originIds));
+        (origins || []).forEach((o: any) => originNameById.set(o.id, (o.name || '').toUpperCase()));
+      }
+
+      const classify = (tagsRaw: any[] | null, originId: string | null): string => {
+        const tags: string[] = (tagsRaw || []).map((t: any) => {
+          if (typeof t === 'string') {
+            if (t.startsWith('{')) {
+              try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
+            }
+            return t.toUpperCase();
+          }
+          return (t?.name || '').toUpperCase();
+        });
+        if (tags.some(t => t.includes('A010'))) return 'A010';
+        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
+        const originName = originId ? (originNameById.get(originId) || '') : '';
+        if (originName.includes('A010')) return 'A010';
+        if (originName.includes('ANAMNESE') || originName.includes('LIVE') || originName.includes('LANÇ') || originName.includes('LANC')) return 'ANAMNESE';
+        // Lead chegou ao R2: foi reconhecido pelo funil → ANAMNESE como default
+        return 'ANAMNESE';
+      };
+
+      deals.forEach(d => {
+        m.set(d.id, classify(d.tags, d.origin_id));
+      });
+      return m;
+    },
+    enabled: carrinhoDealIds.length > 0,
+    staleTime: 60_000,
+  });
+
   // 3. Agregação por canal (3 buckets fixos)
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
