@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth, endOfMonth, addHours } from "date-fns";
 
 /**
  * Métricas de Closer baseadas na Agenda (meeting_slots/meeting_slot_attendees)
@@ -57,10 +57,16 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       const closerId = closer.id;
 
       // 3. Calcular período do mês
+      // BRT (UTC-3): convertemos os limites BRT para UTC adicionando 3h ao
+      // construir o ISO. Isso garante que eventos ocorridos entre 21:00 e
+      // 23:59 BRT (que em UTC caem no dia seguinte) sejam atribuídos ao
+      // dia BRT correto — mesmo padrão já usado em useR1CloserMetrics.
       const [year, month] = anoMes.split('-').map(Number);
       const monthDate = new Date(year, month - 1, 1);
-      const startDate = format(startOfMonth(monthDate), 'yyyy-MM-dd');
-      const endDate = format(endOfMonth(monthDate), 'yyyy-MM-dd');
+      const monthStart = startOfMonth(monthDate); // 00:00 local
+      const monthEnd = endOfMonth(monthDate);     // 23:59:59.999 local
+      const startISO = addHours(monthStart, 3).toISOString();
+      const endISO = addHours(monthEnd, 3).toISOString();
 
       // 4. Buscar todos os meeting_slots do closer no período
       const { data: slots, error: slotsError } = await supabase
@@ -77,8 +83,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           )
         `)
         .eq('closer_id', closerId)
-        .gte('scheduled_at', `${startDate}T00:00:00`)
-        .lte('scheduled_at', `${endDate}T23:59:59`);
+        .gte('scheduled_at', startISO)
+        .lte('scheduled_at', endISO);
 
       if (slotsError) {
         console.error('[useCloserAgendaMetrics] Error fetching slots:', slotsError);
@@ -184,8 +190,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         .in('status', ['contract_paid', 'refunded'])
         .eq('is_partner', false)
         .not('contract_paid_at', 'is', null)
-        .gte('contract_paid_at', `${startDate}T00:00:00`)
-        .lte('contract_paid_at', `${endDate}T23:59:59`);
+        .gte('contract_paid_at', startISO)
+        .lte('contract_paid_at', endISO);
 
       if (contractsError) {
         console.error('[useCloserAgendaMetrics] Error fetching contracts by payment date:', contractsError);
@@ -203,8 +209,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         .in('status', ['contract_paid', 'refunded'])
         .eq('is_partner', false)
         .is('contract_paid_at', null)
-        .gte('meeting_slot.scheduled_at', `${startDate}T00:00:00`)
-        .lte('meeting_slot.scheduled_at', `${endDate}T23:59:59`);
+        .gte('meeting_slot.scheduled_at', startISO)
+        .lte('meeting_slot.scheduled_at', endISO);
 
       if (fallbackError) {
         console.error('[useCloserAgendaMetrics] Error fetching contracts fallback:', fallbackError);
@@ -273,8 +279,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           .select('id, deal_id, created_at')
           .eq('meeting_type', 'r2')
           .in('deal_id', r1DealIds)
-          .gte('scheduled_at', `${startDate}T00:00:00`)
-          .lte('scheduled_at', `${endDate}T23:59:59`);
+          .gte('scheduled_at', startISO)
+          .lte('scheduled_at', endISO);
 
         if (!r2Error && r2Slots) {
           r2_agendadas = r2Slots.filter((r2: any) => {
@@ -290,8 +296,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
           .select('id, deal_id, created_at')
           .eq('closer_id', closerId)
           .eq('meeting_type', 'r2')
-          .gte('scheduled_at', `${startDate}T00:00:00`)
-          .lte('scheduled_at', `${endDate}T23:59:59`);
+          .gte('scheduled_at', startISO)
+          .lte('scheduled_at', endISO);
 
         if (!r2DirectError && r2Direct) {
           r2_agendadas = r2Direct.filter((r2: any) => {

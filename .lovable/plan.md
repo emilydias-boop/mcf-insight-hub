@@ -1,97 +1,59 @@
-## Objetivo
+# Correção de Fuso Horário em `useCloserAgendaMetrics`
 
-Tornar a classificação de canal **estritamente baseada em tags + compra A010**. Remover qualquer atribuição automática vinda de:
-- Nome da pipeline / origem (ex: `PILOTO ANAMNESE / INDICAÇÃO`)
-- Fallback "passou por R1 → ANAMNESE"
+## 🎯 Problema identificado
 
-## Regras finais de classificação
+O hook `src/hooks/useCloserAgendaMetrics.ts` (usado nas páginas de detalhe individual de SDR/Closer) constrói filtros de data como strings literais:
 
-Hierarquia única (mesma no SQL e no TS):
-
-1. **A010** — compra A010 (`hubla_transactions` com `product_category = 'a010'` e `sale_status = 'completed'`) realizada **≤ 30 dias** antes da criação do deal.
-2. **ANAMNESE** —
-   - Tem tag válida (`ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`) **E** nenhuma das tags consideradas contém `INCOMPLET`; **OU**
-   - Tem compra A010 antiga (> 30 dias).
-3. **OUTROS** — qualquer outro caso. Inclui:
-   - Lead com **só** `ANAMNESE-INCOMPLETA`
-   - Lead em pipeline `PILOTO ANAMNESE / INDICAÇÃO` **sem** tag válida
-   - Lead que passou por R1 mas não tem tag nem compra A010
-
-> Origem/pipeline **não classifica mais** o canal.
-
-## Mudanças
-
-### A) SQL — nova migration: `get_channel_funnel_metrics`
-
-Atualmente a função considera `origin.name` como sinal de ANAMNESE. Remover:
-
-**Remover** (linhas que olham `crm_origins.name`):
-```sql
-OR (UPPER(o.name) ~ '(ANAMNESE|LIVE|LAN[CÇ]AMENTO)' AND UPPER(o.name) NOT LIKE '%INCOMPLET%')
+```ts
+.gte('scheduled_at', `${startDate}T00:00:00`)
+.lte('scheduled_at', `${endDate}T23:59:59`)
+.gte('contract_paid_at', `${startDate}T00:00:00`)
+.lte('contract_paid_at', `${endDate}T23:59:59`)
 ```
 
-**Remover** também o sinal vindo de `lead_channel`/origin para anamnese — a única fonte passa a ser a CTE de tags (já corrigida no passo anterior, que exclui `INCOMPLET`).
+O Postgres interpreta essas strings sem timezone como **UTC**. Como o Brasil está em **UTC-3**, qualquer evento entre **21:00 e 23:59 BRT** é deslocado para o dia seguinte nos filtros mensais — exatamente o caso da Rosemeire (paga 23/04 às 22:18 BRT = 24/04 01:18 UTC).
 
-A CTE de tags continua como na última migration:
-```sql
-WHERE (
-  UPPER(t.val) IN ('ANAMNESE','ANAMNESE-INSTA','LIVE','LEAD-LIVE','LANÇAMENTO','LANCAMENTO','LEAD-LANÇAMENTO','LEAD-LANCAMENTO')
-  OR UPPER(t.val) ~ '^LIVE'
-)
-AND UPPER(t.val) NOT LIKE '%INCOMPLET%'
+Os demais hooks do painel (`useR1CloserMetrics`, `useR2MeetingSlotsKPIs`) e as RPCs (`get_sdr_metrics_from_agenda`, `get_sdr_meetings_from_agenda`) **já tratam corretamente** o fuso BRT. Essa é a única fonte de divergência detectada.
+
+## 🔧 Mudanças
+
+### Arquivo único: `src/hooks/useCloserAgendaMetrics.ts`
+
+1. Importar `addHours` do `date-fns`.
+
+2. Substituir as strings `yyyy-MM-dd` por timestamps ISO ajustados para BRT:
+
+```ts
+const monthStart = startOfMonth(monthDate);
+const monthEnd = endOfMonth(monthDate);
+const startISO = addHours(monthStart, 3).toISOString();           // 00:00 BRT
+const endEnd = new Date(monthEnd); endEnd.setHours(23,59,59,999);
+const endISO = addHours(endEnd, 3).toISOString();                  // 23:59:59.999 BRT
 ```
 
-A regra A010 ≤30d permanece inalterada. Resultado: ~1.065 leads do `PILOTO ANAMNESE / INDICAÇÃO` que só têm `ANAMNESE-INCOMPLETA` migram de **ANAMNESE → OUTROS**.
+3. Atualizar as 8 ocorrências de filtros que hoje usam `${startDate}T00:00:00` / `${endDate}T23:59:59`:
+   - `meeting_slots.scheduled_at` (bloco 4 — range principal)
+   - `meeting_slot_attendees.contract_paid_at` (bloco 6 — contratos por data de pagamento)
+   - `meeting_slots.scheduled_at` no fallback de contratos sem timestamp
+   - `meeting_slots.scheduled_at` na busca de R2 via `r1DealIds`
+   - `meeting_slots.scheduled_at` na busca direta de R2 do closer
 
-### B) TS — `src/hooks/useChannelFunnelReport.ts`
+   Todas passam a usar `startISO` / `endISO`.
 
-Em `classifyChannelWith30dRule`:
+4. Sem alteração de lógica de negócio — apenas a janela temporal. Outside, partner e atribuição permanecem idênticos.
 
-1. **Remover** o uso de `originName` na decisão de canal (parâmetro pode permanecer, mas não influencia mais a classificação).
-2. **Remover** o fallback final que retornava `ANAMNESE` quando `reachedR1 === true` sem outros sinais.
-3. Manter:
-   - Regra A010 ≤30d → `'A010'`
-   - Tag válida (whitelist) sem `INCOMPLET` → `'ANAMNESE'`
-   - Compra A010 >30d → `'ANAMNESE'`
-4. Default final → `'OUTROS'`.
+## ✅ Validação esperada
 
-Helpers `isAnamneseTag` continuam válidos. Adicionar comentário explícito de que origem/pipeline não classifica mais.
+- O contrato da **Rosemeire (23/04 22:18 BRT)** passa a ser atribuído ao dia 23/04 nas métricas individuais.
+- Métricas individuais passam a bater com o painel agregado, que já está em BRT.
+- Sem risco para fechamentos: eventos em horário comercial (09–18 BRT) já caíam corretos em ambos os fusos.
 
-### C) UI — `src/components/relatorios/ChannelFunnelTable.tsx`
+## 📁 Arquivos afetados
 
-Atualizar tooltips das colunas e da legenda do canal:
-> "ANAMNESE: leads com tag `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE` ou `LANÇAMENTO` (forms completos), OU compra A010 com mais de 30 dias. Pipeline/origem **não** classifica mais. Forms abandonados (`ANAMNESE-INCOMPLETA`) caem em OUTROS."
->
-> "OUTROS: leads sem tag válida e sem compra A010 — incluindo formulários de anamnese abandonados e leads do pipeline Piloto Anamnese sem tag completa."
+- `src/hooks/useCloserAgendaMetrics.ts` (único)
 
-### D) Memória
+## 🚫 Fora de escopo
 
-Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5`:
-- Classificação de canal é **exclusivamente por tag + compra A010 (regra 30d)**.
-- Origem/pipeline **não** classifica canal.
-- Não há fallback "passou por R1 → ANAMNESE".
-- Tags com substring `INCOMPLET` são ruído e ignoradas.
-
-## Impacto esperado (abril/2026, BU Incorporador)
-
-| Canal | Antes | Depois (estimado) |
-|---|---|---|
-| ANAMNESE | 1.897 | ~830 (perde os ~1.065 do pipeline sem tag válida) |
-| A010 | 585 | ~585 (regra 30d intacta) |
-| OUTROS | 157 | ~1.222 |
-
-Métricas afetadas em todas as colunas: Entradas, R1 Agend., R1 Realiz., No-Show, R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana, Venda Final, Faturamento, Contrato Pago.
-
-## Arquivos afetados
-
-1. **Nova migration SQL** — remover sinal de `origin.name` e `lead_channel` em `get_channel_funnel_metrics`.
-2. **`src/hooks/useChannelFunnelReport.ts`** — remover fallback de R1 e uso de `originName` na classificação.
-3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — tooltips atualizados.
-4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar regra final.
-
-## Validação após deploy
-
-Rodar consulta para abril/2026:
-- Confirmar que canal **OUTROS** absorve os deals do `PILOTO ANAMNESE` sem tag válida.
-- Confirmar que ANAMNESE só conta deals com tag whitelist (sem `INCOMPLET`) ou compra A010 >30d.
-- Confirmar que A010 mantém os ~585 deals com compra ≤30d.
+- RPCs SQL (já com `AT TIME ZONE 'America/Sao_Paulo'`)
+- Hooks `useR1CloserMetrics`, `useR2MeetingSlotsKPIs` (já com `addHours(date, 3)`)
+- Outros painéis não relacionados ao detalhe individual
