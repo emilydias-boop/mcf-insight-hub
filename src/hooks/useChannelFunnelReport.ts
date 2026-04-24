@@ -113,11 +113,15 @@ function classifyChannelWith30dRule(opts: {
   referenceDate: Date;
   reachedR1?: boolean;
 }): string {
-  const { tags, originName, firstA010Purchase, referenceDate, reachedR1 } = opts;
-  // IMPORTANTE: tags com "INCOMPLET" (ex: ANAMNESE-INCOMPLETA / ANAMNESE-INCOMPLETO)
-  // representam formulário ABANDONADO e NÃO contam como sinal de canal ANAMNESE.
-  // Só conta como ANAMNESE se o lead tiver tag completa: ANAMNESE, ANAMNESE-INSTA,
-  // LIVE / LEAD-LIVE, LANÇAMENTO / LEAD-LANÇAMENTO.
+  // `originName` e `reachedR1` permanecem na assinatura por compatibilidade,
+  // mas NÃO classificam mais o canal. A classificação é estritamente baseada
+  // em tag + histórico de compra A010.
+  const { tags, firstA010Purchase, referenceDate } = opts;
+
+  // Tags com "INCOMPLET" (ex: ANAMNESE-INCOMPLETA / ANAMNESE-INCOMPLETO) representam
+  // formulário ABANDONADO e NÃO contam como sinal de canal ANAMNESE.
+  // Só conta como ANAMNESE se o lead tiver tag completa:
+  // ANAMNESE, ANAMNESE-INSTA, LIVE / LEAD-LIVE, LANÇAMENTO / LEAD-LANÇAMENTO.
   const isAnamneseTag = (t: string) => {
     if (t.includes('INCOMPLET')) return false;
     return (
@@ -127,29 +131,24 @@ function classifyChannelWith30dRule(opts: {
       t.includes('LANC')
     );
   };
-  const isAnamneseText = (s: string) => {
-    if (s.includes('INCOMPLET')) return false;
-    return (
-      s.includes('ANAMNESE') ||
-      s.includes('LIVE') ||
-      s.includes('LANÇ') ||
-      s.includes('LANC')
-    );
-  };
 
   const hasA010Tag = tags.some(t => t.includes('A010'));
-  const hasAnamneseSignal =
-    tags.some(isAnamneseTag) || isAnamneseText(originName);
-  const hasA010Origin = originName.includes('A010');
+  const hasAnamneseSignal = tags.some(isAnamneseTag);
 
+  // Hierarquia (mesma do RPC get_channel_funnel_metrics):
+  // 1. Compra A010 fresca (≤30 dias antes ou ≤1 dia depois) → A010
+  // 2. Tag ANAMNESE válida → ANAMNESE
+  // 3. Compra A010 antiga (>30 dias) → ANAMNESE (lead reciclado)
+  // 4. Tag A010 sem compra registrada → A010
+  // 5. Sem nenhum sinal → OUTROS
   if (firstA010Purchase) {
     const diffDays = (referenceDate.getTime() - firstA010Purchase.getTime()) / 86_400_000;
     if (diffDays >= -1 && diffDays <= A010_FRESH_WINDOW_DAYS) return 'A010';
     if (diffDays > A010_FRESH_WINDOW_DAYS) return 'ANAMNESE';
   }
   if (hasAnamneseSignal) return 'ANAMNESE';
-  if (hasA010Tag || hasA010Origin) return 'A010';
-  return reachedR1 ? 'ANAMNESE' : 'OUTROS';
+  if (hasA010Tag) return 'A010';
+  return 'OUTROS';
 }
 
 // Produtos que contam como Venda Final de Parceria.
