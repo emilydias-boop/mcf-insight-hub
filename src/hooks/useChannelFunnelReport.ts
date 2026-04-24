@@ -89,6 +89,48 @@ const phoneSuffix = (phone: string | null | undefined): string => {
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
+// Janela em dias para considerar uma compra A010 como "fresh".
+// Compras dentro dessa janela ANTES da data de referência → A010.
+// Compras MAIS ANTIGAS que isso → ANAMNESE (lead reciclado).
+const A010_FRESH_WINDOW_DAYS = 30;
+
+/**
+ * Classifica o canal aplicando a regra dos 30 dias para compras A010.
+ *
+ * Hierarquia (mesma da RPC get_channel_funnel_metrics):
+ *   1. Compra A010 ≤30d antes (ou ≤1d depois) da data de referência → A010
+ *   2. Tag/origem em (LIVE, ANAMNESE, ANAMNESE-INSTA, LANÇAMENTO) → ANAMNESE
+ *   3. Compra A010 antiga (>30d) → ANAMNESE (lead reciclado)
+ *   4. Tag/origem A010 sem compra registrada → A010
+ *   5. Default → OUTROS (ou ANAMNESE se reachedR1=true)
+ *
+ * referenceDate: para Carrinho usar deal.created_at; para Venda Final usar sale_date.
+ */
+function classifyChannelWith30dRule(opts: {
+  tags: string[];
+  originName: string;
+  firstA010Purchase: Date | null;
+  referenceDate: Date;
+  reachedR1?: boolean;
+}): string {
+  const { tags, originName, firstA010Purchase, referenceDate, reachedR1 } = opts;
+  const hasA010Tag = tags.some(t => t.includes('A010'));
+  const hasAnamneseSignal =
+    tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC')) ||
+    originName.includes('ANAMNESE') || originName.includes('LIVE') ||
+    originName.includes('LANÇ') || originName.includes('LANC');
+  const hasA010Origin = originName.includes('A010');
+
+  if (firstA010Purchase) {
+    const diffDays = (referenceDate.getTime() - firstA010Purchase.getTime()) / 86_400_000;
+    if (diffDays >= -1 && diffDays <= A010_FRESH_WINDOW_DAYS) return 'A010';
+    if (diffDays > A010_FRESH_WINDOW_DAYS) return 'ANAMNESE';
+  }
+  if (hasAnamneseSignal) return 'ANAMNESE';
+  if (hasA010Tag || hasA010Origin) return 'A010';
+  return reachedR1 ? 'ANAMNESE' : 'OUTROS';
+}
+
 // Produtos que contam como Venda Final de Parceria.
 // Reaproveita a whitelist do relatório de Faturamento + A005 (P2 = pacote de
 // parceria, com 35 ocorrências/mês).
