@@ -1,78 +1,74 @@
-## Problema atual
-Hoje a classificação de canais usa lógica simples (qualquer tag/origem com "A010" → A010, qualquer tag/origem com "ANAMNESE/LIVE/LANÇ" → ANAMNESE, default → OUTROS). Isso joga muita coisa em "OUTROS" que deveria estar em ANAMNESE, e atribui A010 a leads antigos que não vieram do produto recente.
+## Contexto
 
-## Nova regra de classificação (proposta pelo usuário)
+Hoje a classificação trata QUALQUER tag contendo a string "ANAMNESE" como sinal válido de ANAMNESE — incluindo `ANAMNESE-INCOMPLETA` e `ANAMNESE-INCOMPLETO`. Resultado: leads que **só preencheram parte do formulário** estão sendo contados como ANAMNESE no funil, inflando o canal.
 
-**Para cada deal/lead, decidir o canal nesta ordem:**
+### Diagnóstico (abril/2026, BU Incorporador)
+| Combinação de tags | Qtd deals | Como deve ser tratado |
+|---|---|---|
+| Só `ANAMNESE-INCOMPLETA` | **1.076** | NÃO é ANAMNESE → vira OUTROS (ou A010 se houver compra recente) |
+| `ANAMNESE-INCOMPLETA` + `ANAMNESE` | **547** | É ANAMNESE COMPLETA ✓ |
+| `ANAMNESE-INCOMPLETA` + `ANAMNESE-INSTA` | **33** | É ANAMNESE-INSTA COMPLETA ✓ |
+| Só `ANAMNESE` (sem incompleta) | 11 | É ANAMNESE ✓ |
+| Só `ANAMNESE-INSTA` | 1 | É ANAMNESE ✓ |
+| Sem nenhuma tag de anamnese | 1.223 | OUTROS / A010 conforme demais regras |
 
-### 1. **A010** (prioridade máxima — só se "fresh")
-Lead é considerado **A010** se:
-- Tem **compra do produto A010** (`hubla_transactions.product_name ILIKE '%A010%'`, `sale_status='completed'`) E
-- A data da compra está **dentro de 30 dias antes do `deal.created_at`** (ou após, mas dentro de 30 dias)
+**Regra confirmada pelo usuário:** uma anamnese só é "completa" quando o lead tem a tag `ANAMNESE` (ou `ANAMNESE-INSTA`/`LIVE`/`LANÇAMENTO`). A tag `ANAMNESE-INCOMPLETA` sozinha indica formulário abandonado e **não conta como canal ANAMNESE**.
 
-OU:
-- Tem **tag A010** no deal E **NÃO tem nenhuma tag ANAMNESE/LIVE/ANAMNESE-INSTA** E não há compra A010 antiga (>30d)
+## Mudanças
 
-### 2. **ANAMNESE** (canal de funil reconhecido)
-Lead é considerado **ANAMNESE** se:
-- Tem alguma tag em `{LIVE, ANAMNESE, ANAMNESE-INSTA}` no deal, OU
-- Tem origem (pipeline name) com `LIVE / ANAMNESE / LANÇAMENTO`, OU
-- Tem **compra A010 antiga** (>30 dias antes do deal) — **mesmo que ainda tenha tag A010** (regra "lead reciclado virou anamnese"), OU
-- Foi reconhecido como attendee de R1 mas não tem nenhum sinal claro (default para R1)
+### A) SQL — RPC `get_channel_funnel_metrics` (nova migration)
+Hoje (linha 37 da migration `20260424144922`):
+```sql
+WHERE UPPER(t.val) ~ '(ANAMNESE|LIVE|LAN[CÇ]AMENTO)'
+```
+Esta regex captura `ANAMNESE-INCOMPLETA`. Precisa virar:
+```sql
+WHERE (
+  UPPER(t.val) IN ('ANAMNESE','ANAMNESE-INSTA','LIVE','LEAD-LIVE','LANÇAMENTO','LANCAMENTO','LEAD-LANÇAMENTO','LEAD-LANCAMENTO')
+  OR UPPER(t.val) ~ '^LIVE'
+)
+AND UPPER(t.val) NOT LIKE '%INCOMPLET%'
+```
+Mesma correção precisa ser aplicada na verificação de `origin.name` e `lead_channel` (linhas 39-40), embora origens dificilmente tenham "INCOMPLETA".
 
-### 3. **OUTROS**
-- Não tem nenhuma das condições acima (sem tag relevante, sem compra A010, sem R1).
+Afeta: **Entradas, R1 Agend., R1 Realiz., No-Show, Contrato Pago** das colunas A010 / ANAMNESE / OUTROS.
 
-> **Observação importante:** A regra dos 30 dias inverte a prioridade da classificação anterior. Antes, "qualquer tag A010" virava A010. Agora, se a compra A010 dele é antiga, ele é tratado como **lead que virou Anamnese** e a tag A010 fica subordinada à data.
+### B) TS — `src/hooks/useChannelFunnelReport.ts`
+Função `classifyChannelWith30dRule` (linha 109) tem o mesmo bug na linha 119:
+```ts
+tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))
+```
 
-## Mudanças técnicas
+Substituir por uma verificação que:
+1. Normaliza cada tag (uppercase, trim).
+2. Considera sinal de ANAMNESE apenas se a tag for **exatamente** `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`, ou começar com `LIVE`.
+3. **Ignora explicitamente** qualquer tag que contenha `INCOMPLET` (cobre `INCOMPLETA` e `INCOMPLETO`).
 
-### A) RPC `get_channel_funnel_metrics` (Postgres) — nova migration
-A RPC atualmente classifica usando apenas tags/origem/lead_channel. Precisa ser reescrita para:
-1. Carregar mapa `email → first_a010_purchase_date` de `hubla_transactions` (lookback 24 meses).
-2. Para cada deal, computar `a010_purchase_age = deal.created_at - first_a010_purchase`.
-3. Aplicar a hierarquia:
-   - Se `a010_purchase_age IS NOT NULL` E `a010_purchase_age <= 30 days` E `a010_purchase_age >= -1 day` → **A010**
-   - Senão, se tem tag/origem em `{LIVE, ANAMNESE, ANAMNESE-INSTA, LANÇAMENTO}` → **ANAMNESE**
-   - Senão, se `a010_purchase_age > 30 days` (compra antiga) → **ANAMNESE** (lead reciclado)
-   - Senão, se tem tag A010 sem compra registrada → **A010**
-   - Senão → **OUTROS**
+Afeta: **R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana, Venda Final, Faturamento** (carrinho + parceria).
 
-Isso afeta as colunas: **Entradas, R1 Agend., R1 Realiz., No-Show, Contrato Pago**.
+### C) UI — tooltip
+Atualizar o cabeçalho/tooltip da coluna ANAMNESE em `src/components/relatorios/ChannelFunnelTable.tsx` para deixar explícito:
+> "ANAMNESE: leads com tag `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE` ou `LANÇAMENTO`. Leads com **apenas** `ANAMNESE-INCOMPLETA` (formulário abandonado) NÃO contam aqui."
 
-### B) `dealChannelMap` em `useChannelFunnelReport.ts` (linhas 427-487)
-Mesma lógica precisa ser aplicada no TS para os deals do Carrinho:
-1. Estender a query de `crm_deals` para também trazer `created_at` e o `email` do contato.
-2. Criar um índice `email → first_a010_purchase` consultando `hubla_transactions` (uma query única para todos os emails do carrinho).
-3. Substituir a função `classify(tagsRaw, originId)` por `classify(tagsRaw, originId, dealCreatedAt, email)` que aplica a nova hierarquia.
-
-Isso afeta as colunas: **R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana**.
-
-### C) `parceriaConversions` em `useChannelFunnelReport.ts` (linhas 227-417)
-A função `classifyAtt` (linhas 397-406) também precisa receber o `email` da conversão e a data da venda para aplicar a mesma regra:
-- Para cada conversão de parceria, buscar a primeira compra A010 do email
-- Se compra A010 ≤ 30 dias antes da venda de parceria → **A010**
-- Se compra A010 > 30 dias antes → **ANAMNESE**
-- Senão, lógica atual (tags/origem/R1)
-
-Isso afeta as colunas: **Venda Final, Fat. Bruto, Fat. Líquido**.
-
-### D) Memory update
-Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5` com a nova regra dos 30 dias para classificação A010 vs ANAMNESE no relatório Funil por Canal (este relatório usa 3 buckets: A010 / ANAMNESE / OUTROS, diferente do agrupamento de 6 canais usado em outros relatórios).
+### D) Memória
+Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5` registrando que `ANAMNESE-INCOMPLETA` é tag-ruído e não classifica canal.
 
 ## Resultado esperado
-Com base em amostra de abril/2026:
-- **142 deals** com compra A010 antiga (>30d) que hoje contam como A010 → **migram para ANAMNESE**
-- **OUTROS** (hoje 269 entradas, 226 R1 Agend., 73 No-Show) deve cair drasticamente, pois a maioria desses leads tem tag de canal ou compra A010 antiga, e serão redistribuídos
-- A consistência entre Entradas / R1 / R2 / Venda Final aumenta porque os 3 pontos de classificação passam a usar exatamente a mesma regra
+
+Em abril/2026:
+- **OUTROS** vai aumentar (recebe os ~1.076 deals que tinham SÓ `ANAMNESE-INCOMPLETA`), salvo aqueles que forem reclassificados como **A010** pela regra de compra ≤30d.
+- **ANAMNESE** vai reduzir: passa a contar apenas ~582 deals com `ANAMNESE` ou `ANAMNESE-INSTA` "real" (incompleta + completa).
+- **A010** permanece com a mesma lógica (compra fresca <30d).
 
 ## Arquivos afetados
-1. **Nova migration SQL** — reescrever `get_channel_funnel_metrics` com a regra de 30 dias
-2. **`src/hooks/useChannelFunnelReport.ts`** — atualizar `classifyAtt` e o builder do `dealChannelMap` com a regra de 30 dias e injeção de `email + created_at`
-3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — atualizar tooltip da coluna OUTROS / cabeçalho do relatório explicando a nova regra
-4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar a regra dos 30 dias
 
-## Pontos para confirmar antes de implementar
-1. **Janela de 30 dias é em relação ao `deal.created_at`** (entrada do lead) ou em relação à **data da venda final** (para parceria)? O texto sugere "compra A010 → ver data": vou usar `deal.created_at` para classificação de entrada/R1/R2, e `sale_date` da parceria para Venda Final/Faturamento. **Ok?**
-2. Se um lead tem tag ANAMNESE **E** compra A010 recente (<30d), prevalece **A010** (compra recente é o mais forte). Confirmar?
-3. Se um lead tem **só tag A010** (sem compra registrada na Hubla), continua sendo **A010**. Confirmar?
+1. **Nova migration SQL** — corrigir regex em `get_channel_funnel_metrics`.
+2. **`src/hooks/useChannelFunnelReport.ts`** — refinar `classifyChannelWith30dRule` para excluir `INCOMPLETA`.
+3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — tooltip da coluna ANAMNESE.
+4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar ruído de `ANAMNESE-INCOMPLETA`.
+
+## Confirmações
+
+1. Tags consideradas **válidas para ANAMNESE**: `ANAMNESE`, `ANAMNESE-INSTA`, `LIVE`, `LEAD-LIVE`, `LANÇAMENTO`, `LANCAMENTO`, `LEAD-LANÇAMENTO`. Tudo que contiver `INCOMPLET` é ignorado. **Ok?**
+2. Lead com **só** `ANAMNESE-INCOMPLETA` (sem outra tag) e **sem compra A010 recente** → cai em **OUTROS**. **Ok?**
+3. Lead com `ANAMNESE-INCOMPLETA` + `ANAMNESE` continua sendo **ANAMNESE** (anamnese completa). **Ok?**
