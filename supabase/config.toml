@@ -18,36 +18,6 @@ verify_jwt = false
 [functions.import-weekly-metrics]
 verify_jwt = false
 
-[functions.clint-api]
-verify_jwt = false
-
-[functions.import-contacts-csv]
-verify_jwt = false
-
-[functions.import-deals-csv]
-verify_jwt = false
-
-[functions.sync-clint-data]
-verify_jwt = false
-
-[functions.sync-origins-stages]
-verify_jwt = false
-
-[functions.sync-contacts]
-verify_jwt = false
-
-[functions.sync-deals]
-verify_jwt = false
-
-[functions.sync-link-contacts]
-verify_jwt = false
-
-[functions.sync-by-origin]
-verify_jwt = false
-
-[functions.clint-webhook-handler]
-verify_jwt = false
-
 [functions.webhook-metrics-receiver]
 verify_jwt = false
 
@@ -171,9 +141,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-recording]
-verify_jwt = false
-
-[functions.sync-deals-from-agenda]
 verify_jwt = false
 
 [functions.asaas-webhook-handler]

@@ -22,9 +22,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { 
   Loader2, Shield, Settings, Link2, KeyRound, 
-  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search, Trash2 
+  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Trash2 
 } from "lucide-react";
-import { useClintUsers } from "@/hooks/useClintAPI";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -64,7 +63,6 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const { data: userDetails, isLoading: loadingDetails } = useUserDetails(userId);
   const { data: permissions = [] } = useUserPermissions(userId);
   const { data: integrations } = useUserIntegrations(userId);
-  const { data: clintUsers } = useClintUsers();
   const { roles: activeRoles } = useRolesConfig(true);
   const queryClient = useQueryClient();
 
@@ -77,7 +75,6 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const sendPasswordReset = useSendPasswordReset();
   const deleteUser = useDeleteUser();
   
-  const [searchingClint, setSearchingClint] = useState(false);
   const [canBookR2, setCanBookR2] = useState(false);
   const [savingCanBookR2, setSavingCanBookR2] = useState(false);
   // Capabilities avançadas da agenda
@@ -279,32 +276,6 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const handleSaveIntegrations = () => {
     if (!userId) return;
     updateIntegrations.mutate({ userId, data: integrationsData });
-  };
-
-  const handleFetchClintId = async () => {
-    if (!userDetails?.email) {
-      toast.error("Email do usuário não encontrado");
-      return;
-    }
-    
-    setSearchingClint(true);
-    try {
-      const users = clintUsers?.data || [];
-      const matchingUser = users.find(
-        (u: any) => u.email?.toLowerCase() === userDetails.email?.toLowerCase()
-      );
-      
-      if (matchingUser) {
-        setIntegrationsData(prev => ({ ...prev, clint_user_id: matchingUser.id }));
-        toast.success(`Clint ID encontrado: ${matchingUser.name || matchingUser.email}`);
-      } else {
-        toast.error("Usuário não encontrado no Clint com este email");
-      }
-    } catch (error) {
-      toast.error("Erro ao buscar no Clint");
-    } finally {
-      setSearchingClint(false);
-    }
   };
 
   if (loadingDetails) {
@@ -822,29 +793,13 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Clint User ID</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={integrationsData.clint_user_id}
-                      onChange={(e) => setIntegrationsData({ ...integrationsData, clint_user_id: e.target.value })}
-                      placeholder="ID do usuário no Clint CRM"
-                      className="flex-1"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      onClick={handleFetchClintId}
-                      disabled={searchingClint}
-                      title="Buscar ID pelo email"
-                    >
-                      {searchingClint ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Search className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
+                  <Input
+                    value={integrationsData.clint_user_id}
+                    onChange={(e) => setIntegrationsData({ ...integrationsData, clint_user_id: e.target.value })}
+                    placeholder="ID histórico do usuário no Clint CRM"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    Clique no ícone 🔍 para buscar automaticamente pelo email
+                    Campo mantido apenas como referência histórica (integração Clint encerrada).
                   </p>
                 </div>
                 <div className="space-y-2">
