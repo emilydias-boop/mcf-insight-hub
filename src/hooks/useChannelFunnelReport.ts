@@ -89,6 +89,48 @@ const phoneSuffix = (phone: string | null | undefined): string => {
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
+// Janela em dias para considerar uma compra A010 como "fresh".
+// Compras dentro dessa janela ANTES da data de referência → A010.
+// Compras MAIS ANTIGAS que isso → ANAMNESE (lead reciclado).
+const A010_FRESH_WINDOW_DAYS = 30;
+
+/**
+ * Classifica o canal aplicando a regra dos 30 dias para compras A010.
+ *
+ * Hierarquia (mesma da RPC get_channel_funnel_metrics):
+ *   1. Compra A010 ≤30d antes (ou ≤1d depois) da data de referência → A010
+ *   2. Tag/origem em (LIVE, ANAMNESE, ANAMNESE-INSTA, LANÇAMENTO) → ANAMNESE
+ *   3. Compra A010 antiga (>30d) → ANAMNESE (lead reciclado)
+ *   4. Tag/origem A010 sem compra registrada → A010
+ *   5. Default → OUTROS (ou ANAMNESE se reachedR1=true)
+ *
+ * referenceDate: para Carrinho usar deal.created_at; para Venda Final usar sale_date.
+ */
+function classifyChannelWith30dRule(opts: {
+  tags: string[];
+  originName: string;
+  firstA010Purchase: Date | null;
+  referenceDate: Date;
+  reachedR1?: boolean;
+}): string {
+  const { tags, originName, firstA010Purchase, referenceDate, reachedR1 } = opts;
+  const hasA010Tag = tags.some(t => t.includes('A010'));
+  const hasAnamneseSignal =
+    tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC')) ||
+    originName.includes('ANAMNESE') || originName.includes('LIVE') ||
+    originName.includes('LANÇ') || originName.includes('LANC');
+  const hasA010Origin = originName.includes('A010');
+
+  if (firstA010Purchase) {
+    const diffDays = (referenceDate.getTime() - firstA010Purchase.getTime()) / 86_400_000;
+    if (diffDays >= -1 && diffDays <= A010_FRESH_WINDOW_DAYS) return 'A010';
+    if (diffDays > A010_FRESH_WINDOW_DAYS) return 'ANAMNESE';
+  }
+  if (hasAnamneseSignal) return 'ANAMNESE';
+  if (hasA010Tag || hasA010Origin) return 'A010';
+  return reachedR1 ? 'ANAMNESE' : 'OUTROS';
+}
+
 // Produtos que contam como Venda Final de Parceria.
 // Reaproveita a whitelist do relatório de Faturamento + A005 (P2 = pacote de
 // parceria, com 35 ocorrências/mês).
@@ -286,6 +328,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         product_name: string;
         bruto: number;
         liquido: number;
+        saleDate: Date;
       };
       const pending: Pending[] = [];
       for (const tx of validTx as any[]) {
@@ -303,10 +346,43 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           product_name: tx.product_name,
           bruto,
           liquido,
+          saleDate: new Date(tx.sale_date),
         });
       }
 
       if (pending.length === 0) return [];
+
+      // 3b. Buscar primeira compra A010 dos emails das conversões (lookback 24m)
+      //     para aplicar a regra dos 30 dias.
+      const a010Lookback = new Date(`${startDate}T00:00:00-03:00`);
+      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
+      const pendingEmails = pending.map(p => p.email);
+      const firstA010ByEmail = new Map<string, Date>();
+      // Quebra em lotes de 200 emails (limite do .in())
+      for (let i = 0; i < pendingEmails.length; i += 200) {
+        const chunk = pendingEmails.slice(i, i + 200);
+        const { data: a010Tx, error: a010Err } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .ilike('product_name', '%A010%')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+          .gte('sale_date', a010Lookback.toISOString())
+          .order('sale_date', { ascending: true })
+          .limit(5000);
+        if (a010Err) {
+          console.warn('[useChannelFunnelReport] a010 purchases error', a010Err);
+          continue;
+        }
+        (a010Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (!e) return;
+          const d = new Date(r.sale_date);
+          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
+            firstA010ByEmail.set(e, d);
+          }
+        });
+      }
 
       // 4. Buscar R1 attendees nos últimos ~90 dias para determinar o canal
       //    de cada conversão (A010 / ANAMNESE / OUTROS).
@@ -389,26 +465,28 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         if (aPhone.length >= 8 && aPhone !== cPhone) phoneToAtt.set(aPhone, idx);
       }
 
-      // 7. Classificação:
-      //  a) Tags claras → A010 / ANAMNESE
-      //  b) Origem (pipeline) → A010 / ANAMNESE
-      //  c) Tinha R1 mas sem sinal claro → ANAMNESE (passou pelo funil)
-      //  d) Sem R1 attendee → OUTROS (compra direta)
-      const classifyAtt = (idx: AttIdx): string => {
-        const { tags, originName } = idx;
-        if (tags.some(t => t.includes('A010'))) return 'A010';
-        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
-        if (originName.includes('A010')) return 'A010';
-        if (originName.includes('ANAMNESE') || originName.includes('LIVE') || originName.includes('LANÇ') || originName.includes('LANC')) return 'ANAMNESE';
-        // Passou por R1, foi reconhecido, mas sem sinal explícito de canal:
-        // assume ANAMNESE (a maior parte dos R1 sem tag vem desse fluxo).
-        return 'ANAMNESE';
-      };
-
+      // 7. Classificação com regra dos 30 dias.
+      // referenceDate = sale_date da venda de parceria (queremos saber se a compra
+      // A010 foi recente em relação à conversão).
       const result: ParceriaConversion[] = pending.map(p => {
         const att = emailToAtt.get(p.email) || (p.phone.length >= 8 ? phoneToAtt.get(p.phone) : undefined);
-        const channel = att ? classifyAtt(att) : 'OUTROS';
-        return { ...p, channel };
+        const firstA010 = firstA010ByEmail.get(p.email) || null;
+        const channel = classifyChannelWith30dRule({
+          tags: att?.tags || [],
+          originName: att?.originName || '',
+          firstA010Purchase: firstA010,
+          referenceDate: p.saleDate,
+          reachedR1: !!att,
+        });
+        return {
+          id: p.id,
+          email: p.email,
+          phone: p.phone,
+          product_name: p.product_name,
+          bruto: p.bruto,
+          liquido: p.liquido,
+          channel,
+        };
       });
       return result;
     },
@@ -425,25 +503,32 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   );
 
   const { data: dealChannelMap = new Map<string, string>() } = useQuery<Map<string, string>>({
-    queryKey: ['funnel-carrinho-deal-channels', carrinhoDealIds.join(',')],
+    queryKey: ['funnel-carrinho-deal-channels-v2', carrinhoDealIds.join(',')],
     queryFn: async () => {
       const m = new Map<string, string>();
       if (carrinhoDealIds.length === 0) return m;
 
-      // Busca tags + origem dos deals do carrinho em lotes
-      const deals: Array<{ id: string; tags: any[] | null; origin_id: string | null }> = [];
+      // Busca tags + origem + created_at + email do contato em lotes
+      type DealRow = {
+        id: string;
+        tags: any[] | null;
+        origin_id: string | null;
+        created_at: string;
+        crm_contacts: { email: string | null } | null;
+      };
+      const deals: DealRow[] = [];
       const chunkSize = 200;
       for (let i = 0; i < carrinhoDealIds.length; i += chunkSize) {
         const chunk = carrinhoDealIds.slice(i, i + chunkSize);
         const { data, error } = await supabase
           .from('crm_deals')
-          .select('id, tags, origin_id')
+          .select('id, tags, origin_id, created_at, crm_contacts!contact_id(email)')
           .in('id', chunk);
         if (error) {
           console.warn('[useChannelFunnelReport] deal channels query error', error);
           continue;
         }
-        deals.push(...((data as any[]) || []));
+        deals.push(...((data as unknown as DealRow[]) || []));
       }
 
       // Resolve nomes de origens
@@ -458,8 +543,37 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         (origins || []).forEach((o: any) => originNameById.set(o.id, (o.name || '').toUpperCase()));
       }
 
-      const classify = (tagsRaw: any[] | null, originId: string | null): string => {
-        const tags: string[] = (tagsRaw || []).map((t: any) => {
+      // Buscar primeira compra A010 dos emails dos deals do carrinho (lookback 24m)
+      const dealEmails = Array.from(new Set(
+        deals.map(d => (d.crm_contacts?.email || '').toLowerCase().trim()).filter(Boolean)
+      ));
+      const a010Lookback = new Date();
+      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
+      const firstA010ByEmail = new Map<string, Date>();
+      for (let i = 0; i < dealEmails.length; i += 200) {
+        const chunk = dealEmails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a010Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .ilike('product_name', '%A010%')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+          .gte('sale_date', a010Lookback.toISOString())
+          .order('sale_date', { ascending: true })
+          .limit(5000);
+        (a010Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (!e) return;
+          const d = new Date(r.sale_date);
+          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
+            firstA010ByEmail.set(e, d);
+          }
+        });
+      }
+
+      const parseTags = (tagsRaw: any[] | null): string[] =>
+        (tagsRaw || []).map((t: any) => {
           if (typeof t === 'string') {
             if (t.startsWith('{')) {
               try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
@@ -468,17 +582,20 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           }
           return (t?.name || '').toUpperCase();
         });
-        if (tags.some(t => t.includes('A010'))) return 'A010';
-        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
-        const originName = originId ? (originNameById.get(originId) || '') : '';
-        if (originName.includes('A010')) return 'A010';
-        if (originName.includes('ANAMNESE') || originName.includes('LIVE') || originName.includes('LANÇ') || originName.includes('LANC')) return 'ANAMNESE';
-        // Lead chegou ao R2: foi reconhecido pelo funil → ANAMNESE como default
-        return 'ANAMNESE';
-      };
 
       deals.forEach(d => {
-        m.set(d.id, classify(d.tags, d.origin_id));
+        const tags = parseTags(d.tags);
+        const originName = d.origin_id ? (originNameById.get(d.origin_id) || '') : '';
+        const email = (d.crm_contacts?.email || '').toLowerCase().trim();
+        const firstA010 = email ? (firstA010ByEmail.get(email) || null) : null;
+        const channel = classifyChannelWith30dRule({
+          tags,
+          originName,
+          firstA010Purchase: firstA010,
+          referenceDate: new Date(d.created_at),
+          reachedR1: true, // está no carrinho R2 → passou por R1
+        });
+        m.set(d.id, channel);
       });
       return m;
     },
