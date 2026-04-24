@@ -1,109 +1,129 @@
-## Diagnóstico real (Abril/26)
+## Plano Final — Refinamento da Venda Final no Funil por Canal
 
-Investigando a query de produção, descobri **dois problemas combinados**:
+Arquivo único: **`src/hooks/useChannelFunnelReport.ts`**
 
-### Problema 1: `acq.classified` perde quase todas as parcerias
-O hook `useChannelFunnelReport` usa `acq.classified` (vindo de `useAllHublaTransactions` → RPC `get_all_hubla_transactions`). Esse RPC tem o filtro:
-```sql
-AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01T00:00:00-03:00')
-```
-Isso exclui **95 das 98** transações com `product_category = 'parceria'` em Abril (todas vêm de `make`). Sobram só 3 → o número que você está vendo.
+### Decisões confirmadas pelo usuário
+1. ✅ **Excluir A000 - Contrato** (são parcelas mensais da pré-reserva, não venda nova) — e qualquer produto que não seja parceria de fato
+2. ✅ **Excluir renovações** (A006, A009 - Renovação Parceiro MCF, R005 - Anticrise Completo etc.)
+3. ✅ **Tudo que vem do Hubla é tratado como Líquido** → o valor pago pelo cliente vai para `faturamentoLiquido`. O `faturamentoBruto` é calculado a partir do `reference_price` configurado em `product_configurations`.
+4. ✅ **Se passou por R1 e foi reconhecido, ele é canal** — usar a presença em `meeting_slot_attendees` como sinal mesmo quando as tags estão vazias.
 
-### Problema 2: A categoria 'parceria' não é a fonte real
-As parcerias **reais** entram no Hubla como `product_category = 'incorporador'` (produtos A001, A005, A009, A000-Contrato). A linha `parceria` do Make era um espelho intermediário (descontinuado em Abril). Quando filtrei direto:
+### Diagnóstico (Abril/26 — dados reais)
 
-| Filtro | Emails únicos (Abril/26) |
-|---|---|
-| `product_category = 'parceria'` (apenas) | 82 (mas RPC corta para 3) |
-| `product_category IN ('incorporador','parceria')` + sources reais | **222** primeiras conversões por email |
-| Dessas, com R1 agendado nos últimos 90d | **156** |
+Produtos encontrados em parcerias do período:
 
-O painel de Vendas Realizadas (~82) usa o CRM stage `Venda Realizada` — número intermediário entre os dois.
+| Produto | Qtd | Conta como Venda? |
+|---|---|---|
+| A000 - Contrato | 301 | ❌ parcela mensal |
+| A000 - Contrato MCF | 1 | ❌ parcela mensal |
+| Contrato - Sócio MCF | 1 | ❌ parcela mensal |
+| A001 - MCF INCORPORADOR COMPLETO | 68 | ✅ venda nova |
+| A009 - MCF INCORPORADOR COMPLETO + THE CLUB | 38 | ✅ venda nova |
+| A005 - MCF P2 | 35 | ✅ venda nova |
+| A009 - Renovação Parceiro MCF | 4 | ❌ renovação |
+| A004 - MCF Plano Anticrise Básico | 2 | ✅ (anticrise é venda nova) |
+| A008 - The CLUB | 1 | ❌ produto auxiliar |
 
-## Plano corrigido
+**Após filtros:** ~143 transações (antes da deduplicação por email/12m). Após dedup, deve ficar próximo dos **~82 do painel de Vendas Realizadas**.
 
-**1 arquivo:** `src/hooks/useChannelFunnelReport.ts`
+### Mudanças concretas no hook
 
-Trocar a fonte de `vendaFinal/faturamento` de `acq.classified` para uma **query direta** em `hubla_transactions` que:
-
-a) Busca primeira conversão por email no período onde:
-   - `product_category IN ('incorporador', 'parceria')`
-   - `sale_status = 'completed'`
-   - `source IN ('hubla', 'kiwify', 'manual', 'mcfpay')` *(exclui `make` que duplica)*
-   - Email nunca teve compra dessas categorias antes (lookback 12 meses para garantir "primeira vez")
-
-b) Para cada primeira conversão, faz match com R1 attendees por email/telefone (mesma lógica de `useAcquisitionReport`) para descobrir o canal (A010/ANAMNESE/OUTROS).
-
-c) Quem não tem R1 → cai em "OUTROS" (compra direta sem passar pelo funil).
-
+#### 1. Lista branca de produtos que contam como Venda Final
+Reaproveitar `ALLOWED_BILLING_PRODUCTS` de `src/constants/billingProducts.ts` (já existe e segue exatamente o mesmo critério usado no relatório de Faturamento):
 ```ts
-// Novo query no hook
-const { data: firstParceriaConversions = [] } = useQuery({
-  queryKey: ['funnel-first-parceria-conversions', startDate, endDate],
+import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
+```
+Lista atual:
+- A001 - MCF INCORPORADOR COMPLETO
+- A009 - MCF INCORPORADOR COMPLETO + THE CLUB
+- A009 - MCF INCORPORADOR + THE CLUB
+- A003 - MCF Plano Anticrise Completo
+- A004 - MCF Plano Anticrise Básico
+- A002 - MCF INCORPORADOR BÁSICO
+
+Vou também incluir **A005 - MCF P2** (vi 35 ocorrências em abril; é P2 = pacote de parceria).
+
+#### 2. Map de reference_price (para calcular o BRUTO)
+Adicionar query nova:
+```ts
+const { data: refPrices } = useQuery({
+  queryKey: ['product-ref-prices'],
   queryFn: async () => {
-    // 1. Buscar TODAS parcerias do período (incluindo upsells) p/ identificar primeira por email
-    const { data: allInPeriod } = await supabase
-      .from('hubla_transactions')
-      .select('id, customer_email, customer_phone, product_price, net_value, sale_date')
-      .in('product_category', ['incorporador', 'parceria'])
-      .eq('sale_status', 'completed')
-      .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
-      .gte('sale_date', `${startDate}T00:00:00-03:00`)
-      .lte('sale_date', `${endDate}T23:59:59-03:00`)
-      .order('sale_date', { ascending: true })
-      .limit(5000);
-
-    // 2. Buscar emails que JÁ eram parceiros antes (lookback 12 meses) p/ excluir
-    const lookbackStart = new Date(startDate);
-    lookbackStart.setMonth(lookbackStart.getMonth() - 12);
-    const { data: priorBuyers } = await supabase
-      .from('hubla_transactions')
-      .select('customer_email')
-      .in('product_category', ['incorporador', 'parceria'])
-      .eq('sale_status', 'completed')
-      .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
-      .gte('sale_date', lookbackStart.toISOString())
-      .lt('sale_date', `${startDate}T00:00:00-03:00`)
-      .limit(20000);
-
-    const priorEmails = new Set((priorBuyers || []).map(r => r.customer_email?.toLowerCase()));
-
-    // 3. Filtrar: primeira por email no período E nunca foi parceiro antes
-    const seen = new Set<string>();
-    const firstConversions = [];
-    for (const tx of (allInPeriod || [])) {
-      const email = tx.customer_email?.toLowerCase().trim();
-      if (!email) continue;
-      if (seen.has(email)) continue;
-      if (priorEmails.has(email)) continue; // já era parceiro antes
-      seen.add(email);
-      firstConversions.push(tx);
-    }
-    return firstConversions;
+    const { data } = await supabase
+      .from('product_configurations')
+      .select('product_name, reference_price')
+      .in('product_category', ['incorporador','parceria'])
+      .eq('is_active', true);
+    const map = new Map<string, number>();
+    (data || []).forEach(r => map.set(r.product_name, Number(r.reference_price) || 0));
+    return map;
   },
-  enabled: !!startDate && !!endDate,
+  staleTime: 5 * 60_000,
 });
 ```
 
-d) Para mapear canal, reutilizar `acq.emailToAttendees` / `acq.phoneToAttendees` (preciso expor esses maps no retorno do `useAcquisitionReport`) OU fazer query própria de R1 attendees no período.
+#### 3. Query de parcerias — incluir `product_name` e filtrar pela whitelist
+```ts
+.select('id, customer_email, customer_phone, product_name, product_price, sale_date')
+// após buscar:
+.filter(tx => ALLOWED_BILLING_PRODUCTS.includes(tx.product_name) || tx.product_name === 'A005 - MCF P2')
+```
 
-**Solução mais simples e isolada:** fazer a query de R1 attendees direto no `useChannelFunnelReport` (mesmo código que `useAcquisitionReport` usa). Mantém os dois hooks independentes.
+#### 4. Cálculo de Bruto e Líquido por transação
+```ts
+pending.push({
+  id: tx.id,
+  email,
+  phone: phoneSuffix(tx.customer_phone),
+  product_name: tx.product_name,
+  liquido: Number(tx.product_price) || 0,           // o que veio do Hubla é o líquido
+  bruto: refPrices.get(tx.product_name) || Number(tx.product_price) || 0, // reference_price
+});
+```
+No agregador:
+```ts
+slot.vendaFinal++;
+slot.faturamentoBruto += p.bruto;
+slot.faturamentoLiquido += p.liquido;
+```
 
-### Resultado esperado (Abril/26, BU Incorporador)
-- Venda Final total: **~150-180** (alinhado com painel ~82, considerando que o painel filtra por estágio CRM enquanto isso usa Hubla pago)
-- Faturamento Bruto: ~R$ 700k–R$ 900k
-- Faturamento Líquido: ~R$ 400k–R$ 500k
-- Distribuição por canal A010/ANAMNESE/OUTROS faz sentido
+#### 5. Classificação por canal — "passou por R1 = é canal"
+A lógica atual já usa R1 attendees (email + telefone), mas só lê `tags`. Vou ajustar para:
 
-### Pergunta de confirmação
-Antes de aprovar, confirma o escopo de **"primeira conversão"**:
+a) **Manter:** se houver tags claras → A010 / ANAMNESE
+b) **Adicionar fallback:** se o lead foi encontrado em R1 attendee mas as tags estão vazias/genéricas → consultar também `crm_deals.origin_id` e o `crm_pipelines.name` para identificar pipeline (ex: "INSIDE SALES A010" → A010, "ANAMNESE" → ANAMNESE).
+c) Apenas se **nem R1 attendee nem origem** identificarem o canal → cai em OUTROS.
 
-1. **Estrita (recomendado):** Email **nunca** comprou parceria antes (lookback 12 meses). Conta apenas conversões 100% novas. → ~150 em Abril.
-2. **Frouxa:** Apenas dedup dentro do período (não importa se já era parceiro antes). → ~222 em Abril.
+Implementação: enriquecer a query de attendees com `crm_deals.origin_id` e fazer JOIN com `crm_pipelines(name)`. A função `classifyByTags` vira `classifyByDeal({ tags, pipelineName })`:
+```ts
+const classifyByDeal = (tags: string[], pipelineName: string): string => {
+  if (tags.some(t => t.includes('A010'))) return 'A010';
+  if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
+  // fallback por pipeline
+  const p = (pipelineName || '').toUpperCase();
+  if (p.includes('A010')) return 'A010';
+  if (p.includes('ANAMNESE') || p.includes('LIVE') || p.includes('LANÇ')) return 'ANAMNESE';
+  // tinha R1 attendee mas pipeline genérica → ainda assim conta como canal "ANAMNESE"
+  // (passou pelo funil, regra do usuário)
+  return 'ANAMNESE';
+};
+```
+**Importante:** se o email/phone NÃO foi encontrado em nenhum R1 attendee, aí sim vai para OUTROS (compra direta sem passar pelo funil).
 
-A versão estrita reflete melhor "novos parceiros adquiridos pelo funil de Inside Sales" — recompras de quem já era parceiro são vendas, mas não são "conversão de funil".
+### Resultado esperado (Abril/26)
 
-### Escopo final
-- 1 arquivo: `src/hooks/useChannelFunnelReport.ts` (substituir filtro do agregador)
+| Métrica | Atual | Esperado |
+|---|---|---|
+| Venda Final Total | 173 (com lixo) | ~80–95 (alinhado ao painel) |
+| Faturamento Bruto | R$ 204k (preços Hubla) | ~R$ 1,0M (reference_price × qtd) |
+| Faturamento Líquido | ~R$ 204k (incorreto) | ~R$ 600k (o que entrou no Hubla) |
+| Distribuição por canal | quase tudo OUTROS | A010 + ANAMNESE recebem corretamente |
+
+### Tooltip
+Atualizar texto em `src/components/relatorios/ChannelFunnelTable.tsx`:
+> "Primeira compra de parceria do cliente no período (deduplicado por email, lookback 12 meses). Considera apenas produtos de parceria/incorporador (A001/A002/A003/A004/A005/A009). Bruto = preço de referência cadastrado. Líquido = valor recebido no Hubla."
+
+### Escopo
+- 1 arquivo principal: `src/hooks/useChannelFunnelReport.ts`
 - 1 ajuste de tooltip: `src/components/relatorios/ChannelFunnelTable.tsx`
-- Sem mudanças em RPCs ou banco
+- Sem mudanças em RPCs, banco ou outros relatórios
