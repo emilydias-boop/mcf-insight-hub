@@ -188,8 +188,13 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — vem do useAcquisitionReport.classified
-    acq.classified.forEach(({ channel, gross, net }) => {
+    // Venda Final + Faturamento — apenas conversões em PARCERIA
+    // (product_category = 'parceria'). Produtos automáticos como A010,
+    // Vitalício, Contrato e Renovação não contam como venda final do funil
+    // de Inside Sales.
+    acq.classified.forEach(({ tx, channel, gross, net }) => {
+      const cat = (tx?.product_category || '').toLowerCase();
+      if (cat !== 'parceria') return;
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
       slot.vendaFinal++;
