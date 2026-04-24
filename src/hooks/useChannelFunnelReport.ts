@@ -77,7 +77,24 @@ function normalizeFunnelChannel(raw: string): string {
   return 'OUTROS';
 }
 
+// helper: últimos 9 dígitos do telefone para matching
+const phoneSuffix = (phone: string | null | undefined): string => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : digits;
+};
+
+interface ParceriaConversion {
+  id: string;
+  email: string;
+  phone: string;
+  product_price: number;
+  net_value: number;
+  channel: string; // 'A010' | 'ANAMNESE' | 'OUTROS'
+}
+
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
+  // acq mantido apenas para compatibilidade (loading state); a fonte real de
+  // Venda Final agora é uma query direta abaixo.
   const acq = useAcquisitionReport(dateRange, bu);
 
   const startDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
@@ -150,35 +167,154 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // 2b. IDs da PRIMEIRA compra de parceria por email no período.
-  // Isso filtra recompras/upsells: clientes que já eram parceiros e compraram
-  // outra parceria no período não contam como nova "Venda Final" do funil.
-  // Quem entrou via A010 e agora vira parceiro pela primeira vez CONTA.
-  const { data: firstParceriaIds = new Set<string>(), isLoading: loadingFirstParceria } = useQuery<Set<string>>({
-    queryKey: ['funnel-first-parceria-ids', startDate, endDate],
+  // Busca DIRETA em hubla_transactions (sem passar por acq.classified, que perde
+  // dados por filtros do RPC get_all_hubla_transactions). Para cada conversão,
+  // determina o canal via R1 attendees (mesma lógica do Painel Comercial).
+  //
+  // Categorias incluídas: 'incorporador' (A001/A005/A009/A000-Contrato no Hubla)
+  // e 'parceria' (lançamentos manuais via Make/manual). Sources: hubla, kiwify,
+  // manual, mcfpay (exclui 'make' a partir de 2026-04 que cria espelhos).
+  //
+  // "Primeira conversão" = email NUNCA comprou nenhuma dessas categorias antes
+  // (lookback 12 meses). Recompras de quem já era parceiro NÃO contam.
+  const { data: parceriaConversions = [], isLoading: loadingFirstParceria } = useQuery<ParceriaConversion[]>({
+    queryKey: ['funnel-parceria-conversions-v2', startDate, endDate],
     queryFn: async () => {
-      if (!startDate || !endDate) return new Set<string>();
-      const { data, error } = await supabase
+      if (!startDate || !endDate) return [];
+
+      // 1. Todas as parcerias do período (para deduplicar primeira por email)
+      const { data: periodTx, error: periodErr } = await supabase
         .from('hubla_transactions')
-        .select('id, customer_email, sale_date')
-        .eq('product_category', 'parceria')
+        .select('id, customer_email, customer_phone, product_price, net_value, sale_date')
+        .in('product_category', ['incorporador', 'parceria'])
         .eq('sale_status', 'completed')
+        .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
         .gte('sale_date', `${startDate}T00:00:00-03:00`)
         .lte('sale_date', `${endDate}T23:59:59-03:00`)
         .order('sale_date', { ascending: true })
-        .limit(20000);
-      if (error) {
-        console.error('[useChannelFunnelReport] first-parceria query error', error);
-        throw error;
+        .limit(5000);
+      if (periodErr) {
+        console.error('[useChannelFunnelReport] period query error', periodErr);
+        throw periodErr;
       }
+
+      // 2. Quem JÁ era parceiro antes do período (lookback 12 meses) — excluir
+      const lookbackStart = new Date(`${startDate}T00:00:00-03:00`);
+      lookbackStart.setMonth(lookbackStart.getMonth() - 12);
+      const { data: priorBuyers, error: priorErr } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email')
+        .in('product_category', ['incorporador', 'parceria'])
+        .eq('sale_status', 'completed')
+        .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
+        .gte('sale_date', lookbackStart.toISOString())
+        .lt('sale_date', `${startDate}T00:00:00-03:00`)
+        .limit(20000);
+      if (priorErr) {
+        console.error('[useChannelFunnelReport] prior buyers query error', priorErr);
+        throw priorErr;
+      }
+      const priorEmails = new Set<string>(
+        (priorBuyers || [])
+          .map((r: any) => (r.customer_email || '').toLowerCase().trim())
+          .filter(Boolean)
+      );
+
+      // 3. Reduzir a uma única conversão por email (a primeira no período) e
+      //    excluir quem já era parceiro antes.
       const seen = new Set<string>();
-      const ids = new Set<string>();
-      (data || []).forEach((r: any) => {
-        const email = (r.customer_email || '').toLowerCase().trim();
-        if (!email || seen.has(email)) return;
+      type Pending = { id: string; email: string; phone: string; product_price: number; net_value: number };
+      const pending: Pending[] = [];
+      for (const tx of (periodTx || []) as any[]) {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (!email || seen.has(email) || priorEmails.has(email)) continue;
         seen.add(email);
-        ids.add(r.id);
+        pending.push({
+          id: tx.id,
+          email,
+          phone: phoneSuffix(tx.customer_phone),
+          product_price: Number(tx.product_price) || 0,
+          net_value: Number(tx.net_value) || 0,
+        });
+      }
+
+      if (pending.length === 0) return [];
+
+      // 4. Buscar R1 attendees nos últimos ~90 dias para determinar o canal
+      //    de cada conversão (A010 / ANAMNESE / OUTROS).
+      const r1Lookback = new Date(`${startDate}T00:00:00-03:00`);
+      r1Lookback.setDate(r1Lookback.getDate() - 90);
+      const r1End = new Date(`${endDate}T23:59:59-03:00`);
+
+      type AttRow = {
+        attendee_phone: string | null;
+        crm_deals: {
+          tags: any[] | null;
+          crm_contacts: { email: string | null; phone: string | null } | null;
+        } | null;
+      };
+      const allAtt: AttRow[] = [];
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore && offset < 10000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            attendee_phone,
+            meeting_slots!inner(scheduled_at, meeting_type),
+            crm_deals!deal_id(tags, crm_contacts!contact_id(email, phone))
+          `)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .gte('meeting_slots.scheduled_at', r1Lookback.toISOString())
+          .lte('meeting_slots.scheduled_at', r1End.toISOString())
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          console.warn('[useChannelFunnelReport] r1 attendees error', error);
+          break;
+        }
+        const batch = (data || []) as unknown as AttRow[];
+        allAtt.push(...batch);
+        hasMore = batch.length >= pageSize;
+        offset += pageSize;
+      }
+
+      // 5. Indexar attendees por email e por sufixo de telefone
+      const emailToTags = new Map<string, string[]>();
+      const phoneToTags = new Map<string, string[]>();
+      for (const a of allAtt) {
+        const tags: string[] = (a.crm_deals?.tags as any[] || []).map((t: any) => {
+          if (typeof t === 'string') {
+            if (t.startsWith('{')) {
+              try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
+            }
+            return t.toUpperCase();
+          }
+          return (t?.name || '').toUpperCase();
+        });
+        const email = (a.crm_deals?.crm_contacts?.email || '').toLowerCase().trim();
+        if (email) emailToTags.set(email, tags);
+        const cPhone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
+        if (cPhone.length >= 8) phoneToTags.set(cPhone, tags);
+        const aPhone = phoneSuffix(a.attendee_phone);
+        if (aPhone.length >= 8 && aPhone !== cPhone) phoneToTags.set(aPhone, tags);
+      }
+
+      // 6. Classificar cada conversão por canal
+      const classifyByTags = (tags: string[]): string => {
+        if (tags.some(t => t.includes('A010'))) return 'A010';
+        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) {
+          return 'ANAMNESE';
+        }
+        return 'OUTROS';
+      };
+
+      const result: ParceriaConversion[] = pending.map(p => {
+        const tags = emailToTags.get(p.email) || (p.phone.length >= 8 ? phoneToTags.get(p.phone) : undefined);
+        const channel = tags ? classifyByTags(tags) : 'OUTROS';
+        return { ...p, channel };
       });
-      return ids;
+      return result;
     },
     enabled: !!startDate && !!endDate,
     staleTime: 60_000,
@@ -223,19 +359,21 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — apenas PRIMEIRA conversão em PARCERIA por
-    // cliente (email) dentro do período. Exclui:
-    //  - Produtos não-parceria (A010, Vitalício, Contrato, Renovação)
-    //  - Recompras / upsells de quem já era parceiro
-    // Clientes que entraram via A010 e agora viraram parceiros pela primeira
-    // vez SÃO contados aqui — esse é o ponto do funil de Inside Sales.
-    acq.classified.forEach(({ tx, channel, gross, net }) => {
-      if (!tx?.id || !firstParceriaIds.has(tx.id)) return;
+    // Venda Final + Faturamento — apenas PRIMEIRA conversão em parceria por
+    // cliente (email) no período. Vem da query direta acima (não do
+    // acq.classified, que perde dados por filtros do RPC).
+    //
+    // Inclui categorias 'incorporador' (A001/A005/A009/A000) e 'parceria'.
+    // Exclui:
+    //  - A010 / Vitalício / Renovação / Clube / Outros (não-parceria)
+    //  - Quem já era parceiro nos últimos 12 meses (recompras/upsells)
+    // Canal vem dos R1 attendees (mesma fonte do Painel Comercial).
+    parceriaConversions.forEach(({ channel, product_price, net_value }) => {
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
       slot.vendaFinal++;
-      slot.faturamentoBruto += gross || 0;
-      slot.faturamentoLiquido += net || 0;
+      slot.faturamentoBruto += product_price || 0;
+      slot.faturamentoLiquido += net_value || 0;
     });
 
     const finalRows: ChannelFunnelRow[] = Array.from(map.entries()).map(([channel, v]) => ({
@@ -270,7 +408,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [channelMetrics, carrinhoRows, acq.classified, firstParceriaIds]);
+  }, [channelMetrics, carrinhoRows, parceriaConversions]);
 
   return {
     rows,

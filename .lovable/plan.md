@@ -1,57 +1,109 @@
+## Diagnóstico real (Abril/26)
 
+Investigando a query de produção, descobri **dois problemas combinados**:
 
-## Trocar "Venda Final" do Funil por Canal para refletir conversão em **Parceria**
+### Problema 1: `acq.classified` perde quase todas as parcerias
+O hook `useChannelFunnelReport` usa `acq.classified` (vindo de `useAllHublaTransactions` → RPC `get_all_hubla_transactions`). Esse RPC tem o filtro:
+```sql
+AND NOT (ht.source = 'make' AND ht.sale_date >= '2026-04-01T00:00:00-03:00')
+```
+Isso exclui **95 das 98** transações com `product_category = 'parceria'` em Abril (todas vêm de `make`). Sobram só 3 → o número que você está vendo.
 
-### Diagnóstico
-Hoje, na tabela **Funil por Canal**, a coluna **Venda Final** soma **todas** as `hubla_transactions` pagas no período (1018 em Abril/26, R$ 868k bruto), incluindo A010, Vitalício, Contrato, Renovação, etc.
+### Problema 2: A categoria 'parceria' não é a fonte real
+As parcerias **reais** entram no Hubla como `product_category = 'incorporador'` (produtos A001, A005, A009, A000-Contrato). A linha `parceria` do Make era um espelho intermediário (descontinuado em Abril). Quando filtrei direto:
 
-Isso quebra a lógica do funil: o objetivo do funil de Inside Sales é medir **quantos leads viraram parceiros** (produtos `product_category = 'parceria'` — Incorporador A001/A009/A002, Anticrise, etc.). As outras categorias (A010, Vitalício, Contrato) são produtos de entrada/automáticos, não a venda final do funil.
+| Filtro | Emails únicos (Abril/26) |
+|---|---|
+| `product_category = 'parceria'` (apenas) | 82 (mas RPC corta para 3) |
+| `product_category IN ('incorporador','parceria')` + sources reais | **222** primeiras conversões por email |
+| Dessas, com R1 agendado nos últimos 90d | **156** |
 
-### Dados confirmados (Abril/26, todas BUs)
-| product_category | Transações | Bruto | Líquido |
-|---|---|---|---|
-| **parceria** | **100** | **R$ 705.281** | **R$ 544.215** |
-| a010 | 1117 | R$ 54.685 | R$ 41.374 |
-| incorporador | 451 | R$ 1.219.263 | R$ 491.569 |
-| ob_vitalicio | 366 | R$ 38.200 | R$ 17.874 |
-| outros | … | … | … |
-| **TOTAL pago** | **2706** | — | — |
+O painel de Vendas Realizadas (~82) usa o CRM stage `Venda Realizada` — número intermediário entre os dois.
 
-(Os 1018 atuais vêm de um filtro intermediário que não isola parceria.)
+## Plano corrigido
 
-### Mudança proposta
-Arquivo único: `src/hooks/useAcquisitionReport.ts` — **não muda** (mantém KPIs do topo iguais).
+**1 arquivo:** `src/hooks/useChannelFunnelReport.ts`
 
-Arquivo: `src/hooks/useChannelFunnelReport.ts` — alterar a fonte de `vendaFinal`, `faturamentoBruto`, `faturamentoLiquido` no agregador (linhas 192-198) para considerar **apenas** transações com `product_category = 'parceria'`:
+Trocar a fonte de `vendaFinal/faturamento` de `acq.classified` para uma **query direta** em `hubla_transactions` que:
+
+a) Busca primeira conversão por email no período onde:
+   - `product_category IN ('incorporador', 'parceria')`
+   - `sale_status = 'completed'`
+   - `source IN ('hubla', 'kiwify', 'manual', 'mcfpay')` *(exclui `make` que duplica)*
+   - Email nunca teve compra dessas categorias antes (lookback 12 meses para garantir "primeira vez")
+
+b) Para cada primeira conversão, faz match com R1 attendees por email/telefone (mesma lógica de `useAcquisitionReport`) para descobrir o canal (A010/ANAMNESE/OUTROS).
+
+c) Quem não tem R1 → cai em "OUTROS" (compra direta sem passar pelo funil).
 
 ```ts
-acq.classified
-  .filter(({ tx }) => (tx.product_category || '').toLowerCase() === 'parceria')
-  .forEach(({ channel, gross, net }) => {
-    const ch = normalizeFunnelChannel(channel);
-    const slot = get(ch);
-    slot.vendaFinal++;
-    slot.faturamentoBruto += gross || 0;
-    slot.faturamentoLiquido += net || 0;
-  });
+// Novo query no hook
+const { data: firstParceriaConversions = [] } = useQuery({
+  queryKey: ['funnel-first-parceria-conversions', startDate, endDate],
+  queryFn: async () => {
+    // 1. Buscar TODAS parcerias do período (incluindo upsells) p/ identificar primeira por email
+    const { data: allInPeriod } = await supabase
+      .from('hubla_transactions')
+      .select('id, customer_email, customer_phone, product_price, net_value, sale_date')
+      .in('product_category', ['incorporador', 'parceria'])
+      .eq('sale_status', 'completed')
+      .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
+      .gte('sale_date', `${startDate}T00:00:00-03:00`)
+      .lte('sale_date', `${endDate}T23:59:59-03:00`)
+      .order('sale_date', { ascending: true })
+      .limit(5000);
+
+    // 2. Buscar emails que JÁ eram parceiros antes (lookback 12 meses) p/ excluir
+    const lookbackStart = new Date(startDate);
+    lookbackStart.setMonth(lookbackStart.getMonth() - 12);
+    const { data: priorBuyers } = await supabase
+      .from('hubla_transactions')
+      .select('customer_email')
+      .in('product_category', ['incorporador', 'parceria'])
+      .eq('sale_status', 'completed')
+      .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
+      .gte('sale_date', lookbackStart.toISOString())
+      .lt('sale_date', `${startDate}T00:00:00-03:00`)
+      .limit(20000);
+
+    const priorEmails = new Set((priorBuyers || []).map(r => r.customer_email?.toLowerCase()));
+
+    // 3. Filtrar: primeira por email no período E nunca foi parceiro antes
+    const seen = new Set<string>();
+    const firstConversions = [];
+    for (const tx of (allInPeriod || [])) {
+      const email = tx.customer_email?.toLowerCase().trim();
+      if (!email) continue;
+      if (seen.has(email)) continue;
+      if (priorEmails.has(email)) continue; // já era parceiro antes
+      seen.add(email);
+      firstConversions.push(tx);
+    }
+    return firstConversions;
+  },
+  enabled: !!startDate && !!endDate,
+});
 ```
 
-### Tooltip
-Atualizar `ChannelFunnelTable.tsx` linha 104:
-> "Conversões em **Parceria** no período (`product_category = 'parceria'`) — produtos Incorporador (A001/A009/A002) e Anticrise. Mede quantos leads do canal viraram parceiros, ignorando vendas de produtos de entrada como A010 ou Contrato."
+d) Para mapear canal, reutilizar `acq.emailToAttendees` / `acq.phoneToAttendees` (preciso expor esses maps no retorno do `useAcquisitionReport`) OU fazer query própria de R1 attendees no período.
+
+**Solução mais simples e isolada:** fazer a query de R1 attendees direto no `useChannelFunnelReport` (mesmo código que `useAcquisitionReport` usa). Mantém os dois hooks independentes.
 
 ### Resultado esperado (Abril/26, BU Incorporador)
-- **Venda Final (total)**: 1018 → **~100** (apenas parcerias)
-- **Fat. Bruto (total)**: R$ 868k → **~R$ 705k**
-- **Fat. Líquido (total)**: R$ 647k → **~R$ 544k**
-- Conversões `Aprovado → Venda` e `Entrada → Venda` ficam realistas (hoje 727,1% por contar transações irrelevantes).
-- Os 4 cards do topo (Total Transações 1018 / Faturamento R$ 868k / etc.) **continuam iguais** — eles representam o universo total de receita, não o funil.
-
-### Escopo
-- 1 arquivo: `src/hooks/useChannelFunnelReport.ts` (filtro `parceria` no `acq.classified`)
-- 1 ajuste de texto: `src/components/relatorios/ChannelFunnelTable.tsx` (tooltip)
-- Sem mudança em RPCs, banco ou outras páginas.
+- Venda Final total: **~150-180** (alinhado com painel ~82, considerando que o painel filtra por estágio CRM enquanto isso usa Hubla pago)
+- Faturamento Bruto: ~R$ 700k–R$ 900k
+- Faturamento Líquido: ~R$ 400k–R$ 500k
+- Distribuição por canal A010/ANAMNESE/OUTROS faz sentido
 
 ### Pergunta de confirmação
-Confirma que **só `product_category = 'parceria'`** deve contar como "Venda Final"? Ou quer incluir também `incorporador` (que tem 451 txs e provavelmente representa adicionais/upsells de parceiros já existentes)?
+Antes de aprovar, confirma o escopo de **"primeira conversão"**:
 
+1. **Estrita (recomendado):** Email **nunca** comprou parceria antes (lookback 12 meses). Conta apenas conversões 100% novas. → ~150 em Abril.
+2. **Frouxa:** Apenas dedup dentro do período (não importa se já era parceiro antes). → ~222 em Abril.
+
+A versão estrita reflete melhor "novos parceiros adquiridos pelo funil de Inside Sales" — recompras de quem já era parceiro são vendas, mas não são "conversão de funil".
+
+### Escopo final
+- 1 arquivo: `src/hooks/useChannelFunnelReport.ts` (substituir filtro do agregador)
+- 1 ajuste de tooltip: `src/components/relatorios/ChannelFunnelTable.tsx`
+- Sem mudanças em RPCs ou banco
