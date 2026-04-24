@@ -217,20 +217,41 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       }
 
       // Contar contratos EXCLUINDO Outside (contrato pago ANTES da reunião)
+      // ✅ DEDUP por deal_id: 1 venda por deal, mesmo com múltiplos attendees marcados como pagos.
+      // Precisamos buscar deal_id também nas duas queries acima — fazemos via segunda chamada leve.
+      const paidAttendeeIdsPrimary = (contractsByPaymentDate || [])
+        .filter(att => {
+          const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
+          const contractPaidAt = att.contract_paid_at;
+          // Excluir Outside (contrato pago ANTES da reunião)
+          if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
+            return false;
+          }
+          return true;
+        })
+        .map(att => att.id);
+
+      const paidAttendeeIdsFallback = (contractsWithoutTimestamp || []).map((att: any) => att.id);
+      const allPaidAttendeeIds = [...paidAttendeeIdsPrimary, ...paidAttendeeIdsFallback];
+
       let contratos_pagos = 0;
-      
-      contractsByPaymentDate?.forEach(att => {
-        const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
-        const contractPaidAt = att.contract_paid_at;
-        
-        if (contractPaidAt && scheduledAt && new Date(contractPaidAt) < new Date(scheduledAt)) {
-          return; // Outside - não contar
-        }
-        
-        contratos_pagos++;
-      });
-      
-      contratos_pagos += contractsWithoutTimestamp?.length || 0;
+      if (allPaidAttendeeIds.length > 0) {
+        const { data: paidWithDeals } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, deal_id')
+          .in('id', allPaidAttendeeIds);
+
+        const uniqueDealIds = new Set<string>();
+        let noDealCount = 0;
+        paidWithDeals?.forEach((row: any) => {
+          if (row.deal_id) {
+            uniqueDealIds.add(row.deal_id);
+          } else {
+            noDealCount++;
+          }
+        });
+        contratos_pagos = uniqueDealIds.size + noDealCount;
+      }
 
       // 7. Buscar vendas parceria de hubla_transactions
       const attendeeIds = slots?.flatMap(s => 
