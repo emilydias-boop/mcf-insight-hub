@@ -101,7 +101,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Transações pagas no período (hubla_transactions.sale_status='paid'). Classificadas pelo produto/oferta — pode divergir de Entradas (janela e fonte distintas)."
+                        info="Conversões em Parceria no período (product_category = 'parceria') — produtos Incorporador (A001/A009/A002) e Anticrise. Mede quantos leads do canal viraram parceiros, ignorando vendas de produtos de entrada como A010, Vitalício ou Contrato."
                       />
                     </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>
