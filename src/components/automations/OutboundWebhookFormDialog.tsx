@@ -21,6 +21,43 @@ interface Props {
   webhook?: OutboundWebhookConfig | null;
 }
 
+const CONSORCIO_PAYLOAD_EXAMPLE = `{
+  "event": "consorcio.venda.criada",
+  "source": "consorcio",
+  "external_id": "<card.id>",
+  "grupo": "1234",
+  "cota": "0789",
+  "tipo_plano": "select",
+  "tipo_contrato": "normal",
+  "valor_carta_credito": 100000,
+  "prazo_meses": 240,
+  "data_venda": "2026-04-24",
+  "dia_assembleia": 15,
+  "status": "ativo",
+  "comprador": {
+    "tipo_pessoa": "pf",
+    "nome": "João da Silva",
+    "cpf": "000.000.000-00",
+    "email": "joao@email.com",
+    "telefone": "+5511999999999",
+    "razao_social": null,
+    "cnpj": null
+  },
+  "vendedor": { "id": "uuid", "nome": "Vendedor X" },
+  "comissao": { "valor": 1500.00 },
+  "origem": { "tipo": "indicacao", "detalhe": "Parceiro Y" },
+  "contemplacao": {
+    "numero": null, "data": null, "motivo": null,
+    "valor_lance": null, "percentual_lance": null
+  },
+  "transferencia": { "e_transferencia": false, "transferido_de": null },
+  "observacoes": null,
+  "timestamps": {
+    "created_at": "2026-04-24T12:34:56Z",
+    "updated_at": "2026-04-24T12:34:56Z"
+  }
+}`;
+
 export function OutboundWebhookFormDialog({ open, onOpenChange, webhook }: Props) {
   const create = useCreateOutboundWebhook();
   const update = useUpdateOutboundWebhook();
@@ -171,6 +208,20 @@ export function OutboundWebhookFormDialog({ open, onOpenChange, webhook }: Props
             />
             <p className="text-xs text-muted-foreground mt-1">Deixe vazio para receber todas as categorias.</p>
           </div>
+
+          {sources.includes('consorcio') && (
+            <div className="rounded-md border border-border bg-muted/40 p-3">
+              <Label className="text-sm">Exemplo de payload (Consórcio)</Label>
+              <p className="text-xs text-muted-foreground mt-1 mb-2">
+                Eventos disparados a partir da tabela de cartas de consórcio. O body é assinado em
+                <code className="mx-1">X-Signature: sha256=&lt;hex&gt;</code>
+                quando o secret token estiver definido.
+              </p>
+              <pre className="text-[11px] leading-relaxed bg-background border border-border rounded p-2 max-h-64 overflow-auto whitespace-pre">
+{CONSORCIO_PAYLOAD_EXAMPLE}
+              </pre>
+            </div>
+          )}
 
           <div>
             <Label>Secret Token (HMAC SHA-256, opcional)</Label>

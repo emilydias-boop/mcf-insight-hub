@@ -54,6 +54,9 @@ export const OUTBOUND_EVENTS = [
   { value: 'sale.created', label: 'Venda Criada' },
   { value: 'sale.updated', label: 'Venda Atualizada' },
   { value: 'sale.refunded', label: 'Venda Reembolsada' },
+  { value: 'consorcio.venda.criada', label: 'Consórcio - Venda Criada' },
+  { value: 'consorcio.venda.atualizada', label: 'Consórcio - Venda Atualizada' },
+  { value: 'consorcio.venda.cancelada', label: 'Consórcio - Venda Cancelada' },
 ] as const;
 
 export const OUTBOUND_SOURCES = [
@@ -63,6 +66,7 @@ export const OUTBOUND_SOURCES = [
   { value: 'make', label: 'Make' },
   { value: 'asaas', label: 'Asaas' },
   { value: 'manual', label: 'Manual' },
+  { value: 'consorcio', label: 'Consórcio' },
 ] as const;
 
 export function useOutboundWebhooks() {
