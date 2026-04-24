@@ -1,129 +1,78 @@
-## Plano Final — Refinamento da Venda Final no Funil por Canal
+## Problema atual
+Hoje a classificação de canais usa lógica simples (qualquer tag/origem com "A010" → A010, qualquer tag/origem com "ANAMNESE/LIVE/LANÇ" → ANAMNESE, default → OUTROS). Isso joga muita coisa em "OUTROS" que deveria estar em ANAMNESE, e atribui A010 a leads antigos que não vieram do produto recente.
 
-Arquivo único: **`src/hooks/useChannelFunnelReport.ts`**
+## Nova regra de classificação (proposta pelo usuário)
 
-### Decisões confirmadas pelo usuário
-1. ✅ **Excluir A000 - Contrato** (são parcelas mensais da pré-reserva, não venda nova) — e qualquer produto que não seja parceria de fato
-2. ✅ **Excluir renovações** (A006, A009 - Renovação Parceiro MCF, R005 - Anticrise Completo etc.)
-3. ✅ **Tudo que vem do Hubla é tratado como Líquido** → o valor pago pelo cliente vai para `faturamentoLiquido`. O `faturamentoBruto` é calculado a partir do `reference_price` configurado em `product_configurations`.
-4. ✅ **Se passou por R1 e foi reconhecido, ele é canal** — usar a presença em `meeting_slot_attendees` como sinal mesmo quando as tags estão vazias.
+**Para cada deal/lead, decidir o canal nesta ordem:**
 
-### Diagnóstico (Abril/26 — dados reais)
+### 1. **A010** (prioridade máxima — só se "fresh")
+Lead é considerado **A010** se:
+- Tem **compra do produto A010** (`hubla_transactions.product_name ILIKE '%A010%'`, `sale_status='completed'`) E
+- A data da compra está **dentro de 30 dias antes do `deal.created_at`** (ou após, mas dentro de 30 dias)
 
-Produtos encontrados em parcerias do período:
+OU:
+- Tem **tag A010** no deal E **NÃO tem nenhuma tag ANAMNESE/LIVE/ANAMNESE-INSTA** E não há compra A010 antiga (>30d)
 
-| Produto | Qtd | Conta como Venda? |
-|---|---|---|
-| A000 - Contrato | 301 | ❌ parcela mensal |
-| A000 - Contrato MCF | 1 | ❌ parcela mensal |
-| Contrato - Sócio MCF | 1 | ❌ parcela mensal |
-| A001 - MCF INCORPORADOR COMPLETO | 68 | ✅ venda nova |
-| A009 - MCF INCORPORADOR COMPLETO + THE CLUB | 38 | ✅ venda nova |
-| A005 - MCF P2 | 35 | ✅ venda nova |
-| A009 - Renovação Parceiro MCF | 4 | ❌ renovação |
-| A004 - MCF Plano Anticrise Básico | 2 | ✅ (anticrise é venda nova) |
-| A008 - The CLUB | 1 | ❌ produto auxiliar |
+### 2. **ANAMNESE** (canal de funil reconhecido)
+Lead é considerado **ANAMNESE** se:
+- Tem alguma tag em `{LIVE, ANAMNESE, ANAMNESE-INSTA}` no deal, OU
+- Tem origem (pipeline name) com `LIVE / ANAMNESE / LANÇAMENTO`, OU
+- Tem **compra A010 antiga** (>30 dias antes do deal) — **mesmo que ainda tenha tag A010** (regra "lead reciclado virou anamnese"), OU
+- Foi reconhecido como attendee de R1 mas não tem nenhum sinal claro (default para R1)
 
-**Após filtros:** ~143 transações (antes da deduplicação por email/12m). Após dedup, deve ficar próximo dos **~82 do painel de Vendas Realizadas**.
+### 3. **OUTROS**
+- Não tem nenhuma das condições acima (sem tag relevante, sem compra A010, sem R1).
 
-### Mudanças concretas no hook
+> **Observação importante:** A regra dos 30 dias inverte a prioridade da classificação anterior. Antes, "qualquer tag A010" virava A010. Agora, se a compra A010 dele é antiga, ele é tratado como **lead que virou Anamnese** e a tag A010 fica subordinada à data.
 
-#### 1. Lista branca de produtos que contam como Venda Final
-Reaproveitar `ALLOWED_BILLING_PRODUCTS` de `src/constants/billingProducts.ts` (já existe e segue exatamente o mesmo critério usado no relatório de Faturamento):
-```ts
-import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
-```
-Lista atual:
-- A001 - MCF INCORPORADOR COMPLETO
-- A009 - MCF INCORPORADOR COMPLETO + THE CLUB
-- A009 - MCF INCORPORADOR + THE CLUB
-- A003 - MCF Plano Anticrise Completo
-- A004 - MCF Plano Anticrise Básico
-- A002 - MCF INCORPORADOR BÁSICO
+## Mudanças técnicas
 
-Vou também incluir **A005 - MCF P2** (vi 35 ocorrências em abril; é P2 = pacote de parceria).
+### A) RPC `get_channel_funnel_metrics` (Postgres) — nova migration
+A RPC atualmente classifica usando apenas tags/origem/lead_channel. Precisa ser reescrita para:
+1. Carregar mapa `email → first_a010_purchase_date` de `hubla_transactions` (lookback 24 meses).
+2. Para cada deal, computar `a010_purchase_age = deal.created_at - first_a010_purchase`.
+3. Aplicar a hierarquia:
+   - Se `a010_purchase_age IS NOT NULL` E `a010_purchase_age <= 30 days` E `a010_purchase_age >= -1 day` → **A010**
+   - Senão, se tem tag/origem em `{LIVE, ANAMNESE, ANAMNESE-INSTA, LANÇAMENTO}` → **ANAMNESE**
+   - Senão, se `a010_purchase_age > 30 days` (compra antiga) → **ANAMNESE** (lead reciclado)
+   - Senão, se tem tag A010 sem compra registrada → **A010**
+   - Senão → **OUTROS**
 
-#### 2. Map de reference_price (para calcular o BRUTO)
-Adicionar query nova:
-```ts
-const { data: refPrices } = useQuery({
-  queryKey: ['product-ref-prices'],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('product_configurations')
-      .select('product_name, reference_price')
-      .in('product_category', ['incorporador','parceria'])
-      .eq('is_active', true);
-    const map = new Map<string, number>();
-    (data || []).forEach(r => map.set(r.product_name, Number(r.reference_price) || 0));
-    return map;
-  },
-  staleTime: 5 * 60_000,
-});
-```
+Isso afeta as colunas: **Entradas, R1 Agend., R1 Realiz., No-Show, Contrato Pago**.
 
-#### 3. Query de parcerias — incluir `product_name` e filtrar pela whitelist
-```ts
-.select('id, customer_email, customer_phone, product_name, product_price, sale_date')
-// após buscar:
-.filter(tx => ALLOWED_BILLING_PRODUCTS.includes(tx.product_name) || tx.product_name === 'A005 - MCF P2')
-```
+### B) `dealChannelMap` em `useChannelFunnelReport.ts` (linhas 427-487)
+Mesma lógica precisa ser aplicada no TS para os deals do Carrinho:
+1. Estender a query de `crm_deals` para também trazer `created_at` e o `email` do contato.
+2. Criar um índice `email → first_a010_purchase` consultando `hubla_transactions` (uma query única para todos os emails do carrinho).
+3. Substituir a função `classify(tagsRaw, originId)` por `classify(tagsRaw, originId, dealCreatedAt, email)` que aplica a nova hierarquia.
 
-#### 4. Cálculo de Bruto e Líquido por transação
-```ts
-pending.push({
-  id: tx.id,
-  email,
-  phone: phoneSuffix(tx.customer_phone),
-  product_name: tx.product_name,
-  liquido: Number(tx.product_price) || 0,           // o que veio do Hubla é o líquido
-  bruto: refPrices.get(tx.product_name) || Number(tx.product_price) || 0, // reference_price
-});
-```
-No agregador:
-```ts
-slot.vendaFinal++;
-slot.faturamentoBruto += p.bruto;
-slot.faturamentoLiquido += p.liquido;
-```
+Isso afeta as colunas: **R2 Agend., R2 Realiz., Aprovados, Reprovados, Próx. Semana**.
 
-#### 5. Classificação por canal — "passou por R1 = é canal"
-A lógica atual já usa R1 attendees (email + telefone), mas só lê `tags`. Vou ajustar para:
+### C) `parceriaConversions` em `useChannelFunnelReport.ts` (linhas 227-417)
+A função `classifyAtt` (linhas 397-406) também precisa receber o `email` da conversão e a data da venda para aplicar a mesma regra:
+- Para cada conversão de parceria, buscar a primeira compra A010 do email
+- Se compra A010 ≤ 30 dias antes da venda de parceria → **A010**
+- Se compra A010 > 30 dias antes → **ANAMNESE**
+- Senão, lógica atual (tags/origem/R1)
 
-a) **Manter:** se houver tags claras → A010 / ANAMNESE
-b) **Adicionar fallback:** se o lead foi encontrado em R1 attendee mas as tags estão vazias/genéricas → consultar também `crm_deals.origin_id` e o `crm_pipelines.name` para identificar pipeline (ex: "INSIDE SALES A010" → A010, "ANAMNESE" → ANAMNESE).
-c) Apenas se **nem R1 attendee nem origem** identificarem o canal → cai em OUTROS.
+Isso afeta as colunas: **Venda Final, Fat. Bruto, Fat. Líquido**.
 
-Implementação: enriquecer a query de attendees com `crm_deals.origin_id` e fazer JOIN com `crm_pipelines(name)`. A função `classifyByTags` vira `classifyByDeal({ tags, pipelineName })`:
-```ts
-const classifyByDeal = (tags: string[], pipelineName: string): string => {
-  if (tags.some(t => t.includes('A010'))) return 'A010';
-  if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
-  // fallback por pipeline
-  const p = (pipelineName || '').toUpperCase();
-  if (p.includes('A010')) return 'A010';
-  if (p.includes('ANAMNESE') || p.includes('LIVE') || p.includes('LANÇ')) return 'ANAMNESE';
-  // tinha R1 attendee mas pipeline genérica → ainda assim conta como canal "ANAMNESE"
-  // (passou pelo funil, regra do usuário)
-  return 'ANAMNESE';
-};
-```
-**Importante:** se o email/phone NÃO foi encontrado em nenhum R1 attendee, aí sim vai para OUTROS (compra direta sem passar pelo funil).
+### D) Memory update
+Atualizar `mem://reporting/commercial-channel-reporting-and-data-integrity-v5` com a nova regra dos 30 dias para classificação A010 vs ANAMNESE no relatório Funil por Canal (este relatório usa 3 buckets: A010 / ANAMNESE / OUTROS, diferente do agrupamento de 6 canais usado em outros relatórios).
 
-### Resultado esperado (Abril/26)
+## Resultado esperado
+Com base em amostra de abril/2026:
+- **142 deals** com compra A010 antiga (>30d) que hoje contam como A010 → **migram para ANAMNESE**
+- **OUTROS** (hoje 269 entradas, 226 R1 Agend., 73 No-Show) deve cair drasticamente, pois a maioria desses leads tem tag de canal ou compra A010 antiga, e serão redistribuídos
+- A consistência entre Entradas / R1 / R2 / Venda Final aumenta porque os 3 pontos de classificação passam a usar exatamente a mesma regra
 
-| Métrica | Atual | Esperado |
-|---|---|---|
-| Venda Final Total | 173 (com lixo) | ~80–95 (alinhado ao painel) |
-| Faturamento Bruto | R$ 204k (preços Hubla) | ~R$ 1,0M (reference_price × qtd) |
-| Faturamento Líquido | ~R$ 204k (incorreto) | ~R$ 600k (o que entrou no Hubla) |
-| Distribuição por canal | quase tudo OUTROS | A010 + ANAMNESE recebem corretamente |
+## Arquivos afetados
+1. **Nova migration SQL** — reescrever `get_channel_funnel_metrics` com a regra de 30 dias
+2. **`src/hooks/useChannelFunnelReport.ts`** — atualizar `classifyAtt` e o builder do `dealChannelMap` com a regra de 30 dias e injeção de `email + created_at`
+3. **`src/components/relatorios/ChannelFunnelTable.tsx`** — atualizar tooltip da coluna OUTROS / cabeçalho do relatório explicando a nova regra
+4. **`mem://reporting/commercial-channel-reporting-and-data-integrity-v5`** — registrar a regra dos 30 dias
 
-### Tooltip
-Atualizar texto em `src/components/relatorios/ChannelFunnelTable.tsx`:
-> "Primeira compra de parceria do cliente no período (deduplicado por email, lookback 12 meses). Considera apenas produtos de parceria/incorporador (A001/A002/A003/A004/A005/A009). Bruto = preço de referência cadastrado. Líquido = valor recebido no Hubla."
-
-### Escopo
-- 1 arquivo principal: `src/hooks/useChannelFunnelReport.ts`
-- 1 ajuste de tooltip: `src/components/relatorios/ChannelFunnelTable.tsx`
-- Sem mudanças em RPCs, banco ou outros relatórios
+## Pontos para confirmar antes de implementar
+1. **Janela de 30 dias é em relação ao `deal.created_at`** (entrada do lead) ou em relação à **data da venda final** (para parceria)? O texto sugere "compra A010 → ver data": vou usar `deal.created_at` para classificação de entrada/R1/R2, e `sale_date` da parceria para Venda Final/Faturamento. **Ok?**
+2. Se um lead tem tag ANAMNESE **E** compra A010 recente (<30d), prevalece **A010** (compra recente é o mais forte). Confirmar?
+3. Se um lead tem **só tag A010** (sem compra registrada na Hubla), continua sendo **A010**. Confirmar?
