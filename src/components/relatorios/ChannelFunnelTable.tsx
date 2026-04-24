@@ -101,7 +101,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Conversões em Parceria no período (product_category = 'parceria') — produtos Incorporador (A001/A009/A002) e Anticrise. Mede quantos leads do canal viraram parceiros, ignorando vendas de produtos de entrada como A010, Vitalício ou Contrato."
+                        info="Primeira conversão em Parceria do cliente no período (product_category = 'parceria', sale_status = 'completed', deduplicado por e-mail). Inclui leads que entraram via A010 e agora viraram parceiros pela primeira vez. Exclui recompras e upsells de quem já era parceiro, e produtos de entrada (A010, Vitalício, Contrato, Renovação)."
                       />
                     </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>

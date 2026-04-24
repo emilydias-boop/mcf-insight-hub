@@ -149,6 +149,41 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
+  // 2b. IDs da PRIMEIRA compra de parceria por email no período.
+  // Isso filtra recompras/upsells: clientes que já eram parceiros e compraram
+  // outra parceria no período não contam como nova "Venda Final" do funil.
+  // Quem entrou via A010 e agora vira parceiro pela primeira vez CONTA.
+  const { data: firstParceriaIds = new Set<string>(), isLoading: loadingFirstParceria } = useQuery<Set<string>>({
+    queryKey: ['funnel-first-parceria-ids', startDate, endDate],
+    queryFn: async () => {
+      if (!startDate || !endDate) return new Set<string>();
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('id, customer_email, sale_date')
+        .eq('product_category', 'parceria')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', `${startDate}T00:00:00-03:00`)
+        .lte('sale_date', `${endDate}T23:59:59-03:00`)
+        .order('sale_date', { ascending: true })
+        .limit(20000);
+      if (error) {
+        console.error('[useChannelFunnelReport] first-parceria query error', error);
+        throw error;
+      }
+      const seen = new Set<string>();
+      const ids = new Set<string>();
+      (data || []).forEach((r: any) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        if (!email || seen.has(email)) return;
+        seen.add(email);
+        ids.add(r.id);
+      });
+      return ids;
+    },
+    enabled: !!startDate && !!endDate,
+    staleTime: 60_000,
+  });
+
   // 3. Agregação por canal (3 buckets fixos)
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
@@ -188,13 +223,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — apenas conversões em PARCERIA
-    // (product_category = 'parceria'). Produtos automáticos como A010,
-    // Vitalício, Contrato e Renovação não contam como venda final do funil
-    // de Inside Sales.
+    // Venda Final + Faturamento — apenas PRIMEIRA conversão em PARCERIA por
+    // cliente (email) dentro do período. Exclui:
+    //  - Produtos não-parceria (A010, Vitalício, Contrato, Renovação)
+    //  - Recompras / upsells de quem já era parceiro
+    // Clientes que entraram via A010 e agora viraram parceiros pela primeira
+    // vez SÃO contados aqui — esse é o ponto do funil de Inside Sales.
     acq.classified.forEach(({ tx, channel, gross, net }) => {
-      const cat = (tx?.product_category || '').toLowerCase();
-      if (cat !== 'parceria') return;
+      if (!tx?.id || !firstParceriaIds.has(tx.id)) return;
       const ch = normalizeFunnelChannel(channel);
       const slot = get(ch);
       slot.vendaFinal++;
@@ -234,11 +270,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [channelMetrics, carrinhoRows, acq.classified]);
+  }, [channelMetrics, carrinhoRows, acq.classified, firstParceriaIds]);
 
   return {
     rows,
     totals,
-    isLoading: loadingMetrics || loadingCarrinho || acq.isLoading,
+    isLoading: loadingMetrics || loadingCarrinho || loadingFirstParceria || acq.isLoading,
   };
 }
