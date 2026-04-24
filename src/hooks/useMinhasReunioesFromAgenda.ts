@@ -6,6 +6,7 @@ export interface MinhasReunioesSummary {
   primeiroAgendamento: number;
   reagendamento: number;
   totalAgendamentos: number;
+  r1Agendada: number;
   noShows: number;
   realizadas: number;
   contratos: number;
@@ -52,6 +53,7 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
     primeiroAgendamento: agendamentos,
     reagendamento: 0, // Agenda ainda não separa reagendamentos em métrica
     totalAgendamentos: agendamentos,
+    r1Agendada,
     noShows,
     realizadas: r1Realizada,
     contratos,
