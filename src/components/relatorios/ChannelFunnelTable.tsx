@@ -101,7 +101,7 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui produtos das categorias 'incorporador' (A001/A005/A009/A000-Contrato no Hubla) e 'parceria' (lançamentos manuais). Sources: hubla, kiwify, manual, mcfpay. Exclui: (1) quem já era parceiro nos últimos 12 meses (recompras/upsells), (2) produtos de entrada (A010, Vitalício, Renovação, Clube), (3) source 'make' (espelhos intermediários). Canal vem dos R1 attendees (mesma fonte do Painel Comercial)."
+                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui: A000-Contrato (parcela mensal), renovações (A006, A009-Renovação), Club isolado, A010, Vitalício e produtos auxiliares. Também exclui clientes que já eram parceiros nos últimos 12 meses (recompras/upsells). Bruto = reference_price configurado em Produtos. Líquido = valor recebido no Hubla. Canal: A010/ANAMNESE quando o lead foi reconhecido em R1 (via tags ou pipeline); OUTROS quando comprou sem passar pelo funil."
                       />
                     </TableHead>
                     <TableHead className="text-right">Fat. Bruto</TableHead>
