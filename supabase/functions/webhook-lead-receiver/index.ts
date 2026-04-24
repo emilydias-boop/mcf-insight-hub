@@ -668,7 +668,7 @@ serve(async (req) => {
     }
 
     // 8. Check for existing deal by identity (email/phone suffix), not just contact_id
-    const emailForDupCheck = normalizedEmail || '';
+    const emailForDupCheck = emailTrimmed ? emailTrimmed.toLowerCase() : '';
     const phoneForDupCheck = normalizedPhone ? normalizedPhone.replace(/\D/g, '') : '';
     const phoneSuffixForDupCheck = phoneForDupCheck.length >= 9 ? phoneForDupCheck.slice(-9) : phoneForDupCheck;
 
