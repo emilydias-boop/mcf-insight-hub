@@ -315,8 +315,10 @@ export default function ReunioesEquipe() {
 
   // Enrich teamKPIs: métricas operacionais (R1/No-Show) vêm do SDR (teamKPIs),
   // métricas financeiras (contratos, outside) vêm do closer (verdade contábil).
+  // Opção C: card "R1 Agendada" usa base booked_at (totalAgendamentos) para
+  // bater exatamente com a coluna "Agendamentos" da tabela e do painel.
   const enrichedKPIs = useMemo(() => {
-    const totalR1Agendada = teamKPIs.totalR1Agendada;
+    const totalR1Agendada = teamKPIs.totalAgendamentos;
     const totalRealizadas = teamKPIs.totalRealizadas;
     const totalNoShows = teamKPIs.totalNoShows;
     return {
