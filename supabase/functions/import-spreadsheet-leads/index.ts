@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ created, updated, skipped, total: leads.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('import-spreadsheet-leads error:', err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
