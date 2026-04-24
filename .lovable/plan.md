@@ -1,52 +1,89 @@
-## Problema
+## Contexto
 
-A página **"Minhas Reuniões"** (`/sdr/minhas-reunioes`) e o **"Painel da Equipe"** mostram números diferentes para o mesmo SDR (ex: Carol Correa) porque chamam **versões distintas** da mesma função RPC:
+Você quer disparar um webhook **outbound** (saída) sempre que uma venda de consórcio (`consortium_cards`) for criada/atualizada, com payload estendido baseado no formato da imagem, gerenciável pela aba **Webhooks Saída** em `/admin/automacoes`.
 
-| Versão | Usada por | Lógica |
-|---|---|---|
-| `get_sdr_metrics_from_agenda(3 args)` | `useMinhasReunioesFromAgenda` (página individual) | **LEGADA** — conta cada attendee sem deduplicar por `deal_id`, ignora `sdr_squad_history`. Infla números de Agendamentos e Contratos. |
-| `get_sdr_metrics_from_agenda(4 args)` | `useTeamMeetingsData` (painel da equipe) | **MODERNA** — deduplica por `deal_id`, usa `ROW_NUMBER() <= 2`, respeita histórico de squad. |
+**Estado atual do sistema:**
+- Já existe infraestrutura completa de outbound webhooks: tabelas `outbound_webhook_configs`, `outbound_webhook_queue`, `outbound_webhook_logs`, edge function `outbound-webhook-dispatcher` (com retry, HMAC, logs) e UI `OutboundWebhookList` em Automações.
+- O trigger atual (`enqueue_outbound_sale_webhook`) só observa `hubla_transactions` com sources `hubla|kiwify|mcfpay|make|asaas|manual`. **Consórcio não está coberto.**
+- A função `build_sale_webhook_payload` monta payload baseado em transações Hubla — não serve para consórcio.
 
-O mesmo problema existe em `get_sdr_meetings_from_agenda` (3 args vs 4 args).
+## Plano de implementação
 
-## Solução: Opção B — Unificar no banco
+### 1. Banco de dados (migração)
 
-### 1. Migration: remover funções legadas (3 args)
+**a) Adicionar `consorcio` à lista de sources permitidos**
+- Atualizar a constante de sources em `OUTBOUND_SOURCES` (frontend) e o filtro do trigger.
 
-```sql
-DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
-DROP FUNCTION IF EXISTS public.get_sdr_meetings_from_agenda(text, text, text);
+**b) Criar função `build_consorcio_sale_webhook_payload(card consortium_cards, event text)`**
+- Retorna JSONB com formato estendido baseado na imagem:
+```json
+{
+  "event": "consorcio.venda.criada",
+  "external_id": "<card.id>",
+  "grupo": "1234",
+  "cota": "0789",
+  "tipo_plano": "select",
+  "tipo_contrato": "normal",
+  "valor_carta_credito": 100000,
+  "prazo_meses": 240,
+  "data_venda": "2026-04-24",
+  "dia_assembleia": 15,
+  "status": "ativo",
+  "comprador": {
+    "tipo_pessoa": "pf",
+    "nome": "...",
+    "cpf": "...",
+    "email": "...",
+    "telefone": "...",
+    "razao_social": null,
+    "cnpj": null
+  },
+  "vendedor": { "id": "...", "nome": "..." },
+  "comissao": { "valor": 1500.00 },
+  "origem": { "tipo": "indicacao", "detalhe": "..." },
+  "contemplacao": { "data": null, "motivo": null, "valor_lance": null },
+  "timestamps": { "created_at": "...", "updated_at": "..." }
+}
 ```
 
-A versão de 4 argumentos já tem `bu_filter text DEFAULT NULL`, então chamadas com 3 args quebrariam por ambiguidade. Após o DROP, o PostgREST resolverá automaticamente para a versão de 4 args usando `bu_filter = NULL`.
+**c) Criar trigger `enqueue_outbound_consorcio_webhook` em `consortium_cards`**
+- Eventos: `consorcio.venda.criada` (INSERT), `consorcio.venda.atualizada` (UPDATE relevante: status, valor_credito, valor_comissao, contemplacao), `consorcio.venda.cancelada` (UPDATE para status=`cancelado`).
+- Insere na mesma fila `outbound_webhook_queue` para reusar o dispatcher existente.
 
-### 2. Frontend: garantir que chamadas de 3 args sejam compatíveis
+**d) Token por integração** (similar ao da imagem)
+- Criar tabela `outbound_webhook_tokens` (id, config_id, name, token_hash, last_used_at, revoked_at, created_at).
+- Token em texto plano só é mostrado uma vez na criação. O dispatcher já injeta `X-Signature` HMAC; tokens são para identificação/revogação por integração.
+- *(Alternativa mais simples: manter apenas o `secret_token` único por config como já existe — me confirma se quer a UI de múltiplos tokens ou só um.)*
 
-Os hooks `useSdrMetricsFromAgenda` e `useSdrMeetingsFromAgenda` **já passam `bu_filter: buFilter || null`** (4 args sempre). Verificar se há outros consumidores chamando só com 3 args:
+### 2. Frontend — Estender Automações
 
-- `useMinhasReunioesFromAgenda` → chama `useSdrMetricsFromAgenda(startDate, endDate, sdrEmail)` (3 args) → o hook internamente envia `bu_filter: null` para a RPC ✅
-- `useSdrMeetingsFromAgenda` → idem ✅
+**a) `useOutboundWebhooks.ts`**
+- Adicionar `'consorcio'` em `OUTBOUND_SOURCES`.
+- Adicionar eventos novos em `OUTBOUND_EVENTS`: `consorcio.venda.criada`, `consorcio.venda.atualizada`, `consorcio.venda.cancelada`.
 
-Nenhuma alteração de código frontend é necessária. A própria RPC de 4 args trata `bu_filter = NULL` retornando todos os squads.
+**b) `OutboundWebhookFormDialog.tsx`**
+- Já consome as listas acima — vai aparecer automaticamente como opção marcável.
+- Adicionar bloco "**Exemplo de payload**" colapsável quando o source `consorcio` estiver selecionado, mostrando o JSON acima e exemplo curl (igual ao da imagem, mas usando seu projeto: `https://rehcfgqvigfcekiipqkc.supabase.co/...` — porém aqui a URL é a do CLIENTE, não a sua, já que é outbound).
 
-### 3. Resultado esperado
+**c) (Opcional) UI de tokens**
+- Se decidirmos por múltiplos tokens, adicionar componente `OutboundWebhookTokens` dentro do form com listagem, botão "Gerar token" e revogação.
 
-Após o DROP:
-- "Minhas Reuniões" da Carol passará a usar a lógica deduplicada (mesmos números do painel da equipe).
-- Agendamentos: contados por `deal_id` distinto com `ordem <= 2` (1º agendamento + 1 reagendamento válido).
-- Contratos: `COUNT(DISTINCT deal_id)` ao invés de contar cada attendee.
-- Squad histórico respeitado via `sdr_squad_history`.
+### 3. Edge function (mínima — reaproveita dispatcher existente)
 
-### 4. Validação pós-deploy
+Nada novo a criar. O `outbound-webhook-dispatcher` já lê da `outbound_webhook_queue` e dispara qualquer evento, então basta o trigger enfileirar.
 
-Comparar os números da Carol (e 2-3 outros SDRs) entre as duas telas — devem ser **idênticos**.
+### 4. Documentação inline na UI
 
-## Riscos
+Na aba "Webhooks Saída", quando o usuário criar um webhook para consórcio, o form mostra:
+- Eventos disponíveis (com checkboxes)
+- Exemplo de payload por evento
+- Header de assinatura HMAC (`X-Signature: sha256=...`) explicado
+- URL de destino (o cliente cola a URL DELE — Zapier/Make/n8n)
 
-- **Baixo**: a versão de 4 args é estritamente mais correta; a versão antiga já era considerada bugada.
-- Se algum outro consumidor (não identificado) depende explicitamente da contagem inflada, ele verá uma redução nos números — o que é o comportamento desejado.
+## Pontos a confirmar antes de implementar
 
-## Arquivos afetados
+1. **Tokens múltiplos por integração** (como na imagem) ou **um único secret_token por config** (como já existe)? O sistema atual já tem assinatura HMAC; tokens nomeados são úteis se você quer revogar/auditar por origem.
+2. **Eventos a disparar**: confirma os 3 (criada / atualizada / cancelada)? Quer também `consorcio.contemplacao.registrada` quando `numero_contemplacao` é preenchido?
+3. **Quais campos de UPDATE devem disparar `atualizada`**? Sugestão: status, valor_credito, valor_comissao, parcelas_pagas_empresa, contemplacao. Outros mudam muito e gerariam ruído.
 
-- **Nova migration**: `DROP` das duas funções legadas de 3 argumentos.
-- **Nenhum código frontend** precisa mudar.
+Após sua aprovação eu sigo direto para a implementação.
