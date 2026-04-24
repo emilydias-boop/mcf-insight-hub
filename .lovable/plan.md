@@ -1,68 +1,52 @@
-## 🧹 Plano de Limpeza — Risco Zero
+## Problema
 
-Verificação cruzada (`rg`) confirma que **nenhum dos itens abaixo é importado/referenciado** em qualquer lugar do código frontend ativo. A integração Clint foi oficialmente encerrada em 05/04/2026 (leads chegam via Hubla webhook direto).
+A página **"Minhas Reuniões"** (`/sdr/minhas-reunioes`) e o **"Painel da Equipe"** mostram números diferentes para o mesmo SDR (ex: Carol Correa) porque chamam **versões distintas** da mesma função RPC:
 
----
+| Versão | Usada por | Lógica |
+|---|---|---|
+| `get_sdr_metrics_from_agenda(3 args)` | `useMinhasReunioesFromAgenda` (página individual) | **LEGADA** — conta cada attendee sem deduplicar por `deal_id`, ignora `sdr_squad_history`. Infla números de Agendamentos e Contratos. |
+| `get_sdr_metrics_from_agenda(4 args)` | `useTeamMeetingsData` (painel da equipe) | **MODERNA** — deduplica por `deal_id`, usa `ROW_NUMBER() <= 2`, respeita histórico de squad. |
 
-### 🗑️ 1. Edge Functions Clint (9 funções, ~150KB)
+O mesmo problema existe em `get_sdr_meetings_from_agenda` (3 args vs 4 args).
 
-Remover do filesystem **e** deletar do Supabase via `delete_edge_functions`:
+## Solução: Opção B — Unificar no banco
 
-- `supabase/functions/clint-api/`
-- `supabase/functions/clint-webhook-handler/`
-- `supabase/functions/sync-clint-data/`
-- `supabase/functions/sync-contacts/`
-- `supabase/functions/sync-deals/`
-- `supabase/functions/sync-deals-from-agenda/` *(órfã no frontend)*
-- `supabase/functions/sync-link-contacts/`
-- `supabase/functions/sync-origins-stages/`
-- `supabase/functions/sync-by-origin/`
-- `supabase/functions/import-contacts-csv/` *(import CSV Clint, sem uso)*
-- `supabase/functions/import-deals-csv/` *(import CSV Clint, sem uso)*
+### 1. Migration: remover funções legadas (3 args)
 
-**Limpar 11 entradas correspondentes em `supabase/config.toml`.**
+```sql
+DROP FUNCTION IF EXISTS public.get_sdr_metrics_from_agenda(text, text, text);
+DROP FUNCTION IF EXISTS public.get_sdr_meetings_from_agenda(text, text, text);
+```
 
----
+A versão de 4 argumentos já tem `bu_filter text DEFAULT NULL`, então chamadas com 3 args quebrariam por ambiguidade. Após o DROP, o PostgREST resolverá automaticamente para a versão de 4 args usando `bu_filter = NULL`.
 
-### 🗑️ 2. Componentes Clint órfãos
+### 2. Frontend: garantir que chamadas de 3 args sejam compatíveis
 
-- `src/components/crm/SyncControls.tsx` *(card "Desativado")*
-- `src/components/crm/SyncMonitor.tsx` *(monitor de jobs Clint)*
-- `src/components/crm/CronJobSetup.tsx` *(card "Desativado")*
+Os hooks `useSdrMetricsFromAgenda` e `useSdrMeetingsFromAgenda` **já passam `bu_filter: buFilter || null`** (4 args sempre). Verificar se há outros consumidores chamando só com 3 args:
 
----
+- `useMinhasReunioesFromAgenda` → chama `useSdrMetricsFromAgenda(startDate, endDate, sdrEmail)` (3 args) → o hook internamente envia `bu_filter: null` para a RPC ✅
+- `useSdrMeetingsFromAgenda` → idem ✅
 
-### 🗑️ 3. Hooks Clint órfãos
+Nenhuma alteração de código frontend é necessária. A própria RPC de 4 args trata `bu_filter = NULL` retornando todos os squads.
 
-- `src/hooks/useClintFunnel.ts`
-- `src/hooks/useClintFunnelByLeadType.ts`
+### 3. Resultado esperado
 
-⚠️ **Antes de deletar `useClintFunnelByLeadType.ts`**, vou reconfirmar que `FunilDuplo.tsx` (que o usa) também está órfão. Se `FunilDuplo` ainda for usado em algum dashboard, mantenho o hook.
+Após o DROP:
+- "Minhas Reuniões" da Carol passará a usar a lógica deduplicada (mesmos números do painel da equipe).
+- Agendamentos: contados por `deal_id` distinto com `ordem <= 2` (1º agendamento + 1 reagendamento válido).
+- Contratos: `COUNT(DISTINCT deal_id)` ao invés de contar cada attendee.
+- Squad histórico respeitado via `sdr_squad_history`.
 
----
+### 4. Validação pós-deploy
 
-### 🗑️ 4. Páginas placeholder vazias
+Comparar os números da Carol (e 2-3 outros SDRs) entre as duas telas — devem ser **idênticos**.
 
-- `src/pages/Index.tsx` *("Welcome to Your Blank App" — sem rota)*
-- `src/pages/bu-consorcio/CRM.tsx` *(`return null` — sem rota)*
+## Riscos
 
----
+- **Baixo**: a versão de 4 args é estritamente mais correta; a versão antiga já era considerada bugada.
+- Se algum outro consumidor (não identificado) depende explicitamente da contagem inflada, ele verá uma redução nos números — o que é o comportamento desejado.
 
-### ✅ O que NÃO será mexido
+## Arquivos afetados
 
-- Campo `clint_id` em `crm_contacts` (referência histórica, conforme memória).
-- Tabelas `crm_origins`, `crm_stages`, `crm_groups`, `sync_jobs` (usadas por outras partes do CRM).
-- `reprocess-failed-webhooks` (mantida — pode reprocessar webhooks Hubla).
-- Hooks/componentes que **podem** estar sendo usados via dynamic import (Fase 2/3 — não incluído).
-
----
-
-### 📋 Execução
-
-1. Reconfirmar uso de `FunilDuplo.tsx` (decide se hook B fica/sai).
-2. Deletar 11 pastas de edge functions + chamar `delete_edge_functions` com a lista.
-3. Limpar `supabase/config.toml` removendo as 11 seções `[functions.<nome>]`.
-4. Deletar 3 componentes + 1-2 hooks + 2 páginas.
-5. Rodar build mental check (TypeScript) — nenhum import quebrado esperado pois já validamos via `rg`.
-
-**Estimativa:** ~180KB de código removido, ~14 arquivos deletados, zero impacto funcional.
+- **Nova migration**: `DROP` das duas funções legadas de 3 argumentos.
+- **Nenhum código frontend** precisa mudar.
