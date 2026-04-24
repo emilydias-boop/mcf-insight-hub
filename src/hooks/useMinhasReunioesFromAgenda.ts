@@ -22,11 +22,15 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   const { user } = useAuth();
   const sdrEmail = user?.email || undefined;
 
-  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail);
+  // Passa o squad ('incorporador') para que o ranking global por deal_id seja
+  // aplicado da mesma forma que no Painel da Equipe — garantindo paridade nos números.
+  const squad = 'incorporador';
+  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail, squad);
   const meetingsQuery = useSdrMeetingsFromAgenda({ 
     startDate, 
     endDate, 
-    sdrEmailFilter: sdrEmail 
+    sdrEmailFilter: sdrEmail,
+    buFilter: squad,
   });
 
   const myMetrics = metricsQuery.data?.metrics?.[0];
