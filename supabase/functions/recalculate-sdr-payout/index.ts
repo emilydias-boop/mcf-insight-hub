@@ -589,10 +589,11 @@ serve(async (req) => {
                 const r1DealMap = new Map<string, string>();
                 const allContracts = [...(contractsByPaymentDate || []), ...(contractsLegacy || [])];
                 for (const contract of allContracts) {
-                  if (contract.contract_paid_at) {
+                  const paidAt = (contract as any).contract_paid_at;
+                  if (paidAt) {
                     const dealId = (contract as any).deal_id;
                     if (dealId && !r1DealMap.has(dealId)) {
-                      r1DealMap.set(dealId, contract.contract_paid_at);
+                      r1DealMap.set(dealId, paidAt);
                     }
                   }
                 }
