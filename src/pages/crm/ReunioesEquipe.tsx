@@ -313,22 +313,27 @@ export default function ReunioesEquipe() {
     return { r1Agendada, r1Realizada, noShows, r2Agendada };
   }, [closerMetrics]);
 
-  // Enrich teamKPIs with data from closerMetrics (source of truth)
-  const enrichedKPIs = useMemo(() => ({
-    ...teamKPIs,
-    // totalAgendamentos vem do spread de teamKPIs (created_at, esforço real do SDR)
-    totalR1Agendada: r1FromClosers.r1Agendada,
-    totalRealizadas: r1FromClosers.r1Realizada,
-    totalNoShows: r1FromClosers.noShows,
-    totalContratos: contractsFromClosers.total,
-    totalOutside: contractsFromClosers.outside,
-    taxaNoShow: r1FromClosers.r1Agendada > 0
-      ? (r1FromClosers.noShows / r1FromClosers.r1Agendada) * 100
-      : 0,
-    taxaConversao: r1FromClosers.r1Realizada > 0
-      ? (contractsFromClosers.contratoPago / r1FromClosers.r1Realizada) * 100
-      : 0,
-  }), [teamKPIs, contractsFromClosers, r1FromClosers]);
+  // Enrich teamKPIs: métricas operacionais (R1/No-Show) vêm do SDR (teamKPIs),
+  // métricas financeiras (contratos, outside) vêm do closer (verdade contábil).
+  const enrichedKPIs = useMemo(() => {
+    const totalR1Agendada = teamKPIs.totalR1Agendada;
+    const totalRealizadas = teamKPIs.totalRealizadas;
+    const totalNoShows = teamKPIs.totalNoShows;
+    return {
+      ...teamKPIs,
+      totalR1Agendada,
+      totalRealizadas,
+      totalNoShows,
+      totalContratos: contractsFromClosers.total,
+      totalOutside: contractsFromClosers.outside,
+      taxaNoShow: totalR1Agendada > 0
+        ? (totalNoShows / totalR1Agendada) * 100
+        : 0,
+      taxaConversao: totalRealizadas > 0
+        ? (contractsFromClosers.contratoPago / totalRealizadas) * 100
+        : 0,
+    };
+  }, [teamKPIs, contractsFromClosers]);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
