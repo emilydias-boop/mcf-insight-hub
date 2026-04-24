@@ -328,6 +328,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         product_name: string;
         bruto: number;
         liquido: number;
+        saleDate: Date;
       };
       const pending: Pending[] = [];
       for (const tx of validTx as any[]) {
@@ -345,10 +346,43 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           product_name: tx.product_name,
           bruto,
           liquido,
+          saleDate: new Date(tx.sale_date),
         });
       }
 
       if (pending.length === 0) return [];
+
+      // 3b. Buscar primeira compra A010 dos emails das conversões (lookback 24m)
+      //     para aplicar a regra dos 30 dias.
+      const a010Lookback = new Date(`${startDate}T00:00:00-03:00`);
+      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
+      const pendingEmails = pending.map(p => p.email);
+      const firstA010ByEmail = new Map<string, Date>();
+      // Quebra em lotes de 200 emails (limite do .in())
+      for (let i = 0; i < pendingEmails.length; i += 200) {
+        const chunk = pendingEmails.slice(i, i + 200);
+        const { data: a010Tx, error: a010Err } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .ilike('product_name', '%A010%')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+          .gte('sale_date', a010Lookback.toISOString())
+          .order('sale_date', { ascending: true })
+          .limit(5000);
+        if (a010Err) {
+          console.warn('[useChannelFunnelReport] a010 purchases error', a010Err);
+          continue;
+        }
+        (a010Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (!e) return;
+          const d = new Date(r.sale_date);
+          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
+            firstA010ByEmail.set(e, d);
+          }
+        });
+      }
 
       // 4. Buscar R1 attendees nos últimos ~90 dias para determinar o canal
       //    de cada conversão (A010 / ANAMNESE / OUTROS).
@@ -431,26 +465,28 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         if (aPhone.length >= 8 && aPhone !== cPhone) phoneToAtt.set(aPhone, idx);
       }
 
-      // 7. Classificação:
-      //  a) Tags claras → A010 / ANAMNESE
-      //  b) Origem (pipeline) → A010 / ANAMNESE
-      //  c) Tinha R1 mas sem sinal claro → ANAMNESE (passou pelo funil)
-      //  d) Sem R1 attendee → OUTROS (compra direta)
-      const classifyAtt = (idx: AttIdx): string => {
-        const { tags, originName } = idx;
-        if (tags.some(t => t.includes('A010'))) return 'A010';
-        if (tags.some(t => t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC'))) return 'ANAMNESE';
-        if (originName.includes('A010')) return 'A010';
-        if (originName.includes('ANAMNESE') || originName.includes('LIVE') || originName.includes('LANÇ') || originName.includes('LANC')) return 'ANAMNESE';
-        // Passou por R1, foi reconhecido, mas sem sinal explícito de canal:
-        // assume ANAMNESE (a maior parte dos R1 sem tag vem desse fluxo).
-        return 'ANAMNESE';
-      };
-
+      // 7. Classificação com regra dos 30 dias.
+      // referenceDate = sale_date da venda de parceria (queremos saber se a compra
+      // A010 foi recente em relação à conversão).
       const result: ParceriaConversion[] = pending.map(p => {
         const att = emailToAtt.get(p.email) || (p.phone.length >= 8 ? phoneToAtt.get(p.phone) : undefined);
-        const channel = att ? classifyAtt(att) : 'OUTROS';
-        return { ...p, channel };
+        const firstA010 = firstA010ByEmail.get(p.email) || null;
+        const channel = classifyChannelWith30dRule({
+          tags: att?.tags || [],
+          originName: att?.originName || '',
+          firstA010Purchase: firstA010,
+          referenceDate: p.saleDate,
+          reachedR1: !!att,
+        });
+        return {
+          id: p.id,
+          email: p.email,
+          phone: p.phone,
+          product_name: p.product_name,
+          bruto: p.bruto,
+          liquido: p.liquido,
+          channel,
+        };
       });
       return result;
     },
