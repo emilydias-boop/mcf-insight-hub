@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Phone } from 'lucide-react';
-import { useTwilio } from '@/contexts/TwilioContext';
 import { QuickDialer } from './QuickDialer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -10,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
  * Atalho: Ctrl/Cmd + Shift + D
  */
 export function QuickDialerLauncher() {
-  const { deviceStatus } = useTwilio();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -24,9 +22,7 @@ export function QuickDialerLauncher() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Mesma regra do TwilioSoftphone: só renderiza se device estiver disponível
-  if (deviceStatus === 'disconnected') return null;
-
+  // Sempre renderiza — o discador inicializa o device sob demanda quando o usuário liga
   return (
     <>
       <TooltipProvider delayDuration={200}>
