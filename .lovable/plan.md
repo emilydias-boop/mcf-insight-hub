@@ -1,158 +1,62 @@
-
-# 🚀 Auto-Discador (Power Dialer) – Discagem automática com pausa inteligente
-
 ## Objetivo
+Quando um lead **atende** durante o auto-discador, o SDR/Closer precisa ver **todos os dados do lead** (igual ao drawer do CRM) sem perder os controles da ligação. Hoje só aparece um banner flutuante mínimo no topo (nome, telefone, mute/hangup/qualificar).
 
-Permitir que o SDR/Closer carregue uma **fila de leads** (manual ou da pipeline) e o sistema disque **automaticamente, um após o outro**:
+A solução é reaproveitar o `DealDetailsDrawer` existente — que já entrega cabeçalho, ações rápidas, jornada, qualificação resumida, perfil do lead, abas (Timeline, Tarefas, Histórico, Ligações, Notas, Produtos) e A010 — abrindo-o automaticamente assim que a chamada conecta, e mantendo o banner verde como **barra flutuante persistente de controle da chamada** sobre o drawer.
 
-1. Disca lead 1 → toca / ninguém atende → registra resultado → disca lead 2 → ...
-2. Quando alguém **atende** (status `in-progress` do Twilio), o sistema **alerta o SDR** (som + visual) e **pausa a fila**.
-3. SDR conduz a ligação normalmente.
-4. Ao **encerrar a chamada**, abre automaticamente o **modal de qualificação** (já existente, `openQualificationModal`).
-5. SDR escolhe um desfecho:
-   - **Agendar reunião** → abre o modal de agendamento existente.
-   - **Sem interesse / Perdido** → marca o lead.
-   - **Retornar depois** → agenda follow-up.
-6. Após salvar o desfecho, a fila **retoma automaticamente** no próximo lead.
+## Comportamento esperado
+1. Auto-discador disca → lead atende → estado vira `paused-in-call`.
+2. Sistema **abre automaticamente o `DealDetailsDrawer`** com o `dealId` do lead corrente.
+3. Toca o beep de alerta (já existe).
+4. O `AutoDialerInCallBanner` continua visível **acima do drawer** (z-index maior), mostrando: nome, telefone, duração, mute, qualificar, hangup, e novos botões "Pular" e "Próximo".
+5. Quando a chamada encerra → abre o `QualificationAndScheduleModal` (fluxo atual) → ao fechar, drawer fecha e fila retoma.
+6. Se o SDR fechar o drawer manualmente durante a ligação, o banner permanece (controles da chamada não somem). Reabrir é possível clicando no nome do lead no banner.
 
----
+## Mudanças
 
-## 📦 Componentes / Hooks a criar
+### 1. `src/contexts/AutoDialerContext.tsx` (editar)
+- Adicionar estado e API para controlar o drawer:
+  - `inCallDrawerOpen: boolean`
+  - `setInCallDrawerOpen: (open: boolean) => void`
+- Quando `callStatus` transita para `in-progress` (bloco que já seta `paused-in-call`), também setar `inCallDrawerOpen = true`.
+- Quando a chamada encerra (`completed`/`failed`) e abre qualificação, fechar o drawer (`inCallDrawerOpen = false`) — o modal de qualificação já é global e cobre o contexto necessário.
+- Quando a fila avança/para/skip, garantir `inCallDrawerOpen = false`.
 
-### 1. `src/contexts/AutoDialerContext.tsx` *(novo)*
+### 2. `src/components/sdr/AutoDialerInCallBanner.tsx` (editar)
+- Adicionar botão **"Ver lead"** (ícone `User`/`PanelRight`) que faz `setInCallDrawerOpen(true)` — útil caso o SDR feche o drawer.
+- Adicionar botão **"Pular"** (ícone `SkipForward`) chamando `skipCurrent()` do auto-discador, com confirmação leve (sem modal).
+- Subir o `z-index` do banner para `z-[120]` para garantir que fique acima do `Sheet` do drawer (que usa `z-50`).
+- Manter beep + controles atuais (mute, qualificar, hangup).
 
-Contexto global que gerencia:
+### 3. `src/components/sdr/AutoDialerDealDrawer.tsx` (novo, wrapper fino)
+- Componente pequeno que consome `useAutoDialer()` e renderiza:
+  ```tsx
+  <DealDetailsDrawer
+    dealId={currentLead?.dealId ?? null}
+    open={inCallDrawerOpen && state === 'paused-in-call'}
+    onOpenChange={setInCallDrawerOpen}
+  />
+  ```
+- Justificativa: isolar a lógica e evitar inflar o `MainLayout`.
 
-```ts
-type AutoDialerState = 'idle' | 'running' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+### 4. `src/components/layout/MainLayout.tsx` (editar)
+- Montar `<AutoDialerDealDrawer />` dentro do `<AutoDialerProvider>`, **antes** do `<AutoDialerInCallBanner />` para que o banner fique sobreposto.
 
-interface AutoDialerContextType {
-  state: AutoDialerState;
-  queue: AutoDialerLead[];          // fila com phone, dealId, contactId, originId, name
-  currentIndex: number;
-  currentLead: AutoDialerLead | null;
-  stats: { total; called; answered; noAnswer; failed };
-  ringTimeoutMs: number;            // default 25000 (25s)
-  betweenCallsMs: number;           // default 2000 (2s)
+## Pontos de atenção
+- **Não duplicar o modal de qualificação**: o `DealDetailsDrawer` tem seu próprio `QualificationAndScheduleModal` interno acionado por "Qualificar". O modal global do `TwilioContext` continua sendo o gatilho automático pós-chamada — ambos coexistem hoje sem conflito porque usam o mesmo `dealId`.
+- **Z-index**: `Sheet` usa `z-50` (overlay) e `z-50` (content). Banner precisa `z-[120]` para sobrepor; o `OverdueAlertOverlay` e modais permanecem em camadas próprias.
+- **Drawer fechar não pausa a chamada**: fechar é só esconder a UI; a chamada continua e o banner permanece no topo.
+- **Performance**: o drawer abre/fecha por chamada (até 100 leads), mas só renderiza quando `open=true` graças ao `Sheet` do Radix — sem custo ocioso.
+- **Mobile**: o `Sheet` ocupa `sm:max-w-2xl`; em telas pequenas vira full-width — o banner continua no topo.
 
-  loadQueue: (leads: AutoDialerLead[]) => void;
-  start: () => void;                // dispara primeira ligação
-  pause: () => void;                // pausa após call atual
-  resume: () => void;               // retoma a fila
-  skipCurrent: () => void;          // pula sem ligar
-  stop: () => void;                 // limpa fila
-}
-```
+## Arquivos
+- editar `src/contexts/AutoDialerContext.tsx`
+- editar `src/components/sdr/AutoDialerInCallBanner.tsx`
+- criar `src/components/sdr/AutoDialerDealDrawer.tsx`
+- editar `src/components/layout/MainLayout.tsx`
 
-**Lógica chave:**
-- Ao iniciar, chama `makeCall(lead.phone, lead.dealId, ...)` do `TwilioContext`.
-- **Observa `callStatus`** do `TwilioContext`:
-  - `ringing` → inicia timer de 25s. Se não atender, faz `hangUp()` + registra `nao_atendeu` em `deal_activities` + avança.
-  - `in-progress` → muda state para `paused-in-call`, toca som de alerta (já temos `notification.mp3`?), exibe banner.
-  - `completed` / `failed` → se vinha de `in-progress`, abre **modal de qualificação** (`openQualificationModal(currentLead.dealId)`) e muda state para `paused-qualifying`. Se vinha de `ringing` (não atendeu), avança automaticamente após `betweenCallsMs`.
-- Quando o modal de qualificação fecha (`qualificationModalOpen` muda de true → false), retoma automaticamente.
-
-### 2. `src/hooks/useAutoDialerController.ts` *(novo)*
-
-Hook que escuta as transições de `callStatus` do `TwilioContext` e dispara os efeitos do controlador.
-
-### 3. `src/components/sdr/AutoDialerPanel.tsx` *(novo)*
-
-Painel principal (pode ficar dentro do **SDRCockpit** ou como um Drawer dedicado):
-
-- Botão **"Carregar fila da pipeline atual"** (usa `useSDRQueueInfinite` para popular).
-- Botão **"Carregar fila do Cockpit"** (mesma função).
-- Lista visual da fila com indicadores:
-  - 🟢 Atendeu | 🔴 Não atendeu | ⚪ Pendente | 🔵 Em ligação
-- Controles: **Iniciar / Pausar / Pular / Parar**.
-- Stats em tempo real: `5/20 ligados • 1 atendeu • 4 não atenderam`.
-- Configurações inline: tempo de toque (15/25/40s) e pausa entre ligações (2/5s).
-
-### 4. `src/components/sdr/AutoDialerInCallBanner.tsx` *(novo)*
-
-Banner full-width que aparece quando `state === 'paused-in-call'`:
-
-- 🔔 Som de alerta + animação pulsante.
-- "📞 **{nome do lead}** atendeu! — em ligação há {timer}".
-- Atalhos visíveis: Mute / Encerrar / Abrir qualificação.
-- Toca som (Web Audio API) curto e discreto (`/sounds/answer-alert.mp3`).
-
-### 5. `src/components/crm/QuickDialer.tsx` *(editar)*
-
-Adicionar uma aba/botão extra: **"Modo Auto-Discador"** que abre o `AutoDialerPanel` em vez de fazer uma ligação única.
-
-### 6. `src/contexts/TwilioContext.tsx` *(pequeno ajuste)*
-
-Já expõe `callStatus`, `currentCallDealId`, `openQualificationModal`. Apenas garantir que o evento `disconnect` continua disparando `setCallStatus('completed')` — **não** precisa mexer.
-
-### 7. `src/components/layout/MainLayout.tsx` *(editar)*
-
-Envolver o app com `<AutoDialerProvider>` e renderizar `<AutoDialerInCallBanner />` global.
-
----
-
-## 🔄 Fluxo de integração com qualificação existente
-
-O `useCallQualificationTrigger` já abre o modal automaticamente quando `callStatus` vira `in-progress`. Vamos **manter** esse comportamento e **adicionar**:
-
-- Ao **fechar** o modal de qualificação (`closeQualificationModal`), o `AutoDialerContext` detecta a transição via efeito e chama `resume()` automaticamente se `state === 'paused-qualifying'`.
-
-Resultado: o SDR não precisa clicar em "próximo lead" — basta qualificar e o sistema dispara o próximo.
-
----
-
-## 📊 Persistência de tentativas
-
-Cada ligação não atendida grava em `deal_activities`:
-```ts
-{
-  deal_id, activity_type: 'call_result',
-  description: 'Tentativa automática — não atendeu',
-  metadata: { result: 'nao_atendeu', auto_dialer: true, attempt_n: X }
-}
-```
-Isso já alimenta o `callAttempts` no `useSelectedDeal` (que conta `nao_atendeu`).
-
----
-
-## 🎯 Critérios de aceitação
-
-- [ ] SDR carrega fila de 10 leads e clica "Iniciar".
-- [ ] Sistema disca o lead 1; após 25s sem atender, registra "nao_atendeu" e disca o lead 2 automaticamente.
-- [ ] Quando o lead 5 atende: toca som, banner aparece, fila pausa.
-- [ ] SDR conduz a ligação. Ao encerrar, modal de qualificação abre.
-- [ ] SDR preenche qualificação e fecha → fila retoma automaticamente no lead 6.
-- [ ] Botão "Pausar" interrompe após a ligação atual; "Parar" limpa a fila.
-- [ ] Histórico de cada tentativa fica registrado em `deal_activities`.
-- [ ] Funciona em qualquer página (provider está no MainLayout).
-
----
-
-## 🛡️ Salvaguardas
-
-- **Bloqueio anti-duplicidade**: se já existe `currentCall` ativo, não inicia próximo.
-- **Limite de fila**: máximo 100 leads por sessão para evitar uso abusivo.
-- **Som de alerta** opt-in: persiste em `localStorage('autoDialerSound')` (default ON).
-- **Confirmação ao Parar** se houver leads não chamados restantes.
-
----
-
-## 📁 Arquivos
-
-**Criar:**
-- `src/contexts/AutoDialerContext.tsx`
-- `src/hooks/useAutoDialerController.ts`
-- `src/components/sdr/AutoDialerPanel.tsx`
-- `src/components/sdr/AutoDialerInCallBanner.tsx`
-- `public/sounds/answer-alert.mp3` (placeholder; usaremos Web Audio beep se não houver arquivo)
-
-**Editar:**
-- `src/components/crm/QuickDialer.tsx` (adicionar entrada para o modo auto)
-- `src/components/crm/QuickDialerLauncher.tsx` (atalho extra `Ctrl+Shift+A` para abrir auto-dialer)
-- `src/components/layout/MainLayout.tsx` (provider + banner global)
-
-**Sem mudanças no banco** — usa `deal_activities` e `calls` que já existem.
-
----
-
-Posso seguir com a implementação?
+## Critérios de aceite
+- Lead atende → drawer abre automaticamente com todos os dados.
+- Banner flutuante fica visível acima do drawer com mute, qualificar, pular, hangup, ver lead.
+- Fechar o drawer manualmente não derruba a chamada nem pausa a fila.
+- Ao desligar, modal de qualificação abre (comportamento atual) e drawer fecha.
+- Após salvar qualificação, fila retoma normalmente.

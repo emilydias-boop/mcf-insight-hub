@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAutoDialer } from '@/contexts/AutoDialerContext';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { Button } from '@/components/ui/button';
-import { PhoneOff, Mic, MicOff, FileText } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, FileText, PanelRight, SkipForward } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function formatDuration(s: number) {
@@ -28,7 +28,7 @@ function playBeep() {
 }
 
 export function AutoDialerInCallBanner() {
-  const { state, currentLead } = useAutoDialer();
+  const { state, currentLead, setInCallDrawerOpen, inCallDrawerOpen, skipCurrent } = useAutoDialer();
   const { callDuration, isMuted, hangUp, toggleMute, currentCallDealId, openQualificationModal } = useTwilio();
   const playedRef = useRef(false);
 
@@ -45,11 +45,16 @@ export function AutoDialerInCallBanner() {
 
   return (
     <div className={cn(
-      'fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[min(92vw,640px)]',
+      'fixed top-4 left-1/2 -translate-x-1/2 z-[120] w-[min(92vw,720px)]',
       'rounded-xl border-2 border-green-500 bg-green-500/15 backdrop-blur-md shadow-2xl shadow-green-500/30',
       'px-4 py-3 flex items-center gap-3 animate-in slide-in-from-top-4',
     )}>
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => setInCallDrawerOpen(true)}
+        className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+        title="Abrir detalhes do lead"
+      >
         <span className="relative flex h-3 w-3 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
@@ -58,16 +63,34 @@ export function AutoDialerInCallBanner() {
           <div className="text-sm font-semibold truncate">📞 {currentLead.name} atendeu!</div>
           <div className="text-xs text-muted-foreground">{currentLead.phone} · {formatDuration(callDuration)}</div>
         </div>
-      </div>
+      </button>
       <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          size="icon"
+          variant={inCallDrawerOpen ? 'default' : 'outline'}
+          className="h-9 w-9 rounded-full"
+          onClick={() => setInCallDrawerOpen(!inCallDrawerOpen)}
+          title="Ver dados do lead"
+        >
+          <PanelRight className="h-4 w-4" />
+        </Button>
         <Button size="icon" variant={isMuted ? 'default' : 'outline'} className="h-9 w-9 rounded-full" onClick={toggleMute}>
           {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
         </Button>
         {currentCallDealId && (
-          <Button size="icon" variant="outline" className="h-9 w-9 rounded-full" onClick={() => openQualificationModal(currentCallDealId)}>
+          <Button size="icon" variant="outline" className="h-9 w-9 rounded-full" onClick={() => openQualificationModal(currentCallDealId)} title="Qualificar">
             <FileText className="h-4 w-4" />
           </Button>
         )}
+        <Button
+          size="icon"
+          variant="outline"
+          className="h-9 w-9 rounded-full"
+          onClick={skipCurrent}
+          title="Pular para o próximo"
+        >
+          <SkipForward className="h-4 w-4" />
+        </Button>
         <Button size="icon" variant="destructive" className="h-9 w-9 rounded-full" onClick={hangUp}>
           <PhoneOff className="h-4 w-4" />
         </Button>

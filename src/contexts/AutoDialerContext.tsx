@@ -41,6 +41,8 @@ interface AutoDialerContextType {
   resume: () => void;
   skipCurrent: () => void;
   stop: () => void;
+  inCallDrawerOpen: boolean;
+  setInCallDrawerOpen: (open: boolean) => void;
 }
 
 const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
@@ -65,6 +67,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [ringTimeoutMs, setRingTimeoutMs] = useState(25000);
   const [betweenCallsMs, setBetweenCallsMs] = useState(2000);
+  const [inCallDrawerOpen, setInCallDrawerOpen] = useState(false);
 
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -167,6 +170,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
       setState('paused-in-call');
       setLeadResult(lead.dealId, 'answered');
+      // Abre automaticamente o drawer rico do lead
+      setInCallDrawerOpen(true);
     }
 
     // ENCERROU (completed/failed) — decide próximo passo
@@ -176,6 +181,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       if (wasInProgressRef.current) {
         // Atendeu → abre qualificação e pausa
         setState('paused-qualifying');
+        setInCallDrawerOpen(false);
         openQualificationModal(lead.dealId, lead.name);
       } else {
         // Não atendeu / falhou
@@ -233,6 +239,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     if (state === 'running') {
       setState('idle');
       clearTimers();
+      setInCallDrawerOpen(false);
       toast.info('Fila pausada');
     }
   }, [state, clearTimers]);
@@ -250,6 +257,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     if (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress') {
       hangUp();
     }
+    setInCallDrawerOpen(false);
     advanceToNext();
   }, [callStatus, hangUp, advanceToNext, setLeadResult]);
 
@@ -262,6 +270,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     setCurrentIndex(-1);
     setQueue([]);
     setResults({});
+    setInCallDrawerOpen(false);
     isAdvancingRef.current = false;
   }, [callStatus, hangUp, clearTimers]);
 
@@ -270,6 +279,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       state, queue, results, currentIndex, currentLead, stats,
       ringTimeoutMs, betweenCallsMs, setRingTimeoutMs, setBetweenCallsMs,
       loadQueue, start, pause, resume, skipCurrent, stop,
+      inCallDrawerOpen, setInCallDrawerOpen,
     }}>
       {children}
     </AutoDialerContext.Provider>
