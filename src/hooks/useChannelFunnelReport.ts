@@ -167,7 +167,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     queryKey: ['funnel-deals-period', startDate, endDate, bu, buOrigins.join(',')],
     queryFn: async (): Promise<{
       dealsCreated: DealMeta[];        // criados na janela (Entradas)
-      r1Deals: Map<string, { status: string; contract_paid_at: string | null }>; // deal → R1 status
+      r1Deals: Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>; // deal → R1 status
       r1NoShowDeals: Set<string>;
       contratoPagoDeals: Set<string>;
     }> => {
@@ -224,7 +224,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
 
       const buOriginsSet = new Set(buOrigins);
-      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null }>();
+      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>();
       const r1NoShowDeals = new Set<string>();
       for (const a of r1Attendees) {
         const dealId = a.deal_id;
@@ -239,11 +239,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         let effective = attStatus || slotStatus || 'scheduled';
         if (slotStatus === 'completed' || attStatus === 'completed') effective = 'completed';
         else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
+        const scheduledAt = a.meeting_slots?.scheduled_at || null;
         const existing = r1Deals.get(dealId);
         // Mantém o "melhor" status: completed > no_show > scheduled
         const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
         if (!existing || rank(effective) > rank(existing.status)) {
-          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at });
+          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at, scheduled_at: scheduledAt });
         } else if (!existing.contract_paid_at && a.contract_paid_at) {
           existing.contract_paid_at = a.contract_paid_at;
         }
