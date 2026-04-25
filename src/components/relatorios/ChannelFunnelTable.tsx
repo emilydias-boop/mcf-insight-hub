@@ -86,31 +86,31 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Entradas"
-                        info="Deals criados no período (crm_deals.created_at), filtrados pela BU. Canal definido só por tag + compra A010 (pipeline não classifica). Tag ANAMNESE-INCOMPLETA isolada cai em OUTROS."
+                        info="Deals criados no período (crm_deals.created_at) com origem da BU. Cada deal conta uma vez. Canal definido por tag + compra A010 (pipeline não classifica)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Agend."
-                        info="Agendamentos R1 criados no período (booked_at), filtrados pela BU do SDR no momento do agendamento. Cap de 2 reagendamentos por deal — alinhado ao Painel Comercial e à página Reuniões Equipe."
+                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Cada deal conta uma vez — reagendamentos não inflam o número."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Realiz."
-                        info="R1 com status realizada/completed no período selecionado (scheduled_at dentro do range), filtradas pela BU. Cap de 2 reagendamentos por deal."
+                        info="Deals únicos cuja R1 ficou com status completed e scheduled_at na janela. Cada deal conta uma vez."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="No-Show"
-                        info="R1 com status no_show no período selecionado, filtradas pela BU. Cap de 2 reagendamentos por deal."
+                        info="Deals únicos cuja R1 ficou com status no_show e scheduled_at na janela. Cada deal conta uma vez."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Contrato Pago"
-                        info="Attendees R1 com contract_paid_at dentro do período, OU deals que entraram no estágio 'Contrato Pago' no período. Atribuído ao canal do deal (TAG + compra A010)."
+                        info="Deals únicos cujo contract_paid_at (no attendee R1) cai dentro da janela. Independe de quando o lead entrou ou agendou."
                       />
                     </TableHead>
                     <TableHead className="text-right">
@@ -146,19 +146,19 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui A000-Contrato, renovações, Club isolado, A010, Vitalício, e clientes que já eram parceiros nos últimos 12 meses. Bruto = reference_price. Líquido = valor recebido no Hubla. Canal (apenas TAG + compra A010, pipeline não classifica): (1) compra A010 ≤30 dias antes da venda → A010; (2) tags LIVE/ANAMNESE/ANAMNESE-INSTA/LANÇAMENTO (sem INCOMPLETA) → ANAMNESE; (3) compra A010 >30 dias → ANAMNESE (lead reciclado); (4) só tag A010 sem compra → A010; (5) sem nenhum sinal → OUTROS."
+                        info="Vendas únicas (por email) de produtos de parceria (A001/A002/A003/A004/A005/A009 completo) com sale_date na janela. INCLUI upsells e recompras — é uma fotografia das vendas que entraram no período. Bruto = reference_price configurado. Líquido = valor recebido no Hubla."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Fat. Bruto"
-                        info="Soma de reference_price (preço de tabela) das vendas finais únicas no período. Não é o valor recebido — é o preço cheio configurado em product_configurations."
+                        info="Soma de reference_price (preço de tabela) das vendas únicas no período. Inclui upsells/recompras."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Fat. Líquido"
-                        info="Soma do valor efetivamente recebido no Hubla (product_price, líquido de descontos) das vendas finais únicas no período."
+                        info="Soma do valor efetivamente recebido no Hubla (product_price) das vendas únicas no período. Inclui upsells/recompras."
                       />
                     </TableHead>
                   </TableRow>
