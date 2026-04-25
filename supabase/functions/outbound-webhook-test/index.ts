@@ -64,6 +64,41 @@ function samplePayload() {
   };
 }
 
+function consorcioSamplePayload() {
+  const now = new Date().toISOString();
+  return {
+    // Schema raiz compatível com webhook-consorcio (Grima)
+    grupo: "TEST",
+    cota: "9999",
+    valor_credito: 100000,
+    prazo_meses: 180,
+    tipo_produto: "select",
+    tipo_contrato: "normal",
+    parcelas_pagas_empresa: 0,
+    data_contratacao: now.split("T")[0],
+    dia_vencimento: 10,
+    origem: "outros",
+    origem_detalhe: "TESTE - Webhook Saída",
+    tipo_pessoa: "pf",
+    nome_completo: "Cliente Teste (PING)",
+    cpf: "00000000000",
+    email: "teste@exemplo.com",
+    telefone: "+5511999999999",
+    razao_social: null,
+    cnpj: null,
+    vendedor_email: null,
+    vendedor_name: "Vendedor Teste",
+
+    // Metadados estendidos
+    event: "consorcio.venda.criada",
+    source: "consorcio",
+    external_id: "00000000-0000-0000-0000-000000000000",
+    occurred_at: now,
+    status: "ativo",
+    _test: true,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
