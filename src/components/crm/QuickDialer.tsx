@@ -127,9 +127,25 @@ export function QuickDialer({ open, onOpenChange }: Props) {
         {/* Display do número */}
         <div className="px-6 pt-2">
           <div className="bg-muted/40 border rounded-lg p-4 text-center">
-            <div className="text-2xl font-mono tabular-nums min-h-[2rem] tracking-wider">
-              {formatPhoneBR(digits) || <span className="text-muted-foreground/50">(__) _ ____-____</span>}
-            </div>
+            <input
+              type="tel"
+              inputMode="tel"
+              autoFocus
+              value={formatPhoneBR(digits)}
+              onChange={(e) => {
+                const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 13);
+                setDigits(onlyDigits);
+              }}
+              onPaste={(e) => {
+                e.preventDefault();
+                const pasted = e.clipboardData.getData('text');
+                const onlyDigits = pasted.replace(/\D/g, '').slice(0, 13);
+                if (onlyDigits) setDigits(onlyDigits);
+              }}
+              placeholder="(__) _ ____-____"
+              className="w-full bg-transparent border-0 outline-none text-center text-2xl font-mono tabular-nums tracking-wider placeholder:text-muted-foreground/50"
+              aria-label="Número de telefone"
+            />
             {digits && (
               <button
                 onClick={handleBackspace}
