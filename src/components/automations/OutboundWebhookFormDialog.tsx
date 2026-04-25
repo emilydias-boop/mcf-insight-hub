@@ -22,40 +22,40 @@ interface Props {
 }
 
 const CONSORCIO_PAYLOAD_EXAMPLE = `{
-  "// SCHEMA RAIZ — compatível com webhook-consorcio (Grima)": "↓",
-  "grupo": "1234",
-  "cota": "0789",
-  "valor_credito": 100000,
-  "prazo_meses": 240,
-  "tipo_produto": "select",
-  "tipo_contrato": "normal",
-  "parcelas_pagas_empresa": 0,
-  "data_contratacao": "2026-04-24",
-  "dia_vencimento": 15,
-  "origem": "indicacao",
-  "origem_detalhe": "Parceiro Y",
-  "tipo_pessoa": "pf",
-  "nome_completo": "João da Silva",
-  "cpf": "00000000000",
-  "email": "joao@email.com",
-  "telefone": "+5511999999999",
-  "razao_social": null,
-  "cnpj": null,
-  "vendedor_email": null,
-  "vendedor_name": "Vendedor X",
-
-  "// METADADOS ESTENDIDOS — opcionais, ignorados pelo destino": "↓",
-  "event": "consorcio.venda.criada",
+  "event": "venda.criada",
   "source": "consorcio",
   "external_id": "<card.id>",
-  "occurred_at": "2026-04-24T12:34:56Z",
+  "grupo": "1234",
+  "cota": "0789",
+  "tipo_plano": "select",
+  "tipo_contrato": "normal",
+  "valor_carta_credito": 100000,
+  "prazo_meses": 240,
+  "data_venda": "2026-04-24",
+  "dia_assembleia": 15,
   "status": "ativo",
-  "comprador": { "tipo_pessoa": "pf", "nome": "João da Silva", "cpf": "00000000000" },
+  "comprador": {
+    "tipo_pessoa": "pf",
+    "nome": "João da Silva",
+    "cpf": "000.000.000-00",
+    "email": "joao@email.com",
+    "telefone": "+5511999999999",
+    "razao_social": null,
+    "cnpj": null
+  },
   "vendedor": { "id": "uuid", "nome": "Vendedor X" },
   "comissao": { "valor": 1500.00 },
-  "contemplacao": { "numero": null, "data": null, "motivo": null },
+  "origem": { "tipo": "indicacao", "detalhe": "Parceiro Y" },
+  "contemplacao": {
+    "numero": null, "data": null, "motivo": null,
+    "valor_lance": null, "percentual_lance": null
+  },
   "transferencia": { "e_transferencia": false, "transferido_de": null },
-  "timestamps": { "created_at": "...", "updated_at": "..." }
+  "observacoes": null,
+  "timestamps": {
+    "created_at": "2026-04-24T12:34:56Z",
+    "updated_at": "2026-04-24T12:34:56Z"
+  }
 }`;
 
 export function OutboundWebhookFormDialog({ open, onOpenChange, webhook }: Props) {

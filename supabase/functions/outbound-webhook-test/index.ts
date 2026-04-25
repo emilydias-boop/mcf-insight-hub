@@ -67,7 +67,12 @@ function samplePayload() {
 function consorcioSamplePayload() {
   const now = new Date().toISOString();
   return {
-    // Schema raiz compatível com webhook-consorcio (Grima)
+    // Evento aceito pelo destino webhook-consorcio (Grima): 'venda.criada' ou 'comissao.paga'
+    event: "venda.criada",
+    source: "consorcio",
+    external_id: "00000000-0000-0000-0000-000000000000",
+    occurred_at: now,
+    // Campos no schema raiz exigidos pelo destino
     grupo: "TEST",
     cota: "9999",
     valor_credito: 100000,
@@ -75,7 +80,7 @@ function consorcioSamplePayload() {
     tipo_produto: "select",
     tipo_contrato: "normal",
     parcelas_pagas_empresa: 0,
-    data_contratacao: now.split("T")[0],
+    data_contratacao: new Date().toISOString().split("T")[0],
     dia_vencimento: 10,
     origem: "outros",
     origem_detalhe: "TESTE - Webhook Saída",
@@ -88,12 +93,6 @@ function consorcioSamplePayload() {
     cnpj: null,
     vendedor_email: null,
     vendedor_name: "Vendedor Teste",
-
-    // Metadados estendidos
-    event: "consorcio.venda.criada",
-    source: "consorcio",
-    external_id: "00000000-0000-0000-0000-000000000000",
-    occurred_at: now,
     status: "ativo",
     _test: true,
   };
@@ -125,8 +124,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const isConsorcio =
-      Array.isArray(cfg.sources) && cfg.sources.includes("consorcio");
+    const isConsorcio = Array.isArray(cfg.sources) && cfg.sources.includes("consorcio");
     const payload = isConsorcio ? consorcioSamplePayload() : samplePayload();
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
