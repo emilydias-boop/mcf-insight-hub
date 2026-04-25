@@ -1,38 +1,57 @@
-Hoje, quando a ligação é atendida, a intenção do código é mostrar duas coisas:
+## Objetivo
 
-1. Um banner verde no topo dizendo que o lead atendeu, com telefone, duração e controles de chamada.
-2. O `DealDetailsDrawer` do CRM à direita, com os dados completos do lead.
+Os botões flutuantes do **Discador Rápido** (📞 verde) e **Auto-Discador** (⚡ cinza) hoje aparecem no canto inferior esquerdo da tela, sobrepondo conteúdo e ficando visíveis para todos os usuários — inclusive quem nunca usa (admins, financeiro, RH, marketing etc.).
 
-O problema provável é que o auto-discador fica dentro de um `Sheet` próprio (`AutoDialerPanel`) e, ao tentar abrir outro `Sheet` (`DealDetailsDrawer`) ao mesmo tempo, os componentes de modal/drawer podem competir entre si. Na prática, o painel do auto-discador pode continuar sendo o modal ativo e impedir/ocultar o drawer do lead.
+A solução: **mover esses dois acessos para dentro do `AppSidebar**`, em uma seção própria no rodapé do menu lateral, **visível apenas para `sdr` e `closer**` (e `admin` por padrão de gestão, se confirmado).
 
-Plano de correção:
+---
 
-1. Fechar/minimizar o painel do auto-discador quando a fila começa ou quando uma chamada é atendida
-   - Ao clicar em “Iniciar”, o painel do auto-discador será fechado automaticamente.
-   - A fila continua rodando em background.
-   - O status fica visível pelo botão flutuante e pelo banner quando alguém atende.
+## Alterações propostas
 
-2. Abrir uma visualização clara do lead quando ele atender
-   - Quando o `callStatus` virar `in-progress`, manter o estado `paused-in-call`.
-   - Abrir o drawer do lead automaticamente com o `dealId` atual.
-   - O SDR verá o mesmo drawer completo do CRM, com cabeçalho, dados, ações rápidas, próxima ação, histórico, tarefas, notas, compras/produtos e qualificação.
+### 1. `src/components/layout/AppSidebar.tsx`
 
-3. Garantir que os controles de ligação fiquem sempre visíveis
-   - Manter o banner verde acima do drawer.
-   - Botões no banner: ver/reabrir lead, mutar, qualificar, pular e desligar.
-   - Se o SDR fechar o drawer sem desligar, o banner continua aparecendo e permite reabrir o lead.
+- Adicionar uma nova seção no `SidebarFooter` (ou logo acima dele), chamada **"Discador"**, contendo dois `SidebarMenuButton`:
+  - **Discador rápido** — ícone `Phone` (verde, igual ao botão atual). Atalho `Ctrl+Shift+D` exibido como hint quando expandido.
+  - **Auto-Discador** — ícone `Zap`. Mostra um `Badge` com `stats.called/stats.total` quando há fila ativa (mesma lógica do botão atual).
+- Filtragem por role: usar `hasAnyRole('sdr', 'closer', 'admin')` do `useAuth()`. Se o usuário não tiver nenhum desses cargos, a seção inteira não é renderizada.
+- Quando o sidebar está colapsado (modo ícone), apenas os ícones aparecem — comportamento nativo do shadcn sidebar.
+- Os botões disparam o mesmo `setOpen(true)` / `setAutoOpen(true)` que hoje vivem no `QuickDialerLauncher`.
 
-4. Ajustar a camada visual dos drawers
-   - Dar uma classe/controle específico ao drawer aberto pelo auto-discador para evitar ficar atrás do painel ou overlay.
-   - Se necessário, impedir que o painel do auto-discador e o drawer do lead fiquem abertos simultaneamente.
+### 2. `src/components/crm/QuickDialerLauncher.tsx`
 
-5. Melhorar o fallback para chamadas sem negócio CRM
-   - Se a fila veio de telefone colado/manual e não existe `dealId` real, não tentar abrir o `DealDetailsDrawer`.
-   - Nesse caso, mostrar apenas o banner da chamada e uma mensagem/estado simples, porque não há dados de CRM para carregar.
+- **Remover os dois botões flutuantes** (o `<div className="fixed bottom-4 left-4 ...">` com os dois `Tooltip`).
+- **Manter** todo o resto: estado `open`/`autoOpen`, atalhos de teclado `Ctrl+Shift+D` e `Ctrl+Shift+A`, efeito que fecha o painel quando entra em chamada, e os componentes `<QuickDialer>` e `<AutoDialerPanel>` montados.
+- Os atalhos de teclado continuam globais e funcionam para qualquer usuário com permissão (sem alteração).
 
-Resultado esperado:
+### 3. Comunicação entre Sidebar e Launcher
 
-- Em “Chamando”: o SDR vê a fila/status do auto-discador.
-- Quando o lead atende: o painel da fila sai da frente, aparece o drawer completo do lead e o banner verde de ligação fica por cima.
-- Durante a conversa: o SDR consegue consultar dados e executar ações do lead.
-- Ao desligar: abre a qualificação/agendamento; depois de concluir/fechar, a fila continua para o próximo lead.
+Como o `QuickDialerLauncher` mantém o estado dos modais e o `AppSidebar` precisa abrir esses modais, vou criar um pequeno contexto `**DialerLauncherContext**` (`src/contexts/DialerLauncherContext.tsx`) com:
+
+- `quickOpen`, `setQuickOpen`
+- `autoOpen`, `setAutoOpen`
+
+O Provider envolve `MainLayout`. O `AppSidebar` consome para abrir; o `QuickDialerLauncher` consome para renderizar os modais e tratar atalhos. Isso evita acoplamento via eventos globais e mantém a lógica de "fechar painel ao atender" intacta.
+
+### 4. Visibilidade (regra final)
+
+- **SDR** ✅ vê os dois botões no sidebar
+- **Closer** ✅ vê os dois botões no sidebar
+- **Admin** ✅ vê (para suporte/teste) — não precisa ver
+- **Manager / Coordenador / Financeiro / RH / Marketing / demais** ❌ não vê nada relacionado a discador
+
+---
+
+## Resultado visual
+
+**Antes:** dois círculos flutuantes sobrepostos ao canto inferior esquerdo, visíveis para todos.
+
+**Depois:** dois itens no sidebar, agrupados em "Discador", junto aos demais itens do menu — discretos quando colapsado (só ícones), descritivos quando expandido. Aparecem apenas para quem opera o telefone.
+
+---
+
+## Arquivos editados/criados
+
+- ✏️ `src/components/layout/AppSidebar.tsx` — adicionar seção "Discador" filtrada por role
+- ✏️ `src/components/crm/QuickDialerLauncher.tsx` — remover botões flutuantes, manter atalhos e modais
+- ➕ `src/contexts/DialerLauncherContext.tsx` — contexto leve para conectar sidebar ↔ modais
+- ✏️ `src/components/layout/MainLayout.tsx` — envolver com `DialerLauncherProvider`
