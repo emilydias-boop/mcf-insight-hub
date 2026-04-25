@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface LeadDealMatch {
   dealId: string;
@@ -29,8 +30,14 @@ export function useLeadLookupByPhone(rawPhone: string) {
   const suffix = phoneSuffix(rawPhone);
   const enabled = digits.length >= 8;
 
+  const { user, hasAnyRole } = useAuth();
+  // Admin / manager / coordenador veem todos os leads.
+  // SDR / closer / demais cargos só enxergam deals dos quais são donos.
+  const seesAll = hasAnyRole('admin', 'manager', 'coordenador');
+  const ownerFilterId = !seesAll && user?.id ? user.id : null;
+
   return useQuery({
-    queryKey: ['lead-lookup-by-phone', suffix],
+    queryKey: ['lead-lookup-by-phone', suffix, ownerFilterId ?? 'all'],
     enabled,
     staleTime: 30_000,
     queryFn: async (): Promise<LeadMatch[]> => {
@@ -52,13 +59,19 @@ export function useLeadLookupByPhone(rawPhone: string) {
       const contactIds = contacts.map(c => c.id);
 
       // 2. Deals desses contatos
-      const { data: deals } = await supabase
+      let dealsQuery = supabase
         .from('crm_deals')
         .select('id, name, contact_id, owner_profile_id, origin_id, stage_id, created_at')
         .in('contact_id', contactIds)
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (ownerFilterId) {
+        dealsQuery = dealsQuery.eq('owner_profile_id', ownerFilterId);
+      }
+
+      const { data: deals } = await dealsQuery;
 
       const dealList = (deals || []) as any[];
       const originIds = Array.from(new Set(dealList.map(d => d.origin_id).filter(Boolean)));
@@ -104,13 +117,17 @@ export function useLeadLookupByPhone(rawPhone: string) {
         dealsByContact.set(d.contact_id, arr);
       });
 
-      return contacts.map(c => ({
+      // Quando filtramos por dono, escondemos contatos que não têm nenhum deal próprio
+      // (assim o SDR não vê o nome de leads de outros SDRs). Sem deal acessível,
+      // a ligação será tratada como avulsa.
+      const all = contacts.map(c => ({
         contactId: c.id,
         contactName: c.name,
         email: c.email,
         phone: c.phone,
         deals: dealsByContact.get(c.id) || [],
       }));
+      return ownerFilterId ? all.filter(c => c.deals.length > 0) : all;
     },
   });
 }
