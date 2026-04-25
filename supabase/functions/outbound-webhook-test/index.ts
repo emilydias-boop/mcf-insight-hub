@@ -125,7 +125,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const payload = samplePayload();
+    const isConsorcio =
+      Array.isArray(cfg.sources) && cfg.sources.includes("consorcio");
+    const payload = isConsorcio ? consorcioSamplePayload() : samplePayload();
     const body = JSON.stringify(payload);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
