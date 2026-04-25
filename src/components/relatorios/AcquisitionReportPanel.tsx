@@ -36,7 +36,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     closers, classified, isLoading,
   } = useAcquisitionReport(dateRange, bu);
 
-  const { rows: funnelRows, totals: funnelTotals, isLoading: funnelLoading } =
+  const { rows: funnelRows, totals: funnelTotals, details: funnelDetails, isLoading: funnelLoading } =
     useChannelFunnelReport(dateRange, bu);
 
   // Apply local filters on classified data to recalculate if needed
@@ -233,7 +233,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
           </CardContent>
         </Card>
       ) : (
-        <ChannelFunnelTable rows={funnelRows} totals={funnelTotals} />
+        <ChannelFunnelTable rows={funnelRows} totals={funnelTotals} details={funnelDetails} />
       )}
 
       {/* Faturamento por Closer */}
