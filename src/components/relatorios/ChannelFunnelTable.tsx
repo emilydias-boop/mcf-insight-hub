@@ -95,22 +95,72 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                         info="Agendamentos R1 criados no período (booked_at), filtrados pela BU do SDR no momento do agendamento. Cap de 2 reagendamentos por deal — alinhado ao Painel Comercial e à página Reuniões Equipe."
                       />
                     </TableHead>
-                    <TableHead className="text-right">R1 Realiz.</TableHead>
-                    <TableHead className="text-right">No-Show</TableHead>
-                    <TableHead className="text-right">Contrato Pago</TableHead>
-                    <TableHead className="text-right">R2 Agend.</TableHead>
-                    <TableHead className="text-right">R2 Realiz.</TableHead>
-                    <TableHead className="text-right">Aprovados</TableHead>
-                    <TableHead className="text-right">Reprovados</TableHead>
-                    <TableHead className="text-right">Próx. Semana</TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="R1 Realiz."
+                        info="R1 com status realizada/completed no período selecionado (scheduled_at dentro do range), filtradas pela BU. Cap de 2 reagendamentos por deal."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="No-Show"
+                        info="R1 com status no_show no período selecionado, filtradas pela BU. Cap de 2 reagendamentos por deal."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Contrato Pago"
+                        info="Attendees R1 com contract_paid_at dentro do período, OU deals que entraram no estágio 'Contrato Pago' no período. Atribuído ao canal do deal (TAG + compra A010)."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="R2 Agend."
+                        info="Attendees de reuniões R2 com scheduled_at dentro do período exato selecionado (não mais semanas inteiras de carrinho — alinhado ao filtro de datas desde a última atualização). Deduplicado por deal."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="R2 Realiz."
+                        info="R2 com status completed/realizada no período exato selecionado. Deduplicado por deal."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Aprovados"
+                        info="Attendees R2 com r2_status_name contendo 'aprovado' no período exato selecionado. Independe da data do contrato — apenas a R2 conta no período."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Reprovados"
+                        info="Attendees R2 cujo r2_status_name indica saída do carrinho (reembolso, desistente, reprovado, cancelado) no período selecionado."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Próx. Semana"
+                        info="Attendees R2 marcados como 'Próxima semana' (lead que será trabalhado na próxima safra) cuja R2 ocorreu no período."
+                      />
+                    </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
                         info="Primeira conversão em Parceria por cliente (e-mail) no período. Inclui apenas produtos de venda nova: A001/A002/A003/A004/A005/A009 completo. Exclui A000-Contrato, renovações, Club isolado, A010, Vitalício, e clientes que já eram parceiros nos últimos 12 meses. Bruto = reference_price. Líquido = valor recebido no Hubla. Canal (apenas TAG + compra A010, pipeline não classifica): (1) compra A010 ≤30 dias antes da venda → A010; (2) tags LIVE/ANAMNESE/ANAMNESE-INSTA/LANÇAMENTO (sem INCOMPLETA) → ANAMNESE; (3) compra A010 >30 dias → ANAMNESE (lead reciclado); (4) só tag A010 sem compra → A010; (5) sem nenhum sinal → OUTROS."
                       />
                     </TableHead>
-                    <TableHead className="text-right">Fat. Bruto</TableHead>
-                    <TableHead className="text-right">Fat. Líquido</TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Fat. Bruto"
+                        info="Soma de reference_price (preço de tabela) das vendas finais únicas no período. Não é o valor recebido — é o preço cheio configurado em product_configurations."
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <HeaderWithInfo
+                        label="Fat. Líquido"
+                        info="Soma do valor efetivamente recebido no Hubla (product_price, líquido de descontos) das vendas finais únicas no período."
+                      />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
