@@ -22,7 +22,7 @@ interface Props {
 }
 
 const CONSORCIO_PAYLOAD_EXAMPLE = `{
-  "event": "consorcio.venda.criada",
+  "event": "venda.criada",
   "source": "consorcio",
   "external_id": "<card.id>",
   "grupo": "1234",
