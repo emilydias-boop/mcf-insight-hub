@@ -52,6 +52,27 @@ export interface ChannelFunnelRow {
   taxaNoShow: number;
 }
 
+export type FunnelMetricKey =
+  | 'entradas' | 'r1Agendada' | 'r1Realizada' | 'noShow' | 'contratoPago'
+  | 'r2Agendada' | 'r2Realizada' | 'aprovados' | 'reprovados' | 'proximaSemana'
+  | 'vendaFinal' | 'faturamentoBruto' | 'faturamentoLiquido';
+
+export interface FunnelDetailItem {
+  id: string;            // deal_id ou transaction_id (para vendas)
+  dealId: string | null; // para abrir no CRM
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  date: string;          // data do evento (created_at / scheduled_at / contract_paid_at / sale_date)
+  channel: string;
+  status: string | null;
+  product: string | null;     // só para vendas
+  bruto: number | null;       // só para vendas
+  liquido: number | null;     // só para vendas
+}
+
+export type FunnelDetails = Record<string, Record<FunnelMetricKey, FunnelDetailItem[]>>;
+
 interface CarrinhoFunnelRow {
   deal_id: string | null;
   r2_status_name: string | null;
