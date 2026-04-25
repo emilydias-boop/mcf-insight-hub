@@ -4,8 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport } from './useAcquisitionReport';
-import { getCartWeekStart, getCartWeekEnd } from '@/lib/carrinhoWeekBoundaries';
-import { addWeeks, format } from 'date-fns';
+import { format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
@@ -200,51 +199,39 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // 2. Carrinho (Aprovado/Reprovado/Próxima semana) por semanas tocadas pelo período
-  const weeksInRange = useMemo(() => {
-    if (!dateRange?.from || !dateRange?.to) return [] as Array<{ start: Date; end: Date }>;
-    const out: Array<{ start: Date; end: Date }> = [];
-    let cursor = getCartWeekStart(dateRange.from);
-    const last = getCartWeekStart(dateRange.to);
-    let safety = 0;
-    while (cursor.getTime() <= last.getTime() && safety < 60) {
-      out.push({ start: cursor, end: getCartWeekEnd(cursor) });
-      cursor = getCartWeekStart(addWeeks(cursor, 1));
-      safety++;
-    }
-    return out;
-  }, [dateRange]);
-
-  const carrinhoKey = weeksInRange.map(w => format(w.start, 'yyyy-MM-dd')).join(',');
+  // 2. Carrinho (R2 Agendada/Realizada + Aprovado/Reprovado/Próxima semana) —
+  //    AGORA respeitando exatamente o intervalo de datas selecionado pelo
+  //    usuário (mesma janela usada por Entradas/R1), em vez de iterar por
+  //    semanas-carrinho inteiras que tocavam o período. Isso elimina o
+  //    descasamento que existia entre R2/Aprovados e Entradas/R1.
   const { data: carrinhoRows = [], isLoading: loadingCarrinho } = useQuery<CarrinhoFunnelRow[]>({
-    queryKey: ['funnel-carrinho', carrinhoKey],
+    queryKey: ['funnel-carrinho-range', startDate, endDate],
     queryFn: async () => {
-      if (weeksInRange.length === 0) return [];
-      const all: CarrinhoFunnelRow[] = [];
-      for (const w of weeksInRange) {
-        const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
-          p_week_start: format(w.start, 'yyyy-MM-dd'),
-          p_window_start: new Date(w.start).toISOString(),
-          p_window_end: new Date(new Date(w.end).setHours(23, 59, 59, 999)).toISOString(),
-          p_apply_contract_cutoff: false,
-          p_previous_cutoff: new Date(w.start).toISOString(),
-        });
-        if (error) {
-          console.warn('[funnel] carrinho RPC error', error);
-          continue;
-        }
-        (data || []).forEach((r: any) => all.push({
-          deal_id: r.deal_id,
-          r2_status_name: r.r2_status_name,
-          meeting_status: r.meeting_status,
-          attendee_status: r.attendee_status,
-          contact_email: r.contact_email,
-          contact_phone: r.contact_phone,
-          attendee_phone: r.attendee_phone,
-        }));
+      if (!startDate || !endDate) return [];
+      const windowStart = `${startDate}T00:00:00-03:00`;
+      const windowEnd = `${endDate}T23:59:59-03:00`;
+      const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
+        p_week_start: startDate, // só satisfaz a assinatura; janela real é window_start/end
+        p_window_start: new Date(windowStart).toISOString(),
+        p_window_end: new Date(windowEnd).toISOString(),
+        p_apply_contract_cutoff: false,
+        p_previous_cutoff: new Date(windowStart).toISOString(),
+      });
+      if (error) {
+        console.warn('[funnel] carrinho RPC error', error);
+        return [];
       }
-      return all;
+      return (data || []).map((r: any) => ({
+        deal_id: r.deal_id,
+        r2_status_name: r.r2_status_name,
+        meeting_status: r.meeting_status,
+        attendee_status: r.attendee_status,
+        contact_email: r.contact_email,
+        contact_phone: r.contact_phone,
+        attendee_phone: r.attendee_phone,
+      }));
     },
-    enabled: weeksInRange.length > 0,
+    enabled: !!startDate && !!endDate,
     staleTime: 60_000,
   });
 
