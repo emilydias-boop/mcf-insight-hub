@@ -81,7 +81,7 @@ const TwilioContext = createContext<TwilioContextType | null>(null);
 const TWILIO_TEST_ORIGIN_NAME = 'Twilio – Teste';
 
 export function TwilioProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, hasAnyRole } = useAuth();
   const [device, setDevice] = useState<TwilioDevice | null>(null);
   const [currentCall, setCurrentCall] = useState<TwilioCall | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('disconnected');
@@ -233,6 +233,25 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [user, deviceStatus, device]);
+
+  // Auto-inicializa o telefone assim que o SDR/Closer/Coordenador faz login
+  // (uma única vez por sessão, em background, sem bloquear a UI).
+  const autoInitTriedRef = useRef(false);
+  useEffect(() => {
+    if (!user) {
+      autoInitTriedRef.current = false;
+      return;
+    }
+    if (autoInitTriedRef.current) return;
+    if (deviceStatus === 'ready' || deviceStatus === 'connecting') return;
+    const eligible = hasAnyRole('sdr', 'closer', 'coordenador', 'admin', 'manager', 'closer_sombra');
+    if (!eligible) return;
+    autoInitTriedRef.current = true;
+    console.log('[Twilio] Auto-inicializando device para usuário elegível...');
+    initializeDevice().catch((err) => {
+      console.warn('[Twilio] Auto-init falhou (silencioso, será reativado on-demand):', err);
+    });
+  }, [user, deviceStatus, hasAnyRole, initializeDevice]);
 
   // Check if token needs refresh
   const ensureValidToken = useCallback(async (): Promise<boolean> => {
