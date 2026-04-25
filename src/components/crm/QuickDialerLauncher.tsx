@@ -17,6 +17,15 @@ export function QuickDialerLauncher() {
   const [autoOpen, setAutoOpen] = useState(false);
   const ad = useAutoDialer();
 
+  // Fecha automaticamente o painel do auto-discador quando a fila começa a rodar
+  // ou quando um lead atende — assim o DealDetailsDrawer e o banner ficam visíveis
+  // sem competir com o Sheet do painel.
+  useEffect(() => {
+    if (ad.state === 'running' || ad.state === 'paused-in-call') {
+      setAutoOpen(false);
+    }
+  }, [ad.state]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
