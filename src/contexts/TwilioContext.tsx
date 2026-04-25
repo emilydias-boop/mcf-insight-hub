@@ -81,7 +81,7 @@ const TwilioContext = createContext<TwilioContextType | null>(null);
 const TWILIO_TEST_ORIGIN_NAME = 'Twilio – Teste';
 
 export function TwilioProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, hasAnyRole } = useAuth();
   const [device, setDevice] = useState<TwilioDevice | null>(null);
   const [currentCall, setCurrentCall] = useState<TwilioCall | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('disconnected');
