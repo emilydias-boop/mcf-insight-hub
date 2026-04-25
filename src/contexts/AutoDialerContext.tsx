@@ -1,0 +1,283 @@
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { useTwilio } from './TwilioContext';
+import { supabase } from '@/integrations/supabase/client';
+import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { toast } from 'sonner';
+
+export type AutoDialerState = 'idle' | 'running' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+
+export interface AutoDialerLead {
+  dealId: string;
+  contactId: string | null;
+  originId: string | null;
+  name: string;
+  phone: string;
+}
+
+export type LeadResult = 'pending' | 'in-progress' | 'answered' | 'no-answer' | 'failed' | 'skipped';
+
+export interface AutoDialerStats {
+  total: number;
+  called: number;
+  answered: number;
+  noAnswer: number;
+  failed: number;
+}
+
+interface AutoDialerContextType {
+  state: AutoDialerState;
+  queue: AutoDialerLead[];
+  results: Record<string, LeadResult>;
+  currentIndex: number;
+  currentLead: AutoDialerLead | null;
+  stats: AutoDialerStats;
+  ringTimeoutMs: number;
+  betweenCallsMs: number;
+  setRingTimeoutMs: (ms: number) => void;
+  setBetweenCallsMs: (ms: number) => void;
+  loadQueue: (leads: AutoDialerLead[]) => void;
+  start: () => void;
+  pause: () => void;
+  resume: () => void;
+  skipCurrent: () => void;
+  stop: () => void;
+}
+
+const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
+
+const MAX_QUEUE = 100;
+
+export function AutoDialerProvider({ children }: { children: ReactNode }) {
+  const {
+    callStatus,
+    currentCallId,
+    makeCall,
+    hangUp,
+    deviceStatus,
+    initializeDevice,
+    qualificationModalOpen,
+    openQualificationModal,
+  } = useTwilio();
+
+  const [state, setState] = useState<AutoDialerState>('idle');
+  const [queue, setQueue] = useState<AutoDialerLead[]>([]);
+  const [results, setResults] = useState<Record<string, LeadResult>>({});
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [ringTimeoutMs, setRingTimeoutMs] = useState(25000);
+  const [betweenCallsMs, setBetweenCallsMs] = useState(2000);
+
+  const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCallStatusRef = useRef(callStatus);
+  const wasInProgressRef = useRef(false);
+  const stateRef = useRef(state);
+  const currentIndexRef = useRef(currentIndex);
+  const queueRef = useRef(queue);
+  const isAdvancingRef = useRef(false);
+
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+  useEffect(() => { queueRef.current = queue; }, [queue]);
+
+  const currentLead = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null;
+
+  const stats: AutoDialerStats = {
+    total: queue.length,
+    called: Object.values(results).filter(r => r !== 'pending').length,
+    answered: Object.values(results).filter(r => r === 'answered').length,
+    noAnswer: Object.values(results).filter(r => r === 'no-answer').length,
+    failed: Object.values(results).filter(r => r === 'failed').length,
+  };
+
+  const clearTimers = useCallback(() => {
+    if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
+    if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+  }, []);
+
+  const setLeadResult = useCallback((dealId: string, result: LeadResult) => {
+    setResults(prev => ({ ...prev, [dealId]: result }));
+  }, []);
+
+  const dialIndex = useCallback(async (idx: number) => {
+    const lead = queueRef.current[idx];
+    if (!lead) return;
+
+    if (deviceStatus !== 'ready') {
+      const ok = await initializeDevice();
+      if (!ok) {
+        toast.error('Não foi possível inicializar o telefone');
+        setState('idle');
+        return;
+      }
+    }
+
+    setLeadResult(lead.dealId, 'in-progress');
+    wasInProgressRef.current = false;
+
+    try {
+      const normalized = normalizePhoneNumber(lead.phone);
+      await makeCall(normalized, lead.dealId, lead.contactId || undefined, lead.originId || undefined);
+    } catch (e) {
+      console.error('[autodialer] makeCall error', e);
+      setLeadResult(lead.dealId, 'failed');
+    }
+  }, [deviceStatus, initializeDevice, makeCall, setLeadResult]);
+
+  const advanceToNext = useCallback(() => {
+    if (isAdvancingRef.current) return;
+    isAdvancingRef.current = true;
+    clearTimers();
+    advanceTimerRef.current = setTimeout(() => {
+      isAdvancingRef.current = false;
+      const next = currentIndexRef.current + 1;
+      if (next >= queueRef.current.length) {
+        setState('finished');
+        toast.success('Fila concluída');
+        return;
+      }
+      if (stateRef.current !== 'running') return;
+      setCurrentIndex(next);
+      dialIndex(next);
+    }, betweenCallsMs);
+  }, [betweenCallsMs, clearTimers, dialIndex]);
+
+  // Reage a transições do callStatus
+  useEffect(() => {
+    const prev = lastCallStatusRef.current;
+    lastCallStatusRef.current = callStatus;
+
+    if (stateRef.current === 'idle' || stateRef.current === 'finished') return;
+    const lead = queueRef.current[currentIndexRef.current];
+    if (!lead) return;
+
+    // RINGING — inicia timer de "não atende"
+    if (callStatus === 'ringing' && stateRef.current === 'running') {
+      if (ringTimerRef.current) clearTimeout(ringTimerRef.current);
+      ringTimerRef.current = setTimeout(() => {
+        // Se ainda estiver ringing/connecting, encerra como no-answer
+        if (callStatus === 'ringing' || callStatus === 'connecting') {
+          hangUp();
+        }
+      }, ringTimeoutMs);
+    }
+
+    // ATENDEU
+    if (callStatus === 'in-progress' && prev !== 'in-progress') {
+      wasInProgressRef.current = true;
+      if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
+      setState('paused-in-call');
+      setLeadResult(lead.dealId, 'answered');
+    }
+
+    // ENCERROU (completed/failed) — decide próximo passo
+    if ((callStatus === 'completed' || callStatus === 'failed') && prev !== callStatus) {
+      if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
+
+      if (wasInProgressRef.current) {
+        // Atendeu → abre qualificação e pausa
+        setState('paused-qualifying');
+        openQualificationModal(lead.dealId, lead.name);
+      } else {
+        // Não atendeu / falhou
+        const result: LeadResult = callStatus === 'failed' ? 'failed' : 'no-answer';
+        setLeadResult(lead.dealId, result);
+
+        // Registra atividade de tentativa
+        if (currentCallId) {
+          // call já foi gravada pelo TwilioContext; só adiciona um deal_activities marker
+          supabase.from('deal_activities').insert({
+            deal_id: lead.dealId,
+            activity_type: 'call_result',
+            description: 'Tentativa automática — não atendeu',
+            metadata: { result: 'nao_atendeu', auto_dialer: true } as any,
+          }).then(({ error }) => { if (error) console.warn('[autodialer] activity insert error', error); });
+        }
+
+        if (stateRef.current === 'running') advanceToNext();
+      }
+    }
+  }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext]);
+
+  // Quando o modal de qualificação fecha, retoma a fila
+  useEffect(() => {
+    if (stateRef.current !== 'paused-qualifying') return;
+    if (!qualificationModalOpen) {
+      setState('running');
+      advanceToNext();
+    }
+  }, [qualificationModalOpen, advanceToNext]);
+
+  // ===== API =====
+  const loadQueue = useCallback((leads: AutoDialerLead[]) => {
+    if (state === 'running' || state === 'paused-in-call') {
+      toast.error('Pause ou pare a fila atual antes de carregar outra');
+      return;
+    }
+    const trimmed = leads.slice(0, MAX_QUEUE);
+    setQueue(trimmed);
+    setResults(Object.fromEntries(trimmed.map(l => [l.dealId, 'pending' as LeadResult])));
+    setCurrentIndex(-1);
+    setState('idle');
+  }, [state]);
+
+  const start = useCallback(() => {
+    if (queue.length === 0) { toast.error('Fila vazia'); return; }
+    if (state === 'running') return;
+    setState('running');
+    const startIdx = currentIndex < 0 ? 0 : currentIndex;
+    setCurrentIndex(startIdx);
+    dialIndex(startIdx);
+  }, [queue.length, state, currentIndex, dialIndex]);
+
+  const pause = useCallback(() => {
+    if (state === 'running') {
+      setState('idle');
+      clearTimers();
+      toast.info('Fila pausada');
+    }
+  }, [state, clearTimers]);
+
+  const resume = useCallback(() => {
+    if (state === 'idle' && queue.length > 0 && currentIndex >= 0 && currentIndex < queue.length - 1) {
+      setState('running');
+      advanceToNext();
+    }
+  }, [state, queue.length, currentIndex, advanceToNext]);
+
+  const skipCurrent = useCallback(() => {
+    const lead = queueRef.current[currentIndexRef.current];
+    if (lead) setLeadResult(lead.dealId, 'skipped');
+    if (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress') {
+      hangUp();
+    }
+    advanceToNext();
+  }, [callStatus, hangUp, advanceToNext, setLeadResult]);
+
+  const stop = useCallback(() => {
+    clearTimers();
+    if (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress') {
+      hangUp();
+    }
+    setState('idle');
+    setCurrentIndex(-1);
+    setQueue([]);
+    setResults({});
+    isAdvancingRef.current = false;
+  }, [callStatus, hangUp, clearTimers]);
+
+  return (
+    <AutoDialerContext.Provider value={{
+      state, queue, results, currentIndex, currentLead, stats,
+      ringTimeoutMs, betweenCallsMs, setRingTimeoutMs, setBetweenCallsMs,
+      loadQueue, start, pause, resume, skipCurrent, stop,
+    }}>
+      {children}
+    </AutoDialerContext.Provider>
+  );
+}
+
+export function useAutoDialer() {
+  const ctx = useContext(AutoDialerContext);
+  if (!ctx) throw new Error('useAutoDialer must be used within AutoDialerProvider');
+  return ctx;
+}

@@ -1,99 +1,158 @@
 
-# Discador Rápido (Quick Dialer) — estilo celular
+# 🚀 Auto-Discador (Power Dialer) – Discagem automática com pausa inteligente
 
-Adicionar um discador global, acessível de qualquer tela do CRM, onde o SDR/Closer digita um número e:
-1. O sistema **identifica o lead automaticamente** (se existir) — mostrando nome, BU, último estágio, dono.
-2. Permite **ligar imediatamente** via Twilio, com vínculo correto ao deal/contato (sem perder métricas).
-3. Suporta também digitação livre para números que ainda não existem no CRM.
+## Objetivo
 
----
+Permitir que o SDR/Closer carregue uma **fila de leads** (manual ou da pipeline) e o sistema disque **automaticamente, um após o outro**:
 
-## 1. Componente novo: `src/components/crm/QuickDialer.tsx`
-
-UI tipo celular:
-- **Display do número** com máscara automática brasileira (`(11) 9 9999-9999`).
-- **Teclado numérico 3x4** (1-9, *, 0, #) com clique para digitar — também aceita teclado físico.
-- **Botão Backspace** para apagar dígito.
-- **Botão verde grande "Ligar"** (ícone Phone).
-- **Card de "Lead identificado"** que aparece em tempo real conforme o usuário digita (debounce 400ms, dispara busca a partir de 8 dígitos):
-  - Nome do contato, e-mail, telefone formatado.
-  - Pipeline atual + estágio + BU.
-  - SDR/Closer responsável.
-  - Última atividade (opcional).
-  - Botão "Abrir no CRM" → navega para `/crm/negocios?dealId=...`.
-- Se **nenhum lead** for encontrado: mostra "Número não cadastrado — ligação será registrada como avulsa".
-- Se **múltiplos** leads (mesmo telefone em pipelines diferentes): lista compacta com escolha; o usuário seleciona qual deal vincular antes de ligar.
-
-Layout: dialog/modal (`Dialog` do shadcn), 380px, centralizado. Tema dark consistente com o app.
+1. Disca lead 1 → toca / ninguém atende → registra resultado → disca lead 2 → ...
+2. Quando alguém **atende** (status `in-progress` do Twilio), o sistema **alerta o SDR** (som + visual) e **pausa a fila**.
+3. SDR conduz a ligação normalmente.
+4. Ao **encerrar a chamada**, abre automaticamente o **modal de qualificação** (já existente, `openQualificationModal`).
+5. SDR escolhe um desfecho:
+   - **Agendar reunião** → abre o modal de agendamento existente.
+   - **Sem interesse / Perdido** → marca o lead.
+   - **Retornar depois** → agenda follow-up.
+6. Após salvar o desfecho, a fila **retoma automaticamente** no próximo lead.
 
 ---
 
-## 2. Hook novo: `src/hooks/useLeadLookupByPhone.ts`
+## 📦 Componentes / Hooks a criar
 
-`useLeadLookupByPhone(phoneDigits: string)` — React Query.
+### 1. `src/contexts/AutoDialerContext.tsx` *(novo)*
 
-- Normaliza para os **últimos 9 dígitos** (padrão de deduplicação já existente no projeto — vide `mem://business-logic/crm-manual-entry-deduplication-standard`).
-- Busca em `crm_contacts` via `ilike` no campo phone (sufixo de 9 dígitos).
-- Para cada contato encontrado, faz join leve com `crm_deals` (último deal por `created_at`) trazendo: `id`, `name`, `pipeline_id` (+ nome via lookup ou já carregado), `stage`, `owner_id`.
-- Inclui também busca em `hubla_transactions.customer_phone` como fallback (já é padrão usado em `phoneUtils.ts → findPhoneByEmail` na direção inversa).
-- `enabled: phoneDigits.replace(/\D/g,'').length >= 8`, `staleTime: 30s`.
-- Retorna `LeadMatch[]` com `{ contactId, contactName, email, phone, deals: [{ id, name, pipeline, stage, ownerEmail, bu }] }`.
+Contexto global que gerencia:
+
+```ts
+type AutoDialerState = 'idle' | 'running' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+
+interface AutoDialerContextType {
+  state: AutoDialerState;
+  queue: AutoDialerLead[];          // fila com phone, dealId, contactId, originId, name
+  currentIndex: number;
+  currentLead: AutoDialerLead | null;
+  stats: { total; called; answered; noAnswer; failed };
+  ringTimeoutMs: number;            // default 25000 (25s)
+  betweenCallsMs: number;           // default 2000 (2s)
+
+  loadQueue: (leads: AutoDialerLead[]) => void;
+  start: () => void;                // dispara primeira ligação
+  pause: () => void;                // pausa após call atual
+  resume: () => void;               // retoma a fila
+  skipCurrent: () => void;          // pula sem ligar
+  stop: () => void;                 // limpa fila
+}
+```
+
+**Lógica chave:**
+- Ao iniciar, chama `makeCall(lead.phone, lead.dealId, ...)` do `TwilioContext`.
+- **Observa `callStatus`** do `TwilioContext`:
+  - `ringing` → inicia timer de 25s. Se não atender, faz `hangUp()` + registra `nao_atendeu` em `deal_activities` + avança.
+  - `in-progress` → muda state para `paused-in-call`, toca som de alerta (já temos `notification.mp3`?), exibe banner.
+  - `completed` / `failed` → se vinha de `in-progress`, abre **modal de qualificação** (`openQualificationModal(currentLead.dealId)`) e muda state para `paused-qualifying`. Se vinha de `ringing` (não atendeu), avança automaticamente após `betweenCallsMs`.
+- Quando o modal de qualificação fecha (`qualificationModalOpen` muda de true → false), retoma automaticamente.
+
+### 2. `src/hooks/useAutoDialerController.ts` *(novo)*
+
+Hook que escuta as transições de `callStatus` do `TwilioContext` e dispara os efeitos do controlador.
+
+### 3. `src/components/sdr/AutoDialerPanel.tsx` *(novo)*
+
+Painel principal (pode ficar dentro do **SDRCockpit** ou como um Drawer dedicado):
+
+- Botão **"Carregar fila da pipeline atual"** (usa `useSDRQueueInfinite` para popular).
+- Botão **"Carregar fila do Cockpit"** (mesma função).
+- Lista visual da fila com indicadores:
+  - 🟢 Atendeu | 🔴 Não atendeu | ⚪ Pendente | 🔵 Em ligação
+- Controles: **Iniciar / Pausar / Pular / Parar**.
+- Stats em tempo real: `5/20 ligados • 1 atendeu • 4 não atenderam`.
+- Configurações inline: tempo de toque (15/25/40s) e pausa entre ligações (2/5s).
+
+### 4. `src/components/sdr/AutoDialerInCallBanner.tsx` *(novo)*
+
+Banner full-width que aparece quando `state === 'paused-in-call'`:
+
+- 🔔 Som de alerta + animação pulsante.
+- "📞 **{nome do lead}** atendeu! — em ligação há {timer}".
+- Atalhos visíveis: Mute / Encerrar / Abrir qualificação.
+- Toca som (Web Audio API) curto e discreto (`/sounds/answer-alert.mp3`).
+
+### 5. `src/components/crm/QuickDialer.tsx` *(editar)*
+
+Adicionar uma aba/botão extra: **"Modo Auto-Discador"** que abre o `AutoDialerPanel` em vez de fazer uma ligação única.
+
+### 6. `src/contexts/TwilioContext.tsx` *(pequeno ajuste)*
+
+Já expõe `callStatus`, `currentCallDealId`, `openQualificationModal`. Apenas garantir que o evento `disconnect` continua disparando `setCallStatus('completed')` — **não** precisa mexer.
+
+### 7. `src/components/layout/MainLayout.tsx` *(editar)*
+
+Envolver o app com `<AutoDialerProvider>` e renderizar `<AutoDialerInCallBanner />` global.
 
 ---
 
-## 3. Integração com Twilio existente
+## 🔄 Fluxo de integração com qualificação existente
 
-Reaproveita 100% o `useTwilio()` já implementado:
-- Usa `normalizePhoneNumber()` de `src/lib/phoneUtils.ts` antes de chamar.
-- Chama `makeCall(normalized, dealId?, contactId?, originId?)`:
-  - Se lead identificado e usuário escolheu um deal → passa `dealId` + `contactId` + `originId` (do pipeline) — métricas, gravação e qualificação ficam corretas.
-  - Se número avulso → passa só `phoneNumber` (já suportado pelo `makeCall`).
-- Antes de ligar, garante `deviceStatus === 'ready'`; caso contrário chama `initializeDevice()` com toast "Inicializando Twilio...".
-- Após `makeCall`, fecha o discador — o `TwilioSoftphone` flutuante e os controles inline já cuidam do resto (mute, hangup, qualificação, post-call modal).
+O `useCallQualificationTrigger` já abre o modal automaticamente quando `callStatus` vira `in-progress`. Vamos **manter** esse comportamento e **adicionar**:
+
+- Ao **fechar** o modal de qualificação (`closeQualificationModal`), o `AutoDialerContext` detecta a transição via efeito e chama `resume()` automaticamente se `state === 'paused-qualifying'`.
+
+Resultado: o SDR não precisa clicar em "próximo lead" — basta qualificar e o sistema dispara o próximo.
 
 ---
 
-## 4. Acesso global — onde abrir o discador
+## 📊 Persistência de tentativas
 
-Adicionar **botão flutuante de telefone** sempre visível para usuários com permissão (mesma regra do `TwilioSoftphone`: `deviceStatus !== 'disconnected'`):
-
-- **Arquivo**: `src/components/layout/MainLayout.tsx` (já hospeda o `TwilioSoftphone`).
-- Botão circular azul/verde no canto inferior esquerdo (oposto ao softphone que fica à direita) com ícone `Phone`.
-- Ao clicar → abre o `<QuickDialer />` modal.
-- **Atalho de teclado**: `Ctrl/Cmd + Shift + D` para abrir/fechar — registrado em um `useEffect` global no `MainLayout`.
-- Não renderizar para roles que não usam telefonia (manter consistência com o softphone atual).
-
----
-
-## 5. Fluxo de UX final
-
-1. Usuário aperta `Ctrl+Shift+D` ou clica no botão flutuante → abre o discador.
-2. Digita `11987654321` → após 8 dígitos, card "João Silva — Lead Instagram — SDR Maria" aparece.
-3. Clica "Ligar" → Twilio disca, modal fecha, softphone flutuante aparece com timer.
-4. Ao final, o `PostCallModal` e o `QualificationModal` abrem normalmente (já vinculados ao deal correto).
-5. Se quiser, clica "Abrir no CRM" para ir direto ao deal antes de ligar.
+Cada ligação não atendida grava em `deal_activities`:
+```ts
+{
+  deal_id, activity_type: 'call_result',
+  description: 'Tentativa automática — não atendeu',
+  metadata: { result: 'nao_atendeu', auto_dialer: true, attempt_n: X }
+}
+```
+Isso já alimenta o `callAttempts` no `useSelectedDeal` (que conta `nao_atendeu`).
 
 ---
 
-## 6. Arquivos a criar / editar
+## 🎯 Critérios de aceitação
+
+- [ ] SDR carrega fila de 10 leads e clica "Iniciar".
+- [ ] Sistema disca o lead 1; após 25s sem atender, registra "nao_atendeu" e disca o lead 2 automaticamente.
+- [ ] Quando o lead 5 atende: toca som, banner aparece, fila pausa.
+- [ ] SDR conduz a ligação. Ao encerrar, modal de qualificação abre.
+- [ ] SDR preenche qualificação e fecha → fila retoma automaticamente no lead 6.
+- [ ] Botão "Pausar" interrompe após a ligação atual; "Parar" limpa a fila.
+- [ ] Histórico de cada tentativa fica registrado em `deal_activities`.
+- [ ] Funciona em qualquer página (provider está no MainLayout).
+
+---
+
+## 🛡️ Salvaguardas
+
+- **Bloqueio anti-duplicidade**: se já existe `currentCall` ativo, não inicia próximo.
+- **Limite de fila**: máximo 100 leads por sessão para evitar uso abusivo.
+- **Som de alerta** opt-in: persiste em `localStorage('autoDialerSound')` (default ON).
+- **Confirmação ao Parar** se houver leads não chamados restantes.
+
+---
+
+## 📁 Arquivos
 
 **Criar:**
-- `src/components/crm/QuickDialer.tsx` — UI do discador.
-- `src/components/crm/QuickDialerLauncher.tsx` — botão flutuante + atalho de teclado + estado open/close.
-- `src/hooks/useLeadLookupByPhone.ts` — busca de leads por telefone.
+- `src/contexts/AutoDialerContext.tsx`
+- `src/hooks/useAutoDialerController.ts`
+- `src/components/sdr/AutoDialerPanel.tsx`
+- `src/components/sdr/AutoDialerInCallBanner.tsx`
+- `public/sounds/answer-alert.mp3` (placeholder; usaremos Web Audio beep se não houver arquivo)
 
 **Editar:**
-- `src/components/layout/MainLayout.tsx` — montar o `<QuickDialerLauncher />` ao lado do `<TwilioSoftphone />`.
+- `src/components/crm/QuickDialer.tsx` (adicionar entrada para o modo auto)
+- `src/components/crm/QuickDialerLauncher.tsx` (atalho extra `Ctrl+Shift+A` para abrir auto-dialer)
+- `src/components/layout/MainLayout.tsx` (provider + banner global)
 
-Sem migrations de banco. Sem novas edge functions. 100% client-side reaproveitando `TwilioContext` existente.
+**Sem mudanças no banco** — usa `deal_activities` e `calls` que já existem.
 
 ---
 
-## 7. Validação pós-implementação
-
-- Digitar número de lead conhecido → deve identificar e mostrar pipeline/SDR.
-- Ligar a partir do discador → ligação deve aparecer na aba "Calls" do deal correto.
-- Ligar para número desconhecido → deve criar `calls` row sem `deal_id`, sem quebrar.
-- Atalho `Ctrl+Shift+D` deve funcionar em qualquer rota do CRM.
-- No mobile (viewport <768px), modal deve ocupar tela cheia e teclado numérico ser tocável.
-
+Posso seguir com a implementação?

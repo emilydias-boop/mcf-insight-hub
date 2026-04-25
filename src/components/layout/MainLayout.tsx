@@ -7,6 +7,8 @@ import { QuickDialerLauncher } from "@/components/crm/QuickDialerLauncher";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useTwilio } from "@/contexts/TwilioContext";
+import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
+import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner";
 import { Menu } from "lucide-react";
 
 function GlobalQualificationModal() {
@@ -33,6 +35,7 @@ function GlobalQualificationModal() {
 export function MainLayout() {
   return (
       <SidebarProvider defaultOpen={false}>
+        <AutoDialerProvider>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
           <SidebarInset className="flex-1 overflow-hidden">
@@ -49,9 +52,11 @@ export function MainLayout() {
           </SidebarInset>
           <TwilioSoftphone />
           <QuickDialerLauncher />
+          <AutoDialerInCallBanner />
           <OverdueAlertOverlay />
           <GlobalQualificationModal />
         </div>
+        </AutoDialerProvider>
       </SidebarProvider>
   );
 }
