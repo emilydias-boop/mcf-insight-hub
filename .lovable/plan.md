@@ -1,89 +1,58 @@
-## Contexto
+## Diagnóstico
 
-Você quer disparar um webhook **outbound** (saída) sempre que uma venda de consórcio (`consortium_cards`) for criada/atualizada, com payload estendido baseado no formato da imagem, gerenciável pela aba **Webhooks Saída** em `/admin/automacoes`.
+O teste retornou **HTTP 401** porque a URL de destino é uma **Edge Function de outro projeto Supabase** (`ruupfbtqmgsynurdoomu.supabase.co`), e Edge Functions Supabase exigem o header `Authorization: Bearer <anon_key>` por padrão. O nosso dispatcher (`outbound-webhook-test` e `outbound-webhook-dispatcher`) só envia `Content-Type` + headers customizados configurados + opcional `X-Signature`. Não há injeção automática de Authorization.
 
-**Estado atual do sistema:**
-- Já existe infraestrutura completa de outbound webhooks: tabelas `outbound_webhook_configs`, `outbound_webhook_queue`, `outbound_webhook_logs`, edge function `outbound-webhook-dispatcher` (com retry, HMAC, logs) e UI `OutboundWebhookList` em Automações.
-- O trigger atual (`enqueue_outbound_sale_webhook`) só observa `hubla_transactions` com sources `hubla|kiwify|mcfpay|make|asaas|manual`. **Consórcio não está coberto.**
-- A função `build_sale_webhook_payload` monta payload baseado em transações Hubla — não serve para consórcio.
+**Segundo problema (silencioso):** Mesmo após resolver o 401, a função de destino (`webhook-consorcio` no outro projeto, cujo código é idêntico ao nosso `supabase/functions/webhook-consorcio/index.ts`) espera um schema **completamente diferente** do payload que enviamos:
 
-## Plano de implementação
+| Campo esperado pelo destino | Enviado pelo nosso webhook |
+|---|---|
+| `grupo`, `cota`, `valor_credito`, `tipo_pessoa` (obrigatórios) | `event`, `external_id`, `comprador.{...}`, `valor_carta_credito` |
+| `nome_completo` / `razao_social` | `comprador.nome` / `comprador.razao_social` |
+| `cnpj`, `cpf`, `email`, `telefone` (raiz) | dentro de `comprador` |
 
-### 1. Banco de dados (migração)
+Resultado esperado se só corrigirmos o 401: HTTP 400 com `Campos obrigatórios: grupo, cota, valor_credito, tipo_pessoa`.
 
-**a) Adicionar `consorcio` à lista de sources permitidos**
-- Atualizar a constante de sources em `OUTBOUND_SOURCES` (frontend) e o filtro do trigger.
+## Solução em 2 partes
 
-**b) Criar função `build_consorcio_sale_webhook_payload(card consortium_cards, event text)`**
-- Retorna JSONB com formato estendido baseado na imagem:
-```json
-{
-  "event": "consorcio.venda.criada",
-  "external_id": "<card.id>",
-  "grupo": "1234",
-  "cota": "0789",
-  "tipo_plano": "select",
-  "tipo_contrato": "normal",
-  "valor_carta_credito": 100000,
-  "prazo_meses": 240,
-  "data_venda": "2026-04-24",
-  "dia_assembleia": 15,
-  "status": "ativo",
-  "comprador": {
-    "tipo_pessoa": "pf",
-    "nome": "...",
-    "cpf": "...",
-    "email": "...",
-    "telefone": "...",
-    "razao_social": null,
-    "cnpj": null
-  },
-  "vendedor": { "id": "...", "nome": "..." },
-  "comissao": { "valor": 1500.00 },
-  "origem": { "tipo": "indicacao", "detalhe": "..." },
-  "contemplacao": { "data": null, "motivo": null, "valor_lance": null },
-  "timestamps": { "created_at": "...", "updated_at": "..." }
-}
-```
+### Parte 1 — Resolver o 401 (você faz, sem código)
 
-**c) Criar trigger `enqueue_outbound_consorcio_webhook` em `consortium_cards`**
-- Eventos: `consorcio.venda.criada` (INSERT), `consorcio.venda.atualizada` (UPDATE relevante: status, valor_credito, valor_comissao, contemplacao), `consorcio.venda.cancelada` (UPDATE para status=`cancelado`).
-- Insere na mesma fila `outbound_webhook_queue` para reusar o dispatcher existente.
+1. Editar o webhook **"Consórcio - Vendas para Grima"** em Admin > Automações > Webhooks Saída.
+2. Na seção **Headers customizados**, adicionar:
+   - **Chave:** `Authorization`
+   - **Valor:** `Bearer <ANON_KEY do projeto ruupfbtqmgsynurdoomu>`
+3. Salvar e clicar em **Testar** novamente.
 
-**d) Token por integração** (similar ao da imagem)
-- Criar tabela `outbound_webhook_tokens` (id, config_id, name, token_hash, last_used_at, revoked_at, created_at).
-- Token em texto plano só é mostrado uma vez na criação. O dispatcher já injeta `X-Signature` HMAC; tokens são para identificação/revogação por integração.
-- *(Alternativa mais simples: manter apenas o `secret_token` único por config como já existe — me confirma se quer a UI de múltiplos tokens ou só um.)*
+> Use a **anon key** do projeto de destino (não service_role). Você pega no dashboard Supabase > Settings > API daquele projeto.
 
-### 2. Frontend — Estender Automações
+### Parte 2 — Compatibilizar o schema (eu faço no código)
 
-**a) `useOutboundWebhooks.ts`**
-- Adicionar `'consorcio'` em `OUTBOUND_SOURCES`.
-- Adicionar eventos novos em `OUTBOUND_EVENTS`: `consorcio.venda.criada`, `consorcio.venda.atualizada`, `consorcio.venda.cancelada`.
+Existem 3 caminhos possíveis. Recomendo o **B**:
 
-**b) `OutboundWebhookFormDialog.tsx`**
-- Já consome as listas acima — vai aparecer automaticamente como opção marcável.
-- Adicionar bloco "**Exemplo de payload**" colapsável quando o source `consorcio` estiver selecionado, mostrando o JSON acima e exemplo curl (igual ao da imagem, mas usando seu projeto: `https://rehcfgqvigfcekiipqkc.supabase.co/...` — porém aqui a URL é a do CLIENTE, não a sua, já que é outbound).
+**A) Adaptar o destino:** alterar `webhook-consorcio` no outro projeto para aceitar o payload estendido. ❌ Não temos acesso ao outro projeto.
 
-**c) (Opcional) UI de tokens**
-- Se decidirmos por múltiplos tokens, adicionar componente `OutboundWebhookTokens` dentro do form com listagem, botão "Gerar token" e revogação.
+**B) Adaptar o payload de saída (RECOMENDADO):** alterar a função `build_consorcio_sale_webhook_payload` no banco para emitir os campos no schema que `webhook-consorcio` espera (`grupo`, `cota`, `valor_credito`, `tipo_pessoa`, `nome_completo` na raiz, etc.) — mantendo também os campos estendidos como metadados opcionais que o destino ignora.
 
-### 3. Edge function (mínima — reaproveita dispatcher existente)
+**C) Trocar o destino:** apontar para um endpoint genérico (Make/Zapier) que aceita JSON livre.
 
-Nada novo a criar. O `outbound-webhook-dispatcher` já lê da `outbound_webhook_queue` e dispara qualquer evento, então basta o trigger enfileirar.
+### Implementação proposta (caminho B)
 
-### 4. Documentação inline na UI
+1. **Migração SQL** — recriar `build_consorcio_sale_webhook_payload(card_id uuid, event_type text)` para retornar JSON com:
+   - **Raiz (compatível com webhook-consorcio):** `grupo`, `cota`, `valor_credito`, `prazo_meses`, `tipo_produto`, `tipo_contrato`, `parcelas_pagas_empresa`, `data_contratacao`, `dia_vencimento`, `origem`, `origem_detalhe`, `tipo_pessoa`, `nome_completo`, `cpf`, `email`, `telefone`, `razao_social`, `cnpj`, `vendedor_name`.
+   - **Metadados extras (ignorados pelo destino, úteis para outros consumidores):** `event`, `external_id`, `source: "consorcio"`, `occurred_at`, `status`, `data_contemplacao`, `motivo_contemplacao`, `vendedor.{id, nome}`, `comissao`, `transferencia`, `timestamps`.
 
-Na aba "Webhooks Saída", quando o usuário criar um webhook para consórcio, o form mostra:
-- Eventos disponíveis (com checkboxes)
-- Exemplo de payload por evento
-- Header de assinatura HMAC (`X-Signature: sha256=...`) explicado
-- URL de destino (o cliente cola a URL DELE — Zapier/Make/n8n)
+2. **Atualizar** `CONSORCIO_PAYLOAD_EXAMPLE` em `src/components/automations/OutboundWebhookFormDialog.tsx` para refletir o novo formato (raiz + metadados).
 
-## Pontos a confirmar antes de implementar
+3. **Atualizar** `samplePayload()` em `supabase/functions/outbound-webhook-test/index.ts` para emitir o novo formato quando a config tiver `sources` contendo `'consorcio'`. Hoje ela manda sempre payload de venda Hubla (`event: "sale.created"`), o que também explicaria o 400 do `webhook-consorcio` mesmo se o 401 fosse resolvido.
 
-1. **Tokens múltiplos por integração** (como na imagem) ou **um único secret_token por config** (como já existe)? O sistema atual já tem assinatura HMAC; tokens nomeados são úteis se você quer revogar/auditar por origem.
-2. **Eventos a disparar**: confirma os 3 (criada / atualizada / cancelada)? Quer também `consorcio.contemplacao.registrada` quando `numero_contemplacao` é preenchido?
-3. **Quais campos de UPDATE devem disparar `atualizada`**? Sugestão: status, valor_credito, valor_comissao, parcelas_pagas_empresa, contemplacao. Outros mudam muito e gerariam ruído.
+### Arquivos afetados
+- `supabase/migrations/<timestamp>_<id>.sql` (novo) — recria função `build_consorcio_sale_webhook_payload`.
+- `src/components/automations/OutboundWebhookFormDialog.tsx` — atualiza exemplo na UI.
+- `supabase/functions/outbound-webhook-test/index.ts` — gera amostra de Consórcio compatível com destino.
 
-Após sua aprovação eu sigo direto para a implementação.
+### Validação
+1. Você adiciona o header `Authorization: Bearer <anon_key>` no webhook.
+2. Eu deploy as alterações.
+3. Você clica **Testar** → esperado: HTTP 200 com `{ "success": true, "id": "<uuid>", "message": "Carta de consórcio criada com sucesso" }`.
+4. Como será criada uma **carta de teste no banco do destino**, você deve depois removê-la manualmente (ou eu posso adicionar um marcador `_test: true` que o destino reconheça — mas isso requer ajuste no destino, então fica fora do escopo).
+
+⚠️ **Atenção sobre o teste real:** o `webhook-consorcio` do destino **realmente cria um registro** em `consortium_cards` no banco do projeto de destino quando recebe um payload válido. Cada clique em "Testar" vai inserir uma carta de teste (grupo `1234`, cota `0789`, cliente `João da Silva`/CPF `00000000000`). Considere se isso é aceitável ou se prefere apontar pra uma URL de staging para testes.
