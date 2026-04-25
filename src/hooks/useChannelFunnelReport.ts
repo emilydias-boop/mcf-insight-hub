@@ -487,6 +487,38 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     return m;
   }, [dealMeta]);
 
+  // ================================================================
+  // 5b. Lookup de nome/telefone do contato (para drill-down)
+  //     Busca leve em crm_contacts apenas para os deals envolvidos.
+  // ================================================================
+  const contactIdsToLoad = useMemo(() => {
+    const s = new Set<string>();
+    dealMeta.forEach(d => { if (d.contact_id) s.add(d.contact_id); });
+    return Array.from(s);
+  }, [dealMeta]);
+
+  const { data: contactInfo = new Map<string, { name: string | null; phone: string | null; email: string | null }>() } =
+    useQuery<Map<string, { name: string | null; phone: string | null; email: string | null }>>({
+      queryKey: ['funnel-contact-info', contactIdsToLoad.join(',').slice(0, 200), contactIdsToLoad.length],
+      queryFn: async () => {
+        const m = new Map<string, { name: string | null; phone: string | null; email: string | null }>();
+        if (contactIdsToLoad.length === 0) return m;
+        for (let i = 0; i < contactIdsToLoad.length; i += 200) {
+          const chunk = contactIdsToLoad.slice(i, i + 200);
+          const { data } = await supabase
+            .from('crm_contacts')
+            .select('id, name, phone, email')
+            .in('id', chunk);
+          (data || []).forEach((c: any) => {
+            m.set(c.id, { name: c.name || null, phone: c.phone || null, email: c.email || null });
+          });
+        }
+        return m;
+      },
+      enabled: contactIdsToLoad.length > 0,
+      staleTime: 60_000,
+    });
+
   // Para vendas cujo email não está em dealMeta, precisamos buscar o deal pelo email
   // e classificar. Faremos isso só para emails que faltarem.
   const missingVendaEmails = useMemo(() => {
