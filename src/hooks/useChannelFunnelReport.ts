@@ -3,19 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { useAcquisitionReport } from './useAcquisitionReport';
 import { format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
- * Funil completo por canal — fonte alinhada ao Painel Comercial.
+ * Funil por Canal — fotografia independente por coluna, dentro da janela exata.
  *
- * As métricas R1 (Agendada / Realizada / No-Show / Contrato Pago) e Entradas vêm da
- * RPC `get_channel_funnel_metrics`, que replica a lógica de `get_sdr_metrics_from_agenda`
- * (Painel Comercial) — apenas agregando por canal em vez de por SDR.
- *
- * R2 (Aprovado/Reprovado/Próx. Semana) continua vindo da RPC do Carrinho.
- * Faturamento (Venda Final/Bruto/Líquido) continua vindo de `useAcquisitionReport`.
+ * Princípio:
+ *  - Cada coluna conta DEALS ÚNICOS (ou EMAILS ÚNICOS para venda)
+ *    cujo evento principal cai estritamente dentro do intervalo selecionado.
+ *  - Sem inflar por reagendamento (1 deal = 1 unidade).
+ *  - Sem filtros escondidos de "primeira-compra-da-vida" — venda final inclui
+ *    todas as vendas de parceria que entraram no período (incluindo upsells/recompras).
+ *  - Classificador de canal único (classifyChannelWith30dRule) aplicado a todos
+ *    os deals/contatos da BU — soma por canal sempre fecha.
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -51,17 +52,6 @@ export interface ChannelFunnelRow {
   taxaNoShow: number;
 }
 
-interface ChannelMetricsResponse {
-  channels: Array<{
-    channel: string;
-    entradas: number;
-    r1_agendada: number;
-    r1_realizada: number;
-    no_shows: number;
-    contratos: number;
-  }>;
-}
-
 interface CarrinhoFunnelRow {
   deal_id: string | null;
   r2_status_name: string | null;
@@ -72,74 +62,25 @@ interface CarrinhoFunnelRow {
   attendee_phone: string | null;
 }
 
-function normalizeFunnelChannel(raw: string): string {
-  if (!raw) return 'OUTROS';
-  const r = String(raw).toUpperCase();
-  if (r.includes('A010')) return 'A010';
-  if (r === 'LIVE' || r === 'ANAMNESE' || r === 'ANAMNESE-INSTA' || r === 'LANÇAMENTO' || r === 'LANCAMENTO') {
-    return 'ANAMNESE';
-  }
-  return 'OUTROS';
-}
-
-// helper: últimos 9 dígitos do telefone para matching
 const phoneSuffix = (phone: string | null | undefined): string => {
   const digits = (phone || '').replace(/\D/g, '');
   return digits.length >= 9 ? digits.slice(-9) : digits;
 };
 
-// Janela em dias para considerar uma compra A010 como "fresh".
-// Compras dentro dessa janela ANTES da data de referência → A010.
-// Compras MAIS ANTIGAS que isso → ANAMNESE (lead reciclado).
 const A010_FRESH_WINDOW_DAYS = 30;
 
-/**
- * Classifica o canal aplicando a regra dos 30 dias para compras A010.
- *
- * Hierarquia (mesma da RPC get_channel_funnel_metrics):
- *   1. Compra A010 ≤30d antes (ou ≤1d depois) da data de referência → A010
- *   2. Tag/origem em (LIVE, ANAMNESE, ANAMNESE-INSTA, LANÇAMENTO) → ANAMNESE
- *   3. Compra A010 antiga (>30d) → ANAMNESE (lead reciclado)
- *   4. Tag/origem A010 sem compra registrada → A010
- *   5. Default → OUTROS (ou ANAMNESE se reachedR1=true)
- *
- * referenceDate: para Carrinho usar deal.created_at; para Venda Final usar sale_date.
- */
 function classifyChannelWith30dRule(opts: {
   tags: string[];
-  originName: string;
   firstA010Purchase: Date | null;
   referenceDate: Date;
-  reachedR1?: boolean;
 }): string {
-  // `originName` e `reachedR1` permanecem na assinatura por compatibilidade,
-  // mas NÃO classificam mais o canal. A classificação é estritamente baseada
-  // em tag + histórico de compra A010.
   const { tags, firstA010Purchase, referenceDate } = opts;
-
-  // Tags com "INCOMPLET" (ex: ANAMNESE-INCOMPLETA / ANAMNESE-INCOMPLETO) representam
-  // formulário ABANDONADO e NÃO contam como sinal de canal ANAMNESE.
-  // Só conta como ANAMNESE se o lead tiver tag completa:
-  // ANAMNESE, ANAMNESE-INSTA, LIVE / LEAD-LIVE, LANÇAMENTO / LEAD-LANÇAMENTO.
   const isAnamneseTag = (t: string) => {
     if (t.includes('INCOMPLET')) return false;
-    return (
-      t.includes('ANAMNESE') ||
-      t.includes('LIVE') ||
-      t.includes('LANÇ') ||
-      t.includes('LANC')
-    );
+    return t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC');
   };
-
   const hasA010Tag = tags.some(t => t.includes('A010'));
   const hasAnamneseSignal = tags.some(isAnamneseTag);
-
-  // Hierarquia (mesma do RPC get_channel_funnel_metrics):
-  // 1. Compra A010 fresca (≤30 dias antes ou ≤1 dia depois) → A010
-  // 2. Tag ANAMNESE válida → ANAMNESE
-  // 3. Compra A010 antiga (>30 dias) → ANAMNESE (lead reciclado)
-  // 4. Tag A010 sem compra registrada → A010
-  // 5. Sem nenhum sinal → OUTROS
   if (firstA010Purchase) {
     const diffDays = (referenceDate.getTime() - firstA010Purchase.getTime()) / 86_400_000;
     if (diffDays >= -1 && diffDays <= A010_FRESH_WINDOW_DAYS) return 'A010';
@@ -150,77 +91,204 @@ function classifyChannelWith30dRule(opts: {
   return 'OUTROS';
 }
 
+const parseTags = (tagsRaw: any[] | null | undefined): string[] =>
+  (tagsRaw || []).map((t: any) => {
+    if (typeof t === 'string') {
+      if (t.startsWith('{')) {
+        try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
+      }
+      return t.toUpperCase();
+    }
+    return (t?.name || '').toUpperCase();
+  });
+
 // Produtos que contam como Venda Final de Parceria.
-// Reaproveita a whitelist do relatório de Faturamento + A005 (P2 = pacote de
-// parceria, com 35 ocorrências/mês).
 const PARCERIA_VENDA_PRODUCTS = new Set<string>([
   ...ALLOWED_BILLING_PRODUCTS,
   'A005 - MCF P2',
 ]);
 
-interface ParceriaConversion {
+// Mapeamento BU → origin_ids. Hardcoded conforme bu_origin_mapping.
+const BU_ORIGIN_IDS: Record<string, string[]> = {
+  incorporador: [
+    'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
+    '7431cf4a-dc29-4208-95a6-28a499a06dac', // PILOTO ANAMNESE / INDICAÇÃO
+  ],
+};
+
+interface DealMeta {
   id: string;
-  email: string;
-  phone: string;
-  product_name: string;
-  bruto: number;     // reference_price configurado
-  liquido: number;   // valor pago (product_price do Hubla)
-  channel: string;   // 'A010' | 'ANAMNESE' | 'OUTROS'
+  origin_id: string | null;
+  tags: any[] | null;
+  created_at: string;
+  contact_id: string | null;
+  email: string | null;
+  channel: string;
 }
 
 export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
-  // acq mantido apenas para compatibilidade (loading state); a fonte real de
-  // Venda Final agora é uma query direta abaixo.
-  const acq = useAcquisitionReport(dateRange, bu);
-
   const startDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
   const endDate = dateRange?.to
     ? format(dateRange.to, 'yyyy-MM-dd')
     : (dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null);
 
-  // 1. Métricas R1 + Entradas — mesma fonte do Painel Comercial
-  const { data: channelMetrics, isLoading: loadingMetrics } = useQuery<ChannelMetricsResponse>({
-    queryKey: ['channel-funnel-metrics', startDate, endDate, bu],
-    queryFn: async () => {
-      if (!startDate || !endDate) return { channels: [] };
-      const { data, error } = await supabase.rpc('get_channel_funnel_metrics', {
-        start_date: startDate,
-        end_date: endDate,
-        bu_filter: bu || null,
-      });
-      if (error) {
-        console.error('[useChannelFunnelReport] RPC error', error);
-        throw error;
+  const buOrigins = bu ? (BU_ORIGIN_IDS[bu] || []) : [];
+
+  const windowStartIso = startDate ? new Date(`${startDate}T00:00:00-03:00`).toISOString() : null;
+  const windowEndIso = endDate ? new Date(`${endDate}T23:59:59-03:00`).toISOString() : null;
+
+  // ================================================================
+  // 1. UNIVERSO DE DEALS — todos os deals da BU envolvidos no funil:
+  //    criados na janela OU com R1/R2 na janela OU contrato na janela.
+  //    Cada deal recebe seu canal classificado uma única vez.
+  // ================================================================
+  const { data: dealsByPeriod, isLoading: loadingDeals } = useQuery({
+    queryKey: ['funnel-deals-period', startDate, endDate, bu, buOrigins.join(',')],
+    queryFn: async (): Promise<{
+      dealsCreated: DealMeta[];        // criados na janela (Entradas)
+      r1Deals: Map<string, { status: string; contract_paid_at: string | null }>; // deal → R1 status
+      r1NoShowDeals: Set<string>;
+      contratoPagoDeals: Set<string>;
+    }> => {
+      if (!startDate || !endDate || buOrigins.length === 0) {
+        return {
+          dealsCreated: [],
+          r1Deals: new Map(),
+          r1NoShowDeals: new Set(),
+          contratoPagoDeals: new Set(),
+        };
       }
-      return (data as unknown as ChannelMetricsResponse) || { channels: [] };
+
+      // 1a. Deals criados na janela (Entradas) — paginar
+      const dealsCreated: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let more = true;
+      while (more && from < 20000) {
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .select('id, origin_id, tags, created_at, contact_id, crm_contacts!contact_id(email)')
+          .in('origin_id', buOrigins)
+          .gte('created_at', windowStartIso!)
+          .lte('created_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel] dealsCreated error', error); break; }
+        const batch = data || [];
+        dealsCreated.push(...batch);
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+
+      // 1b. R1 attendees na janela — agrupado por deal_id, status final
+      const r1Attendees: any[] = [];
+      from = 0;
+      more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            deal_id, status, contract_paid_at,
+            meeting_slots!inner(scheduled_at, meeting_type, status),
+            crm_deals!deal_id(origin_id)
+          `)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .gte('meeting_slots.scheduled_at', windowStartIso!)
+          .lte('meeting_slots.scheduled_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel] r1Attendees error', error); break; }
+        const batch = data || [];
+        r1Attendees.push(...batch);
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+
+      const buOriginsSet = new Set(buOrigins);
+      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null }>();
+      const r1NoShowDeals = new Set<string>();
+      for (const a of r1Attendees) {
+        const dealId = a.deal_id;
+        const dealOrigin = a.crm_deals?.origin_id;
+        if (!dealId || !buOriginsSet.has(dealOrigin)) continue;
+        const slotStatus = (a.meeting_slots?.status || '').toLowerCase();
+        const attStatus = (a.status || '').toLowerCase();
+        // Skip cancelled/rescheduled
+        if (slotStatus === 'cancelled' || slotStatus === 'rescheduled') continue;
+        if (attStatus === 'cancelled' || attStatus === 'rescheduled') continue;
+        // Determine effective status (priorizar realizada/no_show sobre scheduled)
+        let effective = attStatus || slotStatus || 'scheduled';
+        if (slotStatus === 'completed' || attStatus === 'completed') effective = 'completed';
+        else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
+        const existing = r1Deals.get(dealId);
+        // Mantém o "melhor" status: completed > no_show > scheduled
+        const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
+        if (!existing || rank(effective) > rank(existing.status)) {
+          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at });
+        } else if (!existing.contract_paid_at && a.contract_paid_at) {
+          existing.contract_paid_at = a.contract_paid_at;
+        }
+        if (effective === 'no_show') r1NoShowDeals.add(dealId);
+      }
+
+      // 1c. Contrato Pago: contract_paid_at na janela (sobre attendees R1 da BU)
+      const contratoPagoDeals = new Set<string>();
+      const cpAttendees: any[] = [];
+      from = 0;
+      more = true;
+      while (more && from < 10000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            deal_id, contract_paid_at,
+            crm_deals!deal_id(origin_id)
+          `)
+          .gte('contract_paid_at', windowStartIso!)
+          .lte('contract_paid_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel] contratoPago error', error); break; }
+        const batch = data || [];
+        cpAttendees.push(...batch);
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      for (const a of cpAttendees) {
+        const dealId = a.deal_id;
+        const dealOrigin = a.crm_deals?.origin_id;
+        if (!dealId || !buOriginsSet.has(dealOrigin)) continue;
+        contratoPagoDeals.add(dealId);
+      }
+
+      // dealsCreated normalizados (canal vai ser preenchido depois)
+      const dealsNorm: DealMeta[] = dealsCreated.map(d => ({
+        id: d.id,
+        origin_id: d.origin_id,
+        tags: d.tags,
+        created_at: d.created_at,
+        contact_id: d.contact_id,
+        email: (d.crm_contacts?.email || '').toLowerCase().trim() || null,
+        channel: 'OUTROS',
+      }));
+
+      return { dealsCreated: dealsNorm, r1Deals, r1NoShowDeals, contratoPagoDeals };
     },
-    enabled: !!startDate && !!endDate,
+    enabled: !!startDate && !!endDate && buOrigins.length > 0,
     staleTime: 60_000,
   });
 
-  // 2. Carrinho (Aprovado/Reprovado/Próxima semana) por semanas tocadas pelo período
-  // 2. Carrinho (R2 Agendada/Realizada + Aprovado/Reprovado/Próxima semana) —
-  //    AGORA respeitando exatamente o intervalo de datas selecionado pelo
-  //    usuário (mesma janela usada por Entradas/R1), em vez de iterar por
-  //    semanas-carrinho inteiras que tocavam o período. Isso elimina o
-  //    descasamento que existia entre R2/Aprovados e Entradas/R1.
+  // ================================================================
+  // 2. R2/Carrinho — janela exata (já estava correto)
+  // ================================================================
   const { data: carrinhoRows = [], isLoading: loadingCarrinho } = useQuery<CarrinhoFunnelRow[]>({
     queryKey: ['funnel-carrinho-range', startDate, endDate],
     queryFn: async () => {
       if (!startDate || !endDate) return [];
-      const windowStart = `${startDate}T00:00:00-03:00`;
-      const windowEnd = `${endDate}T23:59:59-03:00`;
       const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
-        p_week_start: startDate, // só satisfaz a assinatura; janela real é window_start/end
-        p_window_start: new Date(windowStart).toISOString(),
-        p_window_end: new Date(windowEnd).toISOString(),
+        p_week_start: startDate,
+        p_window_start: windowStartIso!,
+        p_window_end: windowEndIso!,
         p_apply_contract_cutoff: false,
-        p_previous_cutoff: new Date(windowStart).toISOString(),
+        p_previous_cutoff: windowStartIso!,
       });
-      if (error) {
-        console.warn('[funnel] carrinho RPC error', error);
-        return [];
-      }
+      if (error) { console.warn('[funnel] carrinho RPC error', error); return []; }
       return (data || []).map((r: any) => ({
         deal_id: r.deal_id,
         r2_status_name: r.r2_status_name,
@@ -235,330 +303,46 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     staleTime: 60_000,
   });
 
-  // 2b. IDs da PRIMEIRA compra de parceria por email no período.
-  // Busca DIRETA em hubla_transactions (sem passar por acq.classified).
-  //
-  // Filtros aplicados:
-  //  - product_name na whitelist PARCERIA_VENDA_PRODUCTS (A001/A002/A003/A004/
-  //    A005/A009 completo). EXCLUI A000-Contrato (parcela mensal), renovações
-  //    (A006, A009-Renovação), Club isolado e produtos auxiliares.
-  //  - sale_status = 'completed', sources hubla/kiwify/manual/mcfpay (exclui
-  //    'make' que duplica).
-  //  - "Primeira conversão" = email NUNCA comprou parceria antes (lookback
-  //    12 meses). Recompras/upsells de quem já era parceiro NÃO contam.
-  //
-  // Bruto = reference_price configurado em product_configurations.
-  // Líquido = product_price (o que efetivamente entrou via Hubla).
-  // Canal = via R1 attendees (email/telefone). Quem foi reconhecido em R1
-  // entra em A010/ANAMNESE conforme tags ou pipeline; quem não passou por R1
-  // cai em OUTROS.
-  const { data: refPrices = new Map<string, number>() } = useQuery<Map<string, number>>({
-    queryKey: ['funnel-ref-prices'],
+  // ================================================================
+  // 3. METADATA dos deals envolvidos (para classificar canal)
+  //    Junta: dealsCreated + r1Deals + r2Deals + contratoPagoDeals
+  // ================================================================
+  const allInvolvedDealIds = useMemo(() => {
+    const s = new Set<string>();
+    (dealsByPeriod?.dealsCreated || []).forEach(d => s.add(d.id));
+    (dealsByPeriod?.r1Deals || new Map()).forEach((_, id) => s.add(id));
+    (dealsByPeriod?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
+    carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
+    return Array.from(s);
+  }, [dealsByPeriod, carrinhoRows]);
+
+  const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
+    queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_configurations')
-        .select('product_name, reference_price')
-        .in('product_category', ['incorporador', 'parceria'])
-        .eq('is_active', true);
-      if (error) {
-        console.error('[useChannelFunnelReport] ref prices error', error);
-        return new Map();
-      }
-      const m = new Map<string, number>();
-      (data || []).forEach((r: any) => {
-        m.set(r.product_name, Number(r.reference_price) || 0);
-      });
-      return m;
-    },
-    staleTime: 5 * 60_000,
-  });
+      const m = new Map<string, DealMeta>();
+      if (allInvolvedDealIds.length === 0) return m;
 
-  const { data: parceriaConversions = [], isLoading: loadingFirstParceria } = useQuery<ParceriaConversion[]>({
-    queryKey: ['funnel-parceria-conversions-v3', startDate, endDate, refPrices.size],
-    queryFn: async () => {
-      if (!startDate || !endDate) return [];
-
-      // 1. Todas as transações do período da whitelist (para deduplicar
-      //    primeira por email).
-      const { data: periodTx, error: periodErr } = await supabase
-        .from('hubla_transactions')
-        .select('id, customer_email, customer_phone, product_name, product_price, sale_date')
-        .in('product_category', ['incorporador', 'parceria'])
-        .eq('sale_status', 'completed')
-        .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
-        .gte('sale_date', `${startDate}T00:00:00-03:00`)
-        .lte('sale_date', `${endDate}T23:59:59-03:00`)
-        .order('sale_date', { ascending: true })
-        .limit(5000);
-      if (periodErr) {
-        console.error('[useChannelFunnelReport] period query error', periodErr);
-        throw periodErr;
-      }
-
-      // Filtra pela whitelist de produtos válidos (exclui A000/Renovação/etc)
-      const validTx = (periodTx || []).filter((tx: any) =>
-        PARCERIA_VENDA_PRODUCTS.has(tx.product_name)
-      );
-
-      // 2. Quem JÁ era parceiro antes do período (lookback 12 meses) — excluir
-      //    Aqui mantemos o filtro AMPLO (qualquer compra de parceria/incorporador)
-      //    para garantir que recompras de quem já era parceiro fiquem fora,
-      //    mesmo que naquela época tenha comprado um produto fora da whitelist.
-      const lookbackStart = new Date(`${startDate}T00:00:00-03:00`);
-      lookbackStart.setMonth(lookbackStart.getMonth() - 12);
-      const { data: priorBuyers, error: priorErr } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email')
-        .in('product_category', ['incorporador', 'parceria'])
-        .eq('sale_status', 'completed')
-        .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
-        .gte('sale_date', lookbackStart.toISOString())
-        .lt('sale_date', `${startDate}T00:00:00-03:00`)
-        .limit(20000);
-      if (priorErr) {
-        console.error('[useChannelFunnelReport] prior buyers query error', priorErr);
-        throw priorErr;
-      }
-      const priorEmails = new Set<string>(
-        (priorBuyers || [])
-          .map((r: any) => (r.customer_email || '').toLowerCase().trim())
-          .filter(Boolean)
-      );
-
-      // 3. Reduzir a uma única conversão por email (a primeira no período) e
-      //    excluir quem já era parceiro antes.
-      const seen = new Set<string>();
-      type Pending = {
-        id: string;
-        email: string;
-        phone: string;
-        product_name: string;
-        bruto: number;
-        liquido: number;
-        saleDate: Date;
-      };
-      const pending: Pending[] = [];
-      for (const tx of validTx as any[]) {
-        const email = (tx.customer_email || '').toLowerCase().trim();
-        if (!email || seen.has(email) || priorEmails.has(email)) continue;
-        seen.add(email);
-        const liquido = Number(tx.product_price) || 0;
-        // Bruto = reference_price configurado. Fallback para o próprio Hubla
-        // se não houver configuração (não deve acontecer, mas evita zerar).
-        const bruto = refPrices.get(tx.product_name) || liquido;
-        pending.push({
-          id: tx.id,
-          email,
-          phone: phoneSuffix(tx.customer_phone),
-          product_name: tx.product_name,
-          bruto,
-          liquido,
-          saleDate: new Date(tx.sale_date),
-        });
-      }
-
-      if (pending.length === 0) return [];
-
-      // 3b. Buscar primeira compra A010 dos emails das conversões (lookback 24m)
-      //     para aplicar a regra dos 30 dias.
-      const a010Lookback = new Date(`${startDate}T00:00:00-03:00`);
-      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
-      const pendingEmails = pending.map(p => p.email);
-      const firstA010ByEmail = new Map<string, Date>();
-      // Quebra em lotes de 200 emails (limite do .in())
-      for (let i = 0; i < pendingEmails.length; i += 200) {
-        const chunk = pendingEmails.slice(i, i + 200);
-        const { data: a010Tx, error: a010Err } = await supabase
-          .from('hubla_transactions')
-          .select('customer_email, sale_date')
-          .ilike('product_name', '%A010%')
-          .eq('sale_status', 'completed')
-          .in('customer_email', chunk)
-          .gte('sale_date', a010Lookback.toISOString())
-          .order('sale_date', { ascending: true })
-          .limit(5000);
-        if (a010Err) {
-          console.warn('[useChannelFunnelReport] a010 purchases error', a010Err);
-          continue;
-        }
-        (a010Tx || []).forEach((r: any) => {
-          const e = (r.customer_email || '').toLowerCase().trim();
-          if (!e) return;
-          const d = new Date(r.sale_date);
-          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
-            firstA010ByEmail.set(e, d);
-          }
-        });
-      }
-
-      // 4. Buscar R1 attendees nos últimos ~90 dias para determinar o canal
-      //    de cada conversão (A010 / ANAMNESE / OUTROS).
-      const r1Lookback = new Date(`${startDate}T00:00:00-03:00`);
-      r1Lookback.setDate(r1Lookback.getDate() - 90);
-      const r1End = new Date(`${endDate}T23:59:59-03:00`);
-
-      type AttRow = {
-        attendee_phone: string | null;
-        crm_deals: {
-          tags: any[] | null;
-          origin_id: string | null;
-          crm_contacts: { email: string | null; phone: string | null } | null;
-        } | null;
-      };
-      const allAtt: AttRow[] = [];
-      let offset = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      while (hasMore && offset < 10000) {
-        const { data, error } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            attendee_phone,
-            meeting_slots!inner(scheduled_at, meeting_type),
-            crm_deals!deal_id(tags, origin_id, crm_contacts!contact_id(email, phone))
-          `)
-          .eq('meeting_slots.meeting_type', 'r1')
-          .gte('meeting_slots.scheduled_at', r1Lookback.toISOString())
-          .lte('meeting_slots.scheduled_at', r1End.toISOString())
-          .range(offset, offset + pageSize - 1);
-        if (error) {
-          console.warn('[useChannelFunnelReport] r1 attendees error', error);
-          break;
-        }
-        const batch = (data || []) as unknown as AttRow[];
-        allAtt.push(...batch);
-        hasMore = batch.length >= pageSize;
-        offset += pageSize;
-      }
-
-      // 5. Buscar nomes de pipelines/origens para fallback de classificação
-      const originIds = new Set<string>();
-      allAtt.forEach(a => {
-        if (a.crm_deals?.origin_id) originIds.add(a.crm_deals.origin_id);
-      });
-      let originNameById = new Map<string, string>();
-      if (originIds.size > 0) {
-        const { data: origins } = await supabase
-          .from('crm_origins')
-          .select('id, name')
-          .in('id', Array.from(originIds));
-        (origins || []).forEach((o: any) => originNameById.set(o.id, (o.name || '').toUpperCase()));
-      }
-
-      // 6. Indexar attendees por email e por sufixo de telefone, guardando
-      //    tags + nome da origem para classificação.
-      type AttIdx = { tags: string[]; originName: string };
-      const emailToAtt = new Map<string, AttIdx>();
-      const phoneToAtt = new Map<string, AttIdx>();
-      for (const a of allAtt) {
-        const tags: string[] = (a.crm_deals?.tags as any[] || []).map((t: any) => {
-          if (typeof t === 'string') {
-            if (t.startsWith('{')) {
-              try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
-            }
-            return t.toUpperCase();
-          }
-          return (t?.name || '').toUpperCase();
-        });
-        const originName = a.crm_deals?.origin_id
-          ? (originNameById.get(a.crm_deals.origin_id) || '')
-          : '';
-        const idx: AttIdx = { tags, originName };
-        const email = (a.crm_deals?.crm_contacts?.email || '').toLowerCase().trim();
-        if (email) emailToAtt.set(email, idx);
-        const cPhone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
-        if (cPhone.length >= 8) phoneToAtt.set(cPhone, idx);
-        const aPhone = phoneSuffix(a.attendee_phone);
-        if (aPhone.length >= 8 && aPhone !== cPhone) phoneToAtt.set(aPhone, idx);
-      }
-
-      // 7. Classificação com regra dos 30 dias.
-      // referenceDate = sale_date da venda de parceria (queremos saber se a compra
-      // A010 foi recente em relação à conversão).
-      const result: ParceriaConversion[] = pending.map(p => {
-        const att = emailToAtt.get(p.email) || (p.phone.length >= 8 ? phoneToAtt.get(p.phone) : undefined);
-        const firstA010 = firstA010ByEmail.get(p.email) || null;
-        const channel = classifyChannelWith30dRule({
-          tags: att?.tags || [],
-          originName: att?.originName || '',
-          firstA010Purchase: firstA010,
-          referenceDate: p.saleDate,
-          reachedR1: !!att,
-        });
-        return {
-          id: p.id,
-          email: p.email,
-          phone: p.phone,
-          product_name: p.product_name,
-          bruto: p.bruto,
-          liquido: p.liquido,
-          channel,
-        };
-      });
-      return result;
-    },
-    enabled: !!startDate && !!endDate && refPrices.size > 0,
-    staleTime: 60_000,
-  });
-
-  // 2c. Índice de classificação por canal para os deals do Carrinho.
-  // Reaproveita a mesma lógica de tags/origem que classifica Venda Final.
-  // Indexado por deal_id (vem direto do RPC do carrinho).
-  const carrinhoDealIds = useMemo(
-    () => Array.from(new Set(carrinhoRows.map(c => c.deal_id).filter(Boolean) as string[])),
-    [carrinhoRows]
-  );
-
-  const { data: dealChannelMap = new Map<string, string>() } = useQuery<Map<string, string>>({
-    queryKey: ['funnel-carrinho-deal-channels-v2', carrinhoDealIds.join(',')],
-    queryFn: async () => {
-      const m = new Map<string, string>();
-      if (carrinhoDealIds.length === 0) return m;
-
-      // Busca tags + origem + created_at + email do contato em lotes
-      type DealRow = {
-        id: string;
-        tags: any[] | null;
-        origin_id: string | null;
-        created_at: string;
-        crm_contacts: { email: string | null } | null;
-      };
-      const deals: DealRow[] = [];
+      const deals: any[] = [];
       const chunkSize = 200;
-      for (let i = 0; i < carrinhoDealIds.length; i += chunkSize) {
-        const chunk = carrinhoDealIds.slice(i, i + chunkSize);
+      for (let i = 0; i < allInvolvedDealIds.length; i += chunkSize) {
+        const chunk = allInvolvedDealIds.slice(i, i + chunkSize);
         const { data, error } = await supabase
           .from('crm_deals')
-          .select('id, tags, origin_id, created_at, crm_contacts!contact_id(email)')
+          .select('id, origin_id, tags, created_at, contact_id, crm_contacts!contact_id(email)')
           .in('id', chunk);
-        if (error) {
-          console.warn('[useChannelFunnelReport] deal channels query error', error);
-          continue;
-        }
-        deals.push(...((data as unknown as DealRow[]) || []));
+        if (error) { console.warn('[funnel] dealMeta error', error); continue; }
+        deals.push(...(data || []));
       }
 
-      // Resolve nomes de origens
-      const originIds = new Set<string>();
-      deals.forEach(d => { if (d.origin_id) originIds.add(d.origin_id); });
-      const originNameById = new Map<string, string>();
-      if (originIds.size > 0) {
-        const { data: origins } = await supabase
-          .from('crm_origins')
-          .select('id, name')
-          .in('id', Array.from(originIds));
-        (origins || []).forEach((o: any) => originNameById.set(o.id, (o.name || '').toUpperCase()));
-      }
-
-      // Buscar primeira compra A010 dos emails dos deals do carrinho (lookback 24m)
-      const dealEmails = Array.from(new Set(
+      // Buscar primeira compra A010 dos emails (24m lookback) para classificação
+      const emails = Array.from(new Set(
         deals.map(d => (d.crm_contacts?.email || '').toLowerCase().trim()).filter(Boolean)
       ));
       const a010Lookback = new Date();
       a010Lookback.setMonth(a010Lookback.getMonth() - 24);
       const firstA010ByEmail = new Map<string, Date>();
-      for (let i = 0; i < dealEmails.length; i += 200) {
-        const chunk = dealEmails.slice(i, i + 200);
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
         const { data: a010Tx } = await supabase
           .from('hubla_transactions')
@@ -579,41 +363,198 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         });
       }
 
-      const parseTags = (tagsRaw: any[] | null): string[] =>
-        (tagsRaw || []).map((t: any) => {
-          if (typeof t === 'string') {
-            if (t.startsWith('{')) {
-              try { return (JSON.parse(t)?.name || t).toUpperCase(); } catch { return t.toUpperCase(); }
-            }
-            return t.toUpperCase();
-          }
-          return (t?.name || '').toUpperCase();
-        });
-
-      deals.forEach(d => {
+      for (const d of deals) {
+        const email = (d.crm_contacts?.email || '').toLowerCase().trim() || null;
         const tags = parseTags(d.tags);
-        const originName = d.origin_id ? (originNameById.get(d.origin_id) || '') : '';
-        const email = (d.crm_contacts?.email || '').toLowerCase().trim();
-        const firstA010 = email ? (firstA010ByEmail.get(email) || null) : null;
         const channel = classifyChannelWith30dRule({
           tags,
-          originName,
-          firstA010Purchase: firstA010,
+          firstA010Purchase: email ? (firstA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
-          reachedR1: true, // está no carrinho R2 → passou por R1
         });
-        m.set(d.id, channel);
-      });
+        m.set(d.id, {
+          id: d.id,
+          origin_id: d.origin_id,
+          tags: d.tags,
+          created_at: d.created_at,
+          contact_id: d.contact_id,
+          email,
+          channel,
+        });
+      }
       return m;
     },
-    enabled: carrinhoDealIds.length > 0,
+    enabled: allInvolvedDealIds.length > 0,
     staleTime: 60_000,
   });
 
-  // 3. Agregação por canal (3 buckets fixos)
+  // ================================================================
+  // 4. VENDA FINAL — vendas de parceria com sale_date na janela.
+  //    SEM filtro de "primeira-compra-da-vida" (inclui upsells/recompras).
+  //    Dedupe por email dentro da janela.
+  // ================================================================
+  const { data: refPrices = new Map<string, number>() } = useQuery<Map<string, number>>({
+    queryKey: ['funnel-ref-prices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_configurations')
+        .select('product_name, reference_price')
+        .in('product_category', ['incorporador', 'parceria'])
+        .eq('is_active', true);
+      if (error) { console.error('[funnel] refPrices error', error); return new Map(); }
+      const m = new Map<string, number>();
+      (data || []).forEach((r: any) => {
+        m.set(r.product_name, Number(r.reference_price) || 0);
+      });
+      return m;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: vendasFinal = [], isLoading: loadingVendas } = useQuery<Array<{
+    email: string;
+    phone: string;
+    bruto: number;
+    liquido: number;
+    saleDate: Date;
+  }>>({
+    queryKey: ['funnel-vendas-final-v2', startDate, endDate, refPrices.size],
+    queryFn: async () => {
+      if (!startDate || !endDate) return [];
+      const { data: tx, error } = await supabase
+        .from('hubla_transactions')
+        .select('id, customer_email, customer_phone, product_name, product_price, sale_date')
+        .in('product_category', ['incorporador', 'parceria'])
+        .eq('sale_status', 'completed')
+        .in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
+        .gte('sale_date', windowStartIso!)
+        .lte('sale_date', windowEndIso!)
+        .order('sale_date', { ascending: true })
+        .limit(5000);
+      if (error) { console.error('[funnel] vendasFinal error', error); return []; }
+      const valid = (tx || []).filter((t: any) => PARCERIA_VENDA_PRODUCTS.has(t.product_name));
+      const seen = new Set<string>();
+      const result: any[] = [];
+      for (const t of valid as any[]) {
+        const email = (t.customer_email || '').toLowerCase().trim();
+        if (!email || seen.has(email)) continue;
+        seen.add(email);
+        const liquido = Number(t.product_price) || 0;
+        const bruto = refPrices.get(t.product_name) || liquido;
+        result.push({
+          email,
+          phone: phoneSuffix(t.customer_phone),
+          bruto,
+          liquido,
+          saleDate: new Date(t.sale_date),
+        });
+      }
+      return result;
+    },
+    enabled: !!startDate && !!endDate && refPrices.size > 0,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
+  // 5. Mapear email → canal (via deals da BU que têm aquele email)
+  //    para classificar vendas. Fallback: OUTROS.
+  // ================================================================
+  const emailToChannel = useMemo(() => {
+    const m = new Map<string, string>();
+    dealMeta.forEach(d => {
+      if (d.email) m.set(d.email, d.channel);
+    });
+    return m;
+  }, [dealMeta]);
+
+  // Para vendas cujo email não está em dealMeta, precisamos buscar o deal pelo email
+  // e classificar. Faremos isso só para emails que faltarem.
+  const missingVendaEmails = useMemo(() => {
+    return vendasFinal.filter(v => !emailToChannel.has(v.email)).map(v => v.email);
+  }, [vendasFinal, emailToChannel]);
+
+  const { data: extraEmailChannels = new Map<string, string>() } = useQuery<Map<string, string>>({
+    queryKey: ['funnel-extra-email-channels', missingVendaEmails.join(',').slice(0, 200), missingVendaEmails.length, buOrigins.join(',')],
+    queryFn: async () => {
+      const m = new Map<string, string>();
+      if (missingVendaEmails.length === 0 || buOrigins.length === 0) return m;
+
+      // Buscar deals da BU pelos emails faltantes
+      const deals: any[] = [];
+      for (let i = 0; i < missingVendaEmails.length; i += 200) {
+        const chunk = missingVendaEmails.slice(i, i + 200);
+        const { data: contacts } = await supabase
+          .from('crm_contacts')
+          .select('id, email')
+          .in('email', chunk);
+        const contactIds = (contacts || []).map((c: any) => c.id);
+        const emailById = new Map<string, string>();
+        (contacts || []).forEach((c: any) => emailById.set(c.id, (c.email || '').toLowerCase().trim()));
+        if (contactIds.length === 0) continue;
+        const { data: ds } = await supabase
+          .from('crm_deals')
+          .select('id, contact_id, origin_id, tags, created_at')
+          .in('contact_id', contactIds)
+          .in('origin_id', buOrigins);
+        (ds || []).forEach((d: any) => {
+          deals.push({ ...d, email: emailById.get(d.contact_id) });
+        });
+      }
+
+      // Lookup A010
+      const emails = Array.from(new Set(deals.map(d => d.email).filter(Boolean)));
+      const a010Lookback = new Date();
+      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
+      const firstA010ByEmail = new Map<string, Date>();
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a010Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date')
+          .ilike('product_name', '%A010%')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+          .gte('sale_date', a010Lookback.toISOString())
+          .order('sale_date', { ascending: true })
+          .limit(5000);
+        (a010Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (!e) return;
+          const d = new Date(r.sale_date);
+          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) firstA010ByEmail.set(e, d);
+        });
+      }
+
+      // Para cada email, pegar o deal mais recente e classificar
+      const byEmail = new Map<string, any>();
+      for (const d of deals) {
+        const e = d.email;
+        if (!e) continue;
+        const existing = byEmail.get(e);
+        if (!existing || new Date(d.created_at) > new Date(existing.created_at)) {
+          byEmail.set(e, d);
+        }
+      }
+      byEmail.forEach((d, e) => {
+        const ch = classifyChannelWith30dRule({
+          tags: parseTags(d.tags),
+          firstA010Purchase: firstA010ByEmail.get(e) || null,
+          referenceDate: new Date(d.created_at),
+        });
+        m.set(e, ch);
+      });
+      return m;
+    },
+    enabled: missingVendaEmails.length > 0,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
+  // 6. AGREGAÇÃO POR CANAL (3 buckets fixos)
+  // ================================================================
   const { rows, totals } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
-    const blank = (): Omit<ChannelFunnelRow, 'channel' | 'channelLabel' | 'r1AgToReal' | 'r1RealToContrato' | 'aprovadoToVenda' | 'entradaToVenda' | 'taxaNoShow'> => ({
+    const blank = () => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
@@ -624,63 +565,59 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       if (!map.has(c)) map.set(c, blank());
       return map.get(c)!;
     };
+    const channelOf = (dealId: string | null | undefined): string => {
+      if (!dealId) return 'OUTROS';
+      return dealMeta.get(dealId)?.channel || 'OUTROS';
+    };
 
-    // Métricas R1 vindas da RPC alinhada ao Painel
-    (channelMetrics?.channels || []).forEach(c => {
-      const slot = get(c.channel);
-      slot.entradas = c.entradas || 0;
-      slot.r1Agendada = c.r1_agendada || 0;
-      slot.r1Realizada = c.r1_realizada || 0;
-      slot.noShow = c.no_shows || 0;
-      slot.contratoPago = c.contratos || 0;
+    // Entradas: deals criados na janela
+    (dealsByPeriod?.dealsCreated || []).forEach(d => {
+      const ch = dealMeta.get(d.id)?.channel || d.channel || 'OUTROS';
+      get(ch).entradas++;
     });
 
-    // Carrinho — R2 Agendada/Realizada + Aprovado/Reprovado/Próxima semana
-    // Distribuído por canal usando o mapa deal_id → canal (tags/origem do deal).
-    // Deduplicado por deal_id (cada lead conta uma vez).
+    // R1 Agendada / Realizada / No-Show — dedupe por deal
+    (dealsByPeriod?.r1Deals || new Map()).forEach((info: any, dealId: string) => {
+      const ch = channelOf(dealId);
+      const slot = get(ch);
+      slot.r1Agendada++;
+      if (info.status === 'completed') slot.r1Realizada++;
+      else if (info.status === 'no_show') slot.noShow++;
+    });
+
+    // Contrato Pago
+    (dealsByPeriod?.contratoPagoDeals || new Set()).forEach((dealId: string) => {
+      get(channelOf(dealId)).contratoPago++;
+    });
+
+    // R2 / Aprovados / Reprovados / Próxima Semana — dedupe por deal_id
     const seenCarrinho = new Set<string>();
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
-      const channel = dealChannelMap.get(c.deal_id) || 'OUTROS';
-      const slot = get(channel);
-
-      // R2 Agendadas: todos exceto cancelados/reagendados
+      const ch = channelOf(c.deal_id);
+      const slot = get(ch);
       const attStatus = (c.attendee_status || '').toLowerCase();
       const meetingStatus = (c.meeting_status || '').toLowerCase();
       const isCancelled = attStatus === 'cancelled' || attStatus === 'rescheduled';
       if (!isCancelled) slot.r2Agendada++;
-
-      // R2 Realizadas: completed / contract_paid / refunded
       if (
         attStatus === 'completed' || attStatus === 'contract_paid' || attStatus === 'refunded' ||
         meetingStatus === 'completed'
       ) slot.r2Realizada++;
-
-      // Status do carrinho (Aprovado / Reprovado / Próxima Semana)
       const status = (c.r2_status_name || '').toLowerCase();
       if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
       else if (status.includes('próxima') || status.includes('proxima') || status.includes('next')) slot.proximaSemana++;
       else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
     });
 
-    // Venda Final + Faturamento — primeira conversão em Parceria por cliente
-    // (email) no período, da whitelist de produtos válidos.
-    //
-    // Bruto  = reference_price configurado em product_configurations
-    // Líquido = valor pago via Hubla (product_price)
-    //
-    // Canal:
-    //   - Tem R1 attendee + tag/origem A010 → A010
-    //   - Tem R1 attendee + tag/origem ANAMNESE/LIVE/LANÇ → ANAMNESE
-    //   - Tem R1 attendee mas sem sinal claro → ANAMNESE (passou por R1)
-    //   - Não tem R1 attendee → OUTROS (compra direta)
-    parceriaConversions.forEach(({ channel, bruto, liquido }) => {
-      const ch = normalizeFunnelChannel(channel);
+    // Venda Final + Faturamento — TODAS as vendas de parceria do período
+    vendasFinal.forEach(v => {
+      const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
-      slot.faturamentoBruto += bruto || 0;
-      slot.faturamentoLiquido += liquido || 0;
+      slot.faturamentoBruto += v.bruto || 0;
+      slot.faturamentoLiquido += v.liquido || 0;
     });
 
     const finalRows: ChannelFunnelRow[] = Array.from(map.entries()).map(([channel, v]) => ({
@@ -715,11 +652,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot };
-  }, [channelMetrics, carrinhoRows, parceriaConversions, dealChannelMap]);
+  }, [dealsByPeriod, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels]);
 
   return {
     rows,
     totals,
-    isLoading: loadingMetrics || loadingCarrinho || loadingFirstParceria || acq.isLoading,
+    isLoading: loadingDeals || loadingCarrinho || loadingVendas || loadingMeta,
   };
 }
