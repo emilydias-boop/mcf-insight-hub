@@ -234,6 +234,25 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [user, deviceStatus, device]);
 
+  // Auto-inicializa o telefone assim que o SDR/Closer/Coordenador faz login
+  // (uma única vez por sessão, em background, sem bloquear a UI).
+  const autoInitTriedRef = useRef(false);
+  useEffect(() => {
+    if (!user) {
+      autoInitTriedRef.current = false;
+      return;
+    }
+    if (autoInitTriedRef.current) return;
+    if (deviceStatus === 'ready' || deviceStatus === 'connecting') return;
+    const eligible = hasAnyRole('sdr', 'closer', 'coordenador', 'admin', 'master');
+    if (!eligible) return;
+    autoInitTriedRef.current = true;
+    console.log('[Twilio] Auto-inicializando device para usuário elegível...');
+    initializeDevice().catch((err) => {
+      console.warn('[Twilio] Auto-init falhou (silencioso, será reativado on-demand):', err);
+    });
+  }, [user, deviceStatus, hasAnyRole, initializeDevice]);
+
   // Check if token needs refresh
   const ensureValidToken = useCallback(async (): Promise<boolean> => {
     const tokenAge = tokenCreatedAt.current ? Date.now() - tokenCreatedAt.current : Infinity;
