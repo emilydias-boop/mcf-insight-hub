@@ -9,6 +9,7 @@ import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
 import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner";
+import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
 
 function GlobalQualificationModal() {
@@ -52,6 +53,7 @@ export function MainLayout() {
           </SidebarInset>
           <TwilioSoftphone />
           <QuickDialerLauncher />
+          <AutoDialerDealDrawer />
           <AutoDialerInCallBanner />
           <OverdueAlertOverlay />
           <GlobalQualificationModal />
