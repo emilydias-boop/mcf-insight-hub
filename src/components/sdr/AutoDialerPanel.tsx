@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Play, Pause, SkipForward, Square, Trash2, Loader2, Phone, PhoneOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSDRQueueInfinite } from '@/hooks/useSDRCockpit';
+import { useCRMStages, useCRMDeals } from '@/hooks/useCRMData';
+import { PipelineSelector } from '@/components/crm/PipelineSelector';
+import { toast } from 'sonner';
 
 interface Props {
   open: boolean;
@@ -18,6 +21,20 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const ad = useAutoDialer();
   const sdrQueue = useSDRQueueInfinite();
   const [pasted, setPasted] = useState('');
+  const [mode, setMode] = useState<'cockpit' | 'pipeline' | 'paste'>('cockpit');
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [stageId, setStageId] = useState<string | null>(null);
+
+  const { data: stages, isLoading: stagesLoading } = useCRMStages(pipelineId || undefined);
+  const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
+    stageId ? { stageId, limit: 100 } : {}
+  );
+
+  // Reset stage quando muda pipeline
+  const handleSelectPipeline = (id: string | null) => {
+    setPipelineId(id);
+    setStageId(null);
+  };
 
   const loadFromCockpit = () => {
     const leads: AutoDialerLead[] = (sdrQueue.data || [])
@@ -47,6 +64,25 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }));
     ad.loadQueue(leads);
     setPasted('');
+  };
+
+  const loadFromStage = () => {
+    if (!stageId || !stageDeals) return;
+    const leads: AutoDialerLead[] = stageDeals
+      .filter((d: any) => d.crm_contacts?.phone)
+      .map((d: any) => ({
+        dealId: d.id,
+        contactId: d.contact_id || null,
+        originId: d.origin_id || null,
+        name: d.crm_contacts?.name || d.name || 'Lead',
+        phone: d.crm_contacts?.phone || '',
+      }))
+      .slice(0, 100);
+    if (leads.length === 0) {
+      toast.error('Nenhum lead com telefone neste estágio');
+      return;
+    }
+    ad.loadQueue(leads);
   };
 
   const isActive = ad.state === 'running' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
@@ -107,21 +143,104 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
 
         {/* Carregar fila */}
         {!isActive && ad.queue.length === 0 && (
-          <div className="px-4 py-3 space-y-2 border-b">
-            <Button size="sm" variant="outline" className="w-full" onClick={loadFromCockpit} disabled={sdrQueue.isLoading}>
-              {sdrQueue.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Carregar fila do Cockpit ({sdrQueue.data?.length || 0})
-            </Button>
-            <div className="text-[10px] text-muted-foreground uppercase pt-1">Ou cole telefones (1 por linha)</div>
-            <Input
-              placeholder="11987654321&#10;11991234567"
-              value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
-              className="h-8 text-xs font-mono"
-            />
-            <Button size="sm" variant="outline" className="w-full" disabled={!pasted.trim()} onClick={loadFromPaste}>
-              Carregar lista colada
-            </Button>
+          <div className="px-4 py-3 space-y-3 border-b">
+            {/* Tabs de modo */}
+            <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-md">
+              <button
+                onClick={() => setMode('cockpit')}
+                className={cn(
+                  'text-[11px] font-medium py-1.5 rounded transition-colors',
+                  mode === 'cockpit' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Cockpit
+              </button>
+              <button
+                onClick={() => setMode('pipeline')}
+                className={cn(
+                  'text-[11px] font-medium py-1.5 rounded transition-colors',
+                  mode === 'pipeline' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Por Estágio
+              </button>
+              <button
+                onClick={() => setMode('paste')}
+                className={cn(
+                  'text-[11px] font-medium py-1.5 rounded transition-colors',
+                  mode === 'paste' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Colar
+              </button>
+            </div>
+
+            {mode === 'cockpit' && (
+              <Button size="sm" variant="outline" className="w-full" onClick={loadFromCockpit} disabled={sdrQueue.isLoading}>
+                {sdrQueue.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Carregar fila do Cockpit ({sdrQueue.data?.length || 0})
+              </Button>
+            )}
+
+            {mode === 'pipeline' && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                  <div className="[&>div]:w-full [&_button]:w-full [&_label]:hidden">
+                    <PipelineSelector
+                      selectedPipelineId={pipelineId}
+                      onSelectPipeline={handleSelectPipeline}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase">Estágio</label>
+                  <Select
+                    value={stageId || ''}
+                    onValueChange={setStageId}
+                    disabled={!pipelineId || stagesLoading}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder={pipelineId ? 'Selecione um estágio' : 'Selecione um funil primeiro'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(stages || []).map((s: any) => (
+                        <SelectItem key={s.id} value={s.id} className="text-xs">
+                          {s.stage_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  onClick={loadFromStage}
+                  disabled={!stageId || dealsLoading}
+                >
+                  {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {stageId
+                    ? `Carregar ${stageDeals?.filter((d: any) => d.crm_contacts?.phone).length || 0} leads do estágio`
+                    : 'Carregar leads do estágio'}
+                </Button>
+              </div>
+            )}
+
+            {mode === 'paste' && (
+              <div className="space-y-2">
+                <div className="text-[10px] text-muted-foreground uppercase">Telefones (1 por linha)</div>
+                <Input
+                  placeholder="11987654321&#10;11991234567"
+                  value={pasted}
+                  onChange={(e) => setPasted(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+                <Button size="sm" variant="outline" className="w-full" disabled={!pasted.trim()} onClick={loadFromPaste}>
+                  Carregar lista colada
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
