@@ -28,6 +28,8 @@ import {
   Megaphone,
   Monitor,
   Laptop,
+  Phone,
+  Zap,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -35,6 +37,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useMyProducts } from "@/hooks/useMyProducts";
 import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
+import { useAutoDialer } from "@/contexts/AutoDialerContext";
+import { useDialerLauncher } from "@/contexts/DialerLauncherContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -327,6 +331,11 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
+
+  // Dialer (visível apenas para SDR/Closer)
+  const dialer = useDialerLauncher();
+  const autoDialer = useAutoDialer();
+  const showDialerSection = (allRoles as string[]).some(r => r === 'sdr' || r === 'closer');
 
   // === ITENS DINÂMICOS PARA SDR/CLOSER ===
   // Estes itens precisam de URLs dinâmicas baseadas na BU do usuário
@@ -623,6 +632,39 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {showDialerSection && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Discador rápido (Ctrl+Shift+D)"
+                    onClick={() => dialer.setQuickOpen(true)}
+                    className="text-green-600 hover:text-green-700 hover:bg-green-500/10"
+                  >
+                    <Phone className="h-5 w-5" />
+                    {!isCollapsed && <span>Discador rápido</span>}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Auto-Discador (Ctrl+Shift+A)"
+                    onClick={() => dialer.setAutoOpen(true)}
+                  >
+                    <Zap className="h-5 w-5" />
+                    {!isCollapsed && <span>Auto-Discador</span>}
+                    {autoDialer.queue.length > 0 && (
+                      <Badge className="ml-auto h-5 min-w-5 px-1 text-[10px] rounded-full">
+                        {autoDialer.stats.called}/{autoDialer.stats.total}
+                      </Badge>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-2">
