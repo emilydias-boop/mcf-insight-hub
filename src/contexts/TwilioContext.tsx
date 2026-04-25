@@ -244,7 +244,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
     if (autoInitTriedRef.current) return;
     if (deviceStatus === 'ready' || deviceStatus === 'connecting') return;
-    const eligible = hasAnyRole('sdr', 'closer', 'coordenador', 'admin', 'master');
+    const eligible = hasAnyRole('sdr', 'closer', 'coordenador', 'admin', 'manager', 'closer_sombra');
     if (!eligible) return;
     autoInitTriedRef.current = true;
     console.log('[Twilio] Auto-inicializando device para usuário elegível...');
