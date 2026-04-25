@@ -36,7 +36,7 @@ export function useLeadLookupByPhone(rawPhone: string) {
     queryFn: async (): Promise<LeadMatch[]> => {
       if (!enabled) return [];
 
-      // 1. Buscar contatos com phone terminando no sufixo
+      // 1. Contatos com phone terminando no sufixo
       const { data: contacts, error: contactsErr } = await supabase
         .from('crm_contacts')
         .select('id, name, phone, email')
@@ -51,34 +51,54 @@ export function useLeadLookupByPhone(rawPhone: string) {
 
       const contactIds = contacts.map(c => c.id);
 
-      // 2. Buscar deals associados a esses contatos
-      const { data: deals, error: dealsErr } = await supabase
+      // 2. Deals desses contatos
+      const { data: deals } = await supabase
         .from('crm_deals')
-        .select(`
-          id, name, contact_id, owner_id, origin_id, stage_id, created_at,
-          crm_origins!origin_id(name),
-          pipeline_stages!stage_id(name),
-          profiles!owner_profile_id(email)
-        `)
+        .select('id, name, contact_id, owner_profile_id, origin_id, stage_id, created_at')
         .in('contact_id', contactIds)
         .eq('is_archived', false)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-      if (dealsErr) {
-        console.warn('[useLeadLookupByPhone] deals error', dealsErr);
-      }
+      const dealList = (deals || []) as any[];
+      const originIds = Array.from(new Set(dealList.map(d => d.origin_id).filter(Boolean)));
+      const stageIds  = Array.from(new Set(dealList.map(d => d.stage_id).filter(Boolean)));
+      const ownerIds  = Array.from(new Set(dealList.map(d => d.owner_profile_id).filter(Boolean)));
+
+      // 3. Lookups em paralelo
+      const [originsRes, stagesRes, profilesRes] = await Promise.all([
+        originIds.length
+          ? supabase.from('crm_origins').select('id, name').in('id', originIds)
+          : Promise.resolve({ data: [] as any[] }),
+        stageIds.length
+          ? supabase.from('pipeline_stages').select('id, name').in('id', stageIds)
+          : Promise.resolve({ data: [] as any[] }),
+        ownerIds.length
+          ? supabase.from('profiles').select('id, email').in('id', ownerIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const originName = new Map<string, string>(
+        (originsRes.data || []).map((o: any) => [o.id, o.name])
+      );
+      const stageName = new Map<string, string>(
+        (stagesRes.data || []).map((s: any) => [s.id, s.name])
+      );
+      const ownerEmail = new Map<string, string>(
+        (profilesRes.data || []).map((p: any) => [p.id, p.email])
+      );
 
       const dealsByContact = new Map<string, LeadDealMatch[]>();
-      (deals || []).forEach((d: any) => {
+      dealList.forEach(d => {
         if (!d.contact_id) return;
         const arr = dealsByContact.get(d.contact_id) || [];
         arr.push({
           dealId: d.id,
           dealName: d.name,
-          ownerEmail: d.profiles?.email || null,
+          ownerEmail: d.owner_profile_id ? ownerEmail.get(d.owner_profile_id) || null : null,
           originId: d.origin_id,
-          originName: d.crm_origins?.name || null,
-          stageName: d.pipeline_stages?.name || null,
+          originName: d.origin_id ? originName.get(d.origin_id) || null : null,
+          stageName: d.stage_id ? stageName.get(d.stage_id) || null : null,
           createdAt: d.created_at,
         });
         dealsByContact.set(d.contact_id, arr);
