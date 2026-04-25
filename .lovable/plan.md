@@ -1,102 +1,99 @@
-# Drill-down clicável no Funil por Canal
 
-## Objetivo
-Validar **lead por lead, número por número, venda por venda**: ao clicar em qualquer célula numérica da tabela "Funil por Canal", abrir um modal listando exatamente os deals/transações que compõem aquele valor — com email, nome, telefone, data e link pro CRM.
+# Discador Rápido (Quick Dialer) — estilo celular
 
-Isso transforma a tabela de "confiar nos números" em "auditar os números".
+Adicionar um discador global, acessível de qualquer tela do CRM, onde o SDR/Closer digita um número e:
+1. O sistema **identifica o lead automaticamente** (se existir) — mostrando nome, BU, último estágio, dono.
+2. Permite **ligar imediatamente** via Twilio, com vínculo correto ao deal/contato (sem perder métricas).
+3. Suporta também digitação livre para números que ainda não existem no CRM.
 
-## Como vai funcionar (UX)
+---
 
-- Cada célula numérica vira um botão sutil (mesmo visual atual, mas com `cursor: pointer` e hover discreto).
-- Clicar em "94" na linha A010 / coluna R1 Agendada → abre modal:
-  - **Título**: `R1 Agendada — A010 (94 deals)`
-  - **Subtítulo**: explica a regra (ex: "Deals únicos com R1 cujo `scheduled_at` cai entre 10/04 e 11/04, BU Incorporador, status ≠ cancelled/rescheduled").
-  - **Tabela**: Nome do lead | Email | Telefone | Data do evento | Status | Canal classificado | botão "Abrir no CRM".
-  - **Busca** + ordenação por coluna.
-  - Botão **Exportar CSV** dos itens.
-- Clicar em "Total" da mesma coluna → mesma modal mas sem filtro de canal (todos os 3 canais juntos).
-- Células de **conversão** (%), de **canal/label** e de **valores monetários** não são clicáveis (não fazem sentido drill).
-- Faturamento Bruto/Líquido → drill mostra as 17 transações com produto, valor bruto vs líquido (somam o total).
+## 1. Componente novo: `src/components/crm/QuickDialer.tsx`
 
-## Métricas que terão drill-down
+UI tipo celular:
+- **Display do número** com máscara automática brasileira (`(11) 9 9999-9999`).
+- **Teclado numérico 3x4** (1-9, *, 0, #) com clique para digitar — também aceita teclado físico.
+- **Botão Backspace** para apagar dígito.
+- **Botão verde grande "Ligar"** (ícone Phone).
+- **Card de "Lead identificado"** que aparece em tempo real conforme o usuário digita (debounce 400ms, dispara busca a partir de 8 dígitos):
+  - Nome do contato, e-mail, telefone formatado.
+  - Pipeline atual + estágio + BU.
+  - SDR/Closer responsável.
+  - Última atividade (opcional).
+  - Botão "Abrir no CRM" → navega para `/crm/negocios?dealId=...`.
+- Se **nenhum lead** for encontrado: mostra "Número não cadastrado — ligação será registrada como avulsa".
+- Se **múltiplos** leads (mesmo telefone em pipelines diferentes): lista compacta com escolha; o usuário seleciona qual deal vincular antes de ligar.
 
-| Coluna | O que aparece no modal |
-|---|---|
-| Entradas | Deals criados na janela (id, nome, email, data criação, tags, canal) |
-| R1 Agend. | Deals únicos com R1 marcada na janela (status final do attendee) |
-| R1 Realiz. | Idem, status `completed` |
-| No-Show | Idem, status `no_show` |
-| Contrato Pago | Deals com `contract_paid_at` na janela |
-| R2 Agend./Realiz./Aprovados/Reprovados/Próx. Semana | Deals únicos do carrinho com aquele status |
-| Venda Final | Emails únicos com vendas de parceria (mostra produto + valor) |
-| Fat. Bruto/Líquido | Mesmas vendas, com breakdown bruto vs líquido |
+Layout: dialog/modal (`Dialog` do shadcn), 380px, centralizado. Tema dark consistente com o app.
 
-## Implementação técnica
+---
 
-### 1. Expor as listas brutas no `useChannelFunnelReport`
-Atualmente o hook retorna apenas os agregados. Vou adicionar ao retorno uma estrutura `details` indexada por `[canal][métrica]` contendo a lista dos itens que entraram naquela contagem:
+## 2. Hook novo: `src/hooks/useLeadLookupByPhone.ts`
 
-```ts
-type DetailItem = {
-  id: string;          // deal_id ou transaction_id
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  date: string;        // sale_date / scheduled_at / contract_paid_at / created_at
-  extra?: Record<string, any>; // produto, valor, status, etc.
-};
+`useLeadLookupByPhone(phoneDigits: string)` — React Query.
 
-type DetailsByMetric = Record<string, DetailItem[]>;
-type DetailsByChannel = Record<'A010'|'ANAMNESE'|'OUTROS'|'TOTAL', DetailsByMetric>;
-```
+- Normaliza para os **últimos 9 dígitos** (padrão de deduplicação já existente no projeto — vide `mem://business-logic/crm-manual-entry-deduplication-standard`).
+- Busca em `crm_contacts` via `ilike` no campo phone (sufixo de 9 dígitos).
+- Para cada contato encontrado, faz join leve com `crm_deals` (último deal por `created_at`) trazendo: `id`, `name`, `pipeline_id` (+ nome via lookup ou já carregado), `stage`, `owner_id`.
+- Inclui também busca em `hubla_transactions.customer_phone` como fallback (já é padrão usado em `phoneUtils.ts → findPhoneByEmail` na direção inversa).
+- `enabled: phoneDigits.replace(/\D/g,'').length >= 8`, `staleTime: 30s`.
+- Retorna `LeadMatch[]` com `{ contactId, contactName, email, phone, deals: [{ id, name, pipeline, stage, ownerEmail, bu }] }`.
 
-A coleta dos detalhes acompanha a agregação (loops já existentes em `useMemo` da seção 6). Custo: nenhuma query nova — estamos só guardando os mesmos itens que já são contados.
+---
 
-Uma única query nova: nome/telefone do contato pra exibir no modal. Vou fazer um lookup leve de `crm_contacts (id, name, phone)` para os deal_ids envolvidos, em chunks (mesmo padrão dos outros queries).
+## 3. Integração com Twilio existente
 
-### 2. Componente novo: `FunnelCellDrillModal`
-Arquivo: `src/components/relatorios/FunnelCellDrillModal.tsx`
+Reaproveita 100% o `useTwilio()` já implementado:
+- Usa `normalizePhoneNumber()` de `src/lib/phoneUtils.ts` antes de chamar.
+- Chama `makeCall(normalized, dealId?, contactId?, originId?)`:
+  - Se lead identificado e usuário escolheu um deal → passa `dealId` + `contactId` + `originId` (do pipeline) — métricas, gravação e qualificação ficam corretas.
+  - Se número avulso → passa só `phoneNumber` (já suportado pelo `makeCall`).
+- Antes de ligar, garante `deviceStatus === 'ready'`; caso contrário chama `initializeDevice()` com toast "Inicializando Twilio...".
+- Após `makeCall`, fecha o discador — o `TwilioSoftphone` flutuante e os controles inline já cuidam do resto (mute, hangup, qualificação, post-call modal).
 
-- `<Dialog>` com `<DialogContent className="max-w-4xl">`.
-- Props: `{ open, onOpenChange, title, subtitle, items: DetailItem[], columns: ColumnDef[] }`.
-- Tabela com busca client-side, ordenação, e botão "Exportar CSV" (gera blob no browser).
-- Cada linha tem botão "Abrir no CRM" → `window.open('/crm/leads/{deal_id}')` quando aplicável.
-- Vazio: "Nenhum item compõe esta contagem" (não deveria acontecer, mas defensivo).
+---
 
-### 3. Tornar células clicáveis em `ChannelFunnelTable`
-- Substituir `<TableCell>` numéricas por um wrapper `<ClickableCell value={n} onClick={() => openDrill(...)} />`.
-- Estilo: mantém visual atual + `hover:bg-muted/50 cursor-pointer rounded`. Se valor for 0, **não clicável** (cinza muted).
-- Estado local: `const [drillState, setDrillState] = useState<{channel, metric} | null>(null)`.
-- Resolve título/subtítulo/items com base em `drillState` + tabela de configuração de métricas.
+## 4. Acesso global — onde abrir o discador
 
-### 4. Configuração centralizada de métricas
-Arquivo: `src/components/relatorios/funnelMetricsConfig.ts`
+Adicionar **botão flutuante de telefone** sempre visível para usuários com permissão (mesma regra do `TwilioSoftphone`: `deviceStatus !== 'disconnected'`):
 
-```ts
-export const FUNNEL_METRICS_CONFIG = {
-  entradas:      { label: 'Entradas',      rule: 'Deals criados na janela…' },
-  r1Agendada:    { label: 'R1 Agendada',   rule: 'Deals únicos com R1…' },
-  // … etc
-};
-```
+- **Arquivo**: `src/components/layout/MainLayout.tsx` (já hospeda o `TwilioSoftphone`).
+- Botão circular azul/verde no canto inferior esquerdo (oposto ao softphone que fica à direita) com ícone `Phone`.
+- Ao clicar → abre o `<QuickDialer />` modal.
+- **Atalho de teclado**: `Ctrl/Cmd + Shift + D` para abrir/fechar — registrado em um `useEffect` global no `MainLayout`.
+- Não renderizar para roles que não usam telefonia (manter consistência com o softphone atual).
 
-Reaproveita os textos dos tooltips que já estão na tabela. Single source of truth.
+---
 
-## Arquivos a modificar/criar
+## 5. Fluxo de UX final
 
-1. **`src/hooks/useChannelFunnelReport.ts`** — adicionar coleta de `details` + lookup de nome/telefone, retornar no objeto.
-2. **`src/components/relatorios/FunnelCellDrillModal.tsx`** *(novo)* — modal genérico de drill-down.
-3. **`src/components/relatorios/funnelMetricsConfig.ts`** *(novo)* — labels/regras das métricas.
-4. **`src/components/relatorios/ChannelFunnelTable.tsx`** — células clicáveis + state do modal.
+1. Usuário aperta `Ctrl+Shift+D` ou clica no botão flutuante → abre o discador.
+2. Digita `11987654321` → após 8 dígitos, card "João Silva — Lead Instagram — SDR Maria" aparece.
+3. Clica "Ligar" → Twilio disca, modal fecha, softphone flutuante aparece com timer.
+4. Ao final, o `PostCallModal` e o `QualificationModal` abrem normalmente (já vinculados ao deal correto).
+5. Se quiser, clica "Abrir no CRM" para ir direto ao deal antes de ligar.
 
-## Validação esperada (caso 10/04–11/04)
+---
 
-- Clicar em **Venda Final → Total (17)**: modal lista os **17 emails** confirmados pela auditoria SQL, somando R$ 133.792,78 — bate com a UI.
-- Clicar em **R1 Agendada → Total (94)**: modal lista 94 deals únicos (sem repetir reagendamentos).
-- Clicar em **Contrato Pago → Total (20)**: modal lista 20 deals com `contract_paid_at` na janela.
-- Clicar em qualquer célula de canal específico: lista filtrada, e a soma das 3 linhas (A010+ANAMNESE+OUTROS) bate com a do Total.
+## 6. Arquivos a criar / editar
 
-## Out of scope (próxima rodada se quiser)
-- Persistir filtros do drill na URL (deep-link).
-- Comparar dois períodos lado a lado.
-- Drill-down nas células de % de conversão (mostrar numerador + denominador).
+**Criar:**
+- `src/components/crm/QuickDialer.tsx` — UI do discador.
+- `src/components/crm/QuickDialerLauncher.tsx` — botão flutuante + atalho de teclado + estado open/close.
+- `src/hooks/useLeadLookupByPhone.ts` — busca de leads por telefone.
+
+**Editar:**
+- `src/components/layout/MainLayout.tsx` — montar o `<QuickDialerLauncher />` ao lado do `<TwilioSoftphone />`.
+
+Sem migrations de banco. Sem novas edge functions. 100% client-side reaproveitando `TwilioContext` existente.
+
+---
+
+## 7. Validação pós-implementação
+
+- Digitar número de lead conhecido → deve identificar e mostrar pipeline/SDR.
+- Ligar a partir do discador → ligação deve aparecer na aba "Calls" do deal correto.
+- Ligar para número desconhecido → deve criar `calls` row sem `deal_id`, sem quebrar.
+- Atalho `Ctrl+Shift+D` deve funcionar em qualquer rota do CRM.
+- No mobile (viewport <768px), modal deve ocupar tela cheia e teclado numérico ser tocável.
+

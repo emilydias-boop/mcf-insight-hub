@@ -3,6 +3,7 @@ import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
 import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
+import { QuickDialerLauncher } from "@/components/crm/QuickDialerLauncher";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useTwilio } from "@/contexts/TwilioContext";
@@ -47,6 +48,7 @@ export function MainLayout() {
             </div>
           </SidebarInset>
           <TwilioSoftphone />
+          <QuickDialerLauncher />
           <OverdueAlertOverlay />
           <GlobalQualificationModal />
         </div>
