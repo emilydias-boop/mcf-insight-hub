@@ -315,6 +315,16 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
           </>
         )}
       </CardContent>
+
+      <FunnelCellDrillModal
+        open={!!drill}
+        onOpenChange={(o) => { if (!o) setDrill(null); }}
+        metric={drill?.metric ?? null}
+        channel={drill?.channel ?? null}
+        channelLabel={drill?.channelLabel ?? null}
+        items={drill && details ? (details[drill.channel]?.[drill.metric] ?? []) : []}
+        totalDisplay={drill?.total ?? ''}
+      />
     </Card>
   );
 }
