@@ -30,6 +30,7 @@ const KEYS: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '
 export function QuickDialer({ open, onOpenChange }: Props) {
   const [digits, setDigits] = useState('');
   const [selectedDeal, setSelectedDeal] = useState<{ deal: LeadDealMatch; contact: LeadMatch } | null>(null);
+  const [isDialing, setIsDialing] = useState(false);
   const navigate = useNavigate();
   const { makeCall, deviceStatus, initializeDevice } = useTwilio();
   const { data: matches = [], isFetching } = useLeadLookupByPhone(digits);
@@ -39,6 +40,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
     if (!open) {
       setDigits('');
       setSelectedDeal(null);
+      setIsDialing(false);
     }
   }, [open]);
 
@@ -83,27 +85,39 @@ export function QuickDialer({ open, onOpenChange }: Props) {
   const handleBackspace = () => setDigits(d => d.slice(0, -1));
 
   const handleCall = async () => {
-    if (!canCall) return;
+    if (!canCall || isDialing) return;
     const normalized = normalizePhoneNumber(digits);
 
     // Se há um deal selecionado, ou se há exatamente 1 deal candidato, vincular
     let chosen = selectedDeal;
     if (!chosen && allDeals.length === 1) chosen = allDeals[0];
 
-    // Garante device pronto
-    if (deviceStatus !== 'ready') {
-      toast.info('Inicializando telefone...');
-      const ok = await initializeDevice();
-      if (!ok) { toast.error('Erro ao inicializar Twilio'); return; }
-    }
+    setIsDialing(true);
+    try {
+      // Garante device pronto — popup permanece aberto durante a inicialização
+      if (deviceStatus !== 'ready') {
+        const ok = await initializeDevice();
+        if (!ok) {
+          toast.error('Não foi possível inicializar o telefone. Tente novamente.');
+          setIsDialing(false);
+          return;
+        }
+      }
 
-    onOpenChange(false);
-    await makeCall(
-      normalized,
-      chosen?.deal.dealId,
-      chosen?.contact.contactId,
-      chosen?.deal.originId || undefined,
-    );
+      await makeCall(
+        normalized,
+        chosen?.deal.dealId,
+        chosen?.contact.contactId,
+        chosen?.deal.originId || undefined,
+      );
+      // Só fecha após disparar a chamada com sucesso
+      onOpenChange(false);
+    } catch (err) {
+      console.error('[QuickDialer] erro ao ligar', err);
+      toast.error('Falha ao iniciar a ligação. Tente novamente.');
+    } finally {
+      setIsDialing(false);
+    }
   };
 
   const handleOpenDeal = (dealId: string) => {
@@ -249,7 +263,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
             size="lg"
             className="h-12 w-12 rounded-full p-0"
             onClick={handleBackspace}
-            disabled={!digits}
+            disabled={!digits || isDialing}
             aria-label="Apagar"
           >
             <Delete className="h-5 w-5" />
@@ -257,11 +271,20 @@ export function QuickDialer({ open, onOpenChange }: Props) {
           <Button
             size="lg"
             className="flex-1 h-12 bg-green-600 hover:bg-green-700 text-white rounded-full text-base font-semibold"
-            disabled={!canCall}
+            disabled={!canCall || isDialing}
             onClick={handleCall}
           >
-            <Phone className="h-5 w-5 mr-2" />
-            Ligar
+            {isDialing ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                {deviceStatus !== 'ready' ? 'Inicializando telefone…' : 'Conectando…'}
+              </>
+            ) : (
+              <>
+                <Phone className="h-5 w-5 mr-2" />
+                Ligar
+              </>
+            )}
           </Button>
         </div>
       </DialogContent>
