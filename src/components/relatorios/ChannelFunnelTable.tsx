@@ -5,7 +5,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Info, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
-import { ChannelFunnelRow } from '@/hooks/useChannelFunnelReport';
+import { ChannelFunnelRow, FunnelDetails, FunnelMetricKey } from '@/hooks/useChannelFunnelReport';
+import { useState } from 'react';
+import { FunnelCellDrillModal } from './FunnelCellDrillModal';
+import { cn } from '@/lib/utils';
 
 interface Props {
   rows: ChannelFunnelRow[];
@@ -14,6 +17,7 @@ interface Props {
     r2Agendada: number; r2Realizada: number; aprovados: number; reprovados: number;
     proximaSemana: number; vendaFinal: number; faturamentoBruto: number; faturamentoLiquido: number;
   };
+  details?: FunnelDetails;
 }
 
 function pct(n: number): string {
@@ -52,7 +56,36 @@ function HeaderWithInfo({ label, info, align = 'right' }: { label: string; info:
   );
 }
 
-export function ChannelFunnelTable({ rows, totals }: Props) {
+export function ChannelFunnelTable({ rows, totals, details }: Props) {
+  const [drill, setDrill] = useState<{ metric: FunnelMetricKey; channel: string; channelLabel: string; total: string } | null>(null);
+
+  const openDrill = (metric: FunnelMetricKey, channel: string, channelLabel: string, value: number, isMonetary = false) => {
+    if (!details || !value) return;
+    const totalDisplay = isMonetary ? formatCurrency(value) : `${value} ${value === 1 ? 'item' : 'itens'}`;
+    setDrill({ metric, channel, channelLabel, total: totalDisplay });
+  };
+
+  const Cell = ({ value, channel, channelLabel, metric, className, isMonetary }: {
+    value: number; channel: string; channelLabel: string; metric: FunnelMetricKey;
+    className?: string; isMonetary?: boolean;
+  }) => {
+    const display = isMonetary ? formatCurrency(value) : value;
+    const clickable = !!details && value > 0;
+    return (
+      <TableCell className={cn('text-right', className)}>
+        {clickable ? (
+          <button
+            type="button"
+            onClick={() => openDrill(metric, channel, channelLabel, value, isMonetary)}
+            className="hover:underline hover:text-primary cursor-pointer transition-colors"
+          >
+            {display}
+          </button>
+        ) : display}
+      </TableCell>
+    );
+  };
+
   const totalConv = {
     r1AgToReal: totals.r1Agendada > 0 ? (totals.r1Realizada / totals.r1Agendada) * 100 : 0,
     r1RealToContrato: totals.r1Realizada > 0 ? (totals.contratoPago / totals.r1Realizada) * 100 : 0,
@@ -167,36 +200,36 @@ export function ChannelFunnelTable({ rows, totals }: Props) {
                   {rows.map(r => (
                     <TableRow key={r.channel}>
                       <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
-                      <TableCell className="text-right">{r.entradas}</TableCell>
-                      <TableCell className="text-right">{r.r1Agendada}</TableCell>
-                      <TableCell className="text-right">{r.r1Realizada}</TableCell>
-                      <TableCell className="text-right text-destructive">{r.noShow}</TableCell>
-                      <TableCell className="text-right">{r.contratoPago}</TableCell>
-                      <TableCell className="text-right">{r.r2Agendada}</TableCell>
-                      <TableCell className="text-right">{r.r2Realizada}</TableCell>
-                      <TableCell className="text-right text-success">{r.aprovados}</TableCell>
-                      <TableCell className="text-right text-destructive">{r.reprovados}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{r.proximaSemana}</TableCell>
-                      <TableCell className="text-right font-semibold">{r.vendaFinal}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamentoBruto)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatCurrency(r.faturamentoLiquido)}</TableCell>
+                      <Cell value={r.entradas}      channel={r.channel} channelLabel={r.channelLabel} metric="entradas" />
+                      <Cell value={r.r1Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
+                      <Cell value={r.r1Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
+                      <Cell value={r.noShow}        channel={r.channel} channelLabel={r.channelLabel} metric="noShow" className="text-destructive" />
+                      <Cell value={r.contratoPago}  channel={r.channel} channelLabel={r.channelLabel} metric="contratoPago" />
+                      <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
+                      <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
+                      <Cell value={r.aprovados}     channel={r.channel} channelLabel={r.channelLabel} metric="aprovados" className="text-success" />
+                      <Cell value={r.reprovados}    channel={r.channel} channelLabel={r.channelLabel} metric="reprovados" className="text-destructive" />
+                      <Cell value={r.proximaSemana} channel={r.channel} channelLabel={r.channelLabel} metric="proximaSemana" className="text-muted-foreground" />
+                      <Cell value={r.vendaFinal}    channel={r.channel} channelLabel={r.channelLabel} metric="vendaFinal" className="font-semibold" />
+                      <Cell value={r.faturamentoBruto}   channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoBruto"   className="font-semibold" isMonetary />
+                      <Cell value={r.faturamentoLiquido} channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoLiquido" className="font-semibold" isMonetary />
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2 bg-muted/30 font-semibold">
                     <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
-                    <TableCell className="text-right">{totals.entradas}</TableCell>
-                    <TableCell className="text-right">{totals.r1Agendada}</TableCell>
-                    <TableCell className="text-right">{totals.r1Realizada}</TableCell>
-                    <TableCell className="text-right text-destructive">{totals.noShow}</TableCell>
-                    <TableCell className="text-right">{totals.contratoPago}</TableCell>
-                    <TableCell className="text-right">{totals.r2Agendada}</TableCell>
-                    <TableCell className="text-right">{totals.r2Realizada}</TableCell>
-                    <TableCell className="text-right text-success">{totals.aprovados}</TableCell>
-                    <TableCell className="text-right text-destructive">{totals.reprovados}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{totals.proximaSemana}</TableCell>
-                    <TableCell className="text-right">{totals.vendaFinal}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.faturamentoBruto)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.faturamentoLiquido)}</TableCell>
+                    <Cell value={totals.entradas}      channel="TOTAL" channelLabel="Total" metric="entradas" />
+                    <Cell value={totals.r1Agendada}    channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
+                    <Cell value={totals.r1Realizada}   channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
+                    <Cell value={totals.noShow}        channel="TOTAL" channelLabel="Total" metric="noShow"        className="text-destructive" />
+                    <Cell value={totals.contratoPago}  channel="TOTAL" channelLabel="Total" metric="contratoPago" />
+                    <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
+                    <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
+                    <Cell value={totals.aprovados}     channel="TOTAL" channelLabel="Total" metric="aprovados"     className="text-success" />
+                    <Cell value={totals.reprovados}    channel="TOTAL" channelLabel="Total" metric="reprovados"    className="text-destructive" />
+                    <Cell value={totals.proximaSemana} channel="TOTAL" channelLabel="Total" metric="proximaSemana" className="text-muted-foreground" />
+                    <Cell value={totals.vendaFinal}    channel="TOTAL" channelLabel="Total" metric="vendaFinal" />
+                    <Cell value={totals.faturamentoBruto}   channel="TOTAL" channelLabel="Total" metric="faturamentoBruto"   isMonetary />
+                    <Cell value={totals.faturamentoLiquido} channel="TOTAL" channelLabel="Total" metric="faturamentoLiquido" isMonetary />
                   </TableRow>
                 </TableBody>
               </Table>

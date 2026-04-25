@@ -52,6 +52,27 @@ export interface ChannelFunnelRow {
   taxaNoShow: number;
 }
 
+export type FunnelMetricKey =
+  | 'entradas' | 'r1Agendada' | 'r1Realizada' | 'noShow' | 'contratoPago'
+  | 'r2Agendada' | 'r2Realizada' | 'aprovados' | 'reprovados' | 'proximaSemana'
+  | 'vendaFinal' | 'faturamentoBruto' | 'faturamentoLiquido';
+
+export interface FunnelDetailItem {
+  id: string;            // deal_id ou transaction_id (para vendas)
+  dealId: string | null; // para abrir no CRM
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  date: string;          // data do evento (created_at / scheduled_at / contract_paid_at / sale_date)
+  channel: string;
+  status: string | null;
+  product: string | null;     // só para vendas
+  bruto: number | null;       // só para vendas
+  liquido: number | null;     // só para vendas
+}
+
+export type FunnelDetails = Record<string, Record<FunnelMetricKey, FunnelDetailItem[]>>;
+
 interface CarrinhoFunnelRow {
   deal_id: string | null;
   r2_status_name: string | null;
@@ -146,7 +167,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     queryKey: ['funnel-deals-period', startDate, endDate, bu, buOrigins.join(',')],
     queryFn: async (): Promise<{
       dealsCreated: DealMeta[];        // criados na janela (Entradas)
-      r1Deals: Map<string, { status: string; contract_paid_at: string | null }>; // deal → R1 status
+      r1Deals: Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>; // deal → R1 status
       r1NoShowDeals: Set<string>;
       contratoPagoDeals: Set<string>;
     }> => {
@@ -203,7 +224,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
 
       const buOriginsSet = new Set(buOrigins);
-      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null }>();
+      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>();
       const r1NoShowDeals = new Set<string>();
       for (const a of r1Attendees) {
         const dealId = a.deal_id;
@@ -218,11 +239,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         let effective = attStatus || slotStatus || 'scheduled';
         if (slotStatus === 'completed' || attStatus === 'completed') effective = 'completed';
         else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
+        const scheduledAt = a.meeting_slots?.scheduled_at || null;
         const existing = r1Deals.get(dealId);
         // Mantém o "melhor" status: completed > no_show > scheduled
         const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
         if (!existing || rank(effective) > rank(existing.status)) {
-          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at });
+          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at, scheduled_at: scheduledAt });
         } else if (!existing.contract_paid_at && a.contract_paid_at) {
           existing.contract_paid_at = a.contract_paid_at;
         }
@@ -416,6 +438,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     bruto: number;
     liquido: number;
     saleDate: Date;
+    product: string;
   }>>({
     queryKey: ['funnel-vendas-final-v2', startDate, endDate, refPrices.size],
     queryFn: async () => {
@@ -446,6 +469,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           bruto,
           liquido,
           saleDate: new Date(t.sale_date),
+          product: t.product_name,
         });
       }
       return result;
@@ -465,6 +489,38 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
     return m;
   }, [dealMeta]);
+
+  // ================================================================
+  // 5b. Lookup de nome/telefone do contato (para drill-down)
+  //     Busca leve em crm_contacts apenas para os deals envolvidos.
+  // ================================================================
+  const contactIdsToLoad = useMemo(() => {
+    const s = new Set<string>();
+    dealMeta.forEach(d => { if (d.contact_id) s.add(d.contact_id); });
+    return Array.from(s);
+  }, [dealMeta]);
+
+  const { data: contactInfo = new Map<string, { name: string | null; phone: string | null; email: string | null }>() } =
+    useQuery<Map<string, { name: string | null; phone: string | null; email: string | null }>>({
+      queryKey: ['funnel-contact-info', contactIdsToLoad.join(',').slice(0, 200), contactIdsToLoad.length],
+      queryFn: async () => {
+        const m = new Map<string, { name: string | null; phone: string | null; email: string | null }>();
+        if (contactIdsToLoad.length === 0) return m;
+        for (let i = 0; i < contactIdsToLoad.length; i += 200) {
+          const chunk = contactIdsToLoad.slice(i, i + 200);
+          const { data } = await supabase
+            .from('crm_contacts')
+            .select('id, name, phone, email')
+            .in('id', chunk);
+          (data || []).forEach((c: any) => {
+            m.set(c.id, { name: c.name || null, phone: c.phone || null, email: c.email || null });
+          });
+        }
+        return m;
+      },
+      enabled: contactIdsToLoad.length > 0,
+      staleTime: 60_000,
+    });
 
   // Para vendas cujo email não está em dealMeta, precisamos buscar o deal pelo email
   // e classificar. Faremos isso só para emails que faltarem.
@@ -552,7 +608,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // ================================================================
   // 6. AGREGAÇÃO POR CANAL (3 buckets fixos)
   // ================================================================
-  const { rows, totals } = useMemo(() => {
+  const { rows, totals, details } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'OUTROS'];
     const blank = () => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
@@ -570,10 +626,43 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       return dealMeta.get(dealId)?.channel || 'OUTROS';
     };
 
+    // ---- coleta de detalhes (drill-down) ----
+    const blankDetails = (): Record<FunnelMetricKey, FunnelDetailItem[]> => ({
+      entradas: [], r1Agendada: [], r1Realizada: [], noShow: [], contratoPago: [],
+      r2Agendada: [], r2Realizada: [], aprovados: [], reprovados: [], proximaSemana: [],
+      vendaFinal: [], faturamentoBruto: [], faturamentoLiquido: [],
+    });
+    const det: FunnelDetails = {
+      A010: blankDetails(), ANAMNESE: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
+    };
+    const pushDet = (channel: string, metric: FunnelMetricKey, item: FunnelDetailItem) => {
+      if (!det[channel]) det[channel] = blankDetails();
+      det[channel][metric].push(item);
+      det.TOTAL[metric].push(item);
+    };
+    const buildItem = (dealId: string, dateField: string, status: string | null = null): FunnelDetailItem => {
+      const meta = dealMeta.get(dealId);
+      const contact = meta?.contact_id ? contactInfo.get(meta.contact_id) : null;
+      return {
+        id: dealId,
+        dealId,
+        name: contact?.name || null,
+        email: meta?.email || contact?.email || null,
+        phone: contact?.phone || null,
+        date: dateField,
+        channel: meta?.channel || 'OUTROS',
+        status,
+        product: null,
+        bruto: null,
+        liquido: null,
+      };
+    };
+
     // Entradas: deals criados na janela
     (dealsByPeriod?.dealsCreated || []).forEach(d => {
       const ch = dealMeta.get(d.id)?.channel || d.channel || 'OUTROS';
       get(ch).entradas++;
+      pushDet(ch, 'entradas', buildItem(d.id, d.created_at, null));
     });
 
     // R1 Agendada / Realizada / No-Show — dedupe por deal
@@ -581,13 +670,24 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const ch = channelOf(dealId);
       const slot = get(ch);
       slot.r1Agendada++;
-      if (info.status === 'completed') slot.r1Realizada++;
-      else if (info.status === 'no_show') slot.noShow++;
+      const item = buildItem(dealId, info.scheduled_at || '', info.status);
+      pushDet(ch, 'r1Agendada', item);
+      if (info.status === 'completed') {
+        slot.r1Realizada++;
+        pushDet(ch, 'r1Realizada', item);
+      } else if (info.status === 'no_show') {
+        slot.noShow++;
+        pushDet(ch, 'noShow', item);
+      }
     });
 
     // Contrato Pago
     (dealsByPeriod?.contratoPagoDeals || new Set()).forEach((dealId: string) => {
-      get(channelOf(dealId)).contratoPago++;
+      const ch = channelOf(dealId);
+      get(ch).contratoPago++;
+      // contract_paid_at — pegamos do r1Deals se tiver
+      const r1info = (dealsByPeriod?.r1Deals as Map<string, any> | undefined)?.get(dealId);
+      pushDet(ch, 'contratoPago', buildItem(dealId, r1info?.contract_paid_at || '', 'contract_paid'));
     });
 
     // R2 / Aprovados / Reprovados / Próxima Semana — dedupe por deal_id
@@ -600,24 +700,55 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const attStatus = (c.attendee_status || '').toLowerCase();
       const meetingStatus = (c.meeting_status || '').toLowerCase();
       const isCancelled = attStatus === 'cancelled' || attStatus === 'rescheduled';
-      if (!isCancelled) slot.r2Agendada++;
+      const status = (c.r2_status_name || '').toLowerCase();
+      const r2Item: FunnelDetailItem = {
+        id: c.deal_id,
+        dealId: c.deal_id,
+        name: dealMeta.get(c.deal_id)?.contact_id ? (contactInfo.get(dealMeta.get(c.deal_id)!.contact_id!)?.name || null) : null,
+        email: c.contact_email || dealMeta.get(c.deal_id)?.email || null,
+        phone: c.contact_phone || c.attendee_phone || null,
+        date: '',
+        channel: ch,
+        status: c.r2_status_name || c.attendee_status,
+        product: null, bruto: null, liquido: null,
+      };
+      if (!isCancelled) { slot.r2Agendada++; pushDet(ch, 'r2Agendada', r2Item); }
       if (
         attStatus === 'completed' || attStatus === 'contract_paid' || attStatus === 'refunded' ||
         meetingStatus === 'completed'
-      ) slot.r2Realizada++;
-      const status = (c.r2_status_name || '').toLowerCase();
-      if (status.includes('aprovado') || status.includes('approved')) slot.aprovados++;
-      else if (status.includes('próxima') || status.includes('proxima') || status.includes('next')) slot.proximaSemana++;
-      else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) slot.reprovados++;
+      ) { slot.r2Realizada++; pushDet(ch, 'r2Realizada', r2Item); }
+      if (status.includes('aprovado') || status.includes('approved')) {
+        slot.aprovados++; pushDet(ch, 'aprovados', r2Item);
+      } else if (status.includes('próxima') || status.includes('proxima') || status.includes('next')) {
+        slot.proximaSemana++; pushDet(ch, 'proximaSemana', r2Item);
+      } else if (status.includes('reembolso') || status.includes('desistente') || status.includes('reprovado') || status.includes('cancelado')) {
+        slot.reprovados++; pushDet(ch, 'reprovados', r2Item);
+      }
     });
 
     // Venda Final + Faturamento — TODAS as vendas de parceria do período
-    vendasFinal.forEach(v => {
+    vendasFinal.forEach((v: any) => {
       const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
       slot.faturamentoBruto += v.bruto || 0;
       slot.faturamentoLiquido += v.liquido || 0;
+      const vendaItem: FunnelDetailItem = {
+        id: v.email,
+        dealId: null,
+        name: null,
+        email: v.email,
+        phone: v.phone || null,
+        date: v.saleDate ? new Date(v.saleDate).toISOString() : '',
+        channel: ch,
+        status: 'completed',
+        product: v.product || null,
+        bruto: v.bruto || 0,
+        liquido: v.liquido || 0,
+      };
+      pushDet(ch, 'vendaFinal', vendaItem);
+      pushDet(ch, 'faturamentoBruto', vendaItem);
+      pushDet(ch, 'faturamentoLiquido', vendaItem);
     });
 
     const finalRows: ChannelFunnelRow[] = Array.from(map.entries()).map(([channel, v]) => ({
@@ -651,12 +782,13 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       proximaSemana: 0, vendaFinal: 0, faturamentoBruto: 0, faturamentoLiquido: 0,
     });
 
-    return { rows: finalRows, totals: tot };
-  }, [dealsByPeriod, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels]);
+    return { rows: finalRows, totals: tot, details: det };
+  }, [dealsByPeriod, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo]);
 
   return {
     rows,
     totals,
+    details,
     isLoading: loadingDeals || loadingCarrinho || loadingVendas || loadingMeta,
   };
 }

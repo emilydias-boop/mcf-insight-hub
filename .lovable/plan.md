@@ -1,101 +1,102 @@
-# Corrigir Funil por Canal — "uma fotografia por coluna, dentro da janela"
+# Drill-down clicável no Funil por Canal
 
-## Princípio acordado
-> Cada coluna é uma fotografia independente do que aconteceu **no intervalo selecionado**. Um lead conta no máximo uma vez por coluna. Não importa se ele apareceu antes ou comprou depois — só importa se o evento daquela coluna caiu dentro da janela.
+## Objetivo
+Validar **lead por lead, número por número, venda por venda**: ao clicar em qualquer célula numérica da tabela "Funil por Canal", abrir um modal listando exatamente os deals/transações que compõem aquele valor — com email, nome, telefone, data e link pro CRM.
 
-## Diagnóstico (caso 02/04 a 10/04, BU Incorporador)
+Isso transforma a tabela de "confiar nos números" em "auditar os números".
 
-Comparação entre auditoria direta no banco vs. o que a UI exibe hoje:
+## Como vai funcionar (UX)
 
-| Coluna | Esperado (auditoria) | UI mostra | Problema |
-|---|---|---|---|
-| R1 Agendada | 219 | 291 | UI **infla** (~33% a mais) — conta cada attendee/reagendamento |
-| R1 Realizada | 193 | 177 | UI **subtrai** (~8% a menos) — possíveis exclusões na RPC |
-| No-Show | 74 | 93 | UI **infla** — no-shows duplicados por reagendamento |
-| Contrato Pago | 55 | 55 | ✅ OK |
-| R2 Agendada | 46 | 47 | OK (diferença de 1) |
-| R2 Realizada | 38 | 39 | OK |
-| Aprovados | 29 | 30 | OK |
-| Reprovados | — | 7 | OK |
-| Próx. Semana | — | 2 | OK |
-| Venda Final | 84 (emails únicos no período) | 11 | UI **filtra** vendas de recompradores e exige "primeira-compra-da-vida" — você quer **vendas que aconteceram no período**, ponto |
+- Cada célula numérica vira um botão sutil (mesmo visual atual, mas com `cursor: pointer` e hover discreto).
+- Clicar em "94" na linha A010 / coluna R1 Agendada → abre modal:
+  - **Título**: `R1 Agendada — A010 (94 deals)`
+  - **Subtítulo**: explica a regra (ex: "Deals únicos com R1 cujo `scheduled_at` cai entre 10/04 e 11/04, BU Incorporador, status ≠ cancelled/rescheduled").
+  - **Tabela**: Nome do lead | Email | Telefone | Data do evento | Status | Canal classificado | botão "Abrir no CRM".
+  - **Busca** + ordenação por coluna.
+  - Botão **Exportar CSV** dos itens.
+- Clicar em "Total" da mesma coluna → mesma modal mas sem filtro de canal (todos os 3 canais juntos).
+- Células de **conversão** (%), de **canal/label** e de **valores monetários** não são clicáveis (não fazem sentido drill).
+- Faturamento Bruto/Líquido → drill mostra as 17 transações com produto, valor bruto vs líquido (somam o total).
 
-**Causa raiz:**
-1. A RPC `get_channel_funnel_metrics` (R1/Entradas/Contrato) conta attendees, não deals únicos. Reagendamento vira contagem dupla/tripla.
-2. A whitelist de "Venda Final" exige que o cliente **nunca tenha comprado parceria nos últimos 12 meses** (excluindo upsells/recompras como se fossem "não-vendas"). Isso esconde 73 vendas reais.
-3. R1 e R2 usam classificadores de canal diferentes (RPC vs. front), então um mesmo deal pode parecer "ANAMNESE" em R1 e "OUTROS" em R2 — a soma das linhas não fecha como o usuário espera.
+## Métricas que terão drill-down
 
----
+| Coluna | O que aparece no modal |
+|---|---|
+| Entradas | Deals criados na janela (id, nome, email, data criação, tags, canal) |
+| R1 Agend. | Deals únicos com R1 marcada na janela (status final do attendee) |
+| R1 Realiz. | Idem, status `completed` |
+| No-Show | Idem, status `no_show` |
+| Contrato Pago | Deals com `contract_paid_at` na janela |
+| R2 Agend./Realiz./Aprovados/Reprovados/Próx. Semana | Deals únicos do carrinho com aquele status |
+| Venda Final | Emails únicos com vendas de parceria (mostra produto + valor) |
+| Fat. Bruto/Líquido | Mesmas vendas, com breakdown bruto vs líquido |
 
-## Plano de correção
+## Implementação técnica
 
-### Mudança 1 — Reescrever o cálculo de R1/Entradas/Contrato no front
-**Arquivo:** `src/hooks/useChannelFunnelReport.ts`
+### 1. Expor as listas brutas no `useChannelFunnelReport`
+Atualmente o hook retorna apenas os agregados. Vou adicionar ao retorno uma estrutura `details` indexada por `[canal][métrica]` contendo a lista dos itens que entraram naquela contagem:
 
-Substituir a chamada `get_channel_funnel_metrics` por queries diretas do front (mesmo padrão que já fazemos para R2/Carrinho), garantindo:
-- **Dedupe por `deal_id`** em todas as métricas R1.
-- R1 Agendada = `COUNT(DISTINCT deal_id)` de attendees R1 com `scheduled_at` na janela, BU = incorporador, status NÃO em `cancelled/rescheduled`.
-- R1 Realizada = mesma base, status `completed`.
-- No-Show = mesma base, status `no_show`.
-- Contrato Pago = `COUNT(DISTINCT deal_id)` com `contract_paid_at` na janela.
-- Entradas = `COUNT(DISTINCT id)` de `crm_deals` com `created_at` na janela e origem da BU (sem dedupe — entrada é evento de criação do deal).
+```ts
+type DetailItem = {
+  id: string;          // deal_id ou transaction_id
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  date: string;        // sale_date / scheduled_at / contract_paid_at / created_at
+  extra?: Record<string, any>; // produto, valor, status, etc.
+};
 
-Isso elimina os 33% de inflação de R1 Agendada e os no-shows duplicados.
+type DetailsByMetric = Record<string, DetailItem[]>;
+type DetailsByChannel = Record<'A010'|'ANAMNESE'|'OUTROS'|'TOTAL', DetailsByMetric>;
+```
 
-### Mudança 2 — Remover o filtro "12 meses de recompradores" de Venda Final
-**Arquivo:** `src/hooks/useChannelFunnelReport.ts`, query `funnel-parceria-conversions-v3`
+A coleta dos detalhes acompanha a agregação (loops já existentes em `useMemo` da seção 6). Custo: nenhuma query nova — estamos só guardando os mesmos itens que já são contados.
 
-- **Remover** a query `priorBuyers` (lookback 12 meses) e o filtro `priorEmails.has(email)`.
-- **Manter** apenas: dedupe por email **dentro do período**, whitelist de produtos válidos, status `completed`, sources legítimas.
-- Resultado esperado para o caso: Venda Final salta de 11 → ~80 (alinhado às 84 transações únicas detectadas).
+Uma única query nova: nome/telefone do contato pra exibir no modal. Vou fazer um lookup leve de `crm_contacts (id, name, phone)` para os deal_ids envolvidos, em chunks (mesmo padrão dos outros queries).
 
-Isso devolve à coluna o significado intuitivo: **vendas únicas que entraram no período**.
+### 2. Componente novo: `FunnelCellDrillModal`
+Arquivo: `src/components/relatorios/FunnelCellDrillModal.tsx`
 
-### Mudança 3 — Unificar classificador de canal entre R1 e R2
-**Arquivo:** `src/hooks/useChannelFunnelReport.ts`
+- `<Dialog>` com `<DialogContent className="max-w-4xl">`.
+- Props: `{ open, onOpenChange, title, subtitle, items: DetailItem[], columns: ColumnDef[] }`.
+- Tabela com busca client-side, ordenação, e botão "Exportar CSV" (gera blob no browser).
+- Cada linha tem botão "Abrir no CRM" → `window.open('/crm/leads/{deal_id}')` quando aplicável.
+- Vazio: "Nenhum item compõe esta contagem" (não deveria acontecer, mas defensivo).
 
-Hoje:
-- R1 → classificado dentro da RPC `get_channel_funnel_metrics` (lógica server-side).
-- R2 → classificado no front via `classifyChannelWith30dRule` + tags do deal.
-- Venda Final → classificado no front via `classifyChannelWith30dRule` + R1 attendees.
+### 3. Tornar células clicáveis em `ChannelFunnelTable`
+- Substituir `<TableCell>` numéricas por um wrapper `<ClickableCell value={n} onClick={() => openDrill(...)} />`.
+- Estilo: mantém visual atual + `hover:bg-muted/50 cursor-pointer rounded`. Se valor for 0, **não clicável** (cinza muted).
+- Estado local: `const [drillState, setDrillState] = useState<{channel, metric} | null>(null)`.
+- Resolve título/subtítulo/items com base em `drillState` + tabela de configuração de métricas.
 
-Após a Mudança 1, **tudo passa a ser classificado no front**, com a mesma função `classifyChannelWith30dRule(tags, originName, firstA010Purchase, referenceDate)` aplicada a `crm_deals`. Resultado: a soma das linhas A010+ANAMNESE+OUTROS bate em todas as colunas porque o mesmo deal recebe sempre o mesmo canal.
+### 4. Configuração centralizada de métricas
+Arquivo: `src/components/relatorios/funnelMetricsConfig.ts`
 
-### Mudança 4 — Atualizar tooltips
-**Arquivo:** `src/components/relatorios/ChannelFunnelTable.tsx`
+```ts
+export const FUNNEL_METRICS_CONFIG = {
+  entradas:      { label: 'Entradas',      rule: 'Deals criados na janela…' },
+  r1Agendada:    { label: 'R1 Agendada',   rule: 'Deals únicos com R1…' },
+  // … etc
+};
+```
 
-Reescrever os tooltips refletindo as novas regras:
-- R1 Agendada: "Deals únicos com R1 cujo `scheduled_at` cai na janela. Cada lead conta uma vez (sem inflar por reagendamento)."
-- R1 Realizada: "Deals únicos cuja R1 ficou com status `completed` e `scheduled_at` na janela."
-- No-Show: "Deals únicos cuja R1 ficou com status `no_show` e `scheduled_at` na janela."
-- Contrato Pago: "Deals únicos cujo `contract_paid_at` cai na janela."
-- R2 Agendada/Realizada/Aprovados/Reprovados/Próx. Semana: já estavam corretas.
-- Venda Final: "Vendas únicas (por email) de produtos de parceria com `sale_date` na janela. **Inclui upsells e recompras** — é uma fotografia das vendas que entraram no período, não 'primeira compra da vida'."
-- Fat. Bruto/Líquido: idem, inclui recompras.
+Reaproveita os textos dos tooltips que já estão na tabela. Single source of truth.
 
----
+## Arquivos a modificar/criar
 
-## Verificação esperada após implementação (caso 02/04 a 10/04)
+1. **`src/hooks/useChannelFunnelReport.ts`** — adicionar coleta de `details` + lookup de nome/telefone, retornar no objeto.
+2. **`src/components/relatorios/FunnelCellDrillModal.tsx`** *(novo)* — modal genérico de drill-down.
+3. **`src/components/relatorios/funnelMetricsConfig.ts`** *(novo)* — labels/regras das métricas.
+4. **`src/components/relatorios/ChannelFunnelTable.tsx`** — células clicáveis + state do modal.
 
-| Coluna | Antes | Depois (esperado) |
-|---|---|---|
-| R1 Agendada | 291 | ~219 |
-| R1 Realizada | 177 | ~193 |
-| No-Show | 93 | ~74 |
-| Contrato Pago | 55 | 55 |
-| R2 Agendada | 47 | ~47 |
-| R2 Realizada | 39 | ~39 |
-| Aprovados | 30 | ~30 |
-| Venda Final | 11 | ~80 |
-| Soma A010+ANAMNESE+OUTROS | desbalanceada | bate em toda coluna |
+## Validação esperada (caso 10/04–11/04)
 
----
+- Clicar em **Venda Final → Total (17)**: modal lista os **17 emails** confirmados pela auditoria SQL, somando R$ 133.792,78 — bate com a UI.
+- Clicar em **R1 Agendada → Total (94)**: modal lista 94 deals únicos (sem repetir reagendamentos).
+- Clicar em **Contrato Pago → Total (20)**: modal lista 20 deals com `contract_paid_at` na janela.
+- Clicar em qualquer célula de canal específico: lista filtrada, e a soma das 3 linhas (A010+ANAMNESE+OUTROS) bate com a do Total.
 
-## Arquivos a modificar
-1. `src/hooks/useChannelFunnelReport.ts` — reescrever queries R1/Entradas/Contrato + remover filtro de recompradores
-2. `src/components/relatorios/ChannelFunnelTable.tsx` — atualizar tooltips
-
-## Out of scope (posso fazer em outra rodada)
-- Apagar a RPC `get_channel_funnel_metrics` no banco (ela continua viva sem uso)
-- Ajustar a tabela secundária "Canal — Conversões" com a mesma lógica
-- Adicionar exportação CSV reflectindo os novos números
+## Out of scope (próxima rodada se quiser)
+- Persistir filtros do drill na URL (deep-link).
+- Comparar dois períodos lado a lado.
+- Drill-down nas células de % de conversão (mostrar numerador + denominador).
