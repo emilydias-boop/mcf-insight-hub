@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getRolesFromToken } from '@/utils/jwt';
+import { useInactivityLogout } from '@/hooks/useInactivityLogout';
 
 type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo';
 
@@ -363,6 +364,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       navigate('/auth');
     }
   };
+
+  // Logout automático por inatividade (3h). Só ativo quando há usuário logado.
+  const handleInactivityLogout = useCallback(() => {
+    toast.error('Sessão encerrada por inatividade. Faça login novamente.', {
+      duration: 8000,
+    });
+    void signOut();
+  }, []);
+
+  useInactivityLogout({
+    enabled: !!user,
+    timeoutMs: 3 * 60 * 60 * 1000, // 3 horas
+    warningMs: 5 * 60 * 1000, // aviso 5 min antes
+    onTimeout: handleInactivityLogout,
+  });
 
   const hasRole = (requiredRole: AppRole): boolean => {
     if (allRoles.length === 0) return false;
