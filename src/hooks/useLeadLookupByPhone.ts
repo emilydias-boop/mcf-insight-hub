@@ -71,7 +71,7 @@ export function useLeadLookupByPhone(rawPhone: string) {
           ? supabase.from('crm_origins').select('id, name').in('id', originIds)
           : Promise.resolve({ data: [] as any[] }),
         stageIds.length
-          ? supabase.from('pipeline_stages').select('id, name').in('id', stageIds)
+          ? supabase.from('crm_stages').select('id, name').in('id', stageIds)
           : Promise.resolve({ data: [] as any[] }),
         ownerIds.length
           ? supabase.from('profiles').select('id, email').in('id', ownerIds)
