@@ -8,6 +8,7 @@ import { QualificationAndScheduleModal } from "@/components/crm/QualificationAnd
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
+import { DialerLauncherProvider } from "@/contexts/DialerLauncherContext";
 import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner";
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
@@ -37,6 +38,7 @@ export function MainLayout() {
   return (
       <SidebarProvider defaultOpen={false}>
         <AutoDialerProvider>
+        <DialerLauncherProvider>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
           <SidebarInset className="flex-1 overflow-hidden">
@@ -58,6 +60,7 @@ export function MainLayout() {
           <OverdueAlertOverlay />
           <GlobalQualificationModal />
         </div>
+        </DialerLauncherProvider>
         </AutoDialerProvider>
       </SidebarProvider>
   );
