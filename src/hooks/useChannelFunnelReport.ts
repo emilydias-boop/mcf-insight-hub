@@ -438,6 +438,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     bruto: number;
     liquido: number;
     saleDate: Date;
+    product: string;
   }>>({
     queryKey: ['funnel-vendas-final-v2', startDate, endDate, refPrices.size],
     queryFn: async () => {
@@ -468,6 +469,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           bruto,
           liquido,
           saleDate: new Date(t.sale_date),
+          product: t.product_name,
         });
       }
       return result;
