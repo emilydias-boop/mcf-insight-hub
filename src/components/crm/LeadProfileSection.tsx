@@ -30,6 +30,25 @@ const CATEGORIES: { title: string; fields: FieldDef[] }[] = [
       { key: 'estado_cidade', label: 'Estado/Cidade' },
       { key: 'profissao', label: 'Profissão' },
       { key: 'whatsapp', label: 'WhatsApp' },
+      { key: 'email', label: 'E-mail' },
+      { key: 'instagram', label: 'Instagram' },
+      { key: 'canal_conhecimento', label: 'Como conheceu' },
+    ],
+  },
+  {
+    title: 'Experiência & Interesse',
+    fields: [
+      { key: 'ja_constroi', label: 'Já constrói?' },
+      { key: 'experiencia_imobiliaria', label: 'Experiência Imobiliária' },
+      { key: 'interesse_consorcio', label: 'Interesse em Consórcio' },
+    ],
+  },
+  {
+    title: 'Crédito & Urgência',
+    fields: [
+      { key: 'situacao_credito', label: 'Situação de Crédito' },
+      { key: 'tentou_financiamento', label: 'Tentou Financiamento?' },
+      { key: 'urgencia_operacao', label: 'Urgência da Operação' },
     ],
   },
   {
@@ -140,7 +159,12 @@ export function LeadProfileSection({ contactId, dealId }: LeadProfileSectionProp
           <div className="flex items-center gap-2 px-1">
             <span className="text-xs text-muted-foreground">Lead Score:</span>
             <Badge variant="outline">{profile.lead_score}</Badge>
-            {profile.icp_level && <Badge variant="secondary">{profile.icp_level}</Badge>}
+            {profile.icp_level != null && (
+              <Badge variant="secondary">
+                ICP {profile.icp_level}
+                {(profile as any).icp_level_name ? ` · ${(profile as any).icp_level_name}` : ''}
+              </Badge>
+            )}
           </div>
         )}
       </CollapsibleContent>

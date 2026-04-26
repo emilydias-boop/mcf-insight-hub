@@ -6664,6 +6664,7 @@ export type Database = {
       lead_profiles: {
         Row: {
           bancos: Json | null
+          canal_conhecimento: string | null
           contact_id: string | null
           corretora: string | null
           cpf: string | null
@@ -6671,19 +6672,25 @@ export type Database = {
           data_cadastro: string | null
           data_nascimento: string | null
           deal_id: string | null
+          email: string | null
           esporte_hobby: string | null
           estado_cidade: string | null
           estado_civil: string | null
+          experiencia_imobiliaria: string | null
           faixa_aporte: number | null
           faixa_aporte_descricao: string | null
           fonte_renda: string | null
           gosta_futebol: boolean | null
           icp_level: string | null
+          icp_level_name: string | null
           id: string
           imovel_financiado: boolean | null
+          instagram: string | null
+          interesse_consorcio: string | null
           interesse_holding: boolean | null
           investe: boolean | null
           is_empresario: boolean | null
+          ja_constroi: string | null
           lead_score: number | null
           nome_completo: string | null
           num_filhos: number | null
@@ -6700,15 +6707,19 @@ export type Database = {
           renda_bruta: number | null
           renda_passiva_meta: number | null
           saldo_fgts: number | null
+          situacao_credito: string | null
           tempo_independencia: string | null
+          tentou_financiamento: string | null
           time_futebol: string | null
           updated_at: string
+          urgencia_operacao: string | null
           valor_capital_giro: number | null
           valor_investido: number | null
           whatsapp: string | null
         }
         Insert: {
           bancos?: Json | null
+          canal_conhecimento?: string | null
           contact_id?: string | null
           corretora?: string | null
           cpf?: string | null
@@ -6716,19 +6727,25 @@ export type Database = {
           data_cadastro?: string | null
           data_nascimento?: string | null
           deal_id?: string | null
+          email?: string | null
           esporte_hobby?: string | null
           estado_cidade?: string | null
           estado_civil?: string | null
+          experiencia_imobiliaria?: string | null
           faixa_aporte?: number | null
           faixa_aporte_descricao?: string | null
           fonte_renda?: string | null
           gosta_futebol?: boolean | null
           icp_level?: string | null
+          icp_level_name?: string | null
           id?: string
           imovel_financiado?: boolean | null
+          instagram?: string | null
+          interesse_consorcio?: string | null
           interesse_holding?: boolean | null
           investe?: boolean | null
           is_empresario?: boolean | null
+          ja_constroi?: string | null
           lead_score?: number | null
           nome_completo?: string | null
           num_filhos?: number | null
@@ -6745,15 +6762,19 @@ export type Database = {
           renda_bruta?: number | null
           renda_passiva_meta?: number | null
           saldo_fgts?: number | null
+          situacao_credito?: string | null
           tempo_independencia?: string | null
+          tentou_financiamento?: string | null
           time_futebol?: string | null
           updated_at?: string
+          urgencia_operacao?: string | null
           valor_capital_giro?: number | null
           valor_investido?: number | null
           whatsapp?: string | null
         }
         Update: {
           bancos?: Json | null
+          canal_conhecimento?: string | null
           contact_id?: string | null
           corretora?: string | null
           cpf?: string | null
@@ -6761,19 +6782,25 @@ export type Database = {
           data_cadastro?: string | null
           data_nascimento?: string | null
           deal_id?: string | null
+          email?: string | null
           esporte_hobby?: string | null
           estado_cidade?: string | null
           estado_civil?: string | null
+          experiencia_imobiliaria?: string | null
           faixa_aporte?: number | null
           faixa_aporte_descricao?: string | null
           fonte_renda?: string | null
           gosta_futebol?: boolean | null
           icp_level?: string | null
+          icp_level_name?: string | null
           id?: string
           imovel_financiado?: boolean | null
+          instagram?: string | null
+          interesse_consorcio?: string | null
           interesse_holding?: boolean | null
           investe?: boolean | null
           is_empresario?: boolean | null
+          ja_constroi?: string | null
           lead_score?: number | null
           nome_completo?: string | null
           num_filhos?: number | null
@@ -6790,9 +6817,12 @@ export type Database = {
           renda_bruta?: number | null
           renda_passiva_meta?: number | null
           saldo_fgts?: number | null
+          situacao_credito?: string | null
           tempo_independencia?: string | null
+          tentou_financiamento?: string | null
           time_futebol?: string | null
           updated_at?: string
+          urgencia_operacao?: string | null
           valor_capital_giro?: number | null
           valor_investido?: number | null
           whatsapp?: string | null
