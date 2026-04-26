@@ -1,57 +1,65 @@
+
 ## Objetivo
+Atualizar o webhook **ClientData Inside** (`webhook-lead-receiver`) para persistir todos os campos novos do payload e expandir a UI **"Perfil do Lead"** (`LeadProfileSection`) para exibi-los.
 
-Os botões flutuantes do **Discador Rápido** (📞 verde) e **Auto-Discador** (⚡ cinza) hoje aparecem no canto inferior esquerdo da tela, sobrepondo conteúdo e ficando visíveis para todos os usuários — inclusive quem nunca usa (admins, financeiro, RH, marketing etc.).
+## Análise (gaps encontrados)
 
-A solução: **mover esses dois acessos para dentro do `AppSidebar**`, em uma seção própria no rodapé do menu lateral, **visível apenas para `sdr` e `closer**` (e `admin` por padrão de gestão, se confirmado).
+Comparando o novo payload com o que hoje é gravado em `lead_profiles`:
 
----
+### 🆕 Campos novos do payload que HOJE são ignorados
+- `email`
+- `instagram`
+- `canal_conhecimento` (como conheceu)
+- `ja_constroi`
+- `experiencia_imobiliaria`
+- `interesse_consorcio`
+- `situacao_credito`
+- `tentou_financiamento`
+- `urgencia_operacao`
+- `lead_score`, `icp_level`, `icp_level_name` — chegam no payload mas o código força `lead_score = 0` e `icp_level = null`
+- `data_cadastro` — não está sendo gravado a partir do payload
+- `source` — alias de `origem`
 
-## Alterações propostas
+### 🐛 Bugs de mapeamento atuais
+- `estado_civil` chega como array (`["Casado"]`) e é salvo como string JSON literal `"[\"Casado(a)\"]"` — precisa virar string limpa (ex: `"Casado"`)
+- `lead_score` e `icp_level` recebidos no payload são descartados (sobrescritos)
 
-### 1. `src/components/layout/AppSidebar.tsx`
+## Mudanças propostas
 
-- Adicionar uma nova seção no `SidebarFooter` (ou logo acima dele), chamada **"Discador"**, contendo dois `SidebarMenuButton`:
-  - **Discador rápido** — ícone `Phone` (verde, igual ao botão atual). Atalho `Ctrl+Shift+D` exibido como hint quando expandido.
-  - **Auto-Discador** — ícone `Zap`. Mostra um `Badge` com `stats.called/stats.total` quando há fila ativa (mesma lógica do botão atual).
-- Filtragem por role: usar `hasAnyRole('sdr', 'closer', 'admin')` do `useAuth()`. Se o usuário não tiver nenhum desses cargos, a seção inteira não é renderizada.
-- Quando o sidebar está colapsado (modo ícone), apenas os ícones aparecem — comportamento nativo do shadcn sidebar.
-- Os botões disparam o mesmo `setOpen(true)` / `setAutoOpen(true)` que hoje vivem no `QuickDialerLauncher`.
+### 1. Migração no banco (`lead_profiles`)
+Adicionar colunas para os novos campos:
+- `email text`
+- `instagram text`
+- `canal_conhecimento text`
+- `ja_constroi text`
+- `experiencia_imobiliaria text`
+- `interesse_consorcio text`
+- `situacao_credito text`
+- `tentou_financiamento text`
+- `urgencia_operacao text`
+- `icp_level_name text`
 
-### 2. `src/components/crm/QuickDialerLauncher.tsx`
+(`lead_score` int, `icp_level` int e `data_cadastro` timestamptz já existem.)
 
-- **Remover os dois botões flutuantes** (o `<div className="fixed bottom-4 left-4 ...">` com os dois `Tooltip`).
-- **Manter** todo o resto: estado `open`/`autoOpen`, atalhos de teclado `Ctrl+Shift+D` e `Ctrl+Shift+A`, efeito que fecha o painel quando entra em chamada, e os componentes `<QuickDialer>` e `<AutoDialerPanel>` montados.
-- Os atalhos de teclado continuam globais e funcionam para qualquer usuário com permissão (sem alteração).
+### 2. `supabase/functions/webhook-lead-receiver/index.ts`
+Na função `upsertLeadProfile` (linhas ~1157-1251):
+- Mapear todos os campos novos listados acima
+- Normalizar `estado_civil` array → string (`Array.isArray(v) ? v[0] : v`)
+- Usar `lead_score` e `icp_level` recebidos do payload (com fallback `0`/`null`)
+- Aceitar `source` como alias de `origem`
+- Persistir `data_cadastro` quando vier no payload
 
-### 3. Comunicação entre Sidebar e Launcher
+### 3. `src/components/crm/LeadProfileSection.tsx`
+Expandir as `CATEGORIES`:
+- **Dados Pessoais**: adicionar `email`, `instagram`, `canal_conhecimento`
+- **Nova categoria "Experiência & Interesse"**: `ja_constroi`, `experiencia_imobiliaria`, `interesse_consorcio`
+- **Nova categoria "Crédito & Urgência"**: `situacao_credito`, `tentou_financiamento`, `urgencia_operacao`
+- Exibir `icp_level_name` junto ao badge de `icp_level` (rodapé)
 
-Como o `QuickDialerLauncher` mantém o estado dos modais e o `AppSidebar` precisa abrir esses modais, vou criar um pequeno contexto `**DialerLauncherContext**` (`src/contexts/DialerLauncherContext.tsx`) com:
+### 4. Regenerar `src/integrations/supabase/types.ts`
+Automático após a migração.
 
-- `quickOpen`, `setQuickOpen`
-- `autoOpen`, `setAutoOpen`
-
-O Provider envolve `MainLayout`. O `AppSidebar` consome para abrir; o `QuickDialerLauncher` consome para renderizar os modais e tratar atalhos. Isso evita acoplamento via eventos globais e mantém a lógica de "fechar painel ao atender" intacta.
-
-### 4. Visibilidade (regra final)
-
-- **SDR** ✅ vê os dois botões no sidebar
-- **Closer** ✅ vê os dois botões no sidebar
-- **Admin** ✅ vê (para suporte/teste) — não precisa ver
-- **Manager / Coordenador / Financeiro / RH / Marketing / demais** ❌ não vê nada relacionado a discador
-
----
-
-## Resultado visual
-
-**Antes:** dois círculos flutuantes sobrepostos ao canto inferior esquerdo, visíveis para todos.
-
-**Depois:** dois itens no sidebar, agrupados em "Discador", junto aos demais itens do menu — discretos quando colapsado (só ícones), descritivos quando expandido. Aparecem apenas para quem opera o telefone.
-
----
-
-## Arquivos editados/criados
-
-- ✏️ `src/components/layout/AppSidebar.tsx` — adicionar seção "Discador" filtrada por role
-- ✏️ `src/components/crm/QuickDialerLauncher.tsx` — remover botões flutuantes, manter atalhos e modais
-- ➕ `src/contexts/DialerLauncherContext.tsx` — contexto leve para conectar sidebar ↔ modais
-- ✏️ `src/components/layout/MainLayout.tsx` — envolver com `DialerLauncherProvider`
+## Fora de escopo
+- Mudar regras de roteamento/distribuição (mantém o fluxo atual do `webhook-lead-receiver`)
+- Recalcular `lead_score`/`icp_level` no servidor — passamos a confiar no que o payload envia
+- Backfill de leads históricos (apenas novos eventos preencherão os campos novos)
