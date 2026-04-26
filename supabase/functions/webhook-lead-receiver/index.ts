@@ -1174,8 +1174,15 @@ async function upsertLeadProfile(
       whatsapp: normalizedPhone || (getField(payload, 'whatsapp') as string) || null,
       data_nascimento: parseDateField(getField(payload, 'data_nascimento') as string) || null,
       estado_cidade: getField(payload, 'estado_cidade') as string || null,
-      estado_civil: getField(payload, 'estado_civil') as string || null,
+      estado_civil: (() => {
+        const v = getField(payload, 'estado_civil');
+        if (Array.isArray(v)) return (v[0] as string) || null;
+        return (v as string) || null;
+      })(),
       num_filhos: parseNum(getField(payload, 'num_filhos')) as number | null,
+      email: getField(payload, 'email') as string || null,
+      instagram: getField(payload, 'instagram') as string || null,
+      canal_conhecimento: getField(payload, 'canal_conhecimento', 'canalConhecimento') as string || null,
 
       // Profissional
       profissao: getField(payload, 'profissao') as string || null,
@@ -1226,14 +1233,31 @@ async function upsertLeadProfile(
       interesse_holding: parseBool(getField(payload, 'interesse_holding', 'interesseHolding')),
       perfil_indicacao: getField(payload, 'perfil_indicacao', 'perfilIndicacao') as string || null,
 
-      // Calculados (placeholder)
-      lead_score: 0,
-      icp_level: null,
+      // Experiência imobiliária / interesse
+      ja_constroi: getField(payload, 'ja_constroi', 'jaConstroi') as string || null,
+      experiencia_imobiliaria: getField(payload, 'experiencia_imobiliaria', 'experienciaImobiliaria') as string || null,
+      interesse_consorcio: getField(payload, 'interesse_consorcio', 'interesseConsorcio') as string || null,
+
+      // Crédito & Urgência
+      situacao_credito: getField(payload, 'situacao_credito', 'situacaoCredito') as string || null,
+      tentou_financiamento: getField(payload, 'tentou_financiamento', 'tentouFinanciamento') as string || null,
+      urgencia_operacao: getField(payload, 'urgencia_operacao', 'urgenciaOperacao') as string || null,
+
+      // Score / ICP — vindos do payload (ClientData calcula)
+      lead_score: (parseNum(getField(payload, 'lead_score', 'leadScore')) as number | null) ?? 0,
+      icp_level: parseNum(getField(payload, 'icp_level', 'icpLevel')) as number | null,
+      icp_level_name: getField(payload, 'icp_level_name', 'icpLevelName') as string || null,
 
       // Controle
-      origem: (getField(payload, 'origem') as string) || 'mcf_crm',
+      origem: (getField(payload, 'origem', 'source') as string) || 'mcf_crm',
+      data_cadastro: parseDateField(getField(payload, 'data_cadastro', 'dataCadastro') as string) || undefined,
       updated_at: new Date().toISOString(),
     };
+
+    // Remove undefined keys to avoid overwriting with undefined on upsert
+    Object.keys(profileData).forEach((k) => {
+      if (profileData[k] === undefined) delete profileData[k];
+    });
 
     // Upsert by contact_id
     const { error } = await supabaseClient
