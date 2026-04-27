@@ -2192,6 +2192,7 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
+              customerDocument: transactionData.customer_document,
               saleDate: saleDate,
               transactionHublaId: transactionData.hubla_id,
               offerName: transactionData.offer_name,
