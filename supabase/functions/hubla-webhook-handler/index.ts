@@ -2356,6 +2356,7 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
+              customerDocument: transactionData.customer_document,
               saleDate: saleDate,
               transactionHublaId: hublaId,
               offerName: transactionData.offer_name,
