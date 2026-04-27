@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useAutoDialer, type AutoDialerLead } from '@/contexts/AutoDialerContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -31,18 +33,38 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const { data: buMapping } = useBUPipelineMap(activeBU);
   const { data: sdrOriginOverride } = useSDROriginOverride();
 
-  // Grupos (funis) permitidos para o SDR baseado na BU dele
-  const allowedGroupIds = useMemo(() => {
-    if (!isSdr) return undefined; // admins/managers veem tudo
-    return buMapping?.groups || [];
-  }, [isSdr, buMapping]);
-
-  // Origens permitidas (override individual do SDR tem prioridade)
-  const allowedOriginIds = useMemo<string[] | null>(() => {
-    if (!isSdr) return null;
+  // Origens permitidas para o SDR — override individual tem prioridade,
+  // senão usa as origens mapeadas para a BU dele.
+  const sdrOriginIds = useMemo<string[]>(() => {
+    if (!isSdr) return [];
     if (sdrOriginOverride && sdrOriginOverride.length > 0) return sdrOriginOverride;
-    return null;
-  }, [isSdr, sdrOriginOverride]);
+    return buMapping?.origins || [];
+  }, [isSdr, sdrOriginOverride, buMapping]);
+
+  // Buscar os grupos (funis) pais das origens permitidas. Combinamos com os
+  // grupos diretamente mapeados para a BU para cobrir os dois cenários de config.
+  const { data: derivedGroupIds = [] } = useQuery({
+    queryKey: ['autodialer-derived-groups', sdrOriginIds],
+    queryFn: async (): Promise<string[]> => {
+      if (sdrOriginIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('group_id')
+        .in('id', sdrOriginIds);
+      if (error) return [];
+      return Array.from(new Set((data || []).map(r => r.group_id).filter(Boolean) as string[]));
+    },
+    enabled: isSdr && sdrOriginIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Grupos (funis) permitidos no seletor: união de grupos mapeados + grupos
+  // pais das origens permitidas. Para admins/managers retorna undefined (vê tudo).
+  const allowedGroupIds = useMemo<string[] | undefined>(() => {
+    if (!isSdr) return undefined;
+    const fromMap = buMapping?.groups || [];
+    return Array.from(new Set([...fromMap, ...derivedGroupIds]));
+  }, [isSdr, buMapping, derivedGroupIds]);
 
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState<'cockpit' | 'pipeline' | 'paste'>('cockpit');
