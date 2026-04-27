@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Delete, Loader2, ExternalLink, User } from 'lucide-react';
+import { Phone, Delete, Loader2, ExternalLink, User, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTwilio } from '@/contexts/TwilioContext';
@@ -191,6 +191,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
                 {allDeals.map(({ deal, contact }) => {
                   const isSelected = selectedDeal?.deal.dealId === deal.dealId;
                   const isAuto = !selectedDeal && allDeals.length === 1;
+                  const notMine = !deal.isMine;
                   return (
                     <button
                       key={deal.dealId}
@@ -201,6 +202,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
                         (isSelected || isAuto)
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:bg-muted/50',
+                        notMine && 'border-amber-500/50',
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -226,11 +228,25 @@ export function QuickDialer({ open, onOpenChange }: Props) {
                           <Badge variant="secondary" className="text-[10px] py-0 px-1.5">{deal.stageName}</Badge>
                         )}
                         {deal.ownerEmail && (
-                          <span className="text-[10px] text-muted-foreground truncate">
-                            {deal.ownerEmail.split('@')[0]}
+                          <span className={cn(
+                            'text-[10px] truncate',
+                            notMine ? 'text-amber-500 font-medium' : 'text-muted-foreground',
+                          )}>
+                            {notMine ? 'Com: ' : ''}{deal.ownerEmail.split('@')[0]}
+                          </span>
+                        )}
+                        {contact.phone && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {contact.phone}
                           </span>
                         )}
                       </div>
+                      {notMine && (
+                        <div className="flex items-center gap-1 mt-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+                          <AlertTriangle className="h-3 w-3" />
+                          <span>Lead de outro responsável — você só pode ligar. Para agendar, peça transferência.</span>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
