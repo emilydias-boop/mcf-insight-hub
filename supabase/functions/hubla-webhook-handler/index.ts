@@ -235,6 +235,32 @@ function normalizePhone(phone: string | null): string | null {
   return '+' + clean;
 }
 
+// ============= HELPER: Normalizar documento (CPF/CNPJ) =============
+// Mantém apenas dígitos. Retorna null se vazio. Aceita CPF (11) e CNPJ (14).
+function normalizeDocument(doc: string | null | undefined): string | null {
+  if (!doc) return null;
+  const clean = String(doc).replace(/\D/g, '');
+  return clean.length > 0 ? clean : null;
+}
+
+// ============= HELPER: Extrair CPF do payload Hubla (todos os formatos) =============
+function extractCustomerDocument(eventOrInvoice: any, body: any): string | null {
+  return normalizeDocument(
+    eventOrInvoice?.userDocument ||
+    eventOrInvoice?.customerDocument ||
+    eventOrInvoice?.customer?.document ||
+    eventOrInvoice?.user?.document ||
+    eventOrInvoice?.payer?.document ||
+    body?.event?.user?.document ||
+    body?.event?.invoice?.payer?.document ||
+    body?.event?.payer?.document ||
+    body?.user?.document ||
+    body?.payer?.document ||
+    body?.['Documento do cliente'] ||
+    null
+  );
+}
+
 // ============= HELPER: Criar/Atualizar Contato e Deal no CRM =============
 interface CRMContactData {
   email: string | null;
@@ -1967,6 +1993,7 @@ serve(async (req) => {
           customer_name: eventData.userName || eventData.customer?.name || eventData.customerName || null,
           customer_email: eventData.userEmail || eventData.customer?.email || eventData.customerEmail || null,
           customer_phone: eventData.userPhone || eventData.customer?.phone || eventData.customerPhone || null,
+          customer_document: extractCustomerDocument(eventData, body),
           utm_source: utmSource,
           utm_medium: utmMedium,
           utm_campaign: utmCampaign,
@@ -2068,6 +2095,7 @@ serve(async (req) => {
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null,
             customer_email: payer.email || user.email || null,
             customer_phone: payer.phone || user.phone || null,
+            customer_document: extractCustomerDocument({ payer, user }, body),
             utm_source: utmSource,
             utm_medium: utmMedium,
             utm_campaign: utmCampaign,
@@ -2224,6 +2252,7 @@ serve(async (req) => {
             customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
             customer_email: payer.email || user.email || invoice.customer?.email || invoice.customer_email || null,
             customer_phone: payer.phone || user.phone || invoice.customer?.phone || invoice.customer_phone || null,
+            customer_document: extractCustomerDocument({ payer, user, customer: invoice.customer }, body),
             utm_source: utmSourceItems,
             utm_medium: utmMediumItems,
             utm_campaign: utmCampaignItems,
