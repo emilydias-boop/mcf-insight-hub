@@ -413,10 +413,38 @@ serve(async (req) => {
     // ou que já fechou contrato.
     const guardMeetingType: 'r1' | 'r2' = body.meetingType === 'r2' ? 'r2' : 'r1';
 
+    // Detecta BU do deal pela origem — Consórcio é exceção dos guards de
+    // contrato pago/won (ver memória `consorcio-week-and-revenue-attribution`
+    // e o ajuste paralelo no front em `useAgendaData.ts`/`QuickScheduleModal`).
+    let isConsorcioDeal = false;
+    try {
+      const { data: dealOriginRow } = await supabase
+        .from("crm_deals")
+        .select("origin_id")
+        .eq("id", dealId)
+        .maybeSingle();
+      const originId = dealOriginRow?.origin_id ?? null;
+      if (originId) {
+        const { data: buMap } = await supabase
+          .from("bu_origin_mapping")
+          .select("bu")
+          .eq("entity_type", "origin")
+          .eq("entity_id", originId)
+          .maybeSingle();
+        isConsorcioDeal = (buMap?.bu ?? "").toLowerCase() === "consorcio";
+      }
+    } catch (e) {
+      console.warn("⚠️ Falha ao detectar BU do deal — assumindo non-consorcio", e);
+    }
+    if (isConsorcioDeal) {
+      console.log("🟢 Deal pertence à BU Consórcio — guards de contract_paid/won serão ignorados");
+    }
+
     // R2 não aplica os guards de contrato pago / won / duplicate. R2 pode
     // acontecer pós-venda (acompanhamento) ou ser remarcada livremente.
-    // Apenas R1 mantém o bloqueio rígido.
-    if (guardMeetingType === 'r1') {
+    // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio, onde o
+    // mesmo lead pode ter múltiplos contratos/agendamentos ao longo do tempo.
+    if (guardMeetingType === 'r1' && !isConsorcioDeal) {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
