@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, DollarSign, User, Phone, Mail, Link2, Loader2, Package } from 'lucide-react';
+import { Search, DollarSign, User, Phone, Mail, Link2, Loader2, Package, BadgeCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { supabase } from '@/integrations/supabase/client';
 import { useUnlinkedContracts } from '@/hooks/useUnlinkedContracts';
 import { useLinkContractToAttendee } from '@/hooks/useLinkContractToAttendee';
 
@@ -26,6 +27,8 @@ interface LinkContractDialogProps {
   dealId?: string | null;
 }
 
+const onlyDigits = (s: string | null | undefined) => (s || '').replace(/\D/g, '');
+
 export function LinkContractDialog({ 
   open, 
   onOpenChange, 
@@ -35,30 +38,53 @@ export function LinkContractDialog({
 }: LinkContractDialogProps) {
   const [search, setSearch] = useState('');
   const [searchAll, setSearchAll] = useState(false);
+  const [attendeeCpf, setAttendeeCpf] = useState<string>('');
+
+  // Buscar CPF do attendee para destacar matches
+  useEffect(() => {
+    if (!open || !attendeeId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('meeting_slot_attendees')
+        .select('cpf')
+        .eq('id', attendeeId)
+        .maybeSingle();
+      if (!cancelled) setAttendeeCpf(onlyDigits(data?.cpf));
+    })();
+    return () => { cancelled = true; };
+  }, [open, attendeeId]);
 
   const { data: contracts = [], isLoading } = useUnlinkedContracts(
     searchAll ? { searchAll: true, search } : {}
   );
   const linkContract = useLinkContractToAttendee();
 
-  // Filter contracts based on search (client-side for default mode only)
+  // Filter + sort: matches por CPF aparecem primeiro
   const filteredContracts = useMemo(() => {
+    let list = contracts;
     // In searchAll mode, filtering is server-side
-    if (searchAll) return contracts;
-
-    if (!search.trim()) return contracts;
-    
-    const searchLower = search.toLowerCase();
-    const searchDigits = search.replace(/\D/g, '');
-    
-    return contracts.filter(c => {
-      const nameMatch = c.customer_name?.toLowerCase().includes(searchLower);
-      const emailMatch = c.customer_email?.toLowerCase().includes(searchLower);
-      const phoneMatch = searchDigits && c.customer_phone?.replace(/\D/g, '').includes(searchDigits);
-      
-      return nameMatch || emailMatch || phoneMatch;
-    });
-  }, [contracts, search, searchAll]);
+    if (!searchAll && search.trim()) {
+      const searchLower = search.toLowerCase();
+      const searchDigits = search.replace(/\D/g, '');
+      list = list.filter(c => {
+        const nameMatch = c.customer_name?.toLowerCase().includes(searchLower);
+        const emailMatch = c.customer_email?.toLowerCase().includes(searchLower);
+        const phoneMatch = searchDigits && c.customer_phone?.replace(/\D/g, '').includes(searchDigits);
+        const cpfMatch = searchDigits && onlyDigits(c.customer_document).includes(searchDigits);
+        return nameMatch || emailMatch || phoneMatch || cpfMatch;
+      });
+    }
+    // Ordenar: matches por CPF no topo
+    if (attendeeCpf && attendeeCpf.length >= 11) {
+      list = [...list].sort((a, b) => {
+        const aMatch = onlyDigits(a.customer_document) === attendeeCpf ? 1 : 0;
+        const bMatch = onlyDigits(b.customer_document) === attendeeCpf ? 1 : 0;
+        return bMatch - aMatch;
+      });
+    }
+    return list;
+  }, [contracts, search, searchAll, attendeeCpf]);
 
   const handleLink = (transactionId: string) => {
     linkContract.mutate(
@@ -87,6 +113,12 @@ export function LinkContractDialog({
     return phone;
   };
 
+  const formatCpf = (cpf: string | null) => {
+    const d = onlyDigits(cpf);
+    if (d.length !== 11) return cpf;
+    return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -97,6 +129,11 @@ export function LinkContractDialog({
           </DialogTitle>
           <DialogDescription>
             Vincular um contrato pago a <strong>{attendeeName}</strong>
+            {attendeeCpf && attendeeCpf.length >= 11 && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                · CPF: {formatCpf(attendeeCpf)}
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -147,10 +184,17 @@ export function LinkContractDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredContracts.map((contract) => (
+                {filteredContracts.map((contract) => {
+                  const contractCpf = onlyDigits(contract.customer_document);
+                  const cpfMatches = !!attendeeCpf && attendeeCpf.length >= 11 && contractCpf === attendeeCpf;
+                  return (
                   <div 
                     key={contract.id}
-                    className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                    className={`border rounded-lg p-3 transition-colors ${
+                      cpfMatches 
+                        ? 'border-primary bg-primary/5 hover:bg-primary/10' 
+                        : 'hover:bg-muted/50'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0 space-y-1">
@@ -164,6 +208,12 @@ export function LinkContractDialog({
                             <DollarSign className="h-3 w-3 mr-1" />
                             {formatCurrency(contract.net_value || contract.product_price)}
                           </Badge>
+                          {cpfMatches && (
+                            <Badge className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90">
+                              <BadgeCheck className="h-3 w-3 mr-1" />
+                              CPF confere
+                            </Badge>
+                          )}
                         </div>
                         
                         {/* Product info (searchAll mode) */}
@@ -194,6 +244,14 @@ export function LinkContractDialog({
                             <span>{formatPhone(contract.customer_phone)}</span>
                           </div>
                         )}
+
+                        {/* CPF */}
+                        {contractCpf && (
+                          <div className={`flex items-center gap-2 text-sm ${cpfMatches ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                            <BadgeCheck className="h-3 w-3 shrink-0" />
+                            <span>CPF: {formatCpf(contractCpf)}</span>
+                          </div>
+                        )}
                         
                         {/* Date */}
                         <div className="text-xs text-muted-foreground">
@@ -206,6 +264,7 @@ export function LinkContractDialog({
                         size="sm"
                         onClick={() => handleLink(contract.id)}
                         disabled={linkContract.isPending}
+                        variant={cpfMatches ? 'default' : 'outline'}
                       >
                         {linkContract.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -218,7 +277,8 @@ export function LinkContractDialog({
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
