@@ -921,10 +921,13 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       console.log(`   - Attendees com deal_id: ${attendees.filter((a: any) => a.deal_id).length}`);
 
       // ============ OUTSIDE LEAD AUTO-DISTRIBUTION ============
-      // Sem attendee R1 = possível lead Outside. Buscar deal pelo email e distribuir se sem owner.
-      if (emailLower) {
+      // Sem attendee R1 + offer_name de Outside = lead Outside legítimo.
+      // - Deal SEM owner → distribui automaticamente para SDR
+      // - Deal COM owner → move para "Contrato Pago" + tag Outside + notifica SDR
+      const offerIsOutside = isOutsideOffer(data.offerName);
+      if (emailLower && offerIsOutside) {
         try {
-          console.log(`🔄 [AUTO-PAGO][OUTSIDE] Buscando deal para email Outside: ${emailLower}`);
+          console.log(`🔄 [AUTO-PAGO][OUTSIDE] Oferta Outside detectada ("${data.offerName}"). Buscando deal para email: ${emailLower}`);
 
           // Buscar contact pelo email
           const { data: outsideContact } = await supabase
@@ -935,7 +938,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             .maybeSingle();
 
           if (outsideContact?.id) {
-            // Buscar deal no PIPELINE INSIDE SALES sem owner
+            // Buscar deal no PIPELINE INSIDE SALES (com OU sem owner)
             const { data: outsideOrigin } = await supabase
               .from('crm_origins')
               .select('id')
@@ -946,78 +949,139 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             if (outsideOrigin?.id) {
               const { data: outsideDeal } = await supabase
                 .from('crm_deals')
-                .select('id, owner_id, origin_id, tags')
+                .select('id, owner_id, owner_profile_id, origin_id, tags, stage_id')
                 .eq('contact_id', outsideContact.id)
                 .eq('origin_id', outsideOrigin.id)
-                .is('owner_id', null)
                 .limit(1)
                 .maybeSingle();
 
               if (outsideDeal) {
-                console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal sem owner encontrado: ${outsideDeal.id}. Iniciando distribuição automática.`);
-
-                // Verificar se há distribuição ativa
-                const { data: distConfig } = await supabase
-                  .from('lead_distribution_config')
+                // Buscar stage "Contrato Pago" no pipeline
+                const { data: contractPaidStage } = await supabase
+                  .from('crm_stages')
                   .select('id')
                   .eq('origin_id', outsideOrigin.id)
-                  .eq('is_active', true)
-                  .limit(1);
+                  .ilike('stage_name', '%Contrato Pago%')
+                  .maybeSingle();
 
-                if (distConfig && distConfig.length > 0) {
-                  const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
-                    p_origin_id: outsideOrigin.id
-                  });
+                const currentTags = Array.isArray(outsideDeal.tags) ? outsideDeal.tags : [];
+                const newTags = currentTags.includes('Outside') ? currentTags : [...currentTags, 'Outside'];
 
-                  if (nextOwnerEmail) {
-                    // Buscar profile_id
-                    const { data: ownerProfile } = await supabase
-                      .from('profiles')
-                      .select('id')
-                      .ilike('email', nextOwnerEmail)
-                      .maybeSingle();
+                let assignedOwnerEmail: string | null = outsideDeal.owner_id || null;
+                let assignedOwnerProfileId: string | null = outsideDeal.owner_profile_id || null;
 
-                    // Adicionar tag Outside
-                    const currentTags = Array.isArray(outsideDeal.tags) ? outsideDeal.tags : [];
-                    const newTags = currentTags.includes('Outside') ? currentTags : [...currentTags, 'Outside'];
+                // CASO A: Deal SEM owner → distribuir automaticamente
+                if (!outsideDeal.owner_id) {
+                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal SEM owner ${outsideDeal.id}. Iniciando distribuição.`);
+                  const { data: distConfig } = await supabase
+                    .from('lead_distribution_config')
+                    .select('id')
+                    .eq('origin_id', outsideOrigin.id)
+                    .eq('is_active', true)
+                    .limit(1);
 
-                    // Atualizar deal
-                    await supabase
-                      .from('crm_deals')
-                      .update({
-                        owner_id: nextOwnerEmail,
-                        owner_profile_id: ownerProfile?.id || null,
-                        tags: newTags,
-                        updated_at: new Date().toISOString()
-                      })
-                      .eq('id', outsideDeal.id);
+                  if (distConfig && distConfig.length > 0) {
+                    const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
+                      p_origin_id: outsideOrigin.id
+                    });
 
-                    // Registrar atividade
-                    await supabase
-                      .from('deal_activities')
-                      .insert({
-                        deal_id: outsideDeal.id,
-                        activity_type: 'owner_change',
-                        description: `Auto-distribuído como lead Outside para ${nextOwnerEmail} via webhook Hubla`,
-                        metadata: {
-                          new_owner: nextOwnerEmail,
-                          new_owner_profile_id: ownerProfile?.id,
-                          distributed_at: new Date().toISOString(),
-                          distribution_type: 'outside_webhook',
-                          contact_email: emailLower,
-                          trigger: 'contract_paid_no_r1',
-                        }
-                      });
-
-                    console.log(`✅ [AUTO-PAGO][OUTSIDE] Deal ${outsideDeal.id} distribuído automaticamente para ${nextOwnerEmail}`);
+                    if (nextOwnerEmail) {
+                      assignedOwnerEmail = nextOwnerEmail;
+                      const { data: ownerProfile } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .ilike('email', nextOwnerEmail)
+                        .maybeSingle();
+                      assignedOwnerProfileId = ownerProfile?.id || null;
+                      console.log(`✅ [AUTO-PAGO][OUTSIDE] Deal ${outsideDeal.id} será atribuído a ${nextOwnerEmail}`);
+                    } else {
+                      console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Fila de distribuição vazia para origin ${outsideOrigin.id}`);
+                    }
                   } else {
-                    console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Fila de distribuição vazia para origin ${outsideOrigin.id}`);
+                    console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Sem configuração de distribuição ativa para origin ${outsideOrigin.id}`);
                   }
                 } else {
-                  console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Sem configuração de distribuição ativa para origin ${outsideOrigin.id}`);
+                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal COM owner (${outsideDeal.owner_id}) ${outsideDeal.id}. Movendo para Contrato Pago + tag Outside.`);
+                }
+
+                // Atualizar deal: tags + (opcional) owner + stage Contrato Pago
+                const updatePayload: Record<string, unknown> = {
+                  tags: newTags,
+                  updated_at: new Date().toISOString(),
+                };
+                if (!outsideDeal.owner_id && assignedOwnerEmail) {
+                  updatePayload.owner_id = assignedOwnerEmail;
+                  updatePayload.owner_profile_id = assignedOwnerProfileId;
+                }
+                if (contractPaidStage?.id) {
+                  updatePayload.stage_id = contractPaidStage.id;
+                }
+
+                await supabase
+                  .from('crm_deals')
+                  .update(updatePayload)
+                  .eq('id', outsideDeal.id);
+
+                // Registrar atividade
+                await supabase
+                  .from('deal_activities')
+                  .insert({
+                    deal_id: outsideDeal.id,
+                    activity_type: !outsideDeal.owner_id && assignedOwnerEmail ? 'owner_change' : 'stage_change',
+                    description: !outsideDeal.owner_id && assignedOwnerEmail
+                      ? `Auto-distribuído como lead Outside para ${assignedOwnerEmail} via webhook Hubla`
+                      : `Movido para Contrato Pago como Outside (pagamento sem R1) via webhook Hubla`,
+                    metadata: {
+                      new_owner: assignedOwnerEmail,
+                      new_owner_profile_id: assignedOwnerProfileId,
+                      distributed_at: new Date().toISOString(),
+                      distribution_type: !outsideDeal.owner_id ? 'outside_webhook' : 'outside_owner_kept',
+                      contact_email: emailLower,
+                      offer_name: data.offerName,
+                      trigger: 'contract_paid_no_r1',
+                      moved_to_stage: contractPaidStage?.id || null,
+                    }
+                  });
+
+                // Vincular transação ao deal (sem attendee)
+                if (data.transactionHublaId) {
+                  await supabase
+                    .from('hubla_transactions')
+                    .update({ linked_deal_id: outsideDeal.id })
+                    .eq('hubla_id', data.transactionHublaId);
+                }
+
+                // Notificar SDR dono (existente OU recém-atribuído)
+                if (assignedOwnerEmail) {
+                  const { data: sdrProfile } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .ilike('email', assignedOwnerEmail)
+                    .maybeSingle();
+
+                  if (sdrProfile?.id) {
+                    await supabase
+                      .from('user_notifications')
+                      .insert({
+                        user_id: sdrProfile.id,
+                        type: 'contract_paid',
+                        title: '💰 Contrato Pago Outside - Verifique seus leads',
+                        message: `${data.customerName || 'Cliente'} pagou contrato Outside (${data.offerName}). Verifique e dê o tratamento devido.`,
+                        data: {
+                          deal_id: outsideDeal.id,
+                          customer_name: data.customerName,
+                          customer_email: emailLower,
+                          sale_date: data.saleDate,
+                          offer_name: data.offerName,
+                          trigger: 'contract_paid_outside_no_r1',
+                        },
+                        read: false,
+                      });
+                    console.log(`🔔 [AUTO-PAGO][OUTSIDE] Notificação criada para SDR ${assignedOwnerEmail}`);
+                  }
                 }
               } else {
-                console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Nenhum deal sem owner encontrado para o contato no Pipeline Inside Sales`);
+                console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Nenhum deal encontrado no Pipeline Inside Sales para esse contato`);
               }
             }
           } else {
@@ -1026,6 +1090,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         } catch (outsideErr: any) {
           console.error(`❌ [AUTO-PAGO][OUTSIDE] Erro ao distribuir Outside:`, outsideErr.message);
         }
+      } else if (emailLower && !offerIsOutside) {
+        console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Pagamento sem R1 mas offer_name="${data.offerName}" não é Outside. Ignorando.`);
       }
       // ============ FIM OUTSIDE LEAD AUTO-DISTRIBUTION ============
 
