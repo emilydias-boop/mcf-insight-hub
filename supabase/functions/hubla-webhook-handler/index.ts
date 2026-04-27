@@ -893,10 +893,20 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       const contactPhone = attendee.crm_deals?.crm_contacts?.phone?.replace(/\D/g, '') || '';
       const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
       const normalizedAttendeeName = normalizeNameForMatch(attendee.attendee_name);
+      const attendeeCpf = (attendee.cpf || '').replace(/\D/g, '');
 
       // Log para debug detalhado (apenas primeiros 5 para não poluir)
       if (attendees.indexOf(attendee) < 5) {
-        console.log(`🔍 Verificando: ${attendee.attendee_name} | email: "${contactEmail}" | phone: "${contactPhone.slice(-9)}" | deal: ${attendee.deal_id}`);
+        console.log(`🔍 Verificando: ${attendee.attendee_name} | cpf: "${attendeeCpf}" | email: "${contactEmail}" | phone: "${contactPhone.slice(-9)}" | deal: ${attendee.deal_id}`);
+      }
+
+      // Match por CPF (prioridade MÁXIMA - chave única e imutável) - break imediato
+      if (cpfDigits && cpfDigits.length >= 11 && attendeeCpf && attendeeCpf === cpfDigits) {
+        matchingAttendee = attendee;
+        meeting = attendee.meeting_slots;
+        matchType = 'cpf';
+        console.log(`✅ [AUTO-PAGO] Match por CPF: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
+        break;
       }
 
       // Match por EMAIL (prioridade 1) - break imediato
