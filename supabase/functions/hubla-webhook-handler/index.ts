@@ -2152,7 +2152,8 @@ serve(async (req) => {
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
               saleDate: saleDate,
-              transactionHublaId: transactionData.hubla_id
+              transactionHublaId: transactionData.hubla_id,
+              offerName: transactionData.offer_name,
             });
           }
           
