@@ -63,6 +63,7 @@ import { AttendeeNotesSection } from './AttendeeNotesSection';
 import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
+import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
