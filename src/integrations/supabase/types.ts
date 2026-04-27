@@ -6365,6 +6365,7 @@ export type Database = {
         Row: {
           count_in_dashboard: boolean | null
           created_at: string | null
+          customer_document: string | null
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
@@ -6403,6 +6404,7 @@ export type Database = {
         Insert: {
           count_in_dashboard?: boolean | null
           created_at?: string | null
+          customer_document?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
@@ -6441,6 +6443,7 @@ export type Database = {
         Update: {
           count_in_dashboard?: boolean | null
           created_at?: string | null
+          customer_document?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
@@ -11642,6 +11645,7 @@ export type Database = {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
       }
+      normalize_document: { Args: { doc: string }; Returns: string }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       reset_distribution_counters: {
