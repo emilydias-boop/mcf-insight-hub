@@ -776,6 +776,7 @@ interface AutoMarkData {
   customerEmail: string | null;
   customerPhone: string | null;
   customerName: string | null;
+  customerDocument?: string | null;
   saleDate: string;
   transactionHublaId?: string | null;
   offerName?: string | null;
@@ -804,8 +805,8 @@ function normalizeNameForMatch(name: string): string {
 }
 
 async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
-  if (!data.customerEmail && !data.customerPhone && !data.customerName) {
-    console.log('🎯 [AUTO-PAGO] Sem email, telefone ou nome para buscar reunião');
+  if (!data.customerEmail && !data.customerPhone && !data.customerName && !data.customerDocument) {
+    console.log('🎯 [AUTO-PAGO] Sem email, telefone, nome ou CPF para buscar reunião');
     return;
   }
 
@@ -814,8 +815,9 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
   const phoneSuffix = phoneDigits.slice(-9);
   const emailLower = data.customerEmail?.toLowerCase()?.trim() || '';
   const normalizedSearchName = normalizeNameForMatch(data.customerName || '');
+  const cpfDigits = (data.customerDocument || '').replace(/\D/g, '');
 
-  console.log(`🎯 [AUTO-PAGO] Buscando match para: email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}" (normalized="${normalizedSearchName}")`);
+  console.log(`🎯 [AUTO-PAGO] Buscando match para: cpf="${cpfDigits || '(vazio)'}", email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}" (normalized="${normalizedSearchName}")`);
 
   try {
     // CORREÇÃO 1: Limitar busca aos últimos 14 dias
@@ -833,6 +835,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         attendee_name,
         attendee_phone,
         deal_id,
+        cpf,
         meeting_slots!inner(
           id,
           scheduled_at,
@@ -890,10 +893,20 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       const contactPhone = attendee.crm_deals?.crm_contacts?.phone?.replace(/\D/g, '') || '';
       const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
       const normalizedAttendeeName = normalizeNameForMatch(attendee.attendee_name);
+      const attendeeCpf = (attendee.cpf || '').replace(/\D/g, '');
 
       // Log para debug detalhado (apenas primeiros 5 para não poluir)
       if (attendees.indexOf(attendee) < 5) {
-        console.log(`🔍 Verificando: ${attendee.attendee_name} | email: "${contactEmail}" | phone: "${contactPhone.slice(-9)}" | deal: ${attendee.deal_id}`);
+        console.log(`🔍 Verificando: ${attendee.attendee_name} | cpf: "${attendeeCpf}" | email: "${contactEmail}" | phone: "${contactPhone.slice(-9)}" | deal: ${attendee.deal_id}`);
+      }
+
+      // Match por CPF (prioridade MÁXIMA - chave única e imutável) - break imediato
+      if (cpfDigits && cpfDigits.length >= 11 && attendeeCpf && attendeeCpf === cpfDigits) {
+        matchingAttendee = attendee;
+        meeting = attendee.meeting_slots;
+        matchType = 'cpf';
+        console.log(`✅ [AUTO-PAGO] Match por CPF: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
+        break;
       }
 
       // Match por EMAIL (prioridade 1) - break imediato
@@ -2179,6 +2192,7 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
+              customerDocument: transactionData.customer_document,
               saleDate: saleDate,
               transactionHublaId: transactionData.hubla_id,
               offerName: transactionData.offer_name,
@@ -2342,6 +2356,7 @@ serve(async (req) => {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
+              customerDocument: transactionData.customer_document,
               saleDate: saleDate,
               transactionHublaId: hublaId,
               offerName: transactionData.offer_name,
