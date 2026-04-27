@@ -33,9 +33,14 @@ interface AutoDialerContextType {
   stats: AutoDialerStats;
   ringTimeoutMs: number;
   betweenCallsMs: number;
+  maxAttemptsPerLead: number;
+  retryDelayMs: number;
   setRingTimeoutMs: (ms: number) => void;
   setBetweenCallsMs: (ms: number) => void;
+  setMaxAttemptsPerLead: (n: number) => void;
+  setRetryDelayMs: (ms: number) => void;
   loadQueue: (leads: AutoDialerLead[]) => void;
+  attempts: Record<string, number>;
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -67,6 +72,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [ringTimeoutMs, setRingTimeoutMs] = useState(25000);
   const [betweenCallsMs, setBetweenCallsMs] = useState(2000);
+  const [maxAttemptsPerLead, setMaxAttemptsPerLead] = useState(3);
+  const [retryDelayMs, setRetryDelayMs] = useState(5000);
+  const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [inCallDrawerOpen, setInCallDrawerOpen] = useState(false);
 
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,10 +85,16 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const currentIndexRef = useRef(currentIndex);
   const queueRef = useRef(queue);
   const isAdvancingRef = useRef(false);
+  const attemptsRef = useRef<Record<string, number>>({});
+  const maxAttemptsRef = useRef(maxAttemptsPerLead);
+  const retryDelayRef = useRef(retryDelayMs);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
   useEffect(() => { queueRef.current = queue; }, [queue]);
+  useEffect(() => { attemptsRef.current = attempts; }, [attempts]);
+  useEffect(() => { maxAttemptsRef.current = maxAttemptsPerLead; }, [maxAttemptsPerLead]);
+  useEffect(() => { retryDelayRef.current = retryDelayMs; }, [retryDelayMs]);
 
   const currentLead = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null;
 
@@ -116,6 +130,12 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
     setLeadResult(lead.dealId, 'in-progress');
     wasInProgressRef.current = false;
+    // incrementa contagem de tentativas para este lead
+    setAttempts(prev => {
+      const next = { ...prev, [lead.dealId]: (prev[lead.dealId] || 0) + 1 };
+      attemptsRef.current = next;
+      return next;
+    });
 
     try {
       const normalized = normalizePhoneNumber(lead.phone);
@@ -125,6 +145,18 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       setLeadResult(lead.dealId, 'failed');
     }
   }, [deviceStatus, initializeDevice, makeCall, setLeadResult]);
+
+  const retryCurrent = useCallback(() => {
+    if (isAdvancingRef.current) return;
+    isAdvancingRef.current = true;
+    clearTimers();
+    advanceTimerRef.current = setTimeout(() => {
+      isAdvancingRef.current = false;
+      if (stateRef.current !== 'running') return;
+      const idx = currentIndexRef.current;
+      dialIndex(idx);
+    }, retryDelayRef.current);
+  }, [clearTimers, dialIndex]);
 
   const advanceToNext = useCallback(() => {
     if (isAdvancingRef.current) return;
@@ -179,7 +211,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
 
       if (wasInProgressRef.current) {
-        // Atendeu → abre qualificação e pausa
+        // Atendeu → abre qualificação e pausa (não tenta de novo)
         setState('paused-qualifying');
         setInCallDrawerOpen(false);
         openQualificationModal(lead.dealId, lead.name);
@@ -190,19 +222,29 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
         // Registra atividade de tentativa
         if (currentCallId) {
-          // call já foi gravada pelo TwilioContext; só adiciona um deal_activities marker
+          const currentAttempt = attemptsRef.current[lead.dealId] || 1;
           supabase.from('deal_activities').insert({
             deal_id: lead.dealId,
             activity_type: 'call_result',
-            description: 'Tentativa automática — não atendeu',
-            metadata: { result: 'nao_atendeu', auto_dialer: true } as any,
+            description: `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — não atendeu`,
+            metadata: { result: 'nao_atendeu', auto_dialer: true, attempt: currentAttempt, max_attempts: maxAttemptsRef.current } as any,
           }).then(({ error }) => { if (error) console.warn('[autodialer] activity insert error', error); });
         }
 
-        if (stateRef.current === 'running') advanceToNext();
+        if (stateRef.current === 'running') {
+          const attemptCount = attemptsRef.current[lead.dealId] || 1;
+          if (attemptCount < maxAttemptsRef.current) {
+            // ainda tem tentativas → re-disca o mesmo lead
+            setLeadResult(lead.dealId, 'pending');
+            retryCurrent();
+          } else {
+            // esgotou tentativas → próximo lead
+            advanceToNext();
+          }
+        }
       }
     }
-  }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext]);
+  }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
 
   // Quando o modal de qualificação fecha, retoma a fila
   useEffect(() => {
@@ -222,6 +264,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     const trimmed = leads.slice(0, MAX_QUEUE);
     setQueue(trimmed);
     setResults(Object.fromEntries(trimmed.map(l => [l.dealId, 'pending' as LeadResult])));
+    setAttempts({});
+    attemptsRef.current = {};
     setCurrentIndex(-1);
     setState('idle');
   }, [state]);
@@ -270,6 +314,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     setCurrentIndex(-1);
     setQueue([]);
     setResults({});
+    setAttempts({});
+    attemptsRef.current = {};
     setInCallDrawerOpen(false);
     isAdvancingRef.current = false;
   }, [callStatus, hangUp, clearTimers]);
@@ -277,7 +323,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   return (
     <AutoDialerContext.Provider value={{
       state, queue, results, currentIndex, currentLead, stats,
-      ringTimeoutMs, betweenCallsMs, setRingTimeoutMs, setBetweenCallsMs,
+      ringTimeoutMs, betweenCallsMs, maxAttemptsPerLead, retryDelayMs,
+      setRingTimeoutMs, setBetweenCallsMs, setMaxAttemptsPerLead, setRetryDelayMs,
+      attempts,
       loadQueue, start, pause, resume, skipCurrent, stop,
       inCallDrawerOpen, setInCallDrawerOpen,
     }}>

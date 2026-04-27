@@ -196,6 +196,37 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase">Tentativas/lead</label>
+            <Select
+              value={String(ad.maxAttemptsPerLead)}
+              onValueChange={(v) => ad.setMaxAttemptsPerLead(Number(v))}
+              disabled={isActive}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1x (sem retry)</SelectItem>
+                <SelectItem value="2">2x</SelectItem>
+                <SelectItem value="3">3x</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase">Espera p/ retry</label>
+            <Select
+              value={String(ad.retryDelayMs)}
+              onValueChange={(v) => ad.setRetryDelayMs(Number(v))}
+              disabled={isActive}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3000">3s</SelectItem>
+                <SelectItem value="5000">5s</SelectItem>
+                <SelectItem value="10000">10s</SelectItem>
+                <SelectItem value="20000">20s</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Carregar fila */}
@@ -364,6 +395,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
               {ad.queue.map((lead, i) => {
                 const result = ad.results[lead.dealId] || 'pending';
                 const isCurrent = i === ad.currentIndex;
+                const attemptCount = ad.attempts[lead.dealId] || 0;
                 return (
                   <li key={lead.dealId} className={cn(
                     'px-4 py-2 flex items-center gap-2',
@@ -374,6 +406,11 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                       <div className="text-sm font-medium truncate">{lead.name}</div>
                       <div className="text-[11px] text-muted-foreground font-mono">{lead.phone}</div>
                     </div>
+                    {attemptCount > 0 && (
+                      <Badge variant="secondary" className="text-[9px] py-0 px-1.5" title="Tentativas realizadas">
+                        {attemptCount}/{ad.maxAttemptsPerLead}
+                      </Badge>
+                    )}
                     <Badge variant="outline" className="text-[9px] py-0 px-1.5">{i + 1}</Badge>
                   </li>
                 );
