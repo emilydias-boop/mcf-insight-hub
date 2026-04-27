@@ -1067,7 +1067,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                         type: 'contract_paid',
                         title: '💰 Contrato Pago Outside - Verifique seus leads',
                         message: `${data.customerName || 'Cliente'} pagou contrato Outside (${data.offerName}). Verifique e dê o tratamento devido.`,
-                        data: {
+                        metadata: {
                           deal_id: outsideDeal.id,
                           customer_name: data.customerName,
                           customer_email: emailLower,
