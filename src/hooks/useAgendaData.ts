@@ -865,9 +865,10 @@ export function useSearchDealsForSchedule(
   ownerEmail?: string,
   includeWon?: boolean,
   meetingType: 'r1' | 'r2' = 'r1',
+  bu?: string,
 ) {
   return useQuery({
-    queryKey: ['schedule-search', query, originIds, ownerEmail, includeWon, meetingType],
+    queryKey: ['schedule-search', query, originIds, ownerEmail, includeWon, meetingType, bu],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
