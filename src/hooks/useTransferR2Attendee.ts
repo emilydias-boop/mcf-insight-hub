@@ -75,9 +75,24 @@ export function useTransferR2Attendee() {
         .single();
 
       // 5. Update the attendee to point to the new slot
+      // Reset status to 'scheduled' and mark as reschedule, EXCEPT for terminal statuses
+      const TERMINAL_STATUSES = ['contract_paid', 'completed', 'canceled'];
+      const previousStatus = attendee?.status || 'scheduled';
+      const shouldResetStatus = !TERMINAL_STATUSES.includes(previousStatus);
+
+      const updatePayload: Record<string, unknown> = {
+        meeting_slot_id: targetSlotId,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (shouldResetStatus) {
+        updatePayload.status = 'scheduled';
+        updatePayload.is_reschedule = true;
+      }
+
       const { error: updateError } = await supabase
         .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: targetSlotId })
+        .update(updatePayload)
         .eq('id', attendeeId);
 
       if (updateError) throw updateError;
