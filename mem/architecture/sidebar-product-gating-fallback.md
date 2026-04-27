@@ -1,15 +1,20 @@
 ---
-name: Sidebar Product Gating Fallback
-description: Sidebar gates BU menus by employee_products; fallback derives products from sdr.squad when missing.
+name: Sidebar BU Menu Visibility for SDR/Closer
+description: Os grupos "BU - Incorporador MCF" e "BU - Consórcio" no sidebar são restritos a admin/manager/coordenador. SDR/Closer NÃO os veem.
 type: feature
 ---
-A visibilidade dos menus de BU no sidebar é controlada por `requiredProducts` (ex: `["consorcio"]`, `["incorporador"]`), comparado contra `myProducts` retornado por `useMyProducts`.
+SDRs e Closers NÃO devem ver os grupos expansíveis "BU - Incorporador MCF" nem "BU - Consórcio" no sidebar — esses agrupam telas de gestão (Painel Comercial, Vendas, CRM gestor, Relatórios, Movimentações, Fechamento Equipe, Documentos Estratégicos).
 
-Como `employee_products` raramente está populado para SDRs/Closers operacionais, o hook `useMyProducts` aplica fallback derivando do `sdr.squad`:
-- `squad = 'consorcio'` → `['consorcio']`
-- `squad = 'credito'` → `['consorcio']` (Crédito é parte do funil Consórcio)
-- `squad = 'incorporador'` → `['incorporador']`
+Para SDR/Closer, o sidebar mostra apenas itens dedicados:
+- Cockpit (SDR)
+- Minhas Reuniões (SDR)
+- Meu Desempenho (Closer)
+- Metas da Equipe (SDR/Closer/Closer Sombra de Incorporador)
+- Agenda (URL dinâmica por BU via getCRMBasePath)
+- Negócios (URL dinâmica por BU via getCRMBasePath)
+- Discador rápido / Auto-Discador
+- Configurações, Meu RH, Meu Playbook, Meu Fechamento, Meus Equipamentos
 
-Este fallback evita que SDRs/Closers fiquem sem acesso aos menus de BU quando `employee_products` ainda não foi cadastrado.
+`requiredRoles` dos grupos BU NÃO inclui sdr/closer. Não existe mais fallback em `useMyProducts` que libere o grupo BU por produto — o gate é puramente por role.
 
-Adicionalmente, a "BU - Incorporador MCF" inclui `sdr` e `closer` em `requiredRoles` para que SDRs/Closers vejam Painel Comercial, CRM, Vendas etc.
+`useMyProducts` ainda mantém o fallback squad → products (consorcio/credito → consorcio; incorporador → incorporador) para outros usos que dependem de `myProducts`, mas isso não destrava menus BU para SDR/Closer.
