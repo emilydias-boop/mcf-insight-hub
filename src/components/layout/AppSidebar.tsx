@@ -385,10 +385,6 @@ export function AppSidebar() {
   const filteredMenuItems = allMenuItems.filter((item) => {
     // Verificação de roles
     if (item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
-      // Fallback: SDR/Closer pode ver se tem o produto
-      if (item.requiredProducts && ["sdr", "closer"].includes(role)) {
-        return item.requiredProducts.some((p) => myProducts.includes(p));
-      }
       return false;
     }
 
