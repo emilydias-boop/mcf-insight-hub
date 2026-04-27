@@ -125,13 +125,17 @@ Deno.serve(async (req) => {
     const partnerDealIds = partnerDealsRaw.map(d => d.id);
     const dealsWithMeetings = new Set<string>();
 
+    const ACTIVE_MEETING_STATUSES = ['scheduled', 'pre_scheduled', 'confirmed', 'rescheduled'];
+    const nowIso = new Date().toISOString();
+
     for (let i = 0; i < partnerDealIds.length; i += 200) {
       const batch = partnerDealIds.slice(i, i + 200);
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
-        .select('deal_id')
+        .select('deal_id, status, meeting_slot:meeting_slots!inner(scheduled_at)')
         .in('deal_id', batch)
-        .neq('status', 'cancelled');
+        .in('status', ACTIVE_MEETING_STATUSES)
+        .gt('meeting_slot.scheduled_at', nowIso);
 
       for (const a of attendees || []) {
         if (a.deal_id) dealsWithMeetings.add(a.deal_id);
