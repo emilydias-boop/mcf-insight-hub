@@ -776,6 +776,7 @@ interface AutoMarkData {
   customerEmail: string | null;
   customerPhone: string | null;
   customerName: string | null;
+  customerDocument?: string | null;
   saleDate: string;
   transactionHublaId?: string | null;
   offerName?: string | null;
