@@ -425,13 +425,14 @@ serve(async (req) => {
         .maybeSingle();
       const originId = dealOriginRow?.origin_id ?? null;
       if (originId) {
-        const { data: buMap } = await supabase
+        const { data: buMaps } = await supabase
           .from("bu_origin_mapping")
           .select("bu")
           .eq("entity_type", "origin")
-          .eq("entity_id", originId)
-          .maybeSingle();
-        isConsorcioDeal = (buMap?.bu ?? "").toLowerCase() === "consorcio";
+          .eq("entity_id", originId);
+        isConsorcioDeal = (buMaps ?? []).some(
+          (row: any) => (row?.bu ?? "").toString().toLowerCase() === "consorcio",
+        );
       }
     } catch (e) {
       console.warn("⚠️ Falha ao detectar BU do deal — assumindo non-consorcio", e);
