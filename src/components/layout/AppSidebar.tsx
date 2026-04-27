@@ -124,7 +124,7 @@ const menuItems: MenuItem[] = [
   {
     title: "BU - Incorporador MCF",
     icon: Building2,
-    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"],
+    requiredRoles: ["admin", "manager", "coordenador"],
     requiredProducts: ["incorporador"],
     separator: true,
     items: [
@@ -142,7 +142,7 @@ const menuItems: MenuItem[] = [
   {
     title: "BU - Consórcio",
     icon: Handshake,
-    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "assistente_administrativo"],
+    requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"],
     requiredProducts: ["consorcio"],
     items: [
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
