@@ -865,9 +865,10 @@ export function useSearchDealsForSchedule(
   ownerEmail?: string,
   includeWon?: boolean,
   meetingType: 'r1' | 'r2' = 'r1',
+  bu?: string,
 ) {
   return useQuery({
-    queryKey: ['schedule-search', query, originIds, ownerEmail, includeWon, meetingType],
+    queryKey: ['schedule-search', query, originIds, ownerEmail, includeWon, meetingType, bu],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
@@ -997,10 +998,15 @@ export function useSearchDealsForSchedule(
           // R2 NÃO bloqueia por contrato pago (pode ser pós-venda).
           // R2 NÃO bloqueia por R1 realizada (esse é o caso normal de R2).
           // R2 só mostra AVISO (warningOnly) quando já existe R2 futura ativa.
-          if (hasContractPaid && meetingType !== 'r2') {
+          // CONSÓRCIO: contrato pago / won NÃO bloqueia agendamento.
+          // O fluxo do Consórcio não usa vinculação de contrato como
+          // estado terminal de agendamento — SDRs precisam poder reagendar
+          // mesmo após marca operacional de venda.
+          const isConsorcio = bu === 'consorcio';
+          if (hasContractPaid && meetingType !== 'r2' && !isConsorcio) {
             leadState = 'contract_paid';
             blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
-          } else if (dealStatus === 'won' && meetingType !== 'r2') {
+          } else if (dealStatus === 'won' && meetingType !== 'r2' && !isConsorcio) {
             leadState = 'won';
             blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
           } else {

@@ -243,6 +243,9 @@ export function QuickScheduleModal({
     nameQuery,
     originIds && originIds.length > 0 ? originIds : undefined,
     effectiveOwnerEmail,
+    undefined,
+    'r1',
+    activeBU,
   );
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
   const createMeeting = useCreateMeeting();
