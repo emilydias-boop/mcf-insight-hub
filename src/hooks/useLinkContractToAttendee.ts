@@ -67,9 +67,15 @@ export function useLinkContractToAttendee() {
       }
 
       // 1. Link the transaction to the attendee
+      const { data: { user } } = await supabase.auth.getUser();
       const { error: txError } = await supabase
         .from('hubla_transactions')
-        .update({ linked_attendee_id: attendeeId })
+        .update({
+          linked_attendee_id: attendeeId,
+          linked_method: 'manual',
+          linked_at: new Date().toISOString(),
+          linked_by_user_id: user?.id ?? null,
+        })
         .eq('id', transactionId);
 
       if (txError) throw txError;

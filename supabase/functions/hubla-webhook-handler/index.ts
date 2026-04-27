@@ -1176,7 +1176,12 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     if (data.transactionHublaId) {
       const { error: linkError } = await supabase
         .from('hubla_transactions')
-        .update({ linked_attendee_id: matchingAttendee.id })
+        .update({
+          linked_attendee_id: matchingAttendee.id,
+          linked_method: 'auto',
+          linked_at: new Date().toISOString(),
+          linked_by_user_id: null,
+        })
         .eq('hubla_id', data.transactionHublaId);
 
       if (linkError) {
