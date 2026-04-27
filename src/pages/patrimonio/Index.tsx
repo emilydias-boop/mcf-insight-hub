@@ -28,11 +28,9 @@ import {
   ASSET_TYPE_LABELS, 
   ASSET_STATUS_LABELS 
 } from '@/types/patrimonio';
-import { Plus, Search, Monitor, Eye } from 'lucide-react';
+import { Plus, Search, Monitor, Eye, User } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const PatrimonioIndex = () => {
   const navigate = useNavigate();
@@ -117,7 +115,7 @@ const PatrimonioIndex = () => {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Marca/Modelo</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Data Compra</TableHead>
+                    <TableHead>Responsável</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -151,10 +149,17 @@ const PatrimonioIndex = () => {
                           <AssetStatusBadge status={asset.status} />
                         </TableCell>
                         <TableCell>
-                          {asset.data_compra 
-                            ? format(new Date(asset.data_compra), 'dd/MM/yyyy', { locale: ptBR })
-                            : '-'
-                          }
+                          {(asset as any).current_holder_name ? (
+                            <div className="flex items-center gap-2">
+                              <User className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-sm">{(asset as any).current_holder_name}</span>
+                              {!(asset as any).current_holder_active && (
+                                <span className="text-xs text-muted-foreground">(anterior)</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
