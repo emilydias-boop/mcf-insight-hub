@@ -9,6 +9,7 @@ import { useTwilio } from '@/contexts/TwilioContext';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { useLeadLookupByPhone, type LeadMatch, type LeadDealMatch } from '@/hooks/useLeadLookupByPhone';
 import { toast } from 'sonner';
+import { ContactDetailsDrawer } from './ContactDetailsDrawer';
 
 interface Props {
   open: boolean;
@@ -31,6 +32,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
   const [digits, setDigits] = useState('');
   const [selectedDeal, setSelectedDeal] = useState<{ deal: LeadDealMatch; contact: LeadMatch } | null>(null);
   const [isDialing, setIsDialing] = useState(false);
+  const [viewContactId, setViewContactId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { makeCall, deviceStatus, initializeDevice } = useTwilio();
   const { data: matches = [], isFetching } = useLeadLookupByPhone(digits);
@@ -41,6 +43,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
       setDigits('');
       setSelectedDeal(null);
       setIsDialing(false);
+      setViewContactId(null);
     }
   }, [open]);
 
@@ -125,6 +128,16 @@ export function QuickDialer({ open, onOpenChange }: Props) {
     navigate(`/crm/negocios?dealId=${dealId}`);
   };
 
+  const handleLeadClick = (deal: LeadDealMatch, contact: LeadMatch) => {
+    if (deal.isMine) {
+      // Lead próprio: marca para vincular à ligação
+      setSelectedDeal({ deal, contact });
+    } else {
+      // Lead de outro responsável: abre drawer de leitura (visão de Contato)
+      setViewContactId(contact.contactId);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-0 gap-0">
@@ -196,7 +209,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
                     <button
                       key={deal.dealId}
                       type="button"
-                      onClick={() => setSelectedDeal({ deal, contact })}
+                      onClick={() => handleLeadClick(deal, contact)}
                       className={cn(
                         'w-full text-left p-2 rounded border transition-colors',
                         (isSelected || isAuto)
@@ -244,7 +257,7 @@ export function QuickDialer({ open, onOpenChange }: Props) {
                       {notMine && (
                         <div className="flex items-center gap-1 mt-1.5 text-[10px] text-amber-600 dark:text-amber-400">
                           <AlertTriangle className="h-3 w-3" />
-                          <span>Lead de outro responsável — você só pode ligar. Para agendar, peça transferência.</span>
+                          <span>Lead de outro responsável — clique para ver detalhes (somente leitura). Você ainda pode ligar pelo discador.</span>
                         </div>
                       )}
                     </button>
@@ -304,6 +317,12 @@ export function QuickDialer({ open, onOpenChange }: Props) {
           </Button>
         </div>
       </DialogContent>
+      {/* Drawer de leitura para leads de outros responsáveis */}
+      <ContactDetailsDrawer
+        contactId={viewContactId}
+        open={!!viewContactId}
+        onOpenChange={(o) => { if (!o) setViewContactId(null); }}
+      />
     </Dialog>
   );
 }
