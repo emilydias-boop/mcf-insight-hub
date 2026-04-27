@@ -124,7 +124,8 @@ const menuItems: MenuItem[] = [
   {
     title: "BU - Incorporador MCF",
     icon: Building2,
-    requiredRoles: ["admin", "manager", "coordenador"],
+    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer"],
+    requiredProducts: ["incorporador"],
     separator: true,
     items: [
       { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
