@@ -11,14 +11,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { dry_run = true, batch_size = 50 } = await req.json();
+    const { dry_run = true, batch_size = 50, strict = false } = await req.json();
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
     // Single optimized query returns groups with contact_ids already ordered
-    const { data: groups, error: gErr } = await supabase.rpc("get_merge_groups", {
+    const rpcName = strict ? "get_merge_groups_strict" : "get_merge_groups";
+    const { data: groups, error: gErr } = await supabase.rpc(rpcName, {
       p_batch_size: batch_size,
     });
     if (gErr) throw gErr;
