@@ -1062,6 +1062,20 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   </div>
                 </div>
 
+                {/* Detalhes do contrato vinculado */}
+                {selectedParticipant.status === 'contract_paid' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Link2 className="h-4 w-4 text-emerald-600" />
+                      <h4 className="font-medium text-sm">Contrato Vinculado</h4>
+                    </div>
+                    <LinkedContractCard
+                      attendeeId={selectedParticipant.id}
+                      canUnlink={canLinkContract || !isSdr}
+                    />
+                  </div>
+                )}
+
                 {/* Alerta Pós-Reunião para Consórcio */}
                 {activeBU === 'consorcio' && selectedParticipant.status === 'completed' && (
                   <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
