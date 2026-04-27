@@ -1166,7 +1166,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
           type: 'contract_paid',
           title: '💰 Contrato Pago - Agendar R2',
           message: `${data.customerName || matchingAttendee.attendee_name || 'Cliente'} pagou o contrato! Agende a R2.`,
-          data: {
+          metadata: {
             attendee_id: matchingAttendee.id,
             meeting_id: meeting.id,
             customer_name: data.customerName,
