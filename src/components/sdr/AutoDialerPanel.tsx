@@ -41,30 +41,27 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     return buMapping?.origins || [];
   }, [isSdr, sdrOriginOverride, buMapping]);
 
-  // Buscar os grupos (funis) pais das origens permitidas. Combinamos com os
-  // grupos diretamente mapeados para a BU para cobrir os dois cenários de config.
-  const { data: derivedGroupIds = [] } = useQuery({
-    queryKey: ['autodialer-derived-groups', sdrOriginIds],
-    queryFn: async (): Promise<string[]> => {
+  // Buscar nomes das origens permitidas para mostrar no seletor (caso haja >1)
+  const { data: sdrPipelineOptions = [] } = useQuery({
+    queryKey: ['autodialer-sdr-pipelines', sdrOriginIds],
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
       if (sdrOriginIds.length === 0) return [];
       const { data, error } = await supabase
         .from('crm_origins')
-        .select('group_id')
-        .in('id', sdrOriginIds);
+        .select('id, name')
+        .in('id', sdrOriginIds)
+        .not('is_archived', 'eq', true)
+        .order('name');
       if (error) return [];
-      return Array.from(new Set((data || []).map(r => r.group_id).filter(Boolean) as string[]));
+      return (data || []).map(o => ({ id: o.id, name: o.name as string }));
     },
     enabled: isSdr && sdrOriginIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
-  // Grupos (funis) permitidos no seletor: união de grupos mapeados + grupos
-  // pais das origens permitidas. Para admins/managers retorna undefined (vê tudo).
-  const allowedGroupIds = useMemo<string[] | undefined>(() => {
-    if (!isSdr) return undefined;
-    const fromMap = buMapping?.groups || [];
-    return Array.from(new Set([...fromMap, ...derivedGroupIds]));
-  }, [isSdr, buMapping, derivedGroupIds]);
+  // Para admin/manager: undefined = sem filtro (usa o seletor padrão de funis)
+  // Para SDR: usa origens permitidas (a "pipeline" é a origem aqui)
+  const restrictToSdrOrigins = isSdr;
 
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState<'cockpit' | 'pipeline' | 'paste'>('cockpit');
@@ -73,17 +70,21 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
 
   const { data: stages, isLoading: stagesLoading } = useCRMStages(pipelineId || undefined);
 
-  // Auto-selecionar pipeline quando o SDR só tem 1 funil disponível
+  // Auto-selecionar pipeline quando o SDR só tem 1 origem disponível
   useEffect(() => {
     if (mode !== 'pipeline') return;
     if (pipelineId) return;
-    if (allowedGroupIds && allowedGroupIds.length === 1) {
-      setPipelineId(allowedGroupIds[0]);
+    if (restrictToSdrOrigins && sdrPipelineOptions.length === 1) {
+      setPipelineId(sdrPipelineOptions[0].id);
     }
-  }, [mode, pipelineId, allowedGroupIds]);
+  }, [mode, pipelineId, restrictToSdrOrigins, sdrPipelineOptions]);
 
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
-    stageId ? { stageId, limit: 100 } : {}
+    stageId
+      ? (restrictToSdrOrigins && pipelineId
+          ? { stageId, originId: pipelineId, limit: 100 }
+          : { stageId, limit: 100 })
+      : {}
   );
 
   // Reset stage quando muda pipeline
@@ -240,16 +241,36 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
 
             {mode === 'pipeline' && (
               <div className="space-y-2">
-                {/* Só mostra seletor de pipeline se houver mais de 1 opção.
-                    SDRs com 1 funil único têm a pipeline fixada automaticamente. */}
-                {(!allowedGroupIds || allowedGroupIds.length !== 1) && (
+                {/* SDR: lista origens permitidas. Se só houver 1, ela é fixada
+                    automaticamente e o seletor é omitido. */}
+                {restrictToSdrOrigins ? (
+                  sdrPipelineOptions.length > 1 && (
+                    <div>
+                      <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                      <Select
+                        value={pipelineId || ''}
+                        onValueChange={(v) => handleSelectPipeline(v || null)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="Selecione uma pipeline" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sdrPipelineOptions.map(o => (
+                            <SelectItem key={o.id} value={o.id} className="text-xs">
+                              {o.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )
+                ) : (
                   <div>
                     <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
                     <div className="[&>div]:w-full [&_button]:w-full [&_label]:hidden">
                       <PipelineSelector
                         selectedPipelineId={pipelineId}
                         onSelectPipeline={handleSelectPipeline}
-                        allowedGroupIds={allowedGroupIds}
                       />
                     </div>
                   </div>
