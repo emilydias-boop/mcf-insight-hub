@@ -219,16 +219,6 @@ const menuItems: MenuItem[] = [
   // dentro do componente AppSidebar para suportar rotas baseadas na BU do usuário.
   // Veja a variável `dynamicSDRCloserItems` no componente.
 
-  // Cockpit SDR
-  {
-    title: "Cockpit",
-    url: "/sdr/cockpit",
-    icon: Briefcase,
-    resource: "crm",
-    requiredRoles: ["sdr"],
-    separator: true,
-  },
-
   // Minhas Reuniões (apenas SDR)
   {
     title: "Minhas Reuniões",
@@ -236,6 +226,7 @@ const menuItems: MenuItem[] = [
     icon: Calendar,
     resource: "crm",
     requiredRoles: ["sdr"],
+    separator: true,
   },
 
   // Meu Desempenho (apenas Closer)
