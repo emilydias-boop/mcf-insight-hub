@@ -235,6 +235,32 @@ function normalizePhone(phone: string | null): string | null {
   return '+' + clean;
 }
 
+// ============= HELPER: Normalizar documento (CPF/CNPJ) =============
+// Mantém apenas dígitos. Retorna null se vazio. Aceita CPF (11) e CNPJ (14).
+function normalizeDocument(doc: string | null | undefined): string | null {
+  if (!doc) return null;
+  const clean = String(doc).replace(/\D/g, '');
+  return clean.length > 0 ? clean : null;
+}
+
+// ============= HELPER: Extrair CPF do payload Hubla (todos os formatos) =============
+function extractCustomerDocument(eventOrInvoice: any, body: any): string | null {
+  return normalizeDocument(
+    eventOrInvoice?.userDocument ||
+    eventOrInvoice?.customerDocument ||
+    eventOrInvoice?.customer?.document ||
+    eventOrInvoice?.user?.document ||
+    eventOrInvoice?.payer?.document ||
+    body?.event?.user?.document ||
+    body?.event?.invoice?.payer?.document ||
+    body?.event?.payer?.document ||
+    body?.user?.document ||
+    body?.payer?.document ||
+    body?.['Documento do cliente'] ||
+    null
+  );
+}
+
 // ============= HELPER: Criar/Atualizar Contato e Deal no CRM =============
 interface CRMContactData {
   email: string | null;
