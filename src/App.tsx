@@ -78,7 +78,6 @@ const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Cobrancas = lazy(() => import("./pages/Cobrancas"));
 const MeuRH = lazy(() => import("./pages/MeuRH"));
 const MinhasReunioes = lazy(() => import("./pages/sdr/MinhasReunioes"));
-const SDRCockpit = lazy(() => import("./pages/sdr/SDRCockpit"));
 const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
 const SdrMeetingsDetailPage = lazy(() => import("./pages/crm/SdrMeetingsDetailPage"));
 const CloserMeetingsDetailPage = lazy(() => import("./pages/crm/CloserMeetingsDetailPage"));
@@ -234,7 +233,6 @@ const App = () => (
               <Route path="patrimonio/meus-equipamentos" element={<MyEquipmentPage />} />
               <Route path="patrimonio/relatorios" element={<ResourceGuard resource="patrimonio"><PatrimonioRelatorios /></ResourceGuard>} />
               <Route path="patrimonio/:id" element={<ResourceGuard resource="patrimonio"><AssetDetailsPage /></ResourceGuard>} />
-              <Route path="sdr/cockpit" element={<RoleGuard allowedRoles={['sdr']}><SDRCockpit /></RoleGuard>} />
               <Route path="sdr/minhas-reunioes" element={<RoleGuard allowedRoles={['sdr', 'closer']}><MinhasReunioes /></RoleGuard>} />
               <Route path="closer/meu-desempenho" element={<RoleGuard allowedRoles={['closer']}><MeuDesempenhoCloser /></RoleGuard>} />
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><ReunioesEquipe /></RoleGuard>} />
