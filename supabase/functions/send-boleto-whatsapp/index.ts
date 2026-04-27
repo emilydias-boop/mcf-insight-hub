@@ -37,7 +37,7 @@ serve(async (req) => {
     // Fetch boleto + card data
     const { data: boleto, error } = await supabase
       .from('consorcio_boletos')
-      .select('*, consortium_cards(*)')
+      .select('*, consortium_cards(nome_completo, razao_social, telefone, telefone_comercial, email, email_comercial)')
       .eq('id', boletoId)
       .single();
 
