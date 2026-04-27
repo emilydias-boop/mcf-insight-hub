@@ -3,6 +3,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ConsorcioCard } from '@/types/consorcio';
 
+const CONTEMPLATION_CARD_SELECT = `
+  id, created_at, updated_at, tipo_pessoa, status, categoria,
+  grupo, cota, valor_credito, prazo_meses, tipo_produto, tipo_contrato,
+  parcelas_pagas_empresa, data_contratacao, dia_vencimento,
+  origem, origem_detalhe, vendedor_id, vendedor_name,
+  numero_contemplacao, data_contemplacao, motivo_contemplacao, valor_lance, percentual_lance,
+  nome_completo, cpf, telefone, email, razao_social, cnpj,
+  valor_comissao, e_transferencia, transferido_de, observacoes,
+  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais
+`;
+
 export interface ContemplationFilters {
   search?: string;
   grupo?: string;
@@ -17,7 +28,7 @@ export function useContemplationCards(filters: ContemplationFilters) {
     queryFn: async () => {
       let query = supabase
         .from('consortium_cards')
-        .select('*')
+        .select(CONTEMPLATION_CARD_SELECT)
         .order('grupo', { ascending: true })
         .order('cota', { ascending: true });
 
