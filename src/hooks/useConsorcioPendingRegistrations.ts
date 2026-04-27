@@ -71,13 +71,66 @@ export interface PendingRegistration {
   consortium_card_id: string | null;
 }
 
+const PENDING_REGISTRATION_LIST_SELECT = `
+  id,
+  status,
+  tipo_pessoa,
+  nome_completo,
+  razao_social,
+  cpf,
+  cnpj,
+  telefone,
+  telefone_comercial,
+  vendedor_name,
+  aceite_date,
+  deal:crm_deals!deal_id(contact:crm_contacts!contact_id(name, email, phone), owner_id)
+`;
+
+const PENDING_REGISTRATION_DETAIL_SELECT = `
+  id,
+  proposal_id,
+  deal_id,
+  tipo_pessoa,
+  nome_completo,
+  rg,
+  cpf,
+  cpf_conjuge,
+  profissao,
+  telefone,
+  email,
+  endereco_completo,
+  endereco_cep,
+  renda,
+  patrimonio,
+  pix,
+  razao_social,
+  cnpj,
+  natureza_juridica,
+  inscricao_estadual,
+  data_fundacao,
+  telefone_comercial,
+  email_comercial,
+  endereco_comercial,
+  endereco_comercial_cep,
+  num_funcionarios,
+  faturamento_mensal,
+  socios,
+  vendedor_name,
+  aceite_date,
+  created_by,
+  created_at,
+  updated_at,
+  status,
+  consortium_card_id
+`;
+
 export function usePendingRegistrations() {
   return useQuery({
     queryKey: ['consorcio-pending-registrations'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
-        .select('*, deal:crm_deals!deal_id(contact:crm_contacts!contact_id(name, email, phone), owner_id)')
+        .select(PENDING_REGISTRATION_LIST_SELECT)
         .eq('status', 'aguardando_abertura')
         .order('created_at', { ascending: false });
 
@@ -103,7 +156,7 @@ export function usePendingRegistration(id: string | null) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
-        .select('*')
+        .select(PENDING_REGISTRATION_DETAIL_SELECT)
         .eq('id', id)
         .single();
 
