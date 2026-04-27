@@ -11213,6 +11213,17 @@ export type Database = {
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      find_or_create_crm_contact: {
+        Args: {
+          p_clint_id?: string
+          p_email: string
+          p_name: string
+          p_origin_id: string
+          p_phone: string
+          p_tags?: string[]
+        }
+        Returns: string
+      }
       generate_patrimonio_number: {
         Args: { p_tipo: Database["public"]["Enums"]["asset_type"] }
         Returns: string
