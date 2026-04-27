@@ -8,6 +8,7 @@ export interface UnlinkedContract {
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
+  customer_document: string | null;
   sale_date: string;
   net_value: number | null;
   product_price: number | null;
@@ -39,7 +40,7 @@ export function useUnlinkedContracts(options: UseUnlinkedContractsOptions = {}) 
 
         const { data, error } = await supabase
           .from('hubla_transactions')
-          .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value, product_price, product_name, product_category')
+          .select('id, hubla_id, customer_name, customer_email, customer_phone, customer_document, sale_date, net_value, product_price, product_name, product_category')
           .is('linked_attendee_id', null)
           .or(`customer_email.ilike.%${trimmedSearch}%,customer_name.ilike.%${trimmedSearch}%,customer_phone.ilike.%${trimmedSearch}%`)
           .order('sale_date', { ascending: false })
@@ -52,7 +53,7 @@ export function useUnlinkedContracts(options: UseUnlinkedContractsOptions = {}) 
       // Default: last 14 days, contrato only
       const { data, error } = await supabase
         .from('hubla_transactions')
-        .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value, product_price')
+        .select('id, hubla_id, customer_name, customer_email, customer_phone, customer_document, sale_date, net_value, product_price')
         .eq('product_category', 'contrato')
         .is('linked_attendee_id', null)
         .gte('sale_date', twoWeeksAgo.toISOString())
