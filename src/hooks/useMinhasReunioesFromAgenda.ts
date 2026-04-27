@@ -1,4 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useSdrMetricsFromAgenda } from "./useSdrMetricsFromAgenda";
 import { useSdrMeetingsFromAgenda } from "./useSdrMeetingsFromAgenda";
 
@@ -22,9 +24,39 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   const { user } = useAuth();
   const sdrEmail = user?.email || undefined;
 
-  // Passa o squad ('incorporador') para que o ranking global por deal_id seja
-  // aplicado da mesma forma que no Painel da Equipe — garantindo paridade nos números.
-  const squad = 'incorporador';
+  // Buscar o squad real do SDR logado (consorcio, incorporador, etc.) para
+  // que a RPC aplique o filtro correto. Antes estava hardcoded como
+  // 'incorporador', zerando os números dos SDRs de Consórcio.
+  const { data: sdrRecord } = useQuery({
+    queryKey: ['minhas-reunioes-sdr-squad', user?.id, sdrEmail],
+    queryFn: async () => {
+      if (!user?.id && !sdrEmail) return null;
+      let result = null as { squad: string | null } | null;
+      if (user?.id) {
+        const { data } = await supabase
+          .from('sdr')
+          .select('squad')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        result = data as any;
+      }
+      if (!result && sdrEmail) {
+        const { data } = await supabase
+          .from('sdr')
+          .select('squad')
+          .eq('email', sdrEmail)
+          .maybeSingle();
+        result = data as any;
+      }
+      return result;
+    },
+    enabled: !!(user?.id || sdrEmail),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fallback para 'incorporador' se squad ainda não carregou — preserva
+  // comportamento anterior para usuários sem squad cadastrado.
+  const squad = sdrRecord?.squad || 'incorporador';
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail, squad);
   const meetingsQuery = useSdrMeetingsFromAgenda({ 
     startDate, 
