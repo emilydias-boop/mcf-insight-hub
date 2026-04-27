@@ -190,7 +190,7 @@ export function useCreatePendingRegistration() {
           created_by: user.id,
           status: 'aguardando_abertura',
         } as any)
-        .select()
+        .select('id')
         .single();
 
       if (regError) {
@@ -361,7 +361,7 @@ export function useOpenCota() {
       const { data: card, error: cardError } = await supabase
         .from('consortium_cards')
         .insert(cleanedData as any)
-        .select()
+        .select('id')
         .single();
 
       if (cardError) throw cardError;
@@ -431,7 +431,14 @@ export function useOpenCota() {
         });
       }
 
-      await supabase.from('consortium_installments').insert(installments);
+      const CHUNK_SIZE = 8;
+      for (let i = 0; i < installments.length; i += CHUNK_SIZE) {
+        const { error: installmentsError } = await supabase
+          .from('consortium_installments')
+          .insert(installments.slice(i, i + CHUNK_SIZE));
+
+        if (installmentsError) throw installmentsError;
+      }
 
       // 5. Migrate documents from pending_registration_id to card_id
       await supabase

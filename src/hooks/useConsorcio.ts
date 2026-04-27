@@ -198,7 +198,7 @@ export function useCreateConsorcioCard() {
       const { data: card, error: cardError } = await supabase
         .from('consortium_cards')
         .insert(cleanedData as any)
-        .select()
+        .select('id')
         .single();
 
       if (cardError) throw cardError;
