@@ -6377,8 +6377,11 @@ export type Database = {
           installment_fee_cents: number | null
           installment_number: number | null
           is_offer: boolean | null
+          linked_at: string | null
           linked_attendee_id: string | null
+          linked_by_user_id: string | null
           linked_deal_id: string | null
+          linked_method: string | null
           net_value: number | null
           offer_id: string | null
           offer_name: string | null
@@ -6416,8 +6419,11 @@ export type Database = {
           installment_fee_cents?: number | null
           installment_number?: number | null
           is_offer?: boolean | null
+          linked_at?: string | null
           linked_attendee_id?: string | null
+          linked_by_user_id?: string | null
           linked_deal_id?: string | null
+          linked_method?: string | null
           net_value?: number | null
           offer_id?: string | null
           offer_name?: string | null
@@ -6455,8 +6461,11 @@ export type Database = {
           installment_fee_cents?: number | null
           installment_number?: number | null
           is_offer?: boolean | null
+          linked_at?: string | null
           linked_attendee_id?: string | null
+          linked_by_user_id?: string | null
           linked_deal_id?: string | null
+          linked_method?: string | null
           net_value?: number | null
           offer_id?: string | null
           offer_name?: string | null
