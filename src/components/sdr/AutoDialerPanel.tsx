@@ -214,16 +214,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         {!isActive && ad.queue.length === 0 && (
           <div className="px-4 py-3 space-y-3 border-b">
             {/* Tabs de modo */}
-            <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-md">
-              <button
-                onClick={() => setMode('cockpit')}
-                className={cn(
-                  'text-[11px] font-medium py-1.5 rounded transition-colors',
-                  mode === 'cockpit' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                Cockpit
-              </button>
+            <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-md">
               <button
                 onClick={() => setMode('pipeline')}
                 className={cn(
@@ -243,13 +234,6 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                 Colar
               </button>
             </div>
-
-            {mode === 'cockpit' && (
-              <Button size="sm" variant="outline" className="w-full" onClick={loadFromCockpit} disabled={sdrQueue.isLoading}>
-                {sdrQueue.isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Carregar fila do Cockpit ({sdrQueue.data?.length || 0})
-              </Button>
-            )}
 
             {mode === 'pipeline' && (
               <div className="space-y-2">
