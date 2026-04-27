@@ -71,9 +71,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const [results, setResults] = useState<Record<string, LeadResult>>({});
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [ringTimeoutMs, setRingTimeoutMs] = useState(25000);
-  const [betweenCallsMs, setBetweenCallsMs] = useState(2000);
+  const [betweenCallsMs, setBetweenCallsMs] = useState(10000);
   const [maxAttemptsPerLead, setMaxAttemptsPerLead] = useState(3);
-  const [retryDelayMs, setRetryDelayMs] = useState(5000);
+  const [retryDelayMs, setRetryDelayMs] = useState(10000);
   const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [inCallDrawerOpen, setInCallDrawerOpen] = useState(false);
 
