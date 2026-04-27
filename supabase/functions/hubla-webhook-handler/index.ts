@@ -805,8 +805,8 @@ function normalizeNameForMatch(name: string): string {
 }
 
 async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
-  if (!data.customerEmail && !data.customerPhone && !data.customerName) {
-    console.log('🎯 [AUTO-PAGO] Sem email, telefone ou nome para buscar reunião');
+  if (!data.customerEmail && !data.customerPhone && !data.customerName && !data.customerDocument) {
+    console.log('🎯 [AUTO-PAGO] Sem email, telefone, nome ou CPF para buscar reunião');
     return;
   }
 
@@ -815,8 +815,9 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
   const phoneSuffix = phoneDigits.slice(-9);
   const emailLower = data.customerEmail?.toLowerCase()?.trim() || '';
   const normalizedSearchName = normalizeNameForMatch(data.customerName || '');
+  const cpfDigits = (data.customerDocument || '').replace(/\D/g, '');
 
-  console.log(`🎯 [AUTO-PAGO] Buscando match para: email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}" (normalized="${normalizedSearchName}")`);
+  console.log(`🎯 [AUTO-PAGO] Buscando match para: cpf="${cpfDigits || '(vazio)'}", email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}" (normalized="${normalizedSearchName}")`);
 
   try {
     // CORREÇÃO 1: Limitar busca aos últimos 14 dias
