@@ -3,6 +3,21 @@ import { RefreshCw, X } from "lucide-react";
 
 const CHECK_INTERVAL_MS = 60_000; // 60 seconds
 
+/**
+ * Só ativa o checker no domínio publicado (produção).
+ * Em preview da Lovable (id-preview--*.lovable.app) e em dev local,
+ * o index.html é regenerado a cada hot-reload, gerando falsos positivos.
+ */
+function isProductionHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  // Domínio customizado de produção
+  if (host === "mcfgestao.com" || host.endsWith(".mcfgestao.com")) return true;
+  // App publicado em *.lovable.app, mas NÃO o preview (id-preview--*)
+  if (host.endsWith(".lovable.app") && !host.startsWith("id-preview--")) return true;
+  return false;
+}
+
 function useUpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const initialHash = useRef<string | null>(null);
@@ -16,6 +31,9 @@ function useUpdateChecker() {
   }, []);
 
   useEffect(() => {
+    // Skip entirely in preview/dev — evita banner falso a cada rebuild
+    if (!isProductionHost()) return;
+
     let timer: ReturnType<typeof setInterval>;
 
     const check = async () => {
