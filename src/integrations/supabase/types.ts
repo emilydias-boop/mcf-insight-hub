@@ -6377,6 +6377,7 @@ export type Database = {
           installment_number: number | null
           is_offer: boolean | null
           linked_attendee_id: string | null
+          linked_deal_id: string | null
           net_value: number | null
           offer_id: string | null
           offer_name: string | null
@@ -6414,6 +6415,7 @@ export type Database = {
           installment_number?: number | null
           is_offer?: boolean | null
           linked_attendee_id?: string | null
+          linked_deal_id?: string | null
           net_value?: number | null
           offer_id?: string | null
           offer_name?: string | null
@@ -6451,6 +6453,7 @@ export type Database = {
           installment_number?: number | null
           is_offer?: boolean | null
           linked_attendee_id?: string | null
+          linked_deal_id?: string | null
           net_value?: number | null
           offer_id?: string | null
           offer_name?: string | null
@@ -6479,6 +6482,13 @@ export type Database = {
             columns: ["linked_attendee_id"]
             isOneToOne: false
             referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hubla_transactions_linked_deal_id_fkey"
+            columns: ["linked_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
             referencedColumns: ["id"]
           },
         ]
