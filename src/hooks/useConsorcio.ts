@@ -313,10 +313,10 @@ export function useCreateConsorcioCard() {
         } as any);
       }
 
-      // Inserir parcelas em lotes para evitar erro
-      // "cannot pass more than 100 arguments to a function" do PostgREST
-      // (planos longos como 240 parcelas estouram o limite em um único INSERT)
-      const CHUNK_SIZE = 50;
+      // Inserir parcelas em lotes pequenos para evitar erro
+      // "cannot pass more than 100 arguments to a function" do PostgREST.
+      // Cada linha possui ~8 colunas, então 10 linhas = ~80 args (seguro).
+      const CHUNK_SIZE = 10;
       for (let i = 0; i < installments.length; i += CHUNK_SIZE) {
         const chunk = installments.slice(i, i + CHUNK_SIZE);
         const { error: installmentsError } = await supabase
