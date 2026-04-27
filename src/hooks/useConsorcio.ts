@@ -644,7 +644,7 @@ export function useMyConsorcioCards(vendedorId: string | null) {
 
       const { data, error } = await supabase
         .from('consortium_cards')
-        .select('*')
+        .select(CONSORCIO_CARD_LIST_SELECT)
         .eq('vendedor_id', vendedorId)
         .order('created_at', { ascending: false });
 
