@@ -313,11 +313,18 @@ export function useCreateConsorcioCard() {
         } as any);
       }
 
-      const { error: installmentsError } = await supabase
-        .from('consortium_installments')
-        .insert(installments);
+      // Inserir parcelas em lotes para evitar erro
+      // "cannot pass more than 100 arguments to a function" do PostgREST
+      // (planos longos como 240 parcelas estouram o limite em um único INSERT)
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < installments.length; i += CHUNK_SIZE) {
+        const chunk = installments.slice(i, i + CHUNK_SIZE);
+        const { error: installmentsError } = await supabase
+          .from('consortium_installments')
+          .insert(chunk);
 
-      if (installmentsError) throw installmentsError;
+        if (installmentsError) throw installmentsError;
+      }
 
       return card;
     },
