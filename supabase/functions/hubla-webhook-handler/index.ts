@@ -835,6 +835,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         attendee_name,
         attendee_phone,
         deal_id,
+        cpf,
         meeting_slots!inner(
           id,
           scheduled_at,
