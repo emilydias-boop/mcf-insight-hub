@@ -7198,6 +7198,7 @@ export type Database = {
           confirmed_by: string | null
           contact_id: string | null
           contract_paid_at: string | null
+          cpf: string | null
           created_at: string | null
           deal_id: string | null
           decision_maker_type: string | null
@@ -7236,6 +7237,7 @@ export type Database = {
           confirmed_by?: string | null
           contact_id?: string | null
           contract_paid_at?: string | null
+          cpf?: string | null
           created_at?: string | null
           deal_id?: string | null
           decision_maker_type?: string | null
@@ -7274,6 +7276,7 @@ export type Database = {
           confirmed_by?: string | null
           contact_id?: string | null
           contract_paid_at?: string | null
+          cpf?: string | null
           created_at?: string | null
           deal_id?: string | null
           decision_maker_type?: string | null
