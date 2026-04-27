@@ -752,6 +752,19 @@ interface AutoMarkData {
   customerName: string | null;
   saleDate: string;
   transactionHublaId?: string | null;
+  offerName?: string | null;
+}
+
+// Ofertas que qualificam um pagamento como "Outside" (alinhado com src/hooks/outsideOfferConstants.ts)
+const OUTSIDE_OFFER_NAMES = [
+  'Contrato - Curso R$ 97,00',
+  'Contrato Perfil A - Vitrine A010',
+];
+
+function isOutsideOffer(offerName: string | null | undefined): boolean {
+  if (!offerName) return false;
+  const normalized = offerName.toLowerCase().trim();
+  return OUTSIDE_OFFER_NAMES.some(n => n.toLowerCase() === normalized);
 }
 
 // Normalizar nome para match fuzzy
