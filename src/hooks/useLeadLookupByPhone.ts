@@ -6,6 +6,8 @@ export interface LeadDealMatch {
   dealId: string;
   dealName: string | null;
   ownerEmail: string | null;
+  ownerProfileId: string | null;
+  isMine: boolean;
   originId: string | null;
   originName: string | null;
   stageName: string | null;
@@ -31,13 +33,12 @@ export function useLeadLookupByPhone(rawPhone: string) {
   const enabled = digits.length >= 8;
 
   const { user, hasAnyRole } = useAuth();
-  // Admin / manager / coordenador veem todos os leads.
-  // SDR / closer / demais cargos só enxergam deals dos quais são donos.
-  const seesAll = hasAnyRole('admin', 'manager', 'coordenador');
-  const ownerFilterId = !seesAll && user?.id ? user.id : null;
+  // Todos os usuários enxergam o lead pelo telefone para poder LIGAR.
+  // A trava de "não é seu lead" é apenas visual — o agendamento é bloqueado em outro lugar.
+  const currentUserId = user?.id ?? null;
 
   return useQuery({
-    queryKey: ['lead-lookup-by-phone', suffix, ownerFilterId ?? 'all'],
+    queryKey: ['lead-lookup-by-phone', suffix, currentUserId ?? 'anon'],
     enabled,
     staleTime: 30_000,
     queryFn: async (): Promise<LeadMatch[]> => {
@@ -58,20 +59,14 @@ export function useLeadLookupByPhone(rawPhone: string) {
 
       const contactIds = contacts.map(c => c.id);
 
-      // 2. Deals desses contatos
-      let dealsQuery = supabase
+      // 2. Deals desses contatos (sempre todos — independente do dono)
+      const { data: deals } = await supabase
         .from('crm_deals')
         .select('id, name, contact_id, owner_profile_id, origin_id, stage_id, created_at')
         .in('contact_id', contactIds)
         .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(50);
-
-      if (ownerFilterId) {
-        dealsQuery = dealsQuery.eq('owner_profile_id', ownerFilterId);
-      }
-
-      const { data: deals } = await dealsQuery;
 
       const dealList = (deals || []) as any[];
       const originIds = Array.from(new Set(dealList.map(d => d.origin_id).filter(Boolean)));
@@ -109,6 +104,8 @@ export function useLeadLookupByPhone(rawPhone: string) {
           dealId: d.id,
           dealName: d.name,
           ownerEmail: d.owner_profile_id ? ownerEmail.get(d.owner_profile_id) || null : null,
+          ownerProfileId: d.owner_profile_id ?? null,
+          isMine: !!currentUserId && d.owner_profile_id === currentUserId,
           originId: d.origin_id,
           originName: d.origin_id ? originName.get(d.origin_id) || null : null,
           stageName: d.stage_id ? stageName.get(d.stage_id) || null : null,
@@ -117,17 +114,16 @@ export function useLeadLookupByPhone(rawPhone: string) {
         dealsByContact.set(d.contact_id, arr);
       });
 
-      // Quando filtramos por dono, escondemos contatos que não têm nenhum deal próprio
-      // (assim o SDR não vê o nome de leads de outros SDRs). Sem deal acessível,
-      // a ligação será tratada como avulsa.
-      const all = contacts.map(c => ({
+      // Sempre devolvemos todos os contatos identificados — mesmo que os deals
+      // pertençam a outros SDRs/Closers. Assim o usuário consegue LIGAR para o lead
+      // mesmo sem ser o dono. O agendamento é bloqueado pela UI quando isMine=false.
+      return contacts.map(c => ({
         contactId: c.id,
         contactName: c.name,
         email: c.email,
         phone: c.phone,
         deals: dealsByContact.get(c.id) || [],
       }));
-      return ownerFilterId ? all.filter(c => c.deals.length > 0) : all;
     },
   });
 }
