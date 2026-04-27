@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAutoDialer, type AutoDialerLead } from '@/contexts/AutoDialerContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,11 @@ import { cn } from '@/lib/utils';
 import { useSDRQueueInfinite } from '@/hooks/useSDRCockpit';
 import { useCRMStages, useCRMDeals } from '@/hooks/useCRMData';
 import { PipelineSelector } from '@/components/crm/PipelineSelector';
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
+import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
+import { useAuth } from '@/contexts/AuthContext';
+import { isSdrRole } from '@/components/auth/NegociosAccessGuard';
 import { toast } from 'sonner';
 
 interface Props {
@@ -20,12 +25,41 @@ interface Props {
 export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const ad = useAutoDialer();
   const sdrQueue = useSDRQueueInfinite();
+  const { role, allRoles } = useAuth();
+  const isSdr = isSdrRole(role, allRoles);
+  const activeBU = useActiveBU();
+  const { data: buMapping } = useBUPipelineMap(activeBU);
+  const { data: sdrOriginOverride } = useSDROriginOverride();
+
+  // Grupos (funis) permitidos para o SDR baseado na BU dele
+  const allowedGroupIds = useMemo(() => {
+    if (!isSdr) return undefined; // admins/managers veem tudo
+    return buMapping?.groups || [];
+  }, [isSdr, buMapping]);
+
+  // Origens permitidas (override individual do SDR tem prioridade)
+  const allowedOriginIds = useMemo<string[] | null>(() => {
+    if (!isSdr) return null;
+    if (sdrOriginOverride && sdrOriginOverride.length > 0) return sdrOriginOverride;
+    return null;
+  }, [isSdr, sdrOriginOverride]);
+
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState<'cockpit' | 'pipeline' | 'paste'>('cockpit');
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [stageId, setStageId] = useState<string | null>(null);
 
   const { data: stages, isLoading: stagesLoading } = useCRMStages(pipelineId || undefined);
+
+  // Auto-selecionar pipeline quando o SDR só tem 1 funil disponível
+  useEffect(() => {
+    if (mode !== 'pipeline') return;
+    if (pipelineId) return;
+    if (allowedGroupIds && allowedGroupIds.length === 1) {
+      setPipelineId(allowedGroupIds[0]);
+    }
+  }, [mode, pipelineId, allowedGroupIds]);
+
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
     stageId ? { stageId, limit: 100 } : {}
   );
@@ -184,15 +218,20 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
 
             {mode === 'pipeline' && (
               <div className="space-y-2">
-                <div>
-                  <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
-                  <div className="[&>div]:w-full [&_button]:w-full [&_label]:hidden">
-                    <PipelineSelector
-                      selectedPipelineId={pipelineId}
-                      onSelectPipeline={handleSelectPipeline}
-                    />
+                {/* Só mostra seletor de pipeline se houver mais de 1 opção.
+                    SDRs com 1 funil único têm a pipeline fixada automaticamente. */}
+                {(!allowedGroupIds || allowedGroupIds.length !== 1) && (
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                    <div className="[&>div]:w-full [&_button]:w-full [&_label]:hidden">
+                      <PipelineSelector
+                        selectedPipelineId={pipelineId}
+                        onSelectPipeline={handleSelectPipeline}
+                        allowedGroupIds={allowedGroupIds}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase">Estágio</label>
                   <Select
