@@ -24,7 +24,16 @@ export const useAssets = (filters?: AssetFilters) => {
     queryFn: async () => {
       let query = supabase
         .from('assets')
-        .select('*')
+        .select(`
+          *,
+          assignments:asset_assignments(
+            id,
+            status,
+            data_liberacao,
+            data_devolucao_real,
+            employee:employees(id, nome_completo)
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (filters?.status) {
@@ -39,7 +48,20 @@ export const useAssets = (filters?: AssetFilters) => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as Asset[];
+      // Compute current/last holder per asset
+      return (data || []).map((a: any) => {
+        const list = Array.isArray(a.assignments) ? [...a.assignments] : [];
+        const active = list.find((x: any) => x.status === 'ativo');
+        const last = list.sort((x: any, y: any) =>
+          new Date(y.data_liberacao || 0).getTime() - new Date(x.data_liberacao || 0).getTime()
+        )[0];
+        const holder = active || last;
+        return {
+          ...a,
+          current_holder_name: holder?.employee?.nome_completo || null,
+          current_holder_active: !!active,
+        };
+      }) as any;
     },
   });
 };
