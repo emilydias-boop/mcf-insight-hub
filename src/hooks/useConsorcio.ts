@@ -27,16 +27,34 @@ interface ConsorcioFilters {
   origem?: string;
 }
 
+const CONSORCIO_CARD_LIST_SELECT = `
+  id, created_at, updated_at, tipo_pessoa, status, categoria,
+  grupo, cota, valor_credito, prazo_meses, tipo_produto, tipo_contrato,
+  parcelas_pagas_empresa, data_contratacao, dia_vencimento,
+  origem, origem_detalhe, vendedor_id, vendedor_name,
+  numero_contemplacao, data_contemplacao, motivo_contemplacao, valor_lance, percentual_lance,
+  nome_completo, cpf, telefone, email, razao_social, cnpj,
+  valor_comissao, e_transferencia, transferido_de, observacoes,
+  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais
+`;
+
+const CONSORCIO_CARD_EXTRA_SELECT = `
+  id, data_nascimento, rg, estado_civil, cpf_conjuge,
+  endereco_cep, endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado,
+  profissao, tipo_servidor, renda, patrimonio, pix,
+  natureza_juridica, inscricao_estadual, data_fundacao,
+  endereco_comercial_cep, endereco_comercial_rua, endereco_comercial_numero, endereco_comercial_complemento,
+  endereco_comercial_bairro, endereco_comercial_cidade, endereco_comercial_estado,
+  telefone_comercial, email_comercial, faturamento_mensal, num_funcionarios
+`;
+
 export function useConsorcioCards(filters: ConsorcioFilters = {}) {
   return useQuery({
     queryKey: ['consortium-cards', filters],
     queryFn: async () => {
       let query = supabase
         .from('consortium_cards')
-        .select(`
-          *,
-          consortium_installments(valor_comissao)
-        `)
+        .select(`${CONSORCIO_CARD_LIST_SELECT}, consortium_installments(valor_comissao)`)
         .order('created_at', { ascending: false });
 
       if (filters.startDate) {
@@ -100,17 +118,20 @@ export function useConsorcioCardDetails(cardId: string | null) {
     queryFn: async () => {
       if (!cardId) return null;
 
-      const [cardResult, installmentsResult, partnersResult, documentsResult] = await Promise.all([
-        supabase.from('consortium_cards').select('*').eq('id', cardId).single(),
+      const [cardResult, cardExtraResult, installmentsResult, partnersResult, documentsResult] = await Promise.all([
+        supabase.from('consortium_cards').select(CONSORCIO_CARD_LIST_SELECT).eq('id', cardId).single(),
+        supabase.from('consortium_cards').select(CONSORCIO_CARD_EXTRA_SELECT).eq('id', cardId).single(),
         supabase.from('consortium_installments').select('*').eq('card_id', cardId).order('numero_parcela'),
         supabase.from('consortium_pj_partners').select('*').eq('card_id', cardId),
         supabase.from('consortium_documents').select('*').eq('card_id', cardId),
       ]);
 
       if (cardResult.error) throw cardResult.error;
+      if (cardExtraResult.error) throw cardExtraResult.error;
 
       return {
         ...cardResult.data,
+        ...cardExtraResult.data,
         installments: installmentsResult.data || [],
         partners: partnersResult.data || [],
         documents: documentsResult.data || [],
