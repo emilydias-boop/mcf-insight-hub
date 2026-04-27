@@ -261,6 +261,13 @@ async function findOrCreateContact(supabase: any, contactData: any, dryRun: bool
     return { id: 'dry-run-contact-id', created: true };
   }
 
+  // 🚫 Skip creation if there's no contact data (no email AND no phone)
+  // Webhooks de sistema (ping, deal moved sem dados) não devem gerar contatos vazios
+  if (!contactData.email && !contactData.phone) {
+    console.log('[reprocess] Skipping contact creation: no email and no phone');
+    return null;
+  }
+
   const newContactData = {
     clint_id: contactData.clint_id || `reprocessed-${Date.now()}`,
     name: contactData.name || 'Contato sem nome',
