@@ -1335,7 +1335,7 @@ export function QuickScheduleModal({
 
         {/* Submit - Fixed at bottom */}
         <div className="flex-shrink-0 pt-4 border-t">
-          {isLeadBlocked ? (
+          {isLeadBlocked || isApprovalBlocked ? (
             <Button
               variant="secondary"
               className="w-full"
