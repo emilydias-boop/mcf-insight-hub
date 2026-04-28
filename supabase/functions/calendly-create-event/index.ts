@@ -474,7 +474,7 @@ serve(async (req) => {
           message:
             "Lead já fechou contrato — não é possível agendar nova reunião.",
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -496,7 +496,7 @@ serve(async (req) => {
           message:
             "Lead já tem contrato pago — não é possível agendar nova reunião.",
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -528,7 +528,7 @@ serve(async (req) => {
           error: "duplicate_active_booking",
           message: `Lead já tem ${guardMeetingType.toUpperCase()} agendada${closerName ? ` com ${closerName}` : ""}. Use a Agenda para reagendar.`,
         }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     } // end if (guardMeetingType === 'r1') — fim dos guards 1, 2, 3
@@ -666,7 +666,7 @@ serve(async (req) => {
         console.warn(`🚫 Slot full: ${currentAttendees}/${maxLeads} for closer ${closerId} at ${scheduledAt}`);
         return new Response(
           JSON.stringify({ success: false, error: "slot_full", message: `Horário lotado (${currentAttendees}/${maxLeads} leads)` }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
