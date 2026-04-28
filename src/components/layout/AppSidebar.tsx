@@ -272,6 +272,8 @@ const menuItems: MenuItem[] = [
       { title: "Produtos", url: "/admin/produtos", requiredRoles: ["admin"] },
       
       { title: "Configuração BU", url: "/admin/configuracao-bu", requiredRoles: ["admin", "manager"] },
+      { title: "Travas de Fechamento", url: "/admin/travas-fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
+      { title: "Alterações Tardias", url: "/admin/alteracoes-tardias", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 ];
