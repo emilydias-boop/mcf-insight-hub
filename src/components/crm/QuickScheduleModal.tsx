@@ -46,6 +46,8 @@ import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { BlockedLeadCard } from './BlockedLeadCard';
+import { useCreateApprovalRequest, useMyApprovalRequests } from '@/hooks/useApprovalRequests';
+import { ShieldAlert } from 'lucide-react';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -92,6 +94,9 @@ interface DealOption {
   blockReason?: string | null;
   warningOnly?: boolean;
   warningMessage?: string | null;
+  requiresApproval?: boolean;
+  approvalReason?: string | null;
+  rescheduleCount?: number;
 }
 
 type LeadType = 'A' | 'B';
