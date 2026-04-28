@@ -35,7 +35,6 @@ import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 import { useSdrsForSquadInPeriod } from "@/hooks/useSdrsForSquadInPeriod";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
