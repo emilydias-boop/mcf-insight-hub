@@ -47,17 +47,21 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
       const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
-      // Fetch active closers that handle R1 meetings - FILTERED by BU
+      // Fetch ALL closers of this BU (including inactive ones).
+      // Inactive closers are needed to preserve historical attribution:
+      // contracts/meetings from a closer who has since left the team must
+      // still appear in the period they happened in.
       const { data: closers, error: closersError } = await supabase
         .from('closers')
-        .select('id, name, color, email, meeting_type, bu')
-        .eq('is_active', true)
+        .select('id, name, color, email, meeting_type, bu, is_active')
         .eq('bu', bu);
 
       if (closersError) throw closersError;
 
-      // Filter closers that handle R1 (meeting_type is null or 'r1')
-      const r1Closers = closers?.filter(c => !c.meeting_type || c.meeting_type === 'r1') || [];
+      // Active R1 closers — initialized with zeros so they always appear in the table.
+      const r1Closers = closers?.filter(
+        c => c.is_active === true && (!c.meeting_type || c.meeting_type === 'r1')
+      ) || [];
 
       // Fetch active SDRs from database instead of hardcoded list
       const { data: sdrs, error: sdrsError } = await supabase
