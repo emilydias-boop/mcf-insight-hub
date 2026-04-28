@@ -72,14 +72,14 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       bgColor: "bg-red-500/10",
       tooltip: "Total de no-shows no período"
     },
-    // Card condicional: Sem Status (apenas Consórcio) — reuniões já passadas e não atualizadas
-    ...(isConsorcio && (semStatus ?? 0) > 0 ? [{
+    // Card condicional: Sem Status — reuniões com status pendente (invited/rescheduled/sem_sucesso)
+    ...((semStatus ?? 0) > 0 ? [{
       title: "Sem Status",
       value: semStatus ?? 0,
       icon: AlertCircle,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
-      tooltip: "Reuniões cuja data já passou e ainda não foram atualizadas (continuam como agendada/convidada/remarcada). Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Propostas."
+      tooltip: "Reuniões com status pendente (convidada/remarcada/sem sucesso). Cap de 2 por lead. Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Contratos."
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
