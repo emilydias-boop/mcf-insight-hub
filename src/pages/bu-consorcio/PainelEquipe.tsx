@@ -40,6 +40,7 @@ import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData"
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useMeetingsSemStatus } from "@/hooks/useMeetingsSemStatus";
 
 import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 import { useBUPipelineMap } from "@/hooks/useBUPipelineMap";
@@ -324,6 +325,9 @@ export default function ConsorcioPainelEquipe() {
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD);
   
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
+
+  // Reuniões "sem status" (já passaram e não foram atualizadas) — só exibido na BU Consórcio
+  const { data: semStatusCount } = useMeetingsSemStatus(start, end, BU_SQUAD);
 
   // Consórcio pipeline metrics (deals by stage)
   const pipelineMetrics = useConsorcioPipelineMetrics();
@@ -747,6 +751,7 @@ export default function ConsorcioPainelEquipe() {
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
+        semStatus={semStatusCount}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
