@@ -707,6 +707,8 @@ export default function ReunioesEquipe() {
         isLoading={isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHoje}
+        bu="incorporador"
+        semStatus={enrichedKPIs.totalSemStatus || 0}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
