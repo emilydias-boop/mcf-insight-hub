@@ -73,14 +73,14 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: Te
         ? "Propostas fechadas atribuídas via R1 (deal_produtos_adquiridos + stages de fechamento)"
         : "Contratos pagos via R1 (exclui outside)"
     },
-    {
+    ...(isConsorcio ? [] : [{
       title: "Outside",
       value: kpis.totalOutside || 0,
       icon: ExternalLink,
       color: "text-rose-400",
       bgColor: "bg-rose-400/10",
       tooltip: "Leads que compraram contrato antes da reunião R1"
-    },
+    }]),
     {
       title: "Taxa Conversão",
       value: `${kpis.taxaConversao.toFixed(1)}%`,
@@ -101,7 +101,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: Te
 
   return (
     <TooltipProvider>
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-3`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? (isConsorcio ? 'lg:grid-cols-7' : 'lg:grid-cols-8') : (isConsorcio ? 'lg:grid-cols-6' : 'lg:grid-cols-7')} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
