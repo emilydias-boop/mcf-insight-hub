@@ -129,7 +129,7 @@ export function KpiDrillDownDialog({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && !selectedMeeting} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
           <DialogTitle>{title}</DialogTitle>
