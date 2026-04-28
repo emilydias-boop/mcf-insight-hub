@@ -22,9 +22,11 @@ interface TeamKPICardsProps {
   isLoading?: boolean;
   isToday?: boolean;
   pendentesHoje?: number;
+  bu?: string;
 }
 
-export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKPICardsProps) {
+export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: TeamKPICardsProps) {
+  const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const cards = [
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
@@ -60,12 +62,16 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
       tooltip: "Total de no-shows no período"
     },
     {
-      title: "Contratos",
-      value: (kpis.totalContratos || 0) - (kpis.totalOutside || 0),
+      title: isConsorcio ? "Propostas Fechadas" : "Contratos",
+      value: isConsorcio
+        ? (kpis.totalContratos || 0)
+        : ((kpis.totalContratos || 0) - (kpis.totalOutside || 0)),
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      tooltip: "Contratos pagos via R1 (exclui outside)"
+      tooltip: isConsorcio
+        ? "Propostas fechadas atribuídas via R1 (deal_produtos_adquiridos + stages de fechamento)"
+        : "Contratos pagos via R1 (exclui outside)"
     },
     {
       title: "Outside",

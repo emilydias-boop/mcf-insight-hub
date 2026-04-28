@@ -30,6 +30,7 @@ interface SdrSummaryTableProps {
   diasUteisNoPeriodo?: number;
   sdrDiasUteisMap?: Map<string, number>;
   totaisOverride?: SdrSummaryTotalsOverride;
+  bu?: string;
 }
 
 export function SdrSummaryTable({ 
@@ -40,9 +41,13 @@ export function SdrSummaryTable({
   diasUteisNoPeriodo,
   sdrDiasUteisMap,
   totaisOverride,
+  bu,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
+  const contratoLabel = isConsorcio ? 'Propostas Fechadas' : 'Contrato PAGO';
+  const taxaLabel = isConsorcio ? 'Taxa Proposta' : 'Taxa Contrato';
 
   const handleRowClick = (sdrEmail: string) => {
     const params = new URLSearchParams(searchParams);
@@ -126,8 +131,8 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Contrato</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{taxaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>

@@ -100,6 +100,7 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   return {
     meetings: meetingsQuery.data || [],
     summary,
+    squad,
     isLoading: metricsQuery.isLoading || meetingsQuery.isLoading,
     error: metricsQuery.error || meetingsQuery.error,
     refetch: () => {

@@ -746,6 +746,7 @@ export default function ConsorcioPainelEquipe() {
         isLoading={activeTab === "closers" ? closerLoading : isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
+        bu="consorcio"
       />
 
       {/* SDR / Closer Summary Table with Tabs */}

@@ -30,6 +30,7 @@ export interface MeetingSummary {
 interface MeetingSummaryCardsProps {
   summary: MeetingSummaryV2 | MeetingSummary;
   isLoading?: boolean;
+  bu?: string;
 }
 
 // Type guard para verificar se é a nova interface
@@ -37,7 +38,8 @@ function isSummaryV2(summary: MeetingSummaryV2 | MeetingSummary): summary is Mee
   return 'primeiroAgendamento' in summary;
 }
 
-export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsProps) {
+export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCardsProps) {
+  const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   // Normalizar para nova interface
   const normalizedSummary: MeetingSummaryV2 = isSummaryV2(summary) 
     ? summary 
@@ -97,17 +99,21 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
       tooltip: "Realizadas / R1 Agendada × 100"
     },
     {
-      title: "Contratos",
+      title: isConsorcio ? "Propostas Fechadas" : "Contratos",
       value: normalizedSummary.contratos,
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      tooltip: "Contratos fechados (por intermediação)"
+      tooltip: isConsorcio
+        ? "Propostas fechadas atribuídas via R1"
+        : "Contratos fechados (por intermediação)"
     }
   ];
 
   // Filtrar cards se for interface antiga (sem contratos)
-  const visibleCards = isSummaryV2(summary) ? cards : cards.filter(c => c.title !== "Contratos");
+  const visibleCards = isSummaryV2(summary)
+    ? cards
+    : cards.filter(c => c.title !== "Contratos" && c.title !== "Propostas Fechadas");
 
   return (
     <TooltipProvider>
