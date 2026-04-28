@@ -425,10 +425,24 @@ export default function ReunioesEquipe() {
   const filteredBySDR = useMemo(() => {
     // Use merged data (all SDRs) for "today", otherwise use real data only
     const baseData = datePreset === "today" ? mergedBySDR : bySDR;
-    
-    if (sdrFilter === "all") return baseData;
-    return baseData.filter(s => s.sdrEmail === sdrFilter);
-  }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
+
+    // Restringe pela lista de SDRs válidos do squad NO PERÍODO selecionado.
+    // Isso evita que SDRs admitidos APÓS o período (ex.: Andre/Nicola em abril)
+    // apareçam em meses anteriores caso tenham agendamentos atribuídos a eles
+    // por transferência/replicação. Também aplica o cross-check de role
+    // (admins/managers/closers excluídos via activeSdrsList).
+    const allowedEmails = new Set(
+      (activeSdrsList || [])
+        .map(s => (s.email || '').toLowerCase())
+        .filter(Boolean)
+    );
+    const restricted = allowedEmails.size > 0
+      ? baseData.filter(s => allowedEmails.has((s.sdrEmail || '').toLowerCase()))
+      : baseData;
+
+    if (sdrFilter === "all") return restricted;
+    return restricted.filter(s => s.sdrEmail === sdrFilter);
+  }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
