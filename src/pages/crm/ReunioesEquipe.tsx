@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
+import { KpiDrillDownDialog, type KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
@@ -104,6 +105,8 @@ export default function ReunioesEquipe() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
+  const [drillBucket, setDrillBucket] = useState<KpiBucket | null>(null);
+  const [drillTitle, setDrillTitle] = useState<string>("");
 
   // Sync state changes to URL
   const updateUrlParams = (
@@ -710,6 +713,20 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
+        onCardClick={(bucket, title) => {
+          setDrillBucket(bucket);
+          setDrillTitle(title);
+        }}
+      />
+
+      <KpiDrillDownDialog
+        open={drillBucket !== null}
+        onOpenChange={(o) => { if (!o) setDrillBucket(null); }}
+        bucket={drillBucket}
+        title={drillTitle}
+        meetings={allMeetings}
+        startDate={start}
+        endDate={end}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}

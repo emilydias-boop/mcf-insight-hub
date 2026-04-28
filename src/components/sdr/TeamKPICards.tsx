@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TeamKPIs } from "@/hooks/useTeamMeetingsData";
+import type { KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
 
 interface TeamKPICardsProps {
   kpis: TeamKPIs;
@@ -26,11 +27,20 @@ interface TeamKPICardsProps {
   pendentesHoje?: number;
   bu?: string;
   semStatus?: number;
+  onCardClick?: (bucket: KpiBucket, title: string) => void;
 }
 
-export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semStatus }: TeamKPICardsProps) {
+export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semStatus, onCardClick }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
-  const cards = [
+  const cards: Array<{
+    title: string;
+    value: string | number;
+    icon: typeof Calendar;
+    color: string;
+    bgColor: string;
+    tooltip: string;
+    bucket?: KpiBucket;
+  }> = [
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
       title: "Pendentes Hoje",
@@ -46,7 +56,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: "Total de reuniões agendadas no período"
+      tooltip: "Total de reuniões agendadas no período",
+      bucket: "agendamentos" as KpiBucket,
     },
     {
       title: "R1 Agendada",
@@ -54,7 +65,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: CalendarCheck,
       color: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
-      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)"
+      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)",
+      bucket: "r1_agendada" as KpiBucket,
     },
     {
       title: "R1 Realizada",
@@ -62,7 +74,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
-      tooltip: "Reuniões realizadas (por intermediação)"
+      tooltip: "Reuniões realizadas (por intermediação)",
+      bucket: "realizada" as KpiBucket,
     },
     {
       title: "No-Shows",
@@ -70,7 +83,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
-      tooltip: "Total de no-shows no período"
+      tooltip: "Total de no-shows no período",
+      bucket: "no_show" as KpiBucket,
     },
     // Card condicional: Sem Status — reuniões com status pendente (invited/rescheduled/sem_sucesso)
     ...((semStatus ?? 0) > 0 ? [{
@@ -79,7 +93,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: AlertCircle,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
-      tooltip: "Reuniões com status pendente (convidada/remarcada/sem sucesso). Cap de 2 por lead. Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Contratos."
+      tooltip: "Reuniões com status pendente (convidada/remarcada/sem sucesso). Cap de 2 por lead. Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Contratos.",
+      bucket: "sem_status" as KpiBucket,
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
@@ -91,7 +106,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas atribuídas via R1 (deal_produtos_adquiridos + stages de fechamento)"
-        : "Contratos pagos via R1 (exclui outside)"
+        : "Contratos pagos via R1 (exclui outside)",
+      bucket: "contratos" as KpiBucket,
     },
     ...(isConsorcio ? [] : [{
       title: "Outside",
@@ -136,7 +152,16 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
-              <Card className="bg-card border-border cursor-help hover:border-primary/30 transition-colors">
+              <Card
+                className={`bg-card border-border transition-colors ${
+                  card.bucket && onCardClick
+                    ? "cursor-pointer hover:border-primary/60 hover:bg-muted/30"
+                    : "cursor-help hover:border-primary/30"
+                }`}
+                onClick={() => {
+                  if (card.bucket && onCardClick) onCardClick(card.bucket, card.title);
+                }}
+              >
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
                     <div className={`p-2 rounded-lg ${card.bgColor}`}>
@@ -155,7 +180,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
               </Card>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{card.tooltip}</p>
+              <p>{card.tooltip}{card.bucket && onCardClick ? " — clique para ver leads" : ""}</p>
             </TooltipContent>
           </Tooltip>
         ))}
