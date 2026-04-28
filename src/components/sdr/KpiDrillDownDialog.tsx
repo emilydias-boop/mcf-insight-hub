@@ -1,11 +1,11 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 
 export type KpiBucket =
   | "agendamentos"
@@ -124,22 +124,24 @@ export function KpiDrillDownDialog({
   startDate,
   endDate,
 }: KpiDrillDownDialogProps) {
-  const navigate = useNavigate();
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
   const filtered = bucket ? filterByBucket(meetings, bucket, startDate, endDate) : [];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {bucket ? BUCKET_LABELS[bucket] : ""} — {filtered.length} lead(s)
+            {" "}· clique numa linha para alterar status
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[65vh] pr-2">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
                 <TableHead>Lead</TableHead>
                 <TableHead>Telefone</TableHead>
@@ -168,10 +170,7 @@ export function KpiDrillDownDialog({
                     <TableRow
                       key={`${m.deal_id}-${m.attendee_id || ""}`}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() => {
-                        onOpenChange(false);
-                        navigate(`/crm/leads/${m.deal_id}`);
-                      }}
+                      onClick={() => setSelectedMeeting(m)}
                     >
                       <TableCell className="font-medium">{m.contact_name || m.deal_name || "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{m.contact_phone || "—"}</TableCell>
@@ -184,8 +183,14 @@ export function KpiDrillDownDialog({
               )}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
+
+    <SdrMeetingActionsDrawer
+      meeting={selectedMeeting}
+      onClose={() => setSelectedMeeting(null)}
+    />
+    </>
   );
 }
