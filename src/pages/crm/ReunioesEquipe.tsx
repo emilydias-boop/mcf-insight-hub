@@ -204,7 +204,20 @@ export default function ReunioesEquipe() {
   const { data: allSdrsData } = useSdrsAll();
   
   // Fetch active SDRs from squad for dropdown and base dataset
-  const { data: activeSdrsList } = useSdrsFromSquad('incorporador');
+  // Usa histórico de squad (sdr_squad_history) para incluir SDRs que pertenciam
+  // ao squad durante o período selecionado, mesmo que hoje estejam inativos
+  // ou em outro squad. Evita também mostrar contratações futuras em meses passados.
+  const { data: sdrsInPeriod } = useSdrsForSquadInPeriod('incorporador', start, end);
+  const activeSdrsList = useMemo(
+    () => (sdrsInPeriod || []).map(s => ({
+      id: s.sdr_id,
+      name: s.name,
+      email: s.email,
+      role_type: 'sdr' as string | null,
+      meta_diaria: null as number | null,
+    })),
+    [sdrsInPeriod]
+  );
 
   // Create sdrMetaMap: email -> meta_diaria
   const sdrMetaMap = useMemo(() => {
