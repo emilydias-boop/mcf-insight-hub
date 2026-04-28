@@ -666,7 +666,7 @@ serve(async (req) => {
         console.warn(`🚫 Slot full: ${currentAttendees}/${maxLeads} for closer ${closerId} at ${scheduledAt}`);
         return new Response(
           JSON.stringify({ success: false, error: "slot_full", message: `Horário lotado (${currentAttendees}/${maxLeads} leads)` }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
