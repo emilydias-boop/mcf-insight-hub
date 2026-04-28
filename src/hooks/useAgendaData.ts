@@ -950,10 +950,27 @@ export function useSearchDealsForSchedule(
           blockReason: string | null;
           warningOnly: boolean;
           warningMessage: string | null;
+          requiresApproval?: boolean;
+          approvalReason?: string | null;
+          rescheduleCount?: number;
         }
       > = {};
 
       if (dealIds.length > 0) {
+        // Carregar regra dinâmica de aprovação de reagendamento para o BU/role SDR
+        let rescheduleThreshold: number | null = null;
+        try {
+          const { data: ruleData } = await supabase.rpc('get_process_rule', {
+            _bu: bu || null,
+            _role: 'sdr',
+            _rule_key: 'reschedule_approval_threshold',
+          });
+          const parsed = typeof ruleData === 'number' ? ruleData : Number(ruleData);
+          rescheduleThreshold = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        } catch (e) {
+          console.warn('[useAgendaData] Falha ao carregar reschedule_approval_threshold', e);
+        }
+
         // Trazer attendees + slot info para classificar estado
         const { data: allAttendees } = await supabase
           .from('meeting_slot_attendees')
@@ -1079,6 +1096,28 @@ export function useSearchDealsForSchedule(
                 leadState = 'open';
                 blockReason = null;
                 warningOnly = true;
+                // O n-ésimo movimento adicional (reagendamento) é totalMovements + 1.
+                // Se houver regra dinâmica e o próximo movimento atingir/ultrapassar
+                // o threshold, exigir aprovação do gestor.
+                const nextMovementOrder = totalMovements + 1;
+                if (
+                  rescheduleThreshold !== null &&
+                  nextMovementOrder >= rescheduleThreshold
+                ) {
+                  warningOnly = false;
+                  blockReason = `Limite de reagendamentos atingido (${rescheduleThreshold}). É necessário pedir aprovação do gestor para prosseguir.`;
+                  stateMap[deal.id] = {
+                    leadState,
+                    scheduledInfo,
+                    blockReason,
+                    warningOnly: false,
+                    warningMessage: null,
+                    requiresApproval: true,
+                    approvalReason: `Reagendamento nº ${nextMovementOrder} excede o limite configurado (${rescheduleThreshold}).`,
+                    rescheduleCount: totalMovements,
+                  };
+                  continue;
+                }
                 if (totalMovements >= 2) {
                   warningMessage =
                     'Lead já tem 1 agendamento + 1 reagendamento válido. Você pode agendar, mas este NOVO movimento NÃO contará na sua meta.';
@@ -1125,6 +1164,9 @@ export function useSearchDealsForSchedule(
           blockReason: state.blockReason,
           warningOnly: state.warningOnly,
           warningMessage: state.warningMessage,
+          requiresApproval: (state as any).requiresApproval || false,
+          approvalReason: (state as any).approvalReason || null,
+          rescheduleCount: (state as any).rescheduleCount ?? 0,
         };
       });
 

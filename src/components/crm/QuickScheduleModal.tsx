@@ -46,6 +46,8 @@ import { useAgendaReleasedDates } from '@/hooks/useAgendaReleasedDates';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { BlockedLeadCard } from './BlockedLeadCard';
+import { useCreateApprovalRequest, useMyApprovalRequests } from '@/hooks/useApprovalRequests';
+import { ShieldAlert } from 'lucide-react';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -92,6 +94,9 @@ interface DealOption {
   blockReason?: string | null;
   warningOnly?: boolean;
   warningMessage?: string | null;
+  requiresApproval?: boolean;
+  approvalReason?: string | null;
+  rescheduleCount?: number;
 }
 
 type LeadType = 'A' | 'B';
@@ -376,6 +381,7 @@ export function QuickScheduleModal({
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
     // Defesa adicional: nunca submeter para leads bloqueados
     if (isLeadBlocked) return;
+    if (isApprovalBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -504,6 +510,56 @@ export function QuickScheduleModal({
     return null;
   }, [selectedDeal?.leadState]);
   const isLeadBlocked = blockedLeadState !== null;
+
+  // Estado dinâmico de aprovação (limite de reagendamentos atingido)
+  const requiresApproval = !!selectedDeal?.requiresApproval;
+  const createApprovalRequest = useCreateApprovalRequest();
+  const { data: myApprovals } = useMyApprovalRequests();
+  const existingPendingApproval = useMemo(() => {
+    if (!selectedDeal?.id || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === selectedDeal.id &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'pending',
+      ) || null
+    );
+  }, [myApprovals, selectedDeal?.id]);
+  const approvedRequest = useMemo(() => {
+    if (!selectedDeal?.id || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === selectedDeal.id &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'approved',
+      ) || null
+    );
+  }, [myApprovals, selectedDeal?.id]);
+  // Se já foi aprovado, libera o agendamento normalmente
+  const isApprovalBlocked = requiresApproval && !approvedRequest;
+
+  const handleRequestApproval = async () => {
+    if (!selectedDeal) return;
+    try {
+      await createApprovalRequest.mutateAsync({
+        bu: activeBU || null,
+        rule_key: 'reschedule_approval_threshold',
+        requester_role: 'sdr',
+        target_deal_id: selectedDeal.id,
+        payload: {
+          deal_name: selectedDeal.name,
+          reschedule_count: selectedDeal.rescheduleCount ?? 0,
+          reason: selectedDeal.approvalReason || null,
+          contact_name: selectedDeal.contact?.name || null,
+        },
+      });
+      toast.success('Pedido de aprovação enviado ao gestor.');
+    } catch (e: any) {
+      toast.error(`Erro ao enviar pedido: ${e?.message || 'desconhecido'}`);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -786,7 +842,7 @@ export function QuickScheduleModal({
           )}
 
           {/* SDR Responsável Selection - only for coordinators/admins */}
-          {isCoordinatorOrAbove && !isLeadBlocked && (
+          {isCoordinatorOrAbove && !isLeadBlocked && !isApprovalBlocked && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
@@ -808,7 +864,7 @@ export function QuickScheduleModal({
           </div>
           )}
 
-          {!isLeadBlocked && (
+          {!isLeadBlocked && !isApprovalBlocked && (
           <>
           {/* Closer Selection */}
           <div className="space-y-2">
@@ -1203,6 +1259,66 @@ export function QuickScheduleModal({
             />
           )}
 
+          {/* Banner de aprovação obrigatória — limite de reagendamentos atingido */}
+          {isApprovalBlocked && selectedDeal && (
+            <div
+              className="rounded-lg border-2 border-destructive/60 bg-destructive/10 p-4 text-sm space-y-3"
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+                <div className="space-y-1">
+                  <div className="font-semibold text-destructive">
+                    Aprovação do gestor necessária
+                  </div>
+                  <p className="leading-snug text-foreground/80">
+                    {selectedDeal.blockReason}
+                  </p>
+                  {selectedDeal.approvalReason && (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedDeal.approvalReason}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {existingPendingApproval ? (
+                <div className="text-xs text-muted-foreground italic">
+                  ⏳ Pedido já enviado em{' '}
+                  {format(new Date(existingPendingApproval.created_at), "dd/MM 'às' HH:mm")}
+                  . Aguardando análise do gestor.
+                </div>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRequestApproval}
+                  disabled={createApprovalRequest.isPending}
+                >
+                  {createApprovalRequest.isPending ? 'Enviando...' : 'Pedir aprovação ao gestor'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Banner — aprovação concedida */}
+          {requiresApproval && approvedRequest && selectedDeal && (
+            <div
+              className="rounded-lg border-2 border-green-500/60 bg-green-500/10 p-3 text-sm text-green-800 dark:text-green-300"
+              role="status"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Aprovação concedida</div>
+                  <p className="text-xs leading-snug">
+                    Você está liberado para criar este reagendamento excepcional.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Auto-send WhatsApp Toggle - hidden for now
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2">
@@ -1220,7 +1336,7 @@ export function QuickScheduleModal({
 
         {/* Submit - Fixed at bottom */}
         <div className="flex-shrink-0 pt-4 border-t">
-          {isLeadBlocked ? (
+          {isLeadBlocked || isApprovalBlocked ? (
             <Button
               variant="secondary"
               className="w-full"
