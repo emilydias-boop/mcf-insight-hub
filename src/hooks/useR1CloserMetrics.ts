@@ -47,17 +47,21 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
       const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
-      // Fetch active closers that handle R1 meetings - FILTERED by BU
+      // Fetch ALL closers of this BU (including inactive ones).
+      // Inactive closers are needed to preserve historical attribution:
+      // contracts/meetings from a closer who has since left the team must
+      // still appear in the period they happened in.
       const { data: closers, error: closersError } = await supabase
         .from('closers')
-        .select('id, name, color, email, meeting_type, bu')
-        .eq('is_active', true)
+        .select('id, name, color, email, meeting_type, bu, is_active')
         .eq('bu', bu);
 
       if (closersError) throw closersError;
 
-      // Filter closers that handle R1 (meeting_type is null or 'r1')
-      const r1Closers = closers?.filter(c => !c.meeting_type || c.meeting_type === 'r1') || [];
+      // Active R1 closers — initialized with zeros so they always appear in the table.
+      const r1Closers = closers?.filter(
+        c => c.is_active === true && (!c.meeting_type || c.meeting_type === 'r1')
+      ) || [];
 
       // Fetch active SDRs from database instead of hardcoded list
       const { data: sdrs, error: sdrsError } = await supabase
@@ -460,6 +464,32 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           contrato_pago: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0),
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
+        });
+      });
+
+      // Also initialize INACTIVE closers that had any production in the period
+      // (contracts, outside sales, R2s scheduled, or manual attributions).
+      // This preserves history when a closer leaves the team.
+      const closersWithProduction = new Set<string>([
+        ...contractsByCloser.keys(),
+        ...outsideByCloser.keys(),
+        ...r2CountByCloser.keys(),
+        ...manualByCloser.keys(),
+      ]);
+      closersWithProduction.forEach(closerId => {
+        if (metricsMap.has(closerId)) return;
+        const closerInfo = closers?.find(c => c.id === closerId);
+        if (!closerInfo) return; // closer is from another BU
+        metricsMap.set(closerId, {
+          closer_id: closerId,
+          closer_name: closerInfo.name,
+          closer_color: closerInfo.color || null,
+          r1_agendada: 0,
+          r1_realizada: 0,
+          noshow: 0,
+          contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
+          outside: outsideByCloser.get(closerId) || 0,
+          r2_agendada: r2CountByCloser.get(closerId) || 0,
         });
       });
 
