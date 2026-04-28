@@ -37,6 +37,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useMyProducts } from "@/hooks/useMyProducts";
 import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
+import { usePendingApprovalsCount } from "@/hooks/useApprovalRequests";
+
+function PendingApprovalsBadge() {
+  const { data: count = 0 } = usePendingApprovalsCount();
+  if (!count) return null;
+  return (
+    <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+      {count}
+    </Badge>
+  );
+}
 import { useAutoDialer } from "@/contexts/AutoDialerContext";
 import { useDialerLauncher } from "@/contexts/DialerLauncherContext";
 import { Button } from "@/components/ui/button";
@@ -274,6 +285,7 @@ const menuItems: MenuItem[] = [
       { title: "Configuração BU", url: "/admin/configuracao-bu", requiredRoles: ["admin", "manager"] },
       { title: "Travas de Fechamento", url: "/admin/travas-fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "Alterações Tardias", url: "/admin/alteracoes-tardias", requiredRoles: ["admin", "manager", "coordenador"] },
+      { title: "Regras de Processo", url: "/admin/regras-processo", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 ];
@@ -583,7 +595,10 @@ export function AppSidebar() {
                                     className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                     activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                                   >
-                                    <span>{subItem.title}</span>
+                                    <span className="flex items-center justify-between w-full">
+                                      <span>{subItem.title}</span>
+                                      {subItem.url === "/admin/regras-processo" && <PendingApprovalsBadge />}
+                                    </span>
                                   </NavLink>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>

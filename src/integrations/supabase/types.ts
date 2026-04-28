@@ -8209,6 +8209,45 @@ export type Database = {
           },
         ]
       }
+      process_rules: {
+        Row: {
+          bu: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          role: string
+          rule_key: string
+          rule_value: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bu?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          role: string
+          rule_key: string
+          rule_value?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bu?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          role?: string
+          rule_key?: string
+          rule_value?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       product_configurations: {
         Row: {
           count_in_dashboard: boolean | null
@@ -9044,6 +9083,62 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      rule_approval_requests: {
+        Row: {
+          bu: string | null
+          created_at: string
+          id: string
+          payload: Json
+          requested_by: string
+          requester_role: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          rule_key: string
+          status: string
+          target_deal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bu?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          requested_by: string
+          requester_role: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rule_key: string
+          status?: string
+          target_deal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bu?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          requested_by?: string
+          requester_role?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rule_key?: string
+          status?: string
+          target_deal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_approval_requests_target_deal_id_fkey"
+            columns: ["target_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sdr: {
         Row: {
@@ -11580,6 +11675,10 @@ export type Database = {
             Args: { target_date: string; valid_emails?: string[] }
             Returns: Json
           }
+      get_process_rule: {
+        Args: { _bu: string; _role: string; _rule_key: string }
+        Returns: Json
+      }
       get_sdr_all_movements_v2: {
         Args: {
           end_date: string
