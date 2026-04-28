@@ -81,7 +81,7 @@ export default function MinhasReunioes() {
   const { user } = useAuth();
   
   // Usar dados da AGENDA (fonte de verdade) ao invés do Clint
-  const { meetings, summary, isLoading, refetch } = useMinhasReunioesFromAgenda(startDate, endDate);
+  const { meetings, summary, squad, isLoading, refetch } = useMinhasReunioesFromAgenda(startDate, endDate);
   
   // Buscar métricas de ligações do SDR
   const { data: callMetrics, isLoading: callsLoading } = useSdrCallMetrics(
@@ -241,7 +241,8 @@ export default function MinhasReunioes() {
       <div className="flex-shrink-0 mt-4 sm:mt-6">
         <MeetingSummaryCards 
           summary={summary} 
-          isLoading={isLoading} 
+          isLoading={isLoading}
+          bu={squad}
         />
       </div>
       
