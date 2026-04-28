@@ -121,7 +121,12 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
 
   return (
     <TooltipProvider>
-      <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-${cards.length} gap-3`}>
+      <div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3"
+        style={{ gridTemplateColumns: undefined }}
+      >
+        {/* fallback responsive — usa estilo inline em lg para acompanhar a quantidade dinâmica de cards */}
+        <style>{`@media (min-width: 1024px) { .team-kpi-grid-${cards.length} { grid-template-columns: repeat(${cards.length}, minmax(0, 1fr)); } }`}</style>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
