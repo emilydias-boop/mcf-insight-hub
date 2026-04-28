@@ -40,6 +40,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
 import { Settings2 } from "lucide-react";
+import { MonthLockBanner } from "@/components/shared/MonthLockBanner";
+import { toAnoMes } from "@/hooks/useMonthLock";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
