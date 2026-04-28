@@ -170,7 +170,7 @@ export function KpiDrillDownDialog({
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() => {
                         onOpenChange(false);
-                        navigate(`/crm/lead/${m.deal_id}`);
+                        navigate(`/crm/leads/${m.deal_id}`);
                       }}
                     >
                       <TableCell className="font-medium">{m.contact_name || m.deal_name || "—"}</TableCell>
