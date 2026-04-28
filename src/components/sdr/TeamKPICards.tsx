@@ -119,14 +119,20 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
     },
   ];
 
+  // Tailwind precisa de classes estáticas — mapa seguro por contagem
+  const lgColsClass: Record<number, string> = {
+    5: "lg:grid-cols-5",
+    6: "lg:grid-cols-6",
+    7: "lg:grid-cols-7",
+    8: "lg:grid-cols-8",
+    9: "lg:grid-cols-9",
+    10: "lg:grid-cols-10",
+  };
+  const lgCols = lgColsClass[cards.length] || "lg:grid-cols-7";
+
   return (
     <TooltipProvider>
-      <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-3"
-        style={{ gridTemplateColumns: undefined }}
-      >
-        {/* fallback responsive — usa estilo inline em lg para acompanhar a quantidade dinâmica de cards */}
-        <style>{`@media (min-width: 1024px) { .team-kpi-grid-${cards.length} { grid-template-columns: repeat(${cards.length}, minmax(0, 1fr)); } }`}</style>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${lgCols} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
