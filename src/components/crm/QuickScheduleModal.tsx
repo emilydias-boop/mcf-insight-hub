@@ -1258,6 +1258,66 @@ export function QuickScheduleModal({
             />
           )}
 
+          {/* Banner de aprovação obrigatória — limite de reagendamentos atingido */}
+          {isApprovalBlocked && selectedDeal && (
+            <div
+              className="rounded-lg border-2 border-destructive/60 bg-destructive/10 p-4 text-sm space-y-3"
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+                <div className="space-y-1">
+                  <div className="font-semibold text-destructive">
+                    Aprovação do gestor necessária
+                  </div>
+                  <p className="leading-snug text-foreground/80">
+                    {selectedDeal.blockReason}
+                  </p>
+                  {selectedDeal.approvalReason && (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedDeal.approvalReason}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {existingPendingApproval ? (
+                <div className="text-xs text-muted-foreground italic">
+                  ⏳ Pedido já enviado em{' '}
+                  {format(new Date(existingPendingApproval.created_at), "dd/MM 'às' HH:mm")}
+                  . Aguardando análise do gestor.
+                </div>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRequestApproval}
+                  disabled={createApprovalRequest.isPending}
+                >
+                  {createApprovalRequest.isPending ? 'Enviando...' : 'Pedir aprovação ao gestor'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Banner — aprovação concedida */}
+          {requiresApproval && approvedRequest && selectedDeal && (
+            <div
+              className="rounded-lg border-2 border-green-500/60 bg-green-500/10 p-3 text-sm text-green-800 dark:text-green-300"
+              role="status"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Aprovação concedida</div>
+                  <p className="text-xs leading-snug">
+                    Você está liberado para criar este reagendamento excepcional.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Auto-send WhatsApp Toggle - hidden for now
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2">
