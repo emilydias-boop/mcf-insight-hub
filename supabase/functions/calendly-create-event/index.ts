@@ -634,9 +634,14 @@ serve(async (req) => {
 
     // === CAPACITY VALIDATION (server-side) ===
     // Get max_leads for this closer at this time
-    const slotDate = new Date(scheduledAt);
-    const slotDayOfWeek = slotDate.getDay();
-    const slotTimeStr = `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}:00`;
+    // IMPORTANT: closer_meeting_links stores day_of_week/start_time in Brazil local time (UTC-3).
+    // Deno runtime uses UTC, so converting via getDay()/getHours() on a UTC ISO would mismatch.
+    // We shift the date by -3h to obtain the equivalent Brazil-local components.
+    const slotDateUtc = new Date(scheduledAt);
+    const slotDateBR = new Date(slotDateUtc.getTime() - 3 * 60 * 60 * 1000);
+    const slotDayOfWeek = slotDateBR.getUTCDay();
+    const slotTimeStr = `${String(slotDateBR.getUTCHours()).padStart(2, '0')}:${String(slotDateBR.getUTCMinutes()).padStart(2, '0')}:00`;
+    console.log(`🕒 Capacity lookup: dayOfWeek=${slotDayOfWeek} time=${slotTimeStr} (BR local from ${scheduledAt})`);
 
     const [linkCapacity, closerCapacity] = await Promise.all([
       supabase
