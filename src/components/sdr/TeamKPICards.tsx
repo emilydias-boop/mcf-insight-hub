@@ -1,12 +1,14 @@
 import { 
   Calendar, 
+  CalendarCheck,
   CheckCircle, 
   XCircle, 
   FileText, 
   TrendingUp, 
   AlertTriangle,
   Clock,
-  ExternalLink
+  ExternalLink,
+  AlertCircle
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,9 +25,10 @@ interface TeamKPICardsProps {
   isToday?: boolean;
   pendentesHoje?: number;
   bu?: string;
+  semStatus?: number;
 }
 
-export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: TeamKPICardsProps) {
+export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semStatus }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const cards = [
     // Card condicional: Pendentes Hoje (1ª posição)
@@ -46,6 +49,14 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: Te
       tooltip: "Total de reuniões agendadas no período"
     },
     {
+      title: "R1 Agendada",
+      value: kpis.totalR1Agendada,
+      icon: CalendarCheck,
+      color: "text-cyan-500",
+      bgColor: "bg-cyan-500/10",
+      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)"
+    },
+    {
       title: "R1 Realizada",
       value: kpis.totalRealizadas,
       icon: CheckCircle,
@@ -61,6 +72,15 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: Te
       bgColor: "bg-red-500/10",
       tooltip: "Total de no-shows no período"
     },
+    // Card condicional: Sem Status (apenas Consórcio) — reuniões já passadas e não atualizadas
+    ...(isConsorcio && (semStatus ?? 0) > 0 ? [{
+      title: "Sem Status",
+      value: semStatus ?? 0,
+      icon: AlertCircle,
+      color: "text-yellow-500",
+      bgColor: "bg-yellow-500/10",
+      tooltip: "Reuniões cuja data já passou e ainda não foram atualizadas (continuam como agendada/convidada/remarcada). Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Propostas."
+    }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
       value: isConsorcio
@@ -101,7 +121,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu }: Te
 
   return (
     <TooltipProvider>
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? (isConsorcio ? 'lg:grid-cols-7' : 'lg:grid-cols-8') : (isConsorcio ? 'lg:grid-cols-6' : 'lg:grid-cols-7')} gap-3`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-${cards.length} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
