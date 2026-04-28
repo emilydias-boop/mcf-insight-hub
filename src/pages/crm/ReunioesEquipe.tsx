@@ -207,15 +207,51 @@ export default function ReunioesEquipe() {
   // ao squad durante o período selecionado, mesmo que hoje estejam inativos
   // ou em outro squad. Evita também mostrar contratações futuras em meses passados.
   const { data: sdrsInPeriod } = useSdrsForSquadInPeriod('incorporador', start, end);
-  const activeSdrsList = useMemo(
-    () => (sdrsInPeriod || []).map(s => ({
-      id: s.sdr_id,
-      name: s.name,
-      email: s.email,
-      role_type: 'sdr' as string | null,
-      meta_diaria: null as number | null,
-    })),
+
+  // Cross-check com user_roles para excluir quem tem cargo administrativo/closer
+  // (ex.: Yanca foi promovida a admin, não deve aparecer como SDR).
+  const sdrEmailsRaw = useMemo(
+    () => (sdrsInPeriod || []).map(s => s.email?.toLowerCase()).filter(Boolean) as string[],
     [sdrsInPeriod]
+  );
+  const { data: nonSdrEmails } = useQuery({
+    queryKey: ['non-sdr-emails-for-squad-period', sdrEmailsRaw],
+    queryFn: async () => {
+      if (sdrEmailsRaw.length === 0) return new Set<string>();
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('email', sdrEmailsRaw);
+      const profileIds = (profiles || []).map(p => p.id);
+      if (profileIds.length === 0) return new Set<string>();
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('user_id', profileIds)
+        .in('role', ['admin', 'manager', 'coordenador', 'assistente_administrativo', 'closer', 'closer_sombra']);
+      const blockedIds = new Set((roles || []).map(r => r.user_id));
+      const blockedEmails = new Set<string>(
+        (profiles || [])
+          .filter(p => blockedIds.has(p.id))
+          .map(p => p.email?.toLowerCase() || '')
+      );
+      return blockedEmails;
+    },
+    enabled: sdrEmailsRaw.length > 0,
+    staleTime: 60000,
+  });
+
+  const activeSdrsList = useMemo(
+    () => (sdrsInPeriod || [])
+      .filter(s => !nonSdrEmails || !nonSdrEmails.has((s.email || '').toLowerCase()))
+      .map(s => ({
+        id: s.sdr_id,
+        name: s.name,
+        email: s.email,
+        role_type: 'sdr' as string | null,
+        meta_diaria: null as number | null,
+      })),
+    [sdrsInPeriod, nonSdrEmails]
   );
 
   // Create sdrMetaMap: email -> meta_diaria
