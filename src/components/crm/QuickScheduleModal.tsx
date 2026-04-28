@@ -543,7 +543,7 @@ export function QuickScheduleModal({
     if (!selectedDeal) return;
     try {
       await createApprovalRequest.mutateAsync({
-        bu: bu || null,
+        bu: activeBU || null,
         rule_key: 'reschedule_approval_threshold',
         requester_role: 'sdr',
         target_deal_id: selectedDeal.id,
