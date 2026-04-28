@@ -381,6 +381,7 @@ export function QuickScheduleModal({
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
     // Defesa adicional: nunca submeter para leads bloqueados
     if (isLeadBlocked) return;
+    if (isApprovalBlocked) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
