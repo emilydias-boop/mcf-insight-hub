@@ -304,21 +304,42 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
 
       // Process meetings
       if (meetingsRes.data) {
+        // Resolve nomes de quem agendou (booked_by → profiles.full_name)
+        const bookerIds = Array.from(new Set(
+          (meetingsRes.data || [])
+            .map((a: any) => a.booked_by)
+            .filter(Boolean)
+        ));
+        let bookerNameMap = new Map<string, string>();
+        if (bookerIds.length > 0) {
+          const { data: bookers } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', bookerIds);
+          (bookers || []).forEach((p: any) => {
+            bookerNameMap.set(p.id, p.full_name || p.email || '');
+          });
+        }
+
         for (const att of meetingsRes.data) {
           const slot = att.meeting_slots as any;
           const closerName = slot?.closers?.name || null;
           const scheduledAt = slot?.scheduled_at;
+          const bookedByName = att.booked_by ? (bookerNameMap.get(att.booked_by) || null) : null;
           events.push({
             id: att.id,
             type: 'meeting',
             title: `Reunião ${att.status === 'completed' ? 'realizada' : att.status === 'no_show' ? 'No-Show' : 'agendada'}${closerName ? ` com ${closerName}` : ''}`,
             description: att.closer_notes || null,
             date: att.booked_at || att.created_at || '',
-            author: closerName,
+            // Mostra quem agendou ao lado da data; cai para o closer se desconhecido
+            author: bookedByName || closerName,
             metadata: {
               status: att.status,
               scheduled_at: scheduledAt,
               closer_name: closerName,
+              booked_by_name: bookedByName,
+              booked_at: att.booked_at,
               meeting_type: slot?.meeting_type,
               google_meet_link: slot?.google_meet_link,
               closer_notes: att.closer_notes,
