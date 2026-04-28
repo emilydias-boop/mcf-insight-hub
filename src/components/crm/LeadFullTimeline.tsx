@@ -134,11 +134,19 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
     const scheduledAt = meta.scheduled_at
       ? format(new Date(meta.scheduled_at), "dd/MM/yy 'às' HH:mm", { locale: ptBR })
       : null;
+    const bookedAt = meta.booked_at
+      ? format(new Date(meta.booked_at as string), "dd/MM/yy 'às' HH:mm", { locale: ptBR })
+      : null;
     return (
       <div className="flex flex-wrap gap-1.5">
         {meta.status && <Badge variant="outline" className="text-[10px]">{meta.status}</Badge>}
         {scheduledAt && <Badge variant="outline" className="text-[10px]">📅 {scheduledAt}</Badge>}
         {meta.closer_name && <Badge variant="outline" className="text-[10px]">👤 {meta.closer_name}</Badge>}
+        {meta.booked_by_name && (
+          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+            ✍️ Agendado por: {meta.booked_by_name as string}{bookedAt ? ` em ${bookedAt}` : ''}
+          </Badge>
+        )}
         {meta.google_meet_link && (
           <a href={meta.google_meet_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary underline">
             🔗 Meet
