@@ -123,8 +123,17 @@ export function R2MeetingDetailDrawer({
         await updateCRMContact.mutateAsync({ id: contactId, phone: phoneValue });
       }
       setEditingPhone(false);
-    } catch {
-      toast.error('Erro ao salvar telefone');
+    } catch (error) {
+      const friendly = await describeDuplicatePhoneError(error);
+      if (friendly) {
+        toast.error(friendly, {
+          description:
+            'Use a ficha do lead existente, ou ajuste o número aqui se for outro contato.',
+          duration: 8000,
+        });
+      } else {
+        toast.error('Erro ao salvar telefone');
+      }
     }
   };
 
