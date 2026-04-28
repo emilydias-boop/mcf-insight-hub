@@ -6562,6 +6562,63 @@ export type Database = {
         }
         Relationships: []
       }
+      late_status_change_attempts: {
+        Row: {
+          ano_mes: string | null
+          attempted_by: string | null
+          attempted_by_email: string | null
+          attempted_by_role: string | null
+          attendee_id: string | null
+          attendee_name: string | null
+          block_reason: string | null
+          closer_name: string | null
+          created_at: string
+          days_after_meeting: number | null
+          id: string
+          meeting_scheduled_at: string | null
+          new_status: string | null
+          old_status: string | null
+          slot_id: string | null
+          was_blocked: boolean
+        }
+        Insert: {
+          ano_mes?: string | null
+          attempted_by?: string | null
+          attempted_by_email?: string | null
+          attempted_by_role?: string | null
+          attendee_id?: string | null
+          attendee_name?: string | null
+          block_reason?: string | null
+          closer_name?: string | null
+          created_at?: string
+          days_after_meeting?: number | null
+          id?: string
+          meeting_scheduled_at?: string | null
+          new_status?: string | null
+          old_status?: string | null
+          slot_id?: string | null
+          was_blocked?: boolean
+        }
+        Update: {
+          ano_mes?: string | null
+          attempted_by?: string | null
+          attempted_by_email?: string | null
+          attempted_by_role?: string | null
+          attendee_id?: string | null
+          attendee_name?: string | null
+          block_reason?: string | null
+          closer_name?: string | null
+          created_at?: string
+          days_after_meeting?: number | null
+          id?: string
+          meeting_scheduled_at?: string | null
+          new_status?: string | null
+          old_status?: string | null
+          slot_id?: string | null
+          was_blocked?: boolean
+        }
+        Relationships: []
+      }
       lead_assignments: {
         Row: {
           assigned_date: string
