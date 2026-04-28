@@ -28,6 +28,7 @@ import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
+import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
