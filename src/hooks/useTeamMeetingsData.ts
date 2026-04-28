@@ -13,6 +13,7 @@ export interface TeamKPIs {
   totalContratos: number;
   totalOutside: number;
   totalR1Agendada: number;
+  totalSemStatus: number;
   taxaConversao: number;
   taxaNoShow: number;
 }
@@ -24,6 +25,7 @@ export interface SdrSummaryRow {
   r1Agendada: number;        // Reuniões PARA o período (scheduled_at)
   r1Realizada: number;       // Realizadas no período
   noShows: number;           // No-shows no período
+  semStatus: number;         // invited/rescheduled/sem_sucesso (cap 2/lead)
   contratos: number;         // Contratos pagos no período
   isExSquad?: boolean;       // SDR pertencia ao squad no período mas hoje está em outro
   currentSquad?: string | null;
@@ -120,6 +122,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
           r1Agendada: m?.r1_agendada ?? 0,
           r1Realizada: m?.r1_realizada ?? 0,
           noShows: m?.no_shows ?? 0,
+          semStatus: m?.sem_status ?? 0,
           contratos: m?.contratos ?? 0,
           isExSquad: meta?.isExSquad ?? false,
           currentSquad: meta?.currentSquad ?? null,
@@ -139,6 +142,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     const totalRealizadas = bySDR.reduce((sum, s) => sum + s.r1Realizada, 0);
     const totalNoShows = bySDR.reduce((sum, s) => sum + s.noShows, 0);
     const totalContratos = bySDR.reduce((sum, s) => sum + s.contratos, 0);
+    const totalSemStatus = bySDR.reduce((sum, s) => sum + (s.semStatus || 0), 0);
 
     const taxaConversao = totalRealizadas > 0
       ? (totalContratos / totalRealizadas) * 100
@@ -157,6 +161,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
       totalContratos,
       totalOutside: 0, // Will be enriched by useSdrOutsideMetrics in the page
       totalR1Agendada,
+      totalSemStatus,
       taxaConversao,
       taxaNoShow,
     };
