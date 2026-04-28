@@ -713,6 +713,20 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
+        onCardClick={(bucket, title) => {
+          setDrillBucket(bucket);
+          setDrillTitle(title);
+        }}
+      />
+
+      <KpiDrillDownDialog
+        open={drillBucket !== null}
+        onOpenChange={(o) => { if (!o) setDrillBucket(null); }}
+        bucket={drillBucket}
+        title={drillTitle}
+        meetings={allMeetings}
+        startDate={start}
+        endDate={end}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
