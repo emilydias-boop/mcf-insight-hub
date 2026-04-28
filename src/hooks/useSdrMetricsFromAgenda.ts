@@ -37,12 +37,21 @@ export const useSdrMetricsFromAgenda = (
       const start = format(startOfDay(startDate), 'yyyy-MM-dd');
       const end = format(endOfDay(endDate), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase.rpc('get_sdr_metrics_from_agenda', {
-        start_date: start,
-        end_date: end,
-        sdr_email_filter: sdrEmailFilter || null,
-        bu_filter: buFilter || null
-      });
+      // Consórcio usa RPC dedicada (Propostas Fechadas em vez de contract_paid)
+      const isConsorcio = (buFilter || '').toLowerCase() === 'consorcio';
+
+      const { data, error } = isConsorcio
+        ? await supabase.rpc('get_sdr_metrics_from_agenda_consorcio' as any, {
+            start_date: start,
+            end_date: end,
+            sdr_email_filter: sdrEmailFilter || null,
+          })
+        : await supabase.rpc('get_sdr_metrics_from_agenda', {
+            start_date: start,
+            end_date: end,
+            sdr_email_filter: sdrEmailFilter || null,
+            bu_filter: buFilter || null
+          });
 
       if (error) {
         console.error('[useSdrMetricsFromAgenda] RPC error:', error);
