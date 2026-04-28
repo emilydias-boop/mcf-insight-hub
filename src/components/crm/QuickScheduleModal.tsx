@@ -842,7 +842,7 @@ export function QuickScheduleModal({
           )}
 
           {/* SDR Responsável Selection - only for coordinators/admins */}
-          {isCoordinatorOrAbove && !isLeadBlocked && (
+          {isCoordinatorOrAbove && !isLeadBlocked && !isApprovalBlocked && (
           <div className="space-y-2">
             <Label>SDR Responsável (opcional)</Label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
@@ -864,7 +864,7 @@ export function QuickScheduleModal({
           </div>
           )}
 
-          {!isLeadBlocked && (
+          {!isLeadBlocked && !isApprovalBlocked && (
           <>
           {/* Closer Selection */}
           <div className="space-y-2">
