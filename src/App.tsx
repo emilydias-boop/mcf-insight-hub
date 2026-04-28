@@ -92,6 +92,7 @@ const Automacoes = lazy(() => import("./pages/admin/Automacoes"));
 const ConfiguracaoBU = lazy(() => import("./pages/admin/ConfiguracaoBU"));
 const AdminMonthLocks = lazy(() => import("./pages/admin/MonthLocks"));
 const AdminLateStatusAttempts = lazy(() => import("./pages/admin/LateStatusAttempts"));
+const AdminRegrasProcesso = lazy(() => import("./pages/admin/RegrasProcesso"));
 const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento"));
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
@@ -212,6 +213,7 @@ const App = () => (
               <Route path="admin/configuracao-bu" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracaoBU /></RoleGuard>} />
               <Route path="admin/travas-fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminMonthLocks /></RoleGuard>} />
               <Route path="admin/alteracoes-tardias" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminLateStatusAttempts /></RoleGuard>} />
+              <Route path="admin/regras-processo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminRegrasProcesso /></RoleGuard>} />
               
               <Route path="fechamento-sdr" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard></RoleGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard></RoleGuard>} />
