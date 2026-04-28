@@ -7416,6 +7416,48 @@ export type Database = {
           },
         ]
       }
+      meeting_status_locks: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          id: string
+          is_active: boolean
+          locked_at: string
+          locked_by: string | null
+          locked_reason: string | null
+          unlocked_at: string | null
+          unlocked_by: string | null
+          unlocked_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          locked_at?: string
+          locked_by?: string | null
+          locked_reason?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlocked_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          locked_at?: string
+          locked_by?: string | null
+          locked_reason?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlocked_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metas_componentes: {
         Row: {
           ativo: boolean
@@ -11624,8 +11666,13 @@ export type Database = {
         Returns: boolean
       }
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
+      is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
+      lock_month: {
+        Args: { _ano_mes: string; _reason: string }
+        Returns: undefined
+      }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined

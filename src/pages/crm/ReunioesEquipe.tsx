@@ -40,6 +40,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
 import { Settings2 } from "lucide-react";
+import { MonthLockBanner } from "@/components/shared/MonthLockBanner";
+import { toAnoMes } from "@/hooks/useMonthLock";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
@@ -512,6 +514,9 @@ export default function ReunioesEquipe() {
 
       {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
+
+      {/* Trava de fechamento mensal */}
+      <MonthLockBanner anoMes={toAnoMes(start)} />
 
       {/* Filters */}
       <Card className="bg-card border-border">
