@@ -13,7 +13,7 @@ export interface TeamKPIs {
   totalContratos: number;
   totalOutside: number;
   totalR1Agendada: number;
-  totalSemStatus: number;
+  totalSemStatus?: number;
   taxaConversao: number;
   taxaNoShow: number;
 }
@@ -25,7 +25,7 @@ export interface SdrSummaryRow {
   r1Agendada: number;        // Reuniões PARA o período (scheduled_at)
   r1Realizada: number;       // Realizadas no período
   noShows: number;           // No-shows no período
-  semStatus: number;         // invited/rescheduled/sem_sucesso (cap 2/lead)
+  semStatus?: number;        // invited/rescheduled/sem_sucesso (cap 2/lead)
   contratos: number;         // Contratos pagos no período
   isExSquad?: boolean;       // SDR pertencia ao squad no período mas hoje está em outro
   currentSquad?: string | null;
