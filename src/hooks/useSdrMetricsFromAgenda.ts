@@ -9,6 +9,7 @@ export interface SdrAgendaMetrics {
   r1_agendada: number;       // Reuniões PARA o período (scheduled_at)
   r1_realizada: number;      // Realizadas no período
   no_shows: number;          // No-shows no período
+  sem_status?: number;       // invited/rescheduled/sem_sucesso (cap 2/lead)
   contratos: number;         // Contratos pagos no período
 }
 
