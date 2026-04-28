@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
+import { KpiDrillDownDialog, type KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
