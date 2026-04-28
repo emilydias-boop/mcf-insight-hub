@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EditLeadDialog } from './EditLeadDialog';
+import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
 
 interface SdrSummaryBlockProps {
   deal: any;
@@ -60,7 +61,16 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
       }
       setEditingPhone(false);
     } catch (error) {
-      toast.error('Erro ao salvar telefone');
+      const friendly = await describeDuplicatePhoneError(error);
+      if (friendly) {
+        toast.error(friendly, {
+          description:
+            'Use a ficha do lead existente, ou ajuste o número aqui se for outro contato.',
+          duration: 8000,
+        });
+      } else {
+        toast.error('Erro ao salvar telefone');
+      }
     }
   };
   
