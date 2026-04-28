@@ -326,6 +326,9 @@ export default function ConsorcioPainelEquipe() {
   
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
+  // Reuniões "sem status" (já passaram e não foram atualizadas) — só exibido na BU Consórcio
+  const { data: semStatusCount } = useMeetingsSemStatus(start, end, BU_SQUAD);
+
   // Consórcio pipeline metrics (deals by stage)
   const pipelineMetrics = useConsorcioPipelineMetrics();
   const produtosFechados = useConsorcioProdutosFechadosMetrics();
