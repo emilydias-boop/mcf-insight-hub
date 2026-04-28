@@ -467,6 +467,32 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         });
       });
 
+      // Also initialize INACTIVE closers that had any production in the period
+      // (contracts, outside sales, R2s scheduled, or manual attributions).
+      // This preserves history when a closer leaves the team.
+      const closersWithProduction = new Set<string>([
+        ...contractsByCloser.keys(),
+        ...outsideByCloser.keys(),
+        ...r2CountByCloser.keys(),
+        ...manualByCloser.keys(),
+      ]);
+      closersWithProduction.forEach(closerId => {
+        if (metricsMap.has(closerId)) return;
+        const closerInfo = closers?.find(c => c.id === closerId);
+        if (!closerInfo) return; // closer is from another BU
+        metricsMap.set(closerId, {
+          closer_id: closerId,
+          closer_name: closerInfo.name,
+          closer_color: closerInfo.color || null,
+          r1_agendada: 0,
+          r1_realizada: 0,
+          noshow: 0,
+          contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
+          outside: outsideByCloser.get(closerId) || 0,
+          r2_agendada: r2CountByCloser.get(closerId) || 0,
+        });
+      });
+
       // ========== DEDUPLICATION: max 2x per deal_id ==========
       // Same-day reschedule = 1x, different days = max 2x
       // Realizada: 1x per deal if at least one attendee has final status
