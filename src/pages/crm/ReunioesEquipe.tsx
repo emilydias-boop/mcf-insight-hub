@@ -515,6 +515,9 @@ export default function ReunioesEquipe() {
       {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
 
+      {/* Trava de fechamento mensal */}
+      <MonthLockBanner anoMes={toAnoMes(start)} />
+
       {/* Filters */}
       <Card className="bg-card border-border">
         <CardContent className="p-3 sm:p-4">
