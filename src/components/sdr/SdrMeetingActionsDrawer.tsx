@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
   X, ExternalLink, Clock, Calendar, Target, User, 
-  Check, XCircle, CalendarX, ArrowRightLeft, Loader2 
+  Check, XCircle, CalendarX, ArrowRightLeft, Loader2,
+  Users, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { useUpdateAttendeeStatus } from "@/hooks/useAgendaData";
 import { MoveAttendeeModal } from "@/components/crm/MoveAttendeeModal";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SdrMeetingActionsDrawerProps {
   meeting: MeetingV2 | null;
@@ -56,7 +58,42 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
   
   const { data: timeline, isLoading: timelineLoading } = useDealTimeline(meeting?.deal_id || null);
   const updateStatus = useUpdateAttendeeStatus();
-  
+
+  // Notas do attendee (notes / closer_notes / r2_observations)
+  const [notes, setNotes] = useState<{
+    notes: string | null;
+    closer_notes: string | null;
+    r2_observations: string | null;
+  } | null>(null);
+  const [notesLoading, setNotesLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!meeting?.attendee_id) {
+        setNotes(null);
+        return;
+      }
+      setNotesLoading(true);
+      const { data, error } = await supabase
+        .from('meeting_slot_attendees')
+        .select('notes, closer_notes, r2_observations')
+        .eq('id', meeting.attendee_id)
+        .maybeSingle();
+      if (!cancelled) {
+        if (error) {
+          console.error('[SdrMeetingActionsDrawer] notes load error:', error);
+          setNotes(null);
+        } else {
+          setNotes(data as any);
+        }
+        setNotesLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [meeting?.attendee_id]);
+
   if (!meeting) return null;
 
   const hasAttendeeId = !!meeting.attendee_id;
@@ -221,6 +258,90 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
                   Este lead foi agendado fora do sistema de agenda interna. 
                   Ações de status não estão disponíveis.
                 </p>
+              </div>
+            )}
+
+            {/* Pessoas envolvidas */}
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                Pessoas
+              </h3>
+              <div className="bg-muted/30 rounded-lg p-4 space-y-2 border border-border">
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-xs text-muted-foreground">SDR (intermediador):</span>
+                  <span className="text-sm text-foreground font-medium text-right">
+                    {meeting.intermediador || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Closer:</span>
+                  <span className="text-sm text-foreground font-medium text-right">
+                    {meeting.closer || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Dono atual do funil:</span>
+                  <span className="text-sm text-foreground font-medium text-right">
+                    {meeting.current_owner || '—'}
+                  </span>
+                </div>
+                {meeting.from_stage && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-muted-foreground">Origem do agendamento:</span>
+                    <span className="text-sm text-foreground font-medium text-right">
+                      {meeting.from_stage}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Tipo:</span>
+                  <Badge variant="secondary" className="text-xs">{meeting.tipo}</Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Notas do attendee */}
+            {hasAttendeeId && (
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  Notas
+                </h3>
+                <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-border">
+                  {notesLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Carregando notas…
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Nota geral (SDR):</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {notes?.notes?.trim() || <span className="text-muted-foreground italic">— sem nota —</span>}
+                        </p>
+                      </div>
+                      <Separator />
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Nota do Closer:</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {notes?.closer_notes?.trim() || <span className="text-muted-foreground italic">— sem nota —</span>}
+                        </p>
+                      </div>
+                      {notes?.r2_observations?.trim() && (
+                        <>
+                          <Separator />
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Observações R2:</p>
+                            <p className="text-sm text-foreground whitespace-pre-wrap">
+                              {notes.r2_observations}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
             
