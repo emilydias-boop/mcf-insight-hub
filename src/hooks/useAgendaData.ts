@@ -1164,6 +1164,9 @@ export function useSearchDealsForSchedule(
           blockReason: state.blockReason,
           warningOnly: state.warningOnly,
           warningMessage: state.warningMessage,
+          requiresApproval: (state as any).requiresApproval || false,
+          approvalReason: (state as any).approvalReason || null,
+          rescheduleCount: (state as any).rescheduleCount ?? 0,
         };
       });
 
