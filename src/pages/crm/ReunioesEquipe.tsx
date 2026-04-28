@@ -105,6 +105,8 @@ export default function ReunioesEquipe() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
+  const [drillBucket, setDrillBucket] = useState<KpiBucket | null>(null);
+  const [drillTitle, setDrillTitle] = useState<string>("");
 
   // Sync state changes to URL
   const updateUrlParams = (
