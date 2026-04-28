@@ -37,6 +37,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useMyProducts } from "@/hooks/useMyProducts";
 import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
+import { usePendingApprovalsCount } from "@/hooks/useApprovalRequests";
 import { useAutoDialer } from "@/contexts/AutoDialerContext";
 import { useDialerLauncher } from "@/contexts/DialerLauncherContext";
 import { Button } from "@/components/ui/button";
@@ -584,7 +585,10 @@ export function AppSidebar() {
                                     className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                     activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                                   >
-                                    <span>{subItem.title}</span>
+                                    <span className="flex items-center justify-between w-full">
+                                      <span>{subItem.title}</span>
+                                      {subItem.url === "/admin/regras-processo" && <PendingApprovalsBadge />}
+                                    </span>
                                   </NavLink>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>
