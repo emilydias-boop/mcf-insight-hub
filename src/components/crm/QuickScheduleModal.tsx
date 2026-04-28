@@ -510,6 +510,56 @@ export function QuickScheduleModal({
   }, [selectedDeal?.leadState]);
   const isLeadBlocked = blockedLeadState !== null;
 
+  // Estado dinâmico de aprovação (limite de reagendamentos atingido)
+  const requiresApproval = !!selectedDeal?.requiresApproval;
+  const createApprovalRequest = useCreateApprovalRequest();
+  const { data: myApprovals } = useMyApprovalRequests();
+  const existingPendingApproval = useMemo(() => {
+    if (!selectedDeal?.id || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === selectedDeal.id &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'pending',
+      ) || null
+    );
+  }, [myApprovals, selectedDeal?.id]);
+  const approvedRequest = useMemo(() => {
+    if (!selectedDeal?.id || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === selectedDeal.id &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'approved',
+      ) || null
+    );
+  }, [myApprovals, selectedDeal?.id]);
+  // Se já foi aprovado, libera o agendamento normalmente
+  const isApprovalBlocked = requiresApproval && !approvedRequest;
+
+  const handleRequestApproval = async () => {
+    if (!selectedDeal) return;
+    try {
+      await createApprovalRequest.mutateAsync({
+        bu: bu || null,
+        rule_key: 'reschedule_approval_threshold',
+        requester_role: 'sdr',
+        target_deal_id: selectedDeal.id,
+        payload: {
+          deal_name: selectedDeal.name,
+          reschedule_count: selectedDeal.rescheduleCount ?? 0,
+          reason: selectedDeal.approvalReason || null,
+          contact_name: selectedDeal.contact?.name || null,
+        },
+      });
+      toast.success('Pedido de aprovação enviado ao gestor.');
+    } catch (e: any) {
+      toast.error(`Erro ao enviar pedido: ${e?.message || 'desconhecido'}`);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
