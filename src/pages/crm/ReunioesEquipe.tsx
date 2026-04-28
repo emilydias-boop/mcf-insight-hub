@@ -707,7 +707,6 @@ export default function ReunioesEquipe() {
         isLoading={isLoading}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHoje}
-        closerNoShows={r1FromClosers.noShows}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
