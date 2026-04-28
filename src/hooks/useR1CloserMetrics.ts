@@ -310,6 +310,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       const outsideByCloser = new Map<string, number>();
 
       if (bu === 'incorporador') {
+        // Fetch IDs of FIRST purchase per customer (Novo) — used to exclude
+        // recurring transactions from the outside count. Recurring sales
+        // (e.g. monthly Hubla recurrence) must NOT count as new contracts.
+        const { data: firstIdsRows } = await supabase.rpc('get_first_transaction_ids' as any);
+        const firstTransactionIds = new Set<string>(
+          (firstIdsRows as any[] | null || []).map((r: any) => r.id as string)
+        );
+
         // --- Part A: dealEmailMap + emailContractDate for EXCLUSION logic ---
         const dealIds = new Set<string>();
         meetings?.forEach(meeting => {
@@ -358,7 +366,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         // --- Part B: Count outsides by SALE DATE in period ---
         const { data: outsidePeriodContracts } = await supabase
           .from('hubla_transactions')
-          .select('customer_email, sale_date')
+          .select('id, customer_email, sale_date')
           .in('product_category', ['contrato', 'incorporador'])
           .ilike('product_name', '%contrato%')
           .eq('sale_status', 'completed')
@@ -368,6 +376,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
         const periodContractByEmail = new Map<string, Date>();
         outsidePeriodContracts?.forEach(c => {
+          // Skip recurring transactions — only first-purchase (Novo) counts
+          if (!firstTransactionIds.has((c as any).id)) return;
           const email = c.customer_email?.toLowerCase();
           if (email) {
             const date = new Date(c.sale_date);
