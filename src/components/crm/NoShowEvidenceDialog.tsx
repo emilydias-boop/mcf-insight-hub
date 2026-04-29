@@ -190,31 +190,33 @@ export function NoShowEvidenceDialog({
       return;
     }
 
-    // Persiste registro da validação ANTES do update de status.
-    // O banco usa esse registro recente (≤ 5 min) como prova obrigatória no trigger.
-    // Se falhar, NÃO podemos prosseguir — senão o SDR burlaria.
-    const { error: insertErr } = await supabase.from("no_show_validations").insert({
-      deal_id: dealId,
-      meeting_slot_id: meetingSlotId,
-      attendee_id: attendeeId,
-      lead_phone: leadPhone,
-      evidence_path: evidencePath,
-      ai_verdict: aiResult.verdict,
-      ai_reasoning: aiResult.reasoning,
-      ai_extracted_phone: aiResult.extracted_phone,
-      phone_match: aiResult.phone_match,
-      ai_model: "google/gemini-3-flash-preview",
-      human_decision: "no_show",
-      // human_overrode_ai é derivado server-side (trigger). Mandamos só por compatibilidade.
-      human_overrode_ai: isOverride,
-      human_justification: justification || null,
-      // performed_by é forçado para auth.uid() no trigger.
-      performed_by_role: performedByRole,
-      bu_origin_id: buOriginId,
-    });
-    if (insertErr) {
-      console.error("Falha ao registrar evidência:", insertErr);
-      toast.error("Não foi possível registrar a evidência: " + insertErr.message);
+    // COMMIT via edge function — única forma de criar no_show_validations.
+    // A IA é re-executada server-side, ai_verdict não pode ser falsificado pelo cliente.
+    const { data: commitData, error: commitErr } = await supabase.functions.invoke(
+      "validate-no-show-evidence",
+      {
+        body: {
+          action: "commit",
+          evidence_path: evidencePath,
+          lead_phone: leadPhone ?? null,
+          lead_name: leadName ?? null,
+          meeting_scheduled_at: meetingScheduledAt ?? null,
+          deal_id: dealId,
+          meeting_slot_id: meetingSlotId,
+          attendee_id: attendeeId,
+          bu_origin_id: buOriginId,
+          performed_by_role: performedByRole,
+          human_decision: "no_show",
+          human_justification: justification || null,
+        },
+      }
+    );
+    if (commitErr) {
+      toast.error(commitErr.message || "Falha ao registrar validação");
+      return;
+    }
+    if (commitData?.error) {
+      toast.error(commitData.error);
       return;
     }
 
