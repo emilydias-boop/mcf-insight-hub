@@ -62,8 +62,6 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     hangUp,
     deviceStatus,
     initializeDevice,
-    qualificationModalOpen,
-    openQualificationModal,
   } = useTwilio();
 
   const [state, setState] = useState<AutoDialerState>('idle');
@@ -211,10 +209,14 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
 
       if (wasInProgressRef.current) {
-        // Atendeu → abre qualificação e pausa (não tenta de novo)
-        setState('paused-qualifying');
+        // Atendeu → NÃO abre qualificação automaticamente.
+        // O SDR aciona o modal manualmente quando/se precisar (botão na barra
+        // in-call). Se o auto-dialer estiver rodando, segue para o próximo
+        // lead; o SDR pode pausar manualmente o painel se quiser qualificar.
         setInCallDrawerOpen(false);
-        openQualificationModal(lead.dealId, lead.name);
+        if (stateRef.current === 'running') {
+          advanceToNext();
+        }
       } else {
         // Não atendeu / falhou
         const result: LeadResult = callStatus === 'failed' ? 'failed' : 'no-answer';
@@ -244,16 +246,11 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
+  }, [callStatus, currentCallId, hangUp, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
 
-  // Quando o modal de qualificação fecha, retoma a fila
-  useEffect(() => {
-    if (stateRef.current !== 'paused-qualifying') return;
-    if (!qualificationModalOpen) {
-      setState('running');
-      advanceToNext();
-    }
-  }, [qualificationModalOpen, advanceToNext]);
+  // (Removido) A retomada da fila após qualificação não é mais necessária:
+  // o modal de qualificação não abre mais automaticamente — o SDR aciona
+  // manualmente quando precisar.
 
   // ===== API =====
   const loadQueue = useCallback((leads: AutoDialerLead[]) => {
