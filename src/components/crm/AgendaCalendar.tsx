@@ -696,7 +696,14 @@ export function AgendaCalendar({
   };
 
   // Generate initials from full name: "Caroline Correa" → "CC"
+  // Overrides manuais para evitar colisão visual entre SDRs com mesmas iniciais.
+  const INITIALS_OVERRIDES: Record<string, string> = {
+    'andre duarte': 'AS', // Andre Santos Duarte — diferenciar de Alex Dias (AD)
+  };
   const getInitials = (name: string): string => {
+    if (!name) return '';
+    const key = name.trim().toLowerCase();
+    if (INITIALS_OVERRIDES[key]) return INITIALS_OVERRIDES[key];
     return name
       .split(' ')
       .map(part => part[0])

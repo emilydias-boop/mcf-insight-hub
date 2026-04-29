@@ -79,7 +79,14 @@ const ATTENDEE_STATUS_CONFIG: Record<
 };
 
 // Helper to get initials from full name
+// Overrides manuais para evitar colisão visual entre SDRs com mesmas iniciais.
+const INITIALS_OVERRIDES: Record<string, string> = {
+  'andre duarte': 'AS', // Andre Santos Duarte — diferenciar de Alex Dias (AD)
+};
 const getInitials = (name: string): string => {
+  if (!name) return '';
+  const key = name.trim().toLowerCase();
+  if (INITIALS_OVERRIDES[key]) return INITIALS_OVERRIDES[key];
   return name
     .split(' ')
     .filter(word => word.length > 0)
