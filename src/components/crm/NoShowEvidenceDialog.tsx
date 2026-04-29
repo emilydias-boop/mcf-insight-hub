@@ -190,34 +190,41 @@ export function NoShowEvidenceDialog({
       return;
     }
 
-    // Persiste registro da validação (mesmo se override)
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData?.user?.id ?? null;
-      await supabase.from("no_show_validations").insert({
-        deal_id: dealId,
-        meeting_slot_id: meetingSlotId,
-        attendee_id: attendeeId,
-        lead_phone: leadPhone,
-        evidence_path: evidencePath,
-        ai_verdict: aiResult.verdict,
-        ai_reasoning: aiResult.reasoning,
-        ai_extracted_phone: aiResult.extracted_phone,
-        phone_match: aiResult.phone_match,
-        ai_model: "google/gemini-3-flash-preview",
-        human_decision: "no_show",
-        human_overrode_ai: isOverride,
-        human_justification: justification || null,
-        performed_by: uid,
-        performed_by_role: performedByRole,
-        bu_origin_id: buOriginId,
-      });
-    } catch (e) {
-      console.error("Failed to save no_show_validation", e);
-      // continua mesmo se falhar o log
+    // Persiste registro da validação ANTES do update de status.
+    // O banco usa esse registro recente (≤ 5 min) como prova obrigatória no trigger.
+    // Se falhar, NÃO podemos prosseguir — senão o SDR burlaria.
+    const { error: insertErr } = await supabase.from("no_show_validations").insert({
+      deal_id: dealId,
+      meeting_slot_id: meetingSlotId,
+      attendee_id: attendeeId,
+      lead_phone: leadPhone,
+      evidence_path: evidencePath,
+      ai_verdict: aiResult.verdict,
+      ai_reasoning: aiResult.reasoning,
+      ai_extracted_phone: aiResult.extracted_phone,
+      phone_match: aiResult.phone_match,
+      ai_model: "google/gemini-3-flash-preview",
+      human_decision: "no_show",
+      // human_overrode_ai é derivado server-side (trigger). Mandamos só por compatibilidade.
+      human_overrode_ai: isOverride,
+      human_justification: justification || null,
+      // performed_by é forçado para auth.uid() no trigger.
+      performed_by_role: performedByRole,
+      bu_origin_id: buOriginId,
+    });
+    if (insertErr) {
+      console.error("Falha ao registrar evidência:", insertErr);
+      toast.error("Não foi possível registrar a evidência: " + insertErr.message);
+      return;
     }
 
-    await onConfirm();
+    try {
+      await onConfirm();
+    } catch (e: any) {
+      // Se o trigger do banco bloquear a marcação, mostra a mensagem real.
+      const msg = e?.message || "Falha ao marcar No-Show";
+      toast.error(msg);
+    }
   };
 
   const verdict = aiResult?.verdict ?? null;
