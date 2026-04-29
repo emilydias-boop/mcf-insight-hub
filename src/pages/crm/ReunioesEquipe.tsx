@@ -398,6 +398,55 @@ export default function ReunioesEquipe() {
     };
   }, [teamKPIs, contractsFromClosers]);
 
+  // ============================================================
+  // Breakdown SDR/Closer das taxas (média individual)
+  // ============================================================
+  const taxaBreakdowns = useMemo(() => {
+    // Média entre SDRs — usa bySDR (já agregado pelo hook)
+    const sdrRows = bySDR || [];
+    const sdrConversao = averageRate(
+      sdrRows.map((s) => ({
+        numerator: s.contratos || 0,
+        denominator: s.r1Realizada || 0,
+      })),
+    );
+    const sdrNoShow = averageRate(
+      sdrRows.map((s) => ({
+        numerator: s.noShows || 0,
+        denominator: s.r1Agendada || 0,
+      })),
+    );
+
+    // Média entre Closers — usa o breakdown novo
+    const closerRows = closerBreakdown?.closers || [];
+    const closerConversao = averageRate(
+      closerRows.map((c) => ({
+        numerator: c.contratos,
+        denominator: c.r1_realizada,
+      })),
+    );
+    const closerNoShow = averageRate(
+      closerRows.map((c) => ({
+        numerator: c.no_shows,
+        denominator: c.r1_recebida,
+      })),
+    );
+
+    return {
+      conversao: { sdrAvg: sdrConversao, closerAvg: closerConversao },
+      noShow: { sdrAvg: sdrNoShow, closerAvg: closerNoShow },
+    };
+  }, [bySDR, closerBreakdown]);
+
+  // Janela é "futura" quando o end_date >= hoje (controla rótulo de Sem Status)
+  const isFutureWindow = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const e = new Date(end);
+    e.setHours(0, 0, 0, 0);
+    return e.getTime() >= today.getTime();
+  }, [end]);
+
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
