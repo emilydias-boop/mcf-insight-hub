@@ -8,7 +8,8 @@ import {
   AlertTriangle,
   Clock,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  HelpCircle
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -52,6 +53,14 @@ export function TeamKPICards({
   const semStatusTooltip = isFutureWindow
     ? "Pendentes vivos: reuniões cuja hora já passou e ainda estão sem desfecho (convidada/remarcada/sem sucesso). Cap de 2 por lead."
     : "Backlog histórico: reuniões do período que ficaram sem desfecho registrado (convidada/remarcada/sem sucesso). Cap de 2 por lead.";
+  // Diferença entre R1 Agendada (planejado) e a soma dos status conhecidos.
+  // Inclui: reuniões futuras ainda sem desfecho + cancelamentos/remarcações
+  // não contabilizadas + estouros do cap de Sem Status.
+  const diferenca =
+    (kpis.totalR1Agendada || 0)
+    - (kpis.totalRealizadas || 0)
+    - (kpis.totalNoShows || 0)
+    - (semStatus ?? 0);
   const cards: Array<{
     title: string;
     value: string | number;
@@ -151,6 +160,14 @@ export function TeamKPICards({
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
       tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100.",
+    },
+    {
+      title: "Diferença",
+      value: diferenca,
+      icon: HelpCircle,
+      color: "text-slate-400",
+      bgColor: "bg-slate-400/10",
+      tooltip: "R1 Agendada − (Realizada + No-Show + Sem Status). Representa reuniões futuras ainda sem desfecho, canceladas/remarcadas não contabilizadas e estouros do cap de Sem Status.",
     },
   ];
 
