@@ -1,0 +1,1 @@
+GRANT SELECT, INSERT, UPDATE ON public.no_show_validations TO authenticated;
