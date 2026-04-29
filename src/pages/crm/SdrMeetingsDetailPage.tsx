@@ -158,8 +158,8 @@ export default function SdrMeetingsDetailPage() {
         onBack={handleBack}
       />
 
-      {/* Filters - hidden on leads tab */}
-      {activeTab !== "leads" && <SdrPerformanceFilters
+      {/* Filtros aplicam tanto à Visão Geral quanto à aba Reuniões */}
+      <SdrPerformanceFilters
         startDate={startDate}
         endDate={endDate}
         comparisonMode={comparisonMode}
@@ -168,7 +168,7 @@ export default function SdrMeetingsDetailPage() {
         onFiltersChange={handleFiltersChange}
         onRefresh={() => perfData.refetch()}
         isLoading={perfData.isLoading}
-      />}
+      />
 
       <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
