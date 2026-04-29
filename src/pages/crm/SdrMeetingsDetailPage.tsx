@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO, subMonths, addMonths, format } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getWeekStartsOn } from "@/lib/businessDays";
@@ -102,15 +102,10 @@ export default function SdrMeetingsDetailPage() {
     customMeta,
   });
 
-  // Independent query for Reuniões tab - broad range (6 months back, 1 month ahead)
-  const allMeetingsRange = useMemo(() => ({
-    start: subMonths(new Date(), 6),
-    end: addMonths(new Date(), 1),
-  }), []);
-
+  // Reuniões tab respeita o mesmo período dos filtros do topo (igual ao painel/Visão Geral)
   const allMeetingsQuery = useSdrMeetingsFromAgenda({
-    startDate: allMeetingsRange.start,
-    endDate: allMeetingsRange.end,
+    startDate,
+    endDate,
     sdrEmailFilter: sdrEmail || undefined,
   });
   const allMeetings = allMeetingsQuery.data || [];
@@ -163,8 +158,8 @@ export default function SdrMeetingsDetailPage() {
         onBack={handleBack}
       />
 
-      {/* Filters - hidden on leads tab */}
-      {activeTab !== "leads" && <SdrPerformanceFilters
+      {/* Filtros aplicam tanto à Visão Geral quanto à aba Reuniões */}
+      <SdrPerformanceFilters
         startDate={startDate}
         endDate={endDate}
         comparisonMode={comparisonMode}
@@ -173,7 +168,7 @@ export default function SdrMeetingsDetailPage() {
         onFiltersChange={handleFiltersChange}
         onRefresh={() => perfData.refetch()}
         isLoading={perfData.isLoading}
-      />}
+      />
 
       <Tabs defaultValue="overview" className="space-y-5" onValueChange={setActiveTab}>
         <TabsList>
