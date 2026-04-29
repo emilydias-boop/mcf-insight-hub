@@ -36,10 +36,18 @@ export interface PendingReview {
     r1_closer_email: string | null;
     r2_closer_email: string | null;
   } | null;
+  // Dados do LEAD REAL (vem de meeting_slot_attendees, não do crm_deals.name)
+  lead?: {
+    name: string | null;
+    phone: string | null;
+  } | null;
   meeting?: {
     scheduled_at: string | null;
     duration_minutes: number | null;
     closer_name: string | null;
+    closer_email: string | null;
+    sdr_booked_name: string | null;
+    sdr_booked_email: string | null;
     meeting_type: string | null;
   } | null;
   performed_by_profile?: {
@@ -69,11 +77,12 @@ export function useNoShowPendingReviews() {
 
       const dealIds = Array.from(new Set(rows.map(r => r.deal_id).filter(Boolean))) as string[];
       const slotIds = Array.from(new Set(rows.map(r => r.meeting_slot_id).filter(Boolean))) as string[];
+      const attendeeIds = Array.from(new Set(rows.map(r => r.attendee_id).filter(Boolean))) as string[];
       const performerIds = Array.from(new Set(rows.map(r => r.performed_by).filter(Boolean))) as string[];
       const reviewerIds = Array.from(new Set(rows.map(r => r.manager_review_by).filter(Boolean))) as string[];
       const profileIds = Array.from(new Set([...performerIds, ...reviewerIds]));
 
-      const [dealsRes, slotsRes, profilesRes] = await Promise.all([
+      const [dealsRes, slotsRes, attendeesRes, profilesRes] = await Promise.all([
         dealIds.length
           ? supabase
               .from("crm_deals")
@@ -85,6 +94,12 @@ export function useNoShowPendingReviews() {
               .from("meeting_slots")
               .select("id, scheduled_at, duration_minutes, meeting_type, closer_id")
               .in("id", slotIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        attendeeIds.length
+          ? supabase
+              .from("meeting_slot_attendees")
+              .select("id, attendee_name, attendee_phone, booked_by")
+              .in("id", attendeeIds)
           : Promise.resolve({ data: [], error: null } as any),
         profileIds.length
           ? supabase
@@ -99,16 +114,22 @@ export function useNoShowPendingReviews() {
       const profilesById = new Map<string, any>();
       (profilesRes.data ?? []).forEach((p: any) => profilesById.set(p.id, p));
 
-      // Resolver nomes dos closers via meeting_slots.closer_id (uuid de profiles)
+      const attendeesById = new Map<string, any>();
+      (attendeesRes.data ?? []).forEach((a: any) => attendeesById.set(a.id, a));
+
+      // Resolver nomes dos closers (meeting_slots.closer_id) e dos SDRs que agendaram (attendee.booked_by)
       const slotCloserIds = Array.from(
         new Set(((slotsRes.data ?? []) as any[]).map((s) => s.closer_id).filter(Boolean))
       ) as string[];
-      const missingCloserIds = slotCloserIds.filter((id) => !profilesById.has(id));
-      if (missingCloserIds.length) {
+      const bookedByIds = Array.from(
+        new Set(((attendeesRes.data ?? []) as any[]).map((a) => a.booked_by).filter(Boolean))
+      ) as string[];
+      const missingProfileIds = [...slotCloserIds, ...bookedByIds].filter((id) => !profilesById.has(id));
+      if (missingProfileIds.length) {
         const { data: extra } = await supabase
           .from("profiles")
           .select("id, full_name, email")
-          .in("id", missingCloserIds);
+          .in("id", Array.from(new Set(missingProfileIds)));
         (extra ?? []).forEach((p: any) => profilesById.set(p.id, p));
       }
       const slotsById = new Map<string, any>();
@@ -134,7 +155,9 @@ export function useNoShowPendingReviews() {
       return rows.map((r) => {
         const deal = r.deal_id ? dealsById.get(r.deal_id) : null;
         const slot = r.meeting_slot_id ? slotsById.get(r.meeting_slot_id) : null;
+        const attendee = r.attendee_id ? attendeesById.get(r.attendee_id) : null;
         const closerProfile = slot?.closer_id ? profilesById.get(slot.closer_id) : null;
+        const sdrBookedProfile = attendee?.booked_by ? profilesById.get(attendee.booked_by) : null;
         return {
           ...r,
           deal: deal
@@ -148,14 +171,29 @@ export function useNoShowPendingReviews() {
                 r2_closer_email: deal.r2_closer_email ?? null,
               }
             : null,
+          lead: {
+            name: attendee?.attendee_name ?? deal?.name ?? null,
+            phone: attendee?.attendee_phone ?? r.lead_phone ?? null,
+          },
           meeting: slot
             ? {
                 scheduled_at: slot.scheduled_at ?? null,
                 duration_minutes: slot.duration_minutes ?? null,
                 meeting_type: slot.meeting_type ?? null,
-                closer_name: closerProfile?.full_name ?? null,
+                closer_name: closerProfile?.full_name ?? closerProfile?.email ?? null,
+                closer_email: closerProfile?.email ?? null,
+                sdr_booked_name: sdrBookedProfile?.full_name ?? sdrBookedProfile?.email ?? null,
+                sdr_booked_email: sdrBookedProfile?.email ?? null,
               }
-            : null,
+            : {
+                scheduled_at: null,
+                duration_minutes: null,
+                meeting_type: null,
+                closer_name: null,
+                closer_email: null,
+                sdr_booked_name: sdrBookedProfile?.full_name ?? sdrBookedProfile?.email ?? null,
+                sdr_booked_email: sdrBookedProfile?.email ?? null,
+              },
           performed_by_profile: r.performed_by ? profilesById.get(r.performed_by) ?? null : null,
           manager_review_by_profile: r.manager_review_by ? profilesById.get(r.manager_review_by) ?? null : null,
           // -1 porque o próprio registro entra na contagem se já aprovado; mantemos total bruto e a UI subtrai se quiser
