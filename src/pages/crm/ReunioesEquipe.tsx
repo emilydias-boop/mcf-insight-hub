@@ -181,6 +181,7 @@ export default function ReunioesEquipe() {
     teamKPIs,
     bySDR,
     allMeetings,
+    allMeetingsRaw,
     isLoading,
     refetch,
   } = useTeamMeetingsData({
