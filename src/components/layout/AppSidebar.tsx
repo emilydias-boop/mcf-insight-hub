@@ -298,6 +298,7 @@ const menuItems: MenuItem[] = [
       { title: "Travas de Fechamento", url: "/admin/travas-fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "Alterações Tardias", url: "/admin/alteracoes-tardias", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "Regras de Processo", url: "/admin/regras-processo", requiredRoles: ["admin", "manager", "coordenador"] },
+      { title: "Revisão de No-Shows", url: "/crm/revisao-no-shows", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 ];
@@ -610,6 +611,7 @@ export function AppSidebar() {
                                     <span className="flex items-center justify-between w-full">
                                       <span>{subItem.title}</span>
                                       {subItem.url === "/admin/regras-processo" && <PendingApprovalsBadge />}
+                                      {subItem.url === "/crm/revisao-no-shows" && <NoShowReviewsBadge />}
                                     </span>
                                   </NavLink>
                                 </SidebarMenuSubButton>
