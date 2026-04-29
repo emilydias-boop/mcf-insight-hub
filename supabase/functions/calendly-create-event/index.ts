@@ -543,6 +543,7 @@ serve(async (req) => {
     // Valida no servidor a regra de reschedule_approval_threshold para SDRs.
     // Esta é a fonte da verdade — bloqueia tentativas via DevTools/Postman
     // ou estado cliente desatualizado. Não-retroativa: usa applies_from.
+    const authHeader = req.headers.get("Authorization");
     if (guardMeetingType === 'r1') {
       try {
         // Detectar BU do deal para resolver a regra correta
@@ -706,7 +707,6 @@ serve(async (req) => {
     }
 
     // Get booked_by - either from specified SDR email or current user
-    const authHeader = req.headers.get("Authorization");
     let bookedBy = null;
 
     // First try to find by sdrEmail if provided
