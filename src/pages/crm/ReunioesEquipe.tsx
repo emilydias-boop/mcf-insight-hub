@@ -181,6 +181,7 @@ export default function ReunioesEquipe() {
     teamKPIs,
     bySDR,
     allMeetings,
+    allMeetingsRaw,
     isLoading,
     refetch,
   } = useTeamMeetingsData({
@@ -725,6 +726,7 @@ export default function ReunioesEquipe() {
         bucket={drillBucket}
         title={drillTitle}
         meetings={allMeetings}
+        meetingsRaw={allMeetingsRaw}
         startDate={start}
         endDate={end}
       />
