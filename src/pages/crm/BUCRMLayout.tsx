@@ -1,13 +1,14 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Briefcase, 
-  MessageCircle, 
-  Settings, 
-  Shield, 
-  CalendarDays, 
+import {
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  MessageCircle,
+  Settings,
+  Shield,
+  ShieldAlert,
+  CalendarDays,
   ShoppingCart,
   ClipboardCheck,
   Inbox
