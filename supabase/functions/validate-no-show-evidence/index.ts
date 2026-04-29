@@ -168,21 +168,36 @@ Deno.serve(async (req) => {
     const systemPrompt =
       `Você é um auditor de evidências de NO-SHOW para a ${meetingLabel} de uma operação comercial brasileira. ` +
       "Sua tarefa é analisar o print de uma conversa (geralmente WhatsApp) e decidir se caracteriza no-show legítimo. " +
-      "\n\n## CRITÉRIOS OBRIGATÓRIOS PARA 'confirmed':\n" +
-      "1. O telefone OU nome visível no print bate com o lead esperado (informado abaixo).\n" +
-      "2. Existe pelo menos UMA mensagem enviada PELO VENDEDOR (lado direito no WhatsApp) sem resposta do lead, OU o lead respondeu confirmando que não compareceria/não compareceu.\n" +
-      "3. As mensagens são próximas (±24h) ao horário da reunião agendada.\n" +
-      "4. Frases típicas que reforçam: 'esqueci', 'não vou poder', 'não tenho mais interesse', 'desculpa não apareci', silêncio após mensagens insistindo na reunião.\n" +
+      "\n\n## REGRA #1 — IDENTIDADE DO LEAD (BLOQUEANTE)\n" +
+      "ANTES de qualquer outra análise, você PRECISA ver no print uma prova visível de que a conversa é com o lead esperado:\n" +
+      "- Telefone do lead aparecendo no topo/cabeçalho da conversa OU em uma mensagem, OU\n" +
+      "- Nome do lead aparecendo no topo/cabeçalho do contato (ex: '~Renato', 'Renato Silva') compatível com o esperado.\n" +
+      "Se o print mostra APENAS as mensagens (balões verdes/brancos) sem cabeçalho com telefone/nome, OU se o telefone/nome visível NÃO bate com o lead esperado, " +
+      "isso é PROVA INSUFICIENTE de identidade. Nesse caso retorne OBRIGATORIAMENTE 'inconclusive' (NUNCA 'confirmed'), " +
+      "marque criteria_met.identity_match = false, e em 'reasoning' explique exatamente o que está faltando " +
+      "(ex: 'O print não mostra o cabeçalho da conversa com o telefone/nome do contato, então não é possível confirmar que é o lead esperado. Peça um print incluindo o topo da conversa do WhatsApp mostrando o número/nome do contato.').\n" +
+      "\n## CRITÉRIOS OBRIGATÓRIOS PARA 'confirmed' (TODOS precisam ser atendidos):\n" +
+      "1. IDENTIDADE: telefone OU nome visível no print bate com o lead esperado (regra #1 acima).\n" +
+      "2. CONTATO: existe pelo menos UMA mensagem enviada PELO VENDEDOR (balões à direita / verdes) sem resposta do lead, OU o lead respondeu confirmando que não compareceria/não compareceu.\n" +
+      "3. JANELA TEMPORAL: as mensagens são próximas (±24h) ao horário da reunião agendada.\n" +
+      "4. SINAIS REFORÇADORES (bônus): frases como 'esqueci', 'não vou poder', 'não tenho mais interesse', 'desculpa não apareci', 'acabei não conseguindo entrar na reunião', silêncio após mensagens insistindo.\n" +
       "\n## RETORNE 'not_no_show' SE:\n" +
       "- O lead respondeu e remarcou ou apareceu/atrasou (reunião aconteceu).\n" +
       "- A conversa indica reunião realizada/feita.\n" +
       "- Não há tentativa visível de contato sobre a reunião.\n" +
-      "- O telefone/nome no print é claramente de OUTRA pessoa.\n" +
+      "- O telefone/nome no print é claramente de OUTRA pessoa (diferente do lead esperado).\n" +
       "\n## RETORNE 'inconclusive' SE:\n" +
+      "- O print não mostra o cabeçalho com telefone/nome do contato (não dá para confirmar identidade).\n" +
       "- Print ilegível, cortado, ou sem contexto da reunião.\n" +
-      "- Datas das mensagens não são identificáveis.\n" +
-      "- Não dá pra ter certeza dos critérios acima.\n" +
-      "\nSeja RIGOROSO. Em caso de dúvida real, prefira 'inconclusive' a 'confirmed'.";
+      "- Datas/horários das mensagens não são identificáveis.\n" +
+      "- Não dá para ter certeza dos critérios acima.\n" +
+      "\n## EXEMPLOS DE PRINT BOM (confirmed possível):\n" +
+      "- Topo do WhatsApp visível com '+55 11 99999-9999' ou '~Renato' batendo com o lead, mensagens do vendedor próximas ao horário e sem resposta do lead.\n" +
+      "## EXEMPLOS DE PRINT INSUFICIENTE (sempre 'inconclusive'):\n" +
+      "- Apenas balões de mensagem, sem cabeçalho mostrando telefone/nome do contato — mesmo que o lead diga 'desculpa não consegui entrar', não dá para provar que é ESTE lead. " +
+      "Peça um novo print incluindo o topo da conversa.\n" +
+      "\nSeja RIGOROSO. Em caso de dúvida real sobre a identidade, SEMPRE prefira 'inconclusive' a 'confirmed'. " +
+      "A prova de identidade é o ponto mais importante — sem ela o no-show não pode ser auto-aprovado.";
 
     const userParts: any[] = [
       {
