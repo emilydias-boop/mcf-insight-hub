@@ -228,6 +228,15 @@ function RuleRow({
   const sdrInherited = sdrRule?.bu !== bu;
   const closerInherited = closerRule?.bu !== bu;
 
+  const formatAppliesFrom = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+      return format(new Date(iso), "dd/MM/yy HH:mm", { locale: ptBR });
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <>
       <TableRow>
@@ -246,6 +255,11 @@ function RuleRow({
               </Badge>
             )}
           </div>
+          {sdrRule?.applies_from && ruleKey !== RULE_KEYS.APPROVERS && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              Vale desde: {formatAppliesFrom(sdrRule.applies_from)}
+            </div>
+          )}
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
@@ -258,6 +272,11 @@ function RuleRow({
               </Badge>
             )}
           </div>
+          {closerRule?.applies_from && ruleKey !== RULE_KEYS.APPROVERS && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              Vale desde: {formatAppliesFrom(closerRule.applies_from)}
+            </div>
+          )}
         </TableCell>
         <TableCell>
           <div className="flex gap-2">
@@ -277,6 +296,7 @@ function RuleRow({
           bu={bu}
           role={editing.role}
           currentValue={editing.rule?.rule_value}
+          currentAppliesFrom={editing.rule?.applies_from}
           onClose={() => setEditing(null)}
         />
       )}
@@ -289,12 +309,14 @@ function EditRuleDialog({
   bu,
   role,
   currentValue,
+  currentAppliesFrom,
   onClose,
 }: {
   ruleKey: string;
   bu: string | null;
   role: ProcessRuleRole;
   currentValue: any;
+  currentAppliesFrom?: string | null;
   onClose: () => void;
 }) {
   const meta = RULE_LABELS[ruleKey];
@@ -305,6 +327,13 @@ function EditRuleDialog({
     return v === null || v === undefined ? "" : String(v);
   });
   const [approvers, setApprovers] = useState<string[]>(() => currentValue?.roles || ["admin"]);
+  // Default vigência: agora (regra não-retroativa). Se já existir, mantém.
+  const [appliesFromLocal, setAppliesFromLocal] = useState<string>(() => {
+    const base = currentAppliesFrom ? new Date(currentAppliesFrom) : new Date();
+    // formato datetime-local: YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
+  });
 
   const handleSave = async () => {
     let rule_value: any;
@@ -321,7 +350,17 @@ function EditRuleDialog({
     }
 
     try {
-      await upsert.mutateAsync({ bu, role, rule_key: ruleKey, rule_value });
+      const appliesFromIso =
+        meta.type === "number" && appliesFromLocal
+          ? new Date(appliesFromLocal).toISOString()
+          : undefined;
+      await upsert.mutateAsync({
+        bu,
+        role,
+        rule_key: ruleKey,
+        rule_value,
+        applies_from: appliesFromIso,
+      });
       toast.success("Regra atualizada");
       onClose();
     } catch (err: any) {
@@ -344,15 +383,29 @@ function EditRuleDialog({
         </DialogHeader>
 
         {meta.type === "number" ? (
-          <div className="space-y-2">
-            <Label>Valor (vazio = desativado/ilimitado)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={numValue}
-              onChange={(e) => setNumValue(e.target.value)}
-              placeholder="Ex: 2"
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Valor (vazio = desativado/ilimitado)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={numValue}
+                onChange={(e) => setNumValue(e.target.value)}
+                placeholder="Ex: 2"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Vale a partir de</Label>
+              <Input
+                type="datetime-local"
+                value={appliesFromLocal}
+                onChange={(e) => setAppliesFromLocal(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                A regra ignora movimentos anteriores a esta data (não-retroativa).
+                Default: agora.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
