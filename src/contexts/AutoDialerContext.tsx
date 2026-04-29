@@ -246,7 +246,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
+  }, [callStatus, currentCallId, hangUp, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
 
   // (Removido) A retomada da fila após qualificação não é mais necessária:
   // o modal de qualificação não abre mais automaticamente — o SDR aciona
