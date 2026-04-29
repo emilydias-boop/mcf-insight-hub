@@ -1009,7 +1009,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                             ? "bg-red-500/10 border-red-500 text-red-600" 
                             : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                         )}
-                        onClick={() => selectedParticipant.status !== 'no_show' && setShowNoShowConfirm(true)}
+                        onClick={() => {
+                          if (selectedParticipant.status === 'no_show') return;
+                          if (skipNoShowConfirm) {
+                            // Closer / Closer Sombra: marca direto, sem confirmação
+                            handleParticipantStatusChange(selectedParticipant.id, 'no_show');
+                          } else {
+                            setShowNoShowConfirm(true);
+                          }
+                        }}
                         disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'no_show'}
                       >
                         <AlertTriangle className="h-4 w-4" />
