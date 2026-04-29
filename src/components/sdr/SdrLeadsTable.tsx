@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ExternalLink, Filter, Search, CalendarIcon } from "lucide-react";
+import { ExternalLink, Filter, Search, CalendarIcon, CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SdrLeadsTableProps {
   meetings: MeetingV2[];
@@ -53,6 +54,19 @@ const getStatusBadgeClass = (status: string) => {
   }
   if (statusLower === 'rescheduled' || statusLower.includes('reagend')) {
     return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+  }
+  return 'bg-muted text-muted-foreground';
+};
+
+const getTipoBadgeClass = (tipo: string) => {
+  if (tipo === '1º Agendamento') {
+    return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+  }
+  if (tipo === 'Reagendamento Válido') {
+    return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+  }
+  if (tipo === 'Reagendamento Inválido') {
+    return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
   }
   return 'bg-muted text-muted-foreground';
 };
