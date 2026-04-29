@@ -387,7 +387,9 @@ export default function ReunioesEquipe() {
       totalR1Agendada,
       totalRealizadas,
       totalNoShows,
-      totalContratos: contractsFromClosers.total,
+      // Card "Contratos" = contrato_pago puro (mesmo número da coluna "Contrato Pago" da tabela Closers).
+      // Antes vinha como (contratoPago + outside) e o card subtraia outside, criando ruído. Agora é direto.
+      totalContratos: contractsFromClosers.contratoPago,
       totalOutside: contractsFromClosers.outside,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
