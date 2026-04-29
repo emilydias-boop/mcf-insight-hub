@@ -501,16 +501,20 @@ export function R2MeetingDetailDrawer({
 
             {/* Tabbed Content */}
             {attendee && (
-              <Tabs defaultValue="qualificacao" className="w-full">
+              <Tabs defaultValue={isAnamneseLead ? 'avaliacao' : 'qualificacao'} className="w-full">
                 <TabsList className="w-full">
-                  <TabsTrigger value="qualificacao" className="text-xs">Qualificação</TabsTrigger>
+                  {!isAnamneseLead && (
+                    <TabsTrigger value="qualificacao" className="text-xs">Qualificação</TabsTrigger>
+                  )}
                   <TabsTrigger value="avaliacao" className="text-xs">Avaliação R2</TabsTrigger>
                   <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
                 </TabsList>
-                
-                <TabsContent value="qualificacao" className="mt-4">
-                  <R2QualificationTab attendee={attendee} saveTrigger={saveTrigger} />
-                </TabsContent>
+
+                {!isAnamneseLead && (
+                  <TabsContent value="qualificacao" className="mt-4">
+                    <R2QualificationTab attendee={attendee} saveTrigger={saveTrigger} />
+                  </TabsContent>
+                )}
                 
                 <TabsContent value="avaliacao" className="mt-4">
                   <R2EvaluationTab 
