@@ -351,12 +351,10 @@ export function AppSidebar() {
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
-  // Dialer (visível para SDR/Closer e papéis com acesso ampliado)
-  // Inclui admin/manager/gr para que líderes e Closers R2 com role admin
-  // (ex.: Jessica Bellini, Thobson) também consigam usar o discador.
+  // Dialer (visível APENAS para SDRs — closers e admins não fazem ligação ativa)
   const dialer = useDialerLauncher();
   const autoDialer = useAutoDialer();
-  const dialerRoles = new Set(['sdr', 'closer', 'admin', 'manager', 'gr']);
+  const dialerRoles = new Set(['sdr']);
   const showDialerSection = (allRoles as string[]).some(r => dialerRoles.has(r));
 
   // === ITENS DINÂMICOS PARA SDR/CLOSER ===
