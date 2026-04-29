@@ -957,19 +957,37 @@ export function useSearchDealsForSchedule(
       > = {};
 
       if (dealIds.length > 0) {
-        // Carregar regra dinâmica de aprovação de reagendamento para o BU/role SDR
+        // Carregar regras dinâmicas para SDR no BU corrente
+        // O RPC get_process_rule retorna JSONB no formato {"value": N} ou {"roles": [...]}
+        const extractValue = (raw: any): number | null => {
+          if (raw == null) return null;
+          const v = typeof raw === 'object' && 'value' in raw ? raw.value : raw;
+          const n = typeof v === 'number' ? v : Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        };
+
         let rescheduleThreshold: number | null = null;
+        let maxMeetingsPerWeek: number | null = null;
         try {
-          const { data: ruleData } = await supabase.rpc('get_process_rule', {
-            _bu: bu || null,
-            _role: 'sdr',
-            _rule_key: 'reschedule_approval_threshold',
-          });
-          const parsed = typeof ruleData === 'number' ? ruleData : Number(ruleData);
-          rescheduleThreshold = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+          const [r1, r2] = await Promise.all([
+            supabase.rpc('get_process_rule', {
+              _bu: bu || null,
+              _role: 'sdr',
+              _rule_key: 'reschedule_approval_threshold',
+            }),
+            supabase.rpc('get_process_rule', {
+              _bu: bu || null,
+              _role: 'sdr',
+              _rule_key: 'max_meetings_per_week',
+            }),
+          ]);
+          rescheduleThreshold = extractValue(r1.data);
+          maxMeetingsPerWeek = extractValue(r2.data);
         } catch (e) {
-          console.warn('[useAgendaData] Falha ao carregar reschedule_approval_threshold', e);
+          console.warn('[useAgendaData] Falha ao carregar process_rules SDR', e);
         }
+        // Fallback: se não houver regra de meetings configurada, mantém o teto histórico de 2.
+        const meetingsCap = maxMeetingsPerWeek ?? 2;
 
         // Trazer attendees + slot info para classificar estado
         const { data: allAttendees } = await supabase
@@ -1118,9 +1136,9 @@ export function useSearchDealsForSchedule(
                   };
                   continue;
                 }
-                if (totalMovements >= 2) {
+                if (totalMovements >= meetingsCap) {
                   warningMessage =
-                    'Lead já tem 1 agendamento + 1 reagendamento válido. Você pode agendar, mas este NOVO movimento NÃO contará na sua meta.';
+                    `Lead já atingiu o limite de ${meetingsCap} movimentos válidos na semana. Você pode agendar, mas este NOVO movimento NÃO contará na sua meta.`;
                 } else {
                   warningMessage =
                     'Lead já realizou R1. Este será o 1º Reagendamento e CONTA na sua meta.';
