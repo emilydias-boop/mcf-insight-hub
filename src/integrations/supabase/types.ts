@@ -11441,6 +11441,10 @@ export type Database = {
       }
     }
     Functions: {
+      apply_no_show_approval_effects: {
+        Args: { p_validation_id: string }
+        Returns: undefined
+      }
       assign_partner_to_gr: {
         Args: {
           p_bu?: string
