@@ -193,10 +193,18 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     return deduplicateMeetings(meetings);
   }, [meetingsQuery.data]);
 
+  // Mesmo conjunto de reuniões SEM dedup global por deal_id.
+  // Necessário para o drilldown de no-show espelhar a regra do KPI
+  // (cap 1 por lead antes de 2026-04-28, cap 2 depois).
+  const allMeetingsRaw = useMemo(() => {
+    return meetingsQuery.data || [];
+  }, [meetingsQuery.data]);
+
   return {
     teamKPIs,
     bySDR,
     allMeetings,
+    allMeetingsRaw,
     getMeetingsForSDR,
     isLoading: sdrsQuery.isLoading || sdrsInPeriodQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading,
     error: sdrsQuery.error || sdrsInPeriodQuery.error || metricsQuery.error || meetingsQuery.error,
