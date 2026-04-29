@@ -21,6 +21,12 @@ interface KpiDrillDownDialogProps {
   bucket: KpiBucket | null;
   title: string;
   meetings: MeetingV2[];
+  /**
+   * Reuniões SEM dedup global por deal_id. Quando informado, é usado para
+   * o bucket "no_show" espelhar a regra do KPI (cap 1 antes de 2026-04-28,
+   * cap 2 depois, por SDR+deal+dia em America/Sao_Paulo).
+   */
+  meetingsRaw?: MeetingV2[];
   startDate: Date | null;
   endDate: Date | null;
 }
@@ -48,6 +54,74 @@ function isNoShowStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v === "no_show" || v === "noshow" || v === "no-show";
 }
+
+/**
+ * Devolve o "dia" do agendamento em America/Sao_Paulo no formato YYYY-MM-DD.
+ * Espelha (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date do KPI SQL.
+ */
+function spDayKey(iso?: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    // pt-BR em SP devolve dd/mm/yyyy
+    const parts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const day = parts.find((p) => p.type === "day")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    const year = parts.find((p) => p.type === "year")?.value;
+    if (!day || !month || !year) return null;
+    return `${year}-${month}-${day}`;
+  } catch {
+    return null;
+  }
+}
+
+const NO_SHOW_CAP_BOUNDARY = "2026-04-28"; // YYYY-MM-DD em America/Sao_Paulo
+
+/**
+ * Aplica a regra do KPI (cap 1 antes de 2026-04-28, cap 2 depois) por
+ * (sdr_email, deal_id), contando dias distintos em São Paulo.
+ */
+function applyNoShowCap(meetings: MeetingV2[]): MeetingV2[] {
+  // Agrupa por (sdr, deal) -> mapa de dia -> primeira reunião daquele dia
+  type Group = Map<string, MeetingV2>;
+  const groups = new Map<string, Group>();
+
+  meetings.forEach((m) => {
+    const day = spDayKey(m.scheduled_at || m.data_agendamento);
+    if (!day) return;
+    const sdr = (m.intermediador || m.current_owner || "").toLowerCase();
+    const dealKey = m.deal_id || `noid-${m.attendee_id || ""}`;
+    const key = `${sdr}::${dealKey}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = new Map();
+      groups.set(key, g);
+    }
+    if (!g.has(day)) g.set(day, m);
+  });
+
+  const out: MeetingV2[] = [];
+  groups.forEach((dayMap) => {
+    const before: MeetingV2[] = [];
+    const after: MeetingV2[] = [];
+    Array.from(dayMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .forEach(([day, m]) => {
+        if (day < NO_SHOW_CAP_BOUNDARY) before.push(m);
+        else after.push(m);
+      });
+    if (before.length > 0) out.push(before[0]); // cap 1
+    after.slice(0, 2).forEach((m) => out.push(m)); // cap 2
+  });
+
+  return out;
+}
+
 function isSemStatusStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v === "invited" || v === "rescheduled" || v === "sem_sucesso" || v === "" || v === "pending";
@@ -121,11 +195,22 @@ export function KpiDrillDownDialog({
   bucket,
   title,
   meetings,
+  meetingsRaw,
   startDate,
   endDate,
 }: KpiDrillDownDialogProps) {
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
-  const filtered = bucket ? filterByBucket(meetings, bucket, startDate, endDate) : [];
+  const filtered = (() => {
+    if (!bucket) return [] as MeetingV2[];
+    // Para o bucket no_show usamos as reuniões SEM dedup global por deal_id
+    // e aplicamos o mesmo cap do KPI. Os demais buckets seguem a regra antiga.
+    if (bucket === "no_show") {
+      const source = meetingsRaw && meetingsRaw.length > 0 ? meetingsRaw : meetings;
+      const noShowsInRange = filterByBucket(source, "no_show", startDate, endDate);
+      return applyNoShowCap(noShowsInRange);
+    }
+    return filterByBucket(meetings, bucket, startDate, endDate);
+  })();
 
   return (
     <>
