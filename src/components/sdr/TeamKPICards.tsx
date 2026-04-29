@@ -144,10 +144,7 @@ export function TeamKPICards({
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Global agregada: Σ Contratos / Σ R1 Realizada × 100. Breakdown mostra a média individual entre SDRs e entre Closers.",
-      subline: taxaConversaoBreakdown
-        ? `SDR ${taxaConversaoBreakdown.sdrAvg.toFixed(1)}% · Closer ${taxaConversaoBreakdown.closerAvg.toFixed(1)}%`
-        : undefined,
+      tooltip: "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
     },
     {
       title: "Taxa No-Show",
@@ -155,10 +152,7 @@ export function TeamKPICards({
       icon: AlertTriangle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
-      tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100. Breakdown mostra a média individual entre SDRs e entre Closers.",
-      subline: taxaNoShowBreakdown
-        ? `SDR ${taxaNoShowBreakdown.sdrAvg.toFixed(1)}% · Closer ${taxaNoShowBreakdown.closerAvg.toFixed(1)}%`
-        : undefined,
+      tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100.",
     },
   ];
 
