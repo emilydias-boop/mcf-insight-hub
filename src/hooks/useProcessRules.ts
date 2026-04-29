@@ -11,6 +11,7 @@ export interface ProcessRule {
   rule_key: string;
   rule_value: any;
   is_active: boolean;
+  applies_from: string;
   description: string | null;
   updated_at: string;
   updated_by: string | null;
@@ -75,6 +76,7 @@ export function useUpsertProcessRule() {
       rule_value: any;
       is_active?: boolean;
       description?: string | null;
+      applies_from?: string | null;
     }) => {
       // Procura existente
       let q = supabase
@@ -87,14 +89,18 @@ export function useUpsertProcessRule() {
       const { data: existing } = await q.maybeSingle();
 
       if (existing) {
+        const updatePayload: Record<string, any> = {
+          rule_value: input.rule_value,
+          is_active: input.is_active ?? true,
+          description: input.description,
+          updated_by: user?.id ?? null,
+        };
+        if (input.applies_from !== undefined) {
+          updatePayload.applies_from = input.applies_from ?? new Date().toISOString();
+        }
         const { error } = await supabase
           .from("process_rules" as any)
-          .update({
-            rule_value: input.rule_value,
-            is_active: input.is_active ?? true,
-            description: input.description,
-            updated_by: user?.id ?? null,
-          })
+          .update(updatePayload)
           .eq("id", (existing as any).id);
         if (error) throw error;
       } else {
@@ -105,6 +111,7 @@ export function useUpsertProcessRule() {
           rule_value: input.rule_value,
           is_active: input.is_active ?? true,
           description: input.description ?? null,
+          applies_from: input.applies_from ?? new Date().toISOString(),
           updated_by: user?.id ?? null,
         });
         if (error) throw error;

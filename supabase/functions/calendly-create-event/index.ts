@@ -539,6 +539,111 @@ serve(async (req) => {
     // que o operacional resolva casos legítimos sem inflar métricas.
     // ============= END GUARD =============
 
+    // ============= PROCESS RULE GUARD (server-side) =============
+    // Valida no servidor a regra de reschedule_approval_threshold para SDRs.
+    // Esta é a fonte da verdade — bloqueia tentativas via DevTools/Postman
+    // ou estado cliente desatualizado. Não-retroativa: usa applies_from.
+    const authHeader = req.headers.get("Authorization");
+    if (guardMeetingType === 'r1') {
+      try {
+        // Detectar BU do deal para resolver a regra correta
+        let dealBu: string | null = null;
+        const { data: dealOriginRow2 } = await supabase
+          .from('crm_deals')
+          .select('origin_id')
+          .eq('id', dealId)
+          .maybeSingle();
+        if (dealOriginRow2?.origin_id) {
+          const { data: buMaps2 } = await supabase
+            .from('bu_origin_mapping')
+            .select('bu')
+            .eq('entity_type', 'origin')
+            .eq('entity_id', dealOriginRow2.origin_id)
+            .limit(1);
+          dealBu = (buMaps2 ?? [])[0]?.bu ?? null;
+        }
+
+        // Identificar o role do solicitante
+        let isPrivileged = false;
+        if (authHeader) {
+          const { data: userData } = await supabase.auth.getUser(
+            authHeader.replace('Bearer ', ''),
+          );
+          if (userData?.user?.id) {
+            const { data: roles } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', userData.user.id);
+            const roleSet = new Set((roles ?? []).map((r: any) => r.role));
+            isPrivileged =
+              roleSet.has('admin') ||
+              roleSet.has('manager') ||
+              roleSet.has('coordenador');
+          }
+        }
+
+        if (!isPrivileged) {
+          const { data: evalResult, error: evalError } = await supabase.rpc(
+            'evaluate_sdr_reschedule',
+            { _deal_id: dealId, _bu: dealBu, _meeting_type: 'r1' },
+          );
+
+          if (evalError) {
+            console.error('❌ Falha ao avaliar regra de processo:', evalError);
+            // Fail-closed: se não conseguimos validar, bloqueia.
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'rule_eval_failed',
+                message:
+                  'Não foi possível validar a regra de agendamento. Tente novamente.',
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            );
+          }
+
+          const allowed = (evalResult as any)?.allowed !== false;
+          if (!allowed) {
+            console.warn(
+              `🚫 Regra bloqueou agendamento — deal ${dealId}:`,
+              evalResult,
+            );
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'rule_violation_reschedule_threshold',
+                message:
+                  (evalResult as any)?.reason ||
+                  'Limite de reagendamentos atingido. Aprovação do gestor obrigatória.',
+                rule: evalResult,
+              }),
+              {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              },
+            );
+          }
+        }
+      } catch (ruleErr) {
+        console.error('❌ Exceção na avaliação de regra de processo:', ruleErr);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'rule_eval_exception',
+            message: 'Erro inesperado ao validar regra. Tente novamente.',
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        );
+      }
+    }
+    // ============= END PROCESS RULE GUARD =============
+
     let meetingLink = "";
     let videoConferenceLink = "";
     let googleEventId = "";
@@ -602,7 +707,6 @@ serve(async (req) => {
     }
 
     // Get booked_by - either from specified SDR email or current user
-    const authHeader = req.headers.get("Authorization");
     let bookedBy = null;
 
     // First try to find by sdrEmail if provided
