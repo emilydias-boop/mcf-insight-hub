@@ -195,7 +195,7 @@ const App = () => (
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador']}><RevisaoNoShows /></RoleGuard>} />
+                <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
