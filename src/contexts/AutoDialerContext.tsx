@@ -211,10 +211,11 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
 
       if (wasInProgressRef.current) {
-        // Atendeu → abre qualificação e pausa (não tenta de novo)
+        // Atendeu → NÃO abre qualificação automaticamente.
+        // O SDR aciona o modal manualmente quando/se precisar.
+        // Apenas pausa a fila para o SDR decidir o próximo passo.
         setState('paused-qualifying');
         setInCallDrawerOpen(false);
-        openQualificationModal(lead.dealId, lead.name);
       } else {
         // Não atendeu / falhou
         const result: LeadResult = callStatus === 'failed' ? 'failed' : 'no-answer';
