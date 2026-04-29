@@ -157,6 +157,8 @@ export function useConfirmR2PreScheduled() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-pre-scheduled-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Agendamento confirmado');
@@ -198,6 +200,8 @@ export function useCancelR2PreScheduled() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-pre-scheduled-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Pré-agendamento cancelado');

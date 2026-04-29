@@ -68,6 +68,8 @@ export function useUpdateR2MeetingStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
@@ -256,6 +258,8 @@ export function useRescheduleR2Meeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
@@ -355,6 +359,8 @@ export function useCreateR2Meeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });

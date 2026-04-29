@@ -371,6 +371,8 @@ export function MoveAttendeeModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['meeting_slots'] });
       queryClient.invalidateQueries({ queryKey: ['booked-slots'] });

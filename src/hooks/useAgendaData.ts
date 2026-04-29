@@ -441,6 +441,8 @@ export function useUpdateCloserColor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['closers-with-availability'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
       toast.success('Cor atualizada');
     },
@@ -566,6 +568,8 @@ export function useUpdateMeetingStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
@@ -649,6 +653,8 @@ export function useCancelMeeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       toast.success('Reunião cancelada');
@@ -674,6 +680,8 @@ export function useUpdateMeetingNotes() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       toast.success('Notas salvas');
     },
     onError: () => {
@@ -751,6 +759,8 @@ export function useMarkContractPaid() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['search-past-meetings'] });
@@ -1351,6 +1361,8 @@ export function useCreateMeeting() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
@@ -1380,6 +1392,8 @@ export function useSendMeetingNotification() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       if (data?.summary) {
         if (data.summary.sent > 0) {
           toast.success(`${data.summary.sent} notificação(ões) enviada(s)`);
@@ -1546,6 +1560,8 @@ export function useRemoveMeetingAttendee() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
     },
   });
 }
@@ -1701,6 +1717,8 @@ export function useRescheduleMeeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       toast.success('Reunião reagendada');
@@ -1727,6 +1745,8 @@ export function useUpdateMeetingSchedule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
@@ -1759,6 +1779,8 @@ export function useDeleteMeeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
@@ -1786,6 +1808,8 @@ export function useUpdateAttendeeStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       toast.success('Status atualizado');
     },
     onError: () => {
@@ -2046,11 +2070,15 @@ export function useUpdateAttendeeAndSlotStatus() {
     onSuccess: () => {
       // Invalidate all relevant queries (R1 + R2)
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       toast.success('Status atualizado');
     },
@@ -2084,6 +2112,8 @@ export function useUpdateAttendeeNotes() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       toast.success('Nota salva');
     },
     onError: () => {
@@ -2106,6 +2136,8 @@ export function useUpdateAttendeePhone() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       toast.success('Telefone atualizado');
     },
     onError: () => {
@@ -2206,6 +2238,8 @@ export function useMoveAttendeeToMeeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['attendee-movement-history'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });

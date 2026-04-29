@@ -134,6 +134,8 @@ export function useAddAttendeeNote() {
       // Also invalidate queries that might include dealId
       queryClient.invalidateQueries({ queryKey: ['attendee-notes'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['lead-notes'] });
     },
   });
@@ -159,6 +161,8 @@ export function useDeleteAttendeeNote() {
       // Also invalidate all attendee-notes queries
       queryClient.invalidateQueries({ queryKey: ['attendee-notes'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
     },
   });
 }
