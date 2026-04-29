@@ -40,6 +40,10 @@ export interface MeetingV2 {
   meeting_slot_id?: string | null;
   attendee_status?: string | null;
   booked_at?: string | null;
+  // No-Show breakdown (from get_sdr_meetings_from_agenda)
+  ordem_no_show?: number | null;
+  total_no_shows_deal?: number | null;
+  conta_no_show?: boolean | null;
 }
 
 export interface MetricsSummary {
