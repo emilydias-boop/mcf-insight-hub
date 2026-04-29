@@ -43,7 +43,9 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
   const updateStatus = useUpdateR2MeetingStatus();
   const { role } = useAuth();
   const [showNoShowEvidence, setShowNoShowEvidence] = useState(false);
-  const requiresEvidence = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+  // Apenas SDRs precisam anexar evidência + IA ao marcar No-Show.
+  // Closers/Closer Sombra marcam direto, sem confirmação (decisão de produto).
+  const requiresEvidence = role === 'sdr';
 
   if (!meeting) return null;
 
