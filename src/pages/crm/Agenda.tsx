@@ -30,6 +30,15 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
+  scheduled: ['invited', 'scheduled'],
+  rescheduled: ['rescheduled'],
+  completed: ['completed'],
+  no_show: ['no_show'],
+  canceled: ['cancelled', 'canceled'],
+  contract_paid: ['contract_paid'],
+};
+
 export default function Agenda() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
