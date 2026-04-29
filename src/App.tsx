@@ -54,6 +54,7 @@ const ImportarContatos = lazy(() => import("./pages/crm/ImportarContatos"));
 const ImportarNegocios = lazy(() => import("./pages/crm/ImportarNegocios"));
 const ImportarHistorico = lazy(() => import("./pages/crm/ImportarHistorico"));
 const AuditoriaAgendamentos = lazy(() => import("./pages/crm/AuditoriaAgendamentos"));
+const RevisaoNoShows = lazy(() => import("./pages/crm/RevisaoNoShows"));
 const Agenda = lazy(() => import("./pages/crm/Agenda"));
 const LeadsLimbo = lazy(() => import("./pages/crm/LeadsLimbo"));
 const RetornosParceiros = lazy(() => import("./pages/crm/RetornosParceiros"));
