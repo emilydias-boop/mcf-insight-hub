@@ -1100,12 +1100,11 @@ export function useSearchDealsForSchedule(
                   (a: any) => {
                     if (a.meeting_slot?.meeting_type !== 'r1') return false;
                     if (!a.meeting_slot?.scheduled_at) return false;
-                    // REGRA NÃO-RETROATIVA: ignora movimentos anteriores
-                    // à data de aplicação da regra de reagendamento.
-                    if (rescheduleAppliesFrom) {
-                      const moveAt = new Date(a.booked_at || a.created_at);
-                      if (moveAt < rescheduleAppliesFrom) return false;
-                    }
+                    // A partir da vigência da regra (applies_from), TODO o
+                    // histórico de R1 do lead conta para o limite — leads que
+                    // já tinham 2+ movimentos ficam imediatamente bloqueados.
+                    // O gating temporal (regra ainda não vigora) é aplicado
+                    // abaixo via verificação de rescheduleAppliesFrom > now.
                     return true;
                   },
                 )
@@ -1136,6 +1135,7 @@ export function useSearchDealsForSchedule(
                 const nextMovementOrder = totalMovements + 1;
                 if (
                   rescheduleThreshold !== null &&
+                  (!rescheduleAppliesFrom || rescheduleAppliesFrom <= new Date()) &&
                   nextMovementOrder >= rescheduleThreshold
                 ) {
                   warningOnly = false;
