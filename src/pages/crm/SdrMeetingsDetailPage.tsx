@@ -102,15 +102,10 @@ export default function SdrMeetingsDetailPage() {
     customMeta,
   });
 
-  // Independent query for Reuniões tab - broad range (6 months back, 1 month ahead)
-  const allMeetingsRange = useMemo(() => ({
-    start: subMonths(new Date(), 6),
-    end: addMonths(new Date(), 1),
-  }), []);
-
+  // Reuniões tab respeita o mesmo período dos filtros do topo (igual ao painel/Visão Geral)
   const allMeetingsQuery = useSdrMeetingsFromAgenda({
-    startDate: allMeetingsRange.start,
-    endDate: allMeetingsRange.end,
+    startDate,
+    endDate,
     sdrEmailFilter: sdrEmail || undefined,
   });
   const allMeetings = allMeetingsQuery.data || [];
