@@ -119,15 +119,13 @@ export function TeamKPICards({
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
-      value: isConsorcio
-        ? (kpis.totalContratos || 0)
-        : ((kpis.totalContratos || 0) - (kpis.totalOutside || 0)),
+      value: kpis.totalContratos || 0,
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
-        : "Contratos pagos via R1 (contract_paid_at no período, exclui outside). Fato consumado — não inclui futuro.",
+        : "Contratos pagos via R1 (contract_paid_at no período). Mesmo número da coluna 'Contrato Pago' da tabela Closers.",
       bucket: "contratos" as KpiBucket,
     },
     ...(isConsorcio ? [] : [{
