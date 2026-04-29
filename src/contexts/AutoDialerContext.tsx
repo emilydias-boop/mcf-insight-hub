@@ -212,10 +212,13 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
       if (wasInProgressRef.current) {
         // Atendeu → NÃO abre qualificação automaticamente.
-        // O SDR aciona o modal manualmente quando/se precisar.
-        // Apenas pausa a fila para o SDR decidir o próximo passo.
-        setState('paused-qualifying');
+        // O SDR aciona o modal manualmente quando/se precisar (botão na barra
+        // in-call). Se o auto-dialer estiver rodando, segue para o próximo
+        // lead; o SDR pode pausar manualmente o painel se quiser qualificar.
         setInCallDrawerOpen(false);
+        if (stateRef.current === 'running') {
+          advanceToNext();
+        }
       } else {
         // Não atendeu / falhou
         const result: LeadResult = callStatus === 'failed' ? 'failed' : 'no-answer';
