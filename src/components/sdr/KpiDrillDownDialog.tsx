@@ -52,7 +52,16 @@ function inRange(iso: string | null | undefined, start: Date | null, end: Date |
 
 function isRealizadaStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
-  return v === "completed" || v === "realizada" || v === "show" || v === "attended";
+  // contract_paid e refunded implicam que a R1 aconteceu (lead pagou ou foi reembolsado depois).
+  // Alinhado com get_sdr_metrics_from_agenda, que conta esses como Realizada.
+  return (
+    v === "completed" ||
+    v === "realizada" ||
+    v === "show" ||
+    v === "attended" ||
+    v === "contract_paid" ||
+    v === "refunded"
+  );
 }
 function isNoShowStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
@@ -228,6 +237,8 @@ function statusBadge(s?: string | null) {
   if (v === "rescheduled") return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Remarcada</Badge>;
   if (v === "sem_sucesso") return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Sem Sucesso</Badge>;
   if (isCancelledStatus(v)) return <Badge className="bg-rose-500/15 text-rose-500 border-rose-500/30">Cancelada</Badge>;
+  if (v === "contract_paid") return <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30">Contrato Pago</Badge>;
+  if (v === "refunded") return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30">Reembolsado</Badge>;
   return <Badge variant="outline">{s || "—"}</Badge>;
 }
 
@@ -253,9 +264,9 @@ export function KpiDrillDownDialog({
       return applyNoShowCap(noShowsInRange);
     }
     if (bucket === "pendentes") {
-      // Usa raw para não perder reuniões deduplicadas (várias por lead)
-      const source = meetingsRaw && meetingsRaw.length > 0 ? meetingsRaw : meetings;
-      return filterByBucket(source, "pendentes", startDate, endDate);
+      // Usa a lista DEDUPLICADA por deal_id (mesma regra do KPI R1 Agendada),
+      // senão o drilldown infla por lead com várias reuniões.
+      return filterByBucket(meetings, "pendentes", startDate, endDate);
     }
     return filterByBucket(meetings, bucket, startDate, endDate);
   })();
