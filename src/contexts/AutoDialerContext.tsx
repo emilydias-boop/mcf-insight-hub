@@ -250,14 +250,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     }
   }, [callStatus, currentCallId, hangUp, openQualificationModal, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
 
-  // Quando o modal de qualificação fecha, retoma a fila
-  useEffect(() => {
-    if (stateRef.current !== 'paused-qualifying') return;
-    if (!qualificationModalOpen) {
-      setState('running');
-      advanceToNext();
-    }
-  }, [qualificationModalOpen, advanceToNext]);
+  // (Removido) A retomada da fila após qualificação não é mais necessária:
+  // o modal de qualificação não abre mais automaticamente — o SDR aciona
+  // manualmente quando precisar.
 
   // ===== API =====
   const loadQueue = useCallback((leads: AutoDialerLead[]) => {
