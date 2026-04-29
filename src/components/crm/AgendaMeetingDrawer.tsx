@@ -66,6 +66,7 @@ import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
+import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -1139,6 +1140,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               <>
                 <Separator />
                 <MovementHistorySection attendeeId={selectedParticipant.id} />
+                <Separator />
+                <LeadNoShowEvidenceHistory dealId={activeMeeting?.deal_id || null} />
               </>
             )}
 

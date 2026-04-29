@@ -104,3 +104,31 @@ export async function getEvidenceSignedUrl(path: string): Promise<string | null>
     .createSignedUrl(path, 300);
   return data?.signedUrl ?? null;
 }
+
+/**
+ * Lista as evidências de No-Show enviadas pelo usuário logado (SDR/Closer).
+ * Read-only — usado em /crm/meus-no-shows e no drawer do lead.
+ */
+export function useMyNoShowEvidences(opts?: { dealId?: string | null }) {
+  return useQuery({
+    queryKey: ["my-no-show-evidences", opts?.dealId ?? "all"],
+    queryFn: async (): Promise<PendingReview[]> => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      if (!uid) return [];
+      let q = supabase
+        .from("no_show_validations")
+        .select(
+          "id, deal_id, meeting_slot_id, attendee_id, lead_phone, evidence_path, ai_verdict, ai_reasoning, ai_extracted_phone, phone_match, sdr_justification, performed_by, performed_by_role, bu_origin_id, meeting_type, created_at, manager_review_status, manager_review_by, manager_review_at, manager_review_notes, final_status, human_decision, human_overrode_ai"
+        )
+        .eq("performed_by", uid)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (opts?.dealId) q = q.eq("deal_id", opts.dealId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as PendingReview[];
+    },
+    staleTime: 30_000,
+  });
+}

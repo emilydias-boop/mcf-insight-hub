@@ -1,13 +1,14 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Briefcase, 
-  MessageCircle, 
-  Settings, 
-  Shield, 
-  CalendarDays, 
+import {
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  MessageCircle,
+  Settings,
+  Shield,
+  ShieldAlert,
+  CalendarDays,
   ShoppingCart,
   ClipboardCheck,
   Inbox
@@ -23,23 +24,23 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
     'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
-    'auditoria-agendamentos', 'configuracoes'
+    'auditoria-agendamentos', 'meus-no-shows', 'configuracoes'
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'pos-reuniao', 'configuracoes'
+    'agenda', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
   ],
   credito: [
-    'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'configuracoes'
+    'visao-geral', 'contatos', 'negocios',
+    'agenda', 'meus-no-shows', 'configuracoes'
   ],
   projetos: [
-    'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'configuracoes'
+    'visao-geral', 'contatos', 'negocios',
+    'agenda', 'meus-no-shows', 'configuracoes'
   ],
   leilao: [
-    'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'configuracoes'
+    'visao-geral', 'contatos', 'negocios',
+    'agenda', 'meus-no-shows', 'configuracoes'
   ],
   marketing: [],
 };
@@ -95,6 +96,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'leads-limbo', to: `${basePath}/leads-limbo`, label: 'Limbo', icon: Inbox },
     
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
+    { key: 'meus-no-shows', to: `${basePath}/meus-no-shows`, label: 'Meus No-Shows', icon: ShieldAlert },
     { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
@@ -117,6 +119,10 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     }
     
     allowedTabs.push('negocios');
+    // SDR/Closer precisa ver as próprias contestações de no-show
+    if (buVisibleTabs.includes('meus-no-shows')) {
+      allowedTabs.push('meus-no-shows');
+    }
     
     navItems = navItems.filter(item => allowedTabs.includes(item.key));
   }
