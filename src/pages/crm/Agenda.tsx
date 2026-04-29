@@ -30,6 +30,15 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
+  scheduled: ['invited', 'scheduled'],
+  rescheduled: ['rescheduled'],
+  completed: ['completed'],
+  no_show: ['no_show'],
+  canceled: ['cancelled', 'canceled'],
+  contract_paid: ['contract_paid'],
+};
+
 export default function Agenda() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -142,45 +151,21 @@ export default function Agenda() {
     }
     
     if (closerFilter) {
-      const beforeCount = result.length;
       result = result.filter(m => m.closer_id === closerFilter);
-      console.log('[AgendaR1][filter:closer]', {
-        closerFilter,
-        beforeCount,
-        afterCount: result.length,
-        sampleClosersInData: Array.from(new Set(meetings.slice(0, 30).map(m => m.closer_id))),
-      });
     }
     if (statusFilter) {
       // Filter by attendee-level status instead of slot-level status
-      const attendeeStatusMap: Record<string, string[]> = {
-        'scheduled': ['invited', 'scheduled'],
-        'rescheduled': ['rescheduled'],
-        'completed': ['completed'],
-        'no_show': ['no_show'],
-        'canceled': ['cancelled', 'canceled'],
-        'contract_paid': ['contract_paid'],
-      };
-      const validStatuses = attendeeStatusMap[statusFilter] || [statusFilter];
-      const beforeCount = result.length;
+      const validStatuses = ATTENDEE_STATUS_FILTERS[statusFilter] || [statusFilter];
       result = result.filter(m => 
-        m.attendees?.some(att => validStatuses.includes(att.status))
+        m.attendees?.some(att => !att.is_partner && validStatuses.includes(att.status))
       );
-      console.log('[AgendaR1][filter:status]', {
-        statusFilter,
-        validStatuses,
-        beforeCount,
-        afterCount: result.length,
-        sampleAttendeeStatuses: Array.from(
-          new Set(meetings.slice(0, 30).flatMap(m => (m.attendees || []).map(a => a.status)))
-        ),
-      });
     }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
       const searchDigits = searchTerm.replace(/\D/g, '');
       result = result.filter(m =>
         m.attendees?.some(att => {
+          if (att.is_partner) return false;
           const name = (att.attendee_name || '').toLowerCase();
           const phone = (att.attendee_phone || '').replace(/\D/g, '');
           return name.includes(search) || 
@@ -605,6 +590,8 @@ export default function Agenda() {
             meetings={filteredMeetings}
             isLoading={meetingsLoading}
             onViewDeal={handleViewDeal}
+            statusFilter={statusFilter}
+            searchTerm={searchTerm}
           />
         </TabsContent>
       </Tabs>

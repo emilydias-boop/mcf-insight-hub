@@ -14,7 +14,18 @@ interface MeetingsListProps {
   meetings: MeetingSlot[];
   isLoading: boolean;
   onViewDeal: (dealId: string) => void;
+  statusFilter?: string | null;
+  searchTerm?: string;
 }
+
+const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
+  scheduled: ['invited', 'scheduled'],
+  rescheduled: ['rescheduled'],
+  completed: ['completed'],
+  no_show: ['no_show'],
+  canceled: ['cancelled', 'canceled'],
+  contract_paid: ['contract_paid'],
+};
 
 const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle }> = {
   invited: { label: 'Agendada', variant: 'default', icon: CheckCircle },
@@ -43,18 +54,30 @@ interface AttendeeRow {
   isReschedule: boolean;
 }
 
-export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListProps) {
+export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '' }: MeetingsListProps) {
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
     const rows: AttendeeRow[] = [];
+    const validStatuses = statusFilter ? ATTENDEE_STATUS_FILTERS[statusFilter] || [statusFilter] : null;
+    const search = searchTerm.trim().toLowerCase();
+    const searchDigits = searchTerm.replace(/\D/g, '');
+
     for (const meeting of meetings) {
       if (meeting.attendees?.length) {
         for (const att of meeting.attendees) {
           // Skip partners - they share the slot with the main lead
           if (att.is_partner) continue;
+          if (validStatuses && !validStatuses.includes(att.status || meeting.status)) continue;
+
+          if (search.length >= 2) {
+            const name = (att.attendee_name || att.contact?.name || '').toLowerCase();
+            const phone = (att.attendee_phone || att.contact?.phone || '').replace(/\D/g, '');
+            if (!name.includes(search) && !(searchDigits.length >= 2 && phone.includes(searchDigits))) continue;
+          }
+
           rows.push({
             meetingId: meeting.id,
             meetingStatus: meeting.status,
@@ -86,7 +109,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListPr
       }
     }
     return rows;
-  }, [meetings]);
+  }, [meetings, statusFilter, searchTerm]);
 
   const handleUpdateStatus = (meetingId: string, status: string) => {
     updateStatus.mutate({ meetingId, status });
