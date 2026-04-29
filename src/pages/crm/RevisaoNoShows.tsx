@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Loader2, ShieldAlert, CheckCircle2, XCircle, Phone, User, Calendar, Image as ImageIcon } from "lucide-react";
+import { Loader2, ShieldAlert, CheckCircle2, XCircle, Phone, User, Calendar, Image as ImageIcon, Briefcase, Tag, Users, AlertCircle, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,22 +57,83 @@ function ReviewCard({ item }: { item: PendingReview }) {
           <div className="space-y-1">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-orange-600" />
-              No-Show {item.meeting_type ?? "R1"} — {item.lead_phone || "lead sem telefone"}
+              No-Show {item.meeting_type ?? "R1"} — {item.deal?.name || item.lead_phone || "lead sem identificação"}
             </CardTitle>
             <CardDescription className="text-xs">
               Registrado em {format(new Date(item.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+              {item.performed_by_profile?.full_name && (
+                <> · por <strong>{item.performed_by_profile.full_name}</strong>{item.performed_by_role ? ` (${item.performed_by_role})` : ""}</>
+              )}
               {item.manager_review_at && (
-                <> · Revisado em {format(new Date(item.manager_review_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</>
+                <> · Revisado em {format(new Date(item.manager_review_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}{item.manager_review_by_profile?.full_name ? ` por ${item.manager_review_by_profile.full_name}` : ""}</>
               )}
             </CardDescription>
           </div>
           <div className="flex flex-col items-end gap-1">
             {statusBadge(item)}
             <Badge variant="outline" className="text-[10px]">IA: {item.ai_verdict ?? "—"}</Badge>
+            {typeof item.prior_no_shows_for_deal === "number" && item.prior_no_shows_for_deal > 0 && (
+              <Badge variant="secondary" className="text-[10px]">
+                {item.prior_no_shows_for_deal} no-show(s) deste lead
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Bloco de contexto: lead, reunião, atribuição */}
+        <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="space-y-1">
+            <div className="font-semibold flex items-center gap-1"><Briefcase className="h-3 w-3" /> Lead</div>
+            <div>{item.deal?.name || "—"}</div>
+            {item.deal?.product_name && <div className="text-muted-foreground">Produto: {item.deal.product_name}</div>}
+            {item.deal?.origin_name && <div className="text-muted-foreground">Origem: {item.deal.origin_name}</div>}
+            <div className="text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" /> {item.lead_phone || "—"}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="font-semibold flex items-center gap-1"><Calendar className="h-3 w-3" /> Reunião {item.meeting?.meeting_type || item.meeting_type || "R1"}</div>
+            {item.meeting?.scheduled_at ? (
+              <>
+                <div>{format(new Date(item.meeting.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</div>
+                {item.meeting.duration_minutes && (
+                  <div className="text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> {item.meeting.duration_minutes} min</div>
+                )}
+              </>
+            ) : (
+              <div className="text-muted-foreground">Reunião não localizada</div>
+            )}
+            {item.meeting?.closer_name && (
+              <div className="text-muted-foreground">Closer: {item.meeting.closer_name}</div>
+            )}
+          </div>
+          <div className="space-y-1">
+            <div className="font-semibold flex items-center gap-1"><Users className="h-3 w-3" /> Atribuição</div>
+            {item.deal?.original_sdr_email && (
+              <div className="text-muted-foreground">SDR original: {item.deal.original_sdr_email}</div>
+            )}
+            {item.deal?.r1_closer_email && (
+              <div className="text-muted-foreground">R1 closer: {item.deal.r1_closer_email}</div>
+            )}
+            {item.deal?.r2_closer_email && (
+              <div className="text-muted-foreground">R2 closer: {item.deal.r2_closer_email}</div>
+            )}
+            {!item.deal?.original_sdr_email && !item.deal?.r1_closer_email && !item.deal?.r2_closer_email && (
+              <div className="text-muted-foreground">—</div>
+            )}
+          </div>
+        </div>
+
+        {/* Alerta quando IA bloqueou (contestação) */}
+        {item.ai_verdict === "not_no_show" && (
+          <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/20 p-3 text-xs flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-red-700 dark:text-red-300">Por que a IA NÃO autorizou este No-Show</div>
+              <div className="text-red-700/80 dark:text-red-300/90">{item.ai_reasoning || "Sem detalhes."}</div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <div className="text-xs space-y-1">
@@ -84,7 +145,7 @@ function ReviewCard({ item }: { item: PendingReview }) {
               </div>
             </div>
             <div className="rounded-md border p-3 bg-muted/40 space-y-2">
-              <div className="text-xs font-semibold">Análise da IA</div>
+              <div className="text-xs font-semibold">Análise da IA {item.ai_verdict ? `(${item.ai_verdict})` : ""}</div>
               <p className="text-xs text-muted-foreground">{item.ai_reasoning || "—"}</p>
             </div>
             {item.sdr_justification && (
