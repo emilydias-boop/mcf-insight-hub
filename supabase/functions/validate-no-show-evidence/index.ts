@@ -17,6 +17,12 @@ function normalizePhone(raw: string | null | undefined): string | null {
   return digits.slice(-9);
 }
 
+async function sha256Hex(buf: Uint8Array): Promise<string> {
+  const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+  const arr = Array.from(new Uint8Array(hashBuf));
+  return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -50,20 +56,49 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const {
+      action = "analyze",
       evidence_path,
       lead_phone,
       lead_name,
       meeting_scheduled_at,
+      deal_id,
+      meeting_slot_id,
+      attendee_id,
+      bu_origin_id,
+      performed_by_role,
+      human_decision,
+      human_justification,
+      ai_verdict_received, // veredito retornado em analyze, devolvido em commit
+      ai_payload,          // payload completo da IA devolvido em commit
     }: {
+      action?: "analyze" | "commit";
       evidence_path: string;
       lead_phone?: string | null;
       lead_name?: string | null;
       meeting_scheduled_at?: string | null;
+      deal_id?: string | null;
+      meeting_slot_id?: string | null;
+      attendee_id?: string | null;
+      bu_origin_id?: string | null;
+      performed_by_role?: string | null;
+      human_decision?: "no_show" | "not_no_show" | null;
+      human_justification?: string | null;
+      ai_verdict_received?: string | null;
+      ai_payload?: any;
     } = body;
 
     if (!evidence_path) {
       return new Response(JSON.stringify({ error: "evidence_path required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Garante que o path pertence ao próprio usuário (mesmo padrão da policy de Storage)
+    const firstSegment = evidence_path.split("/")[0];
+    if (firstSegment !== userId) {
+      return new Response(JSON.stringify({ error: "evidence_path não pertence ao usuário" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -90,10 +125,24 @@ Deno.serve(async (req) => {
     }
     const contentType = imgResp.headers.get("content-type") ?? "image/png";
     const imgBuf = new Uint8Array(await imgResp.arrayBuffer());
+    const evidenceHash = await sha256Hex(imgBuf);
     let binary = "";
     for (let i = 0; i < imgBuf.length; i++) binary += String.fromCharCode(imgBuf[i]);
     const base64 = btoa(binary);
     const dataUrl = `data:${contentType};base64,${base64}`;
+
+    // ========== COMMIT: pula IA, persiste validação com service role ==========
+    if (action === "commit") {
+      if (!human_decision) {
+        return new Response(JSON.stringify({ error: "human_decision required no commit" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Re-executa IA aqui também — não confia no veredito devolvido pelo cliente.
+      // (Reutiliza dataUrl já baixado)
+    }
 
     const systemPrompt =
       "Você é um auditor de conversas de WhatsApp para uma operação comercial brasileira. " +
@@ -214,6 +263,78 @@ Deno.serve(async (req) => {
     const phoneMatch =
       leadNorm && aiNorm ? leadNorm === aiNorm : null;
 
+    // ========== COMMIT: persiste no DB com service role ==========
+    if (action === "commit") {
+      // Busca settings (modo block?)
+      const { data: settings } = await adminClient
+        .from("no_show_ai_settings")
+        .select("*")
+        .eq("id", 1)
+        .maybeSingle();
+
+      const requireEvidence = settings?.require_evidence ?? true;
+      const mode = settings?.mode ?? "suggest";
+
+      if (requireEvidence && mode === "block" && parsed.verdict === "not_no_show" && human_decision === "no_show") {
+        return new Response(JSON.stringify({
+          error: "Modo block: a IA determinou que esta conversa NÃO é No-Show.",
+          ai: { verdict: parsed.verdict, reasoning: parsed.reasoning },
+        }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const isOverride = parsed.verdict === "not_no_show" && human_decision === "no_show";
+      if (isOverride && (!human_justification || human_justification.trim().length < 10)) {
+        return new Response(JSON.stringify({
+          error: "Justificativa obrigatória (mínimo 10 caracteres) ao discordar da IA.",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { data: inserted, error: insertErr } = await adminClient
+        .from("no_show_validations")
+        .insert({
+          deal_id: deal_id ?? null,
+          meeting_slot_id: meeting_slot_id ?? null,
+          attendee_id: attendee_id ?? null,
+          lead_phone: lead_phone ?? null,
+          evidence_path,
+          evidence_hash: evidenceHash,
+          ai_verdict: parsed.verdict,
+          ai_reasoning: parsed.reasoning,
+          ai_extracted_phone: parsed.extracted_phone,
+          phone_match: phoneMatch,
+          ai_model: "google/gemini-3-flash-preview",
+          ai_raw_response: aiJson,
+          human_decision,
+          human_justification: human_justification ?? null,
+          performed_by: userId,             // forçado server-side
+          performed_by_role: performed_by_role ?? null,
+          bu_origin_id: bu_origin_id ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (insertErr) {
+        console.error("insert validation failed", insertErr);
+        return new Response(JSON.stringify({ error: "Falha ao registrar validação", detail: insertErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          committed: true,
+          validation_id: inserted.id,
+          verdict: parsed.verdict,
+          reasoning: parsed.reasoning,
+          phone_match: phoneMatch,
+          override: isOverride,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ========== ANALYZE (default): só retorna parecer, NÃO persiste ==========
     return new Response(
       JSON.stringify({
         verdict: parsed.verdict,
@@ -223,8 +344,8 @@ Deno.serve(async (req) => {
         phone_match: phoneMatch,
         lead_phone_normalized: leadNorm,
         extracted_phone_normalized: aiNorm,
+        evidence_hash: evidenceHash,
         model: "google/gemini-3-flash-preview",
-        raw: aiJson,
         user_id: userId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
