@@ -53,14 +53,13 @@ export function TeamKPICards({
   const semStatusTooltip = isFutureWindow
     ? "Pendentes vivos: reuniões cuja hora já passou e ainda estão sem desfecho (convidada/remarcada/sem sucesso). Cap de 2 por lead."
     : "Backlog histórico: reuniões do período que ficaram sem desfecho registrado (convidada/remarcada/sem sucesso). Cap de 2 por lead.";
-  // Diferença entre R1 Agendada (planejado) e a soma dos status conhecidos.
-  // Inclui: reuniões futuras ainda sem desfecho + cancelamentos/remarcações
-  // não contabilizadas + estouros do cap de Sem Status.
-  const diferenca =
+  // Pendentes / Sem Desfecho = R1 Agendada − (Realizada + No-Show).
+  // Engloba: futuras ainda sem desfecho, vencidas sem desfecho (Sem Status)
+  // e canceladas/remarcadas. Drilldown separa em sub-abas.
+  const pendentesTotal =
     (kpis.totalR1Agendada || 0)
     - (kpis.totalRealizadas || 0)
-    - (kpis.totalNoShows || 0)
-    - (semStatus ?? 0);
+    - (kpis.totalNoShows || 0);
   const cards: Array<{
     title: string;
     value: string | number;
@@ -116,15 +115,16 @@ export function TeamKPICards({
       tooltip: "No-shows ocorridos (cap de 1/lead antes de 28/04, cap de 2/lead a partir de 28/04). Fato consumado — não inclui futuro.",
       bucket: "no_show" as KpiBucket,
     },
-    // Card condicional: Sem Status (híbrido — pendentes vivos no futuro, backlog no passado)
-    ...((semStatus ?? 0) > 0 ? [{
-      title: semStatusLabel,
-      value: semStatus ?? 0,
+    // Card unificado: Pendentes / Sem Desfecho
+    ...(pendentesTotal > 0 ? [{
+      title: "Pendentes / Sem Desfecho",
+      value: pendentesTotal,
       icon: AlertCircle,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
-      tooltip: semStatusTooltip,
-      bucket: "sem_status" as KpiBucket,
+      tooltip: "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.",
+      bucket: "pendentes" as KpiBucket,
+      subline: `Vencidas: ${semStatus ?? 0}`,
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
@@ -160,14 +160,6 @@ export function TeamKPICards({
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
       tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100.",
-    },
-    {
-      title: "Diferença",
-      value: diferenca,
-      icon: HelpCircle,
-      color: "text-slate-400",
-      bgColor: "bg-slate-400/10",
-      tooltip: "R1 Agendada − (Realizada + No-Show + Sem Status). Representa reuniões futuras ainda sem desfecho, canceladas/remarcadas não contabilizadas e estouros do cap de Sem Status.",
     },
   ];
 
