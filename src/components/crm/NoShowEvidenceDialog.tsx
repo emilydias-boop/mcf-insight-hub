@@ -105,6 +105,28 @@ export function NoShowEvidenceDialog({
   const [committing, setCommitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Extrai a mensagem real de erro de uma edge function (supabase-js v2 esconde
+  // o body em err.context quando o status é non-2xx). Sem isso o usuário só vê
+  // "Edge Function returned a non-2xx status code".
+  const extractEdgeError = async (err: any, fallback = "Falha na chamada"): Promise<string> => {
+    try {
+      const ctx = err?.context;
+      if (ctx && typeof ctx.json === "function") {
+        const j = await ctx.json();
+        if (j?.error) return j.error;
+      }
+      if (ctx && typeof ctx.text === "function") {
+        const t = await ctx.text();
+        try {
+          const j = JSON.parse(t);
+          if (j?.error) return j.error;
+        } catch { /* não é JSON */ }
+        if (t) return t;
+      }
+    } catch { /* ignore */ }
+    return err?.message || fallback;
+  };
+
   useEffect(() => {
     if (!open) {
       setFile(null);
@@ -166,8 +188,9 @@ export function NoShowEvidenceDialog({
       setAiResult(aiData as AIResult);
     } catch (e: any) {
       console.error(e);
-      setAiError(e.message || "Erro ao processar evidência");
-      toast.error(e.message || "Erro ao processar evidência");
+      const msg = await extractEdgeError(e, "Erro ao processar evidência");
+      setAiError(msg);
+      toast.error(msg);
     } finally {
       setUploading(false);
       setAnalyzing(false);
@@ -217,7 +240,8 @@ export function NoShowEvidenceDialog({
         }
       );
       if (commitErr) {
-        toast.error(commitErr.message || "Falha ao registrar validação");
+        const msg = await extractEdgeError(commitErr, "Falha ao registrar validação");
+        toast.error(msg);
         return;
       }
       if (commitData?.error) {
