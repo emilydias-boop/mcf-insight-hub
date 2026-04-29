@@ -87,7 +87,9 @@ Deno.serve(async (req) => {
       meeting_type?: "R1" | "R2";
       sdr_justification?: string | null;
       contest?: boolean;
+      prior_verdict?: "confirmed" | "not_no_show" | "inconclusive" | null;
     } = body;
+    const priorVerdict = (body as any)?.prior_verdict ?? null;
 
     if (!evidence_path) {
       return new Response(JSON.stringify({ error: "evidence_path required" }), {
@@ -315,21 +317,30 @@ Deno.serve(async (req) => {
 
     // ========== COMMIT: persiste no DB com service role ==========
     if (action === "commit") {
+      // Estabilidade: se o cliente passou o veredicto da fase 'analyze',
+      // usamos ele para decidir as validações (a IA não é determinística e
+      // pode oscilar entre chamadas, gerando UX confusa para o usuário).
+      // O veredicto fresco continua sendo gravado em ai_verdict para auditoria.
+      const effectiveVerdict = (priorVerdict ?? parsed.verdict) as
+        | "confirmed"
+        | "not_no_show"
+        | "inconclusive";
+
       // Validações por verdict
-      if (parsed.verdict === "inconclusive") {
+      if (effectiveVerdict === "inconclusive") {
         if (!sdr_justification || sdr_justification.trim().length < 10) {
           return new Response(JSON.stringify({
             error: "Justificativa obrigatória (mínimo 10 caracteres) quando a IA fica em dúvida.",
-            verdict: parsed.verdict,
+            verdict: effectiveVerdict,
           }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
 
-      const isContest = parsed.verdict === "not_no_show" && contest === true;
-      if (parsed.verdict === "not_no_show" && !isContest) {
+      const isContest = effectiveVerdict === "not_no_show" && contest === true;
+      if (effectiveVerdict === "not_no_show" && !isContest) {
         return new Response(JSON.stringify({
           error: "A IA determinou que esta conversa NÃO é No-Show. Use o fluxo de contestação se discordar.",
-          verdict: parsed.verdict,
+          verdict: effectiveVerdict,
           reasoning: parsed.reasoning,
         }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -342,8 +353,8 @@ Deno.serve(async (req) => {
       // final_status
       let finalStatus: "approved" | "blocked" | "pending_review" = "approved";
       let managerReviewStatus: "pending" | null = null;
-      if (parsed.verdict === "confirmed") finalStatus = "approved";
-      else if (parsed.verdict === "inconclusive") finalStatus = "approved";
+      if (effectiveVerdict === "confirmed") finalStatus = "approved";
+      else if (effectiveVerdict === "inconclusive") finalStatus = "approved";
       else if (isContest) {
         finalStatus = "pending_review";
         managerReviewStatus = "pending";
