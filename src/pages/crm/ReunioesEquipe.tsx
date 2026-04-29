@@ -347,6 +347,10 @@ export default function ReunioesEquipe() {
   // Fetch Closer metrics for the selected period
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
 
+  // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
+  // — usado para a média individual entre Closers nos cards de Taxa.
+  const { data: closerBreakdown } = useCloserBreakdownMetrics(start, end, "incorporador");
+
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
