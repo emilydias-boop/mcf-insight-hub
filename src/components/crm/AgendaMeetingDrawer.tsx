@@ -65,6 +65,7 @@ import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
+import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
