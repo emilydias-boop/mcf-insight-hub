@@ -957,16 +957,22 @@ export function useSearchDealsForSchedule(
       > = {};
 
       if (dealIds.length > 0) {
-        // Carregar regras dinâmicas para SDR no BU corrente
-        // O RPC get_process_rule retorna JSONB no formato {"value": N} ou {"roles": [...]}
-        const extractValue = (raw: any): number | null => {
-          if (raw == null) return null;
-          const v = typeof raw === 'object' && 'value' in raw ? raw.value : raw;
+        // Carregar regras dinâmicas para SDR no BU corrente.
+        // O RPC get_process_rule agora retorna { rule_value: {value: N}, applies_from: timestamp }
+        const extractRule = (raw: any): { value: number | null; appliesFrom: Date | null } => {
+          if (!raw || typeof raw !== 'object') return { value: null, appliesFrom: null };
+          const inner = raw.rule_value ?? raw;
+          const v = typeof inner === 'object' && inner && 'value' in inner ? inner.value : inner;
           const n = typeof v === 'number' ? v : Number(v);
-          return Number.isFinite(n) && n > 0 ? n : null;
+          const appliesFromRaw = raw.applies_from ?? null;
+          return {
+            value: Number.isFinite(n) && n > 0 ? n : null,
+            appliesFrom: appliesFromRaw ? new Date(appliesFromRaw) : null,
+          };
         };
 
         let rescheduleThreshold: number | null = null;
+        let rescheduleAppliesFrom: Date | null = null;
         let maxMeetingsPerWeek: number | null = null;
         try {
           const [r1, r2] = await Promise.all([
@@ -981,8 +987,10 @@ export function useSearchDealsForSchedule(
               _rule_key: 'max_meetings_per_week',
             }),
           ]);
-          rescheduleThreshold = extractValue(r1.data);
-          maxMeetingsPerWeek = extractValue(r2.data);
+          const parsedReschedule = extractRule(r1.data);
+          rescheduleThreshold = parsedReschedule.value;
+          rescheduleAppliesFrom = parsedReschedule.appliesFrom;
+          maxMeetingsPerWeek = extractRule(r2.data).value;
         } catch (e) {
           console.warn('[useAgendaData] Falha ao carregar process_rules SDR', e);
         }
@@ -1089,9 +1097,17 @@ export function useSearchDealsForSchedule(
               // (já bateu o teto de 1 agendamento + 1 reagendamento).
               const r1Movements = atts
                 .filter(
-                  (a: any) =>
-                    a.meeting_slot?.meeting_type === 'r1' &&
-                    a.meeting_slot?.scheduled_at,
+                  (a: any) => {
+                    if (a.meeting_slot?.meeting_type !== 'r1') return false;
+                    if (!a.meeting_slot?.scheduled_at) return false;
+                    // REGRA NÃO-RETROATIVA: ignora movimentos anteriores
+                    // à data de aplicação da regra de reagendamento.
+                    if (rescheduleAppliesFrom) {
+                      const moveAt = new Date(a.booked_at || a.created_at);
+                      if (moveAt < rescheduleAppliesFrom) return false;
+                    }
+                    return true;
+                  },
                 )
                 .sort(
                   (a: any, b: any) => {

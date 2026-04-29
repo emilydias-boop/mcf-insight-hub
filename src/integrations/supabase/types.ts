@@ -8211,6 +8211,7 @@ export type Database = {
       }
       process_rules: {
         Row: {
+          applies_from: string
           bu: string | null
           created_at: string
           description: string | null
@@ -8223,6 +8224,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          applies_from?: string
           bu?: string | null
           created_at?: string
           description?: string | null
@@ -8235,6 +8237,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          applies_from?: string
           bu?: string | null
           created_at?: string
           description?: string | null
@@ -11362,6 +11365,10 @@ export type Database = {
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      evaluate_sdr_reschedule: {
+        Args: { _bu: string; _deal_id: string; _meeting_type?: string }
+        Returns: Json
+      }
       find_or_create_crm_contact: {
         Args: {
           p_clint_id?: string
@@ -11820,6 +11827,10 @@ export type Database = {
       }
       has_agenda_capability: {
         Args: { _capability: string; _user_id: string }
+        Returns: boolean
+      }
+      has_approved_reschedule_request: {
+        Args: { _deal_id: string }
         Returns: boolean
       }
       has_role: {
