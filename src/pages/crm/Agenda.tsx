@@ -590,6 +590,8 @@ export default function Agenda() {
             meetings={filteredMeetings}
             isLoading={meetingsLoading}
             onViewDeal={handleViewDeal}
+            statusFilter={statusFilter}
+            searchTerm={searchTerm}
           />
         </TabsContent>
       </Tabs>
