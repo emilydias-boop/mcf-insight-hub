@@ -9,7 +9,6 @@ import {
   Clock,
   ExternalLink,
   AlertCircle,
-  HelpCircle
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
