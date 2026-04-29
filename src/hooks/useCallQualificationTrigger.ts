@@ -2,31 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useTwilio } from '@/contexts/TwilioContext';
 
 /**
- * Hook que detecta quando o lead atende a ligação (callStatus muda para 'in-progress')
- * e abre automaticamente o modal global de qualificação
+ * Hook que observa o status da chamada.
+ *
+ * IMPORTANTE: A abertura automática do modal de qualificação foi REMOVIDA por
+ * decisão de produto — o SDR deve abrir o modal manualmente quando precisar,
+ * em qualquer chamada (manual ou via auto-dialer). Mantemos o hook apenas
+ * para expor `isCallInProgress` aos componentes que ainda o consomem.
  */
 export function useCallQualificationTrigger() {
-  const { 
-    callStatus, 
-    currentCallDealId, 
-    openQualificationModal 
-  } = useTwilio();
-  
-  const prevStatusRef = useRef(callStatus);
-
-  useEffect(() => {
-    // Detectar transição para 'in-progress' (lead atendeu)
-    if (
-      prevStatusRef.current !== 'in-progress' && 
-      callStatus === 'in-progress' && 
-      currentCallDealId
-    ) {
-      // Abre o modal global via contexto
-      openQualificationModal(currentCallDealId);
-    }
-    
-    prevStatusRef.current = callStatus;
-  }, [callStatus, currentCallDealId, openQualificationModal]);
+  const { callStatus } = useTwilio();
 
   return { 
     isCallInProgress: callStatus === 'in-progress'
