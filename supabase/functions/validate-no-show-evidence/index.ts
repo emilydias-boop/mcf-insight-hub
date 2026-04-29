@@ -68,8 +68,9 @@ Deno.serve(async (req) => {
       performed_by_role,
       human_decision,
       human_justification,
-      ai_verdict_received, // veredito retornado em analyze, devolvido em commit
-      ai_payload,          // payload completo da IA devolvido em commit
+      meeting_type,
+      sdr_justification,
+      contest,
     }: {
       action?: "analyze" | "commit";
       evidence_path: string;
@@ -83,8 +84,9 @@ Deno.serve(async (req) => {
       performed_by_role?: string | null;
       human_decision?: "no_show" | "not_no_show" | null;
       human_justification?: string | null;
-      ai_verdict_received?: string | null;
-      ai_payload?: any;
+      meeting_type?: "R1" | "R2";
+      sdr_justification?: string | null;
+      contest?: boolean;
     } = body;
 
     if (!evidence_path) {
@@ -131,34 +133,65 @@ Deno.serve(async (req) => {
     const base64 = btoa(binary);
     const dataUrl = `data:${contentType};base64,${base64}`;
 
-    // ========== COMMIT: pula IA, persiste validação com service role ==========
-    if (action === "commit") {
-      if (!human_decision) {
-        return new Response(JSON.stringify({ error: "human_decision required no commit" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    // ========== Bloqueia hash duplicado (print reusado) ==========
+    if (deal_id) {
+      const { data: dupHash } = await adminClient
+        .from("no_show_validations")
+        .select("id, deal_id")
+        .eq("evidence_hash", evidenceHash)
+        .neq("deal_id", deal_id)
+        .limit(1)
+        .maybeSingle();
+      if (dupHash) {
+        return new Response(JSON.stringify({
+          error: "Este print já foi usado em outro lead. Envie uma evidência única para esta reunião.",
+        }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      // Re-executa IA aqui também — não confia no veredito devolvido pelo cliente.
-      // (Reutiliza dataUrl já baixado)
     }
 
+    // ========== Busca histórico de no-shows do lead (contexto para IA) ==========
+    let priorNoShows = 0;
+    if (deal_id) {
+      const { count } = await adminClient
+        .from("no_show_validations")
+        .select("id", { count: "exact", head: true })
+        .eq("deal_id", deal_id)
+        .in("ai_verdict", ["confirmed", "confirmed_no_show"]);
+      priorNoShows = count ?? 0;
+    }
+
+    const mtype = meeting_type ?? "R1";
+    const meetingLabel = mtype === "R1" ? "R1 (primeira reunião com SDR)" : "R2 (reunião de fechamento com closer)";
+
     const systemPrompt =
-      "Você é um auditor de conversas de WhatsApp para uma operação comercial brasileira. " +
-      "Analise o print enviado e responda APENAS via tool call 'no_show_verdict'. " +
-      "Considere no-show: lead não respondeu, ignorou, esqueceu da reunião, ou disse que não vai comparecer sem reagendar. " +
-      "NÃO é no-show: lead reagendou, lead apareceu, lead chegou atrasado mas chegou, ou conversa indica reunião realizada/feita. " +
-      "Extraia o número de telefone visível no topo da conversa (ou no nome do contato se for um número).";
+      `Você é um auditor de evidências de NO-SHOW para a ${meetingLabel} de uma operação comercial brasileira. ` +
+      "Sua tarefa é analisar o print de uma conversa (geralmente WhatsApp) e decidir se caracteriza no-show legítimo. " +
+      "\n\n## CRITÉRIOS OBRIGATÓRIOS PARA 'confirmed':\n" +
+      "1. O telefone OU nome visível no print bate com o lead esperado (informado abaixo).\n" +
+      "2. Existe pelo menos UMA mensagem enviada PELO VENDEDOR (lado direito no WhatsApp) sem resposta do lead, OU o lead respondeu confirmando que não compareceria/não compareceu.\n" +
+      "3. As mensagens são próximas (±24h) ao horário da reunião agendada.\n" +
+      "4. Frases típicas que reforçam: 'esqueci', 'não vou poder', 'não tenho mais interesse', 'desculpa não apareci', silêncio após mensagens insistindo na reunião.\n" +
+      "\n## RETORNE 'not_no_show' SE:\n" +
+      "- O lead respondeu e remarcou ou apareceu/atrasou (reunião aconteceu).\n" +
+      "- A conversa indica reunião realizada/feita.\n" +
+      "- Não há tentativa visível de contato sobre a reunião.\n" +
+      "- O telefone/nome no print é claramente de OUTRA pessoa.\n" +
+      "\n## RETORNE 'inconclusive' SE:\n" +
+      "- Print ilegível, cortado, ou sem contexto da reunião.\n" +
+      "- Datas das mensagens não são identificáveis.\n" +
+      "- Não dá pra ter certeza dos critérios acima.\n" +
+      "\nSeja RIGOROSO. Em caso de dúvida real, prefira 'inconclusive' a 'confirmed'.";
 
     const userParts: any[] = [
       {
         type: "text",
         text:
-          `Lead esperado: ${lead_name ?? "(desconhecido)"}\n` +
-          `Telefone do lead no CRM: ${lead_phone ?? "(não informado)"}\n` +
-          `Reunião agendada para: ${meeting_scheduled_at ?? "(desconhecido)"}\n\n` +
-          "Analise o print abaixo e dê seu parecer.",
+          `## Dados do lead esperado\n` +
+          `- Nome: ${lead_name ?? "(desconhecido)"}\n` +
+          `- Telefone CRM: ${lead_phone ?? "(não informado)"}\n` +
+          `- Reunião (${mtype}) agendada para: ${meeting_scheduled_at ?? "(desconhecido)"}\n` +
+          `- No-shows anteriores deste lead: ${priorNoShows}\n\n` +
+          "Analise o print abaixo conforme os critérios e responda via tool call.",
       },
       { type: "image_url", image_url: { url: dataUrl } },
     ];
@@ -186,12 +219,12 @@ Deno.serve(async (req) => {
                 properties: {
                   verdict: {
                     type: "string",
-                    enum: ["confirmed_no_show", "not_no_show", "uncertain"],
+                    enum: ["confirmed", "not_no_show", "inconclusive"],
                     description: "Classificação final.",
                   },
                   reasoning: {
                     type: "string",
-                    description: "Explicação curta (máx 2 frases) do porquê.",
+                    description: "Explicação curta (máx 3 frases) citando quais critérios bateram ou faltaram.",
                   },
                   extracted_phone: {
                     type: "string",
@@ -201,8 +234,19 @@ Deno.serve(async (req) => {
                     type: "string",
                     description: "Resumo de 1 frase do que aconteceu na conversa.",
                   },
+                  criteria_met: {
+                    type: "object",
+                    properties: {
+                      identity_match: { type: "boolean", description: "Telefone/nome bate com o lead?" },
+                      vendor_message_no_response: { type: "boolean", description: "Há mensagem do vendedor sem resposta OU resposta confirmando ausência?" },
+                      timing_close_to_meeting: { type: "boolean", description: "Mensagens próximas (±24h) do horário da reunião?" },
+                      lead_confirmed_absence: { type: "boolean", description: "Lead respondeu confirmando que não compareceria/desistiu?" },
+                    },
+                    required: ["identity_match", "vendor_message_no_response", "timing_close_to_meeting", "lead_confirmed_absence"],
+                    additionalProperties: false,
+                  },
                 },
-                required: ["verdict", "reasoning", "extracted_phone", "conversation_summary"],
+                required: ["verdict", "reasoning", "extracted_phone", "conversation_summary", "criteria_met"],
                 additionalProperties: false,
               },
             },
@@ -244,10 +288,16 @@ Deno.serve(async (req) => {
     }
 
     let parsed: {
-      verdict: "confirmed_no_show" | "not_no_show" | "uncertain";
+      verdict: "confirmed" | "not_no_show" | "inconclusive";
       reasoning: string;
       extracted_phone: string;
       conversation_summary: string;
+      criteria_met: {
+        identity_match: boolean;
+        vendor_message_no_response: boolean;
+        timing_close_to_meeting: boolean;
+        lead_confirmed_absence: boolean;
+      };
     };
     try {
       parsed = JSON.parse(toolCall.function.arguments);
@@ -265,28 +315,38 @@ Deno.serve(async (req) => {
 
     // ========== COMMIT: persiste no DB com service role ==========
     if (action === "commit") {
-      // Busca settings (modo block?)
-      const { data: settings } = await adminClient
-        .from("no_show_ai_settings")
-        .select("*")
-        .eq("id", 1)
-        .maybeSingle();
-
-      const requireEvidence = settings?.require_evidence ?? true;
-      const mode = settings?.mode ?? "suggest";
-
-      if (requireEvidence && mode === "block" && parsed.verdict === "not_no_show" && human_decision === "no_show") {
-        return new Response(JSON.stringify({
-          error: "Modo block: a IA determinou que esta conversa NÃO é No-Show.",
-          ai: { verdict: parsed.verdict, reasoning: parsed.reasoning },
-        }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Validações por verdict
+      if (parsed.verdict === "inconclusive") {
+        if (!sdr_justification || sdr_justification.trim().length < 10) {
+          return new Response(JSON.stringify({
+            error: "Justificativa obrigatória (mínimo 10 caracteres) quando a IA fica em dúvida.",
+            verdict: parsed.verdict,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
       }
 
-      const isOverride = parsed.verdict === "not_no_show" && human_decision === "no_show";
-      if (isOverride && (!human_justification || human_justification.trim().length < 10)) {
+      const isContest = parsed.verdict === "not_no_show" && contest === true;
+      if (parsed.verdict === "not_no_show" && !isContest) {
         return new Response(JSON.stringify({
-          error: "Justificativa obrigatória (mínimo 10 caracteres) ao discordar da IA.",
+          error: "A IA determinou que esta conversa NÃO é No-Show. Use o fluxo de contestação se discordar.",
+          verdict: parsed.verdict,
+          reasoning: parsed.reasoning,
+        }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      if (isContest && (!sdr_justification || sdr_justification.trim().length < 20)) {
+        return new Response(JSON.stringify({
+          error: "Para contestar a IA, descreva o motivo em pelo menos 20 caracteres.",
         }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // final_status
+      let finalStatus: "approved" | "blocked" | "pending_review" = "approved";
+      let managerReviewStatus: "pending" | null = null;
+      if (parsed.verdict === "confirmed") finalStatus = "approved";
+      else if (parsed.verdict === "inconclusive") finalStatus = "approved";
+      else if (isContest) {
+        finalStatus = "pending_review";
+        managerReviewStatus = "pending";
       }
 
       const { data: inserted, error: insertErr } = await adminClient
@@ -298,14 +358,19 @@ Deno.serve(async (req) => {
           lead_phone: lead_phone ?? null,
           evidence_path,
           evidence_hash: evidenceHash,
-          ai_verdict: parsed.verdict,
+          ai_verdict: parsed.verdict, // 'confirmed' | 'not_no_show' | 'inconclusive'
           ai_reasoning: parsed.reasoning,
           ai_extracted_phone: parsed.extracted_phone,
           phone_match: phoneMatch,
           ai_model: "google/gemini-3-flash-preview",
           ai_raw_response: aiJson,
-          human_decision,
+          human_decision: human_decision ?? "no_show",
+          human_overrode_ai: isContest,
           human_justification: human_justification ?? null,
+          sdr_justification: sdr_justification ?? null,
+          meeting_type: mtype,
+          manager_review_status: managerReviewStatus,
+          final_status: finalStatus,
           performed_by: userId,             // forçado server-side
           performed_by_role: performed_by_role ?? null,
           bu_origin_id: bu_origin_id ?? null,
@@ -328,7 +393,8 @@ Deno.serve(async (req) => {
           verdict: parsed.verdict,
           reasoning: parsed.reasoning,
           phone_match: phoneMatch,
-          override: isOverride,
+          contest: isContest,
+          final_status: finalStatus,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -341,10 +407,13 @@ Deno.serve(async (req) => {
         reasoning: parsed.reasoning,
         extracted_phone: parsed.extracted_phone,
         conversation_summary: parsed.conversation_summary,
+        criteria_met: parsed.criteria_met,
         phone_match: phoneMatch,
         lead_phone_normalized: leadNorm,
         extracted_phone_normalized: aiNorm,
         evidence_hash: evidenceHash,
+        prior_no_shows: priorNoShows,
+        meeting_type: mtype,
         model: "google/gemini-3-flash-preview",
         user_id: userId,
       }),
