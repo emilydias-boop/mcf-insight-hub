@@ -149,6 +149,8 @@ export function useLinkContractToAttendee() {
       // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ['unlinked-contracts'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['r1-metrics'] });

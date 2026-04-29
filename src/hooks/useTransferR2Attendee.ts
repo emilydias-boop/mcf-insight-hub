@@ -178,6 +178,8 @@ export function useTransferR2Attendee() {
     onSuccess: () => {
       // Invalidate all R2 agenda caches
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });

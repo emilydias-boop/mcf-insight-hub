@@ -38,6 +38,8 @@ export function useUpdateR2Attendee() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -70,6 +72,8 @@ export function useBatchUpdateR2Attendees() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -100,6 +104,8 @@ export function useQuickUpdateAttendeeStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -126,6 +132,8 @@ export function useRemoveR2Attendee() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -162,6 +170,8 @@ export function useCancelR2Meeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
@@ -189,6 +199,8 @@ export function useRestoreR2Meeting() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });

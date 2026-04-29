@@ -723,6 +723,8 @@ export const useDeleteCRMDeal = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['meeting-slots'] });
       queryClient.invalidateQueries({ queryKey: ['crm-contacts-with-deals'] });
       toast.success('Negócio excluído com sucesso');
