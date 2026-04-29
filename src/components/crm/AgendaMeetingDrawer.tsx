@@ -202,8 +202,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     }
   };
 
-  // SDRs e Closers precisam anexar evidência + IA. Liderança vai direto.
-  const requiresEvidence = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+  // Apenas SDRs precisam anexar evidência + IA ao marcar No-Show.
+  // Closers/Closer Sombra marcam direto, sem confirmação (decisão de produto).
+  // Liderança (manager/admin) recebe um AlertDialog simples de confirmação.
+  const requiresEvidence = role === 'sdr';
+  const skipNoShowConfirm = role === 'closer' || role === 'closer_sombra';
 
   const handleContractPaid = () => {
     if (selectedParticipant) {
