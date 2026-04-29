@@ -6,6 +6,8 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useState } from "react";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { startOfDay } from "date-fns";
 
 export type KpiBucket =
   | "agendamentos"
@@ -13,6 +15,7 @@ export type KpiBucket =
   | "realizada"
   | "no_show"
   | "sem_status"
+  | "pendentes"
   | "contratos";
 
 interface KpiDrillDownDialogProps {
@@ -37,6 +40,7 @@ const BUCKET_LABELS: Record<KpiBucket, string> = {
   realizada: "R1 Realizada",
   no_show: "No-Shows",
   sem_status: "Sem Status (invited / rescheduled / sem_sucesso)",
+  pendentes: "Pendentes / Sem Desfecho — reuniões que não viraram Realizada nem No-Show",
   contratos: "Contratos pagos",
 };
 
@@ -126,6 +130,10 @@ function isSemStatusStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v === "invited" || v === "rescheduled" || v === "sem_sucesso" || v === "" || v === "pending";
 }
+function isCancelledStatus(s?: string | null): boolean {
+  const v = (s || "").toLowerCase();
+  return v === "cancelled" || v === "canceled" || v === "cancelada";
+}
 function isContratoStage(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v.includes("contrato pago") || v.includes("proposta fechada");
@@ -162,12 +170,30 @@ function filterByBucket(
           !isRealizadaStatus(m.attendee_status) &&
           !isNoShowStatus(m.attendee_status)
         );
+      case "pendentes":
+        // Tudo que está marcado para o período mas não virou Realizada nem No-Show
+        return (
+          inRange(m.scheduled_at || m.data_agendamento, start, end) &&
+          !isRealizadaStatus(m.attendee_status) &&
+          !isNoShowStatus(m.attendee_status)
+        );
       case "contratos":
         return isContratoStage(m.status_atual);
       default:
         return false;
     }
   });
+}
+
+type PendenteSubBucket = "futuras" | "vencidas" | "canceladas";
+
+function classifyPendente(m: MeetingV2): PendenteSubBucket {
+  const iso = m.scheduled_at || m.data_agendamento;
+  const todayStart = startOfDay(new Date()).getTime();
+  const t = iso ? new Date(iso).getTime() : 0;
+  if (isCancelledStatus(m.attendee_status)) return "canceladas";
+  if (t >= todayStart) return "futuras";
+  return "vencidas";
 }
 
 function formatDate(iso?: string | null): string {
@@ -186,6 +212,7 @@ function statusBadge(s?: string | null) {
   if (v === "invited") return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Convidada</Badge>;
   if (v === "rescheduled") return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Remarcada</Badge>;
   if (v === "sem_sucesso") return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Sem Sucesso</Badge>;
+  if (isCancelledStatus(v)) return <Badge className="bg-rose-500/15 text-rose-500 border-rose-500/30">Cancelada</Badge>;
   return <Badge variant="outline">{s || "—"}</Badge>;
 }
 
@@ -200,6 +227,7 @@ export function KpiDrillDownDialog({
   endDate,
 }: KpiDrillDownDialogProps) {
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
+  const [pendenteTab, setPendenteTab] = useState<PendenteSubBucket | "todos">("todos");
   const filtered = (() => {
     if (!bucket) return [] as MeetingV2[];
     // Para o bucket no_show usamos as reuniões SEM dedup global por deal_id
@@ -209,7 +237,26 @@ export function KpiDrillDownDialog({
       const noShowsInRange = filterByBucket(source, "no_show", startDate, endDate);
       return applyNoShowCap(noShowsInRange);
     }
+    if (bucket === "pendentes") {
+      // Usa raw para não perder reuniões deduplicadas (várias por lead)
+      const source = meetingsRaw && meetingsRaw.length > 0 ? meetingsRaw : meetings;
+      return filterByBucket(source, "pendentes", startDate, endDate);
+    }
     return filterByBucket(meetings, bucket, startDate, endDate);
+  })();
+
+  const pendenteCounts = (() => {
+    if (bucket !== "pendentes") return null;
+    const c = { futuras: 0, vencidas: 0, canceladas: 0 };
+    filtered.forEach((m) => {
+      c[classifyPendente(m)]++;
+    });
+    return c;
+  })();
+
+  const visibleRows = (() => {
+    if (bucket !== "pendentes" || pendenteTab === "todos") return filtered;
+    return filtered.filter((m) => classifyPendente(m) === pendenteTab);
   })();
 
   return (
@@ -219,10 +266,31 @@ export function KpiDrillDownDialog({
         <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {bucket ? BUCKET_LABELS[bucket] : ""} — {filtered.length} lead(s)
+            {bucket ? BUCKET_LABELS[bucket] : ""} — {visibleRows.length} lead(s)
             {" "}· clique numa linha para alterar status
           </DialogDescription>
         </DialogHeader>
+
+        {bucket === "pendentes" && pendenteCounts && (
+          <div className="px-6 pt-3 shrink-0">
+            <Tabs value={pendenteTab} onValueChange={(v) => setPendenteTab(v as PendenteSubBucket | "todos")}>
+              <TabsList>
+                <TabsTrigger value="todos">Todos ({filtered.length})</TabsTrigger>
+                <TabsTrigger value="futuras">Futuras ({pendenteCounts.futuras})</TabsTrigger>
+                <TabsTrigger value="vencidas">Vencidas s/ desfecho ({pendenteCounts.vencidas})</TabsTrigger>
+                <TabsTrigger value="canceladas">Canceladas/Remarcadas ({pendenteCounts.canceladas})</TabsTrigger>
+              </TabsList>
+              <TabsContent value={pendenteTab} className="mt-2">
+                <p className="text-xs text-muted-foreground">
+                  {pendenteTab === "futuras" && "Reuniões agendadas para datas futuras — ainda não aconteceram."}
+                  {pendenteTab === "vencidas" && "Já passaram da hora e ninguém marcou Realizada/No-Show."}
+                  {pendenteTab === "canceladas" && "Canceladas ou remarcadas — não viraram fato consumado."}
+                  {pendenteTab === "todos" && "Soma de futuras + vencidas + canceladas."}
+                </p>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <Table>
@@ -237,14 +305,14 @@ export function KpiDrillDownDialog({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     Nenhum lead encontrado neste bucket.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered
+                visibleRows
                   .slice()
                   .sort((a, b) => {
                     const ad = new Date(a.scheduled_at || a.data_agendamento || 0).getTime();
