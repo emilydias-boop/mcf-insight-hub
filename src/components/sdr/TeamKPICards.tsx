@@ -125,7 +125,7 @@ export function TeamKPICards({
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
-        : "Contratos pagos via R1 (contract_paid_at no período). Mesmo número da coluna 'Contrato Pago' da tabela Closers.",
+        : "Total comercial da tabela Closers: Contrato Pago + Outside. Não depende apenas de atribuição ao SDR.",
       bucket: "contratos" as KpiBucket,
     },
     ...(isConsorcio ? [] : [{

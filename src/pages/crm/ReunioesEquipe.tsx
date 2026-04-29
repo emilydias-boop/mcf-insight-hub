@@ -387,15 +387,15 @@ export default function ReunioesEquipe() {
       totalR1Agendada,
       totalRealizadas,
       totalNoShows,
-      // Card "Contratos" = contrato_pago puro (mesmo número da coluna "Contrato Pago" da tabela Closers).
-      // Antes vinha como (contratoPago + outside) e o card subtraia outside, criando ruído. Agora é direto.
-      totalContratos: contractsFromClosers.contratoPago,
+      // Card "Contratos" = total comercial exibido na tabela Closers: Contrato Pago + Outside.
+      // Assim o KPI não fica restrito apenas aos contratos com atribuição de SDR.
+      totalContratos: contractsFromClosers.total,
       totalOutside: contractsFromClosers.outside,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
         : 0,
       taxaConversao: totalRealizadas > 0
-        ? (contractsFromClosers.contratoPago / totalRealizadas) * 100
+        ? (contractsFromClosers.total / totalRealizadas) * 100
         : 0,
     };
   }, [teamKPIs, contractsFromClosers]);
