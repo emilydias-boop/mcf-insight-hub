@@ -142,7 +142,14 @@ export default function Agenda() {
     }
     
     if (closerFilter) {
+      const beforeCount = result.length;
       result = result.filter(m => m.closer_id === closerFilter);
+      console.log('[AgendaR1][filter:closer]', {
+        closerFilter,
+        beforeCount,
+        afterCount: result.length,
+        sampleClosersInData: Array.from(new Set(meetings.slice(0, 30).map(m => m.closer_id))),
+      });
     }
     if (statusFilter) {
       // Filter by attendee-level status instead of slot-level status
@@ -155,9 +162,19 @@ export default function Agenda() {
         'contract_paid': ['contract_paid'],
       };
       const validStatuses = attendeeStatusMap[statusFilter] || [statusFilter];
+      const beforeCount = result.length;
       result = result.filter(m => 
         m.attendees?.some(att => validStatuses.includes(att.status))
       );
+      console.log('[AgendaR1][filter:status]', {
+        statusFilter,
+        validStatuses,
+        beforeCount,
+        afterCount: result.length,
+        sampleAttendeeStatuses: Array.from(
+          new Set(meetings.slice(0, 30).flatMap(m => (m.attendees || []).map(a => a.status)))
+        ),
+      });
     }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
