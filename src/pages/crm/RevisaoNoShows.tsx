@@ -57,7 +57,7 @@ function ReviewCard({ item }: { item: PendingReview }) {
           <div className="space-y-1">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-orange-600" />
-              No-Show {item.meeting_type ?? "R1"} — {item.deal?.name || item.lead_phone || "lead sem identificação"}
+              No-Show {item.meeting_type ?? "R1"} — {item.lead?.name || item.deal?.name || item.lead_phone || "lead sem identificação"}
             </CardTitle>
             <CardDescription className="text-xs">
               Registrado em {format(new Date(item.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
@@ -85,10 +85,10 @@ function ReviewCard({ item }: { item: PendingReview }) {
         <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
           <div className="space-y-1">
             <div className="font-semibold flex items-center gap-1"><Briefcase className="h-3 w-3" /> Lead</div>
-            <div>{item.deal?.name || "—"}</div>
+            <div>{item.lead?.name || item.deal?.name || "—"}</div>
             {item.deal?.product_name && <div className="text-muted-foreground">Produto: {item.deal.product_name}</div>}
             {item.deal?.origin_name && <div className="text-muted-foreground">Origem: {item.deal.origin_name}</div>}
-            <div className="text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" /> {item.lead_phone || "—"}</div>
+            <div className="text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" /> {item.lead?.phone || item.lead_phone || "—"}</div>
           </div>
           <div className="space-y-1">
             <div className="font-semibold flex items-center gap-1"><Calendar className="h-3 w-3" /> Reunião {item.meeting?.meeting_type || item.meeting_type || "R1"}</div>
@@ -102,12 +102,24 @@ function ReviewCard({ item }: { item: PendingReview }) {
             ) : (
               <div className="text-muted-foreground">Reunião não localizada</div>
             )}
+            {item.meeting?.sdr_booked_name && (
+              <div className="text-muted-foreground">SDR que agendou: {item.meeting.sdr_booked_name}</div>
+            )}
             {item.meeting?.closer_name && (
-              <div className="text-muted-foreground">Closer: {item.meeting.closer_name}</div>
+              <div className="text-muted-foreground">Closer da reunião: {item.meeting.closer_name}</div>
             )}
           </div>
           <div className="space-y-1">
             <div className="font-semibold flex items-center gap-1"><Users className="h-3 w-3" /> Atribuição</div>
+            {item.performed_by_profile?.full_name && (
+              <div>
+                Solicitado por <strong>{item.performed_by_profile.full_name}</strong>
+                {item.performed_by_role ? ` (${item.performed_by_role})` : ""}
+              </div>
+            )}
+            {item.performed_by_profile?.email && (
+              <div className="text-muted-foreground text-[11px]">{item.performed_by_profile.email}</div>
+            )}
             {item.deal?.original_sdr_email && (
               <div className="text-muted-foreground">SDR original: {item.deal.original_sdr_email}</div>
             )}
@@ -117,7 +129,10 @@ function ReviewCard({ item }: { item: PendingReview }) {
             {item.deal?.r2_closer_email && (
               <div className="text-muted-foreground">R2 closer: {item.deal.r2_closer_email}</div>
             )}
-            {!item.deal?.original_sdr_email && !item.deal?.r1_closer_email && !item.deal?.r2_closer_email && (
+            {!item.performed_by_profile?.full_name &&
+             !item.deal?.original_sdr_email &&
+             !item.deal?.r1_closer_email &&
+             !item.deal?.r2_closer_email && (
               <div className="text-muted-foreground">—</div>
             )}
           </div>
