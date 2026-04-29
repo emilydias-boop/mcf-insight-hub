@@ -151,6 +151,45 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ========== Bloqueia reenvio para a MESMA reunião ==========
+    // Regra: para o mesmo attendee_id (ou, na ausência dele, mesmo
+    // meeting_slot_id + deal_id), só pode existir UMA validação ativa
+    // (auto-aprovada, aprovada pelo gestor ou pendente de revisão).
+    // Reenvio só é permitido se a anterior foi REJEITADA pelo gestor.
+    {
+      let activeQuery = adminClient
+        .from("no_show_validations")
+        .select("id, final_status, manager_review_status, ai_verdict, created_at")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (attendee_id) {
+        activeQuery = activeQuery.eq("attendee_id", attendee_id);
+      } else if (meeting_slot_id && deal_id) {
+        activeQuery = activeQuery.eq("meeting_slot_id", meeting_slot_id).eq("deal_id", deal_id);
+      } else if (deal_id) {
+        activeQuery = activeQuery.eq("deal_id", deal_id);
+      } else {
+        activeQuery = null as any;
+      }
+
+      if (activeQuery) {
+        const { data: lastValidation } = await activeQuery.maybeSingle();
+        if (lastValidation) {
+          const wasRejectedByManager = lastValidation.manager_review_status === "rejected";
+          if (!wasRejectedByManager) {
+            return new Response(JSON.stringify({
+              error: "Já existe uma solicitação de No-Show ativa para esta reunião. Aguarde a decisão do gestor antes de enviar uma nova evidência.",
+              code: "duplicate_active_validation",
+              existing_validation_id: lastValidation.id,
+              existing_status: lastValidation.final_status,
+              existing_manager_review: lastValidation.manager_review_status,
+            }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+      }
+    }
+
     // ========== Busca histórico de no-shows do lead (contexto para IA) ==========
     let priorNoShows = 0;
     if (deal_id) {
