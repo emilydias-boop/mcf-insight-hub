@@ -12,6 +12,7 @@ import { DialerLauncherProvider } from "@/contexts/DialerLauncherContext";
 import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner";
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 function GlobalQualificationModal() {
   const { 
@@ -35,6 +36,9 @@ function GlobalQualificationModal() {
 }
 
 export function MainLayout() {
+  const { allRoles } = useAuth();
+  // Dialer/Twilio só para SDRs — closers, admins, managers e demais não ligam pelo sistema
+  const isSDR = (allRoles as string[] | undefined)?.includes("sdr") ?? false;
   return (
       <SidebarProvider defaultOpen={false}>
         <AutoDialerProvider>
@@ -53,10 +57,14 @@ export function MainLayout() {
               <Outlet />
             </div>
           </SidebarInset>
-          <TwilioSoftphone />
-          <QuickDialerLauncher />
-          <AutoDialerDealDrawer />
-          <AutoDialerInCallBanner />
+          {isSDR && (
+            <>
+              <TwilioSoftphone />
+              <QuickDialerLauncher />
+              <AutoDialerDealDrawer />
+              <AutoDialerInCallBanner />
+            </>
+          )}
           <OverdueAlertOverlay />
           <GlobalQualificationModal />
         </div>
