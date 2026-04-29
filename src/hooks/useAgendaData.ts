@@ -1135,6 +1135,7 @@ export function useSearchDealsForSchedule(
                 const nextMovementOrder = totalMovements + 1;
                 if (
                   rescheduleThreshold !== null &&
+                  (!rescheduleAppliesFrom || rescheduleAppliesFrom <= new Date()) &&
                   nextMovementOrder >= rescheduleThreshold
                 ) {
                   warningOnly = false;
