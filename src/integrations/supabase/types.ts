@@ -7651,6 +7651,7 @@ export type Database = {
           bu_origin_id: string | null
           created_at: string
           deal_id: string | null
+          evidence_hash: string | null
           evidence_path: string
           human_decision: string | null
           human_justification: string | null
@@ -7673,6 +7674,7 @@ export type Database = {
           bu_origin_id?: string | null
           created_at?: string
           deal_id?: string | null
+          evidence_hash?: string | null
           evidence_path: string
           human_decision?: string | null
           human_justification?: string | null
@@ -7695,6 +7697,7 @@ export type Database = {
           bu_origin_id?: string | null
           created_at?: string
           deal_id?: string | null
+          evidence_hash?: string | null
           evidence_path?: string
           human_decision?: string | null
           human_justification?: string | null
