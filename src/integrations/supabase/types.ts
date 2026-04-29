@@ -7613,6 +7613,102 @@ export type Database = {
           },
         ]
       }
+      no_show_ai_settings: {
+        Row: {
+          applies_to_roles: string[]
+          id: number
+          mode: string
+          require_evidence: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          applies_to_roles?: string[]
+          id?: number
+          mode?: string
+          require_evidence?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          applies_to_roles?: string[]
+          id?: number
+          mode?: string
+          require_evidence?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      no_show_validations: {
+        Row: {
+          ai_extracted_phone: string | null
+          ai_model: string | null
+          ai_raw_response: Json | null
+          ai_reasoning: string | null
+          ai_verdict: string | null
+          attendee_id: string | null
+          bu_origin_id: string | null
+          created_at: string
+          deal_id: string | null
+          evidence_path: string
+          human_decision: string | null
+          human_justification: string | null
+          human_overrode_ai: boolean | null
+          id: string
+          lead_phone: string | null
+          meeting_slot_id: string | null
+          performed_by: string | null
+          performed_by_role: string | null
+          phone_match: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          ai_extracted_phone?: string | null
+          ai_model?: string | null
+          ai_raw_response?: Json | null
+          ai_reasoning?: string | null
+          ai_verdict?: string | null
+          attendee_id?: string | null
+          bu_origin_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          evidence_path: string
+          human_decision?: string | null
+          human_justification?: string | null
+          human_overrode_ai?: boolean | null
+          id?: string
+          lead_phone?: string | null
+          meeting_slot_id?: string | null
+          performed_by?: string | null
+          performed_by_role?: string | null
+          phone_match?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          ai_extracted_phone?: string | null
+          ai_model?: string | null
+          ai_raw_response?: Json | null
+          ai_reasoning?: string | null
+          ai_verdict?: string | null
+          attendee_id?: string | null
+          bu_origin_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          evidence_path?: string
+          human_decision?: string | null
+          human_justification?: string | null
+          human_overrode_ai?: boolean | null
+          id?: string
+          lead_phone?: string | null
+          meeting_slot_id?: string | null
+          performed_by?: string | null
+          performed_by_role?: string | null
+          phone_match?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       operational_costs: {
         Row: {
           amount: number

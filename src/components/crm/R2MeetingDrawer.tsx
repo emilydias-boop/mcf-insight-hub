@@ -17,6 +17,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2MeetingSlot, useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 
 interface R2MeetingDrawerProps {
   meeting: R2MeetingSlot | null;
@@ -38,6 +40,9 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R2MeetingDrawerProps) {
   const updateStatus = useUpdateR2MeetingStatus();
+  const { role } = useAuth();
+  const [showNoShowEvidence, setShowNoShowEvidence] = useState(false);
+  const requiresEvidence = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
 
   if (!meeting) return null;
 
@@ -182,7 +187,7 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
               <Button 
                 variant="outline"
                 className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={() => handleStatusChange('no_show')}
+                onClick={() => requiresEvidence ? setShowNoShowEvidence(true) : handleStatusChange('no_show')}
               >
                 <XCircle className="h-4 w-4 mr-2" />
                 No-show
@@ -216,6 +221,25 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
             Reembolso
           </Button>
         </div>
+
+        {requiresEvidence && (
+          <NoShowEvidenceDialog
+            open={showNoShowEvidence}
+            onOpenChange={setShowNoShowEvidence}
+            leadPhone={contactPhone || null}
+            leadName={(contact as any)?.name || (contact as any)?.full_name || null}
+            dealId={(firstAttendee as any)?.deal?.id || null}
+            meetingSlotId={meeting.id}
+            attendeeId={firstAttendee?.id || null}
+            meetingScheduledAt={meeting.scheduled_at || null}
+            performedByRole={role}
+            confirmLoading={updateStatus.isPending}
+            onConfirm={async () => {
+              handleStatusChange('no_show');
+              setShowNoShowEvidence(false);
+            }}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );

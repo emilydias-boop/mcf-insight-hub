@@ -16,7 +16,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Settings2, ClipboardList, History, Check, X, Loader2, Info } from "lucide-react";
+import { Settings2, ClipboardList, History, Check, X, Loader2, Info, Sparkles } from "lucide-react";
+import { NoShowAISettingsCard } from "@/components/admin/NoShowAISettingsCard";
 import { toast } from "sonner";
 import { BU_OPTIONS, BusinessUnit } from "@/hooks/useMyBU";
 import {
@@ -98,6 +99,9 @@ export default function RegrasProcesso() {
           <TabsTrigger value="rules" className="gap-2">
             <Settings2 className="h-4 w-4" /> Regras por BU + Cargo
           </TabsTrigger>
+          <TabsTrigger value="no_show_ai" className="gap-2">
+            <Sparkles className="h-4 w-4" /> No-Show + IA
+          </TabsTrigger>
           <TabsTrigger value="pending" className="gap-2">
             <ClipboardList className="h-4 w-4" /> Aprovações Pendentes
           </TabsTrigger>
@@ -108,6 +112,9 @@ export default function RegrasProcesso() {
 
         <TabsContent value="rules">
           <RulesMatrixTab />
+        </TabsContent>
+        <TabsContent value="no_show_ai">
+          <NoShowAISettingsCard />
         </TabsContent>
         <TabsContent value="pending">
           <PendingTab />

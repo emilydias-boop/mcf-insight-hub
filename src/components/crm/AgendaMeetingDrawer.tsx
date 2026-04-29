@@ -65,6 +65,7 @@ import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
+import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -199,6 +200,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       handleParticipantStatusChange(selectedParticipant.id, 'no_show');
     }
   };
+
+  // SDRs e Closers precisam anexar evidência + IA. Liderança vai direto.
+  const requiresEvidence = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
 
   const handleContractPaid = () => {
     if (selectedParticipant) {
@@ -1139,6 +1143,28 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
             {/* No-Show Confirmation Dialog */}
+            {requiresEvidence ? (
+              <NoShowEvidenceDialog
+                open={showNoShowConfirm}
+                onOpenChange={setShowNoShowConfirm}
+                leadPhone={selectedParticipant?.phone || null}
+                leadName={selectedParticipant?.name || null}
+                dealId={activeMeeting?.deal_id || null}
+                meetingSlotId={activeMeeting?.id || null}
+                attendeeId={selectedParticipant?.id || null}
+                meetingScheduledAt={activeMeeting?.scheduled_at || null}
+                buOriginId={(activeMeeting as any)?.origin_id || null}
+                performedByRole={role}
+                confirmLoading={updateAttendeeAndSlotStatus.isPending}
+                onConfirm={async () => {
+                  await new Promise<void>((resolve) => {
+                    handleNoShowConfirm();
+                    // mutation onSuccess fecha o dialog e reseta state
+                    setTimeout(resolve, 0);
+                  });
+                }}
+              />
+            ) : (
             <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -1166,6 +1192,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            )}
 
             {/* Delete button - Only visible for coordenador and above */}
             {canDeleteMeeting && (
