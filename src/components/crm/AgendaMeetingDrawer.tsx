@@ -1155,6 +1155,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 meetingScheduledAt={activeMeeting?.scheduled_at || null}
                 buOriginId={(activeMeeting as any)?.origin_id || null}
                 performedByRole={role}
+                meetingType="R1"
                 confirmLoading={updateAttendeeAndSlotStatus.isPending}
                 onConfirm={async () => {
                   await new Promise<void>((resolve) => {
