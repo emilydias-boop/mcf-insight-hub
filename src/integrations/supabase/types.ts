@@ -11869,6 +11869,7 @@ export type Database = {
           attendee_status: string
           booked_at: string
           closer: string
+          conta_no_show: boolean
           contact_email: string
           contact_name: string
           contact_phone: string
@@ -11877,12 +11878,14 @@ export type Database = {
           deal_name: string
           intermediador: string
           meeting_slot_id: string
+          ordem_no_show: number
           origin_name: string
           probability: number
           scheduled_at: string
           sdr_email: string
           status_atual: string
           tipo: string
+          total_no_shows_deal: number
         }[]
       }
       get_sdr_meetings_v2: {
