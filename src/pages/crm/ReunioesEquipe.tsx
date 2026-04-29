@@ -768,6 +768,9 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
+        isFutureWindow={isFutureWindow}
+        taxaConversaoBreakdown={taxaBreakdowns.conversao}
+        taxaNoShowBreakdown={taxaBreakdowns.noShow}
         onCardClick={(bucket, title) => {
           setDrillBucket(bucket);
           setDrillTitle(title);
