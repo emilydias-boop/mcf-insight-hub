@@ -201,6 +201,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     }
   };
 
+  // SDRs e Closers precisam anexar evidência + IA. Liderança vai direto.
+  const requiresEvidence = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+
   const handleContractPaid = () => {
     if (selectedParticipant) {
       // Store participant info for R2 prompt
