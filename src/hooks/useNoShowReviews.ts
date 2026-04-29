@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { syncDealStageFromAgenda } from "@/hooks/useAgendaData";
 
 export interface PendingReview {
   id: string;
@@ -236,7 +237,16 @@ export function useReviewNoShowContest() {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
       if (!uid) throw new Error("Sessão inválida");
-      const { error } = await supabase
+      // 1) Buscar a validação para saber qual attendee/deal precisa ser atualizado
+      const { data: validation, error: fetchErr } = await supabase
+        .from("no_show_validations")
+        .select("id, attendee_id, deal_id, meeting_slot_id, meeting_type")
+        .eq("id", validationId)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      // 2) Atualizar a própria validação (revisão do gestor)
+      const { error: updErr } = await supabase
         .from("no_show_validations")
         .update({
           manager_review_status: decision,
@@ -246,11 +256,43 @@ export function useReviewNoShowContest() {
           final_status: decision === "approved" ? "approved" : "blocked",
         })
         .eq("id", validationId);
-      if (error) throw error;
+      if (updErr) throw updErr;
+
+      // 3) Quando o gestor APROVA o no-show contestado, é OBRIGATÓRIO refletir
+      //    o status no attendee e mover o deal para a stage de No-Show.
+      //    Sem isso o lead permanece em "R1 Agendada" e o SDR consegue reagendar
+      //    indevidamente, criando brecha de operação.
+      if (decision === "approved" && validation?.attendee_id) {
+        const { error: attErr } = await supabase
+          .from("meeting_slot_attendees")
+          .update({ status: "no_show" })
+          .eq("id", validation.attendee_id);
+        if (attErr) {
+          console.error("Falha ao marcar attendee como no_show após aprovação", attErr);
+          throw new Error(
+            "Validação aprovada, mas não foi possível marcar o participante como No-Show. Verifique permissões.",
+          );
+        }
+
+        // Mover o deal para a stage de No-Show (igual ao fluxo do SDR pelo drawer)
+        if (validation.deal_id) {
+          try {
+            const mtype = (validation.meeting_type === "r2" ? "r2" : "r1") as "r1" | "r2";
+            await syncDealStageFromAgenda(validation.deal_id, "no_show", mtype);
+          } catch (e) {
+            console.error("Falha ao sincronizar stage do deal após aprovar no-show", e);
+            // Não bloqueia o fluxo principal — apenas loga.
+          }
+        }
+      }
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["no-show-all-reviews"] });
       qc.invalidateQueries({ queryKey: ["no-show-pending-reviews-count"] });
+      qc.invalidateQueries({ queryKey: ["agenda-meetings"] });
+      qc.invalidateQueries({ queryKey: ["sdr-meetings-from-agenda"] });
+      qc.invalidateQueries({ queryKey: ["sdr-metrics-agenda"] });
+      qc.invalidateQueries({ queryKey: ["crm-deals"] });
       toast.success(vars.decision === "approved" ? "Contestação aprovada" : "Contestação rejeitada");
     },
     onError: (e: any) => toast.error(e?.message || "Falha ao revisar"),
