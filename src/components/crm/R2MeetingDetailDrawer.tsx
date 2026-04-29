@@ -28,6 +28,7 @@ import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
+import { useLeadProfile } from '@/hooks/useLeadProfile';
 import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
 
 interface R2MeetingDetailDrawerProps {
@@ -99,6 +100,29 @@ export function R2MeetingDetailDrawer({
   const contactPhone = attendee?.phone || attendee?.deal?.contact?.phone;
   const contactEmail = attendee?.deal?.contact?.email;
   const contactId = (attendee?.deal as any)?.contact_id || (attendee?.deal?.contact as any)?.id;
+
+  // Detect "Anamnese" leads: when the lead profile is rich enough that the SDR
+  // qualification fields would be redundant. We hide the Qualificação tab in
+  // that case so the closer relies on the "Perfil do Lead" card instead.
+  const { data: leadProfile } = useLeadProfile(contactId, attendee?.deal_id);
+  const isAnamneseLead = (() => {
+    if (!leadProfile) return false;
+    const keyFields = [
+      'profissao',
+      'estado_cidade',
+      'renda_bruta',
+      'data_nascimento',
+      'ja_constroi',
+      'experiencia_imobiliaria',
+      'fonte_renda',
+      'objetivos_principais',
+    ];
+    const filled = keyFields.filter(k => {
+      const v = (leadProfile as any)[k];
+      return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+    }).length;
+    return filled >= 3;
+  })();
 
   const handleStartEditPhone = () => {
     setPhoneValue(contactPhone || '');
