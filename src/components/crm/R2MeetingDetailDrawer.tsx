@@ -94,9 +94,7 @@ export function R2MeetingDetailDrawer({
     }
   }, [meeting?.id, meeting?.attendees, selectedAttendeeId]);
 
-  if (!meeting) return null;
-
-  const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
+  // Compute identifiers BEFORE any early-return so hook order stays stable.
   const contactPhone = attendee?.phone || attendee?.deal?.contact?.phone;
   const contactEmail = attendee?.deal?.contact?.email;
   const contactId = (attendee?.deal as any)?.contact_id || (attendee?.deal?.contact as any)?.id;
@@ -104,7 +102,15 @@ export function R2MeetingDetailDrawer({
   // Detect "Anamnese" leads: when the lead profile is rich enough that the SDR
   // qualification fields would be redundant. We hide the Qualificação tab in
   // that case so the closer relies on the "Perfil do Lead" card instead.
+  // IMPORTANT: this hook MUST be called unconditionally on every render — do not
+  // place it after an early return, otherwise React throws error #310
+  // ("Rendered more hooks than during the previous render").
   const { data: leadProfile } = useLeadProfile(contactId, attendee?.deal_id);
+
+  if (!meeting) return null;
+
+  const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
+
   const isAnamneseLead = (() => {
     if (!leadProfile) return false;
     const keyFields = [
