@@ -11806,6 +11806,10 @@ export type Database = {
             Args: { target_date: string; valid_emails?: string[] }
             Returns: Json
           }
+      get_pendentes_audit_incorporador: {
+        Args: { p_end: string; p_start: string }
+        Returns: Json
+      }
       get_process_rule: {
         Args: { _bu: string; _role: string; _rule_key: string }
         Returns: Json
