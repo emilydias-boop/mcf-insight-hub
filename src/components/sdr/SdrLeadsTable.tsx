@@ -262,13 +262,16 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
       {/* Table */}
       <div className="rounded-md border border-border overflow-hidden">
         <div className="overflow-x-auto">
+          <TooltipProvider>
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
                 <TableHead className="text-muted-foreground">Reunião</TableHead>
                 <TableHead className="text-muted-foreground">Lead</TableHead>
                 <TableHead className="text-muted-foreground">Tipo</TableHead>
+                <TableHead className="text-muted-foreground text-center">Conta?</TableHead>
                 <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground text-center">No-Show</TableHead>
                 <TableHead className="text-muted-foreground">Agendado em</TableHead>
                 <TableHead className="text-muted-foreground">Closer</TableHead>
                 <TableHead className="text-muted-foreground text-center">Prob.</TableHead>
@@ -278,15 +281,19 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
             <TableBody>
               {filteredMeetings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     Nenhum lead encontrado para os filtros selecionados.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredMeetings.map((meeting, index) => (
+                filteredMeetings.map((meeting, index) => {
+                  const isNoShow = (meeting.status_atual || '').toLowerCase().includes('no_show') ||
+                                   (meeting.status_atual || '').toLowerCase().includes('no-show');
+                  const contaAgendamento = meeting.tipo !== 'Reagendamento Inválido';
+                  return (
                   <TableRow
                     key={`${meeting.deal_id}-${index}`}
-                    className="cursor-pointer hover:bg-muted/30 transition-colors"
+                    className={`cursor-pointer hover:bg-muted/30 transition-colors ${!contaAgendamento ? 'opacity-60' : ''}`}
                     onClick={() => onSelectMeeting(meeting)}
                   >
                     <TableCell className="text-sm">
@@ -304,10 +311,31 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {meeting.tipo === '1º Agendamento' ? '1º Agend.' : 
-                         meeting.tipo === 'Reagendamento Válido' ? 'Reagend.' : meeting.tipo}
+                      <Badge variant="outline" className={`text-xs ${getTipoBadgeClass(meeting.tipo)}`}>
+                        {meeting.tipo === '1º Agendamento' ? '1º Agend.' :
+                         meeting.tipo === 'Reagendamento Válido' ? 'Reagend. Válido' :
+                         meeting.tipo === 'Reagendamento Inválido' ? 'Reagend. Inválido' : meeting.tipo}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            {contaAgendamento ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-zinc-400" />
+                            )}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          {contaAgendamento ? (
+                            <p>Este agendamento entra nas métricas do SDR.</p>
+                          ) : (
+                            <p><strong>Não conta:</strong> Reagendamento Inválido (3º+ movimentação) — não é contabilizado em R1 Agendada.</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       <Badge 
@@ -316,6 +344,42 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                       >
                         {formatMeetingStatus(meeting.status_atual)}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {isNoShow && meeting.ordem_no_show ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="inline-flex items-center gap-1.5">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${meeting.conta_no_show
+                                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                  : 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'}`}
+                              >
+                                {meeting.ordem_no_show}º / {meeting.total_no_shows_deal ?? meeting.ordem_no_show}
+                              </Badge>
+                              {meeting.conta_no_show ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-red-400" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5 text-zinc-400" />
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            {meeting.conta_no_show ? (
+                              <p>
+                                <strong>Conta para No-Show:</strong> {meeting.ordem_no_show}º no-show deste lead, dentro do cap permitido.
+                              </p>
+                            ) : (
+                              <p>
+                                <strong>Não conta:</strong> {meeting.ordem_no_show}º no-show deste lead — excede o cap (1 antes de 28/04, 2 a partir desta data).
+                              </p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {meeting.booked_at
@@ -347,10 +411,12 @@ export function SdrLeadsTable({ meetings, isLoading, onSelectMeeting }: SdrLeads
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
+          </TooltipProvider>
         </div>
       </div>
     </div>
