@@ -233,6 +233,7 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
             attendeeId={firstAttendee?.id || null}
             meetingScheduledAt={meeting.scheduled_at || null}
             performedByRole={role}
+            meetingType="R2"
             confirmLoading={updateStatus.isPending}
             onConfirm={async () => {
               handleStatusChange('no_show');
