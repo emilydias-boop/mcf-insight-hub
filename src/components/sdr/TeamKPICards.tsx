@@ -123,7 +123,6 @@ export function TeamKPICards({
       bgColor: "bg-yellow-500/10",
       tooltip: "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.",
       bucket: "pendentes" as KpiBucket,
-      subline: `Vencidas: ${semStatus ?? 0}`,
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",

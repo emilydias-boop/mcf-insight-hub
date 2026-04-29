@@ -134,6 +134,21 @@ function isCancelledStatus(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v === "cancelled" || v === "canceled" || v === "cancelada";
 }
+/**
+ * "Remanejados/Restituídos": leads que JÁ TIVERAM um status anterior
+ * (foram remarcados, cancelados ou marcados sem sucesso) e por isso
+ * não viraram Realizada/No-Show. Esses são os que precisam ser ajustados.
+ */
+function isRemanejadoStatus(s?: string | null): boolean {
+  const v = (s || "").toLowerCase();
+  return (
+    v === "rescheduled" ||
+    v === "cancelled" ||
+    v === "canceled" ||
+    v === "cancelada" ||
+    v === "sem_sucesso"
+  );
+}
 function isContratoStage(s?: string | null): boolean {
   const v = (s || "").toLowerCase();
   return v.includes("contrato pago") || v.includes("proposta fechada");
@@ -191,7 +206,7 @@ function classifyPendente(m: MeetingV2): PendenteSubBucket {
   const iso = m.scheduled_at || m.data_agendamento;
   const todayStart = startOfDay(new Date()).getTime();
   const t = iso ? new Date(iso).getTime() : 0;
-  if (isCancelledStatus(m.attendee_status)) return "canceladas";
+  if (isRemanejadoStatus(m.attendee_status)) return "canceladas";
   if (t >= todayStart) return "futuras";
   return "vencidas";
 }
@@ -278,14 +293,14 @@ export function KpiDrillDownDialog({
                 <TabsTrigger value="todos">Todos ({filtered.length})</TabsTrigger>
                 <TabsTrigger value="futuras">Futuras ({pendenteCounts.futuras})</TabsTrigger>
                 <TabsTrigger value="vencidas">Vencidas s/ desfecho ({pendenteCounts.vencidas})</TabsTrigger>
-                <TabsTrigger value="canceladas">Canceladas/Remarcadas ({pendenteCounts.canceladas})</TabsTrigger>
+                <TabsTrigger value="canceladas">Remanejados/Restituídos ({pendenteCounts.canceladas})</TabsTrigger>
               </TabsList>
               <TabsContent value={pendenteTab} className="mt-2">
                 <p className="text-xs text-muted-foreground">
                   {pendenteTab === "futuras" && "Reuniões agendadas para datas futuras — ainda não aconteceram."}
                   {pendenteTab === "vencidas" && "Já passaram da hora e ninguém marcou Realizada/No-Show."}
-                  {pendenteTab === "canceladas" && "Canceladas ou remarcadas — não viraram fato consumado."}
-                  {pendenteTab === "todos" && "Soma de futuras + vencidas + canceladas."}
+                  {pendenteTab === "canceladas" && "Leads que já tiveram status anterior (remarcadas, canceladas, sem sucesso) e foram restituídos sem desfecho final. Clique numa linha para ajustar o status."}
+                  {pendenteTab === "todos" && "Soma de futuras + vencidas + remanejados."}
                 </p>
               </TabsContent>
             </Tabs>
