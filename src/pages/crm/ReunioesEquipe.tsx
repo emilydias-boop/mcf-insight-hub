@@ -32,6 +32,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
