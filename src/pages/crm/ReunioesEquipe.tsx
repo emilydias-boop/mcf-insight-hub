@@ -32,6 +32,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
@@ -346,6 +347,10 @@ export default function ReunioesEquipe() {
   // Fetch Closer metrics for the selected period
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
 
+  // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
+  // — usado para a média individual entre Closers nos cards de Taxa.
+  const { data: closerBreakdown } = useCloserBreakdownMetrics(start, end, "incorporador");
+
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
@@ -392,6 +397,55 @@ export default function ReunioesEquipe() {
         : 0,
     };
   }, [teamKPIs, contractsFromClosers]);
+
+  // ============================================================
+  // Breakdown SDR/Closer das taxas (média individual)
+  // ============================================================
+  const taxaBreakdowns = useMemo(() => {
+    // Média entre SDRs — usa bySDR (já agregado pelo hook)
+    const sdrRows = bySDR || [];
+    const sdrConversao = averageRate(
+      sdrRows.map((s) => ({
+        numerator: s.contratos || 0,
+        denominator: s.r1Realizada || 0,
+      })),
+    );
+    const sdrNoShow = averageRate(
+      sdrRows.map((s) => ({
+        numerator: s.noShows || 0,
+        denominator: s.r1Agendada || 0,
+      })),
+    );
+
+    // Média entre Closers — usa o breakdown novo
+    const closerRows = closerBreakdown?.closers || [];
+    const closerConversao = averageRate(
+      closerRows.map((c) => ({
+        numerator: c.contratos,
+        denominator: c.r1_realizada,
+      })),
+    );
+    const closerNoShow = averageRate(
+      closerRows.map((c) => ({
+        numerator: c.no_shows,
+        denominator: c.r1_recebida,
+      })),
+    );
+
+    return {
+      conversao: { sdrAvg: sdrConversao, closerAvg: closerConversao },
+      noShow: { sdrAvg: sdrNoShow, closerAvg: closerNoShow },
+    };
+  }, [bySDR, closerBreakdown]);
+
+  // Janela é "futura" quando o end_date >= hoje (controla rótulo de Sem Status)
+  const isFutureWindow = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const e = new Date(end);
+    e.setHours(0, 0, 0, 0);
+    return e.getTime() >= today.getTime();
+  }, [end]);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
@@ -714,6 +768,9 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
+        isFutureWindow={isFutureWindow}
+        taxaConversaoBreakdown={taxaBreakdowns.conversao}
+        taxaNoShowBreakdown={taxaBreakdowns.noShow}
         onCardClick={(bucket, title) => {
           setDrillBucket(bucket);
           setDrillTitle(title);

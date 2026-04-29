@@ -11590,6 +11590,10 @@ export type Database = {
         Args: { bu_filter?: string; end_date: string; start_date: string }
         Returns: Json
       }
+      get_closer_breakdown_metrics: {
+        Args: { bu_filter?: string; end_date: string; start_date: string }
+        Returns: Json
+      }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
