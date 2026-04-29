@@ -91,8 +91,15 @@ export default function Agenda() {
     return { rangeStart: weekStart, rangeEnd: weekEnd };
   }, [selectedDate, viewMode, activeBU]);
 
-  // Passar filtro de BU para buscar apenas closers da BU ativa
-  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
+  // Passar filtro de BU para buscar apenas closers da BU ativa.
+  // Também passar o range visível para incluir closers DESATIVADOS que ainda
+  // possuem reuniões nesse período — isso garante que reuniões agendadas
+  // antes da desativação continuem visíveis na grade (apenas o agendamento
+  // de novos slots fica bloqueado, pois inativos vêm sem availability).
+  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(
+    activeBU,
+    { includeInactiveWithMeetingsRange: { start: rangeStart, end: rangeEnd } }
+  );
   const { data: blockedDates = [] } = useBlockedDates();
   
   // Extrair IDs dos closers da BU para filtrar reuniões

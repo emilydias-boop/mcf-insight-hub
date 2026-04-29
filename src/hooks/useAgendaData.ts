@@ -308,10 +308,19 @@ export function useUpcomingMeetings(date: Date) {
 
 // ============ Closers Hooks ============
 
-export function useClosersWithAvailability(buFilter?: string | null) {
+export function useClosersWithAvailability(
+  buFilter?: string | null,
+  options?: { includeInactiveWithMeetingsRange?: { start: Date; end: Date } | null }
+) {
+  const range = options?.includeInactiveWithMeetingsRange ?? null;
   return useQuery({
-    queryKey: ['closers-with-availability', buFilter],
+    queryKey: [
+      'closers-with-availability',
+      buFilter,
+      range ? `${range.start.toISOString()}_${range.end.toISOString()}` : null,
+    ],
     queryFn: async () => {
+      // 1) Closers ativos da BU (opções para novos agendamentos)
       let query = supabase
         .from('closers')
         .select('*')
@@ -323,9 +332,42 @@ export function useClosersWithAvailability(buFilter?: string | null) {
         query = query.eq('bu', buFilter);
       }
       
-      const { data: closers, error: closersError } = await query.order('name');
+      const { data: activeClosers, error: closersError } = await query.order('name');
 
       if (closersError) throw closersError;
+
+      // 2) Se houver range, incluir closers INATIVOS que ainda têm reuniões nesse período
+      //    (para preservar histórico/agendamentos feitos antes da desativação)
+      let inactiveClosersWithMeetings: any[] = [];
+      if (range) {
+        const { data: slotsInRange } = await supabase
+          .from('meeting_slots')
+          .select('closer_id')
+          .gte('scheduled_at', range.start.toISOString())
+          .lte('scheduled_at', range.end.toISOString())
+          .not('closer_id', 'is', null);
+
+        const closerIdsInRange = Array.from(
+          new Set((slotsInRange || []).map((s: any) => s.closer_id).filter(Boolean))
+        );
+        const activeIds = new Set((activeClosers || []).map((c: any) => c.id));
+        const missingIds = closerIdsInRange.filter((id) => !activeIds.has(id));
+
+        if (missingIds.length > 0) {
+          let inactiveQuery = supabase
+            .from('closers')
+            .select('*')
+            .in('id', missingIds)
+            .or('meeting_type.is.null,meeting_type.eq.r1');
+          if (buFilter) {
+            inactiveQuery = inactiveQuery.eq('bu', buFilter);
+          }
+          const { data: inactiveData } = await inactiveQuery;
+          inactiveClosersWithMeetings = inactiveData || [];
+        }
+      }
+
+      const closers = [...(activeClosers || []), ...inactiveClosersWithMeetings];
 
       const { data: availability, error: availError } = await supabase
         .from('closer_availability')
@@ -338,7 +380,11 @@ export function useClosersWithAvailability(buFilter?: string | null) {
         color: closer.color || '#3B82F6',
         meeting_duration_minutes: (closer as any).meeting_duration_minutes ?? 45,
         max_leads_per_slot: (closer as any).max_leads_per_slot ?? 4,
-        availability: (availability?.filter(a => a.closer_id === closer.id) || []).map(a => ({
+        // Inativos não têm availability efetiva (não são opção para novos agendamentos)
+        availability: (closer.is_active === false
+          ? []
+          : (availability?.filter(a => a.closer_id === closer.id) || [])
+        ).map(a => ({
           id: a.id,
           day_of_week: a.day_of_week,
           start_time: a.start_time,
