@@ -236,6 +236,7 @@ export function NoShowEvidenceDialog({
             human_decision: "no_show",
             sdr_justification: (isInconclusive || isContest) ? sdrJustification : null,
             contest: isContest,
+            prior_verdict: aiResult.verdict,
           },
         }
       );
