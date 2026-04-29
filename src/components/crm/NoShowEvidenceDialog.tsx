@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Loader2, Upload, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Image as ImageIcon } from "lucide-react";
+import { Loader2, Upload, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Image as ImageIcon, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,24 +7,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
 
-type Verdict = "confirmed_no_show" | "not_no_show" | "uncertain" | "error";
+type Verdict = "confirmed" | "not_no_show" | "inconclusive" | "error";
+
+interface CriteriaMet {
+  identity_match: boolean;
+  vendor_message_no_response: boolean;
+  timing_close_to_meeting: boolean;
+  lead_confirmed_absence: boolean;
+}
 
 interface AIResult {
   verdict: Verdict;
   reasoning: string;
   extracted_phone: string;
   conversation_summary: string;
+  criteria_met?: CriteriaMet;
   phone_match: boolean | null;
   lead_phone_normalized: string | null;
   extracted_phone_normalized: string | null;
+  prior_no_shows?: number;
 }
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  /** Telefone do lead (qualquer formato, será normalizado) */
   leadPhone?: string | null;
   leadName?: string | null;
   dealId?: string | null;
@@ -33,30 +40,29 @@ interface Props {
   meetingScheduledAt?: string | null;
   buOriginId?: string | null;
   performedByRole?: string | null;
-  /** Chamado quando o usuário confirma o No-Show. Deve marcar de fato no banco. */
+  meetingType?: "R1" | "R2";
   onConfirm: () => Promise<void> | void;
-  /** Loading externo (mutation rodando) */
   confirmLoading?: boolean;
 }
 
 const verdictConfig: Record<Verdict, { label: string; icon: typeof CheckCircle2; color: string; description: string }> = {
-  confirmed_no_show: {
-    label: "IA confirma: parece No-Show",
+  confirmed: {
+    label: "IA confirmou: No-Show legítimo",
     icon: CheckCircle2,
-    color: "text-emerald-600 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20",
-    description: "A conversa indica que o lead não compareceu / não respondeu.",
+    color: "text-emerald-700 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300",
+    description: "A conversa atende aos critérios de no-show.",
   },
   not_no_show: {
     label: "IA discorda: NÃO parece No-Show",
     icon: XCircle,
-    color: "text-red-600 border-red-500 bg-red-50 dark:bg-red-950/20",
-    description: "A conversa sugere que o lead reagendou, compareceu, ou a reunião aconteceu.",
+    color: "text-red-700 border-red-500 bg-red-50 dark:bg-red-950/30 dark:text-red-300",
+    description: "A IA bloqueou esta marcação. Você pode contestar com justificativa para revisão do gestor.",
   },
-  uncertain: {
-    label: "IA está incerta",
+  inconclusive: {
+    label: "IA inconclusiva — precisa de justificativa",
     icon: HelpCircle,
-    color: "text-yellow-600 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20",
-    description: "Não foi possível determinar com clareza pela conversa.",
+    color: "text-yellow-700 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30 dark:text-yellow-300",
+    description: "Print sem contexto suficiente. Justifique para registrar o no-show.",
   },
   error: {
     label: "Falha na análise",
@@ -64,6 +70,13 @@ const verdictConfig: Record<Verdict, { label: string; icon: typeof CheckCircle2;
     color: "text-muted-foreground border-border bg-muted",
     description: "Houve um erro ao processar o print.",
   },
+};
+
+const CRITERIA_LABELS: Record<keyof CriteriaMet, string> = {
+  identity_match: "Telefone/nome bate com o lead",
+  vendor_message_no_response: "Mensagem do vendedor sem resposta (ou ausência confirmada)",
+  timing_close_to_meeting: "Mensagens próximas ao horário da reunião",
+  lead_confirmed_absence: "Lead confirmou que não compareceria",
 };
 
 export function NoShowEvidenceDialog({
@@ -77,6 +90,7 @@ export function NoShowEvidenceDialog({
   meetingScheduledAt,
   buOriginId,
   performedByRole,
+  meetingType = "R1",
   onConfirm,
   confirmLoading,
 }: Props) {
@@ -87,37 +101,21 @@ export function NoShowEvidenceDialog({
   const [evidencePath, setEvidencePath] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [justification, setJustification] = useState("");
+  const [sdrJustification, setSdrJustification] = useState("");
+  const [committing, setCommitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Settings (modo da IA)
-  const { data: settings } = useQuery({
-    queryKey: ["no_show_ai_settings"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("no_show_ai_settings")
-        .select("*")
-        .eq("id", 1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 60_000,
-  });
-
-  const mode = (settings?.mode as "suggest" | "block" | "audit") ?? "suggest";
 
   useEffect(() => {
     if (!open) {
-      // reset quando fecha
       setFile(null);
       setPreviewUrl(null);
       setEvidencePath(null);
       setAiResult(null);
       setAiError(null);
-      setJustification("");
+      setSdrJustification("");
       setAnalyzing(false);
       setUploading(false);
+      setCommitting(false);
     }
   }, [open]);
 
@@ -134,8 +132,8 @@ export function NoShowEvidenceDialog({
     setPreviewUrl(URL.createObjectURL(selected));
     setAiResult(null);
     setAiError(null);
+    setSdrJustification("");
 
-    // Upload imediato
     setUploading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -149,7 +147,6 @@ export function NoShowEvidenceDialog({
       if (upErr) throw upErr;
       setEvidencePath(path);
 
-      // Dispara análise da IA
       setAnalyzing(true);
       const { data: aiData, error: aiErr } = await supabase.functions.invoke(
         "validate-no-show-evidence",
@@ -159,6 +156,8 @@ export function NoShowEvidenceDialog({
             lead_phone: leadPhone ?? null,
             lead_name: leadName ?? null,
             meeting_scheduled_at: meetingScheduledAt ?? null,
+            meeting_type: meetingType,
+            deal_id: dealId,
           },
         }
       );
@@ -175,65 +174,85 @@ export function NoShowEvidenceDialog({
     }
   };
 
+  const verdict = aiResult?.verdict ?? null;
+  const cfg = verdict ? verdictConfig[verdict] : null;
+  const VerdictIcon = cfg?.icon;
+
+  const isInconclusive = verdict === "inconclusive";
+  const isContest = verdict === "not_no_show";
+  const minJustifLen = isContest ? 20 : 10;
+  const justifValid = sdrJustification.trim().length >= minJustifLen;
+
   const handleConfirm = async () => {
     if (!evidencePath || !aiResult) {
       toast.error("Anexe um print antes de confirmar.");
       return;
     }
-    const isOverride = aiResult.verdict === "not_no_show";
-    if (isOverride && justification.trim().length < 10) {
-      toast.error("Como a IA discordou, descreva em pelo menos 10 caracteres por que ainda é No-Show.");
-      return;
-    }
-    if (mode === "block" && aiResult.verdict === "not_no_show") {
-      toast.error("A IA bloqueou esta marcação. Reagende ou ajuste o status.");
+    if ((isInconclusive || isContest) && !justifValid) {
+      toast.error(`Justifique em pelo menos ${minJustifLen} caracteres.`);
       return;
     }
 
-    // COMMIT via edge function — única forma de criar no_show_validations.
-    // A IA é re-executada server-side, ai_verdict não pode ser falsificado pelo cliente.
-    const { data: commitData, error: commitErr } = await supabase.functions.invoke(
-      "validate-no-show-evidence",
-      {
-        body: {
-          action: "commit",
-          evidence_path: evidencePath,
-          lead_phone: leadPhone ?? null,
-          lead_name: leadName ?? null,
-          meeting_scheduled_at: meetingScheduledAt ?? null,
-          deal_id: dealId,
-          meeting_slot_id: meetingSlotId,
-          attendee_id: attendeeId,
-          bu_origin_id: buOriginId,
-          performed_by_role: performedByRole,
-          human_decision: "no_show",
-          human_justification: justification || null,
-        },
-      }
-    );
-    if (commitErr) {
-      toast.error(commitErr.message || "Falha ao registrar validação");
-      return;
-    }
-    if (commitData?.error) {
-      toast.error(commitData.error);
-      return;
-    }
-
+    setCommitting(true);
     try {
-      await onConfirm();
-    } catch (e: any) {
-      // Se o trigger do banco bloquear a marcação, mostra a mensagem real.
-      const msg = e?.message || "Falha ao marcar No-Show";
-      toast.error(msg);
+      const { data: commitData, error: commitErr } = await supabase.functions.invoke(
+        "validate-no-show-evidence",
+        {
+          body: {
+            action: "commit",
+            evidence_path: evidencePath,
+            lead_phone: leadPhone ?? null,
+            lead_name: leadName ?? null,
+            meeting_scheduled_at: meetingScheduledAt ?? null,
+            meeting_type: meetingType,
+            deal_id: dealId,
+            meeting_slot_id: meetingSlotId,
+            attendee_id: attendeeId,
+            bu_origin_id: buOriginId,
+            performed_by_role: performedByRole,
+            human_decision: "no_show",
+            sdr_justification: (isInconclusive || isContest) ? sdrJustification : null,
+            contest: isContest,
+          },
+        }
+      );
+      if (commitErr) {
+        toast.error(commitErr.message || "Falha ao registrar validação");
+        return;
+      }
+      if (commitData?.error) {
+        toast.error(commitData.error);
+        return;
+      }
+
+      // Se foi contestação → não tenta marcar no_show ainda (aguarda gestor)
+      if (commitData?.final_status === "pending_review") {
+        toast.success("Contestação enviada para revisão do gestor.");
+        onOpenChange(false);
+        return;
+      }
+
+      try {
+        await onConfirm();
+      } catch (e: any) {
+        toast.error(e?.message || "Falha ao marcar No-Show");
+      }
+    } finally {
+      setCommitting(false);
     }
   };
 
-  const verdict = aiResult?.verdict ?? null;
-  const cfg = verdict ? verdictConfig[verdict] : null;
-  const VerdictIcon = cfg?.icon;
-  const blocked = mode === "block" && verdict === "not_no_show";
-  const requiresJustification = verdict === "not_no_show" && !blocked;
+  const buttonDisabled =
+    !aiResult ||
+    uploading ||
+    analyzing ||
+    confirmLoading ||
+    committing ||
+    ((isInconclusive || isContest) && !justifValid);
+
+  const buttonLabel = isContest
+    ? "Enviar contestação para gestor"
+    : "Confirmar No-Show";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -241,16 +260,15 @@ export function NoShowEvidenceDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-600" />
-            Marcar No-Show com evidência
+            Marcar No-Show {meetingType} com evidência
           </DialogTitle>
           <DialogDescription>
-            Anexe um print da conversa onde fica claro o motivo do No-Show. A IA vai analisar
-            o conteúdo e validar o número de telefone.
+            Anexe um print da conversa onde fica claro o no-show. A IA validará telefone,
+            tentativa de contato e janela temporal.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Upload */}
           {!file && (
             <button
               type="button"
@@ -315,11 +333,28 @@ export function NoShowEvidenceDialog({
 
               <div className="text-xs space-y-1.5 text-foreground/90">
                 <div>
-                  <span className="font-medium">Resumo da conversa:</span> {aiResult.conversation_summary}
+                  <span className="font-medium">Resumo:</span> {aiResult.conversation_summary}
                 </div>
                 <div>
                   <span className="font-medium">Análise:</span> {aiResult.reasoning}
                 </div>
+
+                {aiResult.criteria_met && (
+                  <div className="pt-2 space-y-1">
+                    <div className="font-medium">Critérios verificados:</div>
+                    {Object.entries(aiResult.criteria_met).map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2">
+                        {v ? (
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                        ) : (
+                          <XCircle className="h-3 w-3 text-red-500" />
+                        )}
+                        <span>{CRITERIA_LABELS[k as keyof CriteriaMet]}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Badge variant="outline" className="text-xs">
                     Tel. CRM: {aiResult.lead_phone_normalized || "—"}
@@ -333,61 +368,67 @@ export function NoShowEvidenceDialog({
                   {aiResult.phone_match === false && (
                     <Badge variant="destructive" className="text-xs">⚠ Telefones diferentes</Badge>
                   )}
-                  {aiResult.phone_match === null && (
-                    <Badge variant="secondary" className="text-xs">Telefone não verificado</Badge>
+                  {typeof aiResult.prior_no_shows === "number" && aiResult.prior_no_shows > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {aiResult.prior_no_shows} no-show(s) anterior(es)
+                    </Badge>
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {requiresJustification && (
+          {isInconclusive && (
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                A IA discordou. Justifique por que ainda é No-Show <span className="text-destructive">*</span>
+                Justifique o no-show (mín. 10 caracteres) <span className="text-destructive">*</span>
               </label>
               <Textarea
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                placeholder="Ex: lead disse que viria mas sumiu na hora; print só mostra parte da conversa..."
+                value={sdrJustification}
+                onChange={(e) => setSdrJustification(e.target.value)}
+                placeholder="Ex: lead disse no início que viria, mas não respondeu mais. Print não pegou todo o histórico."
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Esse override fica registrado para auditoria da liderança.
+                Sua justificativa fica registrada para auditoria.
               </p>
             </div>
           )}
 
-          {blocked && (
-            <Alert variant="destructive">
-              <XCircle className="h-4 w-4" />
-              <AlertTitle>Marcação bloqueada</AlertTitle>
-              <AlertDescription>
-                A IA determinou que esta conversa não caracteriza No-Show. Considere reagendar
-                ou marcar como realizada.
-              </AlertDescription>
-            </Alert>
+          {isContest && (
+            <div className="space-y-2 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-300">
+                <ShieldAlert className="h-4 w-4" />
+                Contestar decisão da IA
+              </div>
+              <p className="text-xs text-orange-700/80 dark:text-orange-300/80">
+                A IA bloqueou. Você pode enviar uma contestação com justificativa detalhada
+                (mín. 20 caracteres) para o coordenador/admin revisar e decidir.
+              </p>
+              <Textarea
+                value={sdrJustification}
+                onChange={(e) => setSdrJustification(e.target.value)}
+                placeholder="Explique em detalhe por que ainda é no-show, o que a IA não conseguiu enxergar no print, contexto adicional..."
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">
+                {sdrJustification.trim().length}/20 caracteres mínimos
+              </p>
+            </div>
           )}
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={confirmLoading}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={confirmLoading || committing}>
             Cancelar
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={
-              !aiResult ||
-              uploading ||
-              analyzing ||
-              blocked ||
-              confirmLoading ||
-              (requiresJustification && justification.trim().length < 10)
-            }
-            className="bg-yellow-600 hover:bg-yellow-700"
+            disabled={buttonDisabled}
+            className={isContest ? "bg-orange-600 hover:bg-orange-700" : "bg-yellow-600 hover:bg-yellow-700"}
           >
-            {confirmLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Confirmar No-Show
+            {(confirmLoading || committing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {buttonLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -30,6 +30,7 @@ import {
   Laptop,
   Phone,
   Zap,
+  ShieldAlert,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -38,9 +39,20 @@ import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useMyProducts } from "@/hooks/useMyProducts";
 import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
 import { usePendingApprovalsCount } from "@/hooks/useApprovalRequests";
+import { useNoShowPendingReviewsCount } from "@/hooks/useNoShowReviews";
 
 function PendingApprovalsBadge() {
   const { data: count = 0 } = usePendingApprovalsCount();
+  if (!count) return null;
+  return (
+    <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+      {count}
+    </Badge>
+  );
+}
+
+function NoShowReviewsBadge() {
+  const { data: count = 0 } = useNoShowPendingReviewsCount();
   if (!count) return null;
   return (
     <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
