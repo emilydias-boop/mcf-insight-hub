@@ -22,6 +22,9 @@ interface AgendaMeetingRow {
   attendee_status: string | null;
   sdr_email: string | null;
   booked_at: string | null;
+  ordem_no_show: number | null;
+  total_no_shows_deal: number | null;
+  conta_no_show: boolean | null;
 }
 
 interface UseSdrMeetingsFromAgendaParams {
@@ -94,6 +97,9 @@ export function useSdrMeetingsFromAgenda({
           meeting_slot_id: row.meeting_slot_id || null,
           attendee_status: row.attendee_status || null,
           booked_at: row.booked_at || null,
+          ordem_no_show: row.ordem_no_show ?? null,
+          total_no_shows_deal: row.total_no_shows_deal ?? null,
+          conta_no_show: row.conta_no_show ?? null,
         };
       });
     },
