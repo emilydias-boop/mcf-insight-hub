@@ -62,8 +62,6 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     hangUp,
     deviceStatus,
     initializeDevice,
-    qualificationModalOpen,
-    openQualificationModal,
   } = useTwilio();
 
   const [state, setState] = useState<AutoDialerState>('idle');
