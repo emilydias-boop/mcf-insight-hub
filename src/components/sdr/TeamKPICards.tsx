@@ -28,10 +28,30 @@ interface TeamKPICardsProps {
   bu?: string;
   semStatus?: number;
   onCardClick?: (bucket: KpiBucket, title: string) => void;
+  /** true quando o range inclui hoje/futuro — muda o rótulo de Sem Status */
+  isFutureWindow?: boolean;
+  /** Médias por SDR e por Closer p/ breakdown nas taxas */
+  taxaConversaoBreakdown?: { sdrAvg: number; closerAvg: number } | null;
+  taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
 }
 
-export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semStatus, onCardClick }: TeamKPICardsProps) {
+export function TeamKPICards({
+  kpis,
+  isLoading,
+  isToday,
+  pendentesHoje,
+  bu,
+  semStatus,
+  onCardClick,
+  isFutureWindow = true,
+  taxaConversaoBreakdown,
+  taxaNoShowBreakdown,
+}: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
+  const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
+  const semStatusTooltip = isFutureWindow
+    ? "Pendentes vivos: reuniões cuja hora já passou e ainda estão sem desfecho (convidada/remarcada/sem sucesso). Cap de 2 por lead."
+    : "Backlog histórico: reuniões do período que ficaram sem desfecho registrado (convidada/remarcada/sem sucesso). Cap de 2 por lead.";
   const cards: Array<{
     title: string;
     value: string | number;
@@ -40,6 +60,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
     bgColor: string;
     tooltip: string;
     bucket?: KpiBucket;
+    subline?: string;
   }> = [
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
@@ -56,7 +77,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: "Total de reuniões agendadas no período",
+      tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
     },
     {
@@ -65,7 +86,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: CalendarCheck,
       color: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
-      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)",
+      tooltip: "Reuniões marcadas PARA o período (scheduled_at). Inclui datas futuras dentro do range — visão de planejamento.",
       bucket: "r1_agendada" as KpiBucket,
     },
     {
@@ -74,7 +95,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
-      tooltip: "Reuniões realizadas (por intermediação)",
+      tooltip: "Reuniões efetivamente realizadas no período. Fato consumado — não inclui reuniões futuras.",
       bucket: "realizada" as KpiBucket,
     },
     {
@@ -83,17 +104,17 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
-      tooltip: "Total de no-shows no período",
+      tooltip: "No-shows ocorridos (cap de 1/lead antes de 28/04, cap de 2/lead a partir de 28/04). Fato consumado — não inclui futuro.",
       bucket: "no_show" as KpiBucket,
     },
-    // Card condicional: Sem Status — reuniões com status pendente (invited/rescheduled/sem_sucesso)
+    // Card condicional: Sem Status (híbrido — pendentes vivos no futuro, backlog no passado)
     ...((semStatus ?? 0) > 0 ? [{
-      title: "Sem Status",
+      title: semStatusLabel,
       value: semStatus ?? 0,
       icon: AlertCircle,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
-      tooltip: "Reuniões com status pendente (convidada/remarcada/sem sucesso). Cap de 2 por lead. Diferença entre R1 Agendada e o somatório de Realizadas + No-Shows + Contratos.",
+      tooltip: semStatusTooltip,
       bucket: "sem_status" as KpiBucket,
     }] : []),
     {
@@ -105,8 +126,8 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
-        ? "Propostas fechadas atribuídas via R1 (deal_produtos_adquiridos + stages de fechamento)"
-        : "Contratos pagos via R1 (exclui outside)",
+        ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
+        : "Contratos pagos via R1 (contract_paid_at no período, exclui outside). Fato consumado — não inclui futuro.",
       bucket: "contratos" as KpiBucket,
     },
     ...(isConsorcio ? [] : [{
@@ -115,7 +136,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: ExternalLink,
       color: "text-rose-400",
       bgColor: "bg-rose-400/10",
-      tooltip: "Leads que compraram contrato antes da reunião R1"
+      tooltip: "Contratos pagos sem R1 anterior. Fato consumado no período."
     }]),
     {
       title: "Taxa Conversão",
@@ -123,7 +144,10 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Contratos / Realizadas × 100"
+      tooltip: "Global agregada: Σ Contratos / Σ R1 Realizada × 100. Breakdown mostra a média individual entre SDRs e entre Closers.",
+      subline: taxaConversaoBreakdown
+        ? `SDR ${taxaConversaoBreakdown.sdrAvg.toFixed(1)}% · Closer ${taxaConversaoBreakdown.closerAvg.toFixed(1)}%`
+        : undefined,
     },
     {
       title: "Taxa No-Show",
@@ -131,7 +155,10 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
       icon: AlertTriangle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
-      tooltip: "No-Shows / R1 Agendada × 100"
+      tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100. Breakdown mostra a média individual entre SDRs e entre Closers.",
+      subline: taxaNoShowBreakdown
+        ? `SDR ${taxaNoShowBreakdown.sdrAvg.toFixed(1)}% · Closer ${taxaNoShowBreakdown.closerAvg.toFixed(1)}%`
+        : undefined,
     },
   ];
 
@@ -174,6 +201,11 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje, bu, semS
                       <p className="text-xl font-bold text-foreground">
                         {isLoading ? "..." : card.value}
                       </p>
+                      {card.subline && !isLoading && (
+                        <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5">
+                          {card.subline}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
