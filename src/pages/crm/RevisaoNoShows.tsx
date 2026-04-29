@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Loader2, ShieldAlert, CheckCircle2, XCircle, Phone, User, Calendar, Image as ImageIcon } from "lucide-react";
@@ -7,12 +7,40 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNoShowPendingReviews, useReviewNoShowContest, getEvidenceSignedUrl, type PendingReview } from "@/hooks/useNoShowReviews";
+
+type StatusFilter = "all" | "pending" | "approved" | "rejected" | "auto";
+
+function statusBadge(item: PendingReview) {
+  const mr = item.manager_review_status;
+  if (mr === "pending") {
+    return <Badge className="bg-orange-500 hover:bg-orange-500 text-xs">Pendente revisão</Badge>;
+  }
+  if (mr === "approved") {
+    return <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs">Aprovado pelo gestor</Badge>;
+  }
+  if (mr === "rejected") {
+    return <Badge variant="destructive" className="text-xs">Rejeitado pelo gestor</Badge>;
+  }
+  // sem revisão de gestor → fluxo automático
+  if (item.ai_verdict === "confirmed") {
+    return <Badge className="bg-emerald-600/80 hover:bg-emerald-600/80 text-xs">Auto-aprovado (IA)</Badge>;
+  }
+  if (item.ai_verdict === "inconclusive") {
+    return <Badge className="bg-yellow-600 hover:bg-yellow-600 text-xs">Inconclusivo + justificativa</Badge>;
+  }
+  if (item.ai_verdict === "not_no_show") {
+    return <Badge variant="destructive" className="text-xs">Bloqueado pela IA</Badge>;
+  }
+  return <Badge variant="outline" className="text-xs">{item.final_status ?? "—"}</Badge>;
+}
 
 function ReviewCard({ item }: { item: PendingReview }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const review = useReviewNoShowContest();
+  const isPending = item.manager_review_status === "pending";
 
   useEffect(() => {
     let alive = true;
@@ -29,13 +57,19 @@ function ReviewCard({ item }: { item: PendingReview }) {
           <div className="space-y-1">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 text-orange-600" />
-              Contestação de No-Show {item.meeting_type ?? "R1"}
+              No-Show {item.meeting_type ?? "R1"} — {item.lead_phone || "lead sem telefone"}
             </CardTitle>
             <CardDescription className="text-xs">
-              Enviada em {format(new Date(item.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+              Registrado em {format(new Date(item.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+              {item.manager_review_at && (
+                <> · Revisado em {format(new Date(item.manager_review_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</>
+              )}
             </CardDescription>
           </div>
-          <Badge variant="destructive" className="text-xs">IA: not_no_show</Badge>
+          <div className="flex flex-col items-end gap-1">
+            {statusBadge(item)}
+            <Badge variant="outline" className="text-[10px]">IA: {item.ai_verdict ?? "—"}</Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -53,10 +87,18 @@ function ReviewCard({ item }: { item: PendingReview }) {
               <div className="text-xs font-semibold">Análise da IA</div>
               <p className="text-xs text-muted-foreground">{item.ai_reasoning || "—"}</p>
             </div>
-            <div className="rounded-md border p-3 bg-orange-50 dark:bg-orange-950/20">
-              <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">Justificativa do SDR</div>
-              <p className="text-xs whitespace-pre-wrap">{item.sdr_justification || "(sem justificativa)"}</p>
-            </div>
+            {item.sdr_justification && (
+              <div className="rounded-md border p-3 bg-orange-50 dark:bg-orange-950/20">
+                <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">Justificativa do SDR/Closer</div>
+                <p className="text-xs whitespace-pre-wrap">{item.sdr_justification}</p>
+              </div>
+            )}
+            {item.manager_review_notes && (
+              <div className="rounded-md border p-3 bg-muted/40">
+                <div className="text-xs font-semibold mb-1">Notas do gestor</div>
+                <p className="text-xs whitespace-pre-wrap">{item.manager_review_notes}</p>
+              </div>
+            )}
           </div>
           <div>
             <div className="text-xs font-semibold mb-2 flex items-center gap-2"><ImageIcon className="h-3 w-3" /> Print enviado</div>
@@ -72,37 +114,39 @@ function ReviewCard({ item }: { item: PendingReview }) {
           </div>
         </div>
 
-        <Separator />
-
-        <div className="space-y-2">
-          <label className="text-xs font-medium">Notas do gestor (opcional)</label>
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Comentário sobre a decisão..."
-          />
-        </div>
-
-        <div className="flex gap-2 justify-end">
-          <Button
-            variant="outline"
-            className="text-red-600 border-red-300 hover:bg-red-50"
-            disabled={review.isPending}
-            onClick={() => review.mutate({ validationId: item.id, decision: "rejected", notes })}
-          >
-            <XCircle className="h-4 w-4 mr-2" />
-            Rejeitar
-          </Button>
-          <Button
-            className="bg-emerald-600 hover:bg-emerald-700"
-            disabled={review.isPending}
-            onClick={() => review.mutate({ validationId: item.id, decision: "approved", notes })}
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Aprovar No-Show
-          </Button>
-        </div>
+        {isPending && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Notas do gestor (opcional)</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="Comentário sobre a decisão..."
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-300 hover:bg-red-50"
+                disabled={review.isPending}
+                onClick={() => review.mutate({ validationId: item.id, decision: "rejected", notes })}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Rejeitar
+              </Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={review.isPending}
+                onClick={() => review.mutate({ validationId: item.id, decision: "approved", notes })}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Aprovar No-Show
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -110,19 +154,57 @@ function ReviewCard({ item }: { item: PendingReview }) {
 
 export default function RevisaoNoShows() {
   const { data: items, isLoading } = useNoShowPendingReviews();
+  const [filter, setFilter] = useState<StatusFilter>("all");
+
+  const filtered = useMemo(() => {
+    if (!items) return [];
+    switch (filter) {
+      case "pending":
+        return items.filter((i) => i.manager_review_status === "pending");
+      case "approved":
+        return items.filter((i) => i.manager_review_status === "approved");
+      case "rejected":
+        return items.filter((i) => i.manager_review_status === "rejected");
+      case "auto":
+        return items.filter((i) => !i.manager_review_status);
+      default:
+        return items;
+    }
+  }, [items, filter]);
+
+  const counts = useMemo(() => {
+    const all = items ?? [];
+    return {
+      all: all.length,
+      pending: all.filter((i) => i.manager_review_status === "pending").length,
+      approved: all.filter((i) => i.manager_review_status === "approved").length,
+      rejected: all.filter((i) => i.manager_review_status === "rejected").length,
+      auto: all.filter((i) => !i.manager_review_status).length,
+    };
+  }, [items]);
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-5xl">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <ShieldAlert className="h-6 w-6 text-orange-600" />
-          Revisão de No-Shows Contestados
+          Histórico de No-Shows
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Contestações enviadas pelos SDRs/Closers quando a IA discordou da marcação. Revise o print
-          + análise da IA + justificativa e aprove ou rejeite.
+          Todos os No-Shows registrados com evidência: aprovados pela IA, com justificativa,
+          contestados ou já revisados pelo gestor. Use o filtro para focar em pendentes.
         </p>
       </div>
+
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
+        <TabsList>
+          <TabsTrigger value="all">Todos ({counts.all})</TabsTrigger>
+          <TabsTrigger value="pending">Pendentes ({counts.pending})</TabsTrigger>
+          <TabsTrigger value="auto">Auto-aprovados ({counts.auto})</TabsTrigger>
+          <TabsTrigger value="approved">Aprovados ({counts.approved})</TabsTrigger>
+          <TabsTrigger value="rejected">Rejeitados ({counts.rejected})</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -130,17 +212,17 @@ export default function RevisaoNoShows() {
         </div>
       )}
 
-      {!isLoading && (!items || items.length === 0) && (
+      {!isLoading && filtered.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-600" />
-            Nenhuma contestação pendente. Tudo em dia!
+            Nenhum registro neste filtro.
           </CardContent>
         </Card>
       )}
 
       <div className="space-y-4">
-        {items?.map((it) => <ReviewCard key={it.id} item={it} />)}
+        {filtered.map((it) => <ReviewCard key={it.id} item={it} />)}
       </div>
     </div>
   );

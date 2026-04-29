@@ -19,19 +19,26 @@ export interface PendingReview {
   bu_origin_id: string | null;
   meeting_type: string | null;
   created_at: string;
+  manager_review_status: string | null;
+  manager_review_by: string | null;
+  manager_review_at: string | null;
+  manager_review_notes: string | null;
+  final_status: string | null;
+  human_decision: string | null;
+  human_overrode_ai: boolean | null;
 }
 
 export function useNoShowPendingReviews() {
   return useQuery({
-    queryKey: ["no-show-pending-reviews"],
+    queryKey: ["no-show-all-reviews"],
     queryFn: async (): Promise<PendingReview[]> => {
       const { data, error } = await supabase
         .from("no_show_validations")
         .select(
-          "id, deal_id, meeting_slot_id, attendee_id, lead_phone, evidence_path, ai_verdict, ai_reasoning, ai_extracted_phone, phone_match, sdr_justification, performed_by, performed_by_role, bu_origin_id, meeting_type, created_at"
+          "id, deal_id, meeting_slot_id, attendee_id, lead_phone, evidence_path, ai_verdict, ai_reasoning, ai_extracted_phone, phone_match, sdr_justification, performed_by, performed_by_role, bu_origin_id, meeting_type, created_at, manager_review_status, manager_review_by, manager_review_at, manager_review_notes, final_status, human_decision, human_overrode_ai"
         )
-        .eq("manager_review_status", "pending")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(500);
       if (error) throw error;
       return (data ?? []) as PendingReview[];
     },
@@ -83,7 +90,7 @@ export function useReviewNoShowContest() {
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["no-show-pending-reviews"] });
+      qc.invalidateQueries({ queryKey: ["no-show-all-reviews"] });
       qc.invalidateQueries({ queryKey: ["no-show-pending-reviews-count"] });
       toast.success(vars.decision === "approved" ? "Contestação aprovada" : "Contestação rejeitada");
     },
