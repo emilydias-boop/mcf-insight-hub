@@ -19,6 +19,7 @@ import { R2MeetingSlot, useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
+import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
 
 interface R2MeetingDrawerProps {
   meeting: R2MeetingSlot | null;
@@ -221,6 +222,9 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
             Reembolso
           </Button>
         </div>
+
+        <Separator />
+        <LeadNoShowEvidenceHistory dealId={(firstAttendee as any)?.deal?.id || null} />
 
         {requiresEvidence && (
           <NoShowEvidenceDialog
