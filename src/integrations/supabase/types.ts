@@ -7653,15 +7653,22 @@ export type Database = {
           deal_id: string | null
           evidence_hash: string | null
           evidence_path: string
+          final_status: string | null
           human_decision: string | null
           human_justification: string | null
           human_overrode_ai: boolean | null
           id: string
           lead_phone: string | null
+          manager_review_at: string | null
+          manager_review_by: string | null
+          manager_review_notes: string | null
+          manager_review_status: string | null
           meeting_slot_id: string | null
+          meeting_type: string
           performed_by: string | null
           performed_by_role: string | null
           phone_match: boolean | null
+          sdr_justification: string | null
           updated_at: string
         }
         Insert: {
@@ -7676,15 +7683,22 @@ export type Database = {
           deal_id?: string | null
           evidence_hash?: string | null
           evidence_path: string
+          final_status?: string | null
           human_decision?: string | null
           human_justification?: string | null
           human_overrode_ai?: boolean | null
           id?: string
           lead_phone?: string | null
+          manager_review_at?: string | null
+          manager_review_by?: string | null
+          manager_review_notes?: string | null
+          manager_review_status?: string | null
           meeting_slot_id?: string | null
+          meeting_type?: string
           performed_by?: string | null
           performed_by_role?: string | null
           phone_match?: boolean | null
+          sdr_justification?: string | null
           updated_at?: string
         }
         Update: {
@@ -7699,15 +7713,22 @@ export type Database = {
           deal_id?: string | null
           evidence_hash?: string | null
           evidence_path?: string
+          final_status?: string | null
           human_decision?: string | null
           human_justification?: string | null
           human_overrode_ai?: boolean | null
           id?: string
           lead_phone?: string | null
+          manager_review_at?: string | null
+          manager_review_by?: string | null
+          manager_review_notes?: string | null
+          manager_review_status?: string | null
           meeting_slot_id?: string | null
+          meeting_type?: string
           performed_by?: string | null
           performed_by_role?: string | null
           phone_match?: boolean | null
+          sdr_justification?: string | null
           updated_at?: string
         }
         Relationships: []
