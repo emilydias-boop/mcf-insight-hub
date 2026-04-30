@@ -78,6 +78,51 @@ export function classifyPendente(m: MeetingV2): PendenteSubBucket {
   return "vencidas";
 }
 
+/**
+ * Dedup por (sdr_email, deal_id) com cap 2 — espelha exatamente a regra do
+ * RPC `get_sdr_metrics_from_agenda` para R1 Agendada
+ * (`LEAST(COUNT(DISTINCT meeting_day), 2)`).
+ *
+ * Para cada (sdr, deal) escolhe até 2 ocorrências em DIAS DIFERENTES,
+ * priorizando: Realizada > No-Show > Pendente (futura/vencida/cancelada).
+ * Assim Realizada + No-Show + Pendente == R1 Agendada do KPI.
+ */
+function dedupSdrDealCap2(meetings: MeetingV2[]): MeetingV2[] {
+  const rank = (m: MeetingV2): number => {
+    if (isRealizadaStatus(m.attendee_status)) return 3;
+    if (isNoShowStatus(m.attendee_status)) return 2;
+    return 1; // pendente / cancelada / sem status
+  };
+  // Agrupa por (sdr, deal)
+  const groups = new Map<string, MeetingV2[]>();
+  meetings.forEach((m) => {
+    const sdr = (m.current_owner || m.intermediador || "").toLowerCase();
+    const deal = m.deal_id || `noid-${m.attendee_id || ""}`;
+    const key = `${sdr}::${deal}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(m);
+    else groups.set(key, [m]);
+  });
+
+  const out: MeetingV2[] = [];
+  groups.forEach((arr) => {
+    // Ordena por rank desc; em empate, escolhe o mais antigo (estável)
+    const sorted = [...arr].sort((a, b) => rank(b) - rank(a));
+    const usedDays = new Set<string>();
+    for (const m of sorted) {
+      const day = spDayKey(m.scheduled_at || m.data_agendamento) || "";
+      if (usedDays.has(day)) continue;
+      usedDays.add(day);
+      out.push(m);
+      if (out.length && usedDays.size >= 2) {
+        // Limite: 2 dias distintos por (sdr, deal)
+      }
+      if (usedDays.size >= 2) break;
+    }
+  });
+  return out;
+}
+
 export function getPendentesMeetings(
   meetings: MeetingV2[] | undefined | null,
   start: Date | null,
@@ -89,23 +134,12 @@ export function getPendentesMeetings(
     inRange(m.scheduled_at || m.data_agendamento, start, end),
   );
 
-  const rank = (s?: string | null): number => {
-    if (isRealizadaStatus(s)) return 3;
-    if (isNoShowStatus(s)) return 2;
-    return 1;
-  };
-  const bestPerKey = new Map<string, MeetingV2>();
-  inWindow.forEach((m) => {
-    const day = spDayKey(m.scheduled_at || m.data_agendamento);
-    const dealKey = m.deal_id || `noid-${m.attendee_id || ""}`;
-    const key = `${dealKey}::${day}`;
-    const cur = bestPerKey.get(key);
-    if (!cur || rank(m.attendee_status) > rank(cur.attendee_status)) {
-      bestPerKey.set(key, m);
-    }
-  });
-
-  return Array.from(bestPerKey.values()).filter(
+  // Dedup por (sdr, deal) cap 2 — alinhado ao RPC R1 Agendada — e remove
+  // as ocorrências que já viraram Realizada / No-Show. O que sobra são as
+  // pendentes "verdadeiras" que somam exatamente:
+  //   R1 Agendada − Realizada − No-Show = Pendentes
+  const deduped = dedupSdrDealCap2(inWindow);
+  return deduped.filter(
     (m) => !isRealizadaStatus(m.attendee_status) && !isNoShowStatus(m.attendee_status),
   );
 }
@@ -114,10 +148,13 @@ export function getPendentesMeetings(
  * Calcula o breakdown REAL de Pendentes/Sem Desfecho.
  *
  * Usa as reuniões SEM dedup global (allMeetingsRaw) e aplica dedup por
- * (deal_id + dia em São Paulo) — mesma chave usada pelo backend para R1
- * Agendada. Assim, se um lead teve 1 cancelada + 1 realizada no mesmo dia,
- * conta apenas a realizada; se teve cancelada + (nada), conta a cancelada.
- * Isso garante que Realizada + No-Show + Pendente = R1 Agendada.
+ * (sdr_email + deal_id) com cap 2 dias — mesma regra do RPC
+ * `get_sdr_metrics_from_agenda` para R1 Agendada
+ * (`LEAST(COUNT(DISTINCT meeting_day), 2)`).
+ *
+ * Para cada (sdr, deal) escolhe até 2 dias priorizando Realizada > No-Show
+ * > Pendente. Assim Realizada + No-Show + Pendente == R1 Agendada do KPI,
+ * fechando a aritmética.
  */
 export function computePendentesBreakdown(
   meetings: MeetingV2[] | undefined | null,
