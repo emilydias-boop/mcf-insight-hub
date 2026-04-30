@@ -514,8 +514,8 @@ export default function ReunioesEquipe() {
   // Breakdown REAL de Pendentes (a partir das reuniões já deduplicadas que
   // alimentam o drill-down). Substitui o cálculo aritmético inflado.
   const pendentesBreakdown = useMemo(
-    () => computePendentesBreakdown(allMeetings, start, end),
-    [allMeetings, start, end],
+    () => computePendentesBreakdown(allMeetingsRaw, start, end),
+    [allMeetingsRaw, start, end],
   );
   
   const dayValues = useMemo(() => ({

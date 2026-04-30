@@ -44,6 +44,26 @@ export function isRemanejadoStatus(s?: string | null): boolean {
   );
 }
 
+/** Devolve o "dia" do agendamento em America/Sao_Paulo (YYYY-MM-DD). */
+function spDayKey(iso?: string | null): string | null {
+  if (!iso) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(iso));
+    const d = parts.find((p) => p.type === "day")?.value;
+    const mo = parts.find((p) => p.type === "month")?.value;
+    const y = parts.find((p) => p.type === "year")?.value;
+    if (!d || !mo || !y) return null;
+    return `${y}-${mo}-${d}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Classifica uma reunião pendente em: futuras (ainda vão acontecer),
  * vencidas (já passou da hora e ninguém marcou Realizada/No-Show)
@@ -59,9 +79,13 @@ export function classifyPendente(m: MeetingV2): PendenteSubBucket {
 }
 
 /**
- * Calcula o breakdown REAL de Pendentes/Sem Desfecho a partir das reuniões
- * deduplicadas (mesma fonte usada pelo drilldown), em vez do cálculo
- * aritmético R1 − Realizada − No-Show (que infla por bookings fantasmas).
+ * Calcula o breakdown REAL de Pendentes/Sem Desfecho.
+ *
+ * Usa as reuniões SEM dedup global (allMeetingsRaw) e aplica dedup por
+ * (deal_id + dia em São Paulo) — mesma chave usada pelo backend para R1
+ * Agendada. Assim, se um lead teve 1 cancelada + 1 realizada no mesmo dia,
+ * conta apenas a realizada; se teve cancelada + (nada), conta a cancelada.
+ * Isso garante que Realizada + No-Show + Pendente = R1 Agendada.
  */
 export function computePendentesBreakdown(
   meetings: MeetingV2[] | undefined | null,
@@ -70,9 +94,32 @@ export function computePendentesBreakdown(
 ): PendentesBreakdown {
   const out: PendentesBreakdown = { futuras: 0, vencidas: 0, canceladas: 0, total: 0 };
   if (!meetings || meetings.length === 0) return out;
-  meetings.forEach((m) => {
-    const iso = m.scheduled_at || m.data_agendamento;
-    if (!inRange(iso, start, end)) return;
+
+  // 1. Filtra pelo range
+  const inWindow = meetings.filter((m) =>
+    inRange(m.scheduled_at || m.data_agendamento, start, end),
+  );
+
+  // 2. Dedup por (deal_id + dia SP) priorizando: Realizada > No-Show > demais.
+  //    Assim casamos com a regra de R1 Agendada do backend.
+  const rank = (s?: string | null): number => {
+    if (isRealizadaStatus(s)) return 3;
+    if (isNoShowStatus(s)) return 2;
+    return 1;
+  };
+  const bestPerKey = new Map<string, MeetingV2>();
+  inWindow.forEach((m) => {
+    const day = spDayKey(m.scheduled_at || m.data_agendamento);
+    const dealKey = m.deal_id || `noid-${m.attendee_id || ""}`;
+    const key = `${dealKey}::${day}`;
+    const cur = bestPerKey.get(key);
+    if (!cur || rank(m.attendee_status) > rank(cur.attendee_status)) {
+      bestPerKey.set(key, m);
+    }
+  });
+
+  // 3. Conta os que sobraram e NÃO são Realizada nem No-Show.
+  bestPerKey.forEach((m) => {
     if (isRealizadaStatus(m.attendee_status)) return;
     if (isNoShowStatus(m.attendee_status)) return;
     const cls = classifyPendente(m);
