@@ -356,6 +356,15 @@ export default function ReunioesEquipe() {
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
+  // Chamada extra incluindo canceladas — usada apenas para o card
+  // "Pendentes / Sem Desfecho" fechar a conta com R1 Agendada.
+  const { data: meetingsWithCancelled } = useSdrMeetingsFromAgenda({
+    startDate: start,
+    endDate: end,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    includeCancelled: true,
+  });
+
   // Fetch Outside metrics for the selected period
   
 
