@@ -25,7 +25,7 @@ interface Props {
 
 export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const ad = useAutoDialer();
-  const { role, allRoles } = useAuth();
+  const { user, role, allRoles } = useAuth();
   const isSdr = isSdrRole(role, allRoles);
   const activeBU = useActiveBU();
   const { data: buMapping } = useBUPipelineMap(activeBU);
@@ -80,7 +80,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
     stageId
       ? (restrictToSdrOrigins && pipelineId
-          ? { stageId, originId: pipelineId, limit: 100 }
+          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 100 }
           : { stageId, limit: 100 })
       : {}
   );
