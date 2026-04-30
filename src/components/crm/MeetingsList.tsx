@@ -60,14 +60,29 @@ function normalizePhone9(raw: string | null | undefined): string {
 type SimpleChannel = 'A010' | 'ANAMNESE' | 'Outro';
 
 function classifySimple(opts: {
-  isA010Buyer: boolean;
+  /** ms desde a venda A010 mais recente (null se não for buyer) */
+  a010AgeMs: number | null;
   tags: string[];
 }): SimpleChannel {
-  if (opts.isA010Buyer) return 'A010';
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const isA010Buyer = opts.a010AgeMs !== null;
+  const isStale = opts.a010AgeMs !== null && opts.a010AgeMs > THIRTY_DAYS_MS;
   const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
-  if (norm.some((t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA')) {
-    return 'ANAMNESE';
-  }
+  const hasAnamnese = norm.some(
+    (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
+  );
+
+  // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
+  if (isA010Buyer && !isStale) return 'A010';
+
+  // Buyer A010 esfriado (>30d) E tem tag ANAMNESE → reclassifica como ANAMNESE
+  if (isA010Buyer && isStale && hasAnamnese) return 'ANAMNESE';
+
+  // Buyer A010 esfriado SEM tag ANAMNESE → ainda é A010 (regra: precisa ter tag)
+  if (isA010Buyer && isStale && !hasAnamnese) return 'A010';
+
+  // Não é buyer A010
+  if (hasAnamnese) return 'ANAMNESE';
   return 'Outro';
 }
 
@@ -109,51 +124,66 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     return { emails: Array.from(eSet), phones9: Array.from(pSet) };
   }, [meetings]);
 
-  // Lookup em a010_sales para identificar compradores A010 entre os leads visíveis
+  // Lookup em a010_sales: além de identificar buyers, traz a data da venda mais recente
+  // para aplicar a regra "A010 com +30 dias e tag ANAMNESE → vira ANAMNESE".
   const { data: a010Sets } = useQuery({
     queryKey: ['a010-buyers-lookup', emails, phones9],
     queryFn: async () => {
-      const emailSet = new Set<string>();
-      const phoneSet = new Set<string>();
+      const emailMap = new Map<string, string>(); // email -> ISO sale_date mais recente
+      const phoneMap = new Map<string, string>(); // phone9 -> ISO sale_date mais recente
       if (emails.length === 0 && phones9.length === 0) {
-        return { emailSet, phoneSet };
+        return { emailMap, phoneMap };
       }
-      // Busca em batches por email
       if (emails.length > 0) {
         const { data } = await supabase
           .from('a010_sales')
-          .select('customer_email')
+          .select('customer_email, sale_date')
           .in('customer_email', emails);
         (data || []).forEach((r: any) => {
-          if (r.customer_email) emailSet.add(String(r.customer_email).toLowerCase().trim());
+          if (!r.customer_email) return;
+          const e = String(r.customer_email).toLowerCase().trim();
+          const prev = emailMap.get(e);
+          if (!prev || (r.sale_date && r.sale_date > prev)) {
+            emailMap.set(e, r.sale_date || prev || '');
+          }
         });
       }
-      // Para telefone, traz qualquer venda cujo phone termine com algum dos sufixos.
-      // Como não dá pra fazer "endsWith IN (...)", trazemos todos com telefone preenchido
-      // limitado por uma janela razoável e filtramos no cliente.
       if (phones9.length > 0) {
         const { data } = await supabase
           .from('a010_sales')
-          .select('customer_phone')
+          .select('customer_phone, sale_date')
           .not('customer_phone', 'is', null);
         (data || []).forEach((r: any) => {
           const p9 = normalizePhone9(r.customer_phone);
-          if (p9 && phones9.includes(p9)) phoneSet.add(p9);
+          if (!p9 || !phones9.includes(p9)) return;
+          const prev = phoneMap.get(p9);
+          if (!prev || (r.sale_date && r.sale_date > prev)) {
+            phoneMap.set(p9, r.sale_date || prev || '');
+          }
         });
       }
-      return { emailSet, phoneSet };
+      return { emailMap, phoneMap };
     },
     enabled: emails.length > 0 || phones9.length > 0,
     staleTime: 60_000,
   });
 
-  const isA010 = (email: string | null | undefined, phone: string | null | undefined): boolean => {
-    if (!a010Sets) return false;
+  /** Retorna idade em ms desde a venda A010 mais recente, ou null se não for buyer. */
+  const a010Age = (email: string | null | undefined, phone: string | null | undefined): number | null => {
+    if (!a010Sets) return null;
     const e = (email || '').toLowerCase().trim();
-    if (e && a010Sets.emailSet.has(e)) return true;
     const p9 = normalizePhone9(phone);
-    if (p9 && a010Sets.phoneSet.has(p9)) return true;
-    return false;
+    const dates: string[] = [];
+    if (e && a010Sets.emailMap.has(e)) dates.push(a010Sets.emailMap.get(e)!);
+    if (p9 && a010Sets.phoneMap.has(p9)) dates.push(a010Sets.phoneMap.get(p9)!);
+    const valid = dates.filter(Boolean).map((d) => new Date(d).getTime()).filter((n) => !isNaN(n));
+    if (valid.length === 0) {
+      // É buyer mas sem sale_date utilizável → trata como recente (A010)
+      if ((e && a010Sets.emailMap.has(e)) || (p9 && a010Sets.phoneMap.has(p9))) return 0;
+      return null;
+    }
+    const mostRecent = Math.max(...valid);
+    return Date.now() - mostRecent;
   };
 
   // Expand meetings into attendee-level rows
@@ -190,7 +220,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
               })
             : [];
           const channel = classifySimple({
-            isA010Buyer: isA010(att.contact?.email, att.attendee_phone || att.contact?.phone),
+            a010AgeMs: a010Age(att.contact?.email, att.attendee_phone || att.contact?.phone),
             tags: tagsArr,
           });
 
