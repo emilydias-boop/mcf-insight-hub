@@ -724,7 +724,7 @@ export function useCancelMeeting() {
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
-      queryClient.invalidateQueries({ queryKey: ['lead-schedule-states'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-search'] });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       toast.success('Reunião cancelada');
     },
