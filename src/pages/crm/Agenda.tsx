@@ -311,32 +311,57 @@ export default function Agenda() {
         if (p9) phones9.add(p9);
       }
     }
-    const a010Emails = new Set<string>();
-    const a010Phones = new Set<string>();
+    // Mapeia email/telefone -> sale_date mais recente
+    const a010EmailMap = new Map<string, string>();
+    const a010PhoneMap = new Map<string, string>();
     if (emails.size > 0) {
       const { data } = await supabase
         .from('a010_sales')
-        .select('customer_email')
+        .select('customer_email, sale_date')
         .in('customer_email', Array.from(emails));
       (data || []).forEach((r: any) => {
-        if (r.customer_email) a010Emails.add(String(r.customer_email).toLowerCase().trim());
+        if (!r.customer_email) return;
+        const e = String(r.customer_email).toLowerCase().trim();
+        const prev = a010EmailMap.get(e);
+        if (!prev || (r.sale_date && r.sale_date > prev)) {
+          a010EmailMap.set(e, r.sale_date || prev || '');
+        }
       });
     }
     if (phones9.size > 0) {
       const { data } = await supabase
         .from('a010_sales')
-        .select('customer_phone')
+        .select('customer_phone, sale_date')
         .not('customer_phone', 'is', null);
       (data || []).forEach((r: any) => {
         const p9 = norm9(r.customer_phone);
-        if (p9 && phones9.has(p9)) a010Phones.add(p9);
+        if (!p9 || !phones9.has(p9)) return;
+        const prev = a010PhoneMap.get(p9);
+        if (!prev || (r.sale_date && r.sale_date > prev)) {
+          a010PhoneMap.set(p9, r.sale_date || prev || '');
+        }
       });
     }
 
-    const classify = (email: string | null, phone: string | null, tags: any): string => {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const a010AgeMs = (email: string | null, phone: string | null): number | null => {
       const e = (email || '').toLowerCase().trim();
       const p9 = norm9(phone);
-      if ((e && a010Emails.has(e)) || (p9 && a010Phones.has(p9))) return 'A010';
+      const dates: string[] = [];
+      if (e && a010EmailMap.has(e)) dates.push(a010EmailMap.get(e)!);
+      if (p9 && a010PhoneMap.has(p9)) dates.push(a010PhoneMap.get(p9)!);
+      const valid = dates.filter(Boolean).map((d) => new Date(d).getTime()).filter((n) => !isNaN(n));
+      if (valid.length === 0) {
+        if ((e && a010EmailMap.has(e)) || (p9 && a010PhoneMap.has(p9))) return 0;
+        return null;
+      }
+      return Date.now() - Math.max(...valid);
+    };
+
+    const classify = (email: string | null, phone: string | null, tags: any): string => {
+      const ageMs = a010AgeMs(email, phone);
+      const isBuyer = ageMs !== null;
+      const isStale = ageMs !== null && ageMs > THIRTY_DAYS_MS;
       const arr: string[] = Array.isArray(tags)
         ? tags.map((t: any) => {
             if (typeof t === 'string') {
@@ -349,9 +374,13 @@ export default function Agenda() {
           })
         : [];
       const norm = arr.map((t) => (t || '').trim().toUpperCase());
-      if (norm.some((t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA')) {
-        return 'ANAMNESE';
-      }
+      const hasAnamnese = norm.some(
+        (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
+      );
+      if (isBuyer && !isStale) return 'A010';
+      if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
+      if (isBuyer && isStale && !hasAnamnese) return 'A010';
+      if (hasAnamnese) return 'ANAMNESE';
       return 'Outro';
     };
 
