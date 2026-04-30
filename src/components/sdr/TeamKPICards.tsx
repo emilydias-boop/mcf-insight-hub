@@ -223,7 +223,10 @@ export function TeamKPICards({
               </Card>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{card.tooltip}{card.bucket && onCardClick ? " — clique para ver leads" : ""}</p>
+              <p className="whitespace-pre-line max-w-xs">
+                {card.tooltip}
+                {card.bucket && onCardClick ? "\n— clique para ver leads" : ""}
+              </p>
             </TooltipContent>
           </Tooltip>
         ))}
