@@ -363,6 +363,7 @@ export default function ReunioesEquipe() {
     startDate: start,
     endDate: end,
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    buFilter: "incorporador",
     includeCancelled: true,
   });
 
