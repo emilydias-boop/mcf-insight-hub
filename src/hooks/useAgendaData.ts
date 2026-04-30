@@ -696,12 +696,27 @@ export function useCancelMeeting() {
 
   return useMutation({
     mutationFn: async (meetingId: string) => {
+      // 1) Cancela o slot
       const { error } = await supabase
         .from('meeting_slots')
         .update({ status: 'canceled' })
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      // 2) Cancela os attendees do slot que ainda estavam ativos
+      //    (invited/scheduled/pre_scheduled). Status finais como
+      //    completed/contract_paid/refunded/no_show são preservados
+      //    para não mascarar histórico legítimo.
+      const { error: attErr } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ status: 'cancelled' })
+        .eq('meeting_slot_id', meetingId)
+        .in('status', ['invited', 'scheduled', 'pre_scheduled']);
+
+      if (attErr) {
+        console.warn('[useCancelMeeting] Falha ao cancelar attendees', attErr);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
@@ -709,6 +724,8 @@ export function useCancelMeeting() {
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-search'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       toast.success('Reunião cancelada');
     },
     onError: () => {
@@ -1064,7 +1081,7 @@ export function useSearchDealsForSchedule(
           .from('meeting_slot_attendees')
           .select(
             `id, deal_id, status, contract_paid_at, created_at, booked_at,
-             meeting_slot:meeting_slots(id, scheduled_at, meeting_type, closer:closers(name))`,
+             meeting_slot:meeting_slots(id, scheduled_at, meeting_type, status, closer:closers(name))`,
           )
           .in('deal_id', dealIds)
           .neq('status', 'cancelled')
@@ -1162,6 +1179,9 @@ export function useSearchDealsForSchedule(
                   (a: any) => {
                     if (a.meeting_slot?.meeting_type !== 'r1') return false;
                     if (!a.meeting_slot?.scheduled_at) return false;
+                    // Slots cancelados (status='canceled') NÃO contam no limite
+                    // de reagendamentos — o agendamento foi desfeito.
+                    if (a.meeting_slot?.status === 'canceled') return false;
                     // A partir da vigência da regra (applies_from), TODO o
                     // histórico de R1 do lead conta para o limite — leads que
                     // já tinham 2+ movimentos ficam imediatamente bloqueados.
@@ -1836,6 +1856,8 @@ export function useDeleteMeeting() {
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-search'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       toast.success('Reunião excluída');
     },
     onError: () => {
