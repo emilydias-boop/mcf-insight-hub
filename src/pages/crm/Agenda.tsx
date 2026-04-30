@@ -348,7 +348,7 @@ export default function Agenda() {
     }
 
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const a010AgeMs = (email: string | null, phone: string | null): number | null => {
+    const a010AgeMs = (email: string | null, phone: string | null, referenceISO: string): number | null => {
       const e = (email || '').toLowerCase().trim();
       const p9 = norm9(phone);
       const dates: string[] = [];
@@ -359,11 +359,13 @@ export default function Agenda() {
         if ((e && a010EmailMap.has(e)) || (p9 && a010PhoneMap.has(p9))) return 0;
         return null;
       }
-      return Date.now() - Math.max(...valid);
+      const refMs = new Date(referenceISO).getTime();
+      const baseMs = isNaN(refMs) ? Date.now() : refMs;
+      return baseMs - Math.max(...valid);
     };
 
-    const classify = (email: string | null, phone: string | null, tags: any): string => {
-      const ageMs = a010AgeMs(email, phone);
+    const classify = (email: string | null, phone: string | null, tags: any, referenceISO: string): string => {
+      const ageMs = a010AgeMs(email, phone, referenceISO);
       const isBuyer = ageMs !== null;
       const isStale = ageMs !== null && ageMs > THIRTY_DAYS_MS;
       const arr: string[] = Array.isArray(tags)
@@ -396,7 +398,8 @@ export default function Agenda() {
         const channel = classify(
           att.contact?.email || null,
           att.attendee_phone || att.contact?.phone || null,
-          dealForChannel?.tags
+          dealForChannel?.tags,
+          meeting.scheduled_at,
         );
         rows.push({
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
