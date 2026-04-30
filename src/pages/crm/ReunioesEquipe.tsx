@@ -150,7 +150,7 @@ export default function ReunioesEquipe() {
       }
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
-      case "custom":
+      case "custom": {
         const startCustom = customStartDate || startOfMonth(today);
         const endCustom = customEndDate || customStartDate || endOfMonth(today);
         // Ensure start <= end
@@ -158,6 +158,7 @@ export default function ReunioesEquipe() {
           return { start: endCustom, end: startCustom };
         }
         return { start: startCustom, end: endCustom };
+      }
       default:
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
     }
@@ -537,7 +538,7 @@ export default function ReunioesEquipe() {
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayPendentes, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0,
