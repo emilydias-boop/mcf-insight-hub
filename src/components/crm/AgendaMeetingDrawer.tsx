@@ -520,8 +520,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const participants = getParticipantsList();
   
-  // Selected participant (default to first/main)
-  const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
+  // Selected participant.
+  // IMPORTANTE: só fazemos fallback automático para o primeiro participante quando
+  // há APENAS 1 lead no slot. Em slots multi-lead, exigimos seleção EXPLÍCITA do
+  // SDR/Closer para evitar que ações destrutivas (no-show, contrato pago, realizada,
+  // exclusão) sejam aplicadas ao lead errado — bug histórico onde o fallback silencioso
+  // marcou no-show no lead de outro SDR.
+  const selectedParticipant = participants.find(p => p.id === selectedParticipantId)
+    || (participants.length === 1 ? participants[0] : undefined);
   
   // Check if current user can edit note for the selected participant
   // Roles que podem editar notas de qualquer SDR
@@ -960,6 +966,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             </div>
 
             {/* Quick Actions - Per Participant - ALWAYS VISIBLE */}
+            {!selectedParticipant && participants.length > 1 && (
+              <>
+                <Separator />
+                <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Selecione um participante acima</strong> para alterar status (No-Show, Realizada, Contrato Pago).
+                    Este horário tem {participants.length} convidados — é necessário escolher qual lead será afetado.
+                  </div>
+                </div>
+              </>
+            )}
             {selectedParticipant && (
               <>
                 <Separator />

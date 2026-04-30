@@ -371,6 +371,39 @@ Deno.serve(async (req) => {
 
     // ========== COMMIT: persiste no DB com service role ==========
     if (action === "commit") {
+      // ========== GUARD DE INTEGRIDADE: attendee_id ↔ meeting_slot_id ↔ lead_phone ==========
+      // Bug histórico: o frontend, em slots multi-lead, podia mandar attendee_id de outro
+      // lead (fallback silencioso para participants[0]). Aqui rejeitamos qualquer
+      // combinação inconsistente para garantir que o no-show seja gravado contra o
+      // attendee certo.
+      if (attendee_id) {
+        const { data: att, error: attErr } = await adminClient
+          .from("meeting_slot_attendees")
+          .select("id, meeting_slot_id, attendee_phone")
+          .eq("id", attendee_id)
+          .maybeSingle();
+
+        if (attErr || !att) {
+          return new Response(JSON.stringify({
+            error: "Attendee não encontrado. Atualize a página e selecione novamente o lead.",
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (meeting_slot_id && att.meeting_slot_id !== meeting_slot_id) {
+          return new Response(JSON.stringify({
+            error: "O lead selecionado não pertence a este horário. Atualize a página e tente novamente.",
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (lead_phone && att.attendee_phone) {
+          const attNorm = normalizePhone(att.attendee_phone);
+          const sentNorm = normalizePhone(lead_phone);
+          if (attNorm && sentNorm && attNorm !== sentNorm) {
+            return new Response(JSON.stringify({
+              error: "O telefone enviado não confere com o lead selecionado. Atualize a página e tente novamente.",
+            }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+      }
+
       // Estabilidade: se o cliente passou o veredicto da fase 'analyze',
       // usamos ele para decidir as validações (a IA não é determinística e
       // pode oscilar entre chamadas, gerando UX confusa para o usuário).
