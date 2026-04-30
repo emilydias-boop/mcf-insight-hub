@@ -1,0 +1,204 @@
+CREATE OR REPLACE FUNCTION public.get_sdr_metrics_from_agenda(start_date text, end_date text, sdr_email_filter text DEFAULT NULL::text, bu_filter text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  result JSON;
+  today_sp DATE := (NOW() AT TIME ZONE 'America/Sao_Paulo')::date;
+  start_d DATE := start_date::date;
+  end_d DATE := end_date::date;
+  effective_end DATE := LEAST(end_d, today_sp);
+  is_future_window BOOLEAN := end_d >= today_sp;
+BEGIN
+  WITH raw_attendees AS (
+    SELECT
+      p_booker.email as sdr_email,
+      COALESCE(p_booker.full_name, p_booker.email) as sdr_name,
+      msa.deal_id,
+      ms.scheduled_at,
+      (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date as meeting_day,
+      msa.status,
+      msa.contract_paid_at,
+      COALESCE(msa.booked_at, msa.created_at) as effective_booked_at,
+      sdr_at_time.id as sdr_id_at_booking,
+      sdr_at_time.squad as sdr_squad_at_booking
+    FROM meeting_slot_attendees msa
+    INNER JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
+    LEFT JOIN closers cl ON cl.id = ms.closer_id
+    LEFT JOIN profiles p_booker ON p_booker.id = msa.booked_by
+    LEFT JOIN LATERAL (
+      SELECT s.id, h.squad
+      FROM public.sdr s
+      INNER JOIN public.sdr_squad_history h ON h.sdr_id = s.id
+      WHERE LOWER(s.email) = LOWER(p_booker.email)
+        AND h.valid_from <= COALESCE(msa.booked_at, msa.created_at)
+        AND COALESCE(h.valid_to, 'infinity'::timestamptz) > COALESCE(msa.booked_at, msa.created_at)
+      ORDER BY h.valid_from DESC
+      LIMIT 1
+    ) sdr_at_time ON true
+    WHERE msa.status != 'cancelled'
+      AND ms.meeting_type = 'r1'
+      AND msa.is_partner = false
+      AND (
+        bu_filter IS NULL
+        OR sdr_at_time.squad = bu_filter
+        OR (sdr_at_time.squad IS NULL AND cl.bu = bu_filter)
+      )
+      AND p_booker.email IS NOT NULL
+  ),
+  ranked_movements AS (
+    SELECT
+      sdr_email, sdr_name, deal_id, effective_booked_at, scheduled_at, meeting_day, status, contract_paid_at,
+      ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY effective_booked_at, meeting_day) as ordem
+    FROM raw_attendees
+  ),
+  filtered_attendees AS (
+    SELECT * FROM raw_attendees
+    WHERE sdr_email_filter IS NULL OR sdr_email = sdr_email_filter
+  ),
+  filtered_ranked AS (
+    SELECT * FROM ranked_movements
+    WHERE sdr_email_filter IS NULL OR sdr_email = sdr_email_filter
+  ),
+  dedup_agendada AS (
+    SELECT sdr_email, sdr_name, deal_id,
+      LEAST(COUNT(DISTINCT meeting_day), 2) as agendada_count
+    FROM filtered_attendees
+    WHERE meeting_day BETWEEN start_d AND end_d
+    GROUP BY sdr_email, sdr_name, deal_id
+  ),
+  agendada_agg AS (
+    SELECT sdr_email, SUM(agendada_count) as r1_agendada
+    FROM dedup_agendada GROUP BY sdr_email
+  ),
+  dedup_realizada AS (
+    SELECT sdr_email, deal_id,
+      MAX(CASE WHEN status IN ('completed','contract_paid','refunded') THEN 1 ELSE 0 END) as realized
+    FROM filtered_attendees
+    WHERE meeting_day BETWEEN start_d AND effective_end
+    GROUP BY sdr_email, deal_id
+  ),
+  realizada_agg AS (
+    SELECT sdr_email, SUM(realized) as r1_realizada
+    FROM dedup_realizada GROUP BY sdr_email
+  ),
+  noshow_per_lead AS (
+    SELECT sdr_email, deal_id,
+      LEAST(
+        COUNT(DISTINCT meeting_day) FILTER (WHERE meeting_day >= DATE '2026-04-28'),
+        2
+      )
+      +
+      LEAST(
+        COUNT(DISTINCT meeting_day) FILTER (WHERE meeting_day < DATE '2026-04-28'),
+        1
+      ) as noshow_count
+    FROM filtered_attendees
+    WHERE status = 'no_show'
+      AND meeting_day BETWEEN start_d AND effective_end
+    GROUP BY sdr_email, deal_id
+  ),
+  noshow_agg AS (
+    SELECT sdr_email, SUM(noshow_count) as no_shows
+    FROM noshow_per_lead GROUP BY sdr_email
+  ),
+  sem_status_per_lead AS (
+    SELECT sdr_email, deal_id,
+      LEAST(COUNT(DISTINCT meeting_day), 2) as sem_status_count
+    FROM filtered_attendees
+    WHERE status IN ('invited','rescheduled','sem_sucesso','recurrence_recognized','scheduled')
+      AND meeting_day BETWEEN start_d AND end_d
+      AND (
+        NOT is_future_window
+        OR scheduled_at <= NOW()
+      )
+    GROUP BY sdr_email, deal_id
+  ),
+  sem_status_agg AS (
+    SELECT sdr_email, SUM(sem_status_count) as sem_status
+    FROM sem_status_per_lead GROUP BY sdr_email
+  ),
+  agendamentos_dedup AS (
+    SELECT sdr_email, deal_id, meeting_day,
+      MIN(effective_booked_at) as first_booked_at
+    FROM filtered_attendees
+    WHERE deal_id IS NOT NULL
+    GROUP BY sdr_email, deal_id, meeting_day
+  ),
+  agendamentos_ranked AS (
+    SELECT sdr_email, deal_id, meeting_day, first_booked_at,
+      ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY first_booked_at, meeting_day) as ordem
+    FROM agendamentos_dedup
+  ),
+  agendamentos_cte AS (
+    SELECT sdr_email, COUNT(*) as agendamentos
+    FROM agendamentos_ranked
+    WHERE ordem <= 2
+      AND (first_booked_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN start_d AND effective_end
+    GROUP BY sdr_email
+  ),
+  contratos_cte AS (
+    SELECT sdr_email, COUNT(DISTINCT deal_id) as contratos
+    FROM filtered_attendees
+    WHERE (contract_paid_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN start_d AND effective_end
+      AND deal_id IS NOT NULL
+    GROUP BY sdr_email
+  ),
+  contratos_no_deal_cte AS (
+    SELECT sdr_email, COUNT(*) as contratos_extra
+    FROM filtered_attendees
+    WHERE (contract_paid_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN start_d AND effective_end
+      AND deal_id IS NULL
+    GROUP BY sdr_email
+  ),
+  sdr_universe AS (
+    SELECT DISTINCT sdr_email, sdr_name
+    FROM filtered_attendees
+    WHERE meeting_day BETWEEN start_d AND end_d
+      OR (effective_booked_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN start_d AND end_d
+      OR (contract_paid_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN start_d AND end_d
+  )
+  SELECT json_build_object(
+    'is_future_window', is_future_window,
+    'effective_end_date', effective_end::text,
+    'today_sp', today_sp::text,
+    'metrics',
+    COALESCE(json_agg(json_build_object(
+      'sdr_email', u.sdr_email,
+      'sdr_name', u.sdr_name,
+      'agendamentos', COALESCE(a.agendamentos, 0),
+      'r1_agendada', COALESCE(ag.r1_agendada, 0),
+      'r1_realizada', COALESCE(rz.r1_realizada, 0),
+      'no_shows', COALESCE(ns.no_shows, 0),
+      'sem_status', COALESCE(ss.sem_status, 0),
+      -- NOVO: pendentes calculados aritmeticamente para fechar a conta
+      -- Pendentes = R1 Agendada - Realizadas - No-Shows
+      -- Garante que Realizadas + No-Show + Pendentes = R1 Agendada
+      'pendentes', GREATEST(
+        COALESCE(ag.r1_agendada, 0)
+          - COALESCE(rz.r1_realizada, 0)
+          - COALESCE(ns.no_shows, 0),
+        0
+      ),
+      'contratos', COALESCE(c.contratos, 0) + COALESCE(cnd.contratos_extra, 0)
+    )), '[]'::json)
+  ) INTO result
+  FROM sdr_universe u
+  LEFT JOIN agendamentos_cte a ON a.sdr_email = u.sdr_email
+  LEFT JOIN agendada_agg ag ON ag.sdr_email = u.sdr_email
+  LEFT JOIN realizada_agg rz ON rz.sdr_email = u.sdr_email
+  LEFT JOIN noshow_agg ns ON ns.sdr_email = u.sdr_email
+  LEFT JOIN sem_status_agg ss ON ss.sdr_email = u.sdr_email
+  LEFT JOIN contratos_cte c ON c.sdr_email = u.sdr_email
+  LEFT JOIN contratos_no_deal_cte cnd ON cnd.sdr_email = u.sdr_email;
+
+  RETURN COALESCE(result, json_build_object(
+    'is_future_window', is_future_window,
+    'effective_end_date', effective_end::text,
+    'today_sp', today_sp::text,
+    'metrics', '[]'::json
+  ));
+END;
+$function$;
