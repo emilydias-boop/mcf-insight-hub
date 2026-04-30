@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
-import { classifyChannel } from '@/lib/channelClassifier';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -17,6 +18,7 @@ interface MeetingsListProps {
   onViewDeal: (dealId: string) => void;
   statusFilter?: string | null;
   searchTerm?: string;
+  channelFilter?: string | null;
 }
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
@@ -42,6 +44,33 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; variant: 'default'
   refunded: { label: 'Reembolsado', variant: 'outline', icon: XCircle },
 };
 
+/** Normaliza telefone para os últimos 9 dígitos (padrão usado em deduplicação). */
+function normalizePhone9(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : digits;
+}
+
+/**
+ * Classificação de canal SIMPLIFICADA para a Agenda R1:
+ * - A010: comprou A010 (existe registro em a010_sales por email/telefone)
+ * - ANAMNESE: tem tag exatamente "ANAMNESE" ou "ANAMNESE-INSTA"
+ * - Outro: qualquer outra coisa
+ */
+type SimpleChannel = 'A010' | 'ANAMNESE' | 'Outro';
+
+function classifySimple(opts: {
+  isA010Buyer: boolean;
+  tags: string[];
+}): SimpleChannel {
+  if (opts.isA010Buyer) return 'A010';
+  const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
+  if (norm.some((t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA')) {
+    return 'ANAMNESE';
+  }
+  return 'Outro';
+}
+
 interface AttendeeRow {
   meetingId: string;
   meetingStatus: string;
@@ -53,12 +82,79 @@ interface AttendeeRow {
   attendeePhone: string | null;
   attendeeStatus: string;
   isReschedule: boolean;
-  channel: string;
+  channel: SimpleChannel;
 }
 
-export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '' }: MeetingsListProps) {
+export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '', channelFilter }: MeetingsListProps) {
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
+
+  // Coleta emails e telefones (últimos 9 dígitos) de todos os attendees visíveis
+  const { emails, phones9 } = useMemo(() => {
+    const eSet = new Set<string>();
+    const pSet = new Set<string>();
+    for (const m of meetings) {
+      for (const att of m.attendees || []) {
+        if (att.is_partner) continue;
+        const email = (att.contact?.email || '').toLowerCase().trim();
+        if (email) eSet.add(email);
+        const phone9 = normalizePhone9(att.attendee_phone || att.contact?.phone);
+        if (phone9) pSet.add(phone9);
+      }
+      const dealEmail = (m.deal?.contact?.email || '').toLowerCase().trim();
+      if (dealEmail) eSet.add(dealEmail);
+      const dealPhone9 = normalizePhone9(m.deal?.contact?.phone);
+      if (dealPhone9) pSet.add(dealPhone9);
+    }
+    return { emails: Array.from(eSet), phones9: Array.from(pSet) };
+  }, [meetings]);
+
+  // Lookup em a010_sales para identificar compradores A010 entre os leads visíveis
+  const { data: a010Sets } = useQuery({
+    queryKey: ['a010-buyers-lookup', emails, phones9],
+    queryFn: async () => {
+      const emailSet = new Set<string>();
+      const phoneSet = new Set<string>();
+      if (emails.length === 0 && phones9.length === 0) {
+        return { emailSet, phoneSet };
+      }
+      // Busca em batches por email
+      if (emails.length > 0) {
+        const { data } = await supabase
+          .from('a010_sales')
+          .select('customer_email')
+          .in('customer_email', emails);
+        (data || []).forEach((r: any) => {
+          if (r.customer_email) emailSet.add(String(r.customer_email).toLowerCase().trim());
+        });
+      }
+      // Para telefone, traz qualquer venda cujo phone termine com algum dos sufixos.
+      // Como não dá pra fazer "endsWith IN (...)", trazemos todos com telefone preenchido
+      // limitado por uma janela razoável e filtramos no cliente.
+      if (phones9.length > 0) {
+        const { data } = await supabase
+          .from('a010_sales')
+          .select('customer_phone')
+          .not('customer_phone', 'is', null);
+        (data || []).forEach((r: any) => {
+          const p9 = normalizePhone9(r.customer_phone);
+          if (p9 && phones9.includes(p9)) phoneSet.add(p9);
+        });
+      }
+      return { emailSet, phoneSet };
+    },
+    enabled: emails.length > 0 || phones9.length > 0,
+    staleTime: 60_000,
+  });
+
+  const isA010 = (email: string | null | undefined, phone: string | null | undefined): boolean => {
+    if (!a010Sets) return false;
+    const e = (email || '').toLowerCase().trim();
+    if (e && a010Sets.emailSet.has(e)) return true;
+    const p9 = normalizePhone9(phone);
+    if (p9 && a010Sets.phoneSet.has(p9)) return true;
+    return false;
+  };
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
@@ -83,15 +179,22 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           const dealForChannel: any = (att as any).deal || meeting.deal;
           const rawTags = dealForChannel?.tags;
           const tagsArr: string[] = Array.isArray(rawTags)
-            ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+            ? rawTags.map((t: any) => {
+                if (typeof t === 'string') {
+                  if (t.startsWith('{')) {
+                    try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+                  }
+                  return t;
+                }
+                return (t as any)?.name || '';
+              })
             : [];
-          const channel = classifyChannel({
+          const channel = classifySimple({
+            isA010Buyer: isA010(att.contact?.email, att.attendee_phone || att.contact?.phone),
             tags: tagsArr,
-            originName: dealForChannel?.origin?.name ?? null,
-            leadChannel: null,
-            dataSource: dealForChannel?.data_source ?? null,
-            hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
           });
+
+          if (channelFilter && channel !== channelFilter) continue;
 
           rows.push({
             meetingId: meeting.id,
@@ -105,22 +208,30 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             attendeeStatus: att.status || meeting.status,
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
-            channel: channel || '—',
+            channel,
           });
         }
       } else {
         const dealForChannel: any = meeting.deal;
         const rawTags = dealForChannel?.tags;
         const tagsArr: string[] = Array.isArray(rawTags)
-          ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+          ? rawTags.map((t: any) => {
+              if (typeof t === 'string') {
+                if (t.startsWith('{')) {
+                  try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+                }
+                return t;
+              }
+              return (t as any)?.name || '';
+            })
           : [];
-        const channel = classifyChannel({
+        const channel = classifySimple({
+          isA010Buyer: isA010(dealForChannel?.contact?.email, dealForChannel?.contact?.phone),
           tags: tagsArr,
-          originName: dealForChannel?.origin?.name ?? null,
-          leadChannel: null,
-          dataSource: dealForChannel?.data_source ?? null,
-          hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
         });
+
+        if (channelFilter && channel !== channelFilter) continue;
+
         // Slot without attendees - show slot-level info
         rows.push({
           meetingId: meeting.id,
@@ -133,12 +244,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeePhone: meeting.deal?.contact?.phone || null,
           attendeeStatus: meeting.status,
           isReschedule: false,
-          channel: channel || '—',
+          channel,
         });
       }
     }
     return rows;
-  }, [meetings, statusFilter, searchTerm]);
+  }, [meetings, statusFilter, searchTerm, channelFilter, a010Sets]);
 
   const handleUpdateStatus = (meetingId: string, status: string) => {
     updateStatus.mutate({ meetingId, status });
@@ -210,7 +321,15 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="text-[11px]">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[11px]',
+                      row.channel === 'A010' && 'border-blue-400 text-blue-600',
+                      row.channel === 'ANAMNESE' && 'border-purple-400 text-purple-600',
+                      row.channel === 'Outro' && 'text-muted-foreground'
+                    )}
+                  >
                     {row.channel}
                   </Badge>
                 </TableCell>

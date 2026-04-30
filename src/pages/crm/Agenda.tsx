@@ -29,7 +29,7 @@ import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { classifyChannel } from '@/lib/channelClassifier';
+import { supabase } from '@/integrations/supabase/client';
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
@@ -63,6 +63,7 @@ export default function Agenda() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [closerFilter, setCloserFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [channelFilter, setChannelFilter] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingSlot | null>(null);
   const [quickScheduleOpen, setQuickScheduleOpen] = useState(false);
@@ -293,28 +294,82 @@ export default function Agenda() {
     approved: 'Aprovado', rejected: 'Rejeitado', refunded: 'Reembolsado',
   };
 
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async () => {
+    // Coleta emails/telefones para descobrir compradores A010
+    const norm9 = (raw: string | null | undefined) => {
+      const d = (raw || '').replace(/\D/g, '');
+      return d.length >= 9 ? d.slice(-9) : d;
+    };
+    const emails = new Set<string>();
+    const phones9 = new Set<string>();
+    for (const m of filteredMeetings) {
+      for (const att of m.attendees || []) {
+        if (att.is_partner) continue;
+        const e = (att.contact?.email || '').toLowerCase().trim();
+        if (e) emails.add(e);
+        const p9 = norm9(att.attendee_phone || att.contact?.phone);
+        if (p9) phones9.add(p9);
+      }
+    }
+    const a010Emails = new Set<string>();
+    const a010Phones = new Set<string>();
+    if (emails.size > 0) {
+      const { data } = await supabase
+        .from('a010_sales')
+        .select('customer_email')
+        .in('customer_email', Array.from(emails));
+      (data || []).forEach((r: any) => {
+        if (r.customer_email) a010Emails.add(String(r.customer_email).toLowerCase().trim());
+      });
+    }
+    if (phones9.size > 0) {
+      const { data } = await supabase
+        .from('a010_sales')
+        .select('customer_phone')
+        .not('customer_phone', 'is', null);
+      (data || []).forEach((r: any) => {
+        const p9 = norm9(r.customer_phone);
+        if (p9 && phones9.has(p9)) a010Phones.add(p9);
+      });
+    }
+
+    const classify = (email: string | null, phone: string | null, tags: any): string => {
+      const e = (email || '').toLowerCase().trim();
+      const p9 = norm9(phone);
+      if ((e && a010Emails.has(e)) || (p9 && a010Phones.has(p9))) return 'A010';
+      const arr: string[] = Array.isArray(tags)
+        ? tags.map((t: any) => {
+            if (typeof t === 'string') {
+              if (t.startsWith('{')) {
+                try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+              }
+              return t;
+            }
+            return (t as any)?.name || '';
+          })
+        : [];
+      const norm = arr.map((t) => (t || '').trim().toUpperCase());
+      if (norm.some((t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA')) {
+        return 'ANAMNESE';
+      }
+      return 'Outro';
+    };
+
     const rows: Record<string, string>[] = [];
     for (const meeting of filteredMeetings) {
       for (const att of (meeting.attendees || [])) {
         if (att.is_partner) continue;
         const dealForChannel: any = (att as any).deal || meeting.deal;
-        const rawTags = dealForChannel?.tags;
-        const tagsArr: string[] = Array.isArray(rawTags)
-          ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
-          : [];
-        const channel = classifyChannel({
-          tags: tagsArr,
-          originName: dealForChannel?.origin?.name ?? null,
-          leadChannel: null,
-          dataSource: dealForChannel?.data_source ?? null,
-          hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
-        });
+        const channel = classify(
+          att.contact?.email || null,
+          att.attendee_phone || att.contact?.phone || null,
+          dealForChannel?.tags
+        );
         rows.push({
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
           'Lead': att.attendee_name || att.contact?.name || '',
           'Telefone': att.attendee_phone || att.contact?.phone || '',
-          'Canal': channel || '',
+          'Canal': channel,
           'Closer': meeting.closer?.name || '',
           'Status': STATUS_LABELS[att.status] || att.status || '',
         });
@@ -569,6 +624,18 @@ export default function Agenda() {
               )}
             </SelectContent>
           </Select>
+
+          <Select value={channelFilter || 'all'} onValueChange={(v) => setChannelFilter(v === 'all' ? null : v)}>
+            <SelectTrigger className="w-[120px] sm:w-[140px] text-xs sm:text-sm">
+              <SelectValue placeholder="Canal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos canais</SelectItem>
+              <SelectItem value="A010">A010</SelectItem>
+              <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
+              <SelectItem value="Outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -672,6 +739,7 @@ export default function Agenda() {
             onViewDeal={handleViewDeal}
             statusFilter={statusFilter}
             searchTerm={searchTerm}
+            channelFilter={channelFilter}
           />
         </TabsContent>
       </Tabs>
