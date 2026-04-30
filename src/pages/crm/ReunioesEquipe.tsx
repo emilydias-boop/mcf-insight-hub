@@ -866,6 +866,7 @@ export default function ReunioesEquipe() {
               diasUteisNoPeriodo={diasUteisNoPeriodo}
               sdrDiasUteisMap={sdrDiasUteisMap}
               totaisOverride={{
+                agendamentos: enrichedKPIs.totalAgendamentos,
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
