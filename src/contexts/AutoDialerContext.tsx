@@ -208,6 +208,14 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     if ((callStatus === 'completed' || callStatus === 'failed') && prev !== callStatus) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
 
+      // 🔓 LIBERA O BANNER IMEDIATAMENTE: assim que a chamada termina,
+      // o estado sai de 'paused-in-call' e o banner verde "atendeu!" some.
+      // A decisão de próximo lead / voicemail acontece em background.
+      if (stateRef.current === 'paused-in-call') {
+        setState('running');
+      }
+      setInCallDrawerOpen(false);
+
       // Verifica se foi caixa postal (AMD do Twilio detectou máquina e o webhook
       // já derrubou a chamada). Pequeno delay garante que o AMD callback chegou.
       const handleCompletion = async () => {
@@ -231,7 +239,6 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
         if (wasInProgressRef.current && !isVoicemail) {
           // Atendeu (humano) → NÃO abre qualificação automaticamente.
           // O SDR aciona o modal manualmente quando/se precisar.
-          setInCallDrawerOpen(false);
           if (stateRef.current === 'running') {
             advanceToNext();
           }
@@ -239,7 +246,6 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
         }
 
         // Caixa postal OU não atendeu / falhou
-        setInCallDrawerOpen(false);
         const result: LeadResult = (!isVoicemail && callStatus === 'failed') ? 'failed' : 'no-answer';
         setLeadResult(lead.dealId, result);
 
