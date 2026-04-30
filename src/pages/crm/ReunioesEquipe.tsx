@@ -552,6 +552,29 @@ export default function ReunioesEquipe() {
     () => computePendentesBreakdown(meetingsForBreakdown, start, end),
     [meetingsForBreakdown, start, end],
   );
+
+  // Total de Pendentes vindo direto do RPC (R1 Agendada - Realizadas - No-Shows).
+  // Usa o mesmo recorte (filteredBySDR) dos outros KPIs do topo, garantindo que
+  // Realizadas + No-Show + Pendentes = R1 Agendada exatamente.
+  // Os sub-buckets (futuras/vencidas/canceladas) continuam vindo do breakdown
+  // local, mas o total exibido respeita a aritmética do RPC.
+  const pendentesTotalRpc = useMemo(
+    () => filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
+    [filteredBySDR],
+  );
+
+  // Reconcilia o breakdown: se o total local for menor que o do RPC, joga a
+  // diferença em "vencidas" (cenário mais comum: reuniões antigas sem desfecho
+  // que foram excluídas do hook por status fora do filtro padrão).
+  const pendentesBreakdownReconciled = useMemo(() => {
+    const diff = pendentesTotalRpc - pendentesBreakdown.total;
+    if (diff <= 0) return pendentesBreakdown;
+    return {
+      ...pendentesBreakdown,
+      vencidas: pendentesBreakdown.vencidas + diff,
+      total: pendentesTotalRpc,
+    };
+  }, [pendentesBreakdown, pendentesTotalRpc]);
   
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
@@ -813,7 +836,7 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
-        pendentesBreakdown={pendentesBreakdown}
+        pendentesBreakdown={pendentesBreakdownReconciled}
         isFutureWindow={isFutureWindow}
         taxaConversaoBreakdown={taxaBreakdowns.conversao}
         taxaNoShowBreakdown={taxaBreakdowns.noShow}

@@ -26,6 +26,7 @@ export interface SdrSummaryRow {
   r1Realizada: number;       // Realizadas no período
   noShows: number;           // No-shows no período
   semStatus?: number;        // invited/rescheduled/sem_sucesso (cap 2/lead)
+  pendentes?: number;        // R1 Agendada - Realizadas - No-Shows (vindo do RPC)
   contratos: number;         // Contratos pagos no período
   isExSquad?: boolean;       // SDR pertencia ao squad no período mas hoje está em outro
   currentSquad?: string | null;
@@ -123,6 +124,10 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
           r1Realizada: m?.r1_realizada ?? 0,
           noShows: m?.no_shows ?? 0,
           semStatus: m?.sem_status ?? 0,
+          pendentes: m?.pendentes ?? Math.max(
+            (m?.r1_agendada ?? 0) - (m?.r1_realizada ?? 0) - (m?.no_shows ?? 0),
+            0,
+          ),
           contratos: m?.contratos ?? 0,
           isExSquad: meta?.isExSquad ?? false,
           currentSquad: meta?.currentSquad ?? null,
