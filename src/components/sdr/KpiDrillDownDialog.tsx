@@ -8,6 +8,7 @@ import { useState } from "react";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { startOfDay } from "date-fns";
+import { getPendentesMeetings } from "@/lib/pendentesBreakdown";
 
 export type KpiBucket =
   | "agendamentos"
@@ -263,11 +264,7 @@ export function KpiDrillDownDialog({
       const noShowsInRange = filterByBucket(source, "no_show", startDate, endDate);
       return applyNoShowCap(noShowsInRange);
     }
-    if (bucket === "pendentes") {
-      // Usa a lista DEDUPLICADA por deal_id (mesma regra do KPI R1 Agendada),
-      // senão o drilldown infla por lead com várias reuniões.
-      return filterByBucket(meetings, "pendentes", startDate, endDate);
-    }
+    if (bucket === "pendentes") return getPendentesMeetings(meetingsRaw || meetings, startDate, endDate);
     return filterByBucket(meetings, bucket, startDate, endDate);
   })();
 
