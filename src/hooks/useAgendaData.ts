@@ -696,12 +696,27 @@ export function useCancelMeeting() {
 
   return useMutation({
     mutationFn: async (meetingId: string) => {
+      // 1) Cancela o slot
       const { error } = await supabase
         .from('meeting_slots')
         .update({ status: 'canceled' })
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      // 2) Cancela os attendees do slot que ainda estavam ativos
+      //    (invited/scheduled/pre_scheduled). Status finais como
+      //    completed/contract_paid/refunded/no_show são preservados
+      //    para não mascarar histórico legítimo.
+      const { error: attErr } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ status: 'cancelled' })
+        .eq('meeting_slot_id', meetingId)
+        .in('status', ['invited', 'scheduled', 'pre_scheduled']);
+
+      if (attErr) {
+        console.warn('[useCancelMeeting] Falha ao cancelar attendees', attErr);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
@@ -709,6 +724,8 @@ export function useCancelMeeting() {
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-schedule-states'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       toast.success('Reunião cancelada');
     },
     onError: () => {
