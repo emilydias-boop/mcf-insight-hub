@@ -90,25 +90,43 @@ const phoneSuffix = (phone: string | null | undefined): string => {
 
 const A010_FRESH_WINDOW_DAYS = 30;
 
+/**
+ * Classificação de canal — alinhada com a Agenda R1 (`classifySimple` em
+ * src/components/crm/MeetingsList.tsx). Regras:
+ * - A010 buyer = existe venda em hubla_transactions com product_category='a010'
+ *   e sale_status='completed' (lookup por email/telefone). Usa a sale_date
+ *   MAIS RECENTE.
+ * - Janela de 30 dias é medida entre a `referenceDate` (data do evento: deal
+ *   created_at, scheduled_at, etc.) e a sale_date mais recente.
+ * - Tag de ANAMNESE conta APENAS se for exatamente "ANAMNESE",
+ *   "ANAMNESE-INSTA" ou "ANAMNESE INSTA" (não vale LIVE / LANÇ).
+ * - A010 esfriado (>30d) SEM tag ANAMNESE continua A010.
+ */
 function classifyChannelWith30dRule(opts: {
   tags: string[];
-  firstA010Purchase: Date | null;
+  /** sale_date MAIS RECENTE do A010 do lead (null se não for buyer) */
+  mostRecentA010Purchase: Date | null;
   referenceDate: Date;
 }): string {
-  const { tags, firstA010Purchase, referenceDate } = opts;
-  const isAnamneseTag = (t: string) => {
-    if (t.includes('INCOMPLET')) return false;
-    return t.includes('ANAMNESE') || t.includes('LIVE') || t.includes('LANÇ') || t.includes('LANC');
-  };
-  const hasA010Tag = tags.some(t => t.includes('A010'));
-  const hasAnamneseSignal = tags.some(isAnamneseTag);
-  if (firstA010Purchase) {
-    const diffDays = (referenceDate.getTime() - firstA010Purchase.getTime()) / 86_400_000;
-    if (diffDays >= -1 && diffDays <= A010_FRESH_WINDOW_DAYS) return 'A010';
-    if (diffDays > A010_FRESH_WINDOW_DAYS) return 'ANAMNESE';
-  }
-  if (hasAnamneseSignal) return 'ANAMNESE';
-  if (hasA010Tag) return 'A010';
+  const { tags, mostRecentA010Purchase, referenceDate } = opts;
+  const norm = tags.map((t) => (t || '').trim().toUpperCase());
+  const hasAnamneseTag = norm.some(
+    (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
+  );
+  const isBuyer = mostRecentA010Purchase !== null;
+  const ageDays = isBuyer
+    ? (referenceDate.getTime() - mostRecentA010Purchase!.getTime()) / 86_400_000
+    : null;
+  const isStale = ageDays !== null && ageDays > A010_FRESH_WINDOW_DAYS;
+
+  // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
+  if (isBuyer && !isStale) return 'A010';
+  // Buyer esfriado COM tag ANAMNESE → reclassifica
+  if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
+  // Buyer esfriado SEM tag → continua A010
+  if (isBuyer && isStale && !hasAnamneseTag) return 'A010';
+  // Não-buyer com tag ANAMNESE → ANAMNESE
+  if (hasAnamneseTag) return 'ANAMNESE';
   return 'OUTROS';
 }
 
@@ -356,32 +374,27 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         deals.push(...(data || []));
       }
 
-      // Buscar primeira compra A010 dos emails (24m lookback) para classificação
+      // Buscar a venda A010 MAIS RECENTE de cada email — alinhado com a Agenda R1.
+      // Usa product_category='a010' (NÃO product_name ILIKE '%A010%').
       const emails = Array.from(new Set(
         deals.map(d => (d.crm_contacts?.email || '').toLowerCase().trim()).filter(Boolean)
       ));
-      const a010Lookback = new Date();
-      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
-      const firstA010ByEmail = new Map<string, Date>();
+      const mostRecentA010ByEmail = new Map<string, Date>();
       for (let i = 0; i < emails.length; i += 200) {
         const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
         const { data: a010Tx } = await supabase
           .from('hubla_transactions')
           .select('customer_email, sale_date')
-          .ilike('product_name', '%A010%')
+          .eq('product_category', 'a010')
           .eq('sale_status', 'completed')
-          .in('customer_email', chunk)
-          .gte('sale_date', a010Lookback.toISOString())
-          .order('sale_date', { ascending: true })
-          .limit(5000);
+          .in('customer_email', chunk);
         (a010Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
-          if (!e) return;
+          if (!e || !r.sale_date) return;
           const d = new Date(r.sale_date);
-          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
-            firstA010ByEmail.set(e, d);
-          }
+          const prev = mostRecentA010ByEmail.get(e);
+          if (!prev || d > prev) mostRecentA010ByEmail.set(e, d);
         });
       }
 
@@ -390,7 +403,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         const tags = parseTags(d.tags);
         const channel = classifyChannelWith30dRule({
           tags,
-          firstA010Purchase: email ? (firstA010ByEmail.get(email) || null) : null,
+          mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
         });
         m.set(d.id, {
@@ -556,28 +569,24 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         });
       }
 
-      // Lookup A010
+      // Lookup A010 — alinhado com a Agenda R1 (product_category='a010', sale_date mais recente)
       const emails = Array.from(new Set(deals.map(d => d.email).filter(Boolean)));
-      const a010Lookback = new Date();
-      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
-      const firstA010ByEmail = new Map<string, Date>();
+      const mostRecentA010ByEmail = new Map<string, Date>();
       for (let i = 0; i < emails.length; i += 200) {
         const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
         const { data: a010Tx } = await supabase
           .from('hubla_transactions')
           .select('customer_email, sale_date')
-          .ilike('product_name', '%A010%')
+          .eq('product_category', 'a010')
           .eq('sale_status', 'completed')
-          .in('customer_email', chunk)
-          .gte('sale_date', a010Lookback.toISOString())
-          .order('sale_date', { ascending: true })
-          .limit(5000);
+          .in('customer_email', chunk);
         (a010Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
-          if (!e) return;
+          if (!e || !r.sale_date) return;
           const d = new Date(r.sale_date);
-          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) firstA010ByEmail.set(e, d);
+          const prev = mostRecentA010ByEmail.get(e);
+          if (!prev || d > prev) mostRecentA010ByEmail.set(e, d);
         });
       }
 
@@ -594,7 +603,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       byEmail.forEach((d, e) => {
         const ch = classifyChannelWith30dRule({
           tags: parseTags(d.tags),
-          firstA010Purchase: firstA010ByEmail.get(e) || null,
+          mostRecentA010Purchase: mostRecentA010ByEmail.get(e) || null,
           referenceDate: new Date(d.created_at),
         });
         m.set(e, ch);
