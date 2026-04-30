@@ -1,0 +1,1 @@
+- [SDR Agendamentos Dedup](mem://business-logic/sdr-agendamentos-dedup-rule) — KPI Agendamentos deduplica por (sdr, deal, dia) com cap 2/lead, evitando inflar por duplicatas no mesmo dia.
