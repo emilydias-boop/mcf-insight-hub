@@ -1,14 +1,19 @@
 ---
 name: Agenda R1 channel classification
-description: Regra simplificada de canal usada APENAS na Agenda R1 (lista) — A010 / ANAMNESE / Outro
+description: Regra de canal A010/ANAMNESE/Outro na Agenda R1 com window de 30 dias para reclassificar A010 antigo
 type: feature
 ---
-Na Agenda R1 (`/crm/agenda`, aba Lista) a coluna **Canal** e o filtro de Canal usam classificação SIMPLIFICADA, diferente do `classifyChannel` genérico usado em relatórios:
+Classificação SIMPLIFICADA usada APENAS na Agenda R1 (`/crm/agenda` aba Lista + filtro Canal + export Excel). NÃO usar `classifyChannel` aqui.
 
-- **A010**: o lead consta como comprador em `a010_sales` (match por `customer_email` em lower/trim OU pelos últimos 9 dígitos de `customer_phone`).
-- **ANAMNESE**: o deal possui tag exatamente igual a `ANAMNESE`, `ANAMNESE-INSTA` ou `ANAMNESE INSTA` (case-insensitive, trim). Tags em formato `{...json...}` são parseadas para extrair `name`.
-- **Outro**: qualquer outro caso (não confundir com os rótulos genéricos WEBHOOK/HUBLA/BASE CLINT/LEAD-FORM do `classifyChannel`).
+**Identificação A010**: lookup em `public.a010_sales` por `customer_email` (lower/trim) ou últimos 9 dígitos de `customer_phone`. Quando há mais de uma venda do mesmo lead, usar a `sale_date` MAIS RECENTE.
 
-Implementação: `src/components/crm/MeetingsList.tsx` (função `classifySimple` + lookup em `a010_sales`) e `src/pages/crm/Agenda.tsx` (export Excel reproduz a mesma regra).
+**Window de 30 dias**: idade = `Date.now() - max(sale_date)`. Se >30 dias, considera-se "A010 esfriado".
 
-Não usar `classifyChannel` aqui — ele é mais granular e estava poluindo a tela com canais técnicos.
+**Regra final** (em ordem):
+1. Buyer A010 com venda ≤30 dias → **A010** (mesmo se tiver tag ANAMNESE).
+2. Buyer A010 com venda >30 dias E deal tem tag `ANAMNESE`/`ANAMNESE-INSTA` → **ANAMNESE** (lead esfriou e voltou via anamnese).
+3. Buyer A010 com venda >30 dias SEM tag ANAMNESE → continua **A010**.
+4. Não-buyer com tag `ANAMNESE`/`ANAMNESE-INSTA` → **ANAMNESE**.
+5. Resto → **Outro**.
+
+Implementação: `src/components/crm/MeetingsList.tsx` (`classifySimple` + `a010Age`) e `src/pages/crm/Agenda.tsx` (export Excel reproduz a mesma regra).
