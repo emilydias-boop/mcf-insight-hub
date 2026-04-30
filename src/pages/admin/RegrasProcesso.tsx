@@ -84,6 +84,56 @@ function ruleValueDisplay(key: string, val: any): string {
   return String(v);
 }
 
+/**
+ * Traduz o payload técnico do pedido em uma descrição amigável para o gestor.
+ */
+function formatPayloadHumano(ruleKey: string, payload: any): {
+  resumo: string;
+  lead?: string;
+  motivo?: string;
+} {
+  if (!payload || typeof payload !== "object") {
+    return { resumo: "Sem detalhes adicionais." };
+  }
+
+  const lead =
+    payload.deal_name ||
+    payload.contact_name ||
+    (payload.deal_id ? `Lead #${String(payload.deal_id).slice(0, 8)}` : undefined);
+
+  if (ruleKey === RULE_KEYS.RESCHEDULE_APPROVAL) {
+    const tentativa = payload.reschedule_count;
+    // Se reschedule_count = 2, é a 3ª tentativa (limite costuma ser 3)
+    const ordinal = typeof tentativa === "number" ? `${tentativa + 1}º` : "novo";
+    return {
+      resumo: `Solicita autorização para realizar o ${ordinal} reagendamento deste lead, acima do limite permitido.`,
+      lead,
+      motivo: payload.reason,
+    };
+  }
+
+  if (ruleKey === RULE_KEYS.MAX_MEETINGS) {
+    return {
+      resumo: `Solicita contabilizar uma reunião adicional acima do limite definido.`,
+      lead,
+      motivo: payload.reason,
+    };
+  }
+
+  if (ruleKey === RULE_KEYS.MAX_NOSHOWS) {
+    return {
+      resumo: `Solicita registrar mais um no-show neste lead, acima do limite definido.`,
+      lead,
+      motivo: payload.reason,
+    };
+  }
+
+  return {
+    resumo: payload.reason || "Solicitação de exceção a uma regra de processo.",
+    lead,
+  };
+}
+
 export default function RegrasProcesso() {
   return (
     <div className="space-y-6">
@@ -509,10 +559,26 @@ function PendingTab() {
                     <Badge variant="secondary" className="text-xs uppercase">{req.requester_role}</Badge>
                   </TableCell>
                   <TableCell className="text-xs">{RULE_LABELS[req.rule_key]?.title ?? req.rule_key}</TableCell>
-                  <TableCell className="text-xs max-w-xs">
-                    <pre className="text-[10px] font-mono whitespace-pre-wrap">
-                      {JSON.stringify(req.payload, null, 2)}
-                    </pre>
+                  <TableCell className="text-xs max-w-md">
+                    {(() => {
+                      const info = formatPayloadHumano(req.rule_key, req.payload);
+                      return (
+                        <div className="space-y-1">
+                          <p className="text-sm leading-snug">{info.resumo}</p>
+                          {info.lead && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">Lead:</span> {info.lead}
+                            </p>
+                          )}
+                          {info.motivo && info.motivo !== info.resumo && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">Motivo do sistema:</span>{" "}
+                              {info.motivo}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
