@@ -256,7 +256,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             })
           : [];
         const channel = classifySimple({
-          isA010Buyer: isA010(dealForChannel?.contact?.email, dealForChannel?.contact?.phone),
+          a010AgeMs: a010Age(dealForChannel?.contact?.email, dealForChannel?.contact?.phone),
           tags: tagsArr,
         });
 
