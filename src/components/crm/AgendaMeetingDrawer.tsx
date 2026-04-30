@@ -1230,6 +1230,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
                       <AlertDialogDescription>
                         Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
+                        {(activeMeeting?.attendees?.length ?? 0) > 1 && (
+                          <span className="block mt-3 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive font-medium">
+                            ⚠️ Atenção: este horário possui <strong>{activeMeeting.attendees.length} convidados</strong>. Ao excluir, <strong>TODOS</strong> serão removidos do slot — não apenas o lead que você está visualizando. Os outros leads voltarão para o estágio anterior sem reunião marcada.
+                            <br /><br />
+                            Tem certeza absoluta que deseja excluir a reunião inteira?
+                          </span>
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
