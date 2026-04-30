@@ -569,28 +569,24 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         });
       }
 
-      // Lookup A010
+      // Lookup A010 — alinhado com a Agenda R1 (product_category='a010', sale_date mais recente)
       const emails = Array.from(new Set(deals.map(d => d.email).filter(Boolean)));
-      const a010Lookback = new Date();
-      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
-      const firstA010ByEmail = new Map<string, Date>();
+      const mostRecentA010ByEmail = new Map<string, Date>();
       for (let i = 0; i < emails.length; i += 200) {
         const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
         const { data: a010Tx } = await supabase
           .from('hubla_transactions')
           .select('customer_email, sale_date')
-          .ilike('product_name', '%A010%')
+          .eq('product_category', 'a010')
           .eq('sale_status', 'completed')
-          .in('customer_email', chunk)
-          .gte('sale_date', a010Lookback.toISOString())
-          .order('sale_date', { ascending: true })
-          .limit(5000);
+          .in('customer_email', chunk);
         (a010Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
-          if (!e) return;
+          if (!e || !r.sale_date) return;
           const d = new Date(r.sale_date);
-          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) firstA010ByEmail.set(e, d);
+          const prev = mostRecentA010ByEmail.get(e);
+          if (!prev || d > prev) mostRecentA010ByEmail.set(e, d);
         });
       }
 
@@ -607,7 +603,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       byEmail.forEach((d, e) => {
         const ch = classifyChannelWith30dRule({
           tags: parseTags(d.tags),
-          firstA010Purchase: firstA010ByEmail.get(e) || null,
+          mostRecentA010Purchase: mostRecentA010ByEmail.get(e) || null,
           referenceDate: new Date(d.created_at),
         });
         m.set(e, ch);
