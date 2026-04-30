@@ -380,9 +380,8 @@ export default function Agenda() {
           })
         : [];
       const norm = arr.map((t) => (t || '').trim().toUpperCase());
-      const hasAnamnese = norm.some(
-        (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
-      );
+      // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA.
+      const hasAnamnese = norm.some((t) => t === 'ANAMNESE');
       if (isBuyer && !isStale) return 'A010';
       if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
       if (isBuyer && isStale && !hasAnamnese) return 'A010';

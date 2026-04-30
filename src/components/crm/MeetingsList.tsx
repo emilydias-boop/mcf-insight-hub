@@ -68,9 +68,8 @@ function classifySimple(opts: {
   const isA010Buyer = opts.a010AgeMs !== null;
   const isStale = opts.a010AgeMs !== null && opts.a010AgeMs > THIRTY_DAYS_MS;
   const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
-  const hasAnamnese = norm.some(
-    (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
-  );
+  // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA.
+  const hasAnamnese = norm.some((t) => t === 'ANAMNESE');
 
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isA010Buyer && !isStale) return 'A010';
