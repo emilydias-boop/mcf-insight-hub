@@ -520,8 +520,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const participants = getParticipantsList();
   
-  // Selected participant (default to first/main)
-  const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
+  // Selected participant.
+  // IMPORTANTE: só fazemos fallback automático para o primeiro participante quando
+  // há APENAS 1 lead no slot. Em slots multi-lead, exigimos seleção EXPLÍCITA do
+  // SDR/Closer para evitar que ações destrutivas (no-show, contrato pago, realizada,
+  // exclusão) sejam aplicadas ao lead errado — bug histórico onde o fallback silencioso
+  // marcou no-show no lead de outro SDR.
+  const selectedParticipant = participants.find(p => p.id === selectedParticipantId)
+    || (participants.length === 1 ? participants[0] : undefined);
   
   // Check if current user can edit note for the selected participant
   // Roles que podem editar notas de qualquer SDR
