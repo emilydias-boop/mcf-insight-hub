@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
+import { classifyChannel } from '@/lib/channelClassifier';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -52,6 +53,7 @@ interface AttendeeRow {
   attendeePhone: string | null;
   attendeeStatus: string;
   isReschedule: boolean;
+  channel: string;
 }
 
 export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '' }: MeetingsListProps) {
@@ -78,6 +80,19 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             if (!name.includes(search) && !(searchDigits.length >= 2 && phone.includes(searchDigits))) continue;
           }
 
+          const dealForChannel: any = (att as any).deal || meeting.deal;
+          const rawTags = dealForChannel?.tags;
+          const tagsArr: string[] = Array.isArray(rawTags)
+            ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+            : [];
+          const channel = classifyChannel({
+            tags: tagsArr,
+            originName: dealForChannel?.origin?.name ?? null,
+            leadChannel: null,
+            dataSource: dealForChannel?.data_source ?? null,
+            hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
+          });
+
           rows.push({
             meetingId: meeting.id,
             meetingStatus: meeting.status,
@@ -90,9 +105,22 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             attendeeStatus: att.status || meeting.status,
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
+            channel: channel || '—',
           });
         }
       } else {
+        const dealForChannel: any = meeting.deal;
+        const rawTags = dealForChannel?.tags;
+        const tagsArr: string[] = Array.isArray(rawTags)
+          ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+          : [];
+        const channel = classifyChannel({
+          tags: tagsArr,
+          originName: dealForChannel?.origin?.name ?? null,
+          leadChannel: null,
+          dataSource: dealForChannel?.data_source ?? null,
+          hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
+        });
         // Slot without attendees - show slot-level info
         rows.push({
           meetingId: meeting.id,
@@ -105,6 +133,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeePhone: meeting.deal?.contact?.phone || null,
           attendeeStatus: meeting.status,
           isReschedule: false,
+          channel: channel || '—',
         });
       }
     }
@@ -140,6 +169,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           <TableRow className="bg-muted/50">
             <TableHead>Data/Hora</TableHead>
             <TableHead>Lead</TableHead>
+            <TableHead>Canal</TableHead>
             <TableHead>Closer</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -178,6 +208,11 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                       <span className="text-sm text-muted-foreground">{row.attendeePhone}</span>
                     )}
                   </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-[11px]">
+                    {row.channel}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <span className="font-medium">{row.closerName || '-'}</span>

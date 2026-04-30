@@ -67,6 +67,9 @@ export interface MeetingSlot {
   deal?: {
     id: string;
     name: string;
+    tags?: any;
+    data_source?: string | null;
+    origin?: { name: string | null } | null;
     contact?: {
       id: string;
       name: string;
@@ -154,6 +157,9 @@ export function useAgendaMeetings(
           deal:crm_deals(
             id, 
             name,
+            tags,
+            data_source,
+            origin:crm_origins(name),
             contact:crm_contacts(id, name, phone, email)
           ),
           attendees:meeting_slot_attendees(
@@ -172,7 +178,7 @@ export function useAgendaMeetings(
             already_builds,
             contract_paid_at,
             contact:crm_contacts(id, name, phone, email),
-            deal:crm_deals(id, name),
+            deal:crm_deals(id, name, tags, data_source, origin:crm_origins(name)),
             parent_attendee:meeting_slot_attendees!parent_attendee_id(
               id,
               attendee_name,

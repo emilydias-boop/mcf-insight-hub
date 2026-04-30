@@ -29,6 +29,7 @@ import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { classifyChannel } from '@/lib/channelClassifier';
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
@@ -71,6 +72,12 @@ export default function Agenda() {
   const [searchTerm, setSearchTerm] = useState('');
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Custom date range (overrides viewMode when set)
+  const [customStart, setCustomStart] = useState<Date | undefined>();
+  const [customEnd, setCustomEnd] = useState<Date | undefined>();
+  const [customStartOpen, setCustomStartOpen] = useState(false);
+  const [customEndOpen, setCustomEndOpen] = useState(false);
+  const isCustomRange = !!(customStart && customEnd);
 
   // Auto-abre o modal de agendamento quando vindo de R1SupportDaysConfig com ?openSchedule=1&closerId=
   useEffect(() => {
@@ -87,6 +94,11 @@ export default function Agenda() {
 
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
+    if (isCustomRange && customStart && customEnd) {
+      const s = customStart <= customEnd ? customStart : customEnd;
+      const e = customStart <= customEnd ? customEnd : customStart;
+      return { rangeStart: startOfDay(s), rangeEnd: endOfDay(e) };
+    }
     if (viewMode === 'day') {
       // Usar startOfDay para garantir que todas as reuniões do dia sejam buscadas
       return { rangeStart: startOfDay(selectedDate), rangeEnd: endOfDay(selectedDate) };
@@ -98,7 +110,7 @@ export default function Agenda() {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: wso });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: wso });
     return { rangeStart: weekStart, rangeEnd: weekEnd };
-  }, [selectedDate, viewMode, activeBU]);
+  }, [selectedDate, viewMode, activeBU, isCustomRange, customStart, customEnd]);
 
   // Passar filtro de BU para buscar apenas closers da BU ativa.
   // Também passar o range visível para incluir closers DESATIVADOS que ainda
@@ -263,13 +275,16 @@ export default function Agenda() {
 
   // Format date range label based on viewMode
   const dateRangeLabel = useMemo(() => {
+    if (isCustomRange) {
+      return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
+    }
     if (viewMode === 'day') {
       return format(selectedDate, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR });
     } else if (viewMode === 'month') {
       return format(selectedDate, "MMMM 'de' yyyy", { locale: ptBR });
     }
     return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
-  }, [selectedDate, viewMode, rangeStart, rangeEnd]);
+  }, [selectedDate, viewMode, rangeStart, rangeEnd, isCustomRange]);
 
   const STATUS_LABELS: Record<string, string> = {
     invited: 'Agendada', scheduled: 'Agendada', rescheduled: 'Reagendada',
@@ -283,10 +298,23 @@ export default function Agenda() {
     for (const meeting of filteredMeetings) {
       for (const att of (meeting.attendees || [])) {
         if (att.is_partner) continue;
+        const dealForChannel: any = (att as any).deal || meeting.deal;
+        const rawTags = dealForChannel?.tags;
+        const tagsArr: string[] = Array.isArray(rawTags)
+          ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+          : [];
+        const channel = classifyChannel({
+          tags: tagsArr,
+          originName: dealForChannel?.origin?.name ?? null,
+          leadChannel: null,
+          dataSource: dealForChannel?.data_source ?? null,
+          hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
+        });
         rows.push({
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
           'Lead': att.attendee_name || att.contact?.name || '',
           'Telefone': att.attendee_phone || att.contact?.phone || '',
+          'Canal': channel || '',
           'Closer': meeting.closer?.name || '',
           'Status': STATUS_LABELS[att.status] || att.status || '',
         });
@@ -394,6 +422,9 @@ export default function Agenda() {
               if (v) {
                 setViewMode(v as ViewMode);
                 setSelectedDate(new Date());
+                // Sair do modo personalizado ao trocar de visão
+                setCustomStart(undefined);
+                setCustomEnd(undefined);
               }
             }}
             className="flex-shrink-0"
@@ -436,6 +467,55 @@ export default function Agenda() {
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleNext} title="Próximo período (→)">
               <ChevronRight className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Personalizado (data custom) */}
+          <div className="flex items-center gap-1 border rounded-md px-1 py-0.5 bg-muted/30">
+            <span className="text-[11px] text-muted-foreground px-1 hidden sm:inline">Personalizado:</span>
+            <Popover open={customStartOpen} onOpenChange={setCustomStartOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  {customStart ? format(customStart, 'dd/MM/yy', { locale: ptBR }) : 'Início'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={customStart}
+                  onSelect={(d) => { if (d) { setCustomStart(d); setCustomStartOpen(false); } }}
+                  locale={ptBR}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-xs text-muted-foreground">→</span>
+            <Popover open={customEndOpen} onOpenChange={setCustomEndOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  {customEnd ? format(customEnd, 'dd/MM/yy', { locale: ptBR }) : 'Fim'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={customEnd}
+                  onSelect={(d) => { if (d) { setCustomEnd(d); setCustomEndOpen(false); } }}
+                  locale={ptBR}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            {isCustomRange && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { setCustomStart(undefined); setCustomEnd(undefined); }}
+                title="Limpar período personalizado"
+              >
+                Limpar
+              </Button>
+            )}
           </div>
         </div>
 
