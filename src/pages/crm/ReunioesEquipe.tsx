@@ -491,6 +491,36 @@ export default function ReunioesEquipe() {
     return restricted.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
 
+  // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
+  // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
+  // Antes usávamos teamKPIs cru, que incluía SDRs ex-squad/admins/managers fora
+  // do recorte oficial e inflava os KPIs.
+  // Métricas financeiras (contratos/outside) continuam vindo do closer (verdade contábil).
+  const enrichedKPIs = useMemo(() => {
+    const totalAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
+    const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+    const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
+    const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+    return {
+      ...teamKPIs,
+      sdrCount: filteredBySDR.length,
+      totalAgendamentos,
+      totalR1Agendada,
+      totalRealizadas,
+      totalNoShows,
+      totalSemStatus,
+      totalContratos: contractsFromClosers.total,
+      totalOutside: contractsFromClosers.outside,
+      taxaNoShow: totalR1Agendada > 0
+        ? (totalNoShows / totalR1Agendada) * 100
+        : 0,
+      taxaConversao: totalRealizadas > 0
+        ? (contractsFromClosers.total / totalRealizadas) * 100
+        : 0,
+    };
+  }, [teamKPIs, contractsFromClosers, filteredBySDR]);
+
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
   // Isso garante que GoalsPanel e TeamKPICards mostrem os mesmos números
