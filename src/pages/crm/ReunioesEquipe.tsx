@@ -32,6 +32,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
+import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 
 
@@ -509,6 +510,13 @@ export default function ReunioesEquipe() {
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
   // Isso garante que GoalsPanel e TeamKPICards mostrem os mesmos números
   const dayPendentes = pendentesHoje ?? 0;
+
+  // Breakdown REAL de Pendentes (a partir das reuniões já deduplicadas que
+  // alimentam o drill-down). Substitui o cálculo aritmético inflado.
+  const pendentesBreakdown = useMemo(
+    () => computePendentesBreakdown(allMeetings, start, end),
+    [allMeetings, start, end],
+  );
   
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
@@ -770,6 +778,7 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
+        pendentesBreakdown={pendentesBreakdown}
         isFutureWindow={isFutureWindow}
         taxaConversaoBreakdown={taxaBreakdowns.conversao}
         taxaNoShowBreakdown={taxaBreakdowns.noShow}
