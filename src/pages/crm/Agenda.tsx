@@ -71,6 +71,12 @@ export default function Agenda() {
   const [searchTerm, setSearchTerm] = useState('');
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Custom date range (overrides viewMode when set)
+  const [customStart, setCustomStart] = useState<Date | undefined>();
+  const [customEnd, setCustomEnd] = useState<Date | undefined>();
+  const [customStartOpen, setCustomStartOpen] = useState(false);
+  const [customEndOpen, setCustomEndOpen] = useState(false);
+  const isCustomRange = !!(customStart && customEnd);
 
   // Auto-abre o modal de agendamento quando vindo de R1SupportDaysConfig com ?openSchedule=1&closerId=
   useEffect(() => {
@@ -87,6 +93,11 @@ export default function Agenda() {
 
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
+    if (isCustomRange && customStart && customEnd) {
+      const s = customStart <= customEnd ? customStart : customEnd;
+      const e = customStart <= customEnd ? customEnd : customStart;
+      return { rangeStart: startOfDay(s), rangeEnd: endOfDay(e) };
+    }
     if (viewMode === 'day') {
       // Usar startOfDay para garantir que todas as reuniões do dia sejam buscadas
       return { rangeStart: startOfDay(selectedDate), rangeEnd: endOfDay(selectedDate) };
@@ -98,7 +109,7 @@ export default function Agenda() {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: wso });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: wso });
     return { rangeStart: weekStart, rangeEnd: weekEnd };
-  }, [selectedDate, viewMode, activeBU]);
+  }, [selectedDate, viewMode, activeBU, isCustomRange, customStart, customEnd]);
 
   // Passar filtro de BU para buscar apenas closers da BU ativa.
   // Também passar o range visível para incluir closers DESATIVADOS que ainda
