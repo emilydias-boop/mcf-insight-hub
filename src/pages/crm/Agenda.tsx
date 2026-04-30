@@ -740,6 +740,7 @@ export default function Agenda() {
             onViewDeal={handleViewDeal}
             statusFilter={statusFilter}
             searchTerm={searchTerm}
+            channelFilter={channelFilter}
           />
         </TabsContent>
       </Tabs>
