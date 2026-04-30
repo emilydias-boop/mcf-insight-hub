@@ -244,6 +244,7 @@ export default function ConsorcioPainelEquipe() {
     teamKPIs,
     bySDR,
     allMeetings,
+    allMeetingsRaw,
     isLoading,
     refetch,
   } = useTeamMeetingsData({
@@ -753,7 +754,13 @@ export default function ConsorcioPainelEquipe() {
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
         semStatus={semStatusCount}
-        pendentesBreakdown={computePendentesBreakdown(pipelineFilteredMeetings, start, end)}
+        pendentesBreakdown={computePendentesBreakdown(
+          allowedOriginNames
+            ? (allMeetingsRaw || []).filter(m => matchesPipeline(m.origin_name))
+            : allMeetingsRaw,
+          start,
+          end,
+        )}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
