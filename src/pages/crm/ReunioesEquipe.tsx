@@ -836,7 +836,7 @@ export default function ReunioesEquipe() {
         pendentesHoje={pendentesHoje}
         bu="incorporador"
         semStatus={enrichedKPIs.totalSemStatus || 0}
-        pendentesBreakdown={pendentesBreakdown}
+        pendentesBreakdown={pendentesBreakdownReconciled}
         isFutureWindow={isFutureWindow}
         taxaConversaoBreakdown={taxaBreakdowns.conversao}
         taxaNoShowBreakdown={taxaBreakdowns.noShow}
