@@ -5,7 +5,7 @@ type: feature
 ---
 Classificação SIMPLIFICADA usada APENAS na Agenda R1 (`/crm/agenda` aba Lista + filtro Canal + export Excel). NÃO usar `classifyChannel` aqui.
 
-**Identificação A010**: lookup em `public.a010_sales` por `customer_email` (lower/trim) ou últimos 9 dígitos de `customer_phone`. Quando há mais de uma venda do mesmo lead, usar a `sale_date` MAIS RECENTE.
+**Identificação A010**: lookup em `public.hubla_transactions` filtrando `product_category='a010'` e `sale_status='completed'`, por `customer_email` (lower/trim) ou últimos 9 dígitos de `customer_phone`. (NÃO usar `a010_sales` — está incompleta.) Quando há mais de uma venda do mesmo lead, usar a `sale_date` MAIS RECENTE.
 
 **Window de 30 dias**: idade = `Date.now() - max(sale_date)`. Se >30 dias, considera-se "A010 esfriado".
 
