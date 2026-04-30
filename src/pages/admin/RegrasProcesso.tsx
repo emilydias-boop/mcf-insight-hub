@@ -559,10 +559,26 @@ function PendingTab() {
                     <Badge variant="secondary" className="text-xs uppercase">{req.requester_role}</Badge>
                   </TableCell>
                   <TableCell className="text-xs">{RULE_LABELS[req.rule_key]?.title ?? req.rule_key}</TableCell>
-                  <TableCell className="text-xs max-w-xs">
-                    <pre className="text-[10px] font-mono whitespace-pre-wrap">
-                      {JSON.stringify(req.payload, null, 2)}
-                    </pre>
+                  <TableCell className="text-xs max-w-md">
+                    {(() => {
+                      const info = formatPayloadHumano(req.rule_key, req.payload);
+                      return (
+                        <div className="space-y-1">
+                          <p className="text-sm leading-snug">{info.resumo}</p>
+                          {info.lead && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">Lead:</span> {info.lead}
+                            </p>
+                          )}
+                          {info.motivo && info.motivo !== info.resumo && (
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">Motivo do sistema:</span>{" "}
+                              {info.motivo}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
