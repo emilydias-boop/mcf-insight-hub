@@ -78,30 +78,17 @@ export function classifyPendente(m: MeetingV2): PendenteSubBucket {
   return "vencidas";
 }
 
-/**
- * Calcula o breakdown REAL de Pendentes/Sem Desfecho.
- *
- * Usa as reuniões SEM dedup global (allMeetingsRaw) e aplica dedup por
- * (deal_id + dia em São Paulo) — mesma chave usada pelo backend para R1
- * Agendada. Assim, se um lead teve 1 cancelada + 1 realizada no mesmo dia,
- * conta apenas a realizada; se teve cancelada + (nada), conta a cancelada.
- * Isso garante que Realizada + No-Show + Pendente = R1 Agendada.
- */
-export function computePendentesBreakdown(
+export function getPendentesMeetings(
   meetings: MeetingV2[] | undefined | null,
   start: Date | null,
   end: Date | null,
-): PendentesBreakdown {
-  const out: PendentesBreakdown = { futuras: 0, vencidas: 0, canceladas: 0, total: 0 };
-  if (!meetings || meetings.length === 0) return out;
+): MeetingV2[] {
+  if (!meetings || meetings.length === 0) return [];
 
-  // 1. Filtra pelo range
   const inWindow = meetings.filter((m) =>
     inRange(m.scheduled_at || m.data_agendamento, start, end),
   );
 
-  // 2. Dedup por (deal_id + dia SP) priorizando: Realizada > No-Show > demais.
-  //    Assim casamos com a regra de R1 Agendada do backend.
   const rank = (s?: string | null): number => {
     if (isRealizadaStatus(s)) return 3;
     if (isNoShowStatus(s)) return 2;
@@ -118,10 +105,27 @@ export function computePendentesBreakdown(
     }
   });
 
-  // 3. Conta os que sobraram e NÃO são Realizada nem No-Show.
-  bestPerKey.forEach((m) => {
-    if (isRealizadaStatus(m.attendee_status)) return;
-    if (isNoShowStatus(m.attendee_status)) return;
+  return Array.from(bestPerKey.values()).filter(
+    (m) => !isRealizadaStatus(m.attendee_status) && !isNoShowStatus(m.attendee_status),
+  );
+}
+
+/**
+ * Calcula o breakdown REAL de Pendentes/Sem Desfecho.
+ *
+ * Usa as reuniões SEM dedup global (allMeetingsRaw) e aplica dedup por
+ * (deal_id + dia em São Paulo) — mesma chave usada pelo backend para R1
+ * Agendada. Assim, se um lead teve 1 cancelada + 1 realizada no mesmo dia,
+ * conta apenas a realizada; se teve cancelada + (nada), conta a cancelada.
+ * Isso garante que Realizada + No-Show + Pendente = R1 Agendada.
+ */
+export function computePendentesBreakdown(
+  meetings: MeetingV2[] | undefined | null,
+  start: Date | null,
+  end: Date | null,
+): PendentesBreakdown {
+  const out: PendentesBreakdown = { futuras: 0, vencidas: 0, canceladas: 0, total: 0 };
+  getPendentesMeetings(meetings, start, end).forEach((m) => {
     const cls = classifyPendente(m);
     out[cls]++;
     out.total++;
