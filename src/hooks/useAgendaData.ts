@@ -1064,7 +1064,7 @@ export function useSearchDealsForSchedule(
           .from('meeting_slot_attendees')
           .select(
             `id, deal_id, status, contract_paid_at, created_at, booked_at,
-             meeting_slot:meeting_slots(id, scheduled_at, meeting_type, closer:closers(name))`,
+             meeting_slot:meeting_slots(id, scheduled_at, meeting_type, status, closer:closers(name))`,
           )
           .in('deal_id', dealIds)
           .neq('status', 'cancelled')
@@ -1162,6 +1162,9 @@ export function useSearchDealsForSchedule(
                   (a: any) => {
                     if (a.meeting_slot?.meeting_type !== 'r1') return false;
                     if (!a.meeting_slot?.scheduled_at) return false;
+                    // Slots cancelados (status='canceled') NÃO contam no limite
+                    // de reagendamentos — o agendamento foi desfeito.
+                    if (a.meeting_slot?.status === 'canceled') return false;
                     // A partir da vigência da regra (applies_from), TODO o
                     // histórico de R1 do lead conta para o limite — leads que
                     // já tinham 2+ movimentos ficam imediatamente bloqueados.
