@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip";
 import { TeamKPIs } from "@/hooks/useTeamMeetingsData";
 import type { KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
+import type { PendentesBreakdown } from "@/lib/pendentesBreakdown";
 
 interface TeamKPICardsProps {
   kpis: TeamKPIs;
@@ -27,6 +28,9 @@ interface TeamKPICardsProps {
   pendentesHoje?: number;
   bu?: string;
   semStatus?: number;
+  /** Breakdown REAL dos pendentes (vindo da agenda deduplicada). Quando
+   *  fornecido, substitui o cálculo aritmético R1 − Realizada − No-Show. */
+  pendentesBreakdown?: PendentesBreakdown | null;
   onCardClick?: (bucket: KpiBucket, title: string) => void;
   /** true quando o range inclui hoje/futuro — muda o rótulo de Sem Status */
   isFutureWindow?: boolean;
@@ -42,6 +46,7 @@ export function TeamKPICards({
   pendentesHoje,
   bu,
   semStatus,
+  pendentesBreakdown,
   onCardClick,
   isFutureWindow = true,
   taxaConversaoBreakdown,
@@ -52,13 +57,17 @@ export function TeamKPICards({
   const semStatusTooltip = isFutureWindow
     ? "Pendentes vivos: reuniões cuja hora já passou e ainda estão sem desfecho (convidada/remarcada/sem sucesso). Cap de 2 por lead."
     : "Backlog histórico: reuniões do período que ficaram sem desfecho registrado (convidada/remarcada/sem sucesso). Cap de 2 por lead.";
-  // Pendentes / Sem Desfecho = R1 Agendada − (Realizada + No-Show).
-  // Engloba: futuras ainda sem desfecho, vencidas sem desfecho (Sem Status)
-  // e canceladas/remarcadas. Drilldown separa em sub-abas.
-  const pendentesTotal =
+  // Pendentes / Sem Desfecho — quando temos o breakdown real (vindo da agenda
+  // deduplicada) usamos ele. Caso contrário, fallback para o cálculo
+  // aritmético antigo (R1 − Realizada − No-Show).
+  const pendentesArit =
     (kpis.totalR1Agendada || 0)
     - (kpis.totalRealizadas || 0)
     - (kpis.totalNoShows || 0);
+  const pendentesTotal = pendentesBreakdown ? pendentesBreakdown.total : pendentesArit;
+  const pendentesTooltip = pendentesBreakdown
+    ? `Reuniões marcadas para o período que não viraram Realizada nem No-Show:\n• Futuras (ainda vão acontecer): ${pendentesBreakdown.futuras}\n• Vencidas s/ desfecho (já passaram e ninguém atualizou): ${pendentesBreakdown.vencidas}\n• Remanejados/Restituídos: ${pendentesBreakdown.canceladas}\nClique para destrinchar.`
+    : "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.";
   const cards: Array<{
     title: string;
     value: string | number;
@@ -121,8 +130,11 @@ export function TeamKPICards({
       icon: AlertCircle,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
-      tooltip: "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.",
+      tooltip: pendentesTooltip,
       bucket: "pendentes" as KpiBucket,
+      subline: pendentesBreakdown
+        ? `${pendentesBreakdown.futuras} futuras · ${pendentesBreakdown.vencidas} vencidas · ${pendentesBreakdown.canceladas} reman.`
+        : undefined,
     }] : []),
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
