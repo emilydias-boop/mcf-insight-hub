@@ -274,13 +274,16 @@ export default function Agenda() {
 
   // Format date range label based on viewMode
   const dateRangeLabel = useMemo(() => {
+    if (isCustomRange) {
+      return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
+    }
     if (viewMode === 'day') {
       return format(selectedDate, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR });
     } else if (viewMode === 'month') {
       return format(selectedDate, "MMMM 'de' yyyy", { locale: ptBR });
     }
     return `${format(rangeStart, "dd MMM", { locale: ptBR })} - ${format(rangeEnd, "dd MMM yyyy", { locale: ptBR })}`;
-  }, [selectedDate, viewMode, rangeStart, rangeEnd]);
+  }, [selectedDate, viewMode, rangeStart, rangeEnd, isCustomRange]);
 
   const STATUS_LABELS: Record<string, string> = {
     invited: 'Agendada', scheduled: 'Agendada', rescheduled: 'Reagendada',
