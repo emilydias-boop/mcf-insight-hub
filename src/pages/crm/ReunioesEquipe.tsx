@@ -33,6 +33,7 @@ import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
+import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 
 
@@ -514,8 +515,8 @@ export default function ReunioesEquipe() {
   // Breakdown REAL de Pendentes (a partir das reuniões já deduplicadas que
   // alimentam o drill-down). Substitui o cálculo aritmético inflado.
   const pendentesBreakdown = useMemo(
-    () => computePendentesBreakdown(allMeetingsRaw, start, end),
-    [allMeetingsRaw, start, end],
+    () => computePendentesBreakdown(meetingsWithCancelled, start, end),
+    [meetingsWithCancelled, start, end],
   );
   
   const dayValues = useMemo(() => ({
