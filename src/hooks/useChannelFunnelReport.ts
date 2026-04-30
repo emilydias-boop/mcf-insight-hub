@@ -374,32 +374,27 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         deals.push(...(data || []));
       }
 
-      // Buscar primeira compra A010 dos emails (24m lookback) para classificação
+      // Buscar a venda A010 MAIS RECENTE de cada email — alinhado com a Agenda R1.
+      // Usa product_category='a010' (NÃO product_name ILIKE '%A010%').
       const emails = Array.from(new Set(
         deals.map(d => (d.crm_contacts?.email || '').toLowerCase().trim()).filter(Boolean)
       ));
-      const a010Lookback = new Date();
-      a010Lookback.setMonth(a010Lookback.getMonth() - 24);
-      const firstA010ByEmail = new Map<string, Date>();
+      const mostRecentA010ByEmail = new Map<string, Date>();
       for (let i = 0; i < emails.length; i += 200) {
         const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
         const { data: a010Tx } = await supabase
           .from('hubla_transactions')
           .select('customer_email, sale_date')
-          .ilike('product_name', '%A010%')
+          .eq('product_category', 'a010')
           .eq('sale_status', 'completed')
-          .in('customer_email', chunk)
-          .gte('sale_date', a010Lookback.toISOString())
-          .order('sale_date', { ascending: true })
-          .limit(5000);
+          .in('customer_email', chunk);
         (a010Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
-          if (!e) return;
+          if (!e || !r.sale_date) return;
           const d = new Date(r.sale_date);
-          if (!firstA010ByEmail.has(e) || d < firstA010ByEmail.get(e)!) {
-            firstA010ByEmail.set(e, d);
-          }
+          const prev = mostRecentA010ByEmail.get(e);
+          if (!prev || d > prev) mostRecentA010ByEmail.set(e, d);
         });
       }
 
@@ -408,7 +403,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         const tags = parseTags(d.tags);
         const channel = classifyChannelWith30dRule({
           tags,
-          firstA010Purchase: email ? (firstA010ByEmail.get(email) || null) : null,
+          mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
         });
         m.set(d.id, {
