@@ -136,8 +136,10 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
       }
       if (emails.length > 0) {
         const { data } = await supabase
-          .from('a010_sales')
+          .from('hubla_transactions')
           .select('customer_email, sale_date')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
           .in('customer_email', emails);
         (data || []).forEach((r: any) => {
           if (!r.customer_email) return;
@@ -150,8 +152,10 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
       }
       if (phones9.length > 0) {
         const { data } = await supabase
-          .from('a010_sales')
+          .from('hubla_transactions')
           .select('customer_phone, sale_date')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
           .not('customer_phone', 'is', null);
         (data || []).forEach((r: any) => {
           const p9 = normalizePhone9(r.customer_phone);
