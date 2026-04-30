@@ -21,7 +21,7 @@ import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const CHANNEL_LABELS: Record<string, string> = {
   A010: 'A010',
-  ANAMNESE: 'ANAMNESE (Live + Anamnese + Anamnese-Insta)',
+  ANAMNESE: 'ANAMNESE',
   OUTROS: 'OUTROS',
 };
 export function displayChannelLabel(raw: string): string {
@@ -110,9 +110,8 @@ function classifyChannelWith30dRule(opts: {
 }): string {
   const { tags, mostRecentA010Purchase, referenceDate } = opts;
   const norm = tags.map((t) => (t || '').trim().toUpperCase());
-  const hasAnamneseTag = norm.some(
-    (t) => t === 'ANAMNESE' || t === 'ANAMNESE-INSTA' || t === 'ANAMNESE INSTA'
-  );
+  // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
+  const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
   const isBuyer = mostRecentA010Purchase !== null;
   const ageDays = isBuyer
     ? (referenceDate.getTime() - mostRecentA010Purchase!.getTime()) / 86_400_000
