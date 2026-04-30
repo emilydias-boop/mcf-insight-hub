@@ -1,1 +1,2 @@
 - [SDR Agendamentos Dedup](mem://business-logic/sdr-agendamentos-dedup-rule) — KPI Agendamentos deduplica por (sdr, deal, dia) com cap 2/lead, evitando inflar por duplicatas no mesmo dia.
+- [Pendentes Arithmetic Closure](mem://business-logic/pendentes-arithmetic-closure) — `pendentes` é calculado no RPC como R1 Agendada − Realizadas − No-Shows, fechando a aritmética.
