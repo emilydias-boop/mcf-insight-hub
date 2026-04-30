@@ -67,6 +67,10 @@ export interface MeetingSlot {
   deal?: {
     id: string;
     name: string;
+    tags?: any;
+    lead_channel?: string | null;
+    data_source?: string | null;
+    origin?: { name: string | null } | null;
     contact?: {
       id: string;
       name: string;
