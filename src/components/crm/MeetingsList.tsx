@@ -172,8 +172,17 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     staleTime: 60_000,
   });
 
-  /** Retorna idade em ms desde a venda A010 mais recente, ou null se não for buyer. */
-  const a010Age = (email: string | null | undefined, phone: string | null | undefined): number | null => {
+  /**
+   * Retorna a idade (ms) entre o evento (R1 scheduled_at) e a venda A010
+   * MAIS RECENTE do lead, ou null se não for buyer. Usar scheduled_at como
+   * âncora mantém o canal estável historicamente (alinhado com o Funil
+   * por Canal do Relatório).
+   */
+  const a010Age = (
+    email: string | null | undefined,
+    phone: string | null | undefined,
+    referenceISO: string,
+  ): number | null => {
     if (!a010Sets) return null;
     const e = (email || '').toLowerCase().trim();
     const p9 = normalizePhone9(phone);
@@ -187,7 +196,9 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
       return null;
     }
     const mostRecent = Math.max(...valid);
-    return Date.now() - mostRecent;
+    const refMs = new Date(referenceISO).getTime();
+    const baseMs = isNaN(refMs) ? Date.now() : refMs;
+    return baseMs - mostRecent;
   };
 
   // Expand meetings into attendee-level rows
@@ -224,7 +235,11 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
               })
             : [];
           const channel = classifySimple({
-            a010AgeMs: a010Age(att.contact?.email, att.attendee_phone || att.contact?.phone),
+            a010AgeMs: a010Age(
+              att.contact?.email,
+              att.attendee_phone || att.contact?.phone,
+              meeting.scheduled_at,
+            ),
             tags: tagsArr,
           });
 
@@ -260,7 +275,11 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             })
           : [];
         const channel = classifySimple({
-          a010AgeMs: a010Age(dealForChannel?.contact?.email, dealForChannel?.contact?.phone),
+          a010AgeMs: a010Age(
+            dealForChannel?.contact?.email,
+            dealForChannel?.contact?.phone,
+            meeting.scheduled_at,
+          ),
           tags: tagsArr,
         });
 
