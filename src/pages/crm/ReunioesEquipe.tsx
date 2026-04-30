@@ -525,9 +525,29 @@ export default function ReunioesEquipe() {
 
   // Breakdown REAL de Pendentes (a partir das reuniões já deduplicadas que
   // alimentam o drill-down). Substitui o cálculo aritmético inflado.
+  // Filtra pelas SDRs válidas do squad (mesmo recorte do KPI R1 Agendada
+  // exibido na tela), para fechar a aritmética
+  // Realizada + No-Show + Pendente == R1 Agendada.
+  const allowedSdrEmailsForBreakdown = useMemo(() => {
+    return new Set(
+      (activeSdrsList || [])
+        .map(s => (s.email || '').toLowerCase())
+        .filter(Boolean)
+    );
+  }, [activeSdrsList]);
+
+  const meetingsForBreakdown = useMemo(() => {
+    if (!meetingsWithCancelled) return [];
+    if (allowedSdrEmailsForBreakdown.size === 0) return meetingsWithCancelled;
+    return meetingsWithCancelled.filter(m => {
+      const sdr = (m.current_owner || m.intermediador || '').toLowerCase();
+      return allowedSdrEmailsForBreakdown.has(sdr);
+    });
+  }, [meetingsWithCancelled, allowedSdrEmailsForBreakdown]);
+
   const pendentesBreakdown = useMemo(
-    () => computePendentesBreakdown(meetingsWithCancelled, start, end),
-    [meetingsWithCancelled, start, end],
+    () => computePendentesBreakdown(meetingsForBreakdown, start, end),
+    [meetingsForBreakdown, start, end],
   );
   
   const dayValues = useMemo(() => ({
