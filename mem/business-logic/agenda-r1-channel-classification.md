@@ -9,13 +9,13 @@ Classificação UNIFICADA — usada na Agenda R1 (`/crm/agenda` aba Lista + filt
 
 **Window de 30 dias**: idade = `referenceDate - max(sale_date)`, onde `referenceDate` é a DATA DO EVENTO (R1 `scheduled_at` na Agenda; deal `created_at` no funil). NÃO usar `Date.now()` — isso fazia o canal de uma R1 antiga mudar com o tempo. Se idade >30 dias, considera-se "A010 esfriado".
 
-**Tag ANAMNESE** vale APENAS se a tag for exatamente `ANAMNESE`, `ANAMNESE-INSTA` ou `ANAMNESE INSTA` (uppercase, trim). NÃO contar substrings como `LIVE`, `LANÇ`, etc.
+**Tag ANAMNESE** vale APENAS se a tag for exatamente `ANAMNESE` (uppercase, trim) — anamnese completa. NÃO contar `ANAMNESE-INSTA`, `ANAMNESE INSTA`, `LIVE`, `LANÇ`, etc. Esses casos caem em **Outro/OUTROS**.
 
 **Regra final** (em ordem):
 1. Buyer A010 com venda ≤30 dias → **A010** (mesmo se tiver tag ANAMNESE).
-2. Buyer A010 com venda >30 dias E deal tem tag `ANAMNESE`/`ANAMNESE-INSTA` → **ANAMNESE** (lead esfriou e voltou via anamnese).
+2. Buyer A010 com venda >30 dias E deal tem tag exata `ANAMNESE` → **ANAMNESE** (lead esfriou e voltou via anamnese completa).
 3. Buyer A010 com venda >30 dias SEM tag ANAMNESE → continua **A010**.
-4. Não-buyer com tag `ANAMNESE`/`ANAMNESE-INSTA` → **ANAMNESE**.
+4. Não-buyer com tag exata `ANAMNESE` → **ANAMNESE**.
 5. Resto → **Outro** (no Funil aparece como `OUTROS`).
 
 Implementação:
