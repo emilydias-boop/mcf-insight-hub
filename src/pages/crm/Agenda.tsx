@@ -405,6 +405,9 @@ export default function Agenda() {
               if (v) {
                 setViewMode(v as ViewMode);
                 setSelectedDate(new Date());
+                // Sair do modo personalizado ao trocar de visão
+                setCustomStart(undefined);
+                setCustomEnd(undefined);
               }
             }}
             className="flex-shrink-0"
@@ -447,6 +450,55 @@ export default function Agenda() {
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleNext} title="Próximo período (→)">
               <ChevronRight className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Personalizado (data custom) */}
+          <div className="flex items-center gap-1 border rounded-md px-1 py-0.5 bg-muted/30">
+            <span className="text-[11px] text-muted-foreground px-1 hidden sm:inline">Personalizado:</span>
+            <Popover open={customStartOpen} onOpenChange={setCustomStartOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  {customStart ? format(customStart, 'dd/MM/yy', { locale: ptBR }) : 'Início'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={customStart}
+                  onSelect={(d) => { if (d) { setCustomStart(d); setCustomStartOpen(false); } }}
+                  locale={ptBR}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-xs text-muted-foreground">→</span>
+            <Popover open={customEndOpen} onOpenChange={setCustomEndOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  {customEnd ? format(customEnd, 'dd/MM/yy', { locale: ptBR }) : 'Fim'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={customEnd}
+                  onSelect={(d) => { if (d) { setCustomEnd(d); setCustomEndOpen(false); } }}
+                  locale={ptBR}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            {isCustomRange && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { setCustomStart(undefined); setCustomEnd(undefined); }}
+                title="Limpar período personalizado"
+              >
+                Limpar
+              </Button>
+            )}
           </div>
         </div>
 
