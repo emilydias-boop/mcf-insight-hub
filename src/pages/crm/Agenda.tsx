@@ -29,6 +29,7 @@ import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { classifyChannel } from '@/lib/channelClassifier';
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
@@ -297,10 +298,23 @@ export default function Agenda() {
     for (const meeting of filteredMeetings) {
       for (const att of (meeting.attendees || [])) {
         if (att.is_partner) continue;
+        const dealForChannel: any = (att as any).deal || meeting.deal;
+        const rawTags = dealForChannel?.tags;
+        const tagsArr: string[] = Array.isArray(rawTags)
+          ? rawTags.map((t: any) => (typeof t === 'string' ? t : t?.name || ''))
+          : [];
+        const channel = classifyChannel({
+          tags: tagsArr,
+          originName: dealForChannel?.origin?.name ?? null,
+          leadChannel: null,
+          dataSource: dealForChannel?.data_source ?? null,
+          hasA010: tagsArr.some((t) => (t || '').toUpperCase().includes('A010')),
+        });
         rows.push({
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
           'Lead': att.attendee_name || att.contact?.name || '',
           'Telefone': att.attendee_phone || att.contact?.phone || '',
+          'Canal': channel || '',
           'Closer': meeting.closer?.name || '',
           'Status': STATUS_LABELS[att.status] || att.status || '',
         });
