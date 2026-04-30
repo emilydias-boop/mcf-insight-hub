@@ -804,7 +804,7 @@ export default function ReunioesEquipe() {
         bucket={drillBucket}
         title={drillTitle}
         meetings={allMeetings}
-        meetingsRaw={allMeetingsRaw}
+        meetingsRaw={drillBucket === "pendentes" ? meetingsWithCancelled : allMeetingsRaw}
         startDate={start}
         endDate={end}
       />
