@@ -392,14 +392,23 @@ export default function ReunioesEquipe() {
   // a base correta para reconciliar com Realizada + No-Show + Sem Status, que
   // também são contadas por scheduled_at.
   const enrichedKPIs = useMemo(() => {
-    const totalR1Agendada = teamKPIs.totalR1Agendada;
-    const totalRealizadas = teamKPIs.totalRealizadas;
-    const totalNoShows = teamKPIs.totalNoShows;
+    // IMPORTANTE: somar a partir de filteredBySDR (mesmo array exibido na
+    // tabela de SDRs) para garantir que o card "Agendamentos" e o total
+    // da tabela batam exatamente. Antes usávamos teamKPIs cru, que incluía
+    // SDRs ex-squad/admins/managers fora do recorte oficial e inflava o KPI.
+    const totalAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
+    const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+    const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
+    const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
     return {
       ...teamKPIs,
+      sdrCount: filteredBySDR.length,
+      totalAgendamentos,
       totalR1Agendada,
       totalRealizadas,
       totalNoShows,
+      totalSemStatus,
       // Card "Contratos" = total comercial exibido na tabela Closers: Contrato Pago + Outside.
       // Assim o KPI não fica restrito apenas aos contratos com atribuição de SDR.
       totalContratos: contractsFromClosers.total,
@@ -411,7 +420,7 @@ export default function ReunioesEquipe() {
         ? (contractsFromClosers.total / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR]);
 
   // ============================================================
   // Breakdown SDR/Closer das taxas (média individual)
