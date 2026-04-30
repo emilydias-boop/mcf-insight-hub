@@ -40,8 +40,13 @@ serve(async (req) => {
     const webhookUrl = callRecordId 
       ? `${webhookBaseUrl}?callRecordId=${callRecordId}`
       : webhookBaseUrl;
+    const amdCallbackUrl = callRecordId
+      ? `${webhookBaseUrl}?callRecordId=${callRecordId}&type=amd`
+      : `${webhookBaseUrl}?type=amd`;
 
-    // Generate TwiML to dial the number with recording enabled
+    // Generate TwiML to dial the number with recording + Answering Machine Detection
+    // machineDetection=DetectMessageEnd → preciso (~4-6s), detecta inclusive o fim do beep
+    // asyncAmd=true → não atrasa o atendimento humano; resultado chega via asyncAmdStatusCallback
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial 
@@ -50,6 +55,10 @@ serve(async (req) => {
     record="record-from-answer-dual"
     recordingStatusCallback="${webhookUrl}"
     recordingStatusCallbackEvent="completed"
+    machineDetection="DetectMessageEnd"
+    asyncAmd="true"
+    asyncAmdStatusCallback="${amdCallbackUrl}"
+    asyncAmdStatusCallbackMethod="POST"
     action="${webhookUrl}">
     <Number>${cleanNumber}</Number>
   </Dial>

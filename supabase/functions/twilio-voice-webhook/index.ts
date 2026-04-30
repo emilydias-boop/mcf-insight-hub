@@ -16,6 +16,7 @@ serve(async (req) => {
     // Get callRecordId from URL query params (passed from TwiML)
     const url = new URL(req.url);
     const callRecordIdFromUrl = url.searchParams.get('callRecordId');
+    const callbackType = url.searchParams.get('type'); // 'amd' for async machine detection
 
     // Parse form data from Twilio webhook
     const formData = await req.formData();
@@ -31,14 +32,87 @@ serve(async (req) => {
     const recordingSid = formData.get('RecordingSid')?.toString();
     const recordingDuration = formData.get('RecordingDuration')?.toString();
     const recordingStatus = formData.get('RecordingStatus')?.toString();
+    const answeredBy = formData.get('AnsweredBy')?.toString();
 
     // Detailed logging for debugging
-    console.log(`Webhook received: CallSid=${callSid}, Status=${callStatus}, Duration=${callDuration}, RecordingStatus=${recordingStatus}, RecordingSid=${recordingSid}, RecordingDuration=${recordingDuration}, callRecordId=${callRecordIdFromUrl}`);
+    console.log(`Webhook received: type=${callbackType}, CallSid=${callSid}, Status=${callStatus}, Duration=${callDuration}, RecordingStatus=${recordingStatus}, RecordingSid=${recordingSid}, RecordingDuration=${recordingDuration}, callRecordId=${callRecordIdFromUrl}, AnsweredBy=${answeredBy}`);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // ============================================================
+    // ASYNC AMD CALLBACK (Answering Machine Detection)
+    // Twilio sends AnsweredBy: human | machine_start | machine_end_beep
+    //                        | machine_end_silence | machine_end_other
+    //                        | fax | unknown
+    // If detected as machine/fax/unknown → derruba a chamada e marca voicemail
+    // ============================================================
+    if (callbackType === 'amd' && answeredBy) {
+      console.log(`AMD result: ${answeredBy} for CallSid=${callSid}, callRecordId=${callRecordIdFromUrl}`);
+
+      const isMachine = answeredBy.startsWith('machine') || answeredBy === 'fax' || answeredBy === 'unknown';
+
+      const amdUpdates: Record<string, any> = {
+        answered_by: answeredBy,
+        updated_at: new Date().toISOString(),
+      };
+      if (isMachine) {
+        amdUpdates.outcome = 'voicemail';
+      }
+
+      // Update call record (try by CallSid first, fallback to callRecordId)
+      if (callSid) {
+        const { error } = await supabase
+          .from('calls')
+          .update(amdUpdates)
+          .eq('twilio_call_sid', callSid);
+        if (error) console.error('AMD update by CallSid error:', error);
+      }
+      if (callRecordIdFromUrl) {
+        const { error } = await supabase
+          .from('calls')
+          .update(amdUpdates)
+          .eq('id', callRecordIdFromUrl);
+        if (error) console.error('AMD update by callRecordId error:', error);
+      }
+
+      // If machine detected → hang up the call via Twilio REST API
+      if (isMachine && callSid) {
+        try {
+          const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+          const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+          if (accountSid && authToken) {
+            const auth = btoa(`${accountSid}:${authToken}`);
+            const hangupUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls/${callSid}.json`;
+            const resp = await fetch(hangupUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({ Status: 'completed' }),
+            });
+            if (!resp.ok) {
+              const txt = await resp.text();
+              console.error(`Failed to hangup machine call ${callSid}: ${resp.status} ${txt}`);
+            } else {
+              console.log(`✅ Voicemail detected, hung up call ${callSid} (AnsweredBy=${answeredBy})`);
+            }
+          } else {
+            console.error('Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN — cannot hangup');
+          }
+        } catch (hangupErr) {
+          console.error('Error hanging up machine call:', hangupErr);
+        }
+      }
+
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        { headers: { 'Content-Type': 'application/xml' } }
+      );
+    }
 
     // Check if this is a recording status callback (separate from call status)
     if (recordingStatus === 'completed' && recordingUrl) {

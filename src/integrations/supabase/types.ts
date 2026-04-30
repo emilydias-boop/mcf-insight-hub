@@ -1798,6 +1798,7 @@ export type Database = {
       }
       calls: {
         Row: {
+          answered_by: string | null
           contact_id: string | null
           created_at: string | null
           deal_id: string | null
@@ -1818,6 +1819,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          answered_by?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
@@ -1838,6 +1840,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          answered_by?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null

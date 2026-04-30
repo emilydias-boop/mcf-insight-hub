@@ -208,43 +208,73 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     if ((callStatus === 'completed' || callStatus === 'failed') && prev !== callStatus) {
       if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
 
-      if (wasInProgressRef.current) {
-        // Atendeu → NÃO abre qualificação automaticamente.
-        // O SDR aciona o modal manualmente quando/se precisar (botão na barra
-        // in-call). Se o auto-dialer estiver rodando, segue para o próximo
-        // lead; o SDR pode pausar manualmente o painel se quiser qualificar.
-        setInCallDrawerOpen(false);
-        if (stateRef.current === 'running') {
-          advanceToNext();
+      // Verifica se foi caixa postal (AMD do Twilio detectou máquina e o webhook
+      // já derrubou a chamada). Pequeno delay garante que o AMD callback chegou.
+      const handleCompletion = async () => {
+        let isVoicemail = false;
+        if (currentCallId) {
+          try {
+            const { data } = await supabase
+              .from('calls')
+              .select('outcome, answered_by')
+              .eq('id', currentCallId)
+              .maybeSingle();
+            const ansBy = (data as any)?.answered_by as string | null | undefined;
+            if ((data as any)?.outcome === 'voicemail' || (ansBy && ansBy !== 'human')) {
+              isVoicemail = true;
+            }
+          } catch (e) {
+            console.warn('[autodialer] failed to check voicemail status', e);
+          }
         }
-      } else {
-        // Não atendeu / falhou
-        const result: LeadResult = callStatus === 'failed' ? 'failed' : 'no-answer';
+
+        if (wasInProgressRef.current && !isVoicemail) {
+          // Atendeu (humano) → NÃO abre qualificação automaticamente.
+          // O SDR aciona o modal manualmente quando/se precisar.
+          setInCallDrawerOpen(false);
+          if (stateRef.current === 'running') {
+            advanceToNext();
+          }
+          return;
+        }
+
+        // Caixa postal OU não atendeu / falhou
+        setInCallDrawerOpen(false);
+        const result: LeadResult = (!isVoicemail && callStatus === 'failed') ? 'failed' : 'no-answer';
         setLeadResult(lead.dealId, result);
 
         // Registra atividade de tentativa
         if (currentCallId) {
           const currentAttempt = attemptsRef.current[lead.dealId] || 1;
+          const description = isVoicemail
+            ? `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — caixa postal detectada`
+            : `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — não atendeu`;
+          const resultTag = isVoicemail ? 'caixa_postal' : 'nao_atendeu';
           supabase.from('deal_activities').insert({
             deal_id: lead.dealId,
             activity_type: 'call_result',
-            description: `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — não atendeu`,
-            metadata: { result: 'nao_atendeu', auto_dialer: true, attempt: currentAttempt, max_attempts: maxAttemptsRef.current } as any,
+            description,
+            metadata: { result: resultTag, auto_dialer: true, attempt: currentAttempt, max_attempts: maxAttemptsRef.current, voicemail: isVoicemail } as any,
           }).then(({ error }) => { if (error) console.warn('[autodialer] activity insert error', error); });
+        }
+
+        if (isVoicemail) {
+          toast.info(`📭 Caixa postal — ${lead.name}`);
         }
 
         if (stateRef.current === 'running') {
           const attemptCount = attemptsRef.current[lead.dealId] || 1;
           if (attemptCount < maxAttemptsRef.current) {
-            // ainda tem tentativas → re-disca o mesmo lead
             setLeadResult(lead.dealId, 'pending');
             retryCurrent();
           } else {
-            // esgotou tentativas → próximo lead
             advanceToNext();
           }
         }
-      }
+      };
+
+      // Delay de 1.5s para garantir que o AMD callback do Twilio chegue antes
+      setTimeout(() => { handleCompletion(); }, 1500);
     }
   }, [callStatus, currentCallId, hangUp, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
 
