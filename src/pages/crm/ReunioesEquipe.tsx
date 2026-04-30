@@ -386,33 +386,6 @@ export default function ReunioesEquipe() {
     return { r1Agendada, r1Realizada, noShows, r2Agendada };
   }, [closerMetrics]);
 
-  // Enrich teamKPIs: métricas operacionais (R1/No-Show) vêm do SDR (teamKPIs),
-  // métricas financeiras (contratos, outside) vêm do closer (verdade contábil).
-  // R1 Agendada usa base scheduled_at (reuniões marcadas PARA o período) — é
-  // a base correta para reconciliar com Realizada + No-Show + Sem Status, que
-  // também são contadas por scheduled_at.
-  const enrichedKPIs = useMemo(() => {
-    const totalR1Agendada = teamKPIs.totalR1Agendada;
-    const totalRealizadas = teamKPIs.totalRealizadas;
-    const totalNoShows = teamKPIs.totalNoShows;
-    return {
-      ...teamKPIs,
-      totalR1Agendada,
-      totalRealizadas,
-      totalNoShows,
-      // Card "Contratos" = total comercial exibido na tabela Closers: Contrato Pago + Outside.
-      // Assim o KPI não fica restrito apenas aos contratos com atribuição de SDR.
-      totalContratos: contractsFromClosers.total,
-      totalOutside: contractsFromClosers.outside,
-      taxaNoShow: totalR1Agendada > 0
-        ? (totalNoShows / totalR1Agendada) * 100
-        : 0,
-      taxaConversao: totalRealizadas > 0
-        ? (contractsFromClosers.total / totalRealizadas) * 100
-        : 0,
-    };
-  }, [teamKPIs, contractsFromClosers]);
-
   // ============================================================
   // Breakdown SDR/Closer das taxas (média individual)
   // ============================================================
@@ -517,6 +490,36 @@ export default function ReunioesEquipe() {
     if (sdrFilter === "all") return restricted;
     return restricted.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
+
+  // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
+  // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
+  // Antes usávamos teamKPIs cru, que incluía SDRs ex-squad/admins/managers fora
+  // do recorte oficial e inflava os KPIs.
+  // Métricas financeiras (contratos/outside) continuam vindo do closer (verdade contábil).
+  const enrichedKPIs = useMemo(() => {
+    const totalAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
+    const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+    const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
+    const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+    return {
+      ...teamKPIs,
+      sdrCount: filteredBySDR.length,
+      totalAgendamentos,
+      totalR1Agendada,
+      totalRealizadas,
+      totalNoShows,
+      totalSemStatus,
+      totalContratos: contractsFromClosers.total,
+      totalOutside: contractsFromClosers.outside,
+      taxaNoShow: totalR1Agendada > 0
+        ? (totalNoShows / totalR1Agendada) * 100
+        : 0,
+      taxaConversao: totalRealizadas > 0
+        ? (contractsFromClosers.total / totalRealizadas) * 100
+        : 0,
+    };
+  }, [teamKPIs, contractsFromClosers, filteredBySDR]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -863,6 +866,7 @@ export default function ReunioesEquipe() {
               diasUteisNoPeriodo={diasUteisNoPeriodo}
               sdrDiasUteisMap={sdrDiasUteisMap}
               totaisOverride={{
+                agendamentos: enrichedKPIs.totalAgendamentos,
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
