@@ -1856,6 +1856,8 @@ export function useDeleteMeeting() {
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-search'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       toast.success('Reunião excluída');
     },
     onError: () => {
