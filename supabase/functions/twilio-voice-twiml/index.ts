@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+const escapeXml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
 serve(async (req) => {
   try {
     // Parse form data from Twilio
@@ -50,16 +58,16 @@ serve(async (req) => {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial 
-    callerId="${callerId}" 
+    callerId="${escapeXml(callerId || '')}" 
     timeout="30" 
     record="record-from-answer-dual"
-    recordingStatusCallback="${webhookUrl}"
+    recordingStatusCallback="${escapeXml(webhookUrl)}"
     recordingStatusCallbackEvent="completed"
-    action="${webhookUrl}">
+    action="${escapeXml(webhookUrl)}">
     <Number
       machineDetection="DetectMessageEnd"
-      amdStatusCallback="${amdCallbackUrl}"
-      amdStatusCallbackMethod="POST">${cleanNumber}</Number>
+      amdStatusCallback="${escapeXml(amdCallbackUrl)}"
+      amdStatusCallbackMethod="POST">${escapeXml(cleanNumber)}</Number>
   </Dial>
 </Response>`;
 
