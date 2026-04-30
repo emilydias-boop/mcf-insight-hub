@@ -33,6 +33,7 @@ import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
+import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 
 
@@ -355,6 +356,15 @@ export default function ReunioesEquipe() {
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
+  // Chamada extra incluindo canceladas — usada apenas para o card
+  // "Pendentes / Sem Desfecho" fechar a conta com R1 Agendada.
+  const { data: meetingsWithCancelled } = useSdrMeetingsFromAgenda({
+    startDate: start,
+    endDate: end,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    includeCancelled: true,
+  });
+
   // Fetch Outside metrics for the selected period
   
 
@@ -514,8 +524,8 @@ export default function ReunioesEquipe() {
   // Breakdown REAL de Pendentes (a partir das reuniões já deduplicadas que
   // alimentam o drill-down). Substitui o cálculo aritmético inflado.
   const pendentesBreakdown = useMemo(
-    () => computePendentesBreakdown(allMeetingsRaw, start, end),
-    [allMeetingsRaw, start, end],
+    () => computePendentesBreakdown(meetingsWithCancelled, start, end),
+    [meetingsWithCancelled, start, end],
   );
   
   const dayValues = useMemo(() => ({

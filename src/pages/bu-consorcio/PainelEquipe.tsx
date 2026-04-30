@@ -20,6 +20,7 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
+import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
 import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
@@ -252,6 +253,15 @@ export default function ConsorcioPainelEquipe() {
     endDate: end,
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
     squad: BU_SQUAD,
+  });
+
+  // Chamada extra incluindo canceladas para o breakdown do card Pendentes.
+  const { data: meetingsWithCancelled } = useSdrMeetingsFromAgenda({
+    startDate: start,
+    endDate: end,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    buFilter: BU_SQUAD,
+    includeCancelled: true,
   });
 
   const { teamKPIs: dayKPIs } = useTeamMeetingsData({ startDate: dayStart, endDate: dayEnd, squad: BU_SQUAD });
@@ -756,8 +766,8 @@ export default function ConsorcioPainelEquipe() {
         semStatus={semStatusCount}
         pendentesBreakdown={computePendentesBreakdown(
           allowedOriginNames
-            ? (allMeetingsRaw || []).filter(m => matchesPipeline(m.origin_name))
-            : allMeetingsRaw,
+            ? (meetingsWithCancelled || []).filter(m => matchesPipeline(m.origin_name))
+            : meetingsWithCancelled,
           start,
           end,
         )}

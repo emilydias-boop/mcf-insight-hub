@@ -32,6 +32,10 @@ interface UseSdrMeetingsFromAgendaParams {
   endDate: Date | null;
   sdrEmailFilter?: string;
   buFilter?: string;
+  /** Quando true, retorna também as reuniões canceladas (msa.status='cancelled').
+   *  Usado especialmente pelo card "Pendentes / Sem Desfecho" para fechar a
+   *  conta com R1 Agendada. Padrão: false. */
+  includeCancelled?: boolean;
 }
 
 export function useSdrMeetingsFromAgenda({
@@ -39,6 +43,7 @@ export function useSdrMeetingsFromAgenda({
   endDate,
   sdrEmailFilter,
   buFilter,
+  includeCancelled = false,
 }: UseSdrMeetingsFromAgendaParams) {
   return useQuery({
     queryKey: [
@@ -47,6 +52,7 @@ export function useSdrMeetingsFromAgenda({
       endDate?.toISOString(),
       sdrEmailFilter,
       buFilter,
+      includeCancelled,
     ],
     queryFn: async (): Promise<MeetingV2[]> => {
       if (!startDate || !endDate) return [];
@@ -59,6 +65,7 @@ export function useSdrMeetingsFromAgenda({
         end_date: endStr,
         sdr_email_filter: sdrEmailFilter || null,
         bu_filter: buFilter || null,
+        include_cancelled: includeCancelled,
       });
 
       if (error) {
