@@ -29,7 +29,8 @@ import { useMyCloser } from '@/hooks/useMyCloser';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { classifyChannel } from '@/lib/channelClassifier';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
@@ -63,6 +64,7 @@ export default function Agenda() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [closerFilter, setCloserFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [channelFilter, setChannelFilter] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingSlot | null>(null);
   const [quickScheduleOpen, setQuickScheduleOpen] = useState(false);
@@ -567,6 +569,18 @@ export default function Agenda() {
               {activeBU !== 'consorcio' && (
                 <SelectItem value="contract_paid">Contrato Pago</SelectItem>
               )}
+            </SelectContent>
+          </Select>
+
+          <Select value={channelFilter || 'all'} onValueChange={(v) => setChannelFilter(v === 'all' ? null : v)}>
+            <SelectTrigger className="w-[120px] sm:w-[140px] text-xs sm:text-sm">
+              <SelectValue placeholder="Canal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos canais</SelectItem>
+              <SelectItem value="A010">A010</SelectItem>
+              <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
+              <SelectItem value="Outro">Outro</SelectItem>
             </SelectContent>
           </Select>
         </div>
