@@ -753,6 +753,7 @@ export default function ConsorcioPainelEquipe() {
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
         semStatus={semStatusCount}
+        pendentesBreakdown={computePendentesBreakdown(pipelineFilteredMeetings, start, end)}
       />
 
       {/* SDR / Closer Summary Table with Tabs */}
