@@ -966,6 +966,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             </div>
 
             {/* Quick Actions - Per Participant - ALWAYS VISIBLE */}
+            {!selectedParticipant && participants.length > 1 && (
+              <>
+                <Separator />
+                <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <strong>Selecione um participante acima</strong> para alterar status (No-Show, Realizada, Contrato Pago).
+                    Este horário tem {participants.length} convidados — é necessário escolher qual lead será afetado.
+                  </div>
+                </div>
+              </>
+            )}
             {selectedParticipant && (
               <>
                 <Separator />
