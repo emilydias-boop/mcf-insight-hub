@@ -207,7 +207,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Record token creation time
       tokenCreatedAt.current = Date.now();
 
-      // Create and register device
+      // Create and register device. We intentionally do not pin an inputDevice here:
+      // stale microphone IDs can trigger Twilio 31402 / "Requested device not found"
+      // for specific users even when browser permission is granted.
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
         codecPreferences: ['opus', 'pcmu'] as any,
@@ -237,6 +239,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         twilioDevice.on('registered', () => {
           console.log('Twilio device registered (edge: south-america, codec: opus)');
           setDeviceStatus('ready');
+          deviceRef.current = twilioDevice as unknown as TwilioDevice;
           setDevice(twilioDevice as unknown as TwilioDevice);
           resolve(true);
         });
