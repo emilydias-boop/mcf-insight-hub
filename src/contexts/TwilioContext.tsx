@@ -35,6 +35,10 @@ interface TwilioDevice {
   on: (event: string, handler: (...args: any[]) => void) => void;
   state: string;
   destroy: () => void;
+  audio?: {
+    setInputDevice?: (deviceId: string) => Promise<void>;
+    unsetInputDevice?: () => Promise<void>;
+  };
 }
 
 interface TwilioCall {
@@ -80,9 +84,37 @@ const TwilioContext = createContext<TwilioContextType | null>(null);
 
 const TWILIO_TEST_ORIGIN_NAME = 'Twilio – Teste';
 
+const getTwilioErrorText = (error: unknown) => {
+  const err = error as {
+    code?: number | string;
+    name?: string;
+    message?: string;
+    originalError?: { name?: string; message?: string };
+  };
+
+  return [err?.code, err?.name, err?.message, err?.originalError?.name, err?.originalError?.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
+const isMicrophoneDeviceError = (error: unknown) => {
+  const text = getTwilioErrorText(error);
+  return text.includes('31402')
+    || text.includes('acquisitionfailed')
+    || text.includes('usermedia')
+    || text.includes('requested device not found')
+    || text.includes('notfounderror');
+};
+
+const releaseMediaStream = (stream: MediaStream) => {
+  stream.getTracks().forEach((track) => track.stop());
+};
+
 export function TwilioProvider({ children }: { children: ReactNode }) {
   const { user, hasAnyRole } = useAuth();
   const [device, setDevice] = useState<TwilioDevice | null>(null);
+  const deviceRef = useRef<TwilioDevice | null>(null);
   const [currentCall, setCurrentCall] = useState<TwilioCall | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('disconnected');
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
@@ -159,6 +191,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Destroy existing device before creating new one
       if (device) {
         try { device.destroy(); } catch (e) { /* ignore */ }
+        deviceRef.current = null;
         setDevice(null);
       }
       
@@ -179,7 +212,9 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Record token creation time
       tokenCreatedAt.current = Date.now();
 
-      // Create and register device
+      // Create and register device. We intentionally do not pin an inputDevice here:
+      // stale microphone IDs can trigger Twilio 31402 / "Requested device not found"
+      // for specific users even when browser permission is granted.
       const twilioDevice = new Device(data.token, {
         logLevel: 1,
         codecPreferences: ['opus', 'pcmu'] as any,
@@ -209,6 +244,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         twilioDevice.on('registered', () => {
           console.log('Twilio device registered (edge: south-america, codec: opus)');
           setDeviceStatus('ready');
+          deviceRef.current = twilioDevice as unknown as TwilioDevice;
           setDevice(twilioDevice as unknown as TwilioDevice);
           resolve(true);
         });
@@ -256,6 +292,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
           try { device.destroy(); } catch { /* ignore */ }
         }
       } finally {
+        deviceRef.current = null;
         setDevice(null);
         setCurrentCall(null);
         setDeviceStatus('disconnected');
@@ -289,6 +326,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     return () => {
       if (device) {
         try { device.destroy(); } catch { /* ignore */ }
+        deviceRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,6 +374,20 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      releaseMediaStream(stream);
+    } catch (microphoneError) {
+      console.error('Microphone preflight failed:', microphoneError);
+      setCallStatus('failed');
+      toast({
+        title: 'Microfone indisponível',
+        description: 'O Chrome não encontrou um microfone válido. Selecione outro microfone nas permissões do site ou reconecte o headset.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     // Ensure token is valid before proceeding
     const tokenValid = await ensureValidToken();
     if (!tokenValid) {
@@ -380,35 +432,47 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCallId(callId);
       setCurrentCallDealId(dealId || null);
 
+      const connectWithCurrentDevice = async () => {
+        const activeDevice = deviceRef.current || device;
+        if (!activeDevice) throw new Error('Twilio device not ready');
+        return await activeDevice.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      };
+
       // Attempt to connect via Twilio
       let call: any;
       try {
-        call = await device!.connect({
-          params: {
-            To: phoneNumber,
-            callRecordId: callId
-          }
-        });
+        call = await connectWithCurrentDevice();
       } catch (connectError) {
         console.error('device.connect() failed, retrying with fresh token:', connectError);
+
+        const isMicError = isMicrophoneDeviceError(connectError);
+        if (isMicError) {
+          try {
+            await (deviceRef.current || device)?.audio?.unsetInputDevice?.();
+          } catch (audioResetError) {
+            console.warn('Failed to reset Twilio input device before retry:', audioResetError);
+          }
+        }
         
-        // Retry once with fresh token
+        // Retry once with fresh token/device. For 31402 this also clears stale browser mic selection.
         const refreshed = await initializeDevice(true);
         if (!refreshed) {
-          throw new Error('Failed to reconnect after token refresh');
+          throw isMicError
+            ? new Error('Falha ao acessar o microfone. Verifique o dispositivo de entrada do Chrome/Windows e tente novamente.')
+            : new Error('Failed to reconnect after token refresh');
         }
 
         toast({
-          title: 'Reconectado',
-          description: 'Sessão renovada, tentando ligar novamente...',
+          title: isMicError ? 'Microfone reconectado' : 'Reconectado',
+          description: isMicError ? 'Tentando ligar novamente com o microfone padrão.' : 'Sessão renovada, tentando ligar novamente...',
         });
 
-        call = await device!.connect({
-          params: {
-            To: phoneNumber,
-            callRecordId: callId
-          }
-        });
+        call = await connectWithCurrentDevice();
       }
 
       // Capture CallSid once available and update the database
@@ -555,6 +619,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     return () => {
       if (device) {
         device.destroy();
+        deviceRef.current = null;
       }
     };
   }, [device]);
