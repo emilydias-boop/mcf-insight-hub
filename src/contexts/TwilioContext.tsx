@@ -187,6 +187,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Destroy existing device before creating new one
       if (device) {
         try { device.destroy(); } catch (e) { /* ignore */ }
+        deviceRef.current = null;
         setDevice(null);
       }
       
@@ -287,6 +288,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
           try { device.destroy(); } catch { /* ignore */ }
         }
       } finally {
+        deviceRef.current = null;
         setDevice(null);
         setCurrentCall(null);
         setDeviceStatus('disconnected');
@@ -320,6 +322,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     return () => {
       if (device) {
         try { device.destroy(); } catch { /* ignore */ }
+        deviceRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,6 +589,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     return () => {
       if (device) {
         device.destroy();
+        deviceRef.current = null;
       }
     };
   }, [device]);
