@@ -107,6 +107,10 @@ const isMicrophoneDeviceError = (error: unknown) => {
     || text.includes('notfounderror');
 };
 
+const releaseMediaStream = (stream: MediaStream) => {
+  stream.getTracks().forEach((track) => track.stop());
+};
+
 export function TwilioProvider({ children }: { children: ReactNode }) {
   const { user, hasAnyRole } = useAuth();
   const [device, setDevice] = useState<TwilioDevice | null>(null);
@@ -367,6 +371,20 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   ): Promise<string | null> => {
     if (!user) {
       console.error('User not authenticated');
+      return null;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      releaseMediaStream(stream);
+    } catch (microphoneError) {
+      console.error('Microphone preflight failed:', microphoneError);
+      setCallStatus('failed');
+      toast({
+        title: 'Microfone indisponível',
+        description: 'O Chrome não encontrou um microfone válido. Selecione outro microfone nas permissões do site ou reconecte o headset.',
+        variant: 'destructive',
+      });
       return null;
     }
 
