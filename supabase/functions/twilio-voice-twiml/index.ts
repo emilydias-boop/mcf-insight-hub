@@ -1,17 +1,44 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const escapeXml = (value: string) =>
-  value
+const escapeXml = (value: string | null | undefined) =>
+  (value || '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+const webhookBaseUrl = 'https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook';
+
+const buildWebhookUrl = (params: Record<string, string | undefined>) => {
+  const url = new URL(webhookBaseUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+  return url.toString();
+};
+
+const normalizeE164 = (phoneNumber: string) => {
+  const hasCountryCode = phoneNumber.trim().startsWith('+');
+  const digits = phoneNumber.replace(/\D/g, '');
+  return hasCountryCode ? `+${digits}` : `+55${digits}`;
+};
+
+const parseTwilioParams = async (req: Request) => {
+  const contentType = req.headers.get('content-type') || '';
+  if (contentType.includes('multipart/form-data')) return await req.formData();
+
+  const bodyText = await req.text();
+  const params = new URLSearchParams(bodyText);
+  return {
+    get: (key: string) => params.get(key),
+  };
+};
+
 serve(async (req) => {
   try {
     // Parse form data from Twilio
-    const formData = await req.formData();
+    const formData = await parseTwilioParams(req);
     
     const to = formData.get('To')?.toString();
     const from = formData.get('From')?.toString();
@@ -37,20 +64,10 @@ serve(async (req) => {
       cleanNumber = to.replace('client:', '');
     }
 
-    // Ensure the number has country code
-    if (!cleanNumber.startsWith('+')) {
-      // Assume Brazil if no country code
-      cleanNumber = '+55' + cleanNumber.replace(/\D/g, '');
-    }
+    cleanNumber = normalizeE164(cleanNumber);
 
-    // Build webhook URL with callRecordId as query parameter
-    const webhookBaseUrl = 'https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook';
-    const webhookUrl = callRecordId 
-      ? `${webhookBaseUrl}?callRecordId=${callRecordId}`
-      : webhookBaseUrl;
-    const amdCallbackUrl = callRecordId
-      ? `${webhookBaseUrl}?callRecordId=${callRecordId}&type=amd`
-      : `${webhookBaseUrl}?type=amd`;
+    const webhookUrl = buildWebhookUrl({ callRecordId });
+    const amdCallbackUrl = buildWebhookUrl({ callRecordId, type: 'amd' });
 
     // Generate TwiML to dial the number with recording + Answering Machine Detection.
     // AMD belongs to the <Number> noun in TwiML; keeping it on <Dial> makes Twilio reject
