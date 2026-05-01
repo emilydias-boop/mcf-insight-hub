@@ -35,6 +35,10 @@ interface TwilioDevice {
   on: (event: string, handler: (...args: any[]) => void) => void;
   state: string;
   destroy: () => void;
+  audio?: {
+    setInputDevice?: (deviceId: string) => Promise<void>;
+    unsetInputDevice?: () => Promise<void>;
+  };
 }
 
 interface TwilioCall {
@@ -80,9 +84,33 @@ const TwilioContext = createContext<TwilioContextType | null>(null);
 
 const TWILIO_TEST_ORIGIN_NAME = 'Twilio – Teste';
 
+const getTwilioErrorText = (error: unknown) => {
+  const err = error as {
+    code?: number | string;
+    name?: string;
+    message?: string;
+    originalError?: { name?: string; message?: string };
+  };
+
+  return [err?.code, err?.name, err?.message, err?.originalError?.name, err?.originalError?.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
+const isMicrophoneDeviceError = (error: unknown) => {
+  const text = getTwilioErrorText(error);
+  return text.includes('31402')
+    || text.includes('acquisitionfailed')
+    || text.includes('usermedia')
+    || text.includes('requested device not found')
+    || text.includes('notfounderror');
+};
+
 export function TwilioProvider({ children }: { children: ReactNode }) {
   const { user, hasAnyRole } = useAuth();
   const [device, setDevice] = useState<TwilioDevice | null>(null);
+  const deviceRef = useRef<TwilioDevice | null>(null);
   const [currentCall, setCurrentCall] = useState<TwilioCall | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>('disconnected');
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
