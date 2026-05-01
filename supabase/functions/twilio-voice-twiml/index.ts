@@ -24,10 +24,21 @@ const normalizeE164 = (phoneNumber: string) => {
   return hasCountryCode ? `+${digits}` : `+55${digits}`;
 };
 
+const parseTwilioParams = async (req: Request) => {
+  const contentType = req.headers.get('content-type') || '';
+  if (contentType.includes('multipart/form-data')) return await req.formData();
+
+  const bodyText = await req.text();
+  const params = new URLSearchParams(bodyText);
+  return {
+    get: (key: string) => params.get(key),
+  };
+};
+
 serve(async (req) => {
   try {
     // Parse form data from Twilio
-    const formData = await req.formData();
+    const formData = await parseTwilioParams(req);
     
     const to = formData.get('To')?.toString();
     const from = formData.get('From')?.toString();
