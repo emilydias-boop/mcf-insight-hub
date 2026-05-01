@@ -414,35 +414,47 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCallId(callId);
       setCurrentCallDealId(dealId || null);
 
+      const connectWithCurrentDevice = async () => {
+        const activeDevice = deviceRef.current || device;
+        if (!activeDevice) throw new Error('Twilio device not ready');
+        return await activeDevice.connect({
+          params: {
+            To: phoneNumber,
+            callRecordId: callId
+          }
+        });
+      };
+
       // Attempt to connect via Twilio
       let call: any;
       try {
-        call = await device!.connect({
-          params: {
-            To: phoneNumber,
-            callRecordId: callId
-          }
-        });
+        call = await connectWithCurrentDevice();
       } catch (connectError) {
         console.error('device.connect() failed, retrying with fresh token:', connectError);
+
+        const isMicError = isMicrophoneDeviceError(connectError);
+        if (isMicError) {
+          try {
+            await (deviceRef.current || device)?.audio?.unsetInputDevice?.();
+          } catch (audioResetError) {
+            console.warn('Failed to reset Twilio input device before retry:', audioResetError);
+          }
+        }
         
-        // Retry once with fresh token
+        // Retry once with fresh token/device. For 31402 this also clears stale browser mic selection.
         const refreshed = await initializeDevice(true);
         if (!refreshed) {
-          throw new Error('Failed to reconnect after token refresh');
+          throw isMicError
+            ? new Error('Falha ao acessar o microfone. Verifique o dispositivo de entrada do Chrome/Windows e tente novamente.')
+            : new Error('Failed to reconnect after token refresh');
         }
 
         toast({
-          title: 'Reconectado',
-          description: 'Sessão renovada, tentando ligar novamente...',
+          title: isMicError ? 'Microfone reconectado' : 'Reconectado',
+          description: isMicError ? 'Tentando ligar novamente com o microfone padrão.' : 'Sessão renovada, tentando ligar novamente...',
         });
 
-        call = await device!.connect({
-          params: {
-            To: phoneNumber,
-            callRecordId: callId
-          }
-        });
+        call = await connectWithCurrentDevice();
       }
 
       // Capture CallSid once available and update the database
