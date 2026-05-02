@@ -346,11 +346,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
   // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
   const isCadastroRetroativo = useMemo(() => {
-    if (!dataContratacaoWatch) return false;
+    const dataBase = tipoRegistroWatch === 'reserva' ? dataReservaWatch : dataContratacaoWatch;
+    if (!dataBase) return false;
     const hoje = new Date();
     const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return dataContratacaoWatch < inicioMesAtual;
-  }, [dataContratacaoWatch]);
+    return dataBase < inicioMesAtual;
+  }, [dataContratacaoWatch, dataReservaWatch, tipoRegistroWatch]);
 
   // Sugerir nº de parcelas pagas pelo cliente: meses entre contratação e hoje menos parcelas da empresa
   const sugestaoParcelasCliente = useMemo(() => {
