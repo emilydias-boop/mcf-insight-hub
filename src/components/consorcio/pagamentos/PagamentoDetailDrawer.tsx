@@ -28,6 +28,7 @@ const statusColors: Record<StatusParcela, string> = {
   vencendo: 'bg-yellow-100 text-yellow-800',
   atrasada: 'bg-red-100 text-red-800',
   pendente: 'bg-blue-100 text-blue-800',
+  previsto: 'bg-purple-100 text-purple-800',
 };
 
 const statusLabels: Record<StatusParcela, string> = {
@@ -35,6 +36,7 @@ const statusLabels: Record<StatusParcela, string> = {
   vencendo: 'Vencendo',
   atrasada: 'Atrasada',
   pendente: 'Pendente',
+  previsto: 'Previsto (reserva)',
 };
 
 export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
