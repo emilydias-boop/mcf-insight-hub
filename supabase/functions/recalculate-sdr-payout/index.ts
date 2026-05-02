@@ -739,6 +739,94 @@ serve(async (req) => {
           console.log(`   📊 Período efetivo: ${dataInicioEfetiva.toISOString().split('T')[0]} a ${dataFimEfetiva.toISOString().split('T')[0]}`);
         }
 
+        // ===== BUSCAR SEGMENTOS DE CARGO QUE INTERCEPTAM O MÊS =====
+        // Permite split do mês entre cargos diferentes quando houve mudança no meio do mês.
+        const employeeIdForHistory = (employeeData as any)?.id ?? null;
+        // employeeData não trouxe id; buscar pelo sdr_id
+        let employeeRowId: string | null = null;
+        {
+          const { data: empRow } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('sdr_id', sdr.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          employeeRowId = empRow?.id ?? null;
+        }
+
+        type CargoSegment = {
+          cargo_catalogo_id: string;
+          cargo_nome: string;
+          valid_from: string; // ISO date YYYY-MM-DD
+          valid_to: string;   // ISO date YYYY-MM-DD
+          dias_uteis: number;
+          ratio: number;
+          fixo: number;
+          ote: number;
+          ifood: number;
+        };
+        let cargoSegments: CargoSegment[] = [];
+        let hasMultipleCargoSegments = false;
+
+        if (employeeRowId) {
+          const monthStartIso = inicioMesDate.toISOString().split('T')[0];
+          const monthEndIso = fimMesDate.toISOString().split('T')[0];
+          const { data: histRows } = await supabase
+            .from('employee_cargo_history')
+            .select('cargo_catalogo_id, valid_from, valid_to')
+            .eq('employee_id', employeeRowId)
+            .lte('valid_from', monthEndIso)
+            .or(`valid_to.is.null,valid_to.gte.${monthStartIso}`)
+            .order('valid_from', { ascending: true });
+
+          if (histRows && histRows.length > 1) {
+            // Buscar dados dos cargos envolvidos
+            const cargoIds = Array.from(new Set(histRows.map((h: any) => h.cargo_catalogo_id).filter(Boolean)));
+            const { data: cargosData } = await supabase
+              .from('cargos_catalogo')
+              .select('id, nome_exibicao, ote_total, fixo_valor, variavel_valor')
+              .in('id', cargoIds);
+            const cargoMap = new Map<string, any>();
+            (cargosData || []).forEach((c: any) => cargoMap.set(c.id, c));
+
+            // iFood mensal vem do comp_plan (se existir) ou fallback
+            // Vamos calcular ratio por segmento após ter compPlan; por ora, montar estrutura básica
+            for (const seg of histRows as any[]) {
+              if (!seg.cargo_catalogo_id) continue;
+              const segStart = new Date(seg.valid_from + 'T00:00:00');
+              const segEnd = seg.valid_to ? new Date(seg.valid_to + 'T00:00:00') : new Date('2999-12-31');
+              // Interseção com período efetivo (admissão/demissão + mês)
+              const effStart = segStart > dataInicioEfetiva ? segStart : dataInicioEfetiva;
+              const effEnd = segEnd < dataFimEfetiva ? segEnd : dataFimEfetiva;
+              if (effStart > effEnd) continue;
+              const segDias = countBusinessDays(effStart, effEnd);
+              if (segDias <= 0) continue;
+              const cargo = cargoMap.get(seg.cargo_catalogo_id);
+              if (!cargo) continue;
+              const segRatio = diasUteisMesTotal > 0 ? segDias / diasUteisMesTotal : 0;
+              cargoSegments.push({
+                cargo_catalogo_id: seg.cargo_catalogo_id,
+                cargo_nome: cargo.nome_exibicao,
+                valid_from: effStart.toISOString().split('T')[0],
+                valid_to: effEnd.toISOString().split('T')[0],
+                dias_uteis: segDias,
+                ratio: segRatio,
+                fixo: Math.round(Number(cargo.fixo_valor) * segRatio),
+                ote: Math.round(Number(cargo.ote_total) * segRatio),
+                ifood: 0, // preenchido após compPlan
+              });
+            }
+            hasMultipleCargoSegments = cargoSegments.length > 1;
+            if (hasMultipleCargoSegments) {
+              console.log(`   🔄 ${sdr.name} teve ${cargoSegments.length} cargos no mês:`);
+              cargoSegments.forEach(s => {
+                console.log(`      - ${s.cargo_nome}: ${s.valid_from}→${s.valid_to} (${s.dias_uteis}d, fixo R$ ${s.fixo})`);
+              });
+            }
+          }
+        }
+
         // ===== FECHAMENTO MANUAL: pular cálculo automático =====
         if (employeeData?.fechamento_manual === true) {
           console.log(`   ⏭️ Fechamento manual ativo para ${sdr.name}, pulando cálculo automático`);
