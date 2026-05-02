@@ -490,7 +490,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       ? ['endereco_cep', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado']
       : ['endereco_comercial_cep', 'endereco_comercial_rua', 'endereco_comercial_numero', 'endereco_comercial_bairro', 'endereco_comercial_cidade', 'endereco_comercial_estado'],
     documentos: [],
-    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'dia_vencimento', 'origem'],
+    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem'],
     socios: ['partners'],
   }), [tipoPessoa]);
 
