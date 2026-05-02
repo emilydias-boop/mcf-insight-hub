@@ -198,7 +198,16 @@ const formSchema = z.object({
     ),
     renda: z.number().optional(),
   })).optional(),
-});
+}).refine(
+  (data) =>
+    data.tipo_registro === 'reserva'
+      ? !!data.data_reserva
+      : !!data.data_contratacao,
+  {
+    message: 'Informe a data correspondente ao tipo de cadastro',
+    path: ['data_contratacao'],
+  }
+);
 
 type FormData = z.infer<typeof formSchema>;
 
