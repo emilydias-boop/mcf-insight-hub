@@ -340,6 +340,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
   const dataContratacaoWatch = form.watch('data_contratacao');
+  const tipoRegistroWatch = form.watch('tipo_registro') || 'contratacao';
+  const dataReservaWatch = form.watch('data_reserva');
   const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
 
   // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
