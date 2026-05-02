@@ -970,7 +970,6 @@ serve(async (req) => {
             valor_docs_reuniao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.55),
             valor_tentativas: 0,
             valor_organizacao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.10),
-            valor_contratos_pagos: isCloser ? fallbackValues.variavel_total : 0,
             // iFood por nível: SDR 2 = R$ 570, outros = R$ 600
             ifood_mensal: nivel === 2 ? 570 : 600,
             ifood_ultrameta: 50,
