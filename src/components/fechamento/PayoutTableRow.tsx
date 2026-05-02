@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Eye, AlertTriangle } from 'lucide-react';
+import { Eye, AlertTriangle, RefreshCw } from 'lucide-react';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { formatCurrency } from '@/lib/formatters';
 
@@ -35,6 +35,9 @@ export function PayoutTableRow({
 
   const isProporcional = payout.dias_uteis_trabalhados != null && 
     payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || 22);
+  const cargoSegments: any[] = Array.isArray(payout.cargo_segments) ? payout.cargo_segments : [];
+  const hasCargoChange = cargoSegments.length > 1;
+  const cargoChangeDate = hasCargoChange ? cargoSegments[1]?.valid_from : null;
 
   return (
     <TableRow>
@@ -44,6 +47,16 @@ export function PayoutTableRow({
           {isProporcional && (
             <Badge variant="outline" className="text-[9px] h-4 border-yellow-500 text-yellow-500">
               {payout.dias_uteis_trabalhados}d
+            </Badge>
+          )}
+          {hasCargoChange && (
+            <Badge
+              variant="outline"
+              className="text-[9px] h-4 border-blue-500 text-blue-500 gap-0.5"
+              title={`Mudou de cargo em ${cargoChangeDate}: ${cargoSegments.map(s => s.cargo_nome).join(' → ')}`}
+            >
+              <RefreshCw className="h-2.5 w-2.5" />
+              cargo
             </Badge>
           )}
         </div>

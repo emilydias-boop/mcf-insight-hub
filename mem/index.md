@@ -1,2 +1,3 @@
 - [SDR Agendamentos Dedup](mem://business-logic/sdr-agendamentos-dedup-rule) — KPI Agendamentos deduplica por (sdr, deal, dia) com cap 2/lead, evitando inflar por duplicatas no mesmo dia.
 - [Pendentes Arithmetic Closure](mem://business-logic/pendentes-arithmetic-closure) — `pendentes` é calculado no RPC como R1 Agendada − Realizadas − No-Shows, fechando a aritmética.
+- [Cargo Change Mid-Month Pro-rata](mem://business-logic/cargo-change-mid-month-prorata) — Mudança de cargo no mês divide fixo proporcionalmente via employee_cargo_history e cargo_segments.
