@@ -712,7 +712,7 @@ serve(async (req) => {
         const fimMesDate = new Date(year, month, 0); // last day of month
         
         // Período efetivo: max(início mês, admissão) até min(fim mês, demissão)
-        const dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
+        let dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
           ? dataAdmissaoDate : inicioMesDate;
         const dataFimEfetiva = dataDemissaoDate && dataDemissaoDate < fimMesDate 
           ? dataDemissaoDate : fimMesDate;
@@ -730,9 +730,9 @@ serve(async (req) => {
         };
         
         const diasUteisMesTotal = countBusinessDays(inicioMesDate, fimMesDate);
-        const diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
-        const isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
-        const ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+        let diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+        let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+        let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
         
         if (isProporcional) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
@@ -779,6 +779,22 @@ serve(async (req) => {
             .lte('valid_from', monthEndIso)
             .or(`valid_to.is.null,valid_to.gte.${monthStartIso}`)
             .order('valid_from', { ascending: true });
+
+          // Ajuste de início efetivo quando o PRIMEIRO segmento de cargo do mês
+          // começa DEPOIS do início do mês (ex.: promoção/troca de cargo no meio do mês
+          // sem alterar data_admissao). Isso aplica pró-rata correto mesmo com 1 segmento.
+          if (histRows && histRows.length > 0) {
+            const firstSeg = histRows[0] as any;
+            const firstSegStart = new Date(firstSeg.valid_from + 'T00:00:00');
+            if (firstSegStart > dataInicioEfetiva && firstSegStart <= dataFimEfetiva) {
+              console.log(`   🔁 Ajustando início efetivo de ${sdr.name} para ${firstSeg.valid_from} (primeiro segmento de cargo do mês)`);
+              dataInicioEfetiva = firstSegStart;
+              diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+              isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+              ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+              console.log(`   📊 PRO-RATA reajustado: ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
+            }
+          }
 
           if (histRows && histRows.length > 1) {
             // Buscar dados dos cargos envolvidos
