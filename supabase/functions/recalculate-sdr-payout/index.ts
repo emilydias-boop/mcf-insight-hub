@@ -960,14 +960,17 @@ serve(async (req) => {
             sdr_id: sdr.id,
             vigencia_inicio: monthStart,
             vigencia_fim: monthEnd,
+            cargo_catalogo_id: cargoInfo?.id ?? null,
             ote_total: fallbackValues.ote_total,
             fixo_valor: fallbackValues.fixo_valor,
             variavel_total: fallbackValues.variavel_total,
-            // Pesos corretos: Agendadas 35%, Realizadas 55%, Tentativas 0%, Organização 10%
-            valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),
-            valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.55),
+            // Pesos: Closer paga 100% por contratos pagos (não usa rpg/docs/org).
+            // SDR usa Agendadas 35%, Realizadas 55%, Organização 10%.
+            valor_meta_rpg: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.35),
+            valor_docs_reuniao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.55),
             valor_tentativas: 0,
-            valor_organizacao: Math.round(fallbackValues.variavel_total * 0.10),
+            valor_organizacao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.10),
+            valor_contratos_pagos: isCloser ? fallbackValues.variavel_total : 0,
             // iFood por nível: SDR 2 = R$ 570, outros = R$ 600
             ifood_mensal: nivel === 2 ? 570 : 600,
             ifood_ultrameta: 50,
