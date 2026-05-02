@@ -789,6 +789,10 @@ serve(async (req) => {
             if (firstSegStart > dataInicioEfetiva && firstSegStart <= dataFimEfetiva) {
               console.log(`   🔁 Ajustando início efetivo de ${sdr.name} para ${firstSeg.valid_from} (primeiro segmento de cargo do mês)`);
               dataInicioEfetiva = firstSegStart;
+              diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+              isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+              ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+              console.log(`   📊 PRO-RATA reajustado: ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
             }
           }
 
