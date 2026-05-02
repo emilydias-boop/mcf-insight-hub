@@ -3388,9 +3388,10 @@ export type Database = {
           cpf_conjuge: string | null
           created_at: string
           data_contemplacao: string | null
-          data_contratacao: string
+          data_contratacao: string | null
           data_fundacao: string | null
           data_nascimento: string | null
+          data_reserva: string | null
           dia_vencimento: number
           e_transferencia: boolean | null
           email: string | null
@@ -3441,6 +3442,7 @@ export type Database = {
           tipo_contrato: string
           tipo_pessoa: string
           tipo_produto: string
+          tipo_registro: string
           tipo_servidor: string | null
           transferido_de: string | null
           updated_at: string
@@ -3459,9 +3461,10 @@ export type Database = {
           cpf_conjuge?: string | null
           created_at?: string
           data_contemplacao?: string | null
-          data_contratacao: string
+          data_contratacao?: string | null
           data_fundacao?: string | null
           data_nascimento?: string | null
+          data_reserva?: string | null
           dia_vencimento: number
           e_transferencia?: boolean | null
           email?: string | null
@@ -3512,6 +3515,7 @@ export type Database = {
           tipo_contrato?: string
           tipo_pessoa: string
           tipo_produto: string
+          tipo_registro?: string
           tipo_servidor?: string | null
           transferido_de?: string | null
           updated_at?: string
@@ -3530,9 +3534,10 @@ export type Database = {
           cpf_conjuge?: string | null
           created_at?: string
           data_contemplacao?: string | null
-          data_contratacao?: string
+          data_contratacao?: string | null
           data_fundacao?: string | null
           data_nascimento?: string | null
+          data_reserva?: string | null
           dia_vencimento?: number
           e_transferencia?: boolean | null
           email?: string | null
@@ -3583,6 +3588,7 @@ export type Database = {
           tipo_contrato?: string
           tipo_pessoa?: string
           tipo_produto?: string
+          tipo_registro?: string
           tipo_servidor?: string | null
           transferido_de?: string | null
           updated_at?: string
