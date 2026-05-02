@@ -5166,6 +5166,54 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_cargo_history: {
+        Row: {
+          cargo_catalogo_id: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          motivo: string | null
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          cargo_catalogo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          motivo?: string | null
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          cargo_catalogo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          motivo?: string | null
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_cargo_history_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_cargo_history_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_compliance: {
         Row: {
           anexo_path: string | null
@@ -9619,6 +9667,7 @@ export type Database = {
           ano_mes: string
           aprovado_em: string | null
           aprovado_por: string | null
+          cargo_segments: Json | null
           cargo_vigente: string | null
           created_at: string | null
           departamento_vigente: string | null
@@ -9660,6 +9709,7 @@ export type Database = {
           ano_mes: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_segments?: Json | null
           cargo_vigente?: string | null
           created_at?: string | null
           departamento_vigente?: string | null
@@ -9701,6 +9751,7 @@ export type Database = {
           ano_mes?: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_segments?: Json | null
           cargo_vigente?: string | null
           created_at?: string | null
           departamento_vigente?: string | null
