@@ -960,14 +960,16 @@ serve(async (req) => {
             sdr_id: sdr.id,
             vigencia_inicio: monthStart,
             vigencia_fim: monthEnd,
+            cargo_catalogo_id: cargoInfo?.id ?? null,
             ote_total: fallbackValues.ote_total,
             fixo_valor: fallbackValues.fixo_valor,
             variavel_total: fallbackValues.variavel_total,
-            // Pesos corretos: Agendadas 35%, Realizadas 55%, Tentativas 0%, Organização 10%
-            valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),
-            valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.55),
+            // Pesos: Closer paga 100% por contratos pagos (não usa rpg/docs/org).
+            // SDR usa Agendadas 35%, Realizadas 55%, Organização 10%.
+            valor_meta_rpg: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.35),
+            valor_docs_reuniao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.55),
             valor_tentativas: 0,
-            valor_organizacao: Math.round(fallbackValues.variavel_total * 0.10),
+            valor_organizacao: isCloser ? 0 : Math.round(fallbackValues.variavel_total * 0.10),
             // iFood por nível: SDR 2 = R$ 570, outros = R$ 600
             ifood_mensal: nivel === 2 ? 570 : 600,
             ifood_ultrameta: 50,
@@ -1078,6 +1080,23 @@ serve(async (req) => {
           if (genericData && genericData.length > 0) {
             metricasGenericas = genericData;
             console.log(`   📋 Métricas genéricas encontradas: ${metricasGenericas.map(m => `${m.nome_metrica}(meta%=${m.meta_percentual || 'null'})`).join(', ')}`);
+          } else {
+            // Fallback: buscar métricas genéricas do mês mais recente disponível antes de ano_mes
+            const { data: fallbackGen } = await supabase
+              .from('fechamento_metricas_mes')
+              .select('ano_mes, nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
+              .eq('cargo_catalogo_id', resolvedCargoId)
+              .is('squad', null)
+              .eq('ativo', true)
+              .lt('ano_mes', ano_mes)
+              .order('ano_mes', { ascending: false })
+              .limit(20);
+            if (fallbackGen && fallbackGen.length > 0) {
+              const mostRecent = fallbackGen[0].ano_mes;
+              metricasGenericas = fallbackGen.filter((m: any) => m.ano_mes === mostRecent)
+                .map(({ ano_mes: _am, ...rest }: any) => rest);
+              console.log(`   ↩️ Fallback genéricas: usando métricas de ${mostRecent} para ${ano_mes}`);
+            }
           }
           
           // Segundo: buscar métricas específicas do squad
@@ -1106,6 +1125,23 @@ serve(async (req) => {
                   }
                   return m;
                 });
+              }
+            } else {
+              // Fallback: métricas do squad em mês anterior
+              const { data: fallbackSquad } = await supabase
+                .from('fechamento_metricas_mes')
+                .select('ano_mes, nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
+                .eq('cargo_catalogo_id', resolvedCargoId)
+                .eq('squad', sdr.squad)
+                .eq('ativo', true)
+                .lt('ano_mes', ano_mes)
+                .order('ano_mes', { ascending: false })
+                .limit(20);
+              if (fallbackSquad && fallbackSquad.length > 0) {
+                const mostRecent = fallbackSquad[0].ano_mes;
+                metricas = fallbackSquad.filter((m: any) => m.ano_mes === mostRecent)
+                  .map(({ ano_mes: _am, ...rest }: any) => rest);
+                console.log(`   ↩️ Fallback squad: usando métricas de ${mostRecent} para ${ano_mes} (squad=${sdr.squad})`);
               }
             }
           }
