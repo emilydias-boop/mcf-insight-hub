@@ -355,14 +355,15 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
   // Sugerir nº de parcelas pagas pelo cliente: meses entre contratação e hoje menos parcelas da empresa
   const sugestaoParcelasCliente = useMemo(() => {
-    if (!isCadastroRetroativo || !dataContratacaoWatch) return 0;
+    const dataBase = tipoRegistroWatch === 'reserva' ? dataReservaWatch : dataContratacaoWatch;
+    if (!isCadastroRetroativo || !dataBase) return 0;
     const hoje = new Date();
     const meses =
-      (hoje.getFullYear() - dataContratacaoWatch.getFullYear()) * 12 +
-      (hoje.getMonth() - dataContratacaoWatch.getMonth());
+      (hoje.getFullYear() - dataBase.getFullYear()) * 12 +
+      (hoje.getMonth() - dataBase.getMonth());
     const restante = Math.max(0, meses - (parcelasPagasEmpresa || 0));
     return Math.min(restante, (prazoMeses || 240) - (parcelasPagasEmpresa || 0));
-  }, [isCadastroRetroativo, dataContratacaoWatch, parcelasPagasEmpresa, prazoMeses]);
+  }, [isCadastroRetroativo, dataContratacaoWatch, dataReservaWatch, tipoRegistroWatch, parcelasPagasEmpresa, prazoMeses]);
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
