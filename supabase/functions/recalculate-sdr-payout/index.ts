@@ -712,7 +712,7 @@ serve(async (req) => {
         const fimMesDate = new Date(year, month, 0); // last day of month
         
         // Período efetivo: max(início mês, admissão) até min(fim mês, demissão)
-        const dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
+        let dataInicioEfetiva = dataAdmissaoDate && dataAdmissaoDate > inicioMesDate 
           ? dataAdmissaoDate : inicioMesDate;
         const dataFimEfetiva = dataDemissaoDate && dataDemissaoDate < fimMesDate 
           ? dataDemissaoDate : fimMesDate;
@@ -730,9 +730,9 @@ serve(async (req) => {
         };
         
         const diasUteisMesTotal = countBusinessDays(inicioMesDate, fimMesDate);
-        const diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
-        const isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
-        const ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+        let diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
+        let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
+        let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
         
         if (isProporcional) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
