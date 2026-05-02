@@ -164,7 +164,9 @@ export interface CreateConsorcioCardInput {
   tipo_produto: TipoProduto;
   tipo_contrato: TipoContrato;
   parcelas_pagas_empresa: number;
-  data_contratacao: string;
+  data_contratacao?: string | null;
+  data_reserva?: string | null;
+  tipo_registro?: 'reserva' | 'contratacao';
   dia_vencimento: number;
   inicio_segunda_parcela?: InicioSegundaParcela;
   origem: OrigemConsorcio;
