@@ -1500,6 +1500,27 @@ serve(async (req) => {
           console.log(`   💰 PRO-RATA aplicado para ${sdr.name}: Fixo=R$ ${payoutFields.valor_fixo}, iFood=R$ ${payoutFields.ifood_mensal}, MetaAgend=${payoutFields.meta_agendadas_ajustada}, MetaTent=${payoutFields.meta_tentativas_ajustada}, Total=R$ ${payoutFields.total_conta}`);
         }
 
+        // ===== SOBRESCREVER COM SOMA POR SEGMENTOS DE CARGO (mudança de cargo no meio do mês) =====
+        if (hasMultipleCargoSegments) {
+          // Soma fixo proporcional por cargo de cada segmento
+          const fixoFromSegments = cargoSegments.reduce((sum, s) => sum + s.fixo, 0);
+          // iFood proporcional ao total de dias trabalhados (independente do cargo)
+          const ifoodBase = (calculatedValues as any).ifood_mensal_base ?? payoutFields.ifood_mensal;
+          // Como já aplicamos isProporcional acima, o ifood_mensal já está pro-rata pelo total de dias.
+          // Apenas substituir valor_fixo pela soma por segmento (mais preciso que ratio único).
+          payoutFields.valor_fixo = fixoFromSegments;
+          payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
+
+          // Distribuir iFood entre segmentos para auditoria
+          const totalDiasSegs = cargoSegments.reduce((s, c) => s + c.dias_uteis, 0);
+          if (totalDiasSegs > 0) {
+            cargoSegments.forEach(s => {
+              s.ifood = Math.round(payoutFields.ifood_mensal * (s.dias_uteis / totalDiasSegs));
+            });
+          }
+          console.log(`   🔄 SEGMENTOS de cargo aplicados para ${sdr.name}: Fixo total = R$ ${payoutFields.valor_fixo} (soma de ${cargoSegments.length} segmentos)`);
+        }
+
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
           .from('sdr_month_payout')
@@ -1510,6 +1531,7 @@ serve(async (req) => {
             dias_uteis_trabalhados: isProporcional ? diasUteisTrabalhados : null,
             nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
+            cargo_segments: hasMultipleCargoSegments ? cargoSegments : null,
             status: existingPayout?.status || 'DRAFT',
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
