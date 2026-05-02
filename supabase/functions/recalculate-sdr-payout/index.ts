@@ -1504,10 +1504,6 @@ serve(async (req) => {
         if (hasMultipleCargoSegments) {
           // Soma fixo proporcional por cargo de cada segmento
           const fixoFromSegments = cargoSegments.reduce((sum, s) => sum + s.fixo, 0);
-          // iFood proporcional ao total de dias trabalhados (independente do cargo)
-          const ifoodBase = (calculatedValues as any).ifood_mensal_base ?? payoutFields.ifood_mensal;
-          // Como já aplicamos isProporcional acima, o ifood_mensal já está pro-rata pelo total de dias.
-          // Apenas substituir valor_fixo pela soma por segmento (mais preciso que ratio único).
           payoutFields.valor_fixo = fixoFromSegments;
           payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
 
@@ -1528,7 +1524,7 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
-            dias_uteis_trabalhados: isProporcional ? diasUteisTrabalhados : null,
+            dias_uteis_trabalhados: (isProporcional || hasMultipleCargoSegments) ? diasUteisTrabalhados : null,
             nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             cargo_segments: hasMultipleCargoSegments ? cargoSegments : null,
