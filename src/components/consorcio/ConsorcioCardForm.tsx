@@ -106,6 +106,7 @@ function parseMonetaryInput(value: string): number {
 const formSchema = z.object({
   tipo_pessoa: z.enum(['pf', 'pj']),
   categoria: z.enum(['inside', 'life']),
+  tipo_registro: z.enum(['reserva', 'contratacao']).default('contratacao'),
   
   // Cota
   grupo: z.string().min(1, 'Grupo é obrigatório'),
@@ -116,7 +117,8 @@ const formSchema = z.object({
   empresa_paga_parcelas: z.enum(['sim', 'nao']),
   tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
   parcelas_pagas_empresa: z.number().min(0).optional(),
-  data_contratacao: z.date(),
+  data_reserva: z.date().optional().nullable(),
+  data_contratacao: z.date().optional().nullable(),
   dia_vencimento: z.number().min(1).max(31),
   inicio_segunda_parcela: z.enum(['proximo_mes', 'pular_mes', 'automatico']).default('automatico'),
   // Cadastro retroativo
