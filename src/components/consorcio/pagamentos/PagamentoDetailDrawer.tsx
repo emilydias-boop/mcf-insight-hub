@@ -1,9 +1,17 @@
+import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Repeat } from 'lucide-react';
+import { format } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { PagamentoRow, useCardInstallments, StatusParcela } from '@/hooks/useConsorcioPagamentos';
 import { useBoletosByCard } from '@/hooks/useConsorcioBoletos';
+import { useConvertReservaToContratacao } from '@/hooks/useConsorcio';
 import { BoletoSection } from './BoletoSection';
 
 interface Props {
@@ -42,12 +50,17 @@ const statusLabels: Record<StatusParcela, string> = {
 export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
   const { data: installments, isLoading } = useCardInstallments(row?.card_id ?? null);
   const { data: boletos } = useBoletosByCard(row?.card_id ?? null);
+  const convert = useConvertReservaToContratacao();
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [dataContratacao, setDataContratacao] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   if (!row) return null;
 
   const pagas = installments?.filter(i => calcStatus(i) === 'paga').length ?? 0;
   const atrasadas = installments?.filter(i => calcStatus(i) === 'atrasada').length ?? 0;
   const pendentes = installments?.filter(i => calcStatus(i) === 'pendente' || calcStatus(i) === 'vencendo').length ?? 0;
+  const previstas = installments?.filter(i => (i as any).status === 'previsto').length ?? 0;
+  const isReserva = previstas > 0;
 
   // Map boletos by installment_id for quick lookup
   const boletoByInstallment = new Map(
@@ -63,6 +76,25 @@ export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
         </SheetHeader>
 
         <div className="mt-6 space-y-4">
+          {isReserva && (
+            <div className="rounded-lg border border-purple-200 dark:border-purple-900/40 bg-purple-50 dark:bg-purple-900/10 p-3 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                <p className="font-semibold text-purple-800 dark:text-purple-300">Cota em Reserva</p>
+                <p className="text-xs text-muted-foreground">
+                  {previstas} parcela(s) prevista(s). Ao confirmar a contratação, as datas serão ajustadas.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setConvertOpen(true)}
+                className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <Repeat className="h-4 w-4" />
+                Converter em Contratação
+              </Button>
+            </div>
+          )}
+
           {/* Summary */}
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-3 text-center">
@@ -117,6 +149,43 @@ export function PagamentoDetailDrawer({ row, open, onOpenChange }: Props) {
           </div>
         </div>
       </SheetContent>
+
+      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Converter Reserva em Contratação</DialogTitle>
+            <DialogDescription>
+              Informe a data em que a 1ª parcela foi paga. Todas as parcelas previstas serão recalculadas a partir dessa data e marcadas como pendente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label htmlFor="data-contratacao">Data de contratação</Label>
+            <Input
+              id="data-contratacao"
+              type="date"
+              value={dataContratacao}
+              onChange={(e) => setDataContratacao(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertOpen(false)} disabled={convert.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!row) return;
+                convert.mutate(
+                  { cardId: row.card_id, dataContratacao, inicioSegundaParcela: 'automatico' },
+                  { onSuccess: () => setConvertOpen(false) }
+                );
+              }}
+              disabled={convert.isPending || !dataContratacao}
+            >
+              {convert.isPending ? 'Convertendo...' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

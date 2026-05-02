@@ -660,3 +660,99 @@ export function useMyConsorcioCards(vendedorId: string | null) {
     enabled: !!vendedorId,
   });
 }
+
+/**
+ * Converte uma cota do tipo 'reserva' em 'contratacao'.
+ * Atualiza data_contratacao, regenera as datas de vencimento das parcelas a partir
+ * da nova base e marca parcelas com status 'previsto' como 'pendente'.
+ */
+export function useConvertReservaToContratacao() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      cardId,
+      dataContratacao,
+      inicioSegundaParcela,
+    }: {
+      cardId: string;
+      dataContratacao: string; // YYYY-MM-DD
+      inicioSegundaParcela?: 'proximo_mes' | 'pular_mes' | 'automatico';
+    }) => {
+      // 1. Buscar cota
+      const { data: card, error: cardErr } = await supabase
+        .from('consortium_cards')
+        .select('id, dia_vencimento, prazo_meses, tipo_registro')
+        .eq('id', cardId)
+        .single();
+      if (cardErr) throw cardErr;
+      if (card.tipo_registro !== 'reserva') {
+        throw new Error('Esta cota já está contratada.');
+      }
+
+      // 2. Buscar parcelas
+      const { data: installments, error: instErr } = await supabase
+        .from('consortium_installments')
+        .select('id, numero_parcela, status')
+        .eq('card_id', cardId)
+        .order('numero_parcela');
+      if (instErr) throw instErr;
+
+      // 3. Calcular datas a partir da data de contratação
+      const [yy, mm, dd] = dataContratacao.split('-').map(Number);
+      const baseDate = new Date(yy, mm - 1, dd);
+      const inicio = inicioSegundaParcela || 'automatico';
+      let offsetSegunda: number;
+      if (inicio === 'proximo_mes') offsetSegunda = 1;
+      else if (inicio === 'pular_mes') offsetSegunda = 2;
+      else offsetSegunda = baseDate.getDate() > 16 ? 2 : 1;
+
+      // 4. Atualizar cada parcela individualmente
+      for (const inst of installments || []) {
+        let dataVenc: Date;
+        if (inst.numero_parcela === 1) {
+          dataVenc = baseDate;
+        } else {
+          const monthOffset = offsetSegunda + (inst.numero_parcela - 2);
+          const mesAlvo = baseDate.getMonth() + monthOffset;
+          const anoAlvo = baseDate.getFullYear() + Math.floor(mesAlvo / 12);
+          const mesNorm = ((mesAlvo % 12) + 12) % 12;
+          const ultimoDia = new Date(anoAlvo, mesNorm + 1, 0).getDate();
+          const diaAj = Math.min(card.dia_vencimento, ultimoDia);
+          dataVenc = calcularProximoDiaUtil(new Date(anoAlvo, mesNorm, diaAj));
+        }
+        const update: Record<string, unknown> = {
+          data_vencimento: dataVenc.toISOString().split('T')[0],
+        };
+        if (inst.status === 'previsto') update.status = 'pendente';
+        const { error: upErr } = await supabase
+          .from('consortium_installments')
+          .update(update)
+          .eq('id', inst.id);
+        if (upErr) throw upErr;
+      }
+
+      // 5. Atualizar a cota
+      const { error: updateErr } = await supabase
+        .from('consortium_cards')
+        .update({
+          tipo_registro: 'contratacao',
+          data_contratacao: dataContratacao,
+        })
+        .eq('id', cardId);
+      if (updateErr) throw updateErr;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-card-details', variables.cardId] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'] });
+      queryClient.invalidateQueries({ queryKey: ['card-installments-detail', variables.cardId] });
+      toast.success('Reserva convertida em contratação!');
+    },
+    onError: (error: any) => {
+      console.error('Erro ao converter reserva:', error);
+      toast.error(`Erro ao converter reserva: ${error?.message || 'Erro desconhecido'}`);
+    },
+  });
+}
