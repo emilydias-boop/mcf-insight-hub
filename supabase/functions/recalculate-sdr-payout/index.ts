@@ -780,6 +780,18 @@ serve(async (req) => {
             .or(`valid_to.is.null,valid_to.gte.${monthStartIso}`)
             .order('valid_from', { ascending: true });
 
+          // Ajuste de início efetivo quando o PRIMEIRO segmento de cargo do mês
+          // começa DEPOIS do início do mês (ex.: promoção/troca de cargo no meio do mês
+          // sem alterar data_admissao). Isso aplica pró-rata correto mesmo com 1 segmento.
+          if (histRows && histRows.length > 0) {
+            const firstSeg = histRows[0] as any;
+            const firstSegStart = new Date(firstSeg.valid_from + 'T00:00:00');
+            if (firstSegStart > dataInicioEfetiva && firstSegStart <= dataFimEfetiva) {
+              console.log(`   🔁 Ajustando início efetivo de ${sdr.name} para ${firstSeg.valid_from} (primeiro segmento de cargo do mês)`);
+              dataInicioEfetiva = firstSegStart;
+            }
+          }
+
           if (histRows && histRows.length > 1) {
             // Buscar dados dos cargos envolvidos
             const cargoIds = Array.from(new Set(histRows.map((h: any) => h.cargo_catalogo_id).filter(Boolean)));
