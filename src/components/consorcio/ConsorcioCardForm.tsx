@@ -1306,7 +1306,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="data_contratacao"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Data de Contratação *</FormLabel>
+                        <FormLabel>
+                          {tipoRegistroWatch === 'reserva'
+                            ? 'Data de Contratação (opcional)'
+                            : 'Data de Contratação * (1ª parcela paga)'}
+                        </FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -1362,6 +1366,87 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                         ))}
                           </SelectContent>
                         </Select>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Tipo de cadastro: Reserva ou Contratação */}
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                  <FormField
+                    control={form.control}
+                    name="tipo_registro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Cadastro *</FormLabel>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={field.value === 'reserva' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => field.onChange('reserva')}
+                          >
+                            🔖 Reserva (acordada)
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === 'contratacao' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => field.onChange('contratacao')}
+                          >
+                            ✅ Contratação (1ª parcela paga)
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {field.value === 'reserva'
+                            ? 'Cota acordada, mas a 1ª parcela ainda não foi paga. Parcelas serão geradas como previsão.'
+                            : 'Cota com a 1ª parcela já paga. Parcelas serão geradas como pendentes/pagas.'}
+                        </p>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="data_reserva"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>
+                          {tipoRegistroWatch === 'reserva'
+                            ? 'Data da Reserva *'
+                            : 'Data da Reserva (opcional)'}
+                        </FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  'w-full pl-3 text-left font-normal',
+                                  !field.value && 'text-muted-foreground'
+                                )}
+                              >
+                                {field.value ? (
+                                  format(field.value, 'dd/MM/yyyy', { locale: ptBR })
+                                ) : (
+                                  <span>Selecione</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ?? undefined}
+                              onSelect={field.onChange}
+                              locale={ptBR}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
