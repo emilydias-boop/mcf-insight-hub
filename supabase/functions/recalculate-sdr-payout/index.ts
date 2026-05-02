@@ -1081,6 +1081,23 @@ serve(async (req) => {
           if (genericData && genericData.length > 0) {
             metricasGenericas = genericData;
             console.log(`   📋 Métricas genéricas encontradas: ${metricasGenericas.map(m => `${m.nome_metrica}(meta%=${m.meta_percentual || 'null'})`).join(', ')}`);
+          } else {
+            // Fallback: buscar métricas genéricas do mês mais recente disponível antes de ano_mes
+            const { data: fallbackGen } = await supabase
+              .from('fechamento_metricas_mes')
+              .select('ano_mes, nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
+              .eq('cargo_catalogo_id', resolvedCargoId)
+              .is('squad', null)
+              .eq('ativo', true)
+              .lt('ano_mes', ano_mes)
+              .order('ano_mes', { ascending: false })
+              .limit(20);
+            if (fallbackGen && fallbackGen.length > 0) {
+              const mostRecent = fallbackGen[0].ano_mes;
+              metricasGenericas = fallbackGen.filter((m: any) => m.ano_mes === mostRecent)
+                .map(({ ano_mes: _am, ...rest }: any) => rest);
+              console.log(`   ↩️ Fallback genéricas: usando métricas de ${mostRecent} para ${ano_mes}`);
+            }
           }
           
           // Segundo: buscar métricas específicas do squad
@@ -1109,6 +1126,23 @@ serve(async (req) => {
                   }
                   return m;
                 });
+              }
+            } else {
+              // Fallback: métricas do squad em mês anterior
+              const { data: fallbackSquad } = await supabase
+                .from('fechamento_metricas_mes')
+                .select('ano_mes, nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
+                .eq('cargo_catalogo_id', resolvedCargoId)
+                .eq('squad', sdr.squad)
+                .eq('ativo', true)
+                .lt('ano_mes', ano_mes)
+                .order('ano_mes', { ascending: false })
+                .limit(20);
+              if (fallbackSquad && fallbackSquad.length > 0) {
+                const mostRecent = fallbackSquad[0].ano_mes;
+                metricas = fallbackSquad.filter((m: any) => m.ano_mes === mostRecent)
+                  .map(({ ano_mes: _am, ...rest }: any) => rest);
+                console.log(`   ↩️ Fallback squad: usando métricas de ${mostRecent} para ${ano_mes} (squad=${sdr.squad})`);
               }
             }
           }
