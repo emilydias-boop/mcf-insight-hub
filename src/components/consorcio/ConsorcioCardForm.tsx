@@ -106,6 +106,7 @@ function parseMonetaryInput(value: string): number {
 const formSchema = z.object({
   tipo_pessoa: z.enum(['pf', 'pj']),
   categoria: z.enum(['inside', 'life']),
+  tipo_registro: z.enum(['reserva', 'contratacao']).default('contratacao'),
   
   // Cota
   grupo: z.string().min(1, 'Grupo é obrigatório'),
@@ -116,7 +117,8 @@ const formSchema = z.object({
   empresa_paga_parcelas: z.enum(['sim', 'nao']),
   tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
   parcelas_pagas_empresa: z.number().min(0).optional(),
-  data_contratacao: z.date(),
+  data_reserva: z.date().optional().nullable(),
+  data_contratacao: z.date().optional().nullable(),
   dia_vencimento: z.number().min(1).max(31),
   inicio_segunda_parcela: z.enum(['proximo_mes', 'pular_mes', 'automatico']).default('automatico'),
   // Cadastro retroativo
@@ -196,7 +198,16 @@ const formSchema = z.object({
     ),
     renda: z.number().optional(),
   })).optional(),
-});
+}).refine(
+  (data) =>
+    data.tipo_registro === 'reserva'
+      ? !!data.data_reserva
+      : !!data.data_contratacao,
+  {
+    message: 'Informe a data correspondente ao tipo de cadastro',
+    path: ['data_contratacao'],
+  }
+);
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -229,6 +240,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     defaultValues: card ? {
       tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
       categoria: (card.categoria as 'inside' | 'life') || 'inside',
+      tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
       tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
@@ -240,7 +252,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       cota: card.cota,
       valor_credito: Number(card.valor_credito),
       prazo_meses: card.prazo_meses,
-      data_contratacao: parseDateWithoutTimezone(card.data_contratacao),
+      data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
+      data_reserva: (card as any).data_reserva ? parseDateWithoutTimezone((card as any).data_reserva) : undefined,
       vendedor_id: card.vendedor_id || undefined,
       vendedor_name: card.vendedor_name || undefined,
       // Controle adicional
@@ -290,6 +303,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     } : {
       tipo_pessoa: 'pf',
       categoria: 'inside',
+      tipo_registro: 'contratacao',
       tipo_produto: 'select',
       empresa_paga_parcelas: 'nao',
       tipo_contrato: undefined,
@@ -326,26 +340,30 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
   const dataContratacaoWatch = form.watch('data_contratacao');
+  const tipoRegistroWatch = form.watch('tipo_registro') || 'contratacao';
+  const dataReservaWatch = form.watch('data_reserva');
   const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
 
   // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
   const isCadastroRetroativo = useMemo(() => {
-    if (!dataContratacaoWatch) return false;
+    const dataBase = tipoRegistroWatch === 'reserva' ? dataReservaWatch : dataContratacaoWatch;
+    if (!dataBase) return false;
     const hoje = new Date();
     const inicioMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return dataContratacaoWatch < inicioMesAtual;
-  }, [dataContratacaoWatch]);
+    return dataBase < inicioMesAtual;
+  }, [dataContratacaoWatch, dataReservaWatch, tipoRegistroWatch]);
 
   // Sugerir nº de parcelas pagas pelo cliente: meses entre contratação e hoje menos parcelas da empresa
   const sugestaoParcelasCliente = useMemo(() => {
-    if (!isCadastroRetroativo || !dataContratacaoWatch) return 0;
+    const dataBase = tipoRegistroWatch === 'reserva' ? dataReservaWatch : dataContratacaoWatch;
+    if (!isCadastroRetroativo || !dataBase) return 0;
     const hoje = new Date();
     const meses =
-      (hoje.getFullYear() - dataContratacaoWatch.getFullYear()) * 12 +
-      (hoje.getMonth() - dataContratacaoWatch.getMonth());
+      (hoje.getFullYear() - dataBase.getFullYear()) * 12 +
+      (hoje.getMonth() - dataBase.getMonth());
     const restante = Math.max(0, meses - (parcelasPagasEmpresa || 0));
     return Math.min(restante, (prazoMeses || 240) - (parcelasPagasEmpresa || 0));
-  }, [isCadastroRetroativo, dataContratacaoWatch, parcelasPagasEmpresa, prazoMeses]);
+  }, [isCadastroRetroativo, dataContratacaoWatch, dataReservaWatch, tipoRegistroWatch, parcelasPagasEmpresa, prazoMeses]);
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
@@ -472,7 +490,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       ? ['endereco_cep', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado']
       : ['endereco_comercial_cep', 'endereco_comercial_rua', 'endereco_comercial_numero', 'endereco_comercial_bairro', 'endereco_comercial_cidade', 'endereco_comercial_estado'],
     documentos: [],
-    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'dia_vencimento', 'origem'],
+    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem'],
     socios: ['partners'],
   }), [tipoPessoa]);
 
@@ -493,6 +511,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         form.reset({
           tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
           categoria: (card.categoria as 'inside' | 'life') || 'inside',
+          tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
           tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
           empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
           tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
@@ -504,7 +523,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           cota: card.cota,
           valor_credito: Number(card.valor_credito),
           prazo_meses: card.prazo_meses,
-          data_contratacao: parseDateWithoutTimezone(card.data_contratacao),
+          data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
+          data_reserva: (card as any).data_reserva ? parseDateWithoutTimezone((card as any).data_reserva) : undefined,
           vendedor_id: card.vendedor_id || undefined,
           vendedor_name: card.vendedor_name || undefined,
           nome_completo: card.nome_completo || undefined,
@@ -800,7 +820,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       tipo_produto: tipoProdutoDerivado,
       tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
       parcelas_pagas_empresa: calculatedParcelas,
-      data_contratacao: formatDateForDB(data.data_contratacao),
+      tipo_registro: data.tipo_registro,
+      data_contratacao: data.data_contratacao ? formatDateForDB(data.data_contratacao) : null,
+      data_reserva: data.data_reserva ? formatDateForDB(data.data_reserva) : null,
       dia_vencimento: data.dia_vencimento,
       inicio_segunda_parcela: data.inicio_segunda_parcela || 'automatico',
       origem: data.origem,
@@ -1284,7 +1306,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="data_contratacao"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Data de Contratação *</FormLabel>
+                        <FormLabel>
+                          {tipoRegistroWatch === 'reserva'
+                            ? 'Data de Contratação (opcional)'
+                            : 'Data de Contratação * (1ª parcela paga)'}
+                        </FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -1340,6 +1366,87 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                         ))}
                           </SelectContent>
                         </Select>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Tipo de cadastro: Reserva ou Contratação */}
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                  <FormField
+                    control={form.control}
+                    name="tipo_registro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Cadastro *</FormLabel>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={field.value === 'reserva' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => field.onChange('reserva')}
+                          >
+                            🔖 Reserva (acordada)
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={field.value === 'contratacao' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => field.onChange('contratacao')}
+                          >
+                            ✅ Contratação (1ª parcela paga)
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {field.value === 'reserva'
+                            ? 'Cota acordada, mas a 1ª parcela ainda não foi paga. Parcelas serão geradas como previsão.'
+                            : 'Cota com a 1ª parcela já paga. Parcelas serão geradas como pendentes/pagas.'}
+                        </p>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="data_reserva"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>
+                          {tipoRegistroWatch === 'reserva'
+                            ? 'Data da Reserva *'
+                            : 'Data da Reserva (opcional)'}
+                        </FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  'w-full pl-3 text-left font-normal',
+                                  !field.value && 'text-muted-foreground'
+                                )}
+                              >
+                                {field.value ? (
+                                  format(field.value, 'dd/MM/yyyy', { locale: ptBR })
+                                ) : (
+                                  <span>Selecione</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value ?? undefined}
+                              onSelect={field.onChange}
+                              locale={ptBR}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type StatusParcela = 'paga' | 'vencendo' | 'atrasada' | 'pendente';
+export type StatusParcela = 'paga' | 'vencendo' | 'atrasada' | 'pendente' | 'previsto';
 export type SituacaoCota = 'quitada' | 'pendente' | 'em_atraso' | 'cancelada';
 
 export interface PagamentoRow {
@@ -36,11 +36,14 @@ export interface PagamentosKPIData {
   totalRecebido: number;
   totalPendente: number;
   totalAtraso: number;
+  totalPrevisto: number;
   parcelasPagas: number;
   parcelasPendentes: number;
   parcelasVencidas: number;
+  parcelasPrevistas: number;
   cotasInadimplentes: number;
   cotasQuitadas: number;
+  cotasReservadas: number;
 }
 
 export interface PagamentosFiltersState {
@@ -62,6 +65,7 @@ export const defaultFilters: PagamentosFiltersState = {
 };
 
 function calcStatusParcela(inst: { status: string; data_pagamento: string | null; data_vencimento: string }): StatusParcela {
+  if (inst.status === 'previsto') return 'previsto';
   if (inst.status === 'pago' || inst.data_pagamento) return 'paga';
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
@@ -258,13 +262,13 @@ export function useConsorcioPagamentos(
   // KPIs - based on filteredData so they follow all active filters
   const kpis = useMemo((): PagamentosKPIData => {
     if (!filteredData.length) return {
-      totalRecebido: 0, totalPendente: 0, totalAtraso: 0,
-      parcelasPagas: 0, parcelasPendentes: 0, parcelasVencidas: 0,
-      cotasInadimplentes: 0, cotasQuitadas: 0,
+      totalRecebido: 0, totalPendente: 0, totalAtraso: 0, totalPrevisto: 0,
+      parcelasPagas: 0, parcelasPendentes: 0, parcelasVencidas: 0, parcelasPrevistas: 0,
+      cotasInadimplentes: 0, cotasQuitadas: 0, cotasReservadas: 0,
     };
 
-    let totalRecebido = 0, totalPendente = 0, totalAtraso = 0;
-    let parcelasPagas = 0, parcelasPendentes = 0, parcelasVencidas = 0;
+    let totalRecebido = 0, totalPendente = 0, totalAtraso = 0, totalPrevisto = 0;
+    let parcelasPagas = 0, parcelasPendentes = 0, parcelasVencidas = 0, parcelasPrevistas = 0;
 
     for (const p of filteredData) {
       if (p.status_calculado === 'paga') {
@@ -273,6 +277,9 @@ export function useConsorcioPagamentos(
       } else if (p.status_calculado === 'atrasada') {
         totalAtraso += Number(p.valor_parcela);
         parcelasVencidas++;
+      } else if (p.status_calculado === 'previsto') {
+        totalPrevisto += Number(p.valor_parcela);
+        parcelasPrevistas++;
       } else {
         totalPendente += Number(p.valor_parcela);
         parcelasPendentes++;
@@ -289,7 +296,18 @@ export function useConsorcioPagamentos(
       if (sit === 'quitada') cotasQuitadas++;
     }
 
-    return { totalRecebido, totalPendente, totalAtraso, parcelasPagas, parcelasPendentes, parcelasVencidas, cotasInadimplentes, cotasQuitadas };
+    // Cotas reservadas: cards que têm ao menos uma parcela com status 'previsto'
+    const cotasReservadasSet = new Set<string>();
+    for (const p of filteredData) {
+      if (p.status_calculado === 'previsto') cotasReservadasSet.add(p.card_id);
+    }
+
+    return {
+      totalRecebido, totalPendente, totalAtraso, totalPrevisto,
+      parcelasPagas, parcelasPendentes, parcelasVencidas, parcelasPrevistas,
+      cotasInadimplentes, cotasQuitadas,
+      cotasReservadas: cotasReservadasSet.size,
+    };
   }, [filteredData]);
 
   // Pagination

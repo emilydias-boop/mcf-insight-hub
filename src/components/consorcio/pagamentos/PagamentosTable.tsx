@@ -19,6 +19,7 @@ const statusBadgeConfig: Record<StatusParcela, { label: string; className: strin
   vencendo: { label: 'Vencendo', className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
   atrasada: { label: 'Atrasada', className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
   pendente: { label: 'Pendente', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
+  previsto: { label: 'Previsto', className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
 };
 
 const situacaoBadgeConfig: Record<SituacaoCota, { label: string; className: string }> = {

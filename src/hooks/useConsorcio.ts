@@ -241,7 +241,13 @@ export function useCreateConsorcioCard() {
       }
 
       // 3. Generate installments - Parse date without timezone issues
-      const [year, month, day] = input.data_contratacao.split('-').map(Number);
+      // Para reserva: usa data_reserva como base (parcelas previstas).
+      // Para contratação: usa data_contratacao (1ª parcela paga no ato).
+      const isReserva = input.tipo_registro === 'reserva';
+      const dataBaseStr = isReserva
+        ? (input.data_reserva || input.data_contratacao!)
+        : (input.data_contratacao || input.data_reserva!);
+      const [year, month, day] = dataBaseStr.split('-').map(Number);
       const dataContratacao = new Date(year, month - 1, day);
       
       // Determine offset for 2nd installment based on inicio_segunda_parcela
@@ -329,7 +335,7 @@ export function useCreateConsorcioCard() {
           valor_parcela: input.valor_credito / input.prazo_meses, // Simplified calculation
           valor_comissao: valorComissao,
           data_vencimento: dataVencimento.toISOString().split('T')[0],
-          status,
+          status: isReserva ? 'previsto' : status,
           ...(dataPagamento ? { data_pagamento: dataPagamento } : {}),
         } as any);
       }
