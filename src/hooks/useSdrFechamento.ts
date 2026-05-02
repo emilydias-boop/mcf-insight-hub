@@ -277,12 +277,17 @@ export const useSdrPayouts = (anoMes: string, filters?: {
       
       // Apply filters
       if (filters) {
-        // Show active SDRs; for inactive (desligados), only show if terminated in the selected month
+        // Fonte de verdade do desligamento é employees (status + data_demissao).
+        // sdr.active pode estar fora de sincronia. Mostrar o colaborador apenas no
+        // mês do desligamento (para acerto/pro-rata) e nos meses anteriores.
         result = result.filter(p => {
-          if (p.sdr?.active !== false) return true;
           const employee = (p as any).employee as EmployeeWithCargo | null;
-          if (!employee?.data_demissao) return false;
-          return employee.data_demissao.substring(0, 7) === anoMes;
+          const isTerminated = !!employee?.data_demissao || p.sdr?.active === false;
+          if (!isTerminated) return true;
+          const demissao = employee?.data_demissao;
+          if (!demissao) return false;
+          // Aparece no mês da demissão e em meses anteriores; oculto em meses posteriores
+          return demissao.substring(0, 7) >= anoMes;
         });
         
         // Exclude R2 Partners (sócios) from closing
