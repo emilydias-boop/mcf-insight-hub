@@ -240,6 +240,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     defaultValues: card ? {
       tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
       categoria: (card.categoria as 'inside' | 'life') || 'inside',
+      tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
       tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
@@ -251,7 +252,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       cota: card.cota,
       valor_credito: Number(card.valor_credito),
       prazo_meses: card.prazo_meses,
-      data_contratacao: parseDateWithoutTimezone(card.data_contratacao),
+      data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
+      data_reserva: (card as any).data_reserva ? parseDateWithoutTimezone((card as any).data_reserva) : undefined,
       vendedor_id: card.vendedor_id || undefined,
       vendedor_name: card.vendedor_name || undefined,
       // Controle adicional
@@ -301,6 +303,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     } : {
       tipo_pessoa: 'pf',
       categoria: 'inside',
+      tipo_registro: 'contratacao',
       tipo_produto: 'select',
       empresa_paga_parcelas: 'nao',
       tipo_contrato: undefined,
