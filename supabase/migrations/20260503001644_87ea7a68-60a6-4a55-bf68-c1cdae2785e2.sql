@@ -1,0 +1,2 @@
+DELETE FROM public.consortium_installments WHERE card_id IN ('2f69fe72-2864-4e42-a13e-4dc15b700ed5','0fea4edb-a788-4600-9a9a-b4d5a5ef6a2a');
+DELETE FROM public.consortium_cards WHERE id IN ('2f69fe72-2864-4e42-a13e-4dc15b700ed5','0fea4edb-a788-4600-9a9a-b4d5a5ef6a2a');
