@@ -145,6 +145,21 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       if (dupHash) {
+        await adminClient.from("no_show_blocked_attempts").insert({
+          deal_id,
+          meeting_slot_id: meeting_slot_id ?? null,
+          attendee_id: attendee_id ?? null,
+          evidence_hash: evidenceHash,
+          evidence_path,
+          lead_phone: lead_phone ?? null,
+          lead_name: lead_name ?? null,
+          attempted_by: userId,
+          attempt_reason: "duplicate_hash",
+          conflicting_validation_id: dupHash.id,
+          conflicting_deal_id: dupHash.deal_id,
+          meeting_type: meeting_type ?? null,
+          bu_origin_id: bu_origin_id ?? null,
+        });
         return new Response(JSON.stringify({
           error: "Este print já foi usado em outro lead. Envie uma evidência única para esta reunião.",
         }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -178,6 +193,22 @@ Deno.serve(async (req) => {
         if (lastValidation) {
           const wasRejectedByManager = lastValidation.manager_review_status === "rejected";
           if (!wasRejectedByManager) {
+            await adminClient.from("no_show_blocked_attempts").insert({
+              deal_id: deal_id ?? null,
+              meeting_slot_id: meeting_slot_id ?? null,
+              attendee_id: attendee_id ?? null,
+              evidence_hash: evidenceHash,
+              evidence_path,
+              lead_phone: lead_phone ?? null,
+              lead_name: lead_name ?? null,
+              attempted_by: userId,
+              attempt_reason: "duplicate_active",
+              conflicting_validation_id: lastValidation.id,
+              conflicting_deal_id: deal_id ?? null,
+              ai_verdict: lastValidation.ai_verdict ?? null,
+              meeting_type: meeting_type ?? null,
+              bu_origin_id: bu_origin_id ?? null,
+            });
             return new Response(JSON.stringify({
               error: "Já existe uma solicitação de No-Show ativa para esta reunião. Aguarde a decisão do gestor antes de enviar uma nova evidência.",
               code: "duplicate_active_validation",

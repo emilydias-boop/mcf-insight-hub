@@ -7697,6 +7697,63 @@ export type Database = {
         }
         Relationships: []
       }
+      no_show_blocked_attempts: {
+        Row: {
+          ai_verdict: string | null
+          attempt_reason: string
+          attempted_by: string
+          attendee_id: string | null
+          bu_origin_id: string | null
+          conflicting_deal_id: string | null
+          conflicting_validation_id: string | null
+          created_at: string
+          deal_id: string | null
+          evidence_hash: string | null
+          evidence_path: string | null
+          id: string
+          lead_name: string | null
+          lead_phone: string | null
+          meeting_slot_id: string | null
+          meeting_type: string | null
+        }
+        Insert: {
+          ai_verdict?: string | null
+          attempt_reason: string
+          attempted_by: string
+          attendee_id?: string | null
+          bu_origin_id?: string | null
+          conflicting_deal_id?: string | null
+          conflicting_validation_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          evidence_hash?: string | null
+          evidence_path?: string | null
+          id?: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          meeting_slot_id?: string | null
+          meeting_type?: string | null
+        }
+        Update: {
+          ai_verdict?: string | null
+          attempt_reason?: string
+          attempted_by?: string
+          attendee_id?: string | null
+          bu_origin_id?: string | null
+          conflicting_deal_id?: string | null
+          conflicting_validation_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          evidence_hash?: string | null
+          evidence_path?: string | null
+          id?: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          meeting_slot_id?: string | null
+          meeting_type?: string | null
+        }
+        Relationships: []
+      }
       no_show_validations: {
         Row: {
           ai_extracted_phone: string | null
