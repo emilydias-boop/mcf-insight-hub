@@ -193,12 +193,15 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       contratoPagoDeals: Set<string>;
       // attendees R1 individuais (1 linha por attendee/slot na janela)
       r1Attendees: Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>;
+      // R1 attendees alinhados com KPI (1 linha por sdr+deal+dia)
+      r1Aligned: Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }>;
     }> => {
       const empty = {
         cohortDeals: new Map<string, { anchor: string; followupEnd: string }>(),
         r1Outcome: new Map<string, 'completed' | 'no_show' | 'pending'>(),
         contratoPagoDeals: new Set<string>(),
         r1Attendees: [] as Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>,
+        r1Aligned: [] as Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }>,
       };
       if (!startDate || !endDate || buOrigins.length === 0) return empty;
 
@@ -260,7 +263,31 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         }
       }
 
-      return { cohortDeals, r1Outcome, contratoPagoDeals, r1Attendees };
+      // R1 alinhado com KPI da Equipe — mesmo filtro de squad histórico, is_partner=false, etc.
+      const r1Aligned: Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }> = [];
+      if (bu) {
+        const { data: alignedRows, error: alignedErr } = await supabase.rpc('get_funnel_r1_attendees_aligned' as any, {
+          start_date: startDate,
+          end_date: endDate,
+          bu_filter: bu,
+        });
+        if (alignedErr) {
+          console.warn('[funnel] get_funnel_r1_attendees_aligned error', alignedErr);
+        } else {
+          (alignedRows || []).forEach((r: any) => {
+            r1Aligned.push({
+              dealId: r.deal_id,
+              sdrEmail: r.sdr_email,
+              meetingDay: r.meeting_day,
+              scheduledAt: r.scheduled_at,
+              isRealized: !!r.is_realized,
+              isNoShow: !!r.is_noshow,
+            });
+          });
+        }
+      }
+
+      return { cohortDeals, r1Outcome, contratoPagoDeals, r1Attendees, r1Aligned };
     },
     enabled: !!startDate && !!endDate && buOrigins.length > 0,
     staleTime: 60_000,
