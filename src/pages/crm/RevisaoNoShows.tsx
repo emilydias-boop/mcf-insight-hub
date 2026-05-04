@@ -1,14 +1,25 @@
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Loader2, ShieldAlert, CheckCircle2, XCircle, Phone, User, Calendar, Image as ImageIcon, Briefcase, Tag, Users, AlertCircle, Clock } from "lucide-react";
+import { Loader2, ShieldAlert, CheckCircle2, XCircle, Phone, User, Calendar, Image as ImageIcon, Briefcase, Tag, Users, AlertCircle, Clock, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useNoShowPendingReviews, useReviewNoShowContest, getEvidenceSignedUrl, type PendingReview } from "@/hooks/useNoShowReviews";
+import { useNoShowPendingReviews, useReviewNoShowContest, useDeleteNoShowValidation, getEvidenceSignedUrl, type PendingReview } from "@/hooks/useNoShowReviews";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected" | "auto";
 
@@ -40,6 +51,7 @@ function ReviewCard({ item }: { item: PendingReview }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const review = useReviewNoShowContest();
+  const del = useDeleteNoShowValidation();
   const isPending = item.manager_review_status === "pending";
 
   useEffect(() => {
@@ -188,6 +200,44 @@ function ReviewCard({ item }: { item: PendingReview }) {
               </div>
             )}
           </div>
+        </div>
+
+        <Separator />
+        <div className="flex items-center justify-between gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                disabled={del.isPending}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir evidência
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir esta evidência de No-Show?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Use apenas para registros duplicados ou enviados por engano.
+                  A evidência será removida permanentemente do histórico. Esta
+                  ação NÃO altera o status atual do lead na agenda — se o
+                  no-show já foi desfeito manualmente, basta excluir aqui para
+                  limpar o registro.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700"
+                  onClick={() => del.mutate(item.id)}
+                >
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {isPending && (
