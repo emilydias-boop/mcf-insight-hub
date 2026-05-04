@@ -254,7 +254,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     <TableHead className="text-right">R1 Real → Contrato</TableHead>
                     <TableHead className="text-right">Taxa No-Show</TableHead>
                     <TableHead className="text-right">Aprovado → Venda</TableHead>
-                    <TableHead className="text-right">Entrada → Venda</TableHead>
+                    <TableHead className="text-right">Cohort → Venda</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
