@@ -12077,21 +12077,21 @@ export type Database = {
           start_date: string
         }
         Returns: {
-          attendee_id: string
-          attendee_status: string
-          closer: string
-          contact_email: string
-          contact_name: string
-          contact_phone: string
-          deal_id: string
-          deal_name: string
-          intermediador: string
-          meeting_slot_id: string
-          origin_name: string
-          pendente_reason: string
-          scheduled_at: string
-          sdr_email: string
-          status_atual: string
+          out_attendee_id: string
+          out_attendee_status: string
+          out_closer: string
+          out_contact_email: string
+          out_contact_name: string
+          out_contact_phone: string
+          out_deal_id: string
+          out_deal_name: string
+          out_intermediador: string
+          out_meeting_slot_id: string
+          out_origin_name: string
+          out_pendente_reason: string
+          out_scheduled_at: string
+          out_sdr_email: string
+          out_status_atual: string
         }[]
       }
       get_sdrs_for_squad_in_period: {
