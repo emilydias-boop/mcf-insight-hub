@@ -96,10 +96,10 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Funil por Canal — Cohort R1 + 30 dias</CardTitle>
+        <CardTitle className="text-lg">Funil por Canal — Fotografia da janela</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Funil sequencial real: a base é o conjunto de deals com <strong>R1 Agendada na janela</strong>.
-          As demais colunas contam o mesmo deal apenas se o evento ocorreu até <strong>30 dias após a R1</strong>.
+          Cada coluna é independente: conta eventos cuja data-âncora cai na janela do filtro.
+          <strong> Entradas</strong> = deals criados no período. Sem follow-up de 30 dias.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -119,68 +119,68 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
-                        label="Cohort (R1)"
-                        info="Tamanho do cohort = deals únicos com R1 Agendada cujo scheduled_at cai na janela. É o mesmo número da coluna R1 Agend. — todas as colunas seguintes são subconjuntos desse cohort."
+                        label="Entradas"
+                        info="Deals (leads) criados na janela do filtro, filtrados pela origem da BU. É a base de aquisição do período."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Agend."
-                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Âncora do cohort. Cada deal conta uma vez — reagendamentos não inflam."
+                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Cada deal conta uma vez — reagendamentos não inflam."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Realiz."
-                        info="Deals do cohort que terminaram a R1 com status completed dentro de 30 dias após a R1 âncora (vale o desfecho mais avançado do deal: completed > no_show > pending)."
+                        info="Deals com R1 (scheduled_at na janela) cujo desfecho final foi completed (vale o melhor desfecho: completed > no_show > pending)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="No-Show"
-                        info="Deals do cohort cujo desfecho final dentro do follow-up de 30d foi no_show (e não houve completed posterior)."
+                        info="Deals com R1 na janela cujo desfecho final foi no_show (sem completed posterior na janela)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Contrato Pago"
-                        info="Deals do cohort cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro do follow-up de 30 dias após a R1 âncora."
+                        info="Deals cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro da janela do filtro."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R2 Agend."
-                        info="Deals do cohort cuja R2 (scheduled_at) ocorreu dentro do período selecionado. Deduplicado por deal."
+                        info="Deals cuja R2 (scheduled_at) ocorreu dentro da janela. Deduplicado por deal."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R2 Realiz."
-                        info="Deals do cohort com R2 completed/realizada no período selecionado."
+                        info="Deals com R2 completed/realizada na janela."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Aprovados"
-                        info="Deals do cohort com R2 marcada como 'aprovado' no período selecionado."
+                        info="Deals com R2 marcada como 'aprovado' na janela."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Reprovados"
-                        info="Deals do cohort cuja R2 foi marcada como reembolso/desistente/reprovado/cancelado no período."
+                        info="Deals cuja R2 foi marcada como reembolso/desistente/reprovado/cancelado na janela."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Próx. Semana"
-                        info="Deals do cohort cuja R2 foi marcada como 'Próxima semana' (será trabalhado na próxima safra)."
+                        info="Deals cuja R2 foi marcada como 'Próxima semana' (será trabalhado na próxima safra)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Vendas de produtos de parceria cujo email pertence a um deal do cohort E sale_date está dentro do follow-up de 30 dias após a R1 âncora."
+                        info="Vendas de produtos de parceria cujo sale_date cai na janela. Deduplicado por email."
                       />
                     </TableHead>
                     <TableHead className="text-right">
@@ -241,7 +241,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
               <ConversionCard label="R1 Ag → R1 Real" value={totalConv.r1AgToReal} />
               <ConversionCard label="R1 Real → Contrato Pago" value={totalConv.r1RealToContrato} />
               <ConversionCard label="Aprovado → Venda Final" value={totalConv.aprovadoToVenda} />
-              <ConversionCard label="Cohort → Venda Final" value={totalConv.entradaToVenda} />
+              <ConversionCard label="Entrada → Venda Final" value={totalConv.entradaToVenda} />
             </div>
 
             {/* Tabela de conversões por canal */}
@@ -254,7 +254,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     <TableHead className="text-right">R1 Real → Contrato</TableHead>
                     <TableHead className="text-right">Taxa No-Show</TableHead>
                     <TableHead className="text-right">Aprovado → Venda</TableHead>
-                    <TableHead className="text-right">Cohort → Venda</TableHead>
+                    <TableHead className="text-right">Entrada → Venda</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

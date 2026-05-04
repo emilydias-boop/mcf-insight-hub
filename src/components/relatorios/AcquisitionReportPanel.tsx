@@ -101,7 +101,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     // Funil por Canal
     const funnelSheet = funnelRows.map(r => ({
       'Canal': r.channelLabel,
-      'Cohort (R1)': r.entradas,
+      'Entradas': r.entradas,
       'R1 Agendada': r.r1Agendada,
       'R1 Realizada': r.r1Realizada,
       'No-Show': r.noShow,
@@ -118,7 +118,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
       'R1 Real→Contrato %': r.r1RealToContrato.toFixed(1),
       'Taxa No-Show %': r.taxaNoShow.toFixed(1),
       'Aprovado→Venda %': r.aprovadoToVenda.toFixed(1),
-      'Cohort→Venda %': r.entradaToVenda.toFixed(1),
+      'Entrada→Venda %': r.entradaToVenda.toFixed(1),
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(funnelSheet), 'Funil por Canal');
 
