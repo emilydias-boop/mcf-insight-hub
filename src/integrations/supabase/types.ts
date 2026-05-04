@@ -11770,6 +11770,17 @@ export type Database = {
           id: string
         }[]
       }
+      get_funnel_r1_attendees_aligned: {
+        Args: { bu_filter?: string; end_date: string; start_date: string }
+        Returns: {
+          deal_id: string
+          is_noshow: boolean
+          is_realized: boolean
+          meeting_day: string
+          scheduled_at: string
+          sdr_email: string
+        }[]
+      }
       get_hubla_transactions_by_bu: {
         Args: {
           p_bu: string

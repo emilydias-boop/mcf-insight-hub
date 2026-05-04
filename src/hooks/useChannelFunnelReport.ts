@@ -193,12 +193,15 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       contratoPagoDeals: Set<string>;
       // attendees R1 individuais (1 linha por attendee/slot na janela)
       r1Attendees: Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>;
+      // R1 attendees alinhados com KPI (1 linha por sdr+deal+dia)
+      r1Aligned: Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }>;
     }> => {
       const empty = {
         cohortDeals: new Map<string, { anchor: string; followupEnd: string }>(),
         r1Outcome: new Map<string, 'completed' | 'no_show' | 'pending'>(),
         contratoPagoDeals: new Set<string>(),
         r1Attendees: [] as Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>,
+        r1Aligned: [] as Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }>,
       };
       if (!startDate || !endDate || buOrigins.length === 0) return empty;
 
@@ -260,7 +263,31 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         }
       }
 
-      return { cohortDeals, r1Outcome, contratoPagoDeals, r1Attendees };
+      // R1 alinhado com KPI da Equipe — mesmo filtro de squad histórico, is_partner=false, etc.
+      const r1Aligned: Array<{ dealId: string; sdrEmail: string; meetingDay: string; scheduledAt: string; isRealized: boolean; isNoShow: boolean }> = [];
+      if (bu) {
+        const { data: alignedRows, error: alignedErr } = await supabase.rpc('get_funnel_r1_attendees_aligned' as any, {
+          start_date: startDate,
+          end_date: endDate,
+          bu_filter: bu,
+        });
+        if (alignedErr) {
+          console.warn('[funnel] get_funnel_r1_attendees_aligned error', alignedErr);
+        } else {
+          (alignedRows || []).forEach((r: any) => {
+            r1Aligned.push({
+              dealId: r.deal_id,
+              sdrEmail: r.sdr_email,
+              meetingDay: r.meeting_day,
+              scheduledAt: r.scheduled_at,
+              isRealized: !!r.is_realized,
+              isNoShow: !!r.is_noshow,
+            });
+          });
+        }
+      }
+
+      return { cohortDeals, r1Outcome, contratoPagoDeals, r1Attendees, r1Aligned };
     },
     enabled: !!startDate && !!endDate && buOrigins.length > 0,
     staleTime: 60_000,
@@ -658,51 +685,43 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
-    // Replica a regra do RPC `get_sdr_metrics_from_agenda` para bater 1:1 com o KPI
-    // "R1 AGENDADA" do header /crm/reunioes-equipe:
-    //   - dedupe por (deal_id, meeting_day)
-    //   - cap de 2 dias distintos por deal  (LEAST(COUNT(DISTINCT meeting_day), 2))
-    // R1 Realizada/No-Show: 1 por deal (qualquer dia com aquele desfecho).
+    // Espelha o RPC `get_sdr_metrics_from_agenda` (KPI "R1 AGENDADA" do header):
+    //   - filtro de squad histórico do SDR + is_partner=false + booked_by não nulo
+    //   - dedup por (sdr, deal, dia) com cap de 2 dias por (sdr, deal)
+    //   - R1 Realizada/No-Show: 1 por (sdr, deal) com desfecho mais alto
+    // Fonte: RPC `get_funnel_r1_attendees_aligned` (mantém deal_id para classificar canal).
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
-    const r1AttendeesList = cohort?.r1Attendees || [];
-    // Agrupa attendees por deal → set de dias (YYYY-MM-DD em America/Sao_Paulo).
-    const dealDays = new Map<string, { days: Map<string, string>; outcome: 'completed' | 'no_show' | 'pending' }>();
-    const rankOut = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
-    const dayKeyBR = (iso: string) => {
-      // Formata em America/Sao_Paulo para evitar shift UTC
-      const d = new Date(iso);
-      // toLocaleDateString pt-BR já vem dd/mm/aaaa; convertemos para iso curto
-      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-      return parts; // YYYY-MM-DD
-    };
-    r1AttendeesList.forEach(({ dealId, scheduledAt, outcome }) => {
-      const entry = dealDays.get(dealId) || { days: new Map<string, string>(), outcome: 'pending' as const };
-      const dk = dayKeyBR(scheduledAt);
-      // Mantém o scheduled_at mais cedo do dia como representativo
-      if (!entry.days.has(dk) || new Date(scheduledAt) < new Date(entry.days.get(dk)!)) {
-        entry.days.set(dk, scheduledAt);
-      }
-      if (rankOut(outcome) > rankOut(entry.outcome)) entry.outcome = outcome;
-      dealDays.set(dealId, entry);
+    const r1AlignedList = cohort?.r1Aligned || [];
+    type AlignedAgg = { days: Array<{ day: string; sched: string }>; isRealized: boolean; isNoShow: boolean };
+    const sdrDealMap = new Map<string, AlignedAgg>(); // key: sdr|deal
+    r1AlignedList.forEach((r) => {
+      const key = `${r.sdrEmail}|${r.dealId}`;
+      const cur = sdrDealMap.get(key) || { days: [], isRealized: false, isNoShow: false };
+      cur.days.push({ day: r.meetingDay, sched: r.scheduledAt });
+      if (r.isRealized) cur.isRealized = true;
+      if (r.isNoShow) cur.isNoShow = true;
+      sdrDealMap.set(key, cur);
     });
-    dealDays.forEach((entry, dealId) => {
+    sdrDealMap.forEach((agg, key) => {
+      const dealId = key.split('|')[1];
       const ch = channelOf(dealId);
       const slot = get(ch);
-      // Dias ordenados; aplica cap de 2 (regra do RPC)
-      const sortedDays = Array.from(entry.days.entries())
-        .sort((a, b) => new Date(a[1]).getTime() - new Date(b[1]).getTime())
+      // Cap de 2 dias por (sdr, deal) — espelha LEAST(COUNT(DISTINCT meeting_day), 2)
+      const sortedDays = agg.days
+        .slice()
+        .sort((a, b) => new Date(a.sched).getTime() - new Date(b.sched).getTime())
         .slice(0, 2);
-      sortedDays.forEach(([_dk, sched]) => {
+      sortedDays.forEach(({ sched }) => {
         slot.r1Agendada++;
         pushDet(ch, 'r1Agendada', buildItem(dealId, sched, null));
       });
-      // Realizada/No-Show: 1 por deal (desfecho mais alto)
-      const firstSched = sortedDays[0]?.[1] || '';
+      const firstSched = sortedDays[0]?.sched || '';
       const itemBase = buildItem(dealId, firstSched, null);
-      if (entry.outcome === 'completed') {
+      if (agg.isRealized) {
         slot.r1Realizada++;
         pushDet(ch, 'r1Realizada', { ...itemBase, status: 'completed' });
-      } else if (entry.outcome === 'no_show') {
+      }
+      if (agg.isNoShow) {
         slot.noShow++;
         pushDet(ch, 'noShow', { ...itemBase, status: 'no_show' });
       }
