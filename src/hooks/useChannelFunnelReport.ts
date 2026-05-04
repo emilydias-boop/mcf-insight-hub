@@ -748,6 +748,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     type AlignedAgg = { days: Array<{ day: string; sched: string }>; isRealized: boolean; isNoShow: boolean };
     const sdrDealMap = new Map<string, AlignedAgg>(); // key: sdr|deal
     r1AlignedList.forEach((r) => {
+      // Restringe aos SDRs ativos do squad (mesmo recorte de enrichedKPIs do header)
+      if (allowedSdrEmails.size > 0 && !allowedSdrEmails.has((r.sdrEmail || '').toLowerCase())) return;
       const key = `${r.sdrEmail}|${r.dealId}`;
       const cur = sdrDealMap.get(key) || { days: [], isRealized: false, isNoShow: false };
       cur.days.push({ day: r.meetingDay, sched: r.scheduledAt });
