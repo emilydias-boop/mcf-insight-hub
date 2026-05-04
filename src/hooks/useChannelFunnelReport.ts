@@ -157,6 +157,11 @@ const BU_ORIGIN_IDS: Record<string, string[]> = {
   ],
 };
 
+// BU → squad string usado por get_sdrs_for_squad_in_period e get_sdr_metrics_from_agenda
+const BU_SQUAD: Record<string, string> = {
+  incorporador: 'incorporador',
+};
+
 interface DealMeta {
   id: string;
   origin_id: string | null;
