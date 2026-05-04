@@ -9,6 +9,7 @@ import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawe
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { startOfDay } from "date-fns";
 import { getPendentesMeetings } from "@/lib/pendentesBreakdown";
+import type { PendenteDrillRow } from "@/hooks/usePendentesDrilldown";
 
 export type KpiBucket =
   | "agendamentos"
@@ -33,6 +34,9 @@ interface KpiDrillDownDialogProps {
   meetingsRaw?: MeetingV2[];
   startDate: Date | null;
   endDate: Date | null;
+  /** Quando informado e o bucket for "pendentes", substitui o cálculo local
+   *  pelos dados do RPC `get_sdr_pendentes_drilldown`. */
+  pendentesOverride?: PendenteDrillRow[];
 }
 
 const BUCKET_LABELS: Record<KpiBucket, string> = {
@@ -252,9 +256,11 @@ export function KpiDrillDownDialog({
   meetingsRaw,
   startDate,
   endDate,
+  pendentesOverride,
 }: KpiDrillDownDialogProps) {
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
   const [pendenteTab, setPendenteTab] = useState<PendenteSubBucket | "todos">("todos");
+  const [pendenteReasonTab, setPendenteReasonTab] = useState<"todos" | "sem_desfecho" | "no_show_acima_cap">("todos");
   const filtered = (() => {
     if (!bucket) return [] as MeetingV2[];
     // Para o bucket no_show usamos as reuniões SEM dedup global por deal_id
@@ -264,12 +270,15 @@ export function KpiDrillDownDialog({
       const noShowsInRange = filterByBucket(source, "no_show", startDate, endDate);
       return applyNoShowCap(noShowsInRange);
     }
-    if (bucket === "pendentes") return getPendentesMeetings(meetingsRaw || meetings, startDate, endDate);
+    if (bucket === "pendentes") {
+      if (pendentesOverride && pendentesOverride.length > 0) return pendentesOverride;
+      return getPendentesMeetings(meetingsRaw || meetings, startDate, endDate);
+    }
     return filterByBucket(meetings, bucket, startDate, endDate);
   })();
 
   const pendenteCounts = (() => {
-    if (bucket !== "pendentes") return null;
+    if (bucket !== "pendentes" || pendentesOverride) return null;
     const c = { futuras: 0, vencidas: 0, canceladas: 0 };
     filtered.forEach((m) => {
       c[classifyPendente(m)]++;
@@ -277,8 +286,24 @@ export function KpiDrillDownDialog({
     return c;
   })();
 
+  const reasonCounts = (() => {
+    if (bucket !== "pendentes" || !pendentesOverride) return null;
+    const c = { sem_desfecho: 0, no_show_acima_cap: 0 };
+    filtered.forEach((m) => {
+      const r = (m as PendenteDrillRow).pendente_reason;
+      if (r === "sem_desfecho") c.sem_desfecho++;
+      else if (r === "no_show_acima_cap") c.no_show_acima_cap++;
+    });
+    return c;
+  })();
+
   const visibleRows = (() => {
-    if (bucket !== "pendentes" || pendenteTab === "todos") return filtered;
+    if (bucket !== "pendentes") return filtered;
+    if (pendentesOverride) {
+      if (pendenteReasonTab === "todos") return filtered;
+      return filtered.filter((m) => (m as PendenteDrillRow).pendente_reason === pendenteReasonTab);
+    }
+    if (pendenteTab === "todos") return filtered;
     return filtered.filter((m) => classifyPendente(m) === pendenteTab);
   })();
 
@@ -309,6 +334,25 @@ export function KpiDrillDownDialog({
                   {pendenteTab === "vencidas" && "Já passaram da hora e ninguém marcou Realizada/No-Show."}
                   {pendenteTab === "canceladas" && "Leads que já tiveram status anterior (remarcadas, canceladas, sem sucesso) e foram restituídos sem desfecho final. Clique numa linha para ajustar o status."}
                   {pendenteTab === "todos" && "Soma de futuras + vencidas + remanejados."}
+                </p>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+
+        {bucket === "pendentes" && reasonCounts && (
+          <div className="px-6 pt-3 shrink-0">
+            <Tabs value={pendenteReasonTab} onValueChange={(v) => setPendenteReasonTab(v as any)}>
+              <TabsList>
+                <TabsTrigger value="todos">Todos ({filtered.length})</TabsTrigger>
+                <TabsTrigger value="sem_desfecho">Sem desfecho ({reasonCounts.sem_desfecho})</TabsTrigger>
+                <TabsTrigger value="no_show_acima_cap">No-Show acima do cap ({reasonCounts.no_show_acima_cap})</TabsTrigger>
+              </TabsList>
+              <TabsContent value={pendenteReasonTab} className="mt-2">
+                <p className="text-xs text-muted-foreground">
+                  {pendenteReasonTab === "sem_desfecho" && "Reuniões marcadas para o período sem Realizada/No-Show registrado."}
+                  {pendenteReasonTab === "no_show_acima_cap" && "Dias de No-Show do mesmo lead que ultrapassaram o cap (1 antes de 01/05/2026, 2 a partir disso). Contam para a aritmética R1 Agendada = Realizada + No-Show + Pendente."}
+                  {pendenteReasonTab === "todos" && "Todos os leads contabilizados como Pendentes / Sem Desfecho."}
                 </p>
               </TabsContent>
             </Tabs>
