@@ -2,3 +2,4 @@
 - [Pendentes Arithmetic Closure](mem://business-logic/pendentes-arithmetic-closure) — `pendentes` é calculado no RPC como R1 Agendada − Realizadas − No-Shows, fechando a aritmética.
 - [Cargo Change Mid-Month Pro-rata](mem://business-logic/cargo-change-mid-month-prorata) — Mudança de cargo no mês divide fixo proporcionalmente via employee_cargo_history e cargo_segments.
 - [Consórcio Reserva vs Contratação](mem://features/consorcio-reserva-vs-contratacao) — tipo_registro reserva|contratacao; reservas geram parcelas 'previsto'.
+- [Funil Cohort R1+30d](mem://features/funil-cohort-r1-30d) — Funil por Canal agora é cohort sequencial: base = R1 Agendada na janela, eventos contam até 30d após R1.

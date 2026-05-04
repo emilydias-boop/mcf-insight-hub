@@ -7,16 +7,19 @@ import { format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
- * Funil por Canal — fotografia independente por coluna, dentro da janela exata.
+ * Funil por Canal (COHORT) — funil sequencial REAL.
+ *
+ * Âncora do cohort: R1 Agendada com `scheduled_at` dentro da janela do filtro.
+ * Janela de seguimento: 30 dias corridos após `r1.scheduled_at` de cada deal.
  *
  * Princípio:
- *  - Cada coluna conta DEALS ÚNICOS (ou EMAILS ÚNICOS para venda)
- *    cujo evento principal cai estritamente dentro do intervalo selecionado.
- *  - Sem inflar por reagendamento (1 deal = 1 unidade).
- *  - Sem filtros escondidos de "primeira-compra-da-vida" — venda final inclui
- *    todas as vendas de parceria que entraram no período (incluindo upsells/recompras).
- *  - Classificador de canal único (classifyChannelWith30dRule) aplicado a todos
- *    os deals/contatos da BU — soma por canal sempre fecha.
+ *  - O cohort base é "deals únicos com R1 marcada na janela" (= coluna R1 Agend.).
+ *  - As demais colunas são SUBCONJUNTOS desse cohort: contam o mesmo deal apenas
+ *    se o evento posterior (R1 Realizada / No-Show / Contrato Pago / R2 / Venda)
+ *    aconteceu entre `r1.scheduled_at` e `r1.scheduled_at + 30 dias`.
+ *  - Cada deal conta uma única vez por coluna (dedup por deal_id ou email).
+ *  - "Entradas" = tamanho do cohort (mesmo valor de R1 Agend.) — mantido por
+ *    compatibilidade com a exportação. A UI esconde essa coluna.
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -31,7 +34,7 @@ export function displayChannelLabel(raw: string): string {
 export interface ChannelFunnelRow {
   channel: string;
   channelLabel: string;
-  entradas: number;
+  entradas: number;          // = r1Agendada (tamanho do cohort) — compat
   r1Agendada: number;
   r1Realizada: number;
   noShow: number;
@@ -48,7 +51,7 @@ export interface ChannelFunnelRow {
   r1AgToReal: number;
   r1RealToContrato: number;
   aprovadoToVenda: number;
-  entradaToVenda: number;
+  entradaToVenda: number;    // = cohort → venda final
   taxaNoShow: number;
 }
 
@@ -176,51 +179,36 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   const windowEndIso = endDate ? new Date(`${endDate}T23:59:59-03:00`).toISOString() : null;
 
   // ================================================================
-  // 1. UNIVERSO DE DEALS — todos os deals da BU envolvidos no funil:
-  //    criados na janela OU com R1/R2 na janela OU contrato na janela.
-  //    Cada deal recebe seu canal classificado uma única vez.
+  // 1. COHORT — deals com R1 Agendada (scheduled_at) DENTRO da janela.
+  //    Para cada deal do cohort: âncora = primeira r1.scheduled_at
+  //    elegível na janela; janela de seguimento = âncora + 30 dias.
+  //
+  //    Em seguida buscamos TODOS os attendees R1 desses deals (sem filtro
+  //    de data) para descobrir o desfecho final dentro do follow-up.
   // ================================================================
-  const { data: dealsByPeriod, isLoading: loadingDeals } = useQuery({
-    queryKey: ['funnel-deals-period', startDate, endDate, bu, buOrigins.join(',')],
+  const COHORT_FOLLOWUP_DAYS = 30;
+
+  const { data: cohort, isLoading: loadingCohort } = useQuery({
+    queryKey: ['funnel-cohort-r1', startDate, endDate, bu, buOrigins.join(',')],
     queryFn: async (): Promise<{
-      dealsCreated: DealMeta[];        // criados na janela (Entradas)
-      r1Deals: Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>; // deal → R1 status
-      r1NoShowDeals: Set<string>;
+      // deal_id → âncora (R1 scheduled_at) e fim do follow-up (+30d)
+      cohortDeals: Map<string, { anchor: string; followupEnd: string }>;
+      // deal_id → desfecho final R1 dentro do follow-up
+      r1Outcome: Map<string, 'completed' | 'no_show' | 'pending'>;
+      // deal_id → contract_paid_at (qualquer attendee, dentro do follow-up)
       contratoPagoDeals: Set<string>;
     }> => {
-      if (!startDate || !endDate || buOrigins.length === 0) {
-        return {
-          dealsCreated: [],
-          r1Deals: new Map(),
-          r1NoShowDeals: new Set(),
-          contratoPagoDeals: new Set(),
-        };
-      }
+      const empty = {
+        cohortDeals: new Map<string, { anchor: string; followupEnd: string }>(),
+        r1Outcome: new Map<string, 'completed' | 'no_show' | 'pending'>(),
+        contratoPagoDeals: new Set<string>(),
+      };
+      if (!startDate || !endDate || buOrigins.length === 0) return empty;
 
-      // 1a. Deals criados na janela (Entradas) — paginar
-      const dealsCreated: any[] = [];
-      let from = 0;
+      // 1a. R1 attendees com scheduled_at na janela (cohort base)
+      const attendees: any[] = [];
       const pageSize = 1000;
-      let more = true;
-      while (more && from < 20000) {
-        const { data, error } = await supabase
-          .from('crm_deals')
-          .select('id, origin_id, tags, created_at, contact_id, crm_contacts!contact_id(email)')
-          .in('origin_id', buOrigins)
-          .gte('created_at', windowStartIso!)
-          .lte('created_at', windowEndIso!)
-          .range(from, from + pageSize - 1);
-        if (error) { console.error('[funnel] dealsCreated error', error); break; }
-        const batch = data || [];
-        dealsCreated.push(...batch);
-        more = batch.length >= pageSize;
-        from += pageSize;
-      }
-
-      // 1b. R1 attendees na janela — agrupado por deal_id, status final
-      const r1Attendees: any[] = [];
-      from = 0;
-      more = true;
+      let from = 0, more = true;
       while (more && from < 30000) {
         const { data, error } = await supabase
           .from('meeting_slot_attendees')
@@ -233,81 +221,85 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           .gte('meeting_slots.scheduled_at', windowStartIso!)
           .lte('meeting_slots.scheduled_at', windowEndIso!)
           .range(from, from + pageSize - 1);
-        if (error) { console.error('[funnel] r1Attendees error', error); break; }
+        if (error) { console.error('[funnel-cohort] attendees', error); break; }
         const batch = data || [];
-        r1Attendees.push(...batch);
+        attendees.push(...batch);
         more = batch.length >= pageSize;
         from += pageSize;
       }
 
       const buOriginsSet = new Set(buOrigins);
-      const r1Deals = new Map<string, { status: string; contract_paid_at: string | null; scheduled_at: string | null }>();
-      const r1NoShowDeals = new Set<string>();
-      for (const a of r1Attendees) {
+      const cohortDeals = new Map<string, { anchor: string; followupEnd: string }>();
+      // Para cada deal no cohort, mantém a R1 mais antiga elegível na janela como âncora
+      for (const a of attendees) {
         const dealId = a.deal_id;
         const dealOrigin = a.crm_deals?.origin_id;
         if (!dealId || !buOriginsSet.has(dealOrigin)) continue;
         const slotStatus = (a.meeting_slots?.status || '').toLowerCase();
         const attStatus = (a.status || '').toLowerCase();
-        // Skip cancelled/rescheduled
         if (slotStatus === 'cancelled' || slotStatus === 'rescheduled') continue;
         if (attStatus === 'cancelled' || attStatus === 'rescheduled') continue;
-        // Determine effective status (priorizar realizada/no_show sobre scheduled)
-        let effective = attStatus || slotStatus || 'scheduled';
-        if (slotStatus === 'completed' || attStatus === 'completed') effective = 'completed';
-        else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
-        const scheduledAt = a.meeting_slots?.scheduled_at || null;
-        const existing = r1Deals.get(dealId);
-        // Mantém o "melhor" status: completed > no_show > scheduled
-        const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
-        if (!existing || rank(effective) > rank(existing.status)) {
-          r1Deals.set(dealId, { status: effective, contract_paid_at: a.contract_paid_at, scheduled_at: scheduledAt });
-        } else if (!existing.contract_paid_at && a.contract_paid_at) {
-          existing.contract_paid_at = a.contract_paid_at;
+        const sched: string | null = a.meeting_slots?.scheduled_at || null;
+        if (!sched) continue;
+        const existing = cohortDeals.get(dealId);
+        if (!existing || new Date(sched) < new Date(existing.anchor)) {
+          const followupEnd = new Date(new Date(sched).getTime() + COHORT_FOLLOWUP_DAYS * 86_400_000).toISOString();
+          cohortDeals.set(dealId, { anchor: sched, followupEnd });
         }
-        if (effective === 'no_show') r1NoShowDeals.add(dealId);
       }
 
-      // 1c. Contrato Pago: contract_paid_at na janela (sobre attendees R1 da BU)
+      // 1b. Para cada deal do cohort, buscar TODOS os attendees R1 (sem filtro
+      //     de data) — usa o desfecho mais "avançado" cujo scheduled_at esteja
+      //     dentro do follow-up window. Pagina por chunks de deal_ids.
+      const cohortIds = Array.from(cohortDeals.keys());
+      const r1Outcome = new Map<string, 'completed' | 'no_show' | 'pending'>();
       const contratoPagoDeals = new Set<string>();
-      const cpAttendees: any[] = [];
-      from = 0;
-      more = true;
-      while (more && from < 10000) {
+      const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
+
+      for (let i = 0; i < cohortIds.length; i += 200) {
+        const chunk = cohortIds.slice(i, i + 200);
         const { data, error } = await supabase
           .from('meeting_slot_attendees')
           .select(`
-            deal_id, contract_paid_at,
-            crm_deals!deal_id(origin_id)
+            deal_id, status, contract_paid_at,
+            meeting_slots!inner(scheduled_at, meeting_type, status)
           `)
-          .gte('contract_paid_at', windowStartIso!)
-          .lte('contract_paid_at', windowEndIso!)
-          .range(from, from + pageSize - 1);
-        if (error) { console.error('[funnel] contratoPago error', error); break; }
-        const batch = data || [];
-        cpAttendees.push(...batch);
-        more = batch.length >= pageSize;
-        from += pageSize;
-      }
-      for (const a of cpAttendees) {
-        const dealId = a.deal_id;
-        const dealOrigin = a.crm_deals?.origin_id;
-        if (!dealId || !buOriginsSet.has(dealOrigin)) continue;
-        contratoPagoDeals.add(dealId);
+          .eq('meeting_slots.meeting_type', 'r1')
+          .in('deal_id', chunk);
+        if (error) { console.error('[funnel-cohort] followup', error); continue; }
+        for (const a of (data || [])) {
+          const dealId = a.deal_id;
+          const cd = cohortDeals.get(dealId);
+          if (!cd) continue;
+          const sched: string | null = a.meeting_slots?.scheduled_at || null;
+          // Eventos elegíveis: scheduled_at entre âncora e âncora+30d
+          if (sched && (sched < cd.anchor || sched > cd.followupEnd)) continue;
+
+          const slotStatus = (a.meeting_slots?.status || '').toLowerCase();
+          const attStatus = (a.status || '').toLowerCase();
+          if (slotStatus === 'cancelled' || slotStatus === 'rescheduled') continue;
+          if (attStatus === 'cancelled' || attStatus === 'rescheduled') continue;
+
+          let effective: 'completed' | 'no_show' | 'pending' = 'pending';
+          if (slotStatus === 'completed' || attStatus === 'completed') effective = 'completed';
+          else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
+          const prev = r1Outcome.get(dealId) || 'pending';
+          if (rank(effective) > rank(prev)) r1Outcome.set(dealId, effective);
+
+          // Contrato pago: dentro do follow-up
+          if (a.contract_paid_at) {
+            const cp = a.contract_paid_at;
+            if (cp >= cd.anchor && cp <= cd.followupEnd) contratoPagoDeals.add(dealId);
+          }
+        }
       }
 
-      // dealsCreated normalizados (canal vai ser preenchido depois)
-      const dealsNorm: DealMeta[] = dealsCreated.map(d => ({
-        id: d.id,
-        origin_id: d.origin_id,
-        tags: d.tags,
-        created_at: d.created_at,
-        contact_id: d.contact_id,
-        email: (d.crm_contacts?.email || '').toLowerCase().trim() || null,
-        channel: 'OUTROS',
-      }));
+      // Garantir que todo deal do cohort tenha um desfecho (default pending)
+      for (const id of cohortIds) {
+        if (!r1Outcome.has(id)) r1Outcome.set(id, 'pending');
+      }
 
-      return { dealsCreated: dealsNorm, r1Deals, r1NoShowDeals, contratoPagoDeals };
+      return { cohortDeals, r1Outcome, contratoPagoDeals };
     },
     enabled: !!startDate && !!endDate && buOrigins.length > 0,
     staleTime: 60_000,
@@ -348,12 +340,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // ================================================================
   const allInvolvedDealIds = useMemo(() => {
     const s = new Set<string>();
-    (dealsByPeriod?.dealsCreated || []).forEach(d => s.add(d.id));
-    (dealsByPeriod?.r1Deals || new Map()).forEach((_, id) => s.add(id));
-    (dealsByPeriod?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
+    (cohort?.cohortDeals || new Map()).forEach((_v, id) => s.add(id));
+    (cohort?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
     carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
     return Array.from(s);
-  }, [dealsByPeriod, carrinhoRows]);
+  }, [cohort, carrinhoRows]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
     queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
@@ -666,42 +657,47 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       };
     };
 
-    // Entradas: deals criados na janela
-    (dealsByPeriod?.dealsCreated || []).forEach(d => {
-      const ch = dealMeta.get(d.id)?.channel || d.channel || 'OUTROS';
-      get(ch).entradas++;
-      pushDet(ch, 'entradas', buildItem(d.id, d.created_at, null));
-    });
+    // ===== COHORT: deals com R1 Agendada na janela =====
+    // - Entradas (tamanho do cohort) = R1 Agendada
+    // - R1 Realizada / No-Show / Pendente vêm do desfecho dentro do follow-up de 30d
+    const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
+    const r1OutcomeMap = cohort?.r1Outcome || new Map<string, 'completed' | 'no_show' | 'pending'>();
+    const cohortDealIds = new Set<string>(Array.from(cohortDealsMap.keys()));
 
-    // R1 Agendada / Realizada / No-Show — dedupe por deal
-    (dealsByPeriod?.r1Deals || new Map()).forEach((info: any, dealId: string) => {
+    cohortDealsMap.forEach((info, dealId) => {
       const ch = channelOf(dealId);
       const slot = get(ch);
+      // Entradas = cohort base (mesmo número de R1 Agendada)
+      slot.entradas++;
       slot.r1Agendada++;
-      const item = buildItem(dealId, info.scheduled_at || '', info.status);
+      const item = buildItem(dealId, info.anchor || '', null);
+      pushDet(ch, 'entradas', item);
       pushDet(ch, 'r1Agendada', item);
-      if (info.status === 'completed') {
+      const outcome = r1OutcomeMap.get(dealId);
+      if (outcome === 'completed') {
         slot.r1Realizada++;
-        pushDet(ch, 'r1Realizada', item);
-      } else if (info.status === 'no_show') {
+        pushDet(ch, 'r1Realizada', { ...item, status: 'completed' });
+      } else if (outcome === 'no_show') {
         slot.noShow++;
-        pushDet(ch, 'noShow', item);
+        pushDet(ch, 'noShow', { ...item, status: 'no_show' });
       }
     });
 
-    // Contrato Pago
-    (dealsByPeriod?.contratoPagoDeals || new Set()).forEach((dealId: string) => {
+    // Contrato Pago — apenas deals do cohort com contract_paid_at dentro do follow-up
+    (cohort?.contratoPagoDeals || new Set<string>()).forEach((dealId: string) => {
+      if (!cohortDealIds.has(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
-      // contract_paid_at — pegamos do r1Deals se tiver
-      const r1info = (dealsByPeriod?.r1Deals as Map<string, any> | undefined)?.get(dealId);
-      pushDet(ch, 'contratoPago', buildItem(dealId, r1info?.contract_paid_at || '', 'contract_paid'));
+      const cd = cohortDealsMap.get(dealId);
+      pushDet(ch, 'contratoPago', buildItem(dealId, cd?.anchor || '', 'contract_paid'));
     });
 
-    // R2 / Aprovados / Reprovados / Próxima Semana — dedupe por deal_id
+    // R2 / Aprovados / Reprovados / Próxima Semana — somente deals do cohort
     const seenCarrinho = new Set<string>();
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
+      // Cohort funnel: R2 só conta se o deal teve R1 na janela (está no cohort)
+      if (!cohortDealIds.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
       const ch = channelOf(c.deal_id);
       const slot = get(ch);
@@ -734,8 +730,22 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Venda Final + Faturamento — TODAS as vendas de parceria do período
+    // Venda Final + Faturamento — somente vendas cujo email pertence ao cohort
+    // E sale_date dentro do follow-up de 30d a partir da R1 do deal
+    const cohortEmails = new Map<string, { anchor: string; followupEnd: string }>();
+    cohortDealsMap.forEach((info, dealId) => {
+      const meta = dealMeta.get(dealId);
+      if (meta?.email) {
+        // Se mesmo email aparece em mais de um deal do cohort, mantém o follow-up MAIS amplo
+        const prev = cohortEmails.get(meta.email);
+        if (!prev || info.followupEnd > prev.followupEnd) cohortEmails.set(meta.email, info);
+      }
+    });
     vendasFinal.forEach((v: any) => {
+      const cohortInfo = cohortEmails.get(v.email);
+      if (!cohortInfo) return;
+      const saleIso = v.saleDate ? new Date(v.saleDate).toISOString() : null;
+      if (!saleIso || saleIso < cohortInfo.anchor || saleIso > cohortInfo.followupEnd) return;
       const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
@@ -791,12 +801,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [dealsByPeriod, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo]);
 
   return {
     rows,
     totals,
     details,
-    isLoading: loadingDeals || loadingCarrinho || loadingVendas || loadingMeta,
+    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta,
   };
 }
