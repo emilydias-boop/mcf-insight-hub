@@ -828,8 +828,9 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Contrato Pago — contract_paid_at na janela
-    (cohort?.contratoPagoDeals || new Set<string>()).forEach((dealId: string) => {
+    // Contrato Pago — alinhado ao KPI "CONTRATOS" do header (filtra por SDR ativo
+    // do squad, is_partner=false). Independe da R1 estar na janela.
+    contratoPagoAligned.forEach((dealId: string) => {
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
