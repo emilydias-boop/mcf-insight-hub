@@ -307,6 +307,29 @@ export async function getEvidenceSignedUrl(path: string): Promise<string | null>
 }
 
 /**
+ * Exclui uma evidência de No-Show (uso da liderança quando há duplicidade
+ * ou registro equivocado). Apenas admin/manager/coordenador via RLS.
+ */
+export function useDeleteNoShowValidation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (validationId: string) => {
+      const { error } = await supabase
+        .from("no_show_validations")
+        .delete()
+        .eq("id", validationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["no-show-all-reviews"] });
+      qc.invalidateQueries({ queryKey: ["no-show-pending-reviews-count"] });
+      toast.success("Evidência de No-Show excluída");
+    },
+    onError: (e: any) => toast.error(e?.message || "Falha ao excluir evidência"),
+  });
+}
+
+/**
  * Lista as evidências de No-Show enviadas pelo usuário logado (SDR/Closer).
  * Read-only — usado em /crm/meus-no-shows e no drawer do lead.
  */
