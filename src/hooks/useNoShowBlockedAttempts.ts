@@ -31,7 +31,7 @@ export function useNoShowBlockedAttempts() {
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      const rows = (data ?? []) as BlockedAttempt[];
+      const rows = ((data ?? []) as unknown) as BlockedAttempt[];
       const ids = Array.from(new Set(rows.map((r) => r.attempted_by).filter(Boolean)));
       if (ids.length) {
         const { data: profs } = await supabase
