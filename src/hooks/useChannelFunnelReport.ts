@@ -261,6 +261,36 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // ================================================================
+  // 1c. ENTRADAS — deals criados na janela (independente de R1).
+  // ================================================================
+  const { data: entradasDeals = new Set<string>(), isLoading: loadingEntradas } = useQuery<Set<string>>({
+    queryKey: ['funnel-entradas', startDate, endDate, bu, buOrigins.join(',')],
+    queryFn: async () => {
+      const s = new Set<string>();
+      if (!startDate || !endDate || buOrigins.length === 0) return s;
+      const pageSize = 1000;
+      let from = 0, more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .in('origin_id', buOrigins)
+          .gte('created_at', windowStartIso!)
+          .lte('created_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel-entradas] error', error); break; }
+        const batch = data || [];
+        batch.forEach((d: any) => s.add(d.id));
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      return s;
+    },
+    enabled: !!startDate && !!endDate && buOrigins.length > 0,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 2. R2/Carrinho — janela exata (já estava correto)
   // ================================================================
   const { data: carrinhoRows = [], isLoading: loadingCarrinho } = useQuery<CarrinhoFunnelRow[]>({
