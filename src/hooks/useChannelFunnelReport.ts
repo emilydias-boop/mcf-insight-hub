@@ -377,6 +377,53 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // ================================================================
+  // 1d. CONTRATO PAGO — alinhado ao KPI "CONTRATOS" do header.
+  //     Conta attendees R1 com contract_paid_at na janela, filtrados
+  //     pelos SDRs ativos do squad (allowedSdrEmails) e is_partner=false.
+  //     Independente de a R1 estar na janela.
+  // ================================================================
+  const allowedEmailsKey = useMemo(() => Array.from(allowedSdrEmails).sort().join(','), [allowedSdrEmails]);
+  const { data: contratoPagoAligned = [] as Array<{ dealId: string; sdrId: string }>, isLoading: loadingContratos } = useQuery<Array<{ dealId: string; sdrId: string }>>({
+    queryKey: ['funnel-contratos-aligned', startDate, endDate, bu, allowedEmailsKey],
+    queryFn: async () => {
+      const out: Array<{ dealId: string; sdrId: string }> = [];
+      if (!startDate || !endDate || allowedSdrEmails.size === 0) return out;
+      const allowedList = Array.from(allowedSdrEmails);
+      // 1) Resolver profile.id dos SDRs ativos
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('email', allowedList);
+      const sdrIds = (profs || []).map((p: any) => p.id);
+      if (sdrIds.length === 0) return out;
+      // 2) Buscar attendees com contract_paid_at na janela
+      const pageSize = 1000;
+      let from = 0, more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, booked_by, is_partner, contract_paid_at, meeting_slots!inner(meeting_type)')
+          .eq('is_partner', false)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .in('booked_by', sdrIds)
+          .gte('contract_paid_at', windowStartIso!)
+          .lte('contract_paid_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel-contratos-aligned] error', error); break; }
+        const batch = data || [];
+        batch.forEach((r: any) => {
+          if (r.deal_id && r.booked_by) out.push({ dealId: r.deal_id, sdrId: r.booked_by });
+        });
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      return out;
+    },
+    enabled: !!startDate && !!endDate && allowedSdrEmails.size > 0,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 2. R2/Carrinho — janela exata (já estava correto)
   // ================================================================
   const { data: carrinhoRows = [], isLoading: loadingCarrinho } = useQuery<CarrinhoFunnelRow[]>({
@@ -415,8 +462,9 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     (cohort?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
     carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
     entradasDeals.forEach(id => s.add(id));
+    contratoPagoAligned.forEach(({ dealId }) => s.add(dealId));
     return Array.from(s);
-  }, [cohort, carrinhoRows, entradasDeals]);
+  }, [cohort, carrinhoRows, entradasDeals, contratoPagoAligned]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
     queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
@@ -782,8 +830,13 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Contrato Pago — contract_paid_at na janela
-    (cohort?.contratoPagoDeals || new Set<string>()).forEach((dealId: string) => {
+    // Contrato Pago — alinhado ao KPI "CONTRATOS" do header (1 por sdr+deal,
+    // is_partner=false, SDR ativo do squad). Independe da R1 estar na janela.
+    const seenSdrDeal = new Set<string>();
+    contratoPagoAligned.forEach(({ dealId, sdrId }) => {
+      const key = `${sdrId}|${dealId}`;
+      if (seenSdrDeal.has(key)) return;
+      seenSdrDeal.add(key);
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
@@ -883,12 +936,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned]);
 
   return {
     rows,
     totals,
     details,
-    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta || loadingEntradas,
+    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta || loadingEntradas || loadingContratos,
   };
 }
