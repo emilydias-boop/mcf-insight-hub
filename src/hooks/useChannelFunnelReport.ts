@@ -830,9 +830,13 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Contrato Pago — alinhado ao KPI "CONTRATOS" do header (filtra por SDR ativo
-    // do squad, is_partner=false). Independe da R1 estar na janela.
-    contratoPagoAligned.forEach((dealId: string) => {
+    // Contrato Pago — alinhado ao KPI "CONTRATOS" do header (1 por sdr+deal,
+    // is_partner=false, SDR ativo do squad). Independe da R1 estar na janela.
+    const seenSdrDeal = new Set<string>();
+    contratoPagoAligned.forEach(({ dealId, sdrId }) => {
+      const key = `${sdrId}|${dealId}`;
+      if (seenSdrDeal.has(key)) return;
+      seenSdrDeal.add(key);
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
