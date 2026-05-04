@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { parseYearMonthLocal, parseYmdLocal } from "@/lib/dateHelpers";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON, contarDiasUteis, getWeekStartsOn } from "@/lib/businessDays";
@@ -92,15 +93,12 @@ export default function ReunioesEquipe() {
 
   // Initialize state from URL params
   const initialPreset = (searchParams.get("preset") as DatePreset) || "month";
-  const initialMonth = searchParams.get("month")
-    ? parseISO(searchParams.get("month") + "-01")
-    : new Date();
-  const initialStart = searchParams.get("start")
-    ? parseISO(searchParams.get("start")!)
-    : null;
-  const initialEnd = searchParams.get("end")
-    ? parseISO(searchParams.get("end")!)
-    : initialStart; // Fallback to start if end is missing
+  // Use local-timezone parsing to avoid UTC shift (parseISO("2026-04-01") becomes
+  // March 31 in negative offsets / browsers in UTC). Mantém o mês/dia exatos do filtro
+  // independente do fuso do navegador.
+  const initialMonth = parseYearMonthLocal(searchParams.get("month")) ?? new Date();
+  const initialStart = parseYmdLocal(searchParams.get("start"));
+  const initialEnd = parseYmdLocal(searchParams.get("end")) ?? initialStart;
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
