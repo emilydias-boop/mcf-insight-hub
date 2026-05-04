@@ -328,8 +328,9 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     (cohort?.cohortDeals || new Map()).forEach((_v, id) => s.add(id));
     (cohort?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
     carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
+    entradasDeals.forEach(id => s.add(id));
     return Array.from(s);
-  }, [cohort, carrinhoRows]);
+  }, [cohort, carrinhoRows, entradasDeals]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
     queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
