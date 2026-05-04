@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNoShowPendingReviews, useReviewNoShowContest, useDeleteNoShowValidation, getEvidenceSignedUrl, type PendingReview } from "@/hooks/useNoShowReviews";
+import { useNoShowBlockedAttempts } from "@/hooks/useNoShowBlockedAttempts";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-type StatusFilter = "all" | "pending" | "approved" | "rejected" | "auto";
+type StatusFilter = "all" | "pending" | "approved" | "rejected" | "auto" | "blocked";
 
 function statusBadge(item: PendingReview) {
   const mr = item.manager_review_status;
@@ -280,6 +281,7 @@ function ReviewCard({ item }: { item: PendingReview }) {
 
 export default function RevisaoNoShows() {
   const { data: items, isLoading } = useNoShowPendingReviews();
+  const { data: blocked } = useNoShowBlockedAttempts();
   const [filter, setFilter] = useState<StatusFilter>("all");
 
   const filtered = useMemo(() => {
@@ -329,6 +331,7 @@ export default function RevisaoNoShows() {
           <TabsTrigger value="auto">Auto-aprovados ({counts.auto})</TabsTrigger>
           <TabsTrigger value="approved">Aprovados ({counts.approved})</TabsTrigger>
           <TabsTrigger value="rejected">Rejeitados ({counts.rejected})</TabsTrigger>
+          <TabsTrigger value="blocked">Tentativas bloqueadas ({blocked?.length ?? 0})</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -338,7 +341,7 @@ export default function RevisaoNoShows() {
         </div>
       )}
 
-      {!isLoading && filtered.length === 0 && (
+      {filter !== "blocked" && !isLoading && filtered.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-600" />
@@ -347,9 +350,48 @@ export default function RevisaoNoShows() {
         </Card>
       )}
 
-      <div className="space-y-4">
-        {filtered.map((it) => <ReviewCard key={it.id} item={it} />)}
-      </div>
+      {filter === "blocked" ? (
+        <div className="space-y-3">
+          {(blocked ?? []).length === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-600" />
+                Nenhuma tentativa bloqueada registrada.
+              </CardContent>
+            </Card>
+          )}
+          {(blocked ?? []).map((b) => (
+            <Card key={b.id} className="border-red-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      {b.attempt_reason === "duplicate_hash"
+                        ? "Print já usado em outro lead"
+                        : "Reenvio bloqueado (já existe solicitação ativa)"}
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      {format(new Date(b.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      {b.attempted_by_profile?.full_name && (
+                        <> · por <strong>{b.attempted_by_profile.full_name}</strong></>
+                      )}
+                      {b.lead_name && <> · Lead: {b.lead_name}</>}
+                      {b.lead_phone && <> · {b.lead_phone}</>}
+                      {b.meeting_type && <> · {b.meeting_type}</>}
+                    </CardDescription>
+                  </div>
+                  <Badge variant="destructive" className="text-xs">Bloqueado</Badge>
+                </div>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((it) => <ReviewCard key={it.id} item={it} />)}
+        </div>
+      )}
     </div>
   );
 }
