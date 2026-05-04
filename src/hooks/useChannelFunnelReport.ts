@@ -643,21 +643,23 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       };
     };
 
-    // ===== COHORT: deals com R1 Agendada na janela =====
-    // - Entradas (tamanho do cohort) = R1 Agendada
-    // - R1 Realizada / No-Show / Pendente vêm do desfecho dentro do follow-up de 30d
+    // ===== ENTRADAS: deals criados na janela =====
+    entradasDeals.forEach((dealId) => {
+      const ch = channelOf(dealId);
+      get(ch).entradas++;
+      const meta = dealMeta.get(dealId);
+      pushDet(ch, 'entradas', buildItem(dealId, meta?.created_at || '', null));
+    });
+
+    // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
     const r1OutcomeMap = cohort?.r1Outcome || new Map<string, 'completed' | 'no_show' | 'pending'>();
-    const cohortDealIds = new Set<string>(Array.from(cohortDealsMap.keys()));
 
     cohortDealsMap.forEach((info, dealId) => {
       const ch = channelOf(dealId);
       const slot = get(ch);
-      // Entradas = cohort base (mesmo número de R1 Agendada)
-      slot.entradas++;
       slot.r1Agendada++;
       const item = buildItem(dealId, info.anchor || '', null);
-      pushDet(ch, 'entradas', item);
       pushDet(ch, 'r1Agendada', item);
       const outcome = r1OutcomeMap.get(dealId);
       if (outcome === 'completed') {
@@ -669,21 +671,18 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Contrato Pago — apenas deals do cohort com contract_paid_at dentro do follow-up
+    // Contrato Pago — contract_paid_at na janela
     (cohort?.contratoPagoDeals || new Set<string>()).forEach((dealId: string) => {
-      if (!cohortDealIds.has(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
       pushDet(ch, 'contratoPago', buildItem(dealId, cd?.anchor || '', 'contract_paid'));
     });
 
-    // R2 / Aprovados / Reprovados / Próxima Semana — somente deals do cohort
+    // R2 / Aprovados / Reprovados / Próxima Semana — eventos da janela
     const seenCarrinho = new Set<string>();
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
-      // Cohort funnel: R2 só conta se o deal teve R1 na janela (está no cohort)
-      if (!cohortDealIds.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
       const ch = channelOf(c.deal_id);
       const slot = get(ch);
@@ -716,22 +715,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       }
     });
 
-    // Venda Final + Faturamento — somente vendas cujo email pertence ao cohort
-    // E sale_date dentro do follow-up de 30d a partir da R1 do deal
-    const cohortEmails = new Map<string, { anchor: string; followupEnd: string }>();
-    cohortDealsMap.forEach((info, dealId) => {
-      const meta = dealMeta.get(dealId);
-      if (meta?.email) {
-        // Se mesmo email aparece em mais de um deal do cohort, mantém o follow-up MAIS amplo
-        const prev = cohortEmails.get(meta.email);
-        if (!prev || info.followupEnd > prev.followupEnd) cohortEmails.set(meta.email, info);
-      }
-    });
+    // Venda Final + Faturamento — vendas com sale_date na janela
     vendasFinal.forEach((v: any) => {
-      const cohortInfo = cohortEmails.get(v.email);
-      if (!cohortInfo) return;
-      const saleIso = v.saleDate ? new Date(v.saleDate).toISOString() : null;
-      if (!saleIso || saleIso < cohortInfo.anchor || saleIso > cohortInfo.followupEnd) return;
       const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
