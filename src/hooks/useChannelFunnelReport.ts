@@ -7,19 +7,19 @@ import { format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
- * Funil por Canal (COHORT) — funil sequencial REAL.
+ * Funil por Canal (FOTOGRAFIA POR JANELA).
  *
- * Âncora do cohort: R1 Agendada com `scheduled_at` dentro da janela do filtro.
- * Janela de seguimento: 30 dias corridos após `r1.scheduled_at` de cada deal.
+ * Cada coluna é independente e conta eventos cuja data-âncora cai na janela
+ * do filtro (sem cohort sequencial / sem follow-up de 30 dias):
+ *   - Entradas       → deals com `created_at` na janela (base)
+ *   - R1 Agend.      → R1 attendees com `scheduled_at` na janela
+ *   - R1 Realiz.     → idem, desfecho 'completed'
+ *   - No-Show        → idem, desfecho 'no_show'
+ *   - Contrato Pago  → attendees com `contract_paid_at` na janela
+ *   - R2 / Aprov.    → linhas do carrinho R2 na janela
+ *   - Venda Final    → vendas Hubla com `sale_date` na janela
  *
- * Princípio:
- *  - O cohort base é "deals únicos com R1 marcada na janela" (= coluna R1 Agend.).
- *  - As demais colunas são SUBCONJUNTOS desse cohort: contam o mesmo deal apenas
- *    se o evento posterior (R1 Realizada / No-Show / Contrato Pago / R2 / Venda)
- *    aconteceu entre `r1.scheduled_at` e `r1.scheduled_at + 30 dias`.
- *  - Cada deal conta uma única vez por coluna (dedup por deal_id ou email).
- *  - "Entradas" = tamanho do cohort (mesmo valor de R1 Agend.) — mantido por
- *    compatibilidade com a exportação. A UI esconde essa coluna.
+ * Dedup por deal (ou email para vendas) dentro de cada coluna.
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
