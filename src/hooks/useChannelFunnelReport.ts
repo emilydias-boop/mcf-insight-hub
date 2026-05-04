@@ -778,6 +778,6 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     rows,
     totals,
     details,
-    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta,
+    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta || loadingEntradas,
   };
 }
