@@ -930,12 +930,12 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned]);
 
   return {
     rows,
     totals,
     details,
-    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta || loadingEntradas,
+    isLoading: loadingCohort || loadingCarrinho || loadingVendas || loadingMeta || loadingEntradas || loadingContratos,
   };
 }
