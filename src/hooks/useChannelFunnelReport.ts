@@ -377,6 +377,51 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   });
 
   // ================================================================
+  // 1d. CONTRATO PAGO — alinhado ao KPI "CONTRATOS" do header.
+  //     Conta attendees R1 com contract_paid_at na janela, filtrados
+  //     pelos SDRs ativos do squad (allowedSdrEmails) e is_partner=false.
+  //     Independente de a R1 estar na janela.
+  // ================================================================
+  const allowedEmailsKey = useMemo(() => Array.from(allowedSdrEmails).sort().join(','), [allowedSdrEmails]);
+  const { data: contratoPagoAligned = new Set<string>(), isLoading: loadingContratos } = useQuery<Set<string>>({
+    queryKey: ['funnel-contratos-aligned', startDate, endDate, bu, allowedEmailsKey],
+    queryFn: async () => {
+      const s = new Set<string>();
+      if (!startDate || !endDate || allowedSdrEmails.size === 0) return s;
+      const allowedList = Array.from(allowedSdrEmails);
+      // 1) Resolver profile.id dos SDRs ativos
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('email', allowedList);
+      const sdrIds = (profs || []).map((p: any) => p.id);
+      if (sdrIds.length === 0) return s;
+      // 2) Buscar attendees com contract_paid_at na janela
+      const pageSize = 1000;
+      let from = 0, more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, booked_by, is_partner, contract_paid_at, meeting_slots!inner(meeting_type)')
+          .eq('is_partner', false)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .in('booked_by', sdrIds)
+          .gte('contract_paid_at', windowStartIso!)
+          .lte('contract_paid_at', windowEndIso!)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel-contratos-aligned] error', error); break; }
+        const batch = data || [];
+        batch.forEach((r: any) => { if (r.deal_id) s.add(r.deal_id); });
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      return s;
+    },
+    enabled: !!startDate && !!endDate && allowedSdrEmails.size > 0,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 2. R2/Carrinho — janela exata (já estava correto)
   // ================================================================
   const { data: carrinhoRows = [], isLoading: loadingCarrinho } = useQuery<CarrinhoFunnelRow[]>({
