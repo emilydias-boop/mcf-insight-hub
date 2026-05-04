@@ -179,9 +179,57 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     : (dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null);
 
   const buOrigins = bu ? (BU_ORIGIN_IDS[bu] || []) : [];
+  const buSquad = bu ? (BU_SQUAD[bu] || null) : null;
 
   const windowStartIso = startDate ? new Date(`${startDate}T00:00:00-03:00`).toISOString() : null;
   const windowEndIso = endDate ? new Date(`${endDate}T23:59:59-03:00`).toISOString() : null;
+
+  // ================================================================
+  // 0. SDRs ATIVOS NO SQUAD/PERÍODO — espelha lista usada pelo KPI
+  //    "R1 AGENDADA" do header /crm/reunioes-equipe (enrichedKPIs).
+  //    Usa get_sdrs_for_squad_in_period + cross-check user_roles para
+  //    excluir admins/managers/closers que tiveram booking no período.
+  // ================================================================
+  const { data: allowedSdrEmails = new Set<string>() } = useQuery<Set<string>>({
+    queryKey: ['funnel-allowed-sdrs', startDate, endDate, buSquad],
+    queryFn: async () => {
+      const empty = new Set<string>();
+      if (!startDate || !endDate || !buSquad) return empty;
+      const { data: sdrsInPeriod, error } = await supabase.rpc('get_sdrs_for_squad_in_period' as any, {
+        p_squad: buSquad,
+        p_start: new Date(`${startDate}T00:00:00-03:00`).toISOString(),
+        p_end: new Date(`${endDate}T23:59:59-03:00`).toISOString(),
+      });
+      if (error) { console.error('[funnel] get_sdrs_for_squad_in_period error', error); return empty; }
+      const sdrEmailsRaw = ((sdrsInPeriod as any[]) || [])
+        .map(s => (s.email || '').toLowerCase())
+        .filter(Boolean);
+      if (sdrEmailsRaw.length === 0) return empty;
+      // Cross-check com user_roles (mesma regra do ReunioesEquipe.tsx)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('email', sdrEmailsRaw);
+      const profileIds = (profiles || []).map((p: any) => p.id);
+      const blockedIds = new Set<string>();
+      if (profileIds.length > 0) {
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('user_id, role')
+          .in('user_id', profileIds)
+          .in('role', ['admin', 'manager', 'coordenador', 'assistente_administrativo', 'closer', 'closer_sombra']);
+        (roles || []).forEach((r: any) => blockedIds.add(r.user_id));
+      }
+      const blockedEmails = new Set<string>(
+        (profiles || [])
+          .filter((p: any) => blockedIds.has(p.id))
+          .map((p: any) => (p.email || '').toLowerCase())
+      );
+      return new Set(sdrEmailsRaw.filter(e => !blockedEmails.has(e)));
+    },
+    enabled: !!startDate && !!endDate && !!buSquad,
+    staleTime: 60_000,
+  });
 
   // ================================================================
   // 1. R1 na janela — attendees R1 cujo scheduled_at cai na janela.
