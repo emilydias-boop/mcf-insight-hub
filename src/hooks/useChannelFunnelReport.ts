@@ -658,23 +658,53 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
-    // Conta CADA attendee R1 individualmente (1 linha por agendamento), igual ao KPI
-    // "R1 AGENDADA" do header. Sem dedupe por deal — remarcações/segunda tentativa
-    // contam separado.
+    // Replica a regra do RPC `get_sdr_metrics_from_agenda` para bater 1:1 com o KPI
+    // "R1 AGENDADA" do header /crm/reunioes-equipe:
+    //   - dedupe por (deal_id, meeting_day)
+    //   - cap de 2 dias distintos por deal  (LEAST(COUNT(DISTINCT meeting_day), 2))
+    // R1 Realizada/No-Show: 1 por deal (qualquer dia com aquele desfecho).
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
     const r1AttendeesList = cohort?.r1Attendees || [];
+    // Agrupa attendees por deal → set de dias (YYYY-MM-DD em America/Sao_Paulo).
+    const dealDays = new Map<string, { days: Map<string, string>; outcome: 'completed' | 'no_show' | 'pending' }>();
+    const rankOut = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
+    const dayKeyBR = (iso: string) => {
+      // Formata em America/Sao_Paulo para evitar shift UTC
+      const d = new Date(iso);
+      // toLocaleDateString pt-BR já vem dd/mm/aaaa; convertemos para iso curto
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+      return parts; // YYYY-MM-DD
+    };
     r1AttendeesList.forEach(({ dealId, scheduledAt, outcome }) => {
+      const entry = dealDays.get(dealId) || { days: new Map<string, string>(), outcome: 'pending' as const };
+      const dk = dayKeyBR(scheduledAt);
+      // Mantém o scheduled_at mais cedo do dia como representativo
+      if (!entry.days.has(dk) || new Date(scheduledAt) < new Date(entry.days.get(dk)!)) {
+        entry.days.set(dk, scheduledAt);
+      }
+      if (rankOut(outcome) > rankOut(entry.outcome)) entry.outcome = outcome;
+      dealDays.set(dealId, entry);
+    });
+    dealDays.forEach((entry, dealId) => {
       const ch = channelOf(dealId);
       const slot = get(ch);
-      slot.r1Agendada++;
-      const item = buildItem(dealId, scheduledAt, null);
-      pushDet(ch, 'r1Agendada', item);
-      if (outcome === 'completed') {
+      // Dias ordenados; aplica cap de 2 (regra do RPC)
+      const sortedDays = Array.from(entry.days.entries())
+        .sort((a, b) => new Date(a[1]).getTime() - new Date(b[1]).getTime())
+        .slice(0, 2);
+      sortedDays.forEach(([_dk, sched]) => {
+        slot.r1Agendada++;
+        pushDet(ch, 'r1Agendada', buildItem(dealId, sched, null));
+      });
+      // Realizada/No-Show: 1 por deal (desfecho mais alto)
+      const firstSched = sortedDays[0]?.[1] || '';
+      const itemBase = buildItem(dealId, firstSched, null);
+      if (entry.outcome === 'completed') {
         slot.r1Realizada++;
-        pushDet(ch, 'r1Realizada', { ...item, status: 'completed' });
-      } else if (outcome === 'no_show') {
+        pushDet(ch, 'r1Realizada', { ...itemBase, status: 'completed' });
+      } else if (entry.outcome === 'no_show') {
         slot.noShow++;
-        pushDet(ch, 'noShow', { ...item, status: 'no_show' });
+        pushDet(ch, 'noShow', { ...itemBase, status: 'no_show' });
       }
     });
 
