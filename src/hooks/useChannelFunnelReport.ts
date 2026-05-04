@@ -25,6 +25,7 @@ import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 const CHANNEL_LABELS: Record<string, string> = {
   A010: 'A010',
   ANAMNESE: 'ANAMNESE',
+  ANAMNESE_INCOMPLETA: 'ANAMNESE INCOMPLETA',
   OUTROS: 'OUTROS',
 };
 export function displayChannelLabel(raw: string): string {
@@ -115,6 +116,7 @@ function classifyChannelWith30dRule(opts: {
   const norm = tags.map((t) => (t || '').trim().toUpperCase());
   // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
   const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
+  const hasAnamneseIncompletaTag = norm.some((t) => t === 'ANAMNESE-INCOMPLETA');
   const isBuyer = mostRecentA010Purchase !== null;
   const ageDays = isBuyer
     ? (referenceDate.getTime() - mostRecentA010Purchase!.getTime()) / 86_400_000
@@ -129,6 +131,8 @@ function classifyChannelWith30dRule(opts: {
   if (isBuyer && isStale && !hasAnamneseTag) return 'A010';
   // Não-buyer com tag ANAMNESE → ANAMNESE
   if (hasAnamneseTag) return 'ANAMNESE';
+  // Não-buyer com tag ANAMNESE-INCOMPLETA → ANAMNESE INCOMPLETA
+  if (hasAnamneseIncompletaTag) return 'ANAMNESE_INCOMPLETA';
   return 'OUTROS';
 }
 
