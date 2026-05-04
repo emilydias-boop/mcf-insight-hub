@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
+import { parseYearMonthLocal, parseYmdLocal } from "@/lib/dateHelpers";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,11 +43,11 @@ export default function CloserMeetingsDetailPage() {
       const start = searchParams.get("start");
       const end = searchParams.get("end");
       return {
-        startDate: start ? parseISO(start) : startOfMonth(today),
-        endDate: end ? parseISO(end) : endOfMonth(today),
+        startDate: parseYmdLocal(start) ?? startOfMonth(today),
+        endDate: parseYmdLocal(end) ?? endOfMonth(today),
       };
     }
-    const baseDate = monthParam ? parseISO(monthParam + "-01") : today;
+    const baseDate = parseYearMonthLocal(monthParam) ?? today;
     return { startDate: startOfMonth(baseDate), endDate: endOfMonth(baseDate) };
   }, [preset, monthParam, searchParams, wso]);
 
