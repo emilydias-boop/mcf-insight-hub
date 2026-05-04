@@ -574,6 +574,16 @@ export default function ReunioesEquipe() {
       total: pendentesTotalRpc,
     };
   }, [pendentesBreakdown, pendentesTotalRpc]);
+
+  // Drill-down completo de Pendentes (inclui no-shows acima do cap), usado
+  // pelo modal para listar TODOS os leads contabilizados no KPI.
+  const { data: pendentesDrilldownData } = usePendentesDrilldown({
+    startDate: start,
+    endDate: end,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    buFilter: "incorporador",
+    enabled: drillBucket === "pendentes",
+  });
   
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
