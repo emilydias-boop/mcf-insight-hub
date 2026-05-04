@@ -1,62 +1,79 @@
-## Objetivo
-Igualar o endpoint `alfredo` (slug `alfredo`) ao endpoint `clientdata-inside`, para que ambos aceitem e processem o mesmo payload do ClientData (camelCase + snake_case), mantendo cada um sua própria pipeline/origin/stage e suas tags.
+# Plano: eliminar diferença por fuso UTC entre os painéis
 
-## Estado atual
+Você tem razão: se o navegador está em UTC, o problema não é apenas cache. A causa provável está na forma como o painel **Reuniões da Equipe** inicializa o mês pela URL.
 
-| Campo | clientdata-inside | alfredo (hoje) |
-|---|---|---|
-| `required_fields` | `["name"]` | `["name","email"]` |
-| `field_mapping` | mapeamento camelCase → snake_case (rendaBruta, telefone, nome_completo, etc.) | `{}` (vazio) |
-| `auto_tags` | `["ANAMNESE"]` | `["Alfredo"]` |
-| `origin_id` / `stage_id` | Inside Sales / stage Base Inside | Pipeline Alfredo / stage própria |
+## Causa encontrada
 
-O `webhook-lead-receiver` aplica `field_mapping` antes da validação (linhas 138-145), então copiar o mapping resolve a normalização do payload sem mudar código.
+Na rota `/crm/reunioes-equipe?preset=month&month=2026-04`, o código faz:
 
-## Migração proposta (única alteração necessária)
+```ts
+parseISO(searchParams.get("month") + "-01")
+```
 
-Atualizar a linha do endpoint `alfredo` (id `7f693994-cd5c-4f9f-98a3-14b2d8d2a3fe`) na tabela `webhook_endpoints`:
+Em ambiente UTC isso pode parecer correto, mas o restante das métricas da agenda é calculado no banco usando **America/Sao_Paulo**:
 
-- `required_fields` → `["name"]` (ClientData nem sempre envia email — vide payloads recentes do `clientdata-inside`)
-- `field_mapping` → mesmo objeto do clientdata-inside:
-  ```
-  nome_completo → name
-  telefone → phone
-  rendaBruta → renda_bruta
-  rendaPassivaMeta → renda_passiva_meta
-  faixaAporte → faixa_aporte
-  faixaAporteDescricao → faixa_aporte_descricao
-  fonteRenda → fonte_renda
-  isEmpresario → is_empresario
-  portEmpresa → porte_empresa
-  objetivosPrincipais → objetivos_principais
-  perfilIndicacao → perfil_indicacao
-  interesseHolding → interesse_holding
-  tempoIndependencia → tempo_independencia
-  valorInvestido → valor_investido
-  valorCapitalGiro → valor_capital_giro
-  precisaCapitalGiro → precisa_capital_giro
-  possuiCarro → possui_carro
-  possuiConsorcio → possui_consorcio
-  possuiSeguros → possui_seguros
-  possuiDivida → possui_divida
-  imovelFinanciado → imovel_financiado
-  saldoFGTS → saldo_fgts
-  esporteHobby → esporte_hobby
-  gostaFutebol → gosta_futebol
-  timeFutebol → time_futebol
-  ```
-- `description` → "Webhook ClientData (mesmo payload do clientdata-inside) — pipeline Alfredo"
-- **Mantidos**: `auto_tags = ["Alfredo"]`, `origin_id`, `stage_id`, `slug`, `name`.
+```sql
+(... AT TIME ZONE 'America/Sao_Paulo')::date
+```
 
-## O que NÃO muda
-- Código da edge function `webhook-lead-receiver` (já lê `field_mapping` do banco).
-- Endpoint `clientdata-inside` permanece intacto.
-- Endpoint `alfredo2` (criado hoje 23:10) — sugiro **desativar** (`is_active = false`) para não duplicar ingestão; confirmar antes.
+Então a tela pode acabar mandando para a RPC uma janela diferente da janela visual esperada, especialmente em mês passado / início e fim de mês. Isso afeta principalmente o KPI **Agendamentos**, porque ele usa `first_booked_at` na data SP. Os demais KPIs podem bater porque são ancorados por `scheduled_at`/status e já estão caindo dentro da mesma janela.
 
-## Validação pós-mudança
-1. Disparar payload de teste no slug `alfredo` com formato camelCase do ClientData.
-2. Conferir em `webhook_events` (event_type `lead.received.alfredo`) que o lead foi processado com `status=success`.
-3. Conferir em `crm_deals` que o deal foi criado na pipeline do Alfredo com tag `Alfredo` e custom_fields preenchidos (renda_bruta, faixa_aporte, etc.).
+Além disso, há outro sinal no screenshot: em **Minhas Reuniões** o seletor superior aparece como **maio 2026**, enquanto o filtro inferior está em **01/04/2026 - 30/04/2026**. Isso indica estado de mês/filtro podendo ficar desalinhado visualmente.
 
-## Pergunta antes de aplicar
-Confirmar se desativo o endpoint duplicado `alfredo2` na mesma migração (recomendado) ou deixo intocado.
+## O que será alterado
+
+### 1. Criar helper seguro de parsing de mês/data
+
+Adicionar uma função utilitária para transformar strings de URL sem depender de `parseISO`/`new Date(dateStr)`:
+
+- `parseYearMonthLocal("2026-04")` → `new Date(2026, 3, 1)`
+- `parseYmdLocal("2026-04-01")` → `new Date(2026, 3, 1)`
+
+Isso evita deslocamento de dia/mês por timezone.
+
+### 2. Corrigir `ReunioesEquipe.tsx`
+
+Trocar:
+
+```ts
+parseISO(searchParams.get("month") + "-01")
+parseISO(searchParams.get("start")!)
+parseISO(searchParams.get("end")!)
+```
+
+por parsing local explícito.
+
+Resultado esperado:
+
+- `month=2026-04` sempre vira **abril/2026 local**.
+- A RPC sempre recebe `2026-04-01` até `2026-04-30` quando a tela mostra abril.
+- Não haverá variação por navegador em UTC, São Paulo, ou outro fuso.
+
+### 3. Corrigir `SdrMeetingsDetailPage.tsx`
+
+Essa página de detalhe do SDR também lê parâmetros da URL com `parseISO`, então será ajustada para o mesmo padrão. Isso evita divergência quando o usuário entra no detalhe da Carol a partir do painel geral.
+
+### 4. Revisar `MinhasReunioes.tsx`
+
+Manter a construção do mês via `new Date(year, month - 1)` porque ela já é segura, mas ajustar o estado visual se necessário para garantir que o seletor superior e o período inferior fiquem sempre sincronizados.
+
+## Validação após implementação
+
+Depois da alteração, vou validar estes cenários:
+
+1. `/crm/reunioes-equipe?preset=month&month=2026-04`
+   - janela enviada: `2026-04-01` a `2026-04-30`.
+2. Carol Correa em abril/2026:
+   - Agendamentos deve bater com **Minhas Reuniões** para o mesmo período.
+3. Link para detalhe do SDR:
+   - o detalhe deve manter a mesma janela do painel geral.
+4. Ambiente em UTC:
+   - mês passado não deve deslocar para março/maio nem cortar bordas do período.
+
+## Arquivos previstos
+
+- `src/pages/crm/ReunioesEquipe.tsx`
+- `src/pages/crm/SdrMeetingsDetailPage.tsx`
+- Possivelmente `src/lib/dateHelpers.ts` ou novo helper pequeno em `src/lib/` para centralizar o parsing seguro
+
+Nenhuma mudança de banco é necessária.

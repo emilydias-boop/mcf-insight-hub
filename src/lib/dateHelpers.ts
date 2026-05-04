@@ -12,6 +12,38 @@ import { addDays, subDays, format, differenceInWeeks, startOfDay } from "date-fn
 import { ptBR } from "date-fns/locale";
 
 /**
+ * Parse "YYYY-MM" como data local (1º dia do mês, 00:00 local).
+ * Evita o deslocamento de fuso causado por `parseISO("2026-04-01")`,
+ * que é interpretado como UTC e pode "voltar" para o mês anterior em fusos negativos
+ * ou "avançar" para o mês seguinte em fusos positivos (ex.: navegador em UTC).
+ */
+export function parseYearMonthLocal(ym: string | null | undefined): Date | null {
+  if (!ym) return null;
+  const m = /^(\d{4})-(\d{1,2})$/.exec(ym.trim());
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  if (month < 1 || month > 12) return null;
+  return new Date(year, month - 1, 1);
+}
+
+/**
+ * Parse "YYYY-MM-DD" como data local (00:00 local). Mesma motivação do helper acima.
+ */
+export function parseYmdLocal(ymd: string | null | undefined): Date | null {
+  if (!ymd) return null;
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(ymd.trim());
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  const day = parseInt(m[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return d;
+}
+
+/**
  * Retorna o sábado (início) da semana customizada para uma data específica
  * @param date - Data de referência
  * @returns Data do sábado da semana
