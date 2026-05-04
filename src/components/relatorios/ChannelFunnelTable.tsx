@@ -96,9 +96,10 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Funil por Canal</CardTitle>
+        <CardTitle className="text-lg">Funil por Canal — Cohort R1 + 30 dias</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Jornada completa do lead por canal de aquisição: do primeiro contato à venda final.
+          Funil sequencial real: a base é o conjunto de deals com <strong>R1 Agendada na janela</strong>.
+          As demais colunas contam o mesmo deal apenas se o evento ocorreu até <strong>30 dias após a R1</strong>.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -118,68 +119,68 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
-                        label="Entradas"
-                        info="Deals criados no período (crm_deals.created_at) com origem da BU. Cada deal conta uma vez. Canal definido por tag + compra A010 (pipeline não classifica)."
+                        label="Cohort (R1)"
+                        info="Tamanho do cohort = deals únicos com R1 Agendada cujo scheduled_at cai na janela. É o mesmo número da coluna R1 Agend. — todas as colunas seguintes são subconjuntos desse cohort."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Agend."
-                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Cada deal conta uma vez — reagendamentos não inflam o número."
+                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Âncora do cohort. Cada deal conta uma vez — reagendamentos não inflam."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R1 Realiz."
-                        info="Deals únicos cuja R1 ficou com status completed e scheduled_at na janela. Cada deal conta uma vez."
+                        info="Deals do cohort que terminaram a R1 com status completed dentro de 30 dias após a R1 âncora (vale o desfecho mais avançado do deal: completed > no_show > pending)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="No-Show"
-                        info="Deals únicos cuja R1 ficou com status no_show e scheduled_at na janela. Cada deal conta uma vez."
+                        info="Deals do cohort cujo desfecho final dentro do follow-up de 30d foi no_show (e não houve completed posterior)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Contrato Pago"
-                        info="Deals únicos cujo contract_paid_at (no attendee R1) cai dentro da janela. Independe de quando o lead entrou ou agendou."
+                        info="Deals do cohort cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro do follow-up de 30 dias após a R1 âncora."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R2 Agend."
-                        info="Attendees de reuniões R2 com scheduled_at dentro do período exato selecionado (não mais semanas inteiras de carrinho — alinhado ao filtro de datas desde a última atualização). Deduplicado por deal."
+                        info="Deals do cohort cuja R2 (scheduled_at) ocorreu dentro do período selecionado. Deduplicado por deal."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="R2 Realiz."
-                        info="R2 com status completed/realizada no período exato selecionado. Deduplicado por deal."
+                        info="Deals do cohort com R2 completed/realizada no período selecionado."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Aprovados"
-                        info="Attendees R2 com r2_status_name contendo 'aprovado' no período exato selecionado. Independe da data do contrato — apenas a R2 conta no período."
+                        info="Deals do cohort com R2 marcada como 'aprovado' no período selecionado."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Reprovados"
-                        info="Attendees R2 cujo r2_status_name indica saída do carrinho (reembolso, desistente, reprovado, cancelado) no período selecionado."
+                        info="Deals do cohort cuja R2 foi marcada como reembolso/desistente/reprovado/cancelado no período."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Próx. Semana"
-                        info="Attendees R2 marcados como 'Próxima semana' (lead que será trabalhado na próxima safra) cuja R2 ocorreu no período."
+                        info="Deals do cohort cuja R2 foi marcada como 'Próxima semana' (será trabalhado na próxima safra)."
                       />
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
                         label="Venda Final"
-                        info="Vendas únicas (por email) de produtos de parceria (A001/A002/A003/A004/A005/A009 completo) com sale_date na janela. INCLUI upsells e recompras — é uma fotografia das vendas que entraram no período. Bruto = reference_price configurado. Líquido = valor recebido no Hubla."
+                        info="Vendas de produtos de parceria cujo email pertence a um deal do cohort E sale_date está dentro do follow-up de 30 dias após a R1 âncora."
                       />
                     </TableHead>
                     <TableHead className="text-right">
@@ -240,7 +241,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
               <ConversionCard label="R1 Ag → R1 Real" value={totalConv.r1AgToReal} />
               <ConversionCard label="R1 Real → Contrato Pago" value={totalConv.r1RealToContrato} />
               <ConversionCard label="Aprovado → Venda Final" value={totalConv.aprovadoToVenda} />
-              <ConversionCard label="Entrada → Venda Final" value={totalConv.entradaToVenda} />
+              <ConversionCard label="Cohort → Venda Final" value={totalConv.entradaToVenda} />
             </div>
 
             {/* Tabela de conversões por canal */}
