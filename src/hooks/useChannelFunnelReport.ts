@@ -191,11 +191,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       r1Outcome: Map<string, 'completed' | 'no_show' | 'pending'>;
       // deal_id → contract_paid_at na janela
       contratoPagoDeals: Set<string>;
+      // attendees R1 individuais (1 linha por attendee/slot na janela)
+      r1Attendees: Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>;
     }> => {
       const empty = {
         cohortDeals: new Map<string, { anchor: string; followupEnd: string }>(),
         r1Outcome: new Map<string, 'completed' | 'no_show' | 'pending'>(),
         contratoPagoDeals: new Set<string>(),
+        r1Attendees: [] as Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }>,
       };
       if (!startDate || !endDate || buOrigins.length === 0) return empty;
 
@@ -226,6 +229,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const cohortDeals = new Map<string, { anchor: string; followupEnd: string }>();
       const r1Outcome = new Map<string, 'completed' | 'no_show' | 'pending'>();
       const contratoPagoDeals = new Set<string>();
+      const r1Attendees: Array<{ dealId: string; scheduledAt: string; outcome: 'completed' | 'no_show' | 'pending' }> = [];
       const rank = (s: string) => s === 'completed' ? 3 : s === 'no_show' ? 2 : 1;
 
       for (const a of attendees) {
@@ -247,6 +251,8 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         else if (slotStatus === 'no_show' || attStatus === 'no_show') effective = 'no_show';
         const prev = r1Outcome.get(dealId) || 'pending';
         if (rank(effective) > rank(prev)) r1Outcome.set(dealId, effective);
+        // 1 linha por attendee — alinhado com KPI da Agenda (sem dedupe por deal)
+        r1Attendees.push({ dealId, scheduledAt: sched, outcome: effective });
 
         // Contrato pago na janela
         if (a.contract_paid_at && a.contract_paid_at >= windowStartIso! && a.contract_paid_at <= windowEndIso!) {
@@ -254,7 +260,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         }
       }
 
-      return { cohortDeals, r1Outcome, contratoPagoDeals };
+      return { cohortDeals, r1Outcome, contratoPagoDeals, r1Attendees };
     },
     enabled: !!startDate && !!endDate && buOrigins.length > 0,
     staleTime: 60_000,
@@ -652,16 +658,17 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
+    // Conta CADA attendee R1 individualmente (1 linha por agendamento), igual ao KPI
+    // "R1 AGENDADA" do header. Sem dedupe por deal — remarcações/segunda tentativa
+    // contam separado.
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
-    const r1OutcomeMap = cohort?.r1Outcome || new Map<string, 'completed' | 'no_show' | 'pending'>();
-
-    cohortDealsMap.forEach((info, dealId) => {
+    const r1AttendeesList = cohort?.r1Attendees || [];
+    r1AttendeesList.forEach(({ dealId, scheduledAt, outcome }) => {
       const ch = channelOf(dealId);
       const slot = get(ch);
       slot.r1Agendada++;
-      const item = buildItem(dealId, info.anchor || '', null);
+      const item = buildItem(dealId, scheduledAt, null);
       pushDet(ch, 'r1Agendada', item);
-      const outcome = r1OutcomeMap.get(dealId);
       if (outcome === 'completed') {
         slot.r1Realizada++;
         pushDet(ch, 'r1Realizada', { ...item, status: 'completed' });
