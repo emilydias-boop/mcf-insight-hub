@@ -250,9 +250,14 @@ export function NoShowEvidenceDialog({
         return;
       }
 
-      // Se foi contestação → não tenta marcar no_show ainda (aguarda gestor)
+      // Se ficou pendente de revisão (contestação OU inconclusivo+justificativa)
+      // → não marca no_show ainda; aguarda aprovação do gestor.
       if (commitData?.final_status === "pending_review") {
-        toast.success("Contestação enviada para revisão do gestor.");
+        toast.success(
+          isContest
+            ? "Contestação enviada para revisão do gestor."
+            : "Evidência enviada para aprovação do gestor — o No-Show só será aplicado após aprovação.",
+        );
         onOpenChange(false);
         return;
       }
