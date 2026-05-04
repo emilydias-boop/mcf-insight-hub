@@ -36,6 +36,9 @@ interface UseSdrMeetingsFromAgendaParams {
    *  Usado especialmente pelo card "Pendentes / Sem Desfecho" para fechar a
    *  conta com R1 Agendada. Padrão: false. */
   includeCancelled?: boolean;
+  /** Quando true, usa o RPC alinhado ao KPI Agendamentos (mesma janela e
+   *  dedup do painel "Reuniões da Equipe"). Padrão: false (comportamento legado). */
+  alignedWithKpi?: boolean;
 }
 
 export function useSdrMeetingsFromAgenda({
@@ -44,6 +47,7 @@ export function useSdrMeetingsFromAgenda({
   sdrEmailFilter,
   buFilter,
   includeCancelled = false,
+  alignedWithKpi = false,
 }: UseSdrMeetingsFromAgendaParams) {
   return useQuery({
     queryKey: [
@@ -53,6 +57,7 @@ export function useSdrMeetingsFromAgenda({
       sdrEmailFilter,
       buFilter,
       includeCancelled,
+      alignedWithKpi,
     ],
     queryFn: async (): Promise<MeetingV2[]> => {
       if (!startDate || !endDate) return [];
@@ -60,7 +65,11 @@ export function useSdrMeetingsFromAgenda({
       const startStr = format(startDate, "yyyy-MM-dd");
       const endStr = format(endDate, "yyyy-MM-dd");
 
-      const { data, error } = await supabase.rpc("get_sdr_meetings_from_agenda", {
+      const rpcName = alignedWithKpi
+        ? "get_sdr_meetings_from_agenda_aligned"
+        : "get_sdr_meetings_from_agenda";
+
+      const { data, error } = await supabase.rpc(rpcName as any, {
         start_date: startStr,
         end_date: endStr,
         sdr_email_filter: sdrEmailFilter || null,

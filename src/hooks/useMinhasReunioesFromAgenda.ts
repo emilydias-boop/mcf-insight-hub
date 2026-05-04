@@ -63,6 +63,9 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
     endDate, 
     sdrEmailFilter: sdrEmail,
     buFilter: squad,
+    // Alinha a tabela com o KPI de Agendamentos da equipe:
+    // mesma janela (booked_at), dedup por (deal, dia) e cap de 2 por deal.
+    alignedWithKpi: true,
   });
 
   const myMetrics = metricsQuery.data?.metrics?.[0];
