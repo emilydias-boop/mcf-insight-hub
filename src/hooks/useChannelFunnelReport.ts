@@ -462,7 +462,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     (cohort?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
     carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
     entradasDeals.forEach(id => s.add(id));
-    contratoPagoAligned.forEach(id => s.add(id));
+    contratoPagoAligned.forEach(({ dealId }) => s.add(dealId));
     return Array.from(s);
   }, [cohort, carrinhoRows, entradasDeals, contratoPagoAligned]);
 
