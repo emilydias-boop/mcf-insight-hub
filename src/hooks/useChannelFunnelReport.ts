@@ -883,7 +883,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails]);
 
   return {
     rows,
