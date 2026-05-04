@@ -383,11 +383,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   //     Independente de a R1 estar na janela.
   // ================================================================
   const allowedEmailsKey = useMemo(() => Array.from(allowedSdrEmails).sort().join(','), [allowedSdrEmails]);
-  const { data: contratoPagoAligned = new Set<string>(), isLoading: loadingContratos } = useQuery<Set<string>>({
+  const { data: contratoPagoAligned = [] as Array<{ dealId: string; sdrId: string }>, isLoading: loadingContratos } = useQuery<Array<{ dealId: string; sdrId: string }>>({
     queryKey: ['funnel-contratos-aligned', startDate, endDate, bu, allowedEmailsKey],
     queryFn: async () => {
-      const s = new Set<string>();
-      if (!startDate || !endDate || allowedSdrEmails.size === 0) return s;
+      const out: Array<{ dealId: string; sdrId: string }> = [];
+      if (!startDate || !endDate || allowedSdrEmails.size === 0) return out;
       const allowedList = Array.from(allowedSdrEmails);
       // 1) Resolver profile.id dos SDRs ativos
       const { data: profs } = await supabase
@@ -395,7 +395,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         .select('id, email')
         .in('email', allowedList);
       const sdrIds = (profs || []).map((p: any) => p.id);
-      if (sdrIds.length === 0) return s;
+      if (sdrIds.length === 0) return out;
       // 2) Buscar attendees com contract_paid_at na janela
       const pageSize = 1000;
       let from = 0, more = true;
@@ -411,11 +411,13 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           .range(from, from + pageSize - 1);
         if (error) { console.error('[funnel-contratos-aligned] error', error); break; }
         const batch = data || [];
-        batch.forEach((r: any) => { if (r.deal_id) s.add(r.deal_id); });
+        batch.forEach((r: any) => {
+          if (r.deal_id && r.booked_by) out.push({ dealId: r.deal_id, sdrId: r.booked_by });
+        });
         more = batch.length >= pageSize;
         from += pageSize;
       }
-      return s;
+      return out;
     },
     enabled: !!startDate && !!endDate && allowedSdrEmails.size > 0,
     staleTime: 60_000,
