@@ -441,7 +441,12 @@ Deno.serve(async (req) => {
       let finalStatus: "approved" | "blocked" | "pending_review" = "approved";
       let managerReviewStatus: "pending" | null = null;
       if (effectiveVerdict === "confirmed") finalStatus = "approved";
-      else if (effectiveVerdict === "inconclusive") finalStatus = "approved";
+      else if (effectiveVerdict === "inconclusive") {
+        // Inconclusivo + justificativa NÃO conta automaticamente —
+        // exige aprovação do gestor antes de virar no-show de fato.
+        finalStatus = "pending_review";
+        managerReviewStatus = "pending";
+      }
       else if (isContest) {
         finalStatus = "pending_review";
         managerReviewStatus = "pending";
