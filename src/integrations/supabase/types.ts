@@ -12069,6 +12069,31 @@ export type Database = {
           total_agendamentos: number
         }[]
       }
+      get_sdr_pendentes_drilldown: {
+        Args: {
+          bu_filter?: string
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: {
+          attendee_id: string
+          attendee_status: string
+          closer: string
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          deal_id: string
+          deal_name: string
+          intermediador: string
+          meeting_slot_id: string
+          origin_name: string
+          pendente_reason: string
+          scheduled_at: string
+          sdr_email: string
+          status_atual: string
+        }[]
+      }
       get_sdrs_for_squad_in_period: {
         Args: { p_end: string; p_squad: string; p_start: string }
         Returns: {
