@@ -17,6 +17,83 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Plus, Eye, Download, Trash2, Loader2, Clock, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { buildNfseDetailedEmailHtml } from '@/lib/nfseEmailBuilder';
+
+const FINANCEIRO_EMAIL = 'financeiro@minhacasafinanciada.com';
+
+async function sendNfseEmails(
+  employeeId: string,
+  monthLabel: string,
+  numeroNfse: string,
+  valorNfse: string,
+  storagePath: string,
+) {
+  try {
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('nome_completo, gestor_id, email_pessoal')
+      .eq('id', employeeId)
+      .single();
+    if (!emp) return;
+
+    let pdfUrl: string | undefined;
+    const { data: signedData } = await supabase.storage
+      .from('user-files')
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
+
+    const employeeName = emp.nome_completo || 'Colaborador';
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    const senderEmail = authUser?.email || emp.email_pessoal || undefined;
+    const senderName = employeeName;
+    const subject = `Nova NFSe recebida — ${employeeName}`;
+    const dataEnvio = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+
+    const htmlContent = buildNfseDetailedEmailHtml({
+      employeeName,
+      monthLabel,
+      numeroNfse,
+      valorNfse,
+      dataEnvio,
+      pdfUrl,
+    });
+
+    supabase.functions.invoke('brevo-send', {
+      body: {
+        to: FINANCEIRO_EMAIL,
+        name: 'Financeiro MCF',
+        subject,
+        htmlContent,
+        tags: ['nfse', 'financeiro'],
+        senderEmail,
+        senderName,
+      },
+    }).catch(err => console.error('Erro email financeiro:', err));
+
+    if (emp.gestor_id) {
+      const { data: gestor } = await supabase
+        .from('employees')
+        .select('email_pessoal, nome_completo')
+        .eq('id', emp.gestor_id)
+        .single();
+      if (gestor?.email_pessoal) {
+        supabase.functions.invoke('brevo-send', {
+          body: {
+            to: gestor.email_pessoal,
+            name: gestor.nome_completo || 'Supervisor',
+            subject,
+            htmlContent,
+            tags: ['nfse', 'supervisor'],
+            senderEmail,
+            senderName,
+          },
+        }).catch(err => console.error('Erro email supervisor:', err));
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao enviar emails de NFSe:', err);
+  }
+}
 
 interface EmployeeNfseTabProps {
   employee: Employee;
@@ -142,6 +219,11 @@ export default function EmployeeNfseTab({ employee }: EmployeeNfseTabProps) {
         await updateNfse.mutateAsync({ id: selectedNfse.id, data: nfseData });
       } else {
         await createNfse.mutateAsync({ ...nfseData, employee_id: employee.id });
+        if (storagePath) {
+          const monthLabel = `${MONTH_NAMES[formData.mes - 1]}/${formData.ano}`;
+          const valorStr = formData.valor_nfse.toFixed(2).replace('.', ',');
+          sendNfseEmails(employee.id, monthLabel, formData.numero_nfse, valorStr, storagePath);
+        }
       }
 
       setDialogOpen(false);
