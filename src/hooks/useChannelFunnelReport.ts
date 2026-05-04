@@ -340,12 +340,11 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // ================================================================
   const allInvolvedDealIds = useMemo(() => {
     const s = new Set<string>();
-    (dealsByPeriod?.dealsCreated || []).forEach(d => s.add(d.id));
-    (dealsByPeriod?.r1Deals || new Map()).forEach((_, id) => s.add(id));
-    (dealsByPeriod?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
+    (cohort?.cohortDeals || new Map()).forEach((_v, id) => s.add(id));
+    (cohort?.contratoPagoDeals || new Set()).forEach(id => s.add(id));
     carrinhoRows.forEach(c => { if (c.deal_id) s.add(c.deal_id); });
     return Array.from(s);
-  }, [dealsByPeriod, carrinhoRows]);
+  }, [cohort, carrinhoRows]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
     queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
