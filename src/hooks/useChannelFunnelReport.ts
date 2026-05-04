@@ -658,16 +658,17 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
+    // Conta CADA attendee R1 individualmente (1 linha por agendamento), igual ao KPI
+    // "R1 AGENDADA" do header. Sem dedupe por deal — remarcações/segunda tentativa
+    // contam separado.
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
-    const r1OutcomeMap = cohort?.r1Outcome || new Map<string, 'completed' | 'no_show' | 'pending'>();
-
-    cohortDealsMap.forEach((info, dealId) => {
+    const r1AttendeesList = cohort?.r1Attendees || [];
+    r1AttendeesList.forEach(({ dealId, scheduledAt, outcome }) => {
       const ch = channelOf(dealId);
       const slot = get(ch);
       slot.r1Agendada++;
-      const item = buildItem(dealId, info.anchor || '', null);
+      const item = buildItem(dealId, scheduledAt, null);
       pushDet(ch, 'r1Agendada', item);
-      const outcome = r1OutcomeMap.get(dealId);
       if (outcome === 'completed') {
         slot.r1Realizada++;
         pushDet(ch, 'r1Realizada', { ...item, status: 'completed' });
