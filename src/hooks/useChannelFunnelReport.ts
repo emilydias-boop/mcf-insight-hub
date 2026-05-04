@@ -7,16 +7,19 @@ import { format } from 'date-fns';
 import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 /**
- * Funil por Canal — fotografia independente por coluna, dentro da janela exata.
+ * Funil por Canal (COHORT) — funil sequencial REAL.
+ *
+ * Âncora do cohort: R1 Agendada com `scheduled_at` dentro da janela do filtro.
+ * Janela de seguimento: 30 dias corridos após `r1.scheduled_at` de cada deal.
  *
  * Princípio:
- *  - Cada coluna conta DEALS ÚNICOS (ou EMAILS ÚNICOS para venda)
- *    cujo evento principal cai estritamente dentro do intervalo selecionado.
- *  - Sem inflar por reagendamento (1 deal = 1 unidade).
- *  - Sem filtros escondidos de "primeira-compra-da-vida" — venda final inclui
- *    todas as vendas de parceria que entraram no período (incluindo upsells/recompras).
- *  - Classificador de canal único (classifyChannelWith30dRule) aplicado a todos
- *    os deals/contatos da BU — soma por canal sempre fecha.
+ *  - O cohort base é "deals únicos com R1 marcada na janela" (= coluna R1 Agend.).
+ *  - As demais colunas são SUBCONJUNTOS desse cohort: contam o mesmo deal apenas
+ *    se o evento posterior (R1 Realizada / No-Show / Contrato Pago / R2 / Venda)
+ *    aconteceu entre `r1.scheduled_at` e `r1.scheduled_at + 30 dias`.
+ *  - Cada deal conta uma única vez por coluna (dedup por deal_id ou email).
+ *  - "Entradas" = tamanho do cohort (mesmo valor de R1 Agend.) — mantido por
+ *    compatibilidade com a exportação. A UI esconde essa coluna.
  */
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -31,7 +34,7 @@ export function displayChannelLabel(raw: string): string {
 export interface ChannelFunnelRow {
   channel: string;
   channelLabel: string;
-  entradas: number;
+  entradas: number;          // = r1Agendada (tamanho do cohort) — compat
   r1Agendada: number;
   r1Realizada: number;
   noShow: number;
@@ -48,7 +51,7 @@ export interface ChannelFunnelRow {
   r1AgToReal: number;
   r1RealToContrato: number;
   aprovadoToVenda: number;
-  entradaToVenda: number;
+  entradaToVenda: number;    // = cohort → venda final
   taxaNoShow: number;
 }
 
