@@ -26,16 +26,30 @@ function pct(n: number): string {
 }
 
 function pctBadge(n: number) {
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="inline-flex min-w-[4.75rem] justify-center text-muted-foreground text-base">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
-  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
+  return (
+    <Badge
+      variant={variant as any}
+      className="min-w-[4.75rem] justify-center px-3 py-1.5 font-mono text-base font-extrabold tabular-nums shadow-sm"
+    >
+      {n.toFixed(1)}%
+    </Badge>
+  );
 }
 
 function pctBadgeInverted(n: number) {
   // Para No-Show: quanto menor, melhor
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="inline-flex min-w-[4.75rem] justify-center text-muted-foreground text-base">—</span>;
   const variant = n >= 30 ? 'destructive' : n >= 20 ? 'secondary' : 'default';
-  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
+  return (
+    <Badge
+      variant={variant as any}
+      className="min-w-[4.75rem] justify-center px-3 py-1.5 font-mono text-base font-extrabold tabular-nums shadow-sm"
+    >
+      {n.toFixed(1)}%
+    </Badge>
+  );
 }
 
 function HeaderWithInfo({ label, info, align = 'right' }: { label: string; info: string; align?: 'left' | 'right' }) {
@@ -335,7 +349,7 @@ function ConversionCard({ label, value }: { label: string; value: number }) {
     <Card className="bg-muted/30">
       <CardContent className="pt-4 pb-4">
         <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-xl font-bold">{pct(value)}</p>
+        <p className="font-mono text-2xl font-extrabold tabular-nums text-foreground">{pct(value)}</p>
       </CardContent>
     </Card>
   );
