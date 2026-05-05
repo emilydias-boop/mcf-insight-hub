@@ -1380,14 +1380,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
                   <FormField
                     control={form.control}
-                    name="data_reserva"
+                    name={tipoRegistroWatch === 'reserva' ? 'data_reserva' : 'data_contratacao'}
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                         <FormLabel>
-                           {tipoRegistroWatch === 'reserva'
-                             ? 'Data da Reserva *'
-                             : 'Data da Contratação * (1ª parcela paga)'}
-                         </FormLabel>
+                        <FormLabel>
+                          {tipoRegistroWatch === 'reserva'
+                            ? 'Data da Reserva *'
+                            : 'Data de Contratação * (1ª parcela paga)'}
+                        </FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -1399,7 +1399,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                                 )}
                               >
                                 {field.value ? (
-                                  format(field.value, 'dd/MM/yyyy', { locale: ptBR })
+                                  format(field.value as Date, 'dd/MM/yyyy', { locale: ptBR })
                                 ) : (
                                   <span>Selecione</span>
                                 )}
@@ -1410,7 +1410,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           <PopoverContent className="w-auto p-0" align="start">
                             <Calendar
                               mode="single"
-                              selected={field.value ?? undefined}
+                              selected={(field.value as Date) ?? undefined}
                               onSelect={field.onChange}
                               locale={ptBR}
                             />
