@@ -86,10 +86,10 @@ export function useCarrinhoUnifiedData(
 
       const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
         p_week_start: weekStartStr,
-        p_window_start: boundaries.r2Meetings.start.toISOString(),
+        p_window_start: boundaries.carrinhoOperacional.start.toISOString(),
         p_window_end: boundaries.r2Meetings.end.toISOString(),
         p_apply_contract_cutoff: true,
-        p_previous_cutoff: boundaries.previousCutoff.toISOString(),
+        p_previous_cutoff: boundaries.carrinhoOperacional.start.toISOString(),
       });
 
       if (error) {
