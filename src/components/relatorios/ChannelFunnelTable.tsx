@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Info, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { ChannelFunnelRow, FunnelDetails, FunnelMetricKey } from '@/hooks/useChannelFunnelReport';
@@ -124,134 +125,98 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
           <p className="text-sm text-muted-foreground text-center py-4">Sem dados no período</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-background min-w-[160px]">
-                      <HeaderWithInfo
-                        label="Canal"
-                        info="Classificação 100% por TAG do deal + histórico de compra A010. A pipeline/origem NÃO classifica mais. ANAMNESE: tag ANAMNESE / ANAMNESE-INSTA / LIVE / LANÇAMENTO (sem INCOMPLETA), ou compra A010 com mais de 30 dias. A010: compra A010 ≤30 dias antes do deal, ou tag A010 sem compra. OUTROS: nenhum sinal — inclui formulários abandonados (ANAMNESE-INCOMPLETA) e leads do pipeline Piloto Anamnese sem tag completa."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Entradas"
-                        info="Deals (leads) criados na janela do filtro, filtrados pela origem da BU. É a base de aquisição do período."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="R1 Agend."
-                        info="Deals únicos com R1 cujo scheduled_at cai na janela (status NÃO em cancelled/rescheduled). Cada deal conta uma vez — reagendamentos não inflam."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="R1 Realiz."
-                        info="Deals com R1 (scheduled_at na janela) cujo desfecho final foi completed (vale o melhor desfecho: completed > no_show > pending)."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="No-Show"
-                        info="Deals com R1 na janela cujo desfecho final foi no_show (sem completed posterior na janela)."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Contrato Pago"
-                        info="Deals cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro da janela do filtro."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="R2 Agend."
-                        info="Deals cuja R2 (scheduled_at) ocorreu dentro da janela. Deduplicado por deal."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="R2 Realiz."
-                        info="Deals com R2 completed/realizada na janela."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Aprovados"
-                        info="Deals com R2 marcada como 'aprovado' na janela."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Reprovados"
-                        info="Deals cuja R2 foi marcada como reembolso/desistente/reprovado/cancelado na janela."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Próx. Semana"
-                        info="Deals cuja R2 foi marcada como 'Próxima semana' (será trabalhado na próxima safra)."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Venda Final"
-                        info="Vendas de produtos de parceria cujo sale_date cai na janela. Deduplicado por email."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Fat. Bruto"
-                        info="Soma de reference_price (preço de tabela) das vendas únicas no período. Inclui upsells/recompras."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
-                        label="Fat. Líquido"
-                        info="Soma do valor efetivamente recebido no Hubla (product_price) das vendas únicas no período. Inclui upsells/recompras."
-                      />
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(r => (
-                    <TableRow key={r.channel}>
-                      <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
-                      <Cell value={r.entradas}      channel={r.channel} channelLabel={r.channelLabel} metric="entradas" />
-                      <Cell value={r.r1Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
-                      <Cell value={r.r1Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
-                      <Cell value={r.noShow}        channel={r.channel} channelLabel={r.channelLabel} metric="noShow" className="text-destructive" />
-                      <Cell value={r.contratoPago}  channel={r.channel} channelLabel={r.channelLabel} metric="contratoPago" />
-                      <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
-                      <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
-                      <Cell value={r.aprovados}     channel={r.channel} channelLabel={r.channelLabel} metric="aprovados" className="text-success" />
-                      <Cell value={r.reprovados}    channel={r.channel} channelLabel={r.channelLabel} metric="reprovados" className="text-destructive" />
-                      <Cell value={r.proximaSemana} channel={r.channel} channelLabel={r.channelLabel} metric="proximaSemana" className="text-muted-foreground" />
-                      <Cell value={r.vendaFinal}    channel={r.channel} channelLabel={r.channelLabel} metric="vendaFinal" className="font-semibold" />
-                      <Cell value={r.faturamentoBruto}   channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoBruto"   className="font-semibold" isMonetary />
-                      <Cell value={r.faturamentoLiquido} channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoLiquido" className="font-semibold" isMonetary />
+            <Tabs defaultValue="ate-contrato" className="w-full">
+              <TabsList className="grid w-full max-w-xl grid-cols-2">
+                <TabsTrigger value="ate-contrato">Até Contrato Pago</TabsTrigger>
+                <TabsTrigger value="pos-contrato">Pós Contrato (1º Pós-Vendas)</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="ate-contrato" className="overflow-x-auto mt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-background min-w-[160px]">
+                        <HeaderWithInfo label="Canal" info="Classificação por TAG do deal + histórico A010." />
+                      </TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Entradas" info="Deals criados na janela do filtro." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="R1 Agend." info="Deals únicos com R1 cujo scheduled_at cai na janela." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="R1 Realiz." info="Deals com R1 cujo desfecho final foi completed." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="No-Show" info="Deals com R1 na janela cujo desfecho final foi no_show." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Contrato Pago" info="Deals cujo contract_paid_at ocorreu na janela." /></TableHead>
                     </TableRow>
-                  ))}
-                  <TableRow className="border-t-2 bg-muted/30 font-semibold">
-                    <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
-                    <Cell value={totals.entradas}      channel="TOTAL" channelLabel="Total" metric="entradas" />
-                    <Cell value={totals.r1Agendada}    channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
-                    <Cell value={totals.r1Realizada}   channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
-                    <Cell value={totals.noShow}        channel="TOTAL" channelLabel="Total" metric="noShow"        className="text-destructive" />
-                    <Cell value={totals.contratoPago}  channel="TOTAL" channelLabel="Total" metric="contratoPago" />
-                    <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
-                    <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
-                    <Cell value={totals.aprovados}     channel="TOTAL" channelLabel="Total" metric="aprovados"     className="text-success" />
-                    <Cell value={totals.reprovados}    channel="TOTAL" channelLabel="Total" metric="reprovados"    className="text-destructive" />
-                    <Cell value={totals.proximaSemana} channel="TOTAL" channelLabel="Total" metric="proximaSemana" className="text-muted-foreground" />
-                    <Cell value={totals.vendaFinal}    channel="TOTAL" channelLabel="Total" metric="vendaFinal" />
-                    <Cell value={totals.faturamentoBruto}   channel="TOTAL" channelLabel="Total" metric="faturamentoBruto"   isMonetary />
-                    <Cell value={totals.faturamentoLiquido} channel="TOTAL" channelLabel="Total" metric="faturamentoLiquido" isMonetary />
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(r => (
+                      <TableRow key={`pre-${r.channel}`}>
+                        <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
+                        <Cell value={r.entradas}     channel={r.channel} channelLabel={r.channelLabel} metric="entradas" />
+                        <Cell value={r.r1Agendada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
+                        <Cell value={r.r1Realizada}  channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
+                        <Cell value={r.noShow}       channel={r.channel} channelLabel={r.channelLabel} metric="noShow" className="text-destructive" />
+                        <Cell value={r.contratoPago} channel={r.channel} channelLabel={r.channelLabel} metric="contratoPago" />
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2 bg-muted/30 font-semibold">
+                      <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
+                      <Cell value={totals.entradas}     channel="TOTAL" channelLabel="Total" metric="entradas" />
+                      <Cell value={totals.r1Agendada}   channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
+                      <Cell value={totals.r1Realizada}  channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
+                      <Cell value={totals.noShow}       channel="TOTAL" channelLabel="Total" metric="noShow" className="text-destructive" />
+                      <Cell value={totals.contratoPago} channel="TOTAL" channelLabel="Total" metric="contratoPago" />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TabsContent>
+
+              <TabsContent value="pos-contrato" className="overflow-x-auto mt-4">
+                <p className="text-xs text-muted-foreground mb-3">
+                  O que ocorre <strong>após o Contrato Pago</strong> — primeiro pós-vendas (R2 / aprovação) até a venda final da parceria e faturamento.
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-background min-w-[160px]">
+                        <HeaderWithInfo label="Canal" info="Mesma classificação da aba anterior." />
+                      </TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="R2 Agend." info="Deals cuja R2 ocorreu na janela." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="R2 Realiz." info="Deals com R2 realizada na janela." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Aprovados" info="Deals com R2 aprovada na janela." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Reprovados" info="R2 reembolso/desistente/reprovado/cancelado." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Próx. Semana" info="R2 marcada como 'Próxima semana'." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Venda Final" info="Vendas de parceria com sale_date na janela." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Fat. Bruto" info="Soma de reference_price das vendas únicas." /></TableHead>
+                      <TableHead className="text-right"><HeaderWithInfo label="Fat. Líquido" info="Soma do product_price (recebido no Hubla)." /></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(r => (
+                      <TableRow key={`pos-${r.channel}`}>
+                        <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
+                        <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
+                        <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
+                        <Cell value={r.aprovados}     channel={r.channel} channelLabel={r.channelLabel} metric="aprovados" className="text-success" />
+                        <Cell value={r.reprovados}    channel={r.channel} channelLabel={r.channelLabel} metric="reprovados" className="text-destructive" />
+                        <Cell value={r.proximaSemana} channel={r.channel} channelLabel={r.channelLabel} metric="proximaSemana" className="text-muted-foreground" />
+                        <Cell value={r.vendaFinal}    channel={r.channel} channelLabel={r.channelLabel} metric="vendaFinal" className="font-semibold" />
+                        <Cell value={r.faturamentoBruto}   channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoBruto"   className="font-semibold" isMonetary />
+                        <Cell value={r.faturamentoLiquido} channel={r.channel} channelLabel={r.channelLabel} metric="faturamentoLiquido" className="font-semibold" isMonetary />
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2 bg-muted/30 font-semibold">
+                      <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
+                      <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
+                      <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
+                      <Cell value={totals.aprovados}     channel="TOTAL" channelLabel="Total" metric="aprovados" className="text-success" />
+                      <Cell value={totals.reprovados}    channel="TOTAL" channelLabel="Total" metric="reprovados" className="text-destructive" />
+                      <Cell value={totals.proximaSemana} channel="TOTAL" channelLabel="Total" metric="proximaSemana" className="text-muted-foreground" />
+                      <Cell value={totals.vendaFinal}    channel="TOTAL" channelLabel="Total" metric="vendaFinal" />
+                      <Cell value={totals.faturamentoBruto}   channel="TOTAL" channelLabel="Total" metric="faturamentoBruto"   isMonetary />
+                      <Cell value={totals.faturamentoLiquido} channel="TOTAL" channelLabel="Total" metric="faturamentoLiquido" isMonetary />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TabsContent>
+            </Tabs>
 
             {/* Conversões agregadas */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
