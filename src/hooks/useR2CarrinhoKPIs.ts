@@ -78,9 +78,13 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       return t >= opStart && t < opEnd;
     };
 
+    const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled']);
     for (const row of unifiedData) {
       const opOk = inOperationalWindow(row);
-      if (opOk && isAgendada(row)) r2Agendadas++;
+      // R2 Agendadas: apenas pendentes (ainda não realizadas / no-show / contrato)
+      if (opOk && isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
+        r2Agendadas++;
+      }
       if (opOk && isRealizada(row)) r2Realizadas++;
       if (opOk && isForaDoCarrinho(row)) foraDoCarrinho++;
       if (isCarrinhoEligible(row)) aprovados++;
