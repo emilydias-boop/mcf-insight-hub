@@ -755,6 +755,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // Pré-filtra candidatos não-duplicados
       const candidates: any[] = [];
       const candidateDealIds: string[] = [];
+      const candidatePhoneSuffixes: string[] = [];
       for (const att of (accumulatedPaidData || []) as any[]) {
         if (seenAttendeeIds.has(att.id)) continue;
         if (att.deal_id && seenDealIds.has(att.deal_id)) continue;
@@ -762,6 +763,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         if (pk.length >= 8 && seenPhoneKeys.has(pk)) continue;
         candidates.push(att);
         if (att.deal_id) candidateDealIds.push(att.deal_id);
+        if (pk.length >= 8) candidatePhoneSuffixes.push(pk);
       }
 
       // Buscar R2s existentes desses deals para classificar corretamente
@@ -769,6 +771,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const r2StatusIds = new Set<string>();
       const statusOptionById = new Map<string, { name: string | null; color: string | null }>();
       const dealToR2Info = new Map<string, R2Info>();
+      const phoneToR2Info = new Map<string, R2Info>();
       if (candidateDealIds.length > 0) {
         // chunk para evitar URL muito longa
         const chunks: string[][] = [];
@@ -829,6 +832,82 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
+      // ================================================================
+      // Fallback: buscar R2s por TELEFONE (suffix-9), pois muitos R2s
+      // foram criados em deal_id diferente do R1 pago. Sem isso, leads
+      // com R2 "Aprovado/completed" caem como pendentes incorretamente.
+      // ================================================================
+      if (candidatePhoneSuffixes.length > 0) {
+        const uniqSfx = Array.from(new Set(candidatePhoneSuffixes));
+        // Buscamos atendentes R2 com telefone preenchido; matching por suffix-9 em JS
+        // para evitar dependência de RPC. Limitamos a janela temporal recente.
+        const sinceIso = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365).toISOString();
+        const { data: r2ByPhoneList } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            id, deal_id, status, r2_status_id, attendee_phone,
+            meeting_slot:meeting_slots!inner(
+              scheduled_at, meeting_type, status,
+              closer:closers!meeting_slots_closer_id_fkey(name)
+            )
+          `)
+          .eq('meeting_slot.meeting_type', 'r2')
+          .gte('meeting_slot.scheduled_at', sinceIso)
+          .not('attendee_phone', 'is', null);
+
+        const sfxSet = new Set(uniqSfx);
+        const newStatusIds = new Set<string>();
+        (r2ByPhoneList || []).forEach((att: any) => {
+          const slot = att.meeting_slot;
+          if (!slot) return;
+          const sfx = normalizePhoneSuffix9(att.attendee_phone);
+          if (sfx.length < 8 || !sfxSet.has(sfx)) return;
+          const date = slot.scheduled_at || null;
+          const isFuture = date ? new Date(date) >= fridayCutoff : false;
+          const info: R2Info = {
+            date,
+            closerName: slot.closer?.name || null,
+            status: att.status || null,
+            r2StatusId: att.r2_status_id || null,
+            r2StatusName: null,
+            r2StatusColor: null,
+            isFuture,
+            attendeeId: att.id,
+          };
+          if (att.r2_status_id && !statusOptionById.has(att.r2_status_id)) {
+            newStatusIds.add(att.r2_status_id);
+          }
+          // Priorizar status final > mais recente
+          const existing = phoneToR2Info.get(sfx);
+          const isFinalNow = info.status && ['completed','contract_paid','no_show','refunded','cancelled'].includes(info.status);
+          const isFinalExisting = existing?.status && ['completed','contract_paid','no_show','refunded','cancelled'].includes(existing.status);
+          if (!existing) {
+            phoneToR2Info.set(sfx, info);
+          } else if (isFinalNow && !isFinalExisting) {
+            phoneToR2Info.set(sfx, info);
+          } else if (date && existing.date && new Date(date) > new Date(existing.date) && (isFinalNow || !isFinalExisting)) {
+            phoneToR2Info.set(sfx, info);
+          }
+        });
+        if (newStatusIds.size > 0) {
+          const { data: extraStatusOptions } = await supabase
+            .from('r2_status_options')
+            .select('id, name, color')
+            .in('id', Array.from(newStatusIds));
+          (extraStatusOptions || []).forEach((s: any) => {
+            statusOptionById.set(s.id, { name: s.name || null, color: s.color || null });
+          });
+        }
+        for (const [sfx, info] of phoneToR2Info.entries()) {
+          const status = info.r2StatusId ? statusOptionById.get(info.r2StatusId) : null;
+          phoneToR2Info.set(sfx, {
+            ...info,
+            r2StatusName: status?.name || null,
+            r2StatusColor: status?.color || null,
+          });
+        }
+      }
+
       const FINAL_STATUSES = new Set(['completed', 'contract_paid', 'no_show', 'refunded', 'cancelled']);
       // Nomes de r2_status_options que indicam classificação final do closer
       // (não devem aparecer como "R2 sem status" — closer JÁ classificou)
@@ -844,7 +923,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
         const contractPaidAt = att.contract_paid_at || slot?.scheduled_at || null;
         const diasParado = contractPaidAt ? differenceInDays(now, new Date(contractPaidAt)) : null;
-        const r2Info = att.deal_id ? dealToR2Info.get(att.deal_id) : undefined;
+        const sfx = normalizePhoneSuffix9(att.attendee_phone);
+        const r2Info = (att.deal_id ? dealToR2Info.get(att.deal_id) : undefined)
+          || (sfx.length >= 8 ? phoneToR2Info.get(sfx) : undefined);
 
         let pendingReason: PendingReason = 'aguardando_r2';
         let r2Date: string | null = null;
