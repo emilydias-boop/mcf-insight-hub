@@ -18,6 +18,7 @@ export interface ContractLifecycleFilters {
   startDate: Date;
   endDate: Date;
   weekStart?: Date;
+  mode?: 'safra' | 'custom';
   closerR1Id?: string;
   situacao?: string;
 }
@@ -133,23 +134,26 @@ function classifySituacao(
 
 export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
   return useQuery({
-    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
+    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.mode || 'safra', filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
     staleTime: 30000,
     queryFn: async () => {
       // ============================================================
       // STEP A: Fetch unified R2 data via RPC (canonical source)
       // ============================================================
+      const isCustomRange = filters.mode === 'custom';
       const weekStart = filters.weekStart || filters.startDate;
       const weekEnd = addDays(weekStart, 6);
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const r2WindowStart = isCustomRange ? startOfDay(filters.startDate) : boundaries.r2Meetings.start;
+      const r2WindowEnd = isCustomRange ? endOfDay(filters.endDate) : boundaries.r2Meetings.end;
 
       const rpcPromise = supabase.rpc('get_carrinho_r2_attendees', {
         p_week_start: weekStartStr,
-        p_window_start: boundaries.r2Meetings.start.toISOString(),
-        p_window_end: boundaries.r2Meetings.end.toISOString(),
-        p_apply_contract_cutoff: true,
-        p_previous_cutoff: boundaries.previousCutoff.toISOString(),
+        p_window_start: r2WindowStart.toISOString(),
+        p_window_end: r2WindowEnd.toISOString(),
+        p_apply_contract_cutoff: !isCustomRange,
+        p_previous_cutoff: isCustomRange ? r2WindowStart.toISOString() : boundaries.previousCutoff.toISOString(),
       });
 
       // ============================================================
@@ -163,9 +167,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', contractBoundaryStart)
-        .lte('sale_date', contractBoundaryEnd);
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
