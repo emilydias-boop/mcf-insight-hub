@@ -169,8 +169,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .or(`sale_date.lte.${contractBoundaryEnd},sale_status.eq.refunded`);
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
@@ -469,6 +468,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'hubla',
           semSucessoObservacao: null,
           semSucessoTentativas: null,
+          isBacklogPending: situacao === 'pendente',
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
