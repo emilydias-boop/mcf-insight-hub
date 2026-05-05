@@ -169,7 +169,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+        .gte('sale_date', contractBoundaryStart)
+        .lte('sale_date', contractBoundaryEnd);
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
@@ -414,10 +416,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const seenOrphanKeys = new Set<string>();
       const orphansByPhone = new Map<string, ContractLifecycleRow>();
       const orphansByEmail = new Map<string, ContractLifecycleRow>();
+      const accumulatedPaidPhones = new Set(
+        ((accumulatedPaidData || []) as any[])
+          .map(att => normalizePhoneSuffix9(att.attendee_phone))
+          .filter(pk => pk.length >= 8)
+      );
 
       for (const info of allHublaInfos) {
         const phoneKey = normalizePhoneSuffix9(info.phone);
         const emailKey = info.email;
+        if (phoneKey.length >= 8 && accumulatedPaidPhones.has(phoneKey)) continue;
 
         const matchedByPhone = phoneKey.length >= 8 && matchedHublaPhones.has(phoneKey);
         const matchedByEmail = emailKey && matchedHublaEmails.has(emailKey);
@@ -468,7 +476,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'hubla',
           semSucessoObservacao: null,
           semSucessoTentativas: null,
-          isBacklogPending: situacao === 'pendente',
+          isBacklogPending: false,
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
