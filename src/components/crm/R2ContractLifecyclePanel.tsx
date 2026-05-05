@@ -216,12 +216,13 @@ export function R2ContractLifecyclePanel() {
 
   // Pendentes children: recentes vs antigos
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0, semSucesso: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
       proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
+      semSucesso: pendentes.filter(r => r.pendingReason === 'sem_sucesso').length,
     };
   }, [rows]);
 
@@ -288,6 +289,8 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
           } else if (activeSubFilter === 'proxima_safra') {
             result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
+          } else if (activeSubFilter === 'sem_sucesso') {
+            result = result.filter(r => r.pendingReason === 'sem_sucesso');
           }
         }
       }
@@ -673,7 +676,12 @@ export function R2ContractLifecyclePanel() {
                       </TableCell>
                       <TableCell>
                         {row.situacao === 'pendente'
-                          ? <PendingReasonBadge reason={row.pendingReason} futureDate={row.futureR2Date} />
+                          ? <PendingReasonBadge
+                              reason={row.pendingReason}
+                              futureDate={row.futureR2Date}
+                              semSucessoObservacao={row.semSucessoObservacao}
+                              semSucessoTentativas={row.semSucessoTentativas}
+                            />
                           : <span className="text-muted-foreground text-xs">—</span>
                         }
                       </TableCell>
