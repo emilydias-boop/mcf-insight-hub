@@ -11,6 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCRMDeal } from '@/hooks/useCRMData';
+import { useUpdateCRMDeal } from '@/hooks/useCRMData';
+import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useMeetingSuggestion } from '@/hooks/useMeetingSuggestion';
 import { useSaveQualificationNote } from '@/hooks/useQualificationNote';
 import { SuggestionCard } from './SuggestionCard';
@@ -25,6 +27,18 @@ import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2 } fro
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Stage "Em contato" no Pipeline Inside Sales
+const EM_CONTATO_STAGE_ID = 'b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01';
+// Stages que PODEM ser movidas para "Em contato" (anteriores a R1 Agendada)
+const ALLOWED_SOURCE_STAGES_FOR_EM_CONTATO = new Set([
+  'e6fab26d-f16d-4b00-900f-ca915cbfe9d9', // ANAMNESE INCOMPLETA
+  'd346320a-00b0-4e9f-89b6-149ad1c34061', // Lead Gratuito
+  '3c81d73b-0d5d-480f-a3c9-ab7a6c7965a2', // Lead Instagram
+  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
+  'a1d19874-4d47-4405-94fd-fb5237da44dd', // Lead Qualificado
+  'b06c9413-0312-4f1d-89b4-822d79bc6a90', // Sem Interesse
+]);
 
 interface QualificationAndScheduleModalProps {
   open: boolean;
@@ -44,6 +58,8 @@ export function QualificationAndScheduleModal({
   const { user } = useAuth();
   const { data: deal, refetch: refetchDeal } = useCRMDeal(dealId);
   const saveQualification = useSaveQualificationNote();
+  const updateDeal = useUpdateCRMDeal();
+  const createActivity = useCreateDealActivity();
   
   const [activeTab, setActiveTab] = useState<string>(autoFocus);
   const [qualificationData, setQualificationData] = useState<QualificationDataType>({});
@@ -51,6 +67,7 @@ export function QualificationAndScheduleModal({
   const [isQualificationSaved, setIsQualificationSaved] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showManualSchedule, setShowManualSchedule] = useState(false);
+  const [faleiComLead, setFaleiComLead] = useState(false);
 
   // Buscar sugestões de agendamento
   const { suggestions, topSuggestion, isLoading: suggestionsLoading } = useMeetingSuggestion({
@@ -120,6 +137,28 @@ export function QualificationAndScheduleModal({
         summary,
         paraR1: true,
       });
+
+      // Se SDR confirmou que falou com o lead, mover para "Em contato"
+      // (somente se a stage atual permitir — não mexe em R1 Agendada+)
+      if (faleiComLead && deal?.stage_id && ALLOWED_SOURCE_STAGES_FOR_EM_CONTATO.has(deal.stage_id)) {
+        try {
+          const previousStageId = deal.stage_id;
+          await updateDeal.mutateAsync({
+            id: dealId,
+            stage_id: EM_CONTATO_STAGE_ID,
+          } as any);
+          await createActivity.mutateAsync({
+            deal_id: dealId,
+            activity_type: 'stage_change',
+            description: 'Movido para "Em contato" — SDR confirmou conversa com o lead via Twilio',
+            from_stage: previousStageId,
+            to_stage: EM_CONTATO_STAGE_ID,
+          });
+          toast.success('Lead movido para "Em contato" 🎯');
+        } catch (moveErr) {
+          console.error('[Em contato] Falha ao mover stage:', moveErr);
+        }
+      }
 
       setIsQualificationSaved(true);
       setIsEditing(false);
@@ -297,6 +336,25 @@ export function QualificationAndScheduleModal({
                       rows={5}
                       className="text-sm"
                     />
+                  </div>
+
+                  {/* Falei com o lead → move para "Em contato" */}
+                  <div className="flex items-start gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                    <Checkbox
+                      id="falei-com-lead"
+                      checked={faleiComLead}
+                      onCheckedChange={(checked) => setFaleiComLead(!!checked)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="falei-com-lead" className="cursor-pointer font-medium">
+                        ✅ Falei com o lead (não foi caixa postal)
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Ao salvar, o lead será movido automaticamente para a etapa <strong>Em contato</strong>.
+                        Não se aplica se o lead já estiver em R1 Agendada ou etapas posteriores.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Actions */}
