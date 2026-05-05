@@ -156,13 +156,78 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .gte('sale_date', contractBoundaryStart)
         .lte('sale_date', contractBoundaryEnd);
 
-      const [{ data: rpcData, error: rpcError }, { data: hublaTx, error: hublaError }] = await Promise.all([
+      // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
+      const semSucessoPromise = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          attendee_name,
+          attendee_phone,
+          deal_id,
+          contract_paid_at,
+          r2_observations,
+          created_at,
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+        `)
+        .eq('status', 'sem_sucesso')
+        .eq('meeting_slot.meeting_type', 'r1');
+
+      const [
+        { data: rpcData, error: rpcError },
+        { data: hublaTx, error: hublaError },
+        { data: semSucessoData, error: semSucessoError },
+      ] = await Promise.all([
         rpcPromise,
         hublaPromise,
+        semSucessoPromise,
       ]);
 
       if (rpcError) throw rpcError;
       if (hublaError) throw hublaError;
+      if (semSucessoError) throw semSucessoError;
+
+      // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
+      type SemSucessoInfo = {
+        attendeeId: string;
+        dealId: string | null;
+        observacao: string;
+        tentativas: number;
+        contractPaidAt: string | null;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+      };
+      const semSucessoByPhone = new Map<string, SemSucessoInfo>();
+      const semSucessoByDeal = new Map<string, SemSucessoInfo>();
+      const allSemSucesso: SemSucessoInfo[] = [];
+      for (const att of (semSucessoData || []) as any[]) {
+        let observacao = '';
+        let tentativas = 0;
+        try {
+          const meta = JSON.parse(att.r2_observations || '{}');
+          if (meta.sem_sucesso) {
+            observacao = meta.observacao || '';
+            tentativas = meta.tentativas || 0;
+          }
+        } catch { /* ignore */ }
+        const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+        const info: SemSucessoInfo = {
+          attendeeId: att.id,
+          dealId: att.deal_id || null,
+          observacao,
+          tentativas,
+          contractPaidAt: att.contract_paid_at || slot?.scheduled_at || att.created_at || null,
+          attendeeName: att.attendee_name || null,
+          attendeePhone: att.attendee_phone || null,
+        };
+        allSemSucesso.push(info);
+        const phoneKey = normalizePhoneSuffix9(att.attendee_phone);
+        if (phoneKey.length >= 8 && !semSucessoByPhone.has(phoneKey)) {
+          semSucessoByPhone.set(phoneKey, info);
+        }
+        if (info.dealId && !semSucessoByDeal.has(info.dealId)) {
+          semSucessoByDeal.set(info.dealId, info);
+        }
+      }
 
       // ============================================================
       // STEP C: Build Hubla lookup maps (by phone & email)
