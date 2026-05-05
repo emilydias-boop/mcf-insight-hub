@@ -144,7 +144,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const weekStart = filters.weekStart || filters.startDate;
       const weekEnd = addDays(weekStart, 6);
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const weekStartStr = isCustomRange ? '1900-01-01' : format(weekStart, 'yyyy-MM-dd');
       const r2WindowStart = isCustomRange ? startOfDay(filters.startDate) : boundaries.r2Meetings.start;
       const r2WindowEnd = isCustomRange ? endOfDay(filters.endDate) : boundaries.r2Meetings.end;
 
