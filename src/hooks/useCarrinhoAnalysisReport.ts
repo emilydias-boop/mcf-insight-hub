@@ -307,9 +307,11 @@ function pickBestPhoneMatchedContact(
 export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date | null, config?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const cutoffDayKey = config?.carrinhos?.[0]?.dia_corte ?? config?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+  const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
 
   return useQuery({
-    queryKey: ['carrinho-analysis-v2', startDate?.toISOString(), endDate?.toISOString(), cutoffKey, prevCutoffKey],
+    queryKey: ['carrinho-analysis-v2', startDate?.toISOString(), endDate?.toISOString(), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
     enabled: !!startDate && !!endDate,
     queryFn: async (): Promise<CarrinhoAnalysisData> => {
       if (!startDate || !endDate) throw new Error('Datas não definidas');
