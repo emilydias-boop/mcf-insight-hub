@@ -120,17 +120,17 @@ export function getCarrinhoMetricBoundaries(
   const prevCutoffOffset = (prevLastDay - previousCutoffBase.getDay() + 7) % 7;
   const previousCutoffDay = addDays(previousCutoffBase, prevCutoffOffset);
 
-  // Horário de corte da sexta atual (default 12:00)
+  // Horário do corte atual (dia + hora configurados)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
-  const currentFridayCutoff = new Date(
+  const currentCutoff = new Date(
     currentCutoffDay.getFullYear(), currentCutoffDay.getMonth(), currentCutoffDay.getDate(),
     cutHour, cutMinute || 0, 0, 0
   );
   // Horário de corte ANTERIOR (usa previousConfig se disponível, mesma posição de dia da semana atual)
   const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte || horarioCorte;
   const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
-  const previousFridayCutoff = new Date(
+  const previousCutoff = new Date(
     previousCutoffDay.getFullYear(), previousCutoffDay.getMonth(), previousCutoffDay.getDate(),
     prevCutHour, prevCutMinute || 0, 0, 0
   );
@@ -144,13 +144,13 @@ export function getCarrinhoMetricBoundaries(
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff },
-    aprovados: { start: previousFridayCutoff, end: currentFridayCutoff },
-    vendasParceria: { start: currentFridayCutoff, end: nextMondayEnd },
+    r2Meetings: { start: previousCutoff, end: currentCutoff },
+    aprovados: { start: previousCutoff, end: currentCutoff },
+    vendasParceria: { start: currentCutoff, end: nextMondayEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
-    previousCutoff: previousFridayCutoff,
-    safraOpeningCutoff: previousFridayCutoff,
-    carrinhoOperacional: { start: previousFridayCutoff, end: currentFridayCutoff },
+    previousCutoff,
+    safraOpeningCutoff: previousCutoff,
+    carrinhoOperacional: { start: previousCutoff, end: currentCutoff },
   };
 }
 
