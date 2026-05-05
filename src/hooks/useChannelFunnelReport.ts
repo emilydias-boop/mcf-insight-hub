@@ -788,21 +788,18 @@ export function useChannelFunnelReport(
     const fSearch = (filters?.search || '').trim().toLowerCase();
     const fSearchPhone = fSearch.replace(/\D/g, '');
     const fSource = (filters?.source && filters.source !== 'all') ? filters.source.toLowerCase() : null;
-    const fCloser = (filters?.closerEmail || '').toLowerCase() || null;
+    const fCloserDeals = closerDealIds; // Set<string> | null — null = sem filtro
     const fChannel = (filters?.channel && filters.channel !== 'all') ? filters.channel : null;
     const fOriginId = filters?.originId || null;
 
     const dealPassesFilter = (dealId: string | null | undefined): boolean => {
-      if (!dealId) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!dealId) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (fCloserDeals && !fCloserDeals.has(dealId)) return false;
       const meta = dealMeta.get(dealId);
-      if (!meta) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!meta) return !fSearch && !fSource && !fChannel && !fOriginId;
       if (fOriginId && meta.origin_id !== fOriginId) return false;
       if (fSource && (meta.data_source || '').toLowerCase() !== fSource) return false;
       if (fChannel && meta.channel !== fChannel) return false;
-      if (fCloser) {
-        const matches = meta.r1_closer_email === fCloser || meta.r2_closer_email === fCloser;
-        if (!matches) return false;
-      }
       if (fSearch) {
         const contact = meta.contact_id ? contactInfo.get(meta.contact_id) : null;
         const name = (contact?.name || '').toLowerCase();
