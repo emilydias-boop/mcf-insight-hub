@@ -264,7 +264,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       if (rpcError) throw rpcError;
       if (semSucessoError) throw semSucessoError;
-      const hublaTx = [...(hublaBacklogTx || []), ...(hublaPeriodTx || [])];
+      const hublaTx = [...(hublaPeriodTx || []), ...(hublaBacklogTx || [])];
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
