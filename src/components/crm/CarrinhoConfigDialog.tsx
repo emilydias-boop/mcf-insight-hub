@@ -46,6 +46,7 @@ function makeDefaultCarrinho(id: number): CarrinhoItem {
     dias: id === 1 ? [1, 2, 3] : [4, 5],
     horario_corte: '12:00',
     horario_reuniao: '12:00',
+    dia_corte: id === 1 ? 3 : 5,
   };
 }
 
@@ -180,6 +181,29 @@ export function CarrinhoConfigDialog({
                 </div>
 
                 <div className="space-y-1">
+                  <Label>Dia de corte</Label>
+                  <Select
+                    value={String(
+                      typeof carrinho.dia_corte === 'number'
+                        ? carrinho.dia_corte
+                        : (carrinho.dias.length > 0 ? Math.max(...carrinho.dias) : 5)
+                    )}
+                    onValueChange={v => updateCarrinho(idx, { dia_corte: parseInt(v) })}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DAYS_OF_WEEK.map(d => (
+                        <SelectItem key={d.value} value={String(d.value)}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
                   <Label>Horário de corte do carrinho</Label>
                   <Input
                     type="time"
@@ -187,7 +211,14 @@ export function CarrinhoConfigDialog({
                     onChange={e => updateCarrinho(idx, { horario_corte: e.target.value, horario_reuniao: e.target.value })}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Em dias compartilhados entre carrinhos, reuniões até este horário ficam neste carrinho; após, vão para o próximo.
+                    Corte resolvido:{' '}
+                    <strong>
+                      {DAYS_OF_WEEK.find(d => d.value === (typeof carrinho.dia_corte === 'number'
+                        ? carrinho.dia_corte
+                        : (carrinho.dias.length > 0 ? Math.max(...carrinho.dias) : 5)))?.label}
+                      {' '}às {carrinho.horario_corte}
+                    </strong>
+                    . Reuniões até esse momento ficam nesta safra; após, vão para a próxima.
                   </p>
                 </div>
               </CardContent>
