@@ -154,6 +154,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
+  const updateDeal = useUpdateCRMDeal();
+  const createDealActivity = useCreateDealActivity();
+  const [movingFollowup, setMovingFollowup] = useState(false);
   const updateNotes = useUpdateMeetingNotes();
   const addAttendee = useAddMeetingAttendee();
   const removeAttendee = useRemoveMeetingAttendee();
