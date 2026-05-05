@@ -164,14 +164,38 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const contractBoundaryStart = startOfDay(filters.startDate).toISOString();
       const contractBoundaryEnd = endOfDay(filters.endDate).toISOString();
 
-      const hublaPromise = supabase
-        .from('hubla_transactions')
-        .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
-        .eq('product_name', 'A000 - Contrato')
-        .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', contractBoundaryStart)
-        .lte('sale_date', contractBoundaryEnd);
+      const fetchHublaContracts = async (opts: { start?: string; end?: string; statuses: string[] }) => {
+        const pageSize = 1000;
+        const allRows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          let query = supabase
+            .from('hubla_transactions')
+            .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
+            .eq('product_name', 'A000 - Contrato')
+            .in('sale_status', opts.statuses)
+            .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+            .order('sale_date', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (opts.start) query = query.gte('sale_date', opts.start);
+          if (opts.end) query = query.lte('sale_date', opts.end);
+
+          const { data, error } = await query;
+          if (error) throw error;
+          allRows.push(...(data || []));
+          if (!data || data.length < pageSize) break;
+        }
+        return allRows;
+      };
+
+      const hublaPromise = fetchHublaContracts({
+        start: contractBoundaryStart,
+        end: contractBoundaryEnd,
+        statuses: ['completed', 'refunded'],
+      });
+
+      // Backlog global: contratos pagos antigos também devem aparecer em Pendentes
+      // quando ainda não foram resolvidos, sem alterar os KPIs filtrados por período.
+      const hublaBacklogPromise = fetchHublaContracts({ statuses: ['completed'] });
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
@@ -212,18 +236,19 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       const [
         { data: rpcData, error: rpcError },
-        { data: hublaTx, error: hublaError },
+        hublaTx,
+        hublaBacklogTx,
         { data: semSucessoData, error: semSucessoError },
         { data: accumulatedPaidData, error: accumulatedPaidError },
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
+        hublaBacklogPromise,
         semSucessoPromise,
         accumulatedPaidPromise,
       ]);
 
       if (rpcError) throw rpcError;
-      if (hublaError) throw hublaError;
       if (semSucessoError) throw semSucessoError;
       if (accumulatedPaidError) throw accumulatedPaidError;
 
