@@ -193,10 +193,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         statuses: ['completed', 'refunded'],
       });
 
-      // Backlog global: contratos pagos antigos também devem aparecer em Pendentes
-      // quando ainda não foram resolvidos, sem alterar os KPIs filtrados por período.
-      const hublaBacklogPromise = fetchHublaContracts({ statuses: ['completed'] });
-
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
         .from('meeting_slot_attendees')
@@ -249,13 +245,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const [
         { data: rpcData, error: rpcError },
         hublaTx,
-        hublaBacklogTx,
         { data: semSucessoData, error: semSucessoError },
         accumulatedPaidData,
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
-        hublaBacklogPromise,
         semSucessoPromise,
         accumulatedPaidPromise,
       ]);
@@ -313,8 +307,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const hublaByPhone = new Map<string, HublaInfo>();
       const hublaByEmail = new Map<string, HublaInfo>();
       const allHublaInfos: HublaInfo[] = [];
-      const allHublaBacklogInfos: HublaInfo[] = [];
-      const seenHublaBacklogKeys = new Set<string>();
 
       const parseHublaInfo = (tx: any): HublaInfo | null => {
         if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) return null;
@@ -348,19 +340,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           if (!existing) hublaByPhone.set(phoneKey, info);
           else if (info.isRefunded) existing.isRefunded = true;
         }
-      }
-
-      for (const tx of (hublaBacklogTx || []) as any[]) {
-        const info = parseHublaInfo(tx);
-        if (!info) continue;
-        const phoneKey = normalizePhoneSuffix9(info.phone);
-        const dedupKey = phoneKey.length >= 8 ? `p:${phoneKey}` : `e:${info.email}`;
-        if (!dedupKey || seenHublaBacklogKeys.has(dedupKey)) continue;
-        seenHublaBacklogKeys.add(dedupKey);
-        allHublaBacklogInfos.push(info);
-
-        if (info.email && !hublaByEmail.has(info.email)) hublaByEmail.set(info.email, info);
-        if (phoneKey.length >= 8 && !hublaByPhone.has(phoneKey)) hublaByPhone.set(phoneKey, info);
       }
 
       // Track which Hubla records were matched to RPC rows
