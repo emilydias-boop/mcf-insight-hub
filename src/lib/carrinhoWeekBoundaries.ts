@@ -104,8 +104,19 @@ export function getCarrinhoMetricBoundaries(
   const cutoffOffset = (lastDay - 4 + 7) % 7; // dias após a quinta da safra
 
   const currentCutoffDay = addDays(new Date(weekStart), cutoffOffset);
-  const previousCutoffDay = subDays(currentCutoffDay, 7);
   const nextCutoffDay = addDays(currentCutoffDay, 7);
+
+  // Dia de corte da SEMANA ANTERIOR (pode ser diferente do atual).
+  // weekStart anterior = weekStart - 7. Usamos `dia_corte` do previousConfig se presente,
+  // senão derivamos do último dia em `dias` (legado), senão fallback = mesmo dia do atual.
+  const prevFirstCart = previousConfig?.carrinhos?.[0];
+  const prevDias = prevFirstCart?.dias;
+  const prevExplicitCutDay = typeof prevFirstCart?.dia_corte === 'number' ? prevFirstCart.dia_corte : null;
+  const prevLastDay = prevExplicitCutDay !== null
+    ? prevExplicitCutDay
+    : (prevDias && prevDias.length > 0 ? Math.max(...prevDias) : lastDay);
+  const prevCutoffOffset = (prevLastDay - 4 + 7) % 7;
+  const previousCutoffDay = addDays(subDays(new Date(weekStart), 7), prevCutoffOffset);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
