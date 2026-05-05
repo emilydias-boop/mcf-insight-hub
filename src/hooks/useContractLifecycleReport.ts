@@ -112,6 +112,9 @@ function classifySituacao(
   if (r2AttendeeStatus === 'invited' || r2AttendeeStatus === 'scheduled') {
     if (r2Date) {
       const r2DateTime = new Date(r2Date);
+      if (r2DateTime < new Date()) {
+        return { situacao: 'pendente', label: '⏳ Pendente' };
+      }
       if (r2DateTime >= fridayCutoff) {
         return { situacao: 'proxima_semana', label: '📅 Próxima Semana' };
       }
