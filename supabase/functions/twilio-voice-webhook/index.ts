@@ -243,6 +243,88 @@ serve(async (req) => {
       }
     }
 
+    // ============================================================
+    // AUTO-MOVE deal para "Em contato" quando:
+    //   - chamada completou (status = completed)
+    //   - duração >= 30 segundos
+    //   - AnsweredBy = 'human' OU não foi marcado como voicemail
+    //   - deal está em uma das stages anteriores a R1 Agendada
+    // ============================================================
+    if (callStatus === 'completed') {
+      try {
+        const durationSec = parseInt(callDuration || '0') || 0;
+        const MIN_DURATION = 30;
+
+        if (durationSec >= MIN_DURATION) {
+          // Buscar o call record para descobrir deal_id e checar outcome/answered_by atual
+          const { data: callRow } = await supabase
+            .from('calls')
+            .select('id, deal_id, answered_by, outcome')
+            .eq('twilio_call_sid', callSid)
+            .maybeSingle();
+
+          const finalAnsweredBy = answeredBy || callRow?.answered_by || null;
+          const isHuman = finalAnsweredBy === 'human' || (!finalAnsweredBy && callRow?.outcome !== 'voicemail');
+
+          if (callRow?.deal_id && isHuman) {
+            const EM_CONTATO_STAGE_ID = 'b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01';
+            const ALLOWED_SOURCE_STAGES = new Set([
+              'e6fab26d-f16d-4b00-900f-ca915cbfe9d9', // ANAMNESE INCOMPLETA
+              'd346320a-00b0-4e9f-89b6-149ad1c34061', // Lead Gratuito
+              '3c81d73b-0d5d-480f-a3c9-ab7a6c7965a2', // Lead Instagram
+              'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
+              'a1d19874-4d47-4405-94fd-fb5237da44dd', // Lead Qualificado
+              'b06c9413-0312-4f1d-89b4-822d79bc6a90', // Sem Interesse
+            ]);
+
+            const { data: dealRow } = await supabase
+              .from('crm_deals')
+              .select('id, stage_id, owner_id')
+              .eq('id', callRow.deal_id)
+              .maybeSingle();
+
+            if (dealRow?.stage_id && ALLOWED_SOURCE_STAGES.has(dealRow.stage_id)) {
+              const previousStageId = dealRow.stage_id;
+
+              const { error: stageErr } = await supabase
+                .from('crm_deals')
+                .update({ stage_id: EM_CONTATO_STAGE_ID, updated_at: new Date().toISOString() })
+                .eq('id', callRow.deal_id);
+
+              if (stageErr) {
+                console.error('[Em contato] Falha ao atualizar stage:', stageErr);
+              } else {
+                await supabase.from('deal_activities').insert({
+                  deal_id: callRow.deal_id,
+                  activity_type: 'stage_change',
+                  description: `Movido automaticamente para "Em contato" — chamada Twilio com humano (duração ${durationSec}s)`,
+                  from_stage: previousStageId,
+                  to_stage: EM_CONTATO_STAGE_ID,
+                  user_id: dealRow.owner_id || null,
+                  metadata: {
+                    source: 'twilio_auto',
+                    call_sid: callSid,
+                    call_id: callRow.id,
+                    duration_seconds: durationSec,
+                    answered_by: finalAnsweredBy,
+                  },
+                });
+                console.log(`✅ Deal ${callRow.deal_id} movido para "Em contato" (call ${callSid}, ${durationSec}s, AMD=${finalAnsweredBy})`);
+              }
+            } else {
+              console.log(`[Em contato] Deal ${callRow.deal_id} não movido — stage ${dealRow?.stage_id} não permite auto-move`);
+            }
+          } else {
+            console.log(`[Em contato] Auto-move pulado — deal_id=${callRow?.deal_id}, isHuman=${isHuman}, answeredBy=${finalAnsweredBy}`);
+          }
+        } else {
+          console.log(`[Em contato] Duração ${durationSec}s abaixo do mínimo (${MIN_DURATION}s) — não move`);
+        }
+      } catch (autoMoveErr) {
+        console.error('[Em contato] Erro no auto-move:', autoMoveErr);
+      }
+    }
+
     // Return empty TwiML response
     return new Response(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
