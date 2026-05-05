@@ -188,7 +188,9 @@ export function R2ContractLifecyclePanel() {
       realizadas: periodRows.filter(r => r.situacao === 'realizada').length,
       agendados: periodRows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: periodRows.filter(r => r.situacao === 'pre_agendado').length,
-      pendentes: rows.filter(r => r.situacao === 'pendente' && r.isBacklogPending).length,
+      // Pendentes = backlog global completo (não varia com período).
+      // Inclui qualquer linha com situação 'pendente' — assim KPI bate com filhos e lista.
+      pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: periodRows.filter(r => r.situacao === 'no_show').length,
       reembolso: rows.filter(r => r.situacao === 'reembolso' && paidInPeriod(r)).length,
     };
