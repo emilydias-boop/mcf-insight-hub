@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useEffect } from 'react';
 import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 
@@ -60,6 +61,22 @@ export function useCarrinhoUnifiedData(
 ) {
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
   const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const queryClient = useQueryClient();
+
+  // Realtime: invalidate carrinho data when R2 meetings/attendees change
+  useEffect(() => {
+    const channel = supabase
+      .channel('carrinho-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_slot_attendees' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
+        queryClient.invalidateQueries({ queryKey: ['r2-carrinho-contratos'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_slots' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   return useQuery({
     queryKey: ['carrinho-unified-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffKey, prevCutoffKey],
@@ -82,7 +99,9 @@ export function useCarrinhoUnifiedData(
 
       return (data || []) as CarrinhoLeadRow[];
     },
-    staleTime: 30000,
+    staleTime: 5000,
+    refetchInterval: 20000,
+    refetchOnWindowFocus: true,
   });
 }
 
