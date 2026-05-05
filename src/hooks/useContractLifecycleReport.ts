@@ -31,6 +31,7 @@ export type PendingReason =
   | 'r2_outro_deal'          // R2 existe mas em deal diferente do contrato
   | 'reembolso_recente'      // contrato antigo, reembolso na semana
   | 'outside_legitimo'       // sem R1 nem R2, compra direta
+  | 'sem_sucesso'            // marcado manualmente como sem sucesso de contato
   | null;
 
 export interface ContractLifecycleRow {
@@ -66,6 +67,9 @@ export interface ContractLifecycleRow {
   dentroCorte: boolean;
   effectiveContractDate: string | null;
   contractSource: 'r1' | 'r2' | 'hubla' | 'none' | null;
+  // Sem Sucesso metadata (quando pendingReason = 'sem_sucesso')
+  semSucessoObservacao: string | null;
+  semSucessoTentativas: number | null;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
