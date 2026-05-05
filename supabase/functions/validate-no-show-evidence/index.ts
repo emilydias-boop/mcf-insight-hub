@@ -17,6 +17,41 @@ function normalizePhone(raw: string | null | undefined): string | null {
   return digits.slice(-9);
 }
 
+/**
+ * Extrai assinatura do telefone brasileiro tolerando variações de formato:
+ * - com/sem código do país (55)
+ * - com/sem o "9" extra do celular
+ * - com 8, 9, 10 ou 11 dígitos
+ *
+ * Retorna { last8, ddd } onde:
+ *  - last8 = últimos 8 dígitos do número local (parte invariante)
+ *  - ddd  = DDD (2 dígitos) quando identificável, caso contrário null
+ *
+ * Match considera dois telefones equivalentes quando os últimos 8 dígitos
+ * batem E (DDD ausente em um lado OU iguais).
+ */
+function phoneSignature(raw: string | null | undefined): { last8: string; ddd: string | null } | null {
+  if (!raw) return null;
+  let digits = raw.replace(/\D+/g, "");
+  if (digits.length < 8) return null;
+  // remove código do país (55) quando presente em formatos longos
+  if (digits.length >= 12 && digits.startsWith("55")) digits = digits.slice(2);
+  // tira o "9" extra do celular: DDD + 9XXXXXXXX -> DDD + XXXXXXXX
+  if (digits.length === 11 && digits[2] === "9") digits = digits.slice(0, 2) + digits.slice(3);
+  const last8 = digits.slice(-8);
+  const ddd = digits.length >= 10 ? digits.slice(-10, -8) : null;
+  return { last8, ddd };
+}
+
+function phonesEquivalent(a: string | null | undefined, b: string | null | undefined): boolean | null {
+  const sa = phoneSignature(a);
+  const sb = phoneSignature(b);
+  if (!sa || !sb) return null;
+  if (sa.last8 !== sb.last8) return false;
+  if (sa.ddd && sb.ddd && sa.ddd !== sb.ddd) return false;
+  return true;
+}
+
 async function sha256Hex(buf: Uint8Array): Promise<string> {
   const hashBuf = await crypto.subtle.digest("SHA-256", buf);
   const arr = Array.from(new Uint8Array(hashBuf));
@@ -397,8 +432,8 @@ Deno.serve(async (req) => {
 
     const leadNorm = normalizePhone(lead_phone ?? null);
     const aiNorm = normalizePhone(parsed.extracted_phone ?? null);
-    const phoneMatch =
-      leadNorm && aiNorm ? leadNorm === aiNorm : null;
+    // Comparação tolerante a 8/9/10/11 dígitos, com ou sem "9" extra de celular.
+    const phoneMatch = phonesEquivalent(lead_phone, parsed.extracted_phone);
 
     // ========== COMMIT: persiste no DB com service role ==========
     if (action === "commit") {
