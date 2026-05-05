@@ -121,7 +121,7 @@ export function R2CloserColumnCalendar({
   // Filter time slots to only show configured times AND times with existing meetings
   const timeSlots = useMemo(() => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    
+
     // 1. Configured times
     const configuredTimes = new Set<string>();
     if (configuredSlotsMap) {
@@ -130,23 +130,28 @@ export function R2CloserColumnCalendar({
         Object.keys(dateSlots).forEach(t => configuredTimes.add(t));
       }
     }
-    
-    // 2. Times with existing meetings (even if not configured)
+
+    // 2. Times with existing meetings (even if not configured / not at 30-min boundary)
     meetings.forEach(m => {
       const meetingTime = parseISO(m.scheduled_at);
       if (isSameDay(meetingTime, selectedDate)) {
-        const timeStr = format(meetingTime, 'HH:mm');
-        configuredTimes.add(timeStr);
+        configuredTimes.add(format(meetingTime, 'HH:mm'));
       }
     });
-    
+
     if (configuredTimes.size === 0 && !configuredSlotsMap) {
       return ALL_TIME_SLOTS;
     }
-    
+
     if (configuredTimes.size === 0) return [];
-    
-    return ALL_TIME_SLOTS.filter(slot => configuredTimes.has(slot.label));
+
+    // Build slot list dynamically from any HH:mm (not just 30-min boundaries)
+    return Array.from(configuredTimes)
+      .map(label => {
+        const [h, m] = label.split(':').map(Number);
+        return { hour: h, minute: m, label };
+      })
+      .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
   }, [configuredSlotsMap, selectedDate, meetings]);
 
   // Contador de leads (attendees) agendados por closer no dia
