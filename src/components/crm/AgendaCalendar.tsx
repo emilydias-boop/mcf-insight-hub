@@ -1656,6 +1656,9 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="text-muted-foreground">•</span>
                                                       </>
                                                     )}
+                                                    {channelMap.get(att.id) && (
+                                                      <span className="text-[10px]" title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
+                                                    )}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                     </span>
