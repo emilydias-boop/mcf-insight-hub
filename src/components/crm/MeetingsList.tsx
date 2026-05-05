@@ -325,8 +325,27 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     );
   }
 
+  const channelCounts = { A010: 0, ANAMNESE: 0, Outro: 0 } as Record<SimpleChannel, number>;
+  for (const r of attendeeRows) channelCounts[r.channel]++;
+  const total = attendeeRows.length;
+
   return (
     <div className="border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b text-xs">
+        <span className="text-muted-foreground">
+          {channelFilter ? `Filtrado por canal: ${channelFilter}` : 'Todos os canais'}
+        </span>
+        <div className="flex items-center gap-2">
+          {!channelFilter && (
+            <>
+              <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
+              <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
+              <Badge variant="outline" className="text-muted-foreground">Outro: {channelCounts.Outro}</Badge>
+            </>
+          )}
+          <Badge variant="secondary" className="font-semibold">Total: {total}</Badge>
+        </div>
+      </div>
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
