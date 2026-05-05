@@ -752,6 +752,57 @@ export function useChannelFunnelReport(
   // ================================================================
   const { rows, totals, details } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
+
+    // ---------- Filtros locais ----------
+    const fSearch = (filters?.search || '').trim().toLowerCase();
+    const fSearchPhone = fSearch.replace(/\D/g, '');
+    const fSource = (filters?.source && filters.source !== 'all') ? filters.source.toLowerCase() : null;
+    const fCloser = (filters?.closerEmail || '').toLowerCase() || null;
+    const fChannel = (filters?.channel && filters.channel !== 'all') ? filters.channel : null;
+    const fOriginId = filters?.originId || null;
+
+    const dealPassesFilter = (dealId: string | null | undefined): boolean => {
+      if (!dealId) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      const meta = dealMeta.get(dealId);
+      if (!meta) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (fOriginId && meta.origin_id !== fOriginId) return false;
+      if (fSource && (meta.data_source || '').toLowerCase() !== fSource) return false;
+      if (fChannel && meta.channel !== fChannel) return false;
+      if (fCloser) {
+        const matches = meta.r1_closer_email === fCloser || meta.r2_closer_email === fCloser;
+        if (!matches) return false;
+      }
+      if (fSearch) {
+        const contact = meta.contact_id ? contactInfo.get(meta.contact_id) : null;
+        const name = (contact?.name || '').toLowerCase();
+        const email = (meta.email || contact?.email || '').toLowerCase();
+        const phone = (contact?.phone || '').replace(/\D/g, '');
+        const matchesText = name.includes(fSearch) || email.includes(fSearch);
+        const matchesPhone = fSearchPhone.length >= 4 && phone.includes(fSearchPhone);
+        if (!matchesText && !matchesPhone) return false;
+      }
+      return true;
+    };
+
+    const emailPassesFilter = (email: string | null | undefined): boolean => {
+      if (!email) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      // Tenta achar o deal correspondente para reaproveitar dealPassesFilter
+      let foundDealId: string | null = null;
+      dealMeta.forEach((m, id) => {
+        if (foundDealId) return;
+        if ((m.email || '').toLowerCase() === email.toLowerCase()) foundDealId = id;
+      });
+      if (foundDealId) return dealPassesFilter(foundDealId);
+      // Sem deal: aplica só os filtros que não dependem de meta
+      const ch = extraEmailChannels.get(email) || 'OUTROS';
+      if (fChannel && ch !== fChannel) return false;
+      if (fCloser || fSource || fOriginId) return false;
+      if (fSearch) {
+        if (!email.toLowerCase().includes(fSearch)) return false;
+      }
+      return true;
+    };
+
     const blank = () => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
