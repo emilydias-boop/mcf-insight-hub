@@ -151,23 +151,16 @@ export function R2ContractLifecyclePanel() {
   // KPI counts
   const kpis = useMemo(() => {
     if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
-    // Pendentes só contam contratos pagos DENTRO do período selecionado (safra)
-    // — assim Pendentes nunca ultrapassa Total Pagos da semana.
-    const inPeriod = (r: ContractLifecycleRow) => {
-      if (!r.contractPaidAt) return false;
-      const d = new Date(r.contractPaidAt);
-      return d >= safraStart && d <= safraEnd;
-    };
     return {
       total: rows.filter(r => r.isPaidContract).length,
       realizadas: rows.filter(r => r.situacao === 'realizada').length,
       agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
-      pendentes: rows.filter(r => r.situacao === 'pendente' && inPeriod(r)).length,
+      pendentes: rows.filter(r => r.situacao === 'pendente').length,
       noShow: rows.filter(r => r.situacao === 'no_show').length,
       reembolso: rows.filter(r => r.situacao === 'reembolso').length,
     };
-  }, [rows, safraStart, safraEnd]);
+  }, [rows]);
 
   // Realizadas children: dynamic by r2StatusName (only completed/contract_paid)
   // Leads whose R2 belongs to a different week are bucketed as "Outra semana"
@@ -225,12 +218,7 @@ export function R2ContractLifecyclePanel() {
   // Pendentes children: idade + motivo operacional
   const pendentesChildren = useMemo(() => {
     if (!rows) return { recentes: 0, antigos: 0, aguardandoR2: 0, r2SemStatus: 0, proximaSafra: 0, semSucesso: 0 };
-    const pendentes = rows.filter(r => {
-      if (r.situacao !== 'pendente') return false;
-      if (!r.contractPaidAt) return false;
-      const d = new Date(r.contractPaidAt);
-      return d >= safraStart && d <= safraEnd;
-    });
+    const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
@@ -239,7 +227,7 @@ export function R2ContractLifecyclePanel() {
       proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
       semSucesso: pendentes.filter(r => r.pendingReason === 'sem_sucesso').length,
     };
-  }, [rows, safraStart, safraEnd]);
+  }, [rows]);
 
   // Handle parent KPI click
   const handleParentClick = (key: string) => {
@@ -270,15 +258,6 @@ export function R2ContractLifecyclePanel() {
     // Apply parent filter
     if (expandedKpi && PARENT_SITUACOES[expandedKpi]) {
       result = result.filter(r => PARENT_SITUACOES[expandedKpi].includes(r.situacao));
-
-      // Para Pendentes, restringir ao período (contrato pago na semana selecionada)
-      if (expandedKpi === 'pendentes') {
-        result = result.filter(r => {
-          if (!r.contractPaidAt) return false;
-          const d = new Date(r.contractPaidAt);
-          return d >= safraStart && d <= safraEnd;
-        });
-      }
 
       // Apply sub-filter
       if (activeSubFilter) {
@@ -335,7 +314,7 @@ export function R2ContractLifecyclePanel() {
       );
     }
     return result;
-  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr, safraStart, safraEnd]);
+  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
