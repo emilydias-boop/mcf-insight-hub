@@ -52,9 +52,11 @@ export function useR2MetricsData(weekStart: Date, weekEnd: Date, carrinhoConfig?
   const { data: unifiedData } = useCarrinhoUnifiedData(weekStart, weekEnd, carrinhoConfig, previousConfig);
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
   const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const cutoffDayKey = carrinhoConfig?.carrinhos?.[0]?.dia_corte ?? carrinhoConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+  const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
 
   return useQuery({
-    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffKey, prevCutoffKey, unifiedData?.length],
+    queryKey: ['r2-metrics-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey, unifiedData?.length],
     queryFn: async (): Promise<R2MetricsData> => {
       if (!unifiedData) return emptyMetrics();
 

@@ -66,8 +66,11 @@ export interface R2CarrinhoVenda {
 }
 
 export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
+  const cutoffDayKey = carrinhoConfig?.carrinhos?.[0]?.dia_corte ?? carrinhoConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+  const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+
   return useQuery({
-    queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString(), carrinhoConfig?.carrinhos?.[0]?.horario_corte, previousConfig?.carrinhos?.[0]?.horario_corte],
+    queryKey: ['r2-carrinho-vendas', weekStart.toISOString(), weekEnd.toISOString(), cutoffDayKey, carrinhoConfig?.carrinhos?.[0]?.horario_corte, prevCutoffDayKey, previousConfig?.carrinhos?.[0]?.horario_corte],
     queryFn: async () => {
       const { vendasParceria: { start: effectiveStart, end: effectiveEnd }, aprovados: aprovadosWindow } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       // 1. Buscar attendees aprovados da janela operacional (Sex-Sex com corte)

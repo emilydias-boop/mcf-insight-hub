@@ -79,7 +79,7 @@ export function useR2CarrinhoData(
 
     let filtered = unifiedData;
 
-    // Janela operacional do carrinho (Sex anterior 12:00 → Sex desta semana 12:00) — usada apenas para R2s.
+    // Janela operacional do carrinho (corte anterior → corte atual) — usada apenas para R2s.
     const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
