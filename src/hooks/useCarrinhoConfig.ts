@@ -50,7 +50,26 @@ export function useCarrinhoConfig(weekStart?: Date) {
         if (val.carrinhos && val.carrinhos.length > 0) return val;
       }
 
-      // Fallback: try global key (legacy)
+      // Fallback: inherit the latest weekly config before this week.
+      // This prevents the active safra from silently reverting to the legacy global cutoff
+      // when a new week has not been explicitly saved yet.
+      if (weekKey !== 'carrinho_config') {
+        const { data: latestWeeklyData, error: latestWeeklyError } = await supabase
+          .from('settings')
+          .select('value')
+          .like('key', 'carrinho_config_%')
+          .lte('key', weekKey)
+          .order('key', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latestWeeklyError) throw latestWeeklyError;
+        if (latestWeeklyData?.value) {
+          const val = latestWeeklyData.value as unknown as CarrinhoConfig;
+          if (val.carrinhos && val.carrinhos.length > 0) return val;
+        }
+      }
+
+      // Final fallback: try global key (legacy)
       if (weekKey !== 'carrinho_config') {
         const { data: globalData, error: globalError } = await supabase
           .from('settings')
@@ -155,7 +174,9 @@ export function useCarrinhoConfig(weekStart?: Date) {
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
       queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-metrics-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-contratos'] });
       toast.success('Configuração copiada da semana anterior!');
     },
     onError: (err: Error) => toast.error(err.message || 'Erro ao copiar configuração'),

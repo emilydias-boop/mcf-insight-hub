@@ -59,7 +59,7 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
         const prevDate = subWeeks(currentWeekStart, i);
         const prevStart = getCartWeekStart(prevDate);
         const prevEnd = getCartWeekEnd(prevDate);
-        const boundaries = getCarrinhoMetricBoundaries(prevStart, prevEnd);
+        const boundaries = getCarrinhoMetricBoundaries(prevStart, prevEnd, undefined, undefined);
 
         const weekLabel = `${format(prevStart, 'dd/MM')} - ${format(prevEnd, 'dd/MM')}`;
 
