@@ -556,6 +556,37 @@ export function useChannelFunnelReport(
   });
 
   // ================================================================
+  // 3b. DEALS por CLOSER — para filtro Closer (R1 ou R2).
+  //     Busca todos os deal_ids cuja R1 ou R2 (qualquer attendee, sem
+  //     restrição de janela) foi conduzida pelo closer selecionado.
+  // ================================================================
+  const closerFilterId = filters?.closerId || null;
+  const { data: closerDealIds = null } = useQuery<Set<string> | null>({
+    queryKey: ['funnel-closer-deals', closerFilterId, bu],
+    queryFn: async () => {
+      if (!closerFilterId) return null;
+      const set = new Set<string>();
+      const pageSize = 1000;
+      let from = 0, more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, meeting_slots!inner(closer_id)')
+          .eq('meeting_slots.closer_id', closerFilterId)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel-closer-deals]', error); break; }
+        const batch = data || [];
+        batch.forEach((r: any) => { if (r.deal_id) set.add(r.deal_id); });
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      return set;
+    },
+    enabled: !!closerFilterId,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 4. VENDA FINAL — vendas de parceria com sale_date na janela.
   //    SEM filtro de "primeira-compra-da-vida" (inclui upsells/recompras).
   //    Dedupe por email dentro da janela.
