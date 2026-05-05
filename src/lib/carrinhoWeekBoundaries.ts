@@ -93,12 +93,14 @@ export function getCarrinhoMetricBoundaries(
   const thuStart = localStartOfDay(new Date(weekStart));
   const wedEnd = localEndOfDay(new Date(weekEnd));
 
-  // Dia de corte dinâmico: derivado do ÚLTIMO dia selecionado em `dias` do carrinho.
+  // Dia de corte: usa `dia_corte` explícito se presente; senão deriva do último dia em `dias` (legado).
   // weekStart = Quinta (getDay()=4). Offset desde quinta = (dia - 4 + 7) % 7.
-  // Ex.: dias=[1,2,3,4] (Seg-Qui) → último=Qui → offset=0 → corte na própria quinta da safra.
-  //      dias=[1,2,3,4,5] (Seg-Sex) → último=Sex → offset=1 → corte na sexta (legado).
-  const dias = config?.carrinhos?.[0]?.dias ?? [5];
-  const lastDay = dias.length > 0 ? Math.max(...dias) : 5;
+  const firstCart = config?.carrinhos?.[0];
+  const dias = firstCart?.dias ?? [5];
+  const explicitCutDay = typeof firstCart?.dia_corte === 'number' ? firstCart.dia_corte : null;
+  const lastDay = explicitCutDay !== null
+    ? explicitCutDay
+    : (dias.length > 0 ? Math.max(...dias) : 5);
   const cutoffOffset = (lastDay - 4 + 7) % 7; // dias após a quinta da safra
 
   const currentCutoffDay = addDays(new Date(weekStart), cutoffOffset);
