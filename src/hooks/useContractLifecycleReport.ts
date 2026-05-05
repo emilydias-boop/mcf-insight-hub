@@ -72,6 +72,8 @@ export interface ContractLifecycleRow {
   // Sem Sucesso metadata (quando pendingReason = 'sem_sucesso')
   semSucessoObservacao: string | null;
   semSucessoTentativas: number | null;
+  // Pendência acumulada aberta, independente do filtro de data do relatório
+  isBacklogPending?: boolean;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
@@ -776,6 +778,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'r1',
           semSucessoObservacao: info.observacao || null,
           semSucessoTentativas: info.tentativas || null,
+          isBacklogPending: true,
         });
       }
 
@@ -1044,6 +1047,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'r1',
           semSucessoObservacao: null,
           semSucessoTentativas: null,
+          isBacklogPending: true,
         });
         if (att.deal_id) seenDealIds.add(att.deal_id);
         const pk2 = normalizePhoneSuffix9(att.attendee_phone);
