@@ -290,6 +290,10 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) <= 3);
           } else if (activeSubFilter === 'antigos') {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
+          } else if (activeSubFilter === 'aguardando_r2') {
+            result = result.filter(r => r.pendingReason === 'aguardando_r2');
+          } else if (activeSubFilter === 'r2_sem_status') {
+            result = result.filter(r => r.pendingReason === 'r2_sem_status');
           } else if (activeSubFilter === 'proxima_safra') {
             result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
           } else if (activeSubFilter === 'sem_sucesso') {
