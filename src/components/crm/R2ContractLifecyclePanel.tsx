@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
-import { format, addWeeks, subWeeks, addDays, differenceInDays } from "date-fns";
+import { format, addWeeks, subWeeks, addDays, differenceInDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus, CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
@@ -135,16 +137,32 @@ export function R2ContractLifecyclePanel() {
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
   const [encaixarRow, setEncaixarRow] = useState<ContractLifecycleRow | null>(null);
+  const [dateMode, setDateMode] = useState<'safra' | 'custom'>('safra');
+  const [customRange, setCustomRange] = useState<{ from: Date; to: Date }>(() => {
+    const today = new Date();
+    return { from: addDays(today, -6), to: today };
+  });
 
-  const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
-  const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
-  const carrinhoFriday = useMemo(() => addDays(safraStart, 8), [safraStart]);
+  const safraStartRaw = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
+  const safraEndRaw = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
+  const carrinhoFriday = useMemo(() => addDays(safraStartRaw, 8), [safraStartRaw]);
+
+  // Período efetivo (safra ou custom) — usado em filtros de "Total Pagos"
+  const safraStart = useMemo(
+    () => dateMode === 'custom' ? startOfDay(customRange.from) : safraStartRaw,
+    [dateMode, customRange, safraStartRaw]
+  );
+  const safraEnd = useMemo(
+    () => dateMode === 'custom' ? endOfDay(customRange.to) : safraEndRaw,
+    [dateMode, customRange, safraEndRaw]
+  );
 
   const filters = useMemo(() => ({
     startDate: safraStart,
     endDate: safraEnd,
-    weekStart: safraStart,
-  }), [safraStart, safraEnd]);
+    // weekStart é usado pela RPC do Carrinho — sempre manter em base semanal mesmo em modo custom
+    weekStart: safraStartRaw,
+  }), [safraStart, safraEnd, safraStartRaw]);
 
   const { data: rows, isLoading } = useContractLifecycleReport(filters);
 
@@ -379,26 +397,78 @@ export function R2ContractLifecyclePanel() {
       <Card className="bg-card border-border">
         <CardContent className="pt-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(-1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="px-3 py-1.5 text-sm font-medium whitespace-nowrap">
-                <span className="text-muted-foreground">Carrinho </span>
-                <span className="text-foreground">Sex {format(carrinhoFriday, "dd/MM", { locale: ptBR })}</span>
-                <span className="text-muted-foreground mx-1.5">—</span>
-                <span className="text-muted-foreground">Safra: </span>
-                <span className="text-foreground">
-                  Qui {format(safraStart, "dd/MM", { locale: ptBR })} → Qua {format(safraEnd, "dd/MM", { locale: ptBR })}
-                </span>
-              </div>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(1)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="text-xs ml-1" onClick={() => setWeekDate(new Date())}>
-                Hoje
-              </Button>
+            {/* Toggle modo */}
+            <div className="flex items-center rounded-md border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setDateMode('safra')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors",
+                  dateMode === 'safra' ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted"
+                )}
+              >
+                Safra
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateMode('custom')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors border-l border-border",
+                  dateMode === 'custom' ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted"
+                )}
+              >
+                Personalizado
+              </button>
             </div>
+
+            {dateMode === 'safra' ? (
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="px-3 py-1.5 text-sm font-medium whitespace-nowrap">
+                  <span className="text-muted-foreground">Carrinho </span>
+                  <span className="text-foreground">Sex {format(carrinhoFriday, "dd/MM", { locale: ptBR })}</span>
+                  <span className="text-muted-foreground mx-1.5">—</span>
+                  <span className="text-muted-foreground">Safra: </span>
+                  <span className="text-foreground">
+                    Qui {format(safraStart, "dd/MM", { locale: ptBR })} → Qua {format(safraEnd, "dd/MM", { locale: ptBR })}
+                  </span>
+                </div>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateWeek(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="text-xs ml-1" onClick={() => setWeekDate(new Date())}>
+                  Hoje
+                </Button>
+              </div>
+            ) : (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    <span className="text-xs">
+                      {format(customRange.from, "dd/MM/yy", { locale: ptBR })} → {format(customRange.to, "dd/MM/yy", { locale: ptBR })}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0">
+                  <Calendar
+                    mode="range"
+                    selected={{ from: customRange.from, to: customRange.to }}
+                    onSelect={(range) => {
+                      if (range?.from && range?.to) {
+                        setCustomRange({ from: range.from, to: range.to });
+                      } else if (range?.from) {
+                        setCustomRange({ from: range.from, to: range.from });
+                      }
+                    }}
+                    numberOfMonths={2}
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
 
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
