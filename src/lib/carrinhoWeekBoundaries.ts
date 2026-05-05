@@ -41,7 +41,7 @@ export function getCartWeekEnd(date: Date): Date {
 export interface CarrinhoMetricBoundaries {
   /** Contratos pagos: Qui 00:00 → Qua 23:59:59.999 */
   contratos: { start: Date; end: Date };
-  /** R2 meetings: Qui 00:00 da safra → Sex DA safra no corte */
+  /** R2 meetings: janela operacional entre cortes */
   r2Meetings: { start: Date; end: Date };
   /** Aprovados: Qui 00:00 da safra → Sex DA safra no corte */
   aprovados: { start: Date; end: Date };
@@ -53,7 +53,7 @@ export interface CarrinhoMetricBoundaries {
   previousCutoff: Date;
   /** Alias semântico para previousCutoff (sexta de fechamento da safra anterior = abertura da atual) */
   safraOpeningCutoff: Date;
-  /** Janela operacional do carrinho: Sex anterior 12:00 → Sex desta semana 12:00 (filtro para R2 agendadas/realizadas/fora) */
+  /** Janela operacional do carrinho: Sex da safra no corte → Sex seguinte no corte (filtro para R2 agendadas/realizadas/fora) */
   carrinhoOperacional: { start: Date; end: Date };
 }
 
@@ -121,16 +121,16 @@ export function getCarrinhoMetricBoundaries(
     prevCutHour, prevCutMinute || 0, 0, 0
   );
 
-  // R2 Meetings e Aprovados: janela do CARRINHO = Qui da safra 00:00 → Sex da SEMANA SEGUINTE no corte.
-  // O R2 pode acontecer ao longo da semana toda da safra E até a sexta seguinte no horário de corte.
+  // R2 Meetings e Aprovados: janela do CARRINHO = Sex da safra no corte → Sex da SEMANA SEGUINTE no corte.
+  // O cutoff define o fechamento/abertura operacional da safra, então R2s antes do corte ficam na safra anterior.
   // Vendas parceria: Sex desta semana no corte → Seg 23:59 (captura boletos atrasados após o fechamento do carrinho).
   const nextMonday = addDays(nextFriday, 3); // Sex+1 + 3 = Seg da semana seguinte
   const nextMondayEnd = localEndOfDay(nextMonday);
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: thuStart, end: nextFridayCutoff },
-    aprovados: { start: thuStart, end: nextFridayCutoff },
+    r2Meetings: { start: currentFridayCutoff, end: nextFridayCutoff },
+    aprovados: { start: currentFridayCutoff, end: nextFridayCutoff },
     vendasParceria: { start: nextFridayCutoff, end: nextMondayEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: previousFridayCutoff,
