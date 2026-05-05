@@ -187,10 +187,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         return allRows;
       };
 
-      const hublaPromise = fetchHublaContracts({
+      const hublaPeriodPromise = fetchHublaContracts({
         start: contractBoundaryStart,
         end: contractBoundaryEnd,
         statuses: ['completed', 'refunded'],
+      });
+
+      // Backlog de pendentes precisa olhar contratos A000 históricos completos.
+      // Refunds históricos não entram aqui para não poluir KPI/lista de Reembolso fora do período.
+      const hublaBacklogPromise = fetchHublaContracts({
+        statuses: ['completed'],
       });
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
@@ -244,18 +250,21 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       const [
         { data: rpcData, error: rpcError },
-        hublaTx,
+        hublaPeriodTx,
+        hublaBacklogTx,
         { data: semSucessoData, error: semSucessoError },
         accumulatedPaidData,
       ] = await Promise.all([
         rpcPromise,
-        hublaPromise,
+        hublaPeriodPromise,
+        hublaBacklogPromise,
         semSucessoPromise,
         accumulatedPaidPromise,
       ]);
 
       if (rpcError) throw rpcError;
       if (semSucessoError) throw semSucessoError;
+      const hublaTx = [...(hublaPeriodTx || []), ...(hublaBacklogTx || [])];
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
