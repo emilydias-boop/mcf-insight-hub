@@ -314,7 +314,7 @@ export function R2ContractLifecyclePanel() {
       );
     }
     return result;
-  }, [rows, searchTerm, expandedKpi, activeSubFilter]);
+  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
