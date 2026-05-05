@@ -518,54 +518,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         if (emailKey) orphansByEmail.set(emailKey, orphan);
       }
 
-      for (const info of allHublaBacklogInfos) {
-        const phoneKey = normalizePhoneSuffix9(info.phone);
-        const emailKey = info.email;
-        if (phoneKey.length >= 8 && accumulatedPaidPhones.has(phoneKey)) continue;
-        if ((phoneKey.length >= 8 && matchedHublaPhones.has(phoneKey)) || (emailKey && matchedHublaEmails.has(emailKey))) continue;
-
-        const dedupKey = phoneKey.length >= 8 ? `p:${phoneKey}` : `e:${emailKey}`;
-        if (!dedupKey || seenOrphanKeys.has(dedupKey)) continue;
-        seenOrphanKeys.add(dedupKey);
-
-        const backlogOrphan: ContractLifecycleRow = {
-          id: `hubla-backlog-${emailKey || phoneKey}`,
-          leadName: info.name,
-          phone: info.phone,
-          contractPaidAt: info.saleDate,
-          dealId: null,
-          r1Date: null,
-          r1CloserName: null,
-          r1Status: 'outside',
-          sdrName: null,
-          hasR2: false,
-          r2Date: null,
-          r2CloserName: null,
-          r2StatusName: null,
-          r2StatusColor: null,
-          r2AttendeeStatus: null,
-          carrinhoStatus: null,
-          carrinhoWeekStart: null,
-          diasParado: differenceInDays(now, new Date(info.saleDate)),
-          situacao: 'pendente',
-          situacaoLabel: '⏳ Pendente',
-          isPaidContract: true,
-          pendingReason: null,
-          futureR2Date: null,
-          futureR2CloserName: null,
-          futureR2AttendeeId: null,
-          dentroCorte: false,
-          effectiveContractDate: info.saleDate,
-          contractSource: 'hubla',
-          semSucessoObservacao: null,
-          semSucessoTentativas: null,
-          isBacklogPending: true,
-        };
-        orphanRows.push(backlogOrphan);
-        if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, backlogOrphan);
-        if (emailKey) orphansByEmail.set(emailKey, backlogOrphan);
-      }
-
       // ============================================================
       // STEP F: Enrich orphans with future R2s and R1 fallback
       // (Resolve Grupos A e B do diagnóstico)
