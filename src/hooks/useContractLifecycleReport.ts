@@ -31,6 +31,7 @@ export type PendingReason =
   | 'r2_outro_deal'          // R2 existe mas em deal diferente do contrato
   | 'reembolso_recente'      // contrato antigo, reembolso na semana
   | 'outside_legitimo'       // sem R1 nem R2, compra direta
+  | 'sem_sucesso'            // marcado manualmente como sem sucesso de contato
   | null;
 
 export interface ContractLifecycleRow {
@@ -66,6 +67,9 @@ export interface ContractLifecycleRow {
   dentroCorte: boolean;
   effectiveContractDate: string | null;
   contractSource: 'r1' | 'r2' | 'hubla' | 'none' | null;
+  // Sem Sucesso metadata (quando pendingReason = 'sem_sucesso')
+  semSucessoObservacao: string | null;
+  semSucessoTentativas: number | null;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
@@ -152,13 +156,78 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .gte('sale_date', contractBoundaryStart)
         .lte('sale_date', contractBoundaryEnd);
 
-      const [{ data: rpcData, error: rpcError }, { data: hublaTx, error: hublaError }] = await Promise.all([
+      // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
+      const semSucessoPromise = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          attendee_name,
+          attendee_phone,
+          deal_id,
+          contract_paid_at,
+          r2_observations,
+          created_at,
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+        `)
+        .eq('status', 'sem_sucesso')
+        .eq('meeting_slot.meeting_type', 'r1');
+
+      const [
+        { data: rpcData, error: rpcError },
+        { data: hublaTx, error: hublaError },
+        { data: semSucessoData, error: semSucessoError },
+      ] = await Promise.all([
         rpcPromise,
         hublaPromise,
+        semSucessoPromise,
       ]);
 
       if (rpcError) throw rpcError;
       if (hublaError) throw hublaError;
+      if (semSucessoError) throw semSucessoError;
+
+      // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
+      type SemSucessoInfo = {
+        attendeeId: string;
+        dealId: string | null;
+        observacao: string;
+        tentativas: number;
+        contractPaidAt: string | null;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+      };
+      const semSucessoByPhone = new Map<string, SemSucessoInfo>();
+      const semSucessoByDeal = new Map<string, SemSucessoInfo>();
+      const allSemSucesso: SemSucessoInfo[] = [];
+      for (const att of (semSucessoData || []) as any[]) {
+        let observacao = '';
+        let tentativas = 0;
+        try {
+          const meta = JSON.parse(att.r2_observations || '{}');
+          if (meta.sem_sucesso) {
+            observacao = meta.observacao || '';
+            tentativas = meta.tentativas || 0;
+          }
+        } catch { /* ignore */ }
+        const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+        const info: SemSucessoInfo = {
+          attendeeId: att.id,
+          dealId: att.deal_id || null,
+          observacao,
+          tentativas,
+          contractPaidAt: att.contract_paid_at || slot?.scheduled_at || att.created_at || null,
+          attendeeName: att.attendee_name || null,
+          attendeePhone: att.attendee_phone || null,
+        };
+        allSemSucesso.push(info);
+        const phoneKey = normalizePhoneSuffix9(att.attendee_phone);
+        if (phoneKey.length >= 8 && !semSucessoByPhone.has(phoneKey)) {
+          semSucessoByPhone.set(phoneKey, info);
+        }
+        if (info.dealId && !semSucessoByDeal.has(info.dealId)) {
+          semSucessoByDeal.set(info.dealId, info);
+        }
+      }
 
       // ============================================================
       // STEP C: Build Hubla lookup maps (by phone & email)
@@ -276,6 +345,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           dentroCorte: !!r2.dentro_corte,
           effectiveContractDate: r2.effective_contract_date || null,
           contractSource: (r2.contract_source as any) || null,
+          semSucessoObservacao: null,
+          semSucessoTentativas: null,
         };
 
         // Safety net dedup by phone (should be no-op since RPC dedupes)
@@ -346,6 +417,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           dentroCorte: false,
           effectiveContractDate: info.saleDate,
           contractSource: 'hubla',
+          semSucessoObservacao: null,
+          semSucessoTentativas: null,
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
@@ -553,6 +626,29 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           }
         });
       }
+
+      // ============================================================
+      // STEP F.5: Aplicar metadata de Sem Sucesso em rows pendentes
+      // (match por deal_id ou phone). Tem prioridade sobre 'aguardando_r2'
+      // mas NÃO sobre 'r2_proxima_semana' (já tem ação concreta marcada).
+      // ============================================================
+      const applySemSucesso = (row: ContractLifecycleRow) => {
+        if (row.situacao !== 'pendente') return;
+        let info: SemSucessoInfo | undefined;
+        if (row.dealId) info = semSucessoByDeal.get(row.dealId);
+        if (!info) {
+          const pk = normalizePhoneSuffix9(row.phone);
+          if (pk.length >= 8) info = semSucessoByPhone.get(pk);
+        }
+        if (!info) return;
+        if (row.pendingReason !== 'r2_proxima_semana') {
+          row.pendingReason = 'sem_sucesso';
+        }
+        row.semSucessoObservacao = info.observacao || null;
+        row.semSucessoTentativas = info.tentativas || null;
+      };
+      rpcRows.forEach(applySemSucesso);
+      orphanRows.forEach(applySemSucesso);
 
       const allRows = [...rpcRows, ...orphanRows];
 

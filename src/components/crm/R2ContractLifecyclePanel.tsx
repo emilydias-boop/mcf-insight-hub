@@ -63,14 +63,41 @@ const PENDING_REASON_LABELS: Record<Exclude<PendingReason, null>, { label: strin
   r2_outro_deal:      { label: '🔀 R2 em outro deal', bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
   reembolso_recente:  { label: '💸 Reembolso recente', bg: 'bg-red-500/15',   text: 'text-red-300',     border: 'border-red-500/30' },
   outside_legitimo:   { label: '🚪 Outside (s/ R1)', bg: 'bg-zinc-500/15',    text: 'text-zinc-300',    border: 'border-zinc-500/30' },
+  sem_sucesso:        { label: '🔁 Sem Sucesso',    bg: 'bg-rose-500/15',    text: 'text-rose-300',    border: 'border-rose-500/30' },
 };
 
-function PendingReasonBadge({ reason, futureDate }: { reason: PendingReason; futureDate?: string | null }) {
+function PendingReasonBadge({
+  reason,
+  futureDate,
+  semSucessoObservacao,
+  semSucessoTentativas,
+}: {
+  reason: PendingReason;
+  futureDate?: string | null;
+  semSucessoObservacao?: string | null;
+  semSucessoTentativas?: number | null;
+}) {
   if (!reason) return <span className="text-muted-foreground text-xs">—</span>;
   const style = PENDING_REASON_LABELS[reason];
   const dateSuffix = reason === 'r2_proxima_semana' && futureDate
     ? ` ${format(new Date(futureDate), 'dd/MM', { locale: ptBR })}`
     : '';
+  if (reason === 'sem_sucesso') {
+    const tent = semSucessoTentativas ? ` (${semSucessoTentativas}x)` : '';
+    const obs = semSucessoObservacao?.trim() || '';
+    return (
+      <div className="flex items-center gap-2 max-w-[280px]">
+        <Badge variant="outline" className={cn("text-xs whitespace-nowrap shrink-0", style.bg, style.text, style.border)}>
+          {style.label}{tent}
+        </Badge>
+        {obs && (
+          <span className="text-xs text-muted-foreground truncate" title={obs}>
+            "{obs}"
+          </span>
+        )}
+      </div>
+    );
+  }
   return (
     <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
       {style.label}{dateSuffix}
@@ -189,12 +216,13 @@ export function R2ContractLifecyclePanel() {
 
   // Pendentes children: recentes vs antigos
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0, semSucesso: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
       proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
+      semSucesso: pendentes.filter(r => r.pendingReason === 'sem_sucesso').length,
     };
   }, [rows]);
 
@@ -261,6 +289,8 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
           } else if (activeSubFilter === 'proxima_safra') {
             result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
+          } else if (activeSubFilter === 'sem_sucesso') {
+            result = result.filter(r => r.pendingReason === 'sem_sucesso');
           }
         }
       }
@@ -297,7 +327,11 @@ export function R2ContractLifecyclePanel() {
       formatDate(r.r1Date),
       r.r1Status || '',
       r.situacaoLabel.replace(/^[^\w]*\s*/, ''),
-      r.pendingReason ? PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, '') : '',
+      r.pendingReason
+        ? (r.pendingReason === 'sem_sucesso'
+            ? `Sem Sucesso${r.semSucessoTentativas ? ` (${r.semSucessoTentativas}x)` : ''}${r.semSucessoObservacao ? ` — ${r.semSucessoObservacao}` : ''}`
+            : PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, ''))
+        : '',
       formatDate(r.r2Date || r.futureR2Date),
       r.r2CloserName || r.futureR2CloserName || '',
       r.r2StatusName || '',
@@ -590,6 +624,18 @@ export function R2ContractLifecyclePanel() {
                 <p className="text-lg font-bold text-amber-400">{pendentesChildren.proximaSafra}</p>
               </CardContent>
             </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'sem_sucesso' && "ring-2 ring-rose-500/50 bg-rose-500/5"
+              )}
+              onClick={() => handleSubClick('sem_sucesso')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">🔁 Sem Sucesso</p>
+                <p className="text-lg font-bold text-rose-400">{pendentesChildren.semSucesso}</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -646,7 +692,12 @@ export function R2ContractLifecyclePanel() {
                       </TableCell>
                       <TableCell>
                         {row.situacao === 'pendente'
-                          ? <PendingReasonBadge reason={row.pendingReason} futureDate={row.futureR2Date} />
+                          ? <PendingReasonBadge
+                              reason={row.pendingReason}
+                              futureDate={row.futureR2Date}
+                              semSucessoObservacao={row.semSucessoObservacao}
+                              semSucessoTentativas={row.semSucessoTentativas}
+                            />
                           : <span className="text-muted-foreground text-xs">—</span>
                         }
                       </TableCell>
