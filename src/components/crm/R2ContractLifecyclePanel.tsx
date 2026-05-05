@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
-import { format, addWeeks, subWeeks, addDays, differenceInDays } from "date-fns";
+import { format, addWeeks, subWeeks, addDays, differenceInDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Search, Loader2, PackagePlus, CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, PendingReason } from "@/hooks/useContractLifecycleReport";
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
@@ -135,16 +137,32 @@ export function R2ContractLifecyclePanel() {
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
   const [encaixarRow, setEncaixarRow] = useState<ContractLifecycleRow | null>(null);
+  const [dateMode, setDateMode] = useState<'safra' | 'custom'>('safra');
+  const [customRange, setCustomRange] = useState<{ from: Date; to: Date }>(() => {
+    const today = new Date();
+    return { from: addDays(today, -6), to: today };
+  });
 
-  const safraStart = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
-  const safraEnd = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
-  const carrinhoFriday = useMemo(() => addDays(safraStart, 8), [safraStart]);
+  const safraStartRaw = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
+  const safraEndRaw = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
+  const carrinhoFriday = useMemo(() => addDays(safraStartRaw, 8), [safraStartRaw]);
+
+  // Período efetivo (safra ou custom) — usado em filtros de "Total Pagos"
+  const safraStart = useMemo(
+    () => dateMode === 'custom' ? startOfDay(customRange.from) : safraStartRaw,
+    [dateMode, customRange, safraStartRaw]
+  );
+  const safraEnd = useMemo(
+    () => dateMode === 'custom' ? endOfDay(customRange.to) : safraEndRaw,
+    [dateMode, customRange, safraEndRaw]
+  );
 
   const filters = useMemo(() => ({
     startDate: safraStart,
     endDate: safraEnd,
-    weekStart: safraStart,
-  }), [safraStart, safraEnd]);
+    // weekStart é usado pela RPC do Carrinho — sempre manter em base semanal mesmo em modo custom
+    weekStart: safraStartRaw,
+  }), [safraStart, safraEnd, safraStartRaw]);
 
   const { data: rows, isLoading } = useContractLifecycleReport(filters);
 
