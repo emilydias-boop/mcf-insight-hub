@@ -5,11 +5,24 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
+import { useR2PendingLeadsCount } from '@/hooks/useR2PendingLeads';
 
 export interface R2CarrinhoKPIs {
   contratosPagos: number;
+  /** Leads que entraram nesta safra mas o contrato foi pago em semanas anteriores. */
+  semanasAnteriores: number;
+  /** Leads desta safra que foram empurrados para a próxima semana (status ou agendamento). */
+  proximaSemana: number;
   r2Agendadas: number;
+  /** Pendentes de agendamento (Contrato Pago sem R2 marcada). Realtime via useR2PendingLeads. */
+  pendentesAgendamento: number;
   r2Realizadas: number;
+  /** No-Shows da janela operacional do carrinho. */
+  noShowR2: number;
+  /** Reembolsos Hubla na safra (mesma janela de contratos). */
+  reembolsos: number;
+  /** Status R2 = "Desistente" na janela operacional. */
+  desistentes: number;
   foraDoCarrinho: number;
   aprovados: number;
   aprovadosForaCorte: number;
@@ -19,6 +32,7 @@ export interface R2CarrinhoKPIs {
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const { data: unifiedData, isLoading: unifiedLoading } = useCarrinhoUnifiedData(weekStart, weekEnd, carrinhoConfig, previousConfig);
+  const pendentesAgendamento = useR2PendingLeadsCount();
   
   // Contratos pagos still comes from hubla_transactions (not part of the RPC)
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -26,14 +40,14 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
   const cutoffDayKey = carrinhoConfig?.carrinhos?.[0]?.dia_corte ?? carrinhoConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
   const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
   
-  const { data: contratosPagos, isLoading: contratosLoading } = useQuery({
+  const { data: contratosData, isLoading: contratosLoading } = useQuery({
     queryKey: ['r2-carrinho-contratos', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
-    queryFn: async (): Promise<number> => {
+    queryFn: async (): Promise<{ contratos: number; reembolsos: number }> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       
       const { data: contratosTx } = await supabase
         .from('hubla_transactions')
-        .select('customer_email, hubla_id, source, product_name, installment_number')
+        .select('customer_email, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
         .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
@@ -48,11 +62,14 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       });
 
       const emailMap = new Map<string, boolean>();
+      const refundEmails = new Set<string>();
       for (const tx of validTx) {
         const email = (tx.customer_email || '').toLowerCase().trim();
-        if (email) emailMap.set(email, true);
+        if (!email) continue;
+        emailMap.set(email, true);
+        if (tx.sale_status === 'refunded') refundEmails.add(email);
       }
-      return emailMap.size;
+      return { contratos: emailMap.size, reembolsos: refundEmails.size };
     },
     staleTime: 30000,
   });
@@ -68,16 +85,28 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let aprovadosForaCorte = 0;
     let pendentes = 0;
     let emAnalise = 0;
+    let semanasAnteriores = 0;
+    let proximaSemana = 0;
+    let noShowR2 = 0;
+    let desistentes = 0;
 
     // Janela operacional (corte anterior → corte atual) para R2 agendadas/realizadas/fora.
-    const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    const { carrinhoOperacional, previousCutoff } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
+    const prevCutoffTs = previousCutoff.getTime();
     const inOperationalWindow = (row: CarrinhoLeadRow) => {
       if (row.is_encaixado) return true;
       if (!row.scheduled_at) return false;
       const t = new Date(row.scheduled_at).getTime();
       return t >= opStart && t < opEnd;
+    };
+    const isAfterCurrentCutoff = (row: CarrinhoLeadRow) => {
+      if (!row.scheduled_at) return false;
+      return new Date(row.scheduled_at).getTime() >= opEnd;
+    };
+    const statusContains = (row: CarrinhoLeadRow, needle: string) => {
+      return (row.r2_status_name || '').toLowerCase().includes(needle);
     };
 
     const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled']);
@@ -93,19 +122,46 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       else if (isProximaSafra(row)) aprovadosForaCorte++;
       if (isPendente(row)) pendentes++;
       if (isEmAnalise(row)) emAnalise++;
+
+      // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago antes do corte de abertura desta safra.
+      if (opOk && row.effective_contract_date) {
+        const contractTs = new Date(row.effective_contract_date).getTime();
+        if (contractTs < prevCutoffTs) semanasAnteriores++;
+      }
+
+      // Próxima Semana: status R2 = "próxima semana" OU agendado após o corte atual (próxima janela).
+      const status = (row.attendee_status || '').toLowerCase();
+      const isCancelledLike = status === 'cancelled' || status === 'rescheduled';
+      if (!isCancelledLike && (statusContains(row, 'próxima semana') || statusContains(row, 'proxima semana') || isAfterCurrentCutoff(row))) {
+        proximaSemana++;
+      }
+
+      // No-Show R2: realtime — janela operacional, attendee/meeting status no_show.
+      if (opOk && (status === 'no_show' || (row.meeting_status || '').toLowerCase() === 'no_show')) {
+        noShowR2++;
+      }
+
+      // Desistente: status R2 contém "desistente" na janela operacional.
+      if (opOk && statusContains(row, 'desistente')) desistentes++;
     }
 
     return {
-      contratosPagos: contratosPagos ?? 0,
+      contratosPagos: contratosData?.contratos ?? 0,
+      semanasAnteriores,
+      proximaSemana,
       r2Agendadas,
+      pendentesAgendamento,
       r2Realizadas,
+      noShowR2,
+      reembolsos: contratosData?.reembolsos ?? 0,
+      desistentes,
       foraDoCarrinho,
       aprovados,
       aprovadosForaCorte,
       pendentes,
       emAnalise,
     };
-  }, [unifiedData, contratosPagos, weekStart, weekEnd, carrinhoConfig, previousConfig]);
+  }, [unifiedData, contratosData, pendentesAgendamento, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
   return {
     data: kpis,

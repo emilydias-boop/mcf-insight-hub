@@ -151,13 +151,41 @@ export default function R2Carrinho() {
 
   const displayKpis = filteredKpis ?? kpis;
 
-  const kpiCards = [
-    { label: 'Contratos (R1)', value: displayKpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
-    { label: 'R2 Agendadas', value: displayKpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
-    { label: 'R2 Realizadas', value: displayKpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
-    { label: 'Fora do Carrinho', value: displayKpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
-    { label: 'Aprovados', value: displayKpis?.aprovados ?? 0, color: 'bg-emerald-500' },
-    { label: 'Próxima Safra', value: displayKpis?.aprovadosForaCorte ?? 0, color: 'bg-amber-500' },
+  const kpiCards: Array<{
+    label: string;
+    value: number;
+    color: string;
+    sub?: { label: string; value: number };
+  }> = [
+    {
+      label: 'Contratos',
+      value: displayKpis?.contratosPagos ?? 0,
+      color: 'bg-blue-500',
+      sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
+    },
+    {
+      label: 'Próxima Semana',
+      value: displayKpis?.proximaSemana ?? 0,
+      color: 'bg-amber-500',
+    },
+    {
+      label: 'R2 Agendadas',
+      value: displayKpis?.r2Agendadas ?? 0,
+      color: 'bg-indigo-500',
+      sub: { label: 'Pendentes', value: displayKpis?.pendentesAgendamento ?? 0 },
+    },
+    {
+      label: 'R2 Realizadas',
+      value: displayKpis?.r2Realizadas ?? 0,
+      color: 'bg-green-500',
+      sub: { label: 'No-Show R2', value: displayKpis?.noShowR2 ?? 0 },
+    },
+    {
+      label: 'Reembolso',
+      value: displayKpis?.reembolsos ?? 0,
+      color: 'bg-red-500',
+      sub: { label: 'Desistente', value: displayKpis?.desistentes ?? 0 },
+    },
   ];
 
   const selectedCarrinhoLabel = selectedCarrinhoId 
@@ -263,13 +291,21 @@ export default function R2Carrinho() {
         {kpiCards.map((kpi) => (
           <Card key={kpi.label}>
             <CardContent className="p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <div className={`w-2 h-10 rounded-full ${kpi.color}`} />
-                <div>
-                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                  <p className="text-2xl font-bold">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-muted-foreground truncate">{kpi.label}</p>
+                  <p className="text-2xl font-bold leading-tight">
                     {kpisLoading ? '...' : kpi.value}
                   </p>
+                  {kpi.sub && (
+                    <div className="mt-1.5 pt-1.5 border-t border-border/50">
+                      <p className="text-[11px] text-muted-foreground truncate">{kpi.sub.label}</p>
+                      <p className="text-sm font-semibold leading-tight">
+                        {kpisLoading ? '...' : kpi.sub.value}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
