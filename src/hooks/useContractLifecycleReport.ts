@@ -322,7 +322,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         if (tx.installment_number && tx.installment_number > 1) return null;
 
         const email = normalizeEmail(tx.customer_email);
-        const phoneKey = normalizePhoneSuffix9(tx.customer_phone);
         const isRefunded = tx.sale_status === 'refunded';
         return {
           saleDate: tx.sale_date,
