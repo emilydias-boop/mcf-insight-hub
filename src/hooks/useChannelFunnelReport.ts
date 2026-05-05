@@ -174,9 +174,25 @@ interface DealMeta {
   contact_id: string | null;
   email: string | null;
   channel: string;
+  data_source: string | null;
+  r1_closer_email: string | null;
+  r2_closer_email: string | null;
 }
 
-export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
+export interface ChannelFunnelFilters {
+  search?: string;
+  source?: string;        // 'all' | 'hubla' | 'make' | ...
+  closerEmail?: string;   // already lowercased; '' = all
+  channel?: string;       // 'all' or raw channel key
+  origin?: string;        // 'all' or origin label/id
+  originId?: string;      // resolved origin_id (preferred)
+}
+
+export function useChannelFunnelReport(
+  dateRange: DateRange | undefined,
+  bu?: BusinessUnit,
+  filters?: ChannelFunnelFilters,
+) {
   const startDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
   const endDate = dateRange?.to
     ? format(dateRange.to, 'yyyy-MM-dd')
