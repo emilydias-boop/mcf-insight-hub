@@ -182,7 +182,7 @@ interface DealMeta {
 export interface ChannelFunnelFilters {
   search?: string;
   source?: string;        // 'all' | 'hubla' | 'make' | ...
-  closerEmail?: string;   // already lowercased; '' = all
+  closerId?: string;      // '' = all
   channel?: string;       // 'all' or raw channel key
   origin?: string;        // 'all' or origin label/id
   originId?: string;      // resolved origin_id (preferred)
