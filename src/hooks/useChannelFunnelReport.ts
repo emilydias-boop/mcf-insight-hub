@@ -853,6 +853,7 @@ export function useChannelFunnelReport(
 
     // ===== ENTRADAS: deals criados na janela =====
     entradasDeals.forEach((dealId) => {
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).entradas++;
       const meta = dealMeta.get(dealId);
@@ -879,6 +880,7 @@ export function useChannelFunnelReport(
     });
     sdrDealMap.forEach((agg, key) => {
       const dealId = key.split('|')[1];
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       const slot = get(ch);
       // Cap de 2 dias por (sdr, deal) — espelha LEAST(COUNT(DISTINCT meeting_day), 2)
@@ -907,6 +909,7 @@ export function useChannelFunnelReport(
       const key = `${sdrId}|${dealId}`;
       if (seenSdrDeal.has(key)) return;
       seenSdrDeal.add(key);
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
@@ -918,6 +921,7 @@ export function useChannelFunnelReport(
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
+      if (!dealPassesFilter(c.deal_id)) return;
       const ch = channelOf(c.deal_id);
       const slot = get(ch);
       const attStatus = (c.attendee_status || '').toLowerCase();
@@ -951,6 +955,7 @@ export function useChannelFunnelReport(
 
     // Venda Final + Faturamento — vendas com sale_date na janela
     vendasFinal.forEach((v: any) => {
+      if (!emailPassesFilter(v.email)) return;
       const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
