@@ -172,19 +172,39 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .eq('status', 'sem_sucesso')
         .eq('meeting_slot.meeting_type', 'r1');
 
+      // Fetch ALL paid R1 attendees globally — used to surface accumulated pendentes
+      // (contract_paid sem R2 agendado/concluído), independente da semana filtrada
+      const accumulatedPaidPromise = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          attendee_name,
+          attendee_phone,
+          deal_id,
+          contract_paid_at,
+          status,
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+        `)
+        .eq('status', 'contract_paid')
+        .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null);
+
       const [
         { data: rpcData, error: rpcError },
         { data: hublaTx, error: hublaError },
         { data: semSucessoData, error: semSucessoError },
+        { data: accumulatedPaidData, error: accumulatedPaidError },
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
         semSucessoPromise,
+        accumulatedPaidPromise,
       ]);
 
       if (rpcError) throw rpcError;
       if (hublaError) throw hublaError;
       if (semSucessoError) throw semSucessoError;
+      if (accumulatedPaidError) throw accumulatedPaidError;
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
@@ -695,6 +715,73 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       const allRows = [...rpcRows, ...orphanRows, ...semSucessoRows];
+
+      // ============================================================
+      // STEP F.7: Injetar TODOS os contratos pagos acumulados (status=contract_paid em R1)
+      // que não apareceram na semana selecionada — pendência aberta sem R2.
+      // Dedup contra rpcRows/orphanRows/semSucessoRows por deal_id, telefone e attendee_id.
+      // ============================================================
+      const seenDealIds = new Set<string>();
+      const seenPhoneKeys = new Set<string>();
+      const seenAttendeeIds = new Set<string>();
+      for (const r of allRows) {
+        if (r.dealId) seenDealIds.add(r.dealId);
+        const pk = normalizePhoneSuffix9(r.phone);
+        if (pk.length >= 8) seenPhoneKeys.add(pk);
+        if (r.id && !r.id.startsWith('hubla-orphan-') && !r.id.startsWith('sem-sucesso-')) {
+          seenAttendeeIds.add(r.id);
+        }
+      }
+
+      const accumulatedRows: ContractLifecycleRow[] = [];
+      for (const att of (accumulatedPaidData || []) as any[]) {
+        if (seenAttendeeIds.has(att.id)) continue;
+        if (att.deal_id && seenDealIds.has(att.deal_id)) continue;
+        const pk = normalizePhoneSuffix9(att.attendee_phone);
+        if (pk.length >= 8 && seenPhoneKeys.has(pk)) continue;
+
+        const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+        const contractPaidAt = att.contract_paid_at || slot?.scheduled_at || null;
+        const diasParado = contractPaidAt ? differenceInDays(now, new Date(contractPaidAt)) : null;
+
+        accumulatedRows.push({
+          id: `acc-pendente-${att.id}`,
+          leadName: att.attendee_name || null,
+          phone: att.attendee_phone || null,
+          contractPaidAt,
+          dealId: att.deal_id || null,
+          r1Date: slot?.scheduled_at || null,
+          r1CloserName: null,
+          r1Status: 'contract_paid',
+          sdrName: null,
+          hasR2: false,
+          r2Date: null,
+          r2CloserName: null,
+          r2StatusName: null,
+          r2StatusColor: null,
+          r2AttendeeStatus: null,
+          carrinhoStatus: null,
+          carrinhoWeekStart: null,
+          diasParado,
+          situacao: 'pendente',
+          situacaoLabel: '⏳ Pendente',
+          isPaidContract: true,
+          pendingReason: 'aguardando_r2',
+          futureR2Date: null,
+          futureR2CloserName: null,
+          futureR2AttendeeId: null,
+          dentroCorte: false,
+          effectiveContractDate: contractPaidAt,
+          contractSource: 'r1',
+          semSucessoObservacao: null,
+          semSucessoTentativas: null,
+        });
+        if (att.deal_id) seenDealIds.add(att.deal_id);
+        if (pk.length >= 8) seenPhoneKeys.add(pk);
+        seenAttendeeIds.add(att.id);
+      }
+
+      allRows.push(...accumulatedRows);
 
       // ============================================================
       // STEP G: Apply filters & sort
