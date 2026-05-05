@@ -9,6 +9,8 @@ export interface CarrinhoItem {
   dias: number[]; // 0=Dom, 1=Seg, ..., 6=Sáb
   horario_corte: string; // "HH:mm"
   horario_reuniao: string; // "HH:mm"
+  /** Dia da semana em que o corte do carrinho ocorre (0=Dom..6=Sáb). Se ausente, usa max(dias). */
+  dia_corte?: number;
 }
 
 export interface CarrinhoConfig {
