@@ -1312,49 +1312,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="data_contratacao"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>
-                          {tipoRegistroWatch === 'reserva'
-                            ? 'Data de Contratação (opcional)'
-                            : 'Data de Contratação * (1ª parcela paga)'}
-                        </FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  'w-full pl-3 text-left font-normal',
-                                  !field.value && 'text-muted-foreground'
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, 'dd/MM/yyyy', { locale: ptBR })
-                                ) : (
-                                  <span>Selecione</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              locale={ptBR}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="grid grid-cols-1 gap-4">
                   <FormField
                     control={form.control}
                     name="origem"
@@ -1422,13 +1380,13 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
                   <FormField
                     control={form.control}
-                    name="data_reserva"
+                    name={tipoRegistroWatch === 'reserva' ? 'data_reserva' : 'data_contratacao'}
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>
                           {tipoRegistroWatch === 'reserva'
                             ? 'Data da Reserva *'
-                            : 'Data da Reserva (opcional)'}
+                            : 'Data de Contratação * (1ª parcela paga)'}
                         </FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
@@ -1441,7 +1399,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                                 )}
                               >
                                 {field.value ? (
-                                  format(field.value, 'dd/MM/yyyy', { locale: ptBR })
+                                  format(field.value as Date, 'dd/MM/yyyy', { locale: ptBR })
                                 ) : (
                                   <span>Selecione</span>
                                 )}
@@ -1452,7 +1410,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           <PopoverContent className="w-auto p-0" align="start">
                             <Calendar
                               mode="single"
-                              selected={field.value ?? undefined}
+                              selected={(field.value as Date) ?? undefined}
                               onSelect={field.onChange}
                               locale={ptBR}
                             />
