@@ -26,16 +26,16 @@ function pct(n: number): string {
 }
 
 function pctBadge(n: number) {
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
-  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
 }
 
 function pctBadgeInverted(n: number) {
   // Para No-Show: quanto menor, melhor
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
   const variant = n >= 30 ? 'destructive' : n >= 20 ? 'secondary' : 'default';
-  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
 }
 
 function HeaderWithInfo({ label, info, align = 'right' }: { label: string; info: string; align?: 'left' | 'right' }) {
@@ -143,12 +143,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
-                        label="% No-Show"
-                        info="Taxa de No-Show: No-Show ÷ R1 Agendada na janela. Quanto menor, melhor."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
                         label="Contrato Pago"
                         info="Deals cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro da janela do filtro."
                       />
@@ -211,7 +205,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                       <Cell value={r.r1Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
                       <Cell value={r.r1Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
                       <Cell value={r.noShow}        channel={r.channel} channelLabel={r.channelLabel} metric="noShow" className="text-destructive" />
-                      <TableCell className="text-right">{pctBadgeInverted(r.taxaNoShow)}</TableCell>
                       <Cell value={r.contratoPago}  channel={r.channel} channelLabel={r.channelLabel} metric="contratoPago" />
                       <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
                       <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
@@ -229,7 +222,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     <Cell value={totals.r1Agendada}    channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
                     <Cell value={totals.r1Realizada}   channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
                     <Cell value={totals.noShow}        channel="TOTAL" channelLabel="Total" metric="noShow"        className="text-destructive" />
-                    <TableCell className="text-right">{pctBadgeInverted(totals.r1Agendada > 0 ? (totals.noShow / totals.r1Agendada) * 100 : 0)}</TableCell>
                     <Cell value={totals.contratoPago}  channel="TOTAL" channelLabel="Total" metric="contratoPago" />
                     <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
                     <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
