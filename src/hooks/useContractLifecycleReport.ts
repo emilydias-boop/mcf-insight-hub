@@ -106,6 +106,10 @@ function classifySituacao(
   if (r2StatusName && r2StatusName.toLowerCase().includes('desistente')) {
     return { situacao: 'desistente', label: '🚫 Desistente' };
   }
+  // Closer classificou como Aprovado via r2_status_options → reunião realizada
+  if (r2StatusName && r2StatusName.toLowerCase().includes('aprovado')) {
+    return { situacao: 'realizada', label: '✅ Realizada' };
+  }
   if (r2AttendeeStatus === 'completed' || r2AttendeeStatus === 'contract_paid') {
     return { situacao: 'realizada', label: '✅ Realizada' };
   }
@@ -826,6 +830,14 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       const FINAL_STATUSES = new Set(['completed', 'contract_paid', 'no_show', 'refunded', 'cancelled']);
+      // Nomes de r2_status_options que indicam classificação final do closer
+      // (não devem aparecer como "R2 sem status" — closer JÁ classificou)
+      const FINAL_R2_STATUS_NAME_KEYWORDS = ['aprovado', 'reembolso', 'desistente', 'realizada', 'no-show', 'no show', 'noshow', 'cancelado', 'reagendado'];
+      const isFinalR2StatusName = (name: string | null | undefined) => {
+        if (!name) return false;
+        const n = name.toLowerCase();
+        return FINAL_R2_STATUS_NAME_KEYWORDS.some(k => n.includes(k));
+      };
 
       const accumulatedRows: ContractLifecycleRow[] = [];
       for (const att of candidates) {
@@ -848,6 +860,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         if (r2Info) {
           // Status final → não é pendente, ignorar
           if (r2Info.status && FINAL_STATUSES.has(r2Info.status)) continue;
+          // Closer já classificou via r2_status_options (Aprovado, Reembolso, etc.) → ignorar
+          if (isFinalR2StatusName(r2Info.r2StatusName)) continue;
           hasR2 = true;
           r2Date = r2Info.date;
           r2CloserName = r2Info.closerName;
