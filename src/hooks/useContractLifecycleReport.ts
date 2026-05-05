@@ -97,6 +97,9 @@ function classifySituacao(
   if (r1Status === 'refunded' || isHublaRefunded) {
     return { situacao: 'reembolso', label: '💰 Reembolso' };
   }
+  if (r2AttendeeStatus === 'refunded' || (r2StatusName || '').toLowerCase().includes('reembolso')) {
+    return { situacao: 'reembolso', label: '💰 Reembolso' };
+  }
   if (r2AttendeeStatus === 'no_show') {
     return { situacao: 'no_show', label: '❌ No-show' };
   }
