@@ -797,16 +797,14 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     // Fonte: RPC `get_funnel_r1_attendees_aligned` (mantém deal_id para classificar canal).
     const cohortDealsMap = cohort?.cohortDeals || new Map<string, { anchor: string; followupEnd: string }>();
     const r1AlignedList = cohort?.r1Aligned || [];
-    type AlignedAgg = { days: Array<{ day: string; sched: string }>; isRealized: boolean; isNoShow: boolean };
+    type AlignedAgg = { days: Array<{ day: string; sched: string; isRealized: boolean; isNoShow: boolean }> };
     const sdrDealMap = new Map<string, AlignedAgg>(); // key: sdr|deal
     r1AlignedList.forEach((r) => {
       // Restringe aos SDRs ativos do squad (mesmo recorte de enrichedKPIs do header)
       if (allowedSdrEmails.size > 0 && !allowedSdrEmails.has((r.sdrEmail || '').toLowerCase())) return;
       const key = `${r.sdrEmail}|${r.dealId}`;
-      const cur = sdrDealMap.get(key) || { days: [], isRealized: false, isNoShow: false };
-      cur.days.push({ day: r.meetingDay, sched: r.scheduledAt });
-      if (r.isRealized) cur.isRealized = true;
-      if (r.isNoShow) cur.isNoShow = true;
+      const cur = sdrDealMap.get(key) || { days: [] };
+      cur.days.push({ day: r.meetingDay, sched: r.scheduledAt, isRealized: !!r.isRealized, isNoShow: !!r.isNoShow });
       sdrDealMap.set(key, cur);
     });
     sdrDealMap.forEach((agg, key) => {
@@ -818,20 +816,18 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         .slice()
         .sort((a, b) => new Date(a.sched).getTime() - new Date(b.sched).getTime())
         .slice(0, 2);
-      sortedDays.forEach(({ sched }) => {
+      sortedDays.forEach(({ sched, isRealized, isNoShow }) => {
         slot.r1Agendada++;
         pushDet(ch, 'r1Agendada', buildItem(dealId, sched, null));
+        if (isRealized) {
+          slot.r1Realizada++;
+          pushDet(ch, 'r1Realizada', buildItem(dealId, sched, 'completed'));
+        }
+        if (isNoShow) {
+          slot.noShow++;
+          pushDet(ch, 'noShow', buildItem(dealId, sched, 'no_show'));
+        }
       });
-      const firstSched = sortedDays[0]?.sched || '';
-      const itemBase = buildItem(dealId, firstSched, null);
-      if (agg.isRealized) {
-        slot.r1Realizada++;
-        pushDet(ch, 'r1Realizada', { ...itemBase, status: 'completed' });
-      }
-      if (agg.isNoShow) {
-        slot.noShow++;
-        pushDet(ch, 'noShow', { ...itemBase, status: 'no_show' });
-      }
     });
 
     // Contrato Pago — alinhado ao KPI "CONTRATOS" do header (1 por sdr+deal,
