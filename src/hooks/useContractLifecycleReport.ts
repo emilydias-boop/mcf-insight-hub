@@ -164,14 +164,34 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const contractBoundaryStart = startOfDay(filters.startDate).toISOString();
       const contractBoundaryEnd = endOfDay(filters.endDate).toISOString();
 
-      const hublaPromise = supabase
-        .from('hubla_transactions')
-        .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
-        .eq('product_name', 'A000 - Contrato')
-        .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
-        .gte('sale_date', contractBoundaryStart)
-        .lte('sale_date', contractBoundaryEnd);
+      const fetchHublaContracts = async (opts: { start?: string; end?: string; statuses: string[] }) => {
+        const pageSize = 1000;
+        const allRows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          let query = supabase
+            .from('hubla_transactions')
+            .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
+            .eq('product_name', 'A000 - Contrato')
+            .in('sale_status', opts.statuses)
+            .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+            .order('sale_date', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (opts.start) query = query.gte('sale_date', opts.start);
+          if (opts.end) query = query.lte('sale_date', opts.end);
+
+          const { data, error } = await query;
+          if (error) throw error;
+          allRows.push(...(data || []));
+          if (!data || data.length < pageSize) break;
+        }
+        return allRows;
+      };
+
+      const hublaPromise = fetchHublaContracts({
+        start: contractBoundaryStart,
+        end: contractBoundaryEnd,
+        statuses: ['completed', 'refunded'],
+      });
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
@@ -191,30 +211,42 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       // Fetch ALL paid R1 attendees globally — used to surface accumulated pendentes
       // (contract_paid sem R2 agendado/concluído), independente da semana filtrada
-      const accumulatedPaidPromise = supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          attendee_name,
-          attendee_phone,
-          deal_id,
-          contract_paid_at,
-          status,
-          meeting_slot:meeting_slots!inner(
-            scheduled_at,
-            meeting_type,
-            closer:closers!meeting_slots_closer_id_fkey(name)
-          )
-        `)
-        .eq('status', 'contract_paid')
-        .eq('meeting_slot.meeting_type', 'r1')
-        .not('contract_paid_at', 'is', null);
+      const fetchAccumulatedPaidAttendees = async () => {
+        const pageSize = 1000;
+        const allRows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              id,
+              attendee_name,
+              attendee_phone,
+              deal_id,
+              contract_paid_at,
+              status,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers!meeting_slots_closer_id_fkey(name)
+              )
+            `)
+            .eq('status', 'contract_paid')
+            .eq('meeting_slot.meeting_type', 'r1')
+            .not('contract_paid_at', 'is', null)
+            .range(from, from + pageSize - 1);
+          if (error) throw error;
+          allRows.push(...(data || []));
+          if (!data || data.length < pageSize) break;
+        }
+        return allRows;
+      };
+      const accumulatedPaidPromise = fetchAccumulatedPaidAttendees();
 
       const [
         { data: rpcData, error: rpcError },
-        { data: hublaTx, error: hublaError },
+        hublaTx,
         { data: semSucessoData, error: semSucessoError },
-        { data: accumulatedPaidData, error: accumulatedPaidError },
+        accumulatedPaidData,
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
@@ -223,9 +255,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       ]);
 
       if (rpcError) throw rpcError;
-      if (hublaError) throw hublaError;
       if (semSucessoError) throw semSucessoError;
-      if (accumulatedPaidError) throw accumulatedPaidError;
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
@@ -278,32 +308,37 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const hublaByEmail = new Map<string, HublaInfo>();
       const allHublaInfos: HublaInfo[] = [];
 
-      for (const tx of (hublaTx || []) as any[]) {
-        if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) continue;
-        if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') continue;
-        if (tx.installment_number && tx.installment_number > 1) continue;
+      const parseHublaInfo = (tx: any): HublaInfo | null => {
+        if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) return null;
+        if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') return null;
+        if (tx.installment_number && tx.installment_number > 1) return null;
 
         const email = normalizeEmail(tx.customer_email);
-        const phoneKey = normalizePhoneSuffix9(tx.customer_phone);
         const isRefunded = tx.sale_status === 'refunded';
-        const info: HublaInfo = {
+        return {
           saleDate: tx.sale_date,
           isRefunded,
           email,
           phone: tx.customer_phone || null,
           name: tx.customer_name || null,
         };
+      };
+
+      for (const tx of (hublaTx || []) as any[]) {
+        const info = parseHublaInfo(tx);
+        if (!info) continue;
+        const phoneKey = normalizePhoneSuffix9(info.phone);
         allHublaInfos.push(info);
 
-        if (email) {
-          const existing = hublaByEmail.get(email);
-          if (!existing) hublaByEmail.set(email, info);
-          else if (isRefunded) existing.isRefunded = true;
+        if (info.email) {
+          const existing = hublaByEmail.get(info.email);
+          if (!existing) hublaByEmail.set(info.email, info);
+          else if (info.isRefunded) existing.isRefunded = true;
         }
         if (phoneKey.length >= 8) {
           const existing = hublaByPhone.get(phoneKey);
           if (!existing) hublaByPhone.set(phoneKey, info);
-          else if (isRefunded) existing.isRefunded = true;
+          else if (info.isRefunded) existing.isRefunded = true;
         }
       }
 
