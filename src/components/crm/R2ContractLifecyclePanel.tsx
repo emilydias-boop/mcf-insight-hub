@@ -594,7 +594,7 @@ export function R2ContractLifecyclePanel() {
           "overflow-hidden transition-all duration-300 ease-in-out",
           expandedKpi === 'pendentes' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
         )}>
-          <div className="grid grid-cols-2 gap-2 max-w-xs pt-1">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
             <Card
               className={cn(
                 "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
@@ -617,6 +617,30 @@ export function R2ContractLifecyclePanel() {
               <CardContent className="py-2 px-3 text-center">
                 <p className="text-[10px] text-muted-foreground">{"Antigos (>3d)"}</p>
                 <p className="text-lg font-bold text-amber-600">{pendentesChildren.antigos}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'aguardando_r2' && "ring-2 ring-amber-500/50 bg-amber-500/5"
+              )}
+              onClick={() => handleSubClick('aguardando_r2')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">⏳ Aguardando R2</p>
+                <p className="text-lg font-bold text-amber-300">{pendentesChildren.aguardandoR2}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'r2_sem_status' && "ring-2 ring-orange-500/50 bg-orange-500/5"
+              )}
+              onClick={() => handleSubClick('r2_sem_status')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">⚠️ R2 sem status</p>
+                <p className="text-lg font-bold text-orange-400">{pendentesChildren.r2SemStatus}</p>
               </CardContent>
             </Card>
             <Card
