@@ -91,11 +91,15 @@ export function useCarrinhoConfig(weekStart?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carrinho-config', weekKey] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
       queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
       queryClient.invalidateQueries({ queryKey: ['r2-accumulated-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-metrics-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-contratos'] });
       toast.success('Configuração do carrinho salva!');
     },
     onError: () => toast.error('Erro ao salvar configuração'),
@@ -145,6 +149,13 @@ export function useCarrinhoConfig(weekStart?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carrinho-config', weekKey] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-config'] });
+      queryClient.invalidateQueries({ queryKey: ['carrinho-unified-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-metrics-data'] });
       toast.success('Configuração copiada da semana anterior!');
     },
     onError: (err: Error) => toast.error(err.message || 'Erro ao copiar configuração'),
