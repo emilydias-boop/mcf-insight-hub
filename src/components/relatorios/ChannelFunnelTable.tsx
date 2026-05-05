@@ -26,16 +26,16 @@ function pct(n: number): string {
 }
 
 function pctBadge(n: number) {
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
   const variant = n >= 50 ? 'default' : n >= 20 ? 'secondary' : 'outline';
-  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
 }
 
 function pctBadgeInverted(n: number) {
   // Para No-Show: quanto menor, melhor
-  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground">—</span>;
+  if (!isFinite(n) || n <= 0) return <span className="text-muted-foreground text-base">—</span>;
   const variant = n >= 30 ? 'destructive' : n >= 20 ? 'secondary' : 'default';
-  return <Badge variant={variant as any} className="font-mono">{n.toFixed(1)}%</Badge>;
+  return <Badge variant={variant as any} className="font-mono text-sm font-bold px-3 py-1">{n.toFixed(1)}%</Badge>;
 }
 
 function HeaderWithInfo({ label, info, align = 'right' }: { label: string; info: string; align?: 'left' | 'right' }) {
