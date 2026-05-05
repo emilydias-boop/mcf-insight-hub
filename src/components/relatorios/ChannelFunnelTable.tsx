@@ -89,12 +89,12 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
     const display = isMonetary ? formatCurrency(value) : value;
     const clickable = !!details && value > 0;
     return (
-      <TableCell className={cn('text-right', className)}>
+      <TableCell className={cn('text-right text-lg font-semibold tabular-nums', className)}>
         {clickable ? (
           <button
             type="button"
             onClick={() => openDrill(metric, channel, channelLabel, value, isMonetary)}
-            className="hover:underline hover:text-primary cursor-pointer transition-colors"
+            className="hover:underline hover:text-primary cursor-pointer transition-colors text-lg font-semibold tabular-nums"
           >
             {display}
           </button>
