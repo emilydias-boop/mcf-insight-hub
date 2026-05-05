@@ -287,6 +287,20 @@ export function R2ContractLifecyclePanel() {
     if (!rows) return [];
     let result = rows;
 
+    // Pendentes na LISTA seguem o filtro de período (por contractPaidAt, fallback r1Date).
+    // O KPI Pendentes continua acumulado (backlog global) — só a lista é restringida ao período.
+    {
+      const startMs = safraStart.getTime();
+      const endMs = safraEnd.getTime();
+      result = result.filter(r => {
+        if (r.situacao !== 'pendente') return true;
+        const anchor = r.contractPaidAt || r.r1Date || null;
+        if (!anchor) return false;
+        const t = new Date(anchor).getTime();
+        return t >= startMs && t <= endMs;
+      });
+    }
+
     // Apply parent filter
     if (expandedKpi && PARENT_SITUACOES[expandedKpi]) {
       result = result.filter(r => PARENT_SITUACOES[expandedKpi].includes(r.situacao));
@@ -346,7 +360,7 @@ export function R2ContractLifecyclePanel() {
       );
     }
     return result;
-  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr]);
+  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr, safraStart, safraEnd]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
