@@ -172,19 +172,39 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .eq('status', 'sem_sucesso')
         .eq('meeting_slot.meeting_type', 'r1');
 
+      // Fetch ALL paid R1 attendees globally — used to surface accumulated pendentes
+      // (contract_paid sem R2 agendado/concluído), independente da semana filtrada
+      const accumulatedPaidPromise = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          attendee_name,
+          attendee_phone,
+          deal_id,
+          contract_paid_at,
+          status,
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+        `)
+        .eq('status', 'contract_paid')
+        .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null);
+
       const [
         { data: rpcData, error: rpcError },
         { data: hublaTx, error: hublaError },
         { data: semSucessoData, error: semSucessoError },
+        { data: accumulatedPaidData, error: accumulatedPaidError },
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
         semSucessoPromise,
+        accumulatedPaidPromise,
       ]);
 
       if (rpcError) throw rpcError;
       if (hublaError) throw hublaError;
       if (semSucessoError) throw semSucessoError;
+      if (accumulatedPaidError) throw accumulatedPaidError;
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
