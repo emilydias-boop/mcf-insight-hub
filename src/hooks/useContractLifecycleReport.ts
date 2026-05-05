@@ -696,19 +696,56 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // STEP F.6: Injetar TODOS os "Sem Sucesso" não casados como rows pendentes
       // (sempre visíveis, independente da semana selecionada — são pendência aberta)
       const semSucessoRows: ContractLifecycleRow[] = [];
+      // Buscar R1 (data + closer) por deal_id para enriquecer os Sem Sucesso
+      const semSucessoDealIds = Array.from(new Set(
+        allSemSucesso
+          .filter(i => !matchedSemSucessoIds.has(i.attendeeId) && i.dealId)
+          .map(i => i.dealId as string)
+      ));
+      const semSucessoR1ByDeal = new Map<string, { date: string | null; closerName: string | null }>();
+      if (semSucessoDealIds.length > 0) {
+        const chunks: string[][] = [];
+        for (let i = 0; i < semSucessoDealIds.length; i += 200) chunks.push(semSucessoDealIds.slice(i, i + 200));
+        for (const ch of chunks) {
+          const { data: r1List } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              deal_id,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers!meeting_slots_closer_id_fkey(name)
+              )
+            `)
+            .in('deal_id', ch)
+            .eq('meeting_slot.meeting_type', 'r1')
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false });
+          (r1List || []).forEach((att: any) => {
+            if (!att.deal_id || semSucessoR1ByDeal.has(att.deal_id)) return;
+            const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+            if (!slot?.scheduled_at) return;
+            semSucessoR1ByDeal.set(att.deal_id, {
+              date: slot.scheduled_at,
+              closerName: slot.closer?.name || null,
+            });
+          });
+        }
+      }
       for (const info of allSemSucesso) {
         if (matchedSemSucessoIds.has(info.attendeeId)) continue;
         const diasParado = info.contractPaidAt
           ? differenceInDays(now, new Date(info.contractPaidAt))
           : null;
+        const r1 = info.dealId ? semSucessoR1ByDeal.get(info.dealId) : undefined;
         semSucessoRows.push({
           id: `sem-sucesso-${info.attendeeId}`,
           leadName: info.attendeeName,
           phone: info.attendeePhone,
           contractPaidAt: info.contractPaidAt,
           dealId: info.dealId,
-          r1Date: null,
-          r1CloserName: null,
+          r1Date: r1?.date || info.contractPaidAt || null,
+          r1CloserName: r1?.closerName || null,
           r1Status: null,
           sdrName: null,
           hasR2: false,
