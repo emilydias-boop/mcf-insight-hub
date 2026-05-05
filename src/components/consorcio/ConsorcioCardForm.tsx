@@ -109,10 +109,10 @@ const formSchema = z.object({
   tipo_registro: z.enum(['reserva', 'contratacao']).default('contratacao'),
   
   // Cota
-  grupo: z.string().min(1, 'Grupo é obrigatório'),
-  cota: z.string().min(1, 'Cota é obrigatória'),
+  grupo: z.string().optional().or(z.literal('')),
+  cota: z.string().optional().or(z.literal('')),
   valor_credito: z.number().min(1, 'Valor do crédito é obrigatório'),
-  prazo_meses: z.number().min(1, 'Prazo é obrigatório'),
+  prazo_meses: z.number().optional(),
   tipo_produto: z.enum(['select', 'parcelinha']),
   empresa_paga_parcelas: z.enum(['sim', 'nao']),
   tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
@@ -207,7 +207,19 @@ const formSchema = z.object({
     message: 'Informe a data correspondente ao tipo de cadastro',
     path: ['data_contratacao'],
   }
-);
+).superRefine((data, ctx) => {
+  if (data.tipo_registro !== 'reserva') {
+    if (!data.grupo || !data.grupo.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Grupo é obrigatório', path: ['grupo'] });
+    }
+    if (!data.cota || !data.cota.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Cota é obrigatória', path: ['cota'] });
+    }
+    if (!data.prazo_meses || data.prazo_meses < 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Prazo é obrigatório', path: ['prazo_meses'] });
+    }
+  }
+});
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -1007,7 +1019,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="grupo"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Grupo *</FormLabel>
+                        <FormLabel>Grupo{tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Ex: A" />
                         </FormControl>
@@ -1020,7 +1032,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="cota"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cota *</FormLabel>
+                        <FormLabel>Cota{tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Ex: 101" />
                         </FormControl>
@@ -1056,7 +1068,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="prazo_meses"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Prazo (meses) *</FormLabel>
+                        <FormLabel>Prazo (meses){tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
