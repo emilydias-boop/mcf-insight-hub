@@ -32,6 +32,7 @@ export type PendingReason =
   | 'reembolso_recente'      // contrato antigo, reembolso na semana
   | 'outside_legitimo'       // sem R1 nem R2, compra direta
   | 'sem_sucesso'            // marcado manualmente como sem sucesso de contato
+  | 'r2_sem_status'          // R2 marcado mas sem status atualizado pelo closer
   | null;
 
 export interface ContractLifecycleRow {
