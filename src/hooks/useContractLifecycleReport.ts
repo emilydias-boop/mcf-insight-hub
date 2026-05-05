@@ -280,6 +280,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           dentroCorte: !!r2.dentro_corte,
           effectiveContractDate: r2.effective_contract_date || null,
           contractSource: (r2.contract_source as any) || null,
+          semSucessoObservacao: null,
+          semSucessoTentativas: null,
         };
 
         // Safety net dedup by phone (should be no-op since RPC dedupes)
@@ -350,6 +352,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           dentroCorte: false,
           effectiveContractDate: info.saleDate,
           contractSource: 'hubla',
+          semSucessoObservacao: null,
+          semSucessoTentativas: null,
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
