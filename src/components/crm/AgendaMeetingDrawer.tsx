@@ -709,6 +709,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               </Badge>
                             );
                           })()}
+                          {/* Canal do lead */}
+                          {(() => {
+                            const ch = channelMap.get(p.id);
+                            if (!ch) return null;
+                            return (
+                              <Badge variant="outline" className={cn('text-[11px] gap-1', CHANNEL_BADGE_CLASS[ch])}>
+                                <span>{CHANNEL_EMOJI[ch]}</span>
+                                {ch}
+                              </Badge>
+                            );
+                          })()}
                           {selectedParticipant?.id === p.id && (
                             <Badge className="text-xs bg-primary">Selecionado</Badge>
                           )}
