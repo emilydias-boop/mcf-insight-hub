@@ -348,12 +348,15 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
   );
 }
 
-function ConversionCard({ label, value }: { label: string; value: number }) {
+function ConversionCard({ label, value, inverted }: { label: string; value: number; inverted?: boolean }) {
+  const colorClass = inverted
+    ? (value >= 30 ? 'text-destructive' : value >= 20 ? 'text-warning' : 'text-foreground')
+    : 'text-foreground';
   return (
     <Card className="bg-muted/30">
       <CardContent className="pt-4 pb-4">
         <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="font-mono text-2xl font-extrabold tabular-nums text-foreground">{pct(value)}</p>
+        <p className={cn('font-mono text-2xl font-extrabold tabular-nums', colorClass)}>{pct(value)}</p>
       </CardContent>
     </Card>
   );
