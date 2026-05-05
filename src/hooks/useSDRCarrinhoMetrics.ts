@@ -16,9 +16,11 @@ export function useSDRCarrinhoMetrics(weekStart: Date, weekEnd: Date, squad: str
   const sdrsQuery = useSdrsFromSquad(squad);
   const cutoffKey = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const cutoffDayKey = config?.carrinhos?.[0]?.dia_corte ?? config?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+  const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
 
   return useQuery({
-    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), squad, cutoffKey, prevCutoffKey],
+    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), squad, cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
     queryFn: async (): Promise<SDRCarrinhoMetric[]> => {
       const sdrs = sdrsQuery.data || [];
       const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
