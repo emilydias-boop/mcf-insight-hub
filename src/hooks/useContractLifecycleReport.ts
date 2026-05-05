@@ -167,7 +167,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         .select('customer_email, customer_phone, customer_name, sale_date, hubla_id, source, product_name, installment_number, sale_status')
         .eq('product_name', 'A000 - Contrato')
         .in('sale_status', ['completed', 'refunded'])
-        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify']);
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+        .or(`sale_date.lte.${contractBoundaryEnd},sale_status.eq.refunded`);
 
       // Fetch all sem_sucesso attendees (R1 meeting type) — global, used as fallback Motivo for orphans
       const semSucessoPromise = supabase
