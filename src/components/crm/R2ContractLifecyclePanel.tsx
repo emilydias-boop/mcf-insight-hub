@@ -63,14 +63,41 @@ const PENDING_REASON_LABELS: Record<Exclude<PendingReason, null>, { label: strin
   r2_outro_deal:      { label: '🔀 R2 em outro deal', bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
   reembolso_recente:  { label: '💸 Reembolso recente', bg: 'bg-red-500/15',   text: 'text-red-300',     border: 'border-red-500/30' },
   outside_legitimo:   { label: '🚪 Outside (s/ R1)', bg: 'bg-zinc-500/15',    text: 'text-zinc-300',    border: 'border-zinc-500/30' },
+  sem_sucesso:        { label: '🔁 Sem Sucesso',    bg: 'bg-rose-500/15',    text: 'text-rose-300',    border: 'border-rose-500/30' },
 };
 
-function PendingReasonBadge({ reason, futureDate }: { reason: PendingReason; futureDate?: string | null }) {
+function PendingReasonBadge({
+  reason,
+  futureDate,
+  semSucessoObservacao,
+  semSucessoTentativas,
+}: {
+  reason: PendingReason;
+  futureDate?: string | null;
+  semSucessoObservacao?: string | null;
+  semSucessoTentativas?: number | null;
+}) {
   if (!reason) return <span className="text-muted-foreground text-xs">—</span>;
   const style = PENDING_REASON_LABELS[reason];
   const dateSuffix = reason === 'r2_proxima_semana' && futureDate
     ? ` ${format(new Date(futureDate), 'dd/MM', { locale: ptBR })}`
     : '';
+  if (reason === 'sem_sucesso') {
+    const tent = semSucessoTentativas ? ` (${semSucessoTentativas}x)` : '';
+    const obs = semSucessoObservacao?.trim() || '';
+    return (
+      <div className="flex items-center gap-2 max-w-[280px]">
+        <Badge variant="outline" className={cn("text-xs whitespace-nowrap shrink-0", style.bg, style.text, style.border)}>
+          {style.label}{tent}
+        </Badge>
+        {obs && (
+          <span className="text-xs text-muted-foreground truncate" title={obs}>
+            "{obs}"
+          </span>
+        )}
+      </div>
+    );
+  }
   return (
     <Badge variant="outline" className={cn("text-xs whitespace-nowrap", style.bg, style.text, style.border)}>
       {style.label}{dateSuffix}
