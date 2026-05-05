@@ -105,6 +105,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
   const totalConv = {
     r1AgToReal: totals.r1Agendada > 0 ? (totals.r1Realizada / totals.r1Agendada) * 100 : 0,
     r1RealToContrato: totals.r1Realizada > 0 ? (totals.contratoPago / totals.r1Realizada) * 100 : 0,
+    r1AgToNoShow: totals.r1Agendada > 0 ? (totals.noShow / totals.r1Agendada) * 100 : 0,
     aprovadoToVenda: totals.aprovados > 0 ? (totals.vendaFinal / totals.aprovados) * 100 : 0,
     entradaToVenda: totals.entradas > 0 ? (totals.vendaFinal / totals.entradas) * 100 : 0,
   };
@@ -253,9 +254,10 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
             </div>
 
             {/* Conversões agregadas */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <ConversionCard label="R1 Ag → R1 Real" value={totalConv.r1AgToReal} />
               <ConversionCard label="R1 Real → Contrato Pago" value={totalConv.r1RealToContrato} />
+              <ConversionCard label="R1 Ag → No-Show" value={totalConv.r1AgToNoShow} inverted />
               <ConversionCard label="Aprovado → Venda Final" value={totalConv.aprovadoToVenda} />
               <ConversionCard label="Entrada → Venda Final" value={totalConv.entradaToVenda} />
             </div>
