@@ -151,8 +151,15 @@ export function R2ContractLifecyclePanel() {
   // KPI counts
   const kpis = useMemo(() => {
     if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
+    // Total Pagos = contratos pagos DENTRO do período selecionado (safra).
+    // Pendentes acumulam (podem ser de períodos anteriores) e NÃO entram no Total Pagos.
+    const inPeriod = (r: ContractLifecycleRow) => {
+      if (!r.contractPaidAt) return false;
+      const d = new Date(r.contractPaidAt);
+      return d >= safraStart && d <= safraEnd;
+    };
     return {
-      total: rows.filter(r => r.isPaidContract).length,
+      total: rows.filter(r => r.isPaidContract && inPeriod(r)).length,
       realizadas: rows.filter(r => r.situacao === 'realizada').length,
       agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
       preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
@@ -160,7 +167,7 @@ export function R2ContractLifecyclePanel() {
       noShow: rows.filter(r => r.situacao === 'no_show').length,
       reembolso: rows.filter(r => r.situacao === 'reembolso').length,
     };
-  }, [rows]);
+  }, [rows, safraStart, safraEnd]);
 
   // Realizadas children: dynamic by r2StatusName (only completed/contract_paid)
   // Leads whose R2 belongs to a different week are bucketed as "Outra semana"
