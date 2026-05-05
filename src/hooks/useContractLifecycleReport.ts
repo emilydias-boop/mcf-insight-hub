@@ -32,6 +32,7 @@ export type PendingReason =
   | 'reembolso_recente'      // contrato antigo, reembolso na semana
   | 'outside_legitimo'       // sem R1 nem R2, compra direta
   | 'sem_sucesso'            // marcado manualmente como sem sucesso de contato
+  | 'r2_sem_status'          // R2 marcado mas sem status atualizado pelo closer
   | null;
 
 export interface ContractLifecycleRow {
@@ -717,9 +718,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const allRows = [...rpcRows, ...orphanRows, ...semSucessoRows];
 
       // ============================================================
-      // STEP F.7: Injetar TODOS os contratos pagos acumulados (status=contract_paid em R1)
-      // que não apareceram na semana selecionada — pendência aberta sem R2.
-      // Dedup contra rpcRows/orphanRows/semSucessoRows por deal_id, telefone e attendee_id.
+      // STEP F.7: Injetar contratos pagos acumulados como pendentes.
+      // Para cada paid R1 não casado, verificar se existe R2 vinculado ao deal:
+      //   - SEM R2 algum            → 'aguardando_r2'
+      //   - COM R2 sem status final → 'r2_sem_status' (R2 marcado mas closer não atualizou)
+      //   - COM R2 com status final → ignorar (já é realizada/no-show/reembolso/etc)
       // ============================================================
       const seenDealIds = new Set<string>();
       const seenPhoneKeys = new Set<string>();
@@ -733,16 +736,102 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
       }
 
-      const accumulatedRows: ContractLifecycleRow[] = [];
+      // Pré-filtra candidatos não-duplicados
+      const candidates: any[] = [];
+      const candidateDealIds: string[] = [];
       for (const att of (accumulatedPaidData || []) as any[]) {
         if (seenAttendeeIds.has(att.id)) continue;
         if (att.deal_id && seenDealIds.has(att.deal_id)) continue;
         const pk = normalizePhoneSuffix9(att.attendee_phone);
         if (pk.length >= 8 && seenPhoneKeys.has(pk)) continue;
+        candidates.push(att);
+        if (att.deal_id) candidateDealIds.push(att.deal_id);
+      }
 
+      // Buscar R2s existentes desses deals para classificar corretamente
+      type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
+      const dealToR2Info = new Map<string, R2Info>();
+      if (candidateDealIds.length > 0) {
+        // chunk para evitar URL muito longa
+        const chunks: string[][] = [];
+        for (let i = 0; i < candidateDealIds.length; i += 200) chunks.push(candidateDealIds.slice(i, i + 200));
+        for (const ch of chunks) {
+          const { data: r2List } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              id, deal_id, status,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at, meeting_type, status,
+                closer:closers!meeting_slots_closer_id_fkey(name),
+                r2_status:r2_statuses(name, color)
+              )
+            `)
+            .in('deal_id', ch)
+            .eq('meeting_slot.meeting_type', 'r2');
+          (r2List || []).forEach((att: any) => {
+            const slot = att.meeting_slot;
+            if (!slot) return;
+            const date = slot.scheduled_at || null;
+            const isFuture = date ? new Date(date) >= fridayCutoff : false;
+            const info: R2Info = {
+              date,
+              closerName: slot.closer?.name || null,
+              status: att.status || null,
+              r2StatusName: slot.r2_status?.name || null,
+              r2StatusColor: slot.r2_status?.color || null,
+              isFuture,
+              attendeeId: att.id,
+            };
+            const existing = dealToR2Info.get(att.deal_id);
+            // Priorizar: status final > futuro mais próximo > mais recente
+            if (!existing) {
+              dealToR2Info.set(att.deal_id, info);
+            } else if (date && existing.date && new Date(date) > new Date(existing.date)) {
+              dealToR2Info.set(att.deal_id, info);
+            }
+          });
+        }
+      }
+
+      const FINAL_STATUSES = new Set(['completed', 'contract_paid', 'no_show', 'refunded', 'cancelled']);
+
+      const accumulatedRows: ContractLifecycleRow[] = [];
+      for (const att of candidates) {
         const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
         const contractPaidAt = att.contract_paid_at || slot?.scheduled_at || null;
         const diasParado = contractPaidAt ? differenceInDays(now, new Date(contractPaidAt)) : null;
+        const r2Info = att.deal_id ? dealToR2Info.get(att.deal_id) : undefined;
+
+        let pendingReason: PendingReason = 'aguardando_r2';
+        let r2Date: string | null = null;
+        let r2CloserName: string | null = null;
+        let r2StatusName: string | null = null;
+        let r2StatusColor: string | null = null;
+        let r2AttendeeStatus: string | null = null;
+        let hasR2 = false;
+        let futureR2Date: string | null = null;
+        let futureR2CloserName: string | null = null;
+        let futureR2AttendeeId: string | null = null;
+
+        if (r2Info) {
+          // Status final → não é pendente, ignorar
+          if (r2Info.status && FINAL_STATUSES.has(r2Info.status)) continue;
+          hasR2 = true;
+          r2Date = r2Info.date;
+          r2CloserName = r2Info.closerName;
+          r2StatusName = r2Info.r2StatusName;
+          r2StatusColor = r2Info.r2StatusColor;
+          r2AttendeeStatus = r2Info.status;
+          if (r2Info.isFuture) {
+            pendingReason = 'r2_proxima_semana';
+            futureR2Date = r2Info.date;
+            futureR2CloserName = r2Info.closerName;
+            futureR2AttendeeId = r2Info.attendeeId;
+          } else {
+            // R2 já passou mas sem status final → closer não atualizou
+            pendingReason = 'r2_sem_status';
+          }
+        }
 
         accumulatedRows.push({
           id: `acc-pendente-${att.id}`,
@@ -754,22 +843,22 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r1CloserName: null,
           r1Status: 'contract_paid',
           sdrName: null,
-          hasR2: false,
-          r2Date: null,
-          r2CloserName: null,
-          r2StatusName: null,
-          r2StatusColor: null,
-          r2AttendeeStatus: null,
+          hasR2,
+          r2Date,
+          r2CloserName,
+          r2StatusName,
+          r2StatusColor,
+          r2AttendeeStatus,
           carrinhoStatus: null,
           carrinhoWeekStart: null,
           diasParado,
           situacao: 'pendente',
           situacaoLabel: '⏳ Pendente',
           isPaidContract: true,
-          pendingReason: 'aguardando_r2',
-          futureR2Date: null,
-          futureR2CloserName: null,
-          futureR2AttendeeId: null,
+          pendingReason,
+          futureR2Date,
+          futureR2CloserName,
+          futureR2AttendeeId,
           dentroCorte: false,
           effectiveContractDate: contractPaidAt,
           contractSource: 'r1',
@@ -777,7 +866,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           semSucessoTentativas: null,
         });
         if (att.deal_id) seenDealIds.add(att.deal_id);
-        if (pk.length >= 8) seenPhoneKeys.add(pk);
+        const pk2 = normalizePhoneSuffix9(att.attendee_phone);
+        if (pk2.length >= 8) seenPhoneKeys.add(pk2);
         seenAttendeeIds.add(att.id);
       }
 

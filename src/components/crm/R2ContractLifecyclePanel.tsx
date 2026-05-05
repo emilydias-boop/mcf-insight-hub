@@ -64,6 +64,7 @@ const PENDING_REASON_LABELS: Record<Exclude<PendingReason, null>, { label: strin
   reembolso_recente:  { label: '💸 Reembolso recente', bg: 'bg-red-500/15',   text: 'text-red-300',     border: 'border-red-500/30' },
   outside_legitimo:   { label: '🚪 Outside (s/ R1)', bg: 'bg-zinc-500/15',    text: 'text-zinc-300',    border: 'border-zinc-500/30' },
   sem_sucesso:        { label: '🔁 Sem Sucesso',    bg: 'bg-rose-500/15',    text: 'text-rose-300',    border: 'border-rose-500/30' },
+  r2_sem_status:      { label: '⚠️ R2 sem status',  bg: 'bg-orange-500/15',  text: 'text-orange-300',  border: 'border-orange-500/30' },
 };
 
 function PendingReasonBadge({
