@@ -367,6 +367,15 @@ export function R2ContractLifecyclePanel() {
     return result;
   }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr, safraStart, safraEnd]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredRows, currentPage]
+  );
+
+  useEffect(() => { setPage(1); }, [expandedKpi, activeSubFilter, searchTerm, dateMode, customRange, weekDate]);
+
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
       setSelectedDealId(row.dealId);
