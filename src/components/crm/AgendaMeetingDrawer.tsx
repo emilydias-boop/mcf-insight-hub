@@ -72,6 +72,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
+import { useAttendeeChannels, CHANNEL_EMOJI, CHANNEL_BADGE_CLASS } from '@/hooks/useAttendeeChannels';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
@@ -347,6 +348,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   }, [activeMeeting?.attendees, activeBU]);
 
   const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
+
+  // Canal (A010 / ANAMNESE / Outro) por participante
+  const channelInputs = useMemo(() => {
+    return (activeMeeting?.attendees || []).map(att => ({
+      id: att.id,
+      email: att.contact?.email || (att as any).deal?.contact?.email || activeMeeting?.deal?.contact?.email || null,
+      phone: att.attendee_phone || att.contact?.phone || activeMeeting?.deal?.contact?.phone || null,
+      scheduledAt: activeMeeting?.scheduled_at,
+      tags: ((att as any).deal?.tags) ?? (activeMeeting?.deal as any)?.tags ?? [],
+    }));
+  }, [activeMeeting?.attendees, activeMeeting?.scheduled_at, activeMeeting?.deal]);
+  const channelMap = useAttendeeChannels(channelInputs);
 
   if (!meeting || !activeMeeting) return null;
 
@@ -693,6 +706,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                             return (
                               <Badge className={cn('text-xs text-white', STATUS_LABELS[displayStatus]?.color || 'bg-muted')}>
                                 {STATUS_LABELS[displayStatus]?.label || displayStatus}
+                              </Badge>
+                            );
+                          })()}
+                          {/* Canal do lead */}
+                          {(() => {
+                            const ch = channelMap.get(p.id);
+                            if (!ch) return null;
+                            return (
+                              <Badge variant="outline" className={cn('text-[11px] gap-1', CHANNEL_BADGE_CLASS[ch])}>
+                                <span>{CHANNEL_EMOJI[ch]}</span>
+                                {ch}
                               </Badge>
                             );
                           })()}

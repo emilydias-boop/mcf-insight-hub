@@ -67,6 +67,7 @@ import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle } from 'lucide-r
 import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
 import { useBUContext } from '@/contexts/BUContext';
+import { useAttendeeChannels, CHANNEL_EMOJI } from '@/hooks/useAttendeeChannels';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
@@ -301,6 +302,20 @@ export function AgendaCalendar({
   }, [meetings, activeBU]);
 
   const { data: partnerData = {} } = usePartnerProductDetectionBatch(attendeesForPartnerCheck);
+
+  // Canal por attendee (para mostrar emoji no slot)
+  const channelInputs = useMemo(() => {
+    return meetings.flatMap(m =>
+      m.attendees?.map(att => ({
+        id: att.id,
+        email: att.contact?.email || (att as any).deal?.contact?.email || m.deal?.contact?.email || null,
+        phone: att.attendee_phone || att.contact?.phone || m.deal?.contact?.phone || null,
+        scheduledAt: m.scheduled_at,
+        tags: ((att as any).deal?.tags) ?? (m.deal as any)?.tags ?? [],
+      })) || []
+    );
+  }, [meetings]);
+  const channelMap = useAttendeeChannels(channelInputs);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
@@ -1262,6 +1277,9 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       <span className="text-muted-foreground">•</span>
                                                     </>
                                                   )}
+                                                  {channelMap.get(att.id) && (
+                                                    <span className="text-[10px]" title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
+                                                  )}
                                                   <span className="truncate flex-1">
                                                     {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                   </span>
@@ -1586,6 +1604,9 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                             <span className="text-muted-foreground">•</span>
                                                           </>
                                                         )}
+                                                        {channelMap.get(att.id) && (
+                                                          <span title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
+                                                        )}
                                                         <span className="truncate flex-1">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
@@ -1634,6 +1655,9 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         </span>
                                                         <span className="text-muted-foreground">•</span>
                                                       </>
+                                                    )}
+                                                    {channelMap.get(att.id) && (
+                                                      <span className="text-[10px]" title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
                                                     )}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
