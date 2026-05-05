@@ -106,6 +106,10 @@ function classifySituacao(
   if (r2StatusName && r2StatusName.toLowerCase().includes('desistente')) {
     return { situacao: 'desistente', label: '🚫 Desistente' };
   }
+  // Closer classificou como Aprovado via r2_status_options → reunião realizada
+  if (r2StatusName && r2StatusName.toLowerCase().includes('aprovado')) {
+    return { situacao: 'realizada', label: '✅ Realizada' };
+  }
   if (r2AttendeeStatus === 'completed' || r2AttendeeStatus === 'contract_paid') {
     return { situacao: 'realizada', label: '✅ Realizada' };
   }
