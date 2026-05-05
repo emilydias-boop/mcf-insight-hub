@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2, MessageSquareReply
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
@@ -73,6 +73,10 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { useAttendeeChannels, CHANNEL_EMOJI, CHANNEL_BADGE_CLASS } from '@/hooks/useAttendeeChannels';
+import { useUpdateCRMDeal } from '@/hooks/useCRMData';
+import { useCreateDealActivity } from '@/hooks/useDealActivities';
+
+const FOLLOWUP_CLOSER_STAGE_ID = 'c2d1b8f3-ae5a-4b2d-9f4c-3a6e7b9d0e02';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
