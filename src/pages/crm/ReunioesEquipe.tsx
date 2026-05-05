@@ -509,7 +509,7 @@ export default function ReunioesEquipe() {
       totalRealizadas,
       totalNoShows,
       totalSemStatus,
-      totalContratos: contractsFromClosers.total,
+      totalContratos: contractsFromClosers.contratoPago,
       totalOutside: contractsFromClosers.outside,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
