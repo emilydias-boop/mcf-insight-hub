@@ -340,6 +340,12 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           diasParado = differenceInDays(now, new Date(contractPaidAt));
         }
 
+        const hasR2Date = !!r2.scheduled_at;
+        const isR2Past = hasR2Date ? new Date(r2.scheduled_at) < fridayCutoff : false;
+        const rpcPendingReason: PendingReason = situacao === 'pendente' && hasR2Date && isR2Past
+          ? 'r2_sem_status'
+          : null;
+
         const row: ContractLifecycleRow = {
           id: r2.attendee_id,
           leadName: r2.attendee_name || r2.contact_name || hublaInfo?.name || null,
@@ -350,7 +356,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r1CloserName: r2.r1_closer_name || null,
           r1Status,
           sdrName: null,
-          hasR2: !!r2.scheduled_at,
+          hasR2: hasR2Date,
           r2Date: r2.scheduled_at || null,
           r2CloserName: r2.r2_closer_name || null,
           r2StatusName: r2.r2_status_name || null,
@@ -362,7 +368,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           situacao,
           situacaoLabel,
           isPaidContract: !!hublaInfo,
-          pendingReason: null,
+          pendingReason: rpcPendingReason,
           futureR2Date: null,
           futureR2CloserName: null,
           futureR2AttendeeId: null,
