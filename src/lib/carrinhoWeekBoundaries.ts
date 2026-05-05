@@ -93,38 +93,44 @@ export function getCarrinhoMetricBoundaries(
   const thuStart = localStartOfDay(new Date(weekStart));
   const wedEnd = localEndOfDay(new Date(weekEnd));
 
-  // Sexta da safra atual = Qui + 1 dia (sexta da mesma semana — fechamento desta safra)
-  const currentFriday = addDays(new Date(weekStart), 1);
-  // Sexta da safra ANTERIOR = Qui - 6 dias (sexta da semana anterior — abertura desta safra)
-  const previousFriday = subDays(new Date(weekStart), 6);
-  // Sexta da SEMANA SEGUINTE = Qui + 8 dias (corte do carrinho desta safra)
-  const nextFriday = addDays(new Date(weekStart), 8);
+  // Dia de corte dinâmico: derivado do ÚLTIMO dia selecionado em `dias` do carrinho.
+  // weekStart = Quinta (getDay()=4). Offset desde quinta = (dia - 4 + 7) % 7.
+  // Ex.: dias=[1,2,3,4] (Seg-Qui) → último=Qui → offset=0 → corte na própria quinta da safra.
+  //      dias=[1,2,3,4,5] (Seg-Sex) → último=Sex → offset=1 → corte na sexta (legado).
+  const dias = config?.carrinhos?.[0]?.dias ?? [5];
+  const lastDay = dias.length > 0 ? Math.max(...dias) : 5;
+  const cutoffOffset = (lastDay - 4 + 7) % 7; // dias após a quinta da safra
+
+  const currentCutoffDay = addDays(new Date(weekStart), cutoffOffset);
+  const previousCutoffDay = subDays(currentCutoffDay, 7);
+  const nextCutoffDay = addDays(currentCutoffDay, 7);
 
   // Horário de corte da sexta atual (default 12:00)
   const horarioCorte = config?.carrinhos?.[0]?.horario_corte || '12:00';
   const [cutHour, cutMinute] = horarioCorte.split(':').map(Number);
   const currentFridayCutoff = new Date(
-    currentFriday.getFullYear(), currentFriday.getMonth(), currentFriday.getDate(),
+    currentCutoffDay.getFullYear(), currentCutoffDay.getMonth(), currentCutoffDay.getDate(),
     cutHour, cutMinute || 0, 0, 0
   );
-  // Corte da sexta seguinte (mesmo horario_corte)
+  // Corte da semana seguinte (mesmo horario_corte)
   const nextFridayCutoff = new Date(
-    nextFriday.getFullYear(), nextFriday.getMonth(), nextFriday.getDate(),
+    nextCutoffDay.getFullYear(), nextCutoffDay.getMonth(), nextCutoffDay.getDate(),
     cutHour, cutMinute || 0, 0, 0
   );
 
-  // Horário de corte da sexta ANTERIOR (usa previousConfig se disponível)
+  // Horário de corte ANTERIOR (usa previousConfig se disponível, mesma posição de dia da semana atual)
   const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte || horarioCorte;
   const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
   const previousFridayCutoff = new Date(
-    previousFriday.getFullYear(), previousFriday.getMonth(), previousFriday.getDate(),
+    previousCutoffDay.getFullYear(), previousCutoffDay.getMonth(), previousCutoffDay.getDate(),
     prevCutHour, prevCutMinute || 0, 0, 0
   );
 
-  // R2 Meetings e Aprovados: janela do CARRINHO = Sex da safra no corte → Sex da SEMANA SEGUINTE no corte.
+  // R2 Meetings e Aprovados: janela do CARRINHO = corte desta safra → corte da SEMANA SEGUINTE.
   // O cutoff define o fechamento/abertura operacional da safra, então R2s antes do corte ficam na safra anterior.
-  // Vendas parceria: Sex desta semana no corte → Seg 23:59 (captura boletos atrasados após o fechamento do carrinho).
-  const nextMonday = addDays(nextFriday, 3); // Sex+1 + 3 = Seg da semana seguinte
+  // Vendas parceria: corte desta semana → Seg 23:59 da semana seguinte (captura boletos atrasados).
+  // Segunda-feira da semana seguinte = weekStart (Qui) + 11 dias = currentCutoffDay + (11 - cutoffOffset)
+  const nextMonday = addDays(currentCutoffDay, 11 - cutoffOffset);
   const nextMondayEnd = localEndOfDay(nextMonday);
 
   return {
