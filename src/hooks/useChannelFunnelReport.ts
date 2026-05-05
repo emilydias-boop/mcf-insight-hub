@@ -498,7 +498,7 @@ export function useChannelFunnelReport(
         const chunk = allInvolvedDealIds.slice(i, i + chunkSize);
         const { data, error } = await supabase
           .from('crm_deals')
-          .select('id, origin_id, tags, created_at, contact_id, crm_contacts!contact_id(email)')
+          .select('id, origin_id, tags, created_at, contact_id, data_source, r1_closer_email, r2_closer_email, crm_contacts!contact_id(email, name, phone)')
           .in('id', chunk);
         if (error) { console.warn('[funnel] dealMeta error', error); continue; }
         deals.push(...(data || []));
@@ -544,6 +544,9 @@ export function useChannelFunnelReport(
           contact_id: d.contact_id,
           email,
           channel,
+          data_source: d.data_source || null,
+          r1_closer_email: (d.r1_closer_email || '').toLowerCase() || null,
+          r2_closer_email: (d.r2_closer_email || '').toLowerCase() || null,
         });
       }
       return m;
