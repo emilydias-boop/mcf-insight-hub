@@ -1,0 +1,4 @@
+UPDATE public.crm_stages SET stage_order = stage_order + 1 WHERE origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c' AND stage_order >= 4;
+UPDATE public.local_pipeline_stages SET stage_order = stage_order + 1 WHERE origin_id = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c' AND stage_order >= 4;
+INSERT INTO public.crm_stages (id, clint_id, stage_name, color, stage_order, origin_id, is_active) VALUES ('b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01', 'local-b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01', 'Em contato', '#22c55e', 4, 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', true) ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.local_pipeline_stages (id, name, color, stage_order, origin_id) VALUES ('b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01', 'Em contato', '#22c55e', 4, 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c') ON CONFLICT (id) DO NOTHING;
