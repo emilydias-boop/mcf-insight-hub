@@ -129,7 +129,8 @@ export function getCarrinhoMetricBoundaries(
   // R2 Meetings e Aprovados: janela do CARRINHO = corte desta safra → corte da SEMANA SEGUINTE.
   // O cutoff define o fechamento/abertura operacional da safra, então R2s antes do corte ficam na safra anterior.
   // Vendas parceria: corte desta semana → Seg 23:59 da semana seguinte (captura boletos atrasados).
-  const nextMonday = addDays(currentCutoffDay, 10 - cutoffOffset); // segunda-feira da semana seguinte
+  // Segunda-feira da semana seguinte = weekStart (Qui) + 11 dias = currentCutoffDay + (11 - cutoffOffset)
+  const nextMonday = addDays(currentCutoffDay, 11 - cutoffOffset);
   const nextMondayEnd = localEndOfDay(nextMonday);
 
   return {
