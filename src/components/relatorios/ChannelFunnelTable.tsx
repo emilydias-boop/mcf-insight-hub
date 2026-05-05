@@ -148,7 +148,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                   <TableBody>
                     {rows.map(r => (
                       <TableRow key={`pre-${r.channel}`}>
-                        <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
+                        <TableCell className="sticky left-0 bg-background font-semibold text-base">{r.channelLabel}</TableCell>
                         <Cell value={r.entradas}     channel={r.channel} channelLabel={r.channelLabel} metric="entradas" />
                         <Cell value={r.r1Agendada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
                         <Cell value={r.r1Realizada}  channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
@@ -157,7 +157,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 bg-muted/30 font-semibold">
-                      <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
+                      <TableCell className="sticky left-0 bg-muted/30 text-base">Total</TableCell>
                       <Cell value={totals.entradas}     channel="TOTAL" channelLabel="Total" metric="entradas" />
                       <Cell value={totals.r1Agendada}   channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
                       <Cell value={totals.r1Realizada}  channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
@@ -191,7 +191,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                   <TableBody>
                     {rows.map(r => (
                       <TableRow key={`pos-${r.channel}`}>
-                        <TableCell className="sticky left-0 bg-background font-medium">{r.channelLabel}</TableCell>
+                        <TableCell className="sticky left-0 bg-background font-semibold text-base">{r.channelLabel}</TableCell>
                         <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
                         <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
                         <Cell value={r.aprovados}     channel={r.channel} channelLabel={r.channelLabel} metric="aprovados" className="text-success" />
@@ -203,7 +203,7 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 bg-muted/30 font-semibold">
-                      <TableCell className="sticky left-0 bg-muted/30">Total</TableCell>
+                      <TableCell className="sticky left-0 bg-muted/30 text-base">Total</TableCell>
                       <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
                       <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
                       <Cell value={totals.aprovados}     channel="TOTAL" channelLabel="Total" metric="aprovados" className="text-success" />
