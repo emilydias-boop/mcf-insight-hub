@@ -815,7 +815,7 @@ export function R2ContractLifecyclePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map(row => (
+                  {paginatedRows.map(row => (
                     <TableRow
                       key={row.id}
                       onClick={() => handleRowClick(row)}
@@ -867,6 +867,24 @@ export function R2ContractLifecyclePanel() {
                   ))}
                 </TableBody>
               </Table>
+              {filteredRows.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs">
+                  <div className="text-muted-foreground">
+                    Mostrando {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRows.length)} de {filteredRows.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                      Anterior
+                    </Button>
+                    <span className="text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
