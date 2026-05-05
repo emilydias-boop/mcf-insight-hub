@@ -142,6 +142,8 @@ export function R2ContractLifecyclePanel() {
     const today = new Date();
     return { from: addDays(today, -6), to: today };
   });
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   const safraStartRaw = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const safraEndRaw = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
