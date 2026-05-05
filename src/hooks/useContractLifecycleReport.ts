@@ -627,6 +627,29 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         });
       }
 
+      // ============================================================
+      // STEP F.5: Aplicar metadata de Sem Sucesso em rows pendentes
+      // (match por deal_id ou phone). Tem prioridade sobre 'aguardando_r2'
+      // mas NÃO sobre 'r2_proxima_semana' (já tem ação concreta marcada).
+      // ============================================================
+      const applySemSucesso = (row: ContractLifecycleRow) => {
+        if (row.situacao !== 'pendente') return;
+        let info: SemSucessoInfo | undefined;
+        if (row.dealId) info = semSucessoByDeal.get(row.dealId);
+        if (!info) {
+          const pk = normalizePhoneSuffix9(row.phone);
+          if (pk.length >= 8) info = semSucessoByPhone.get(pk);
+        }
+        if (!info) return;
+        if (row.pendingReason !== 'r2_proxima_semana') {
+          row.pendingReason = 'sem_sucesso';
+        }
+        row.semSucessoObservacao = info.observacao || null;
+        row.semSucessoTentativas = info.tentativas || null;
+      };
+      rpcRows.forEach(applySemSucesso);
+      orphanRows.forEach(applySemSucesso);
+
       const allRows = [...rpcRows, ...orphanRows];
 
       // ============================================================
