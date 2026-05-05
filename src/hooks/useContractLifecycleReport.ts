@@ -306,9 +306,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const seenHublaBacklogKeys = new Set<string>();
 
       const parseHublaInfo = (tx: any): HublaInfo | null => {
-        if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) continue;
-        if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') continue;
-        if (tx.installment_number && tx.installment_number > 1) continue;
+        if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) return null;
+        if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') return null;
+        if (tx.installment_number && tx.installment_number > 1) return null;
 
         const email = normalizeEmail(tx.customer_email);
         const phoneKey = normalizePhoneSuffix9(tx.customer_phone);
@@ -330,7 +330,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         if (info.email) {
           const existing = hublaByEmail.get(info.email);
-          if (!existing) hublaByEmail.set(email, info);
+          if (!existing) hublaByEmail.set(info.email, info);
           else if (info.isRefunded) existing.isRefunded = true;
         }
         if (phoneKey.length >= 8) {
