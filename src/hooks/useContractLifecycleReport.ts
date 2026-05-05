@@ -194,7 +194,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           deal_id,
           contract_paid_at,
           status,
-          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+          meeting_slot:meeting_slots!inner(
+            scheduled_at,
+            meeting_type,
+            closer:closers!meeting_slots_closer_id_fkey(name)
+          )
         `)
         .eq('status', 'contract_paid')
         .eq('meeting_slot.meeting_type', 'r1')
@@ -972,7 +976,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractPaidAt,
           dealId: att.deal_id || null,
           r1Date: slot?.scheduled_at || null,
-          r1CloserName: null,
+          r1CloserName: slot?.closer?.name || null,
           r1Status: 'contract_paid',
           sdrName: null,
           hasR2,
