@@ -174,9 +174,25 @@ interface DealMeta {
   contact_id: string | null;
   email: string | null;
   channel: string;
+  data_source: string | null;
+  r1_closer_email: string | null;
+  r2_closer_email: string | null;
 }
 
-export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: BusinessUnit) {
+export interface ChannelFunnelFilters {
+  search?: string;
+  source?: string;        // 'all' | 'hubla' | 'make' | ...
+  closerEmail?: string;   // already lowercased; '' = all
+  channel?: string;       // 'all' or raw channel key
+  origin?: string;        // 'all' or origin label/id
+  originId?: string;      // resolved origin_id (preferred)
+}
+
+export function useChannelFunnelReport(
+  dateRange: DateRange | undefined,
+  bu?: BusinessUnit,
+  filters?: ChannelFunnelFilters,
+) {
   const startDate = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : null;
   const endDate = dateRange?.to
     ? format(dateRange.to, 'yyyy-MM-dd')
@@ -482,7 +498,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
         const chunk = allInvolvedDealIds.slice(i, i + chunkSize);
         const { data, error } = await supabase
           .from('crm_deals')
-          .select('id, origin_id, tags, created_at, contact_id, crm_contacts!contact_id(email)')
+          .select('id, origin_id, tags, created_at, contact_id, data_source, r1_closer_email, r2_closer_email, crm_contacts!contact_id(email, name, phone)')
           .in('id', chunk);
         if (error) { console.warn('[funnel] dealMeta error', error); continue; }
         deals.push(...(data || []));
@@ -528,6 +544,9 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
           contact_id: d.contact_id,
           email,
           channel,
+          data_source: d.data_source || null,
+          r1_closer_email: (d.r1_closer_email || '').toLowerCase() || null,
+          r2_closer_email: (d.r2_closer_email || '').toLowerCase() || null,
         });
       }
       return m;
@@ -733,6 +752,57 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
   // ================================================================
   const { rows, totals, details } = useMemo(() => {
     const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
+
+    // ---------- Filtros locais ----------
+    const fSearch = (filters?.search || '').trim().toLowerCase();
+    const fSearchPhone = fSearch.replace(/\D/g, '');
+    const fSource = (filters?.source && filters.source !== 'all') ? filters.source.toLowerCase() : null;
+    const fCloser = (filters?.closerEmail || '').toLowerCase() || null;
+    const fChannel = (filters?.channel && filters.channel !== 'all') ? filters.channel : null;
+    const fOriginId = filters?.originId || null;
+
+    const dealPassesFilter = (dealId: string | null | undefined): boolean => {
+      if (!dealId) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      const meta = dealMeta.get(dealId);
+      if (!meta) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (fOriginId && meta.origin_id !== fOriginId) return false;
+      if (fSource && (meta.data_source || '').toLowerCase() !== fSource) return false;
+      if (fChannel && meta.channel !== fChannel) return false;
+      if (fCloser) {
+        const matches = meta.r1_closer_email === fCloser || meta.r2_closer_email === fCloser;
+        if (!matches) return false;
+      }
+      if (fSearch) {
+        const contact = meta.contact_id ? contactInfo.get(meta.contact_id) : null;
+        const name = (contact?.name || '').toLowerCase();
+        const email = (meta.email || contact?.email || '').toLowerCase();
+        const phone = (contact?.phone || '').replace(/\D/g, '');
+        const matchesText = name.includes(fSearch) || email.includes(fSearch);
+        const matchesPhone = fSearchPhone.length >= 4 && phone.includes(fSearchPhone);
+        if (!matchesText && !matchesPhone) return false;
+      }
+      return true;
+    };
+
+    const emailPassesFilter = (email: string | null | undefined): boolean => {
+      if (!email) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      // Tenta achar o deal correspondente para reaproveitar dealPassesFilter
+      let foundDealId: string | null = null;
+      dealMeta.forEach((m, id) => {
+        if (foundDealId) return;
+        if ((m.email || '').toLowerCase() === email.toLowerCase()) foundDealId = id;
+      });
+      if (foundDealId) return dealPassesFilter(foundDealId);
+      // Sem deal: aplica só os filtros que não dependem de meta
+      const ch = extraEmailChannels.get(email) || 'OUTROS';
+      if (fChannel && ch !== fChannel) return false;
+      if (fCloser || fSource || fOriginId) return false;
+      if (fSearch) {
+        if (!email.toLowerCase().includes(fSearch)) return false;
+      }
+      return true;
+    };
+
     const blank = () => ({
       entradas: 0, r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0,
       r2Agendada: 0, r2Realizada: 0, aprovados: 0, reprovados: 0,
@@ -783,6 +853,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
     // ===== ENTRADAS: deals criados na janela =====
     entradasDeals.forEach((dealId) => {
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).entradas++;
       const meta = dealMeta.get(dealId);
@@ -809,6 +880,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
     sdrDealMap.forEach((agg, key) => {
       const dealId = key.split('|')[1];
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       const slot = get(ch);
       // Cap de 2 dias por (sdr, deal) — espelha LEAST(COUNT(DISTINCT meeting_day), 2)
@@ -837,6 +909,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
       const key = `${sdrId}|${dealId}`;
       if (seenSdrDeal.has(key)) return;
       seenSdrDeal.add(key);
+      if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
       get(ch).contratoPago++;
       const cd = cohortDealsMap.get(dealId);
@@ -848,6 +921,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     carrinhoRows.forEach(c => {
       if (!c.deal_id || seenCarrinho.has(c.deal_id)) return;
       seenCarrinho.add(c.deal_id);
+      if (!dealPassesFilter(c.deal_id)) return;
       const ch = channelOf(c.deal_id);
       const slot = get(ch);
       const attStatus = (c.attendee_status || '').toLowerCase();
@@ -881,6 +955,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
 
     // Venda Final + Faturamento — vendas com sale_date na janela
     vendasFinal.forEach((v: any) => {
+      if (!emailPassesFilter(v.email)) return;
       const ch = emailToChannel.get(v.email) || extraEmailChannels.get(v.email) || 'OUTROS';
       const slot = get(ch);
       slot.vendaFinal++;
@@ -936,7 +1011,7 @@ export function useChannelFunnelReport(dateRange: DateRange | undefined, bu?: Bu
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, filters?.search, filters?.source, filters?.closerEmail, filters?.channel, filters?.originId]);
 
   return {
     rows,
