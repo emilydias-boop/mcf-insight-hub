@@ -1019,7 +1019,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="grupo"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Grupo *</FormLabel>
+                        <FormLabel>Grupo{tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Ex: A" />
                         </FormControl>
@@ -1032,7 +1032,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="cota"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cota *</FormLabel>
+                        <FormLabel>Cota{tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Ex: 101" />
                         </FormControl>
@@ -1068,7 +1068,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="prazo_meses"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Prazo (meses) *</FormLabel>
+                        <FormLabel>Prazo (meses){tipoRegistroWatch === 'reserva' ? '' : ' *'}</FormLabel>
                         <FormControl>
                           <Input 
                             type="number" 
