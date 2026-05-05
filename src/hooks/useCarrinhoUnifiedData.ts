@@ -61,6 +61,8 @@ export function useCarrinhoUnifiedData(
 ) {
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
   const prevCutoffKey = previousConfig?.carrinhos?.[0]?.horario_corte || '12:00';
+  const cutoffDayKey = carrinhoConfig?.carrinhos?.[0]?.dia_corte ?? carrinhoConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
+  const prevCutoffDayKey = previousConfig?.carrinhos?.[0]?.dia_corte ?? previousConfig?.carrinhos?.[0]?.dias?.join(',') ?? 'default';
   const queryClient = useQueryClient();
 
   // Realtime: invalidate carrinho data when R2 meetings/attendees change
@@ -79,7 +81,7 @@ export function useCarrinhoUnifiedData(
   }, [queryClient]);
 
   return useQuery({
-    queryKey: ['carrinho-unified-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffKey, prevCutoffKey],
+    queryKey: ['carrinho-unified-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
     queryFn: async (): Promise<CarrinhoLeadRow[]> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
