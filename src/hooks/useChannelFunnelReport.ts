@@ -1011,7 +1011,7 @@ export function useChannelFunnelReport(
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, filters?.search, filters?.source, filters?.closerEmail, filters?.channel, filters?.originId]);
 
   return {
     rows,
