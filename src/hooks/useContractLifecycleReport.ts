@@ -753,6 +753,8 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       // Buscar R2s existentes desses deals para classificar corretamente
       type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
+      const r2StatusIds = new Set<string>();
+      const statusOptionById = new Map<string, { name: string | null; color: string | null }>();
       const dealToR2Info = new Map<string, R2Info>();
       if (candidateDealIds.length > 0) {
         // chunk para evitar URL muito longa
@@ -762,11 +764,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           const { data: r2List } = await supabase
             .from('meeting_slot_attendees')
             .select(`
-              id, deal_id, status,
+              id, deal_id, status, r2_status_id,
               meeting_slot:meeting_slots!inner(
                 scheduled_at, meeting_type, status,
-                closer:closers!meeting_slots_closer_id_fkey(name),
-                r2_status:r2_statuses(name, color)
+                closer:closers!meeting_slots_closer_id_fkey(name)
               )
             `)
             .in('deal_id', ch)
@@ -774,14 +775,15 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           (r2List || []).forEach((att: any) => {
             const slot = att.meeting_slot;
             if (!slot) return;
+            if (att.r2_status_id) r2StatusIds.add(att.r2_status_id);
             const date = slot.scheduled_at || null;
             const isFuture = date ? new Date(date) >= fridayCutoff : false;
             const info: R2Info = {
               date,
               closerName: slot.closer?.name || null,
               status: att.status || null,
-              r2StatusName: slot.r2_status?.name || null,
-              r2StatusColor: slot.r2_status?.color || null,
+              r2StatusName: null,
+              r2StatusColor: null,
               isFuture,
               attendeeId: att.id,
             };
