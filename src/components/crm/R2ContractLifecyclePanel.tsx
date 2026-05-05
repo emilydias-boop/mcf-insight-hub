@@ -327,7 +327,11 @@ export function R2ContractLifecyclePanel() {
       formatDate(r.r1Date),
       r.r1Status || '',
       r.situacaoLabel.replace(/^[^\w]*\s*/, ''),
-      r.pendingReason ? PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, '') : '',
+      r.pendingReason
+        ? (r.pendingReason === 'sem_sucesso'
+            ? `Sem Sucesso${r.semSucessoTentativas ? ` (${r.semSucessoTentativas}x)` : ''}${r.semSucessoObservacao ? ` — ${r.semSucessoObservacao}` : ''}`
+            : PENDING_REASON_LABELS[r.pendingReason].label.replace(/^[^\w]*\s*/, ''))
+        : '',
       formatDate(r.r2Date || r.futureR2Date),
       r.r2CloserName || r.futureR2CloserName || '',
       r.r2StatusName || '',
