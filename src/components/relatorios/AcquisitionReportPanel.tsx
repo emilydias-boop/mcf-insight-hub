@@ -36,8 +36,24 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     closers, classified, isLoading,
   } = useAcquisitionReport(dateRange, bu);
 
+  const selectedCloserEmail = useMemo(() => {
+    if (selectedCloser === 'all') return '';
+    const c = closers.find(c => c.id === selectedCloser);
+    return (c?.email || '').toLowerCase();
+  }, [selectedCloser, closers]);
+
   const { rows: funnelRows, totals: funnelTotals, details: funnelDetails, isLoading: funnelLoading } =
-    useChannelFunnelReport(dateRange, bu);
+    useChannelFunnelReport(dateRange, bu, {
+      search: searchTerm,
+      source: selectedSource,
+      closerEmail: selectedCloserEmail,
+      channel: selectedChannel === 'all' ? 'all' :
+        // mapeia label do select para chave do funil
+        selectedChannel === 'A010' ? 'A010' :
+        selectedChannel === 'ANAMNESE' || selectedChannel === 'LIVE' || selectedChannel === 'ANAMNESE-INSTA' || selectedChannel === 'LANÇAMENTO'
+          ? 'ANAMNESE'
+          : 'OUTROS',
+    });
 
   // Apply local filters on classified data to recalculate if needed
   // For simplicity the main hook already processes all; filters here are on the aggregated views
