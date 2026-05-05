@@ -215,13 +215,15 @@ export function R2ContractLifecyclePanel() {
     return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
   }, [rows]);
 
-  // Pendentes children: recentes vs antigos
+  // Pendentes children: idade + motivo operacional
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0, semSucesso: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, aguardandoR2: 0, r2SemStatus: 0, proximaSafra: 0, semSucesso: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
+      aguardandoR2: pendentes.filter(r => r.pendingReason === 'aguardando_r2').length,
+      r2SemStatus: pendentes.filter(r => r.pendingReason === 'r2_sem_status').length,
       proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
       semSucesso: pendentes.filter(r => r.pendingReason === 'sem_sucesso').length,
     };
@@ -288,6 +290,10 @@ export function R2ContractLifecyclePanel() {
             result = result.filter(r => (r.diasParado ?? 0) <= 3);
           } else if (activeSubFilter === 'antigos') {
             result = result.filter(r => (r.diasParado ?? 0) > 3);
+          } else if (activeSubFilter === 'aguardando_r2') {
+            result = result.filter(r => r.pendingReason === 'aguardando_r2');
+          } else if (activeSubFilter === 'r2_sem_status') {
+            result = result.filter(r => r.pendingReason === 'r2_sem_status');
           } else if (activeSubFilter === 'proxima_safra') {
             result = result.filter(r => r.pendingReason === 'r2_proxima_semana');
           } else if (activeSubFilter === 'sem_sucesso') {
@@ -308,7 +314,7 @@ export function R2ContractLifecyclePanel() {
       );
     }
     return result;
-  }, [rows, searchTerm, expandedKpi, activeSubFilter]);
+  }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
@@ -588,7 +594,7 @@ export function R2ContractLifecyclePanel() {
           "overflow-hidden transition-all duration-300 ease-in-out",
           expandedKpi === 'pendentes' ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
         )}>
-          <div className="grid grid-cols-2 gap-2 max-w-xs pt-1">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
             <Card
               className={cn(
                 "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
@@ -611,6 +617,30 @@ export function R2ContractLifecyclePanel() {
               <CardContent className="py-2 px-3 text-center">
                 <p className="text-[10px] text-muted-foreground">{"Antigos (>3d)"}</p>
                 <p className="text-lg font-bold text-amber-600">{pendentesChildren.antigos}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'aguardando_r2' && "ring-2 ring-amber-500/50 bg-amber-500/5"
+              )}
+              onClick={() => handleSubClick('aguardando_r2')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">⏳ Aguardando R2</p>
+                <p className="text-lg font-bold text-amber-300">{pendentesChildren.aguardandoR2}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'r2_sem_status' && "ring-2 ring-orange-500/50 bg-orange-500/5"
+              )}
+              onClick={() => handleSubClick('r2_sem_status')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">⚠️ R2 sem status</p>
+                <p className="text-lg font-bold text-orange-400">{pendentesChildren.r2SemStatus}</p>
               </CardContent>
             </Card>
             <Card

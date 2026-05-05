@@ -97,6 +97,9 @@ function classifySituacao(
   if (r1Status === 'refunded' || isHublaRefunded) {
     return { situacao: 'reembolso', label: '💰 Reembolso' };
   }
+  if (r2AttendeeStatus === 'refunded' || (r2StatusName || '').toLowerCase().includes('reembolso')) {
+    return { situacao: 'reembolso', label: '💰 Reembolso' };
+  }
   if (r2AttendeeStatus === 'no_show') {
     return { situacao: 'no_show', label: '❌ No-show' };
   }
@@ -109,6 +112,9 @@ function classifySituacao(
   if (r2AttendeeStatus === 'invited' || r2AttendeeStatus === 'scheduled') {
     if (r2Date) {
       const r2DateTime = new Date(r2Date);
+      if (r2DateTime < new Date()) {
+        return { situacao: 'pendente', label: '⏳ Pendente' };
+      }
       if (r2DateTime >= fridayCutoff) {
         return { situacao: 'proxima_semana', label: '📅 Próxima Semana' };
       }
@@ -337,6 +343,12 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           diasParado = differenceInDays(now, new Date(contractPaidAt));
         }
 
+        const hasR2Date = !!r2.scheduled_at;
+        const isR2Past = hasR2Date ? new Date(r2.scheduled_at) < fridayCutoff : false;
+        const rpcPendingReason: PendingReason = situacao === 'pendente' && hasR2Date && isR2Past
+          ? 'r2_sem_status'
+          : null;
+
         const row: ContractLifecycleRow = {
           id: r2.attendee_id,
           leadName: r2.attendee_name || r2.contact_name || hublaInfo?.name || null,
@@ -347,7 +359,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r1CloserName: r2.r1_closer_name || null,
           r1Status,
           sdrName: null,
-          hasR2: !!r2.scheduled_at,
+          hasR2: hasR2Date,
           r2Date: r2.scheduled_at || null,
           r2CloserName: r2.r2_closer_name || null,
           r2StatusName: r2.r2_status_name || null,
@@ -359,7 +371,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           situacao,
           situacaoLabel,
           isPaidContract: !!hublaInfo,
-          pendingReason: null,
+          pendingReason: rpcPendingReason,
           futureR2Date: null,
           futureR2CloserName: null,
           futureR2AttendeeId: null,
@@ -749,7 +761,9 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       // Buscar R2s existentes desses deals para classificar corretamente
-      type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
+      type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusId: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
+      const r2StatusIds = new Set<string>();
+      const statusOptionById = new Map<string, { name: string | null; color: string | null }>();
       const dealToR2Info = new Map<string, R2Info>();
       if (candidateDealIds.length > 0) {
         // chunk para evitar URL muito longa
@@ -759,11 +773,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           const { data: r2List } = await supabase
             .from('meeting_slot_attendees')
             .select(`
-              id, deal_id, status,
+              id, deal_id, status, r2_status_id,
               meeting_slot:meeting_slots!inner(
                 scheduled_at, meeting_type, status,
-                closer:closers!meeting_slots_closer_id_fkey(name),
-                r2_status:r2_statuses(name, color)
+                closer:closers!meeting_slots_closer_id_fkey(name)
               )
             `)
             .in('deal_id', ch)
@@ -771,14 +784,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           (r2List || []).forEach((att: any) => {
             const slot = att.meeting_slot;
             if (!slot) return;
+            if (att.r2_status_id) r2StatusIds.add(att.r2_status_id);
             const date = slot.scheduled_at || null;
             const isFuture = date ? new Date(date) >= fridayCutoff : false;
             const info: R2Info = {
               date,
               closerName: slot.closer?.name || null,
               status: att.status || null,
-              r2StatusName: slot.r2_status?.name || null,
-              r2StatusColor: slot.r2_status?.color || null,
+              r2StatusId: att.r2_status_id || null,
+              r2StatusName: null,
+              r2StatusColor: null,
               isFuture,
               attendeeId: att.id,
             };
@@ -790,6 +805,23 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
               dealToR2Info.set(att.deal_id, info);
             }
           });
+        }
+        if (r2StatusIds.size > 0) {
+          const { data: statusOptions } = await supabase
+            .from('r2_status_options')
+            .select('id, name, color')
+            .in('id', Array.from(r2StatusIds));
+          (statusOptions || []).forEach((s: any) => {
+            statusOptionById.set(s.id, { name: s.name || null, color: s.color || null });
+          });
+          for (const [dealId, info] of dealToR2Info.entries()) {
+            const status = info.r2StatusId ? statusOptionById.get(info.r2StatusId) : null;
+            dealToR2Info.set(dealId, {
+              ...info,
+              r2StatusName: status?.name || null,
+              r2StatusColor: status?.color || null,
+            });
+          }
         }
       }
 
