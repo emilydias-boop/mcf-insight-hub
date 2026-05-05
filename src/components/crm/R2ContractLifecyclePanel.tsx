@@ -287,9 +287,10 @@ export function R2ContractLifecyclePanel() {
     if (!rows) return [];
     let result = rows;
 
-    // Pendentes na LISTA seguem o filtro de período (por contractPaidAt, fallback r1Date).
-    // O KPI Pendentes continua acumulado (backlog global) — só a lista é restringida ao período.
-    {
+    // Pendentes na LISTA seguem o filtro de período (por contractPaidAt, fallback r1Date)
+    // APENAS quando o usuário NÃO está visualizando a aba Pendentes.
+    // Ao expandir Pendentes, mostramos o backlog completo (todos os períodos).
+    if (expandedKpi !== 'pendentes') {
       const startMs = safraStart.getTime();
       const endMs = safraEnd.getTime();
       result = result.filter(r => {
