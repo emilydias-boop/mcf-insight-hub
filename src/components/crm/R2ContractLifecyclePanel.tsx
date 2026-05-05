@@ -215,13 +215,15 @@ export function R2ContractLifecyclePanel() {
     return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
   }, [rows]);
 
-  // Pendentes children: recentes vs antigos
+  // Pendentes children: idade + motivo operacional
   const pendentesChildren = useMemo(() => {
-    if (!rows) return { recentes: 0, antigos: 0, proximaSafra: 0, semSucesso: 0 };
+    if (!rows) return { recentes: 0, antigos: 0, aguardandoR2: 0, r2SemStatus: 0, proximaSafra: 0, semSucesso: 0 };
     const pendentes = rows.filter(r => r.situacao === 'pendente');
     return {
       recentes: pendentes.filter(r => (r.diasParado ?? 0) <= 3).length,
       antigos: pendentes.filter(r => (r.diasParado ?? 0) > 3).length,
+      aguardandoR2: pendentes.filter(r => r.pendingReason === 'aguardando_r2').length,
+      r2SemStatus: pendentes.filter(r => r.pendingReason === 'r2_sem_status').length,
       proximaSafra: pendentes.filter(r => r.pendingReason === 'r2_proxima_semana').length,
       semSucesso: pendentes.filter(r => r.pendingReason === 'sem_sucesso').length,
     };
