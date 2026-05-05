@@ -69,7 +69,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let pendentes = 0;
     let emAnalise = 0;
 
-    // Janela operacional (Sex anterior 12:00 → Sex desta semana 12:00) para R2 agendadas/realizadas/fora.
+    // Janela operacional (corte anterior → corte atual) para R2 agendadas/realizadas/fora.
     const { carrinhoOperacional } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
