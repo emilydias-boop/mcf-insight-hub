@@ -1383,11 +1383,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     name="data_reserva"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>
-                          {tipoRegistroWatch === 'reserva'
-                            ? 'Data da Reserva *'
-                            : 'Data da Reserva (opcional)'}
-                        </FormLabel>
+                         <FormLabel>
+                           {tipoRegistroWatch === 'reserva'
+                             ? 'Data da Reserva *'
+                             : 'Data da Contratação * (1ª parcela paga)'}
+                         </FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
