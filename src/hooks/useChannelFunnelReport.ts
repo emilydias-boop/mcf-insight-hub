@@ -813,7 +813,7 @@ export function useChannelFunnelReport(
     };
 
     const emailPassesFilter = (email: string | null | undefined): boolean => {
-      if (!email) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!email) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
       // Tenta achar o deal correspondente para reaproveitar dealPassesFilter
       let foundDealId: string | null = null;
       dealMeta.forEach((m, id) => {
@@ -824,7 +824,7 @@ export function useChannelFunnelReport(
       // Sem deal: aplica só os filtros que não dependem de meta
       const ch = extraEmailChannels.get(email) || 'OUTROS';
       if (fChannel && ch !== fChannel) return false;
-      if (fCloser || fSource || fOriginId) return false;
+      if (fCloserDeals || fSource || fOriginId) return false;
       if (fSearch) {
         if (!email.toLowerCase().includes(fSearch)) return false;
       }
