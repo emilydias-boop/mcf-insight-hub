@@ -302,8 +302,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const hublaByPhone = new Map<string, HublaInfo>();
       const hublaByEmail = new Map<string, HublaInfo>();
       const allHublaInfos: HublaInfo[] = [];
+      const allHublaBacklogInfos: HublaInfo[] = [];
+      const seenHublaBacklogKeys = new Set<string>();
 
-      for (const tx of (hublaTx || []) as any[]) {
+      const parseHublaInfo = (tx: any): HublaInfo | null => {
         if (tx.hubla_id && String(tx.hubla_id).startsWith('newsale-')) continue;
         if (tx.source === 'make' && tx.product_name?.toLowerCase() === 'contrato') continue;
         if (tx.installment_number && tx.installment_number > 1) continue;
@@ -311,25 +313,44 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         const email = normalizeEmail(tx.customer_email);
         const phoneKey = normalizePhoneSuffix9(tx.customer_phone);
         const isRefunded = tx.sale_status === 'refunded';
-        const info: HublaInfo = {
+        return {
           saleDate: tx.sale_date,
           isRefunded,
           email,
           phone: tx.customer_phone || null,
           name: tx.customer_name || null,
         };
+      };
+
+      for (const tx of (hublaTx || []) as any[]) {
+        const info = parseHublaInfo(tx);
+        if (!info) continue;
+        const phoneKey = normalizePhoneSuffix9(info.phone);
         allHublaInfos.push(info);
 
-        if (email) {
-          const existing = hublaByEmail.get(email);
+        if (info.email) {
+          const existing = hublaByEmail.get(info.email);
           if (!existing) hublaByEmail.set(email, info);
-          else if (isRefunded) existing.isRefunded = true;
+          else if (info.isRefunded) existing.isRefunded = true;
         }
         if (phoneKey.length >= 8) {
           const existing = hublaByPhone.get(phoneKey);
           if (!existing) hublaByPhone.set(phoneKey, info);
-          else if (isRefunded) existing.isRefunded = true;
+          else if (info.isRefunded) existing.isRefunded = true;
         }
+      }
+
+      for (const tx of (hublaBacklogTx || []) as any[]) {
+        const info = parseHublaInfo(tx);
+        if (!info) continue;
+        const phoneKey = normalizePhoneSuffix9(info.phone);
+        const dedupKey = phoneKey.length >= 8 ? `p:${phoneKey}` : `e:${info.email}`;
+        if (!dedupKey || seenHublaBacklogKeys.has(dedupKey)) continue;
+        seenHublaBacklogKeys.add(dedupKey);
+        allHublaBacklogInfos.push(info);
+
+        if (info.email && !hublaByEmail.has(info.email)) hublaByEmail.set(info.email, info);
+        if (phoneKey.length >= 8 && !hublaByPhone.has(phoneKey)) hublaByPhone.set(phoneKey, info);
       }
 
       // Track which Hubla records were matched to RPC rows
