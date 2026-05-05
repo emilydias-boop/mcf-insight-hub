@@ -143,12 +143,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     </TableHead>
                     <TableHead className="text-right">
                       <HeaderWithInfo
-                        label="% No-Show"
-                        info="Taxa de No-Show: No-Show ÷ R1 Agendada na janela. Quanto menor, melhor."
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <HeaderWithInfo
                         label="Contrato Pago"
                         info="Deals cujo contract_paid_at (em qualquer attendee R1) ocorreu dentro da janela do filtro."
                       />
@@ -211,7 +205,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                       <Cell value={r.r1Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r1Agendada" />
                       <Cell value={r.r1Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r1Realizada" />
                       <Cell value={r.noShow}        channel={r.channel} channelLabel={r.channelLabel} metric="noShow" className="text-destructive" />
-                      <TableCell className="text-right">{pctBadgeInverted(r.taxaNoShow)}</TableCell>
                       <Cell value={r.contratoPago}  channel={r.channel} channelLabel={r.channelLabel} metric="contratoPago" />
                       <Cell value={r.r2Agendada}    channel={r.channel} channelLabel={r.channelLabel} metric="r2Agendada" />
                       <Cell value={r.r2Realizada}   channel={r.channel} channelLabel={r.channelLabel} metric="r2Realizada" />
@@ -229,7 +222,6 @@ export function ChannelFunnelTable({ rows, totals, details }: Props) {
                     <Cell value={totals.r1Agendada}    channel="TOTAL" channelLabel="Total" metric="r1Agendada" />
                     <Cell value={totals.r1Realizada}   channel="TOTAL" channelLabel="Total" metric="r1Realizada" />
                     <Cell value={totals.noShow}        channel="TOTAL" channelLabel="Total" metric="noShow"        className="text-destructive" />
-                    <TableCell className="text-right">{pctBadgeInverted(totals.r1Agendada > 0 ? (totals.noShow / totals.r1Agendada) * 100 : 0)}</TableCell>
                     <Cell value={totals.contratoPago}  channel="TOTAL" channelLabel="Total" metric="contratoPago" />
                     <Cell value={totals.r2Agendada}    channel="TOTAL" channelLabel="Total" metric="r2Agendada" />
                     <Cell value={totals.r2Realizada}   channel="TOTAL" channelLabel="Total" metric="r2Realizada" />
