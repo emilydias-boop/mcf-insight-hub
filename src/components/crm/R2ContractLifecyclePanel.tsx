@@ -620,6 +620,18 @@ export function R2ContractLifecyclePanel() {
                 <p className="text-lg font-bold text-amber-400">{pendentesChildren.proximaSafra}</p>
               </CardContent>
             </Card>
+            <Card
+              className={cn(
+                "bg-muted/30 border-border cursor-pointer transition-all hover:shadow-sm",
+                activeSubFilter === 'sem_sucesso' && "ring-2 ring-rose-500/50 bg-rose-500/5"
+              )}
+              onClick={() => handleSubClick('sem_sucesso')}
+            >
+              <CardContent className="py-2 px-3 text-center">
+                <p className="text-[10px] text-muted-foreground">🔁 Sem Sucesso</p>
+                <p className="text-lg font-bold text-rose-400">{pendentesChildren.semSucesso}</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
