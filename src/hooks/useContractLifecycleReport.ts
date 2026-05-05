@@ -18,6 +18,7 @@ export interface ContractLifecycleFilters {
   startDate: Date;
   endDate: Date;
   weekStart?: Date;
+  mode?: 'safra' | 'custom';
   closerR1Id?: string;
   situacao?: string;
 }
@@ -71,6 +72,8 @@ export interface ContractLifecycleRow {
   // Sem Sucesso metadata (quando pendingReason = 'sem_sucesso')
   semSucessoObservacao: string | null;
   semSucessoTentativas: number | null;
+  // Pendência acumulada aberta, independente do filtro de data do relatório
+  isBacklogPending?: boolean;
 }
 
 function getFridayCutoff(weekStart?: Date, horarioCorte?: string): Date {
@@ -133,23 +136,26 @@ function classifySituacao(
 
 export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
   return useQuery({
-    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
+    queryKey: ['contract-lifecycle-report', filters.startDate.toISOString(), filters.endDate.toISOString(), filters.mode || 'safra', filters.closerR1Id, filters.situacao, filters.weekStart?.toISOString()],
     staleTime: 30000,
     queryFn: async () => {
       // ============================================================
       // STEP A: Fetch unified R2 data via RPC (canonical source)
       // ============================================================
+      const isCustomRange = filters.mode === 'custom';
       const weekStart = filters.weekStart || filters.startDate;
       const weekEnd = addDays(weekStart, 6);
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd);
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const weekStartStr = isCustomRange ? '1900-01-01' : format(weekStart, 'yyyy-MM-dd');
+      const r2WindowStart = isCustomRange ? startOfDay(filters.startDate) : boundaries.r2Meetings.start;
+      const r2WindowEnd = isCustomRange ? endOfDay(filters.endDate) : boundaries.r2Meetings.end;
 
       const rpcPromise = supabase.rpc('get_carrinho_r2_attendees', {
         p_week_start: weekStartStr,
-        p_window_start: boundaries.r2Meetings.start.toISOString(),
-        p_window_end: boundaries.r2Meetings.end.toISOString(),
-        p_apply_contract_cutoff: true,
-        p_previous_cutoff: boundaries.previousCutoff.toISOString(),
+        p_window_start: r2WindowStart.toISOString(),
+        p_window_end: r2WindowEnd.toISOString(),
+        p_apply_contract_cutoff: !isCustomRange,
+        p_previous_cutoff: isCustomRange ? r2WindowStart.toISOString() : boundaries.previousCutoff.toISOString(),
       });
 
       // ============================================================
@@ -333,6 +339,10 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
         const isHublaRefunded = !!hublaInfo?.isRefunded;
         const contractPaidAt = r2.effective_contract_date || r2.r1_contract_paid_at || hublaInfo?.saleDate || r2.contract_paid_at || null;
+        const contractInSelectedPeriod = !!contractPaidAt && new Date(contractPaidAt) >= new Date(contractBoundaryStart) && new Date(contractPaidAt) <= new Date(contractBoundaryEnd);
+        const r2InSelectedPeriod = !!r2.scheduled_at && new Date(r2.scheduled_at) >= new Date(contractBoundaryStart) && new Date(r2.scheduled_at) <= new Date(contractBoundaryEnd);
+        const includeCurrentRow = !isCustomRange || contractInSelectedPeriod || r2InSelectedPeriod || isHublaRefunded;
+        if (!includeCurrentRow) continue;
 
         const r1Status: string | null = isHublaRefunded ? 'refunded' : null;
         const r2AttendeeStatus = r2.attendee_status as string | null;
@@ -406,10 +416,16 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       const seenOrphanKeys = new Set<string>();
       const orphansByPhone = new Map<string, ContractLifecycleRow>();
       const orphansByEmail = new Map<string, ContractLifecycleRow>();
+      const accumulatedPaidPhones = new Set(
+        ((accumulatedPaidData || []) as any[])
+          .map(att => normalizePhoneSuffix9(att.attendee_phone))
+          .filter(pk => pk.length >= 8)
+      );
 
       for (const info of allHublaInfos) {
         const phoneKey = normalizePhoneSuffix9(info.phone);
         const emailKey = info.email;
+        if (phoneKey.length >= 8 && accumulatedPaidPhones.has(phoneKey)) continue;
 
         const matchedByPhone = phoneKey.length >= 8 && matchedHublaPhones.has(phoneKey);
         const matchedByEmail = emailKey && matchedHublaEmails.has(emailKey);
@@ -460,6 +476,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'hubla',
           semSucessoObservacao: null,
           semSucessoTentativas: null,
+          isBacklogPending: false,
         };
         orphanRows.push(orphan);
         if (phoneKey.length >= 8) orphansByPhone.set(phoneKey, orphan);
@@ -769,6 +786,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'r1',
           semSucessoObservacao: info.observacao || null,
           semSucessoTentativas: info.tentativas || null,
+          isBacklogPending: true,
         });
       }
 
@@ -1037,6 +1055,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           contractSource: 'r1',
           semSucessoObservacao: null,
           semSucessoTentativas: null,
+          isBacklogPending: true,
         });
         if (att.deal_id) seenDealIds.add(att.deal_id);
         const pk2 = normalizePhoneSuffix9(att.attendee_phone);

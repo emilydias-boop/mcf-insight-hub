@@ -162,28 +162,35 @@ export function R2ContractLifecyclePanel() {
     endDate: safraEnd,
     // weekStart é usado pela RPC do Carrinho — sempre manter em base semanal mesmo em modo custom
     weekStart: safraStartRaw,
-  }), [safraStart, safraEnd, safraStartRaw]);
+    mode: dateMode,
+  }), [safraStart, safraEnd, safraStartRaw, dateMode]);
 
   const { data: rows, isLoading } = useContractLifecycleReport(filters);
 
   // KPI counts
   const kpis = useMemo(() => {
     if (!rows) return { total: 0, realizadas: 0, agendados: 0, preAgendado: 0, pendentes: 0, noShow: 0, reembolso: 0 };
-    // Total Pagos = contratos pagos DENTRO do período selecionado (safra).
-    // Pendentes acumulam (podem ser de períodos anteriores) e NÃO entram no Total Pagos.
-    const inPeriod = (r: ContractLifecycleRow) => {
+    // KPIs de status seguem o filtro do período por data de R2; Pendentes é backlog aberto e não varia por período.
+    const paidInPeriod = (r: ContractLifecycleRow) => {
       if (!r.contractPaidAt) return false;
       const d = new Date(r.contractPaidAt);
       return d >= safraStart && d <= safraEnd;
     };
+    const r2InPeriod = (r: ContractLifecycleRow) => {
+      const date = r.r2Date || r.futureR2Date;
+      if (!date) return false;
+      const d = new Date(date);
+      return d >= safraStart && d <= safraEnd;
+    };
+    const periodRows = rows.filter(r => r.situacao === 'pendente' ? r.isBacklogPending : r2InPeriod(r));
     return {
-      total: rows.filter(r => r.isPaidContract && inPeriod(r)).length,
-      realizadas: rows.filter(r => r.situacao === 'realizada').length,
-      agendados: rows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
-      preAgendado: rows.filter(r => r.situacao === 'pre_agendado').length,
-      pendentes: rows.filter(r => r.situacao === 'pendente').length,
-      noShow: rows.filter(r => r.situacao === 'no_show').length,
-      reembolso: rows.filter(r => r.situacao === 'reembolso').length,
+      total: rows.filter(r => r.isPaidContract && paidInPeriod(r)).length,
+      realizadas: periodRows.filter(r => r.situacao === 'realizada').length,
+      agendados: periodRows.filter(r => ['agendado', 'proxima_semana'].includes(r.situacao)).length,
+      preAgendado: periodRows.filter(r => r.situacao === 'pre_agendado').length,
+      pendentes: rows.filter(r => r.situacao === 'pendente' && r.isBacklogPending).length,
+      noShow: periodRows.filter(r => r.situacao === 'no_show').length,
+      reembolso: rows.filter(r => r.situacao === 'reembolso' && paidInPeriod(r)).length,
     };
   }, [rows, safraStart, safraEnd]);
 
