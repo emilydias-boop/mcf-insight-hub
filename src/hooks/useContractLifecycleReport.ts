@@ -868,6 +868,11 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
           r2StatusName = r2Info.r2StatusName;
           r2StatusColor = r2Info.r2StatusColor;
           r2AttendeeStatus = r2Info.status;
+          // R2 ainda não aconteceu (futuro em relação a AGORA) → não é pendente,
+          // está apenas agendado/próxima safra. Não deve aparecer em Pendentes.
+          const r2DateTime = r2Info.date ? new Date(r2Info.date) : null;
+          const isStillUpcoming = r2DateTime ? r2DateTime > now : false;
+          if (isStillUpcoming) continue;
           if (r2Info.isFuture) {
             pendingReason = 'r2_proxima_semana';
             futureR2Date = r2Info.date;
