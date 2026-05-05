@@ -797,6 +797,23 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
             }
           });
         }
+        if (r2StatusIds.size > 0) {
+          const { data: statusOptions } = await supabase
+            .from('r2_status_options')
+            .select('id, name, color')
+            .in('id', Array.from(r2StatusIds));
+          (statusOptions || []).forEach((s: any) => {
+            statusOptionById.set(s.id, { name: s.name || null, color: s.color || null });
+          });
+          for (const [dealId, info] of dealToR2Info.entries()) {
+            const status = info.r2StatusId ? statusOptionById.get(info.r2StatusId) : null;
+            dealToR2Info.set(dealId, {
+              ...info,
+              r2StatusName: status?.name || null,
+              r2StatusColor: status?.color || null,
+            });
+          }
+        }
       }
 
       const FINAL_STATUSES = new Set(['completed', 'contract_paid', 'no_show', 'refunded', 'cancelled']);
