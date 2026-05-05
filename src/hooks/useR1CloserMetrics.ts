@@ -419,7 +419,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
                 .from('meeting_slot_attendees')
                 .select('deal_id, is_partner, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type, status)')
                 .in('deal_id', chunk)
-                .eq('meeting_slot.meeting_type', 'r1')
+                .in('meeting_slot.meeting_type', ['r1', 'r2'])
                 .neq('meeting_slot.status', 'cancelled')
                 .neq('meeting_slot.status', 'canceled')
                 .eq('is_partner', false),
@@ -428,19 +428,40 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           : [];
 
         const countedOutsideEmails = new Set<string>();
+        // Para cada email, escolhe a reunião MAIS ANTIGA (R1 tem prioridade sobre R2
+        // se ambas existirem, pois R1 vem primeiro no funil). Outside = contrato
+        // pago ANTES dessa primeira reunião.
+        const earliestByEmail = new Map<string, { scheduledAt: Date; closerId: string; meetingType: string }>();
         outsideAttendees.forEach(att => {
           const email = outsideDealToEmail.get(att.deal_id);
-          if (!email || countedOutsideEmails.has(email)) return;
-
-          const contractDate = periodContractByEmail.get(email);
-          if (!contractDate) return;
-
+          if (!email) return;
           const meetingSlot = att.meeting_slot as any;
           const scheduledAt = new Date(meetingSlot.scheduled_at);
           const closerId = meetingSlot.closer_id;
+          const meetingType = meetingSlot.meeting_type;
+          if (!closerId) return;
 
-          if (contractDate < scheduledAt && closerId) {
-            outsideByCloser.set(closerId, (outsideByCloser.get(closerId) || 0) + 1);
+          const current = earliestByEmail.get(email);
+          if (!current) {
+            earliestByEmail.set(email, { scheduledAt, closerId, meetingType });
+            return;
+          }
+          // R1 sempre vence R2; entre iguais, a mais antiga vence.
+          const currentIsR1 = current.meetingType === 'r1';
+          const newIsR1 = meetingType === 'r1';
+          if (newIsR1 && !currentIsR1) {
+            earliestByEmail.set(email, { scheduledAt, closerId, meetingType });
+          } else if (newIsR1 === currentIsR1 && scheduledAt < current.scheduledAt) {
+            earliestByEmail.set(email, { scheduledAt, closerId, meetingType });
+          }
+        });
+
+        earliestByEmail.forEach((info, email) => {
+          if (countedOutsideEmails.has(email)) return;
+          const contractDate = periodContractByEmail.get(email);
+          if (!contractDate) return;
+          if (contractDate < info.scheduledAt) {
+            outsideByCloser.set(info.closerId, (outsideByCloser.get(info.closerId) || 0) + 1);
             countedOutsideEmails.add(email);
           }
         });
