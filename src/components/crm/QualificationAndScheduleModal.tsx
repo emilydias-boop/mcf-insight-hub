@@ -338,6 +338,25 @@ export function QualificationAndScheduleModal({
                     />
                   </div>
 
+                  {/* Falei com o lead → move para "Em contato" */}
+                  <div className="flex items-start gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
+                    <Checkbox
+                      id="falei-com-lead"
+                      checked={faleiComLead}
+                      onCheckedChange={(checked) => setFaleiComLead(!!checked)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <Label htmlFor="falei-com-lead" className="cursor-pointer font-medium">
+                        ✅ Falei com o lead (não foi caixa postal)
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Ao salvar, o lead será movido automaticamente para a etapa <strong>Em contato</strong>.
+                        Não se aplica se o lead já estiver em R1 Agendada ou etapas posteriores.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
                     <Button 
