@@ -215,31 +215,43 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       // Fetch ALL paid R1 attendees globally — used to surface accumulated pendentes
       // (contract_paid sem R2 agendado/concluído), independente da semana filtrada
-      const accumulatedPaidPromise = supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          attendee_name,
-          attendee_phone,
-          deal_id,
-          contract_paid_at,
-          status,
-          meeting_slot:meeting_slots!inner(
-            scheduled_at,
-            meeting_type,
-            closer:closers!meeting_slots_closer_id_fkey(name)
-          )
-        `)
-        .eq('status', 'contract_paid')
-        .eq('meeting_slot.meeting_type', 'r1')
-        .not('contract_paid_at', 'is', null);
+      const fetchAccumulatedPaidAttendees = async () => {
+        const pageSize = 1000;
+        const allRows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from('meeting_slot_attendees')
+            .select(`
+              id,
+              attendee_name,
+              attendee_phone,
+              deal_id,
+              contract_paid_at,
+              status,
+              meeting_slot:meeting_slots!inner(
+                scheduled_at,
+                meeting_type,
+                closer:closers!meeting_slots_closer_id_fkey(name)
+              )
+            `)
+            .eq('status', 'contract_paid')
+            .eq('meeting_slot.meeting_type', 'r1')
+            .not('contract_paid_at', 'is', null)
+            .range(from, from + pageSize - 1);
+          if (error) throw error;
+          allRows.push(...(data || []));
+          if (!data || data.length < pageSize) break;
+        }
+        return allRows;
+      };
+      const accumulatedPaidPromise = fetchAccumulatedPaidAttendees();
 
       const [
         { data: rpcData, error: rpcError },
         hublaTx,
         hublaBacklogTx,
         { data: semSucessoData, error: semSucessoError },
-        { data: accumulatedPaidData, error: accumulatedPaidError },
+        accumulatedPaidData,
       ] = await Promise.all([
         rpcPromise,
         hublaPromise,
@@ -250,7 +262,6 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
 
       if (rpcError) throw rpcError;
       if (semSucessoError) throw semSucessoError;
-      if (accumulatedPaidError) throw accumulatedPaidError;
 
       // Build sem_sucesso lookup by phone suffix (9 digits) and deal_id
       type SemSucessoInfo = {
