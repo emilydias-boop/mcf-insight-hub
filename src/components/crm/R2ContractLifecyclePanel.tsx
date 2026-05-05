@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, addWeeks, subWeeks, addDays, differenceInDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
@@ -142,6 +142,8 @@ export function R2ContractLifecyclePanel() {
     const today = new Date();
     return { from: addDays(today, -6), to: today };
   });
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   const safraStartRaw = useMemo(() => getCartWeekStart(weekDate), [weekDate]);
   const safraEndRaw = useMemo(() => getCartWeekEnd(weekDate), [weekDate]);
@@ -364,6 +366,15 @@ export function R2ContractLifecyclePanel() {
     }
     return result;
   }, [rows, searchTerm, expandedKpi, activeSubFilter, currentWeekStartStr, safraStart, safraEnd]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredRows, currentPage]
+  );
+
+  useEffect(() => { setPage(1); }, [expandedKpi, activeSubFilter, searchTerm, dateMode, customRange, weekDate]);
 
   const handleRowClick = (row: ContractLifecycleRow) => {
     if (row.dealId) {
@@ -804,7 +815,7 @@ export function R2ContractLifecyclePanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRows.map(row => (
+                  {paginatedRows.map(row => (
                     <TableRow
                       key={row.id}
                       onClick={() => handleRowClick(row)}
@@ -856,6 +867,24 @@ export function R2ContractLifecyclePanel() {
                   ))}
                 </TableBody>
               </Table>
+              {filteredRows.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border text-xs">
+                  <div className="text-muted-foreground">
+                    Mostrando {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRows.length)} de {filteredRows.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                      Anterior
+                    </Button>
+                    <span className="text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
