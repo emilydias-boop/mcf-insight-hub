@@ -62,8 +62,8 @@ export interface CarrinhoMetricBoundaries {
  *
  * Ciclo do carrinho (exemplo: safra Qui 03/04 - Qua 09/04, carrinho sexta 10/04):
  * - Contratos:       Qui 03/04 00:00 → Qua 09/04 23:59
- * - R2 Agendadas:    Sex 03/04 12:00 (corte anterior) → Sex 10/04 12:00 (corte atual)
- * - Aprovados:       Sex 03/04 12:00 (corte anterior) → Sex 10/04 12:00 (corte atual)
+ * - R2 Agendadas:    corte anterior → corte atual
+ * - Aprovados:       corte anterior → corte atual
  * - Vendas Parceria: Sex 10/04 00:00 → Seg 13/04 23:59
  * - R1 Realizadas:   Qui 03/04 00:00 → Qua 09/04 23:59
  *
@@ -104,8 +104,6 @@ export function getCarrinhoMetricBoundaries(
   const cutoffOffset = (lastDay - 4 + 7) % 7; // dias após a quinta da safra
 
   const currentCutoffDay = addDays(new Date(weekStart), cutoffOffset);
-  const nextCutoffDay = addDays(currentCutoffDay, 7);
-
   // Dia de corte da SEMANA ANTERIOR (pode ser diferente do atual).
   // weekStart anterior = weekStart - 7. Usamos `dia_corte` do previousConfig se presente,
   // senão derivamos do último dia em `dias` (legado), senão fallback = mesmo dia do atual.
@@ -125,12 +123,6 @@ export function getCarrinhoMetricBoundaries(
     currentCutoffDay.getFullYear(), currentCutoffDay.getMonth(), currentCutoffDay.getDate(),
     cutHour, cutMinute || 0, 0, 0
   );
-  // Corte da semana seguinte (mesmo horario_corte)
-  const nextFridayCutoff = new Date(
-    nextCutoffDay.getFullYear(), nextCutoffDay.getMonth(), nextCutoffDay.getDate(),
-    cutHour, cutMinute || 0, 0, 0
-  );
-
   // Horário de corte ANTERIOR (usa previousConfig se disponível, mesma posição de dia da semana atual)
   const prevHorarioCorte = previousConfig?.carrinhos?.[0]?.horario_corte || horarioCorte;
   const [prevCutHour, prevCutMinute] = prevHorarioCorte.split(':').map(Number);
@@ -151,7 +143,7 @@ export function getCarrinhoMetricBoundaries(
     contratos: { start: thuStart, end: wedEnd },
     r2Meetings: { start: previousFridayCutoff, end: currentFridayCutoff },
     aprovados: { start: previousFridayCutoff, end: currentFridayCutoff },
-    vendasParceria: { start: nextFridayCutoff, end: nextMondayEnd },
+    vendasParceria: { start: currentFridayCutoff, end: nextMondayEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: previousFridayCutoff,
     safraOpeningCutoff: previousFridayCutoff,
