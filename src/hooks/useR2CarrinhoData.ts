@@ -35,8 +35,6 @@ export interface R2CarrinhoAttendee {
   is_encaixado?: boolean;
 }
 
-const SCHEDULED_ATTENDEE_STATUSES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled']);
-
 function toAttendee(row: CarrinhoLeadRow): R2CarrinhoAttendee {
   return {
     id: row.attendee_id,
@@ -97,12 +95,7 @@ export function useR2CarrinhoData(
     } else if (filter === 'aprovados_proxima_safra') {
       filtered = filtered.filter(isProximaSafra);
     } else if (filter === 'agendadas') {
-      filtered = filtered.filter(r =>
-        r.meeting_status !== 'cancelled'
-        && r.meeting_status !== 'rescheduled'
-        && SCHEDULED_ATTENDEE_STATUSES.has((r.attendee_status || '').toLowerCase())
-        && inOperationalWindow(r)
-      );
+      filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled' && inOperationalWindow(r));
     } else if (filter === 'no_show') {
       filtered = filtered.filter(r => r.meeting_status === 'no_show' && inOperationalWindow(r));
     } else if (filter === 'realizadas') {
