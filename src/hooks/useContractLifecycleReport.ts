@@ -752,7 +752,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       }
 
       // Buscar R2s existentes desses deals para classificar corretamente
-      type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
+      type R2Info = { date: string | null; closerName: string | null; status: string | null; r2StatusId: string | null; r2StatusName: string | null; r2StatusColor: string | null; isFuture: boolean; attendeeId: string };
       const r2StatusIds = new Set<string>();
       const statusOptionById = new Map<string, { name: string | null; color: string | null }>();
       const dealToR2Info = new Map<string, R2Info>();
@@ -782,6 +782,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
               date,
               closerName: slot.closer?.name || null,
               status: att.status || null,
+              r2StatusId: att.r2_status_id || null,
               r2StatusName: null,
               r2StatusColor: null,
               isFuture,
