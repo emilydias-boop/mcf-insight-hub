@@ -93,7 +93,7 @@ export default function R2Carrinho() {
     if (!selectedCarrinhoId || !kpis) return kpis;
     return {
       ...kpis,
-      r2Agendadas: agendadasData.filter(a => ['scheduled', 'invited', 'pending'].includes(a.meeting_status) && a.status !== 'rescheduled').length,
+      r2Agendadas: agendadasData.length,
       r2Realizadas: agendadasData.filter(a => a.meeting_status === 'completed').length,
       foraDoCarrinho: foraCarrinhoData.length,
       aprovados: aprovadosData.length,
