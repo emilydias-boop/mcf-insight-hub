@@ -36,17 +36,11 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
     closers, classified, isLoading,
   } = useAcquisitionReport(dateRange, bu);
 
-  const selectedCloserEmail = useMemo(() => {
-    if (selectedCloser === 'all') return '';
-    const c = closers.find(c => c.id === selectedCloser);
-    return (c?.email || '').toLowerCase();
-  }, [selectedCloser, closers]);
-
   const { rows: funnelRows, totals: funnelTotals, details: funnelDetails, isLoading: funnelLoading } =
     useChannelFunnelReport(dateRange, bu, {
       search: searchTerm,
       source: selectedSource,
-      closerEmail: selectedCloserEmail,
+      closerId: selectedCloser === 'all' ? '' : selectedCloser,
       channel: selectedChannel === 'all' ? 'all' :
         // mapeia label do select para chave do funil
         selectedChannel === 'A010' ? 'A010' :

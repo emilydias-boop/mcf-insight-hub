@@ -182,7 +182,7 @@ interface DealMeta {
 export interface ChannelFunnelFilters {
   search?: string;
   source?: string;        // 'all' | 'hubla' | 'make' | ...
-  closerEmail?: string;   // already lowercased; '' = all
+  closerId?: string;      // '' = all
   channel?: string;       // 'all' or raw channel key
   origin?: string;        // 'all' or origin label/id
   originId?: string;      // resolved origin_id (preferred)
@@ -556,6 +556,37 @@ export function useChannelFunnelReport(
   });
 
   // ================================================================
+  // 3b. DEALS por CLOSER — para filtro Closer (R1 ou R2).
+  //     Busca todos os deal_ids cuja R1 ou R2 (qualquer attendee, sem
+  //     restrição de janela) foi conduzida pelo closer selecionado.
+  // ================================================================
+  const closerFilterId = filters?.closerId || null;
+  const { data: closerDealIds = null } = useQuery<Set<string> | null>({
+    queryKey: ['funnel-closer-deals', closerFilterId, bu],
+    queryFn: async () => {
+      if (!closerFilterId) return null;
+      const set = new Set<string>();
+      const pageSize = 1000;
+      let from = 0, more = true;
+      while (more && from < 30000) {
+        const { data, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, meeting_slots!inner(closer_id)')
+          .eq('meeting_slots.closer_id', closerFilterId)
+          .range(from, from + pageSize - 1);
+        if (error) { console.error('[funnel-closer-deals]', error); break; }
+        const batch = data || [];
+        batch.forEach((r: any) => { if (r.deal_id) set.add(r.deal_id); });
+        more = batch.length >= pageSize;
+        from += pageSize;
+      }
+      return set;
+    },
+    enabled: !!closerFilterId,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 4. VENDA FINAL — vendas de parceria com sale_date na janela.
   //    SEM filtro de "primeira-compra-da-vida" (inclui upsells/recompras).
   //    Dedupe por email dentro da janela.
@@ -757,21 +788,18 @@ export function useChannelFunnelReport(
     const fSearch = (filters?.search || '').trim().toLowerCase();
     const fSearchPhone = fSearch.replace(/\D/g, '');
     const fSource = (filters?.source && filters.source !== 'all') ? filters.source.toLowerCase() : null;
-    const fCloser = (filters?.closerEmail || '').toLowerCase() || null;
+    const fCloserDeals = closerDealIds; // Set<string> | null — null = sem filtro
     const fChannel = (filters?.channel && filters.channel !== 'all') ? filters.channel : null;
     const fOriginId = filters?.originId || null;
 
     const dealPassesFilter = (dealId: string | null | undefined): boolean => {
-      if (!dealId) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!dealId) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (fCloserDeals && !fCloserDeals.has(dealId)) return false;
       const meta = dealMeta.get(dealId);
-      if (!meta) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!meta) return !fSearch && !fSource && !fChannel && !fOriginId;
       if (fOriginId && meta.origin_id !== fOriginId) return false;
       if (fSource && (meta.data_source || '').toLowerCase() !== fSource) return false;
       if (fChannel && meta.channel !== fChannel) return false;
-      if (fCloser) {
-        const matches = meta.r1_closer_email === fCloser || meta.r2_closer_email === fCloser;
-        if (!matches) return false;
-      }
       if (fSearch) {
         const contact = meta.contact_id ? contactInfo.get(meta.contact_id) : null;
         const name = (contact?.name || '').toLowerCase();
@@ -785,7 +813,7 @@ export function useChannelFunnelReport(
     };
 
     const emailPassesFilter = (email: string | null | undefined): boolean => {
-      if (!email) return !fCloser && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!email) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
       // Tenta achar o deal correspondente para reaproveitar dealPassesFilter
       let foundDealId: string | null = null;
       dealMeta.forEach((m, id) => {
@@ -796,7 +824,7 @@ export function useChannelFunnelReport(
       // Sem deal: aplica só os filtros que não dependem de meta
       const ch = extraEmailChannels.get(email) || 'OUTROS';
       if (fChannel && ch !== fChannel) return false;
-      if (fCloser || fSource || fOriginId) return false;
+      if (fCloserDeals || fSource || fOriginId) return false;
       if (fSearch) {
         if (!email.toLowerCase().includes(fSearch)) return false;
       }
@@ -1011,7 +1039,7 @@ export function useChannelFunnelReport(
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, filters?.search, filters?.source, filters?.closerEmail, filters?.channel, filters?.originId]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
 
   return {
     rows,
