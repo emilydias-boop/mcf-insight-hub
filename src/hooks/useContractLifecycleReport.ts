@@ -632,6 +632,7 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
       // (match por deal_id ou phone). Tem prioridade sobre 'aguardando_r2'
       // mas NÃO sobre 'r2_proxima_semana' (já tem ação concreta marcada).
       // ============================================================
+      const matchedSemSucessoIds = new Set<string>();
       const applySemSucesso = (row: ContractLifecycleRow) => {
         if (row.situacao !== 'pendente') return;
         let info: SemSucessoInfo | undefined;
@@ -646,11 +647,54 @@ export function useContractLifecycleReport(filters: ContractLifecycleFilters) {
         }
         row.semSucessoObservacao = info.observacao || null;
         row.semSucessoTentativas = info.tentativas || null;
+        matchedSemSucessoIds.add(info.attendeeId);
       };
       rpcRows.forEach(applySemSucesso);
       orphanRows.forEach(applySemSucesso);
 
-      const allRows = [...rpcRows, ...orphanRows];
+      // STEP F.6: Injetar TODOS os "Sem Sucesso" não casados como rows pendentes
+      // (sempre visíveis, independente da semana selecionada — são pendência aberta)
+      const semSucessoRows: ContractLifecycleRow[] = [];
+      for (const info of allSemSucesso) {
+        if (matchedSemSucessoIds.has(info.attendeeId)) continue;
+        const diasParado = info.contractPaidAt
+          ? differenceInDays(now, new Date(info.contractPaidAt))
+          : null;
+        semSucessoRows.push({
+          id: `sem-sucesso-${info.attendeeId}`,
+          leadName: info.attendeeName,
+          phone: info.attendeePhone,
+          contractPaidAt: info.contractPaidAt,
+          dealId: info.dealId,
+          r1Date: null,
+          r1CloserName: null,
+          r1Status: null,
+          sdrName: null,
+          hasR2: false,
+          r2Date: null,
+          r2CloserName: null,
+          r2StatusName: null,
+          r2StatusColor: null,
+          r2AttendeeStatus: 'sem_sucesso',
+          carrinhoStatus: null,
+          carrinhoWeekStart: null,
+          diasParado,
+          situacao: 'pendente',
+          situacaoLabel: '⏳ Pendente',
+          isPaidContract: true,
+          pendingReason: 'sem_sucesso',
+          futureR2Date: null,
+          futureR2CloserName: null,
+          futureR2AttendeeId: null,
+          dentroCorte: false,
+          effectiveContractDate: info.contractPaidAt,
+          contractSource: 'r1',
+          semSucessoObservacao: info.observacao || null,
+          semSucessoTentativas: info.tentativas || null,
+        });
+      }
+
+      const allRows = [...rpcRows, ...orphanRows, ...semSucessoRows];
 
       // ============================================================
       // STEP G: Apply filters & sort
