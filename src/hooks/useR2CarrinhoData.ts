@@ -93,7 +93,20 @@ export function useR2CarrinhoData(
     if (filter === 'aprovados') {
       filtered = filtered.filter(isCarrinhoEligible);
     } else if (filter === 'aprovados_proxima_safra') {
-      filtered = filtered.filter(isProximaSafra);
+      // Inclui:
+      //  (a) aprovados cujo contrato caiu fora do corte desta safra (isProximaSafra clássico)
+      //  (b) qualquer lead com R2 agendada APÓS o fim operacional desta safra
+      //      (mesmo bucket do KPI "Próxima Semana") — assim os 3 leads que aparecem
+      //      no KPI também aparecem na aba.
+      filtered = filtered.filter((r) => {
+        if (isProximaSafra(r)) return true;
+        if (!r.scheduled_at) return false;
+        const t = new Date(r.scheduled_at).getTime();
+        if (t < opEnd) return false;
+        const status = (r.attendee_status || '').toLowerCase();
+        if (status === 'cancelled' || status === 'rescheduled') return false;
+        return true;
+      });
     } else if (filter === 'agendadas') {
       filtered = filtered.filter(r => r.meeting_status !== 'cancelled' && r.meeting_status !== 'rescheduled' && inOperationalWindow(r));
     } else if (filter === 'no_show') {
