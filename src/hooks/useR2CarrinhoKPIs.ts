@@ -37,6 +37,13 @@ export interface R2CarrinhoKPIs {
   aprovadosForaCorte: number;
   pendentes: number;
   emAnalise: number;
+  /** Indicadores de PARCERIA por bucket: leads que também compraram A001-A009/R001/INCORPORADOR/Renovação/Parceria na janela. */
+  parceriaR2Agendadas: number;
+  parceriaR2Realizadas: number;
+  parceriaNoShowR2: number;
+  parceriaPendentes: number;
+  parceriaAprovados: number;
+  parceriaForaDoCarrinho: number;
 }
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
