@@ -3118,6 +3118,8 @@ export type Database = {
         Row: {
           ativo: boolean | null
           codigo: string
+          comissao_base: string
+          comissao_schedule: Json | null
           created_at: string | null
           descricao: string | null
           faixa_credito_max: number
@@ -3140,6 +3142,8 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           codigo: string
+          comissao_base?: string
+          comissao_schedule?: Json | null
           created_at?: string | null
           descricao?: string | null
           faixa_credito_max: number
@@ -3162,6 +3166,8 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           codigo?: string
+          comissao_base?: string
+          comissao_schedule?: Json | null
           created_at?: string | null
           descricao?: string | null
           faixa_credito_max?: number
