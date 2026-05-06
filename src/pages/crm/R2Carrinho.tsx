@@ -160,7 +160,7 @@ export default function R2Carrinho() {
     parceria?: number;
     parceriaLabel?: string;
     parceriaTitle?: string;
-  }> = [
+  } | null> = [
     {
       label: 'Contratos',
       value: displayKpis?.contratosPagos ?? 0,
@@ -181,16 +181,6 @@ export default function R2Carrinho() {
         'Contratos pagos nesta safra (Qui→Qua) cujo lead já havia comprado parceria ' +
         '(A001-A009, R001, INCORPORADOR, Renovação, Parceria) na janela de parceria da SEMANA ANTERIOR ' +
         '(Sex passada 12:00 → Seg desta semana 23:59). Por isso esses leads aparecem aqui em "Contratos novos" mesmo já sendo parceiros — a parceria deles foi contabilizada no carrinho passado.',
-    },
-    {
-      label: 'Semanas Anteriores',
-      value: displayKpis?.semanasAnteriores ?? 0,
-      color: 'bg-blue-500/60',
-      title:
-        'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
-        'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +
-        'No-Show (' + (displayKpis?.semanasAnterioresNoShow ?? 0) + ') + ' +
-        'Reembolso/Desistente (' + (displayKpis?.semanasAnterioresForaDoCarrinho ?? 0) + ').',
     },
     {
       label: 'Próxima Semana',
