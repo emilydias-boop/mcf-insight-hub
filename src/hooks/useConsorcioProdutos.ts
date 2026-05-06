@@ -10,6 +10,7 @@ export function useConsorcioProdutos() {
       const { data, error } = await supabase
         .from('consorcio_produtos')
         .select('*')
+        .eq('ativo', true)
         .order('faixa_credito_min', { ascending: true });
 
       if (error) throw error;
