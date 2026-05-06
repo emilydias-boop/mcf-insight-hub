@@ -1,46 +1,50 @@
-## Contexto
+## Problema
 
-Hoje no card "Contratos" desta semana aparecem leads que:
-- Pagaram A000 Qui/Sex (safra atual) ✅
-- Fizeram R2 Qui/Sex (safra atual) ✅
-- **Mas a parceria deles foi paga numa janela `vendasParceria` da semana ANTERIOR** (Sex anterior 12:00 → Seg desta semana 23:59)
+No card **Próxima Semana** da safra atual (30/04 → 06/05) aparece **0**, mas existem 3 leads (Alexsandro, Jeferson, Maria) que pagaram contrato nesta safra e têm R2 agendada na próxima safra (07/05 → 13/05). Eles deveriam aparecer no contador.
 
-Esses leads não são "parceiros novos desta semana" — eles já foram contabilizados como parceria no carrinho passado. Você precisa de um indicador para identificá-los.
+## Causa raiz
 
-## Mudança proposta
+`useR2CarrinhoKPIs.proximaSemana` é calculado iterando `unifiedData`, que vem da RPC `get_carrinho_r2_attendees` chamada com janela `[carrinhoOperacional.start, r2Meetings.end]` — ou seja, **somente Qui 00:00 → Qua 23:59 da safra atual**.
 
-### 1. Nova métrica em `useR2CarrinhoKPIs.ts`
+Leads cuja R2 está agendada **depois** do `wedEnd` (próxima safra) nunca entram no `unifiedData`. A condição `isAfterCurrentCutoff(row)` em `useR2CarrinhoKPIs.ts:295` nunca é atingida porque esses rows simplesmente não estão no array.
 
-Adicionar `contratosComParceriaSemanaAnterior: number`:
+## Correção
 
-- Para a janela `vendasParceria` da **semana ANTERIOR** (Sex passada 12:00 → Seg desta semana 23:59 da safra anterior), buscar todos os emails que compraram parceria (A001-A009/R001/INCORPORADOR/Renovação/Parceria).
-- Cruzar com os emails que estão no `contratosPagos` desta safra (A000 pago Qui→Qua atual).
-- Contar a interseção.
+Em `src/hooks/useCarrinhoUnifiedData.ts`, estender a janela enviada para a RPC para também cobrir a **próxima safra** (mais 7 dias após `wedEnd`), de modo que leads com R2 agendada na próxima semana sejam carregados.
 
-Implementação: nova query paralela à existente `r2-carrinho-contratos`, calculando `boundaries` da semana anterior (`weekStart - 7`, `weekEnd - 7`) via `getCarrinhoMetricBoundaries`, pegando `vendasParceria.start` e `vendasParceria.end` daquela semana, e buscando parcerias nessa janela. Depois interseccionar com o `emailMap` dos contratos atuais.
+```ts
+// useCarrinhoUnifiedData.ts (queryFn)
+const nextSafraEnd = addDays(boundaries.r2Meetings.end, 7);
 
-### 2. Sub-badge no card "Contratos" em `R2Carrinho.tsx`
+const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
+  p_week_start: weekStartStr,
+  p_window_start: boundaries.carrinhoOperacional.start.toISOString(),
+  p_window_end: nextSafraEnd.toISOString(),   // ← estender +7d
+  p_apply_contract_cutoff: true,
+  p_previous_cutoff: boundaries.carrinhoOperacional.start.toISOString(),
+});
+```
 
-Adicionar abaixo do número de contratos:
-- `★ {N} c/ parceria da semana anterior`
-- Tooltip: "Contratos pagos nesta safra cujo lead já havia comprado parceria na janela de parceria da semana anterior (Sex 12:00 → Seg 23:59 da safra passada). Por isso aparecem aqui em contratos novos, mas operacionalmente já são parceiros."
+E garantir que os outros KPIs operacionais (R2 Agendadas, R2 Realizadas, Fora do Carrinho, No-Show, Semanas Anteriores) **continuem usando `inOperationalWindow(row)`** — eles já filtram por `opEnd` da safra atual, então a extensão da janela de fetch não os contamina. Apenas o `proximaSemana` (que já usa `isAfterCurrentCutoff`) passará a enxergar esses leads.
 
-### 3. (Opcional) Drill-down
+Adicionalmente, o filtro de "Próxima Semana" deve **limitar ao final da próxima safra** para não contar leads agendados muito longe (ex: 2 semanas à frente):
 
-Tornar o badge clicável abrindo modal com nome, email, data do A000, data da parceria e produto.
+```ts
+const nextSafraEndTs = addDays(carrinhoOperacional.end, 7).getTime();
+const isInNextSafra = (row: CarrinhoLeadRow) => {
+  if (!row.scheduled_at) return false;
+  const t = new Date(row.scheduled_at).getTime();
+  return t >= opEnd && t <= nextSafraEndTs;
+};
+// substituir isAfterCurrentCutoff(row) por isInNextSafra(row) na linha 295
+```
 
-## Resultado
+## Validação
 
-- Card "Contratos" continua mostrando o total real (ex.: 21).
-- Sub-badge mostra quantos desses (ex.: 4) já tinham parceria contabilizada na semana anterior.
-- Você consegue responder "por que esse lead conta em contratos se ele é parceiro?" → "porque a parceria dele foi atribuída à semana passada".
+Após ajuste, na safra 30/04→06/05 o card **Próxima Semana** deve passar de **0 → 3** (Alexsandro 07/05, Jeferson 11/05, Maria 12/05), e o tooltip/lista deve mostrar esses leads.
 
-## Detalhes técnicos
+## Não muda
 
-- Em `useR2CarrinhoKPIs.ts`, dentro da query `r2-carrinho-contratos`:
-  - Calcular `prevBoundaries = getCarrinhoMetricBoundaries(subDays(weekStart, 7), subDays(weekEnd, 7), previousConfig, undefined)`.
-  - Query adicional em `hubla_transactions` com `sale_date BETWEEN prevBoundaries.vendasParceria.start AND prevBoundaries.vendasParceria.end` e o mesmo filtro `or(...)` de produtos de parceria.
-  - Coletar `prevWeekPartnerEmails: Set<string>`.
-  - No `emailMap` de contratos desta safra, contar quantos emails pertencem a `prevWeekPartnerEmails` → retornar como `contratosComParceriaSemanaAnterior`.
-- Adicionar campo no tipo `R2CarrinhoKPIs` e propagar até `R2Carrinho.tsx`.
-- Renderizar como `Badge` discreto dentro do card "Contratos" usando o mesmo padrão visual dos outros sub-indicadores (`★ N c/ parceria nova` já existente em outros cards).
+- Lógica de Contratos, Semanas Anteriores, R2 Agendadas/Realizadas, No-Show, Reembolso, Aprovados — todos continuam restritos à janela operacional via `opOk`.
+- RPC `get_carrinho_r2_attendees` não muda.
+- Não toca no Carrinho da próxima semana (já mostra esses 3 corretamente).

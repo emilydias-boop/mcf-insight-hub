@@ -212,15 +212,18 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
     const prevCutoffTs = previousCutoff.getTime();
+    // Fim da próxima safra (+7 dias após o fim operacional desta safra).
+    const nextSafraEndTs = opEnd + 7 * 24 * 60 * 60 * 1000;
     const inOperationalWindow = (row: CarrinhoLeadRow) => {
       if (row.is_encaixado) return true;
       if (!row.scheduled_at) return false;
       const t = new Date(row.scheduled_at).getTime();
       return t >= opStart && t < opEnd;
     };
-    const isAfterCurrentCutoff = (row: CarrinhoLeadRow) => {
+    const isInNextSafra = (row: CarrinhoLeadRow) => {
       if (!row.scheduled_at) return false;
-      return new Date(row.scheduled_at).getTime() >= opEnd;
+      const t = new Date(row.scheduled_at).getTime();
+      return t >= opEnd && t <= nextSafraEndTs;
     };
     const statusContains = (row: CarrinhoLeadRow, needle: string) => {
       return (row.r2_status_name || '').toLowerCase().includes(needle);
@@ -292,7 +295,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       // Próxima Semana: status R2 = "próxima semana" OU agendado após o corte atual (próxima janela).
       const status = (row.attendee_status || '').toLowerCase();
       const isCancelledLike = status === 'cancelled' || status === 'rescheduled';
-      if (!isCancelledLike && (statusContains(row, 'próxima semana') || statusContains(row, 'proxima semana') || isAfterCurrentCutoff(row))) {
+      if (!isCancelledLike && (statusContains(row, 'próxima semana') || statusContains(row, 'proxima semana') || isInNextSafra(row))) {
         proximaSemana++;
       }
 
