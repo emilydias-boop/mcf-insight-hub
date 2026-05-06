@@ -165,7 +165,7 @@ export default function R2Carrinho() {
       color: 'bg-blue-500',
       sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
       subTitle:
-        'Leads desta safra com contrato pago ANTES do início desta safra (Qui 00:00). ' +
+        'Leads desta safra com contrato pago ANTES do corte de abertura desta safra (Sex 12:00 da semana anterior). ' +
         'Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) NÃO entram nesta contagem. ' +
         'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
         'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +

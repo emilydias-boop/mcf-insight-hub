@@ -383,21 +383,19 @@ export function useR2PendingLeadsCount() {
 
 /**
  * Quebra dos pendentes em "safra atual" vs "semanas anteriores",
- * usando o contract_paid_at de cada lead vs. o INÍCIO da safra atual
- * (Qui 00:00 = boundaries.contratos.start).
+ * usando o contract_paid_at de cada lead vs. o corte de abertura
+ * desta safra (previousCutoff do carrinho — Sex 12:00 da semana anterior).
  *
- * IMPORTANTE: Antes usávamos `previousCutoff` (Sex 12:00), o que classificava
- * incorretamente como "semana anterior" qualquer contrato pago entre
- * Qui 00:00 e Sex 12:00 da própria safra. O critério correto é a data de
- * início da safra, não o horário do corte.
+ * Regra: o ciclo do carrinho ABRE no corte da sexta. Quem pagou contrato antes
+ * desse corte (mesmo na própria quinta da safra) é considerado "vindo de semana anterior".
  */
-export function useR2PendingLeadsBreakdown(safraStart: Date | null | undefined) {
+export function useR2PendingLeadsBreakdown(previousCutoff: Date | null | undefined) {
   const { data: pendingLeads } = useR2PendingLeads();
   const total = pendingLeads?.length || 0;
-  if (!pendingLeads || !safraStart) {
+  if (!pendingLeads || !previousCutoff) {
     return { total, semanasAnteriores: 0, safraAtual: total };
   }
-  const cutoffTs = safraStart.getTime();
+  const cutoffTs = previousCutoff.getTime();
   let semanasAnteriores = 0;
   for (const lead of pendingLeads) {
     const ref = lead.contract_paid_at;

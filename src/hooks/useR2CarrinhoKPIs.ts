@@ -41,13 +41,15 @@ export interface R2CarrinhoKPIs {
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const { data: unifiedData, isLoading: unifiedLoading } = useCarrinhoUnifiedData(weekStart, weekEnd, carrinhoConfig, previousConfig);
-  // Início da safra (Qui 00:00) — usado para determinar "semana anterior" tanto em
-  // sub-cards quanto no breakdown dos Pendentes.
-  const safraStartForPending = useMemo(
-    () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).contratos.start,
+  // Cutoff de abertura operacional desta safra (Sex 12:00 da semana anterior).
+  // Usado para determinar "semana anterior" tanto em sub-cards quanto no breakdown dos Pendentes.
+  // Regra: o ciclo do carrinho ABRE no corte da sexta — quem pagou contrato antes desse corte
+  // (mesmo na própria quinta da safra) é considerado "vindo de semana anterior".
+  const previousCutoffForPending = useMemo(
+    () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).previousCutoff,
     [weekStart, weekEnd, carrinhoConfig, previousConfig]
   );
-  const pendentesBreakdown = useR2PendingLeadsBreakdown(safraStartForPending);
+  const pendentesBreakdown = useR2PendingLeadsBreakdown(previousCutoffForPending);
   
   // Contratos pagos still comes from hubla_transactions (not part of the RPC)
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -149,12 +151,11 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let desistentes = 0;
 
     // Janela operacional (corte anterior → corte atual) para R2 agendadas/realizadas/fora.
-    // Para "semana anterior" usamos o INÍCIO da safra (Qui 00:00), não o previousCutoff (Sex 12:00).
-    const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
-    const { carrinhoOperacional } = boundaries;
+    // Para "semana anterior" usamos o `previousCutoff` (Sex 12:00) — o carrinho abre no corte da sexta.
+    const { carrinhoOperacional, previousCutoff } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
-    const safraStartTs = boundaries.contratos.start.getTime();
+    const prevCutoffTs = previousCutoff.getTime();
     const inOperationalWindow = (row: CarrinhoLeadRow) => {
       if (row.is_encaixado) return true;
       if (!row.scheduled_at) return false;
@@ -187,10 +188,10 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       if (isPendente(row)) pendentes++;
       if (isEmAnalise(row)) emAnalise++;
 
-      // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago ANTES do início desta safra (Qui 00:00).
+      // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago ANTES do corte de abertura desta safra (Sex 12:00).
       if (opOk && row.effective_contract_date) {
         const contractTs = new Date(row.effective_contract_date).getTime();
-        if (contractTs < safraStartTs) {
+        if (contractTs < prevCutoffTs) {
           semanasAnteriores++;
           // Sub-quebra pelo bucket operacional onde o lead aparece hoje.
           // Garantia: a soma dos sub-buckets bate com o total via o bucket "Outros".
