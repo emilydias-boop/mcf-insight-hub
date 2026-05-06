@@ -441,6 +441,7 @@ export default function R2Carrinho() {
           <R2ForaDoCarrinhoList 
             attendees={foraCarrinhoData} 
             isLoading={foraCarrinhoLoading}
+            weekStart={weekStart}
           />
         </TabsContent>
 
