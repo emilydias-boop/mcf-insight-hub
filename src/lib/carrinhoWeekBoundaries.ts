@@ -140,23 +140,25 @@ export function getCarrinhoMetricBoundaries(
     prevCutHour, prevCutMinute || 0, 0, 0
   );
 
-  // REGRA (v7):
+  // REGRA (v7.1):
   // - Safra (Contratos + R1): Qui 00:00 → Qua 23:59 (fixa).
-  // - Carrinho R2 (R2s, Aprovados, operacional): Sáb 00:00 → Sex(corte com horário).
-  // - Vendas Parceria: Sex(corte com horário) → Dom 23:59 (mesma semana).
-  const satStart = localStartOfDay(addDays(thuStart, 2)); // Sáb 00:00 dentro da safra
+  // - Carrinho R2 (R2s, Aprovados, operacional): início = corte ANTERIOR (com horário),
+  //   fim = corte ATUAL (com horário). Captura tudo que foi cortado da safra anterior
+  //   e ainda não passou pelo corte atual — funciona em semanas normais (Sex→Sex)
+  //   e em semanas atípicas (ex.: feriado moveu o corte para quinta).
+  // - Vendas Parceria: corte ATUAL → Dom 23:59 da mesma semana.
   const sundayAfterCutoff = localEndOfDay(addDays(currentCutoffDay, 2)); // Dom 23:59
   const safraStart = thuStart; // Qui 00:00 desta safra
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: satStart, end: currentCutoff },
-    aprovados: { start: satStart, end: currentCutoff },
+    r2Meetings: { start: previousCutoff, end: currentCutoff },
+    aprovados: { start: previousCutoff, end: currentCutoff },
     vendasParceria: { start: currentCutoff, end: sundayAfterCutoff },
     r1Meetings: { start: thuStart, end: wedEnd },
     previousCutoff: safraStart,
     safraOpeningCutoff: safraStart,
-    carrinhoOperacional: { start: satStart, end: currentCutoff },
+    carrinhoOperacional: { start: previousCutoff, end: currentCutoff },
   };
 }
 
