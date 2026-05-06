@@ -159,6 +159,8 @@ export default function R2Carrinho() {
     fromPrevious?: number;
     subTitle?: string;
     parceria?: number;
+    parceriaLabel?: string;
+    parceriaTitle?: string;
   }> = [
     {
       label: 'Contratos',
@@ -175,6 +177,12 @@ export default function R2Carrinho() {
         ((displayKpis?.semanasAnterioresOutros ?? 0) > 0
           ? ' + Outros estados — sem status normal (' + displayKpis!.semanasAnterioresOutros + ')'
           : '') + '.',
+      parceria: displayKpis?.contratosComParceriaSemanaAnterior ?? 0,
+      parceriaLabel: 'c/ parceria da semana anterior',
+      parceriaTitle:
+        'Contratos pagos nesta safra (Qui→Qua) cujo lead já havia comprado parceria ' +
+        '(A001-A009, R001, INCORPORADOR, Renovação, Parceria) na janela de parceria da SEMANA ANTERIOR ' +
+        '(Sex passada 12:00 → Seg desta semana 23:59). Por isso esses leads aparecem aqui em "Contratos novos" mesmo já sendo parceiros — a parceria deles foi contabilizada no carrinho passado.',
     },
     {
       label: 'Próxima Semana',
@@ -334,9 +342,9 @@ export default function R2Carrinho() {
                   {!kpisLoading && (kpi.parceria ?? 0) > 0 && (
                     <p
                       className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5 truncate"
-                      title="Leads neste bucket que TAMBÉM compraram parceria/renovação (A001-A009, R001, INCORPORADOR, Renovação, Parceria) na janela."
+                      title={kpi.parceriaTitle ?? "Leads neste bucket que TAMBÉM compraram parceria/renovação (A001-A009, R001, INCORPORADOR, Renovação, Parceria) na janela."}
                     >
-                      ★ {kpi.parceria} c/ parceria
+                      ★ {kpi.parceria} {kpi.parceriaLabel ?? 'c/ parceria'}
                     </p>
                   )}
                   {kpi.sub && (

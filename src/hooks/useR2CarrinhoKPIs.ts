@@ -3,12 +3,16 @@ import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { useR2PendingLeadsBreakdown } from '@/hooks/useR2PendingLeads';
 
 export interface R2CarrinhoKPIs {
   contratosPagos: number;
+  /** Contratos desta safra cujo lead já havia comprado parceria na janela
+   *  `vendasParceria` da semana ANTERIOR (Sex passada 12:00 → Seg desta semana 23:59).
+   *  Explica por que esses leads aparecem em "Contratos novos" mesmo já sendo parceiros. */
+  contratosComParceriaSemanaAnterior: number;
   /** Leads que entraram nesta safra mas o contrato foi pago em semanas anteriores. */
   semanasAnteriores: number;
   /** Quebra dos "Semanas Anteriores" pelo bucket operacional atual em que estão. */
@@ -66,8 +70,14 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
   
   const { data: contratosData, isLoading: contratosLoading } = useQuery({
     queryKey: ['r2-carrinho-contratos', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
-    queryFn: async (): Promise<{ contratos: number; reembolsos: number; partnerEmails: string[] }> => {
+    queryFn: async (): Promise<{ contratos: number; reembolsos: number; partnerEmails: string[]; contratosComParceriaSemanaAnterior: number }> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+      // Janela de parceria da SEMANA ANTERIOR (Sex passada 12:00 → Seg desta semana 23:59
+      // da safra anterior). Usada para detectar contratos novos desta safra cujo lead
+      // já havia comprado parceria contabilizada no carrinho passado.
+      const prevWeekStart = subDays(weekStart, 7);
+      const prevWeekEnd = subDays(weekEnd, 7);
+      const prevBoundaries = getCarrinhoMetricBoundaries(prevWeekStart, prevWeekEnd, previousConfig, undefined);
       
       const { data: contratosTx } = await supabase
         .from('hubla_transactions')
@@ -113,6 +123,31 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         if (email) partnerEmails.add(email);
       }
 
+      // Parcerias compradas na janela `vendasParceria` da semana ANTERIOR.
+      const { data: prevWeekPartnerTx } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, hubla_id, source, product_name, installment_number, sale_status')
+        .eq('sale_status', 'completed')
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+        .or(
+          'product_name.ilike.A001%,product_name.ilike.A002%,product_name.ilike.A003%,' +
+          'product_name.ilike.A004%,product_name.ilike.A005%,product_name.ilike.A006%,' +
+          'product_name.ilike.A007%,product_name.ilike.A008%,product_name.ilike.A009%,' +
+          'product_name.ilike.R001%,product_name.ilike.INCORPORADOR%,' +
+          'product_name.ilike.%Renovação%,product_name.ilike.%Renovacao%,' +
+          'product_name.ilike.Parceria%'
+        )
+        .gte('sale_date', prevBoundaries.vendasParceria.start.toISOString())
+        .lte('sale_date', prevBoundaries.vendasParceria.end.toISOString());
+
+      const prevWeekPartnerEmails = new Set<string>();
+      for (const tx of prevWeekPartnerTx || []) {
+        if (tx.hubla_id?.startsWith('newsale-')) continue;
+        if (tx.installment_number && tx.installment_number > 1) continue;
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (email) prevWeekPartnerEmails.add(email);
+      }
+
       const emailMap = new Map<string, boolean>();
       const refundEmails = new Set<string>();
       for (const tx of validTx) {
@@ -123,10 +158,16 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         emailMap.set(email, true);
         if (tx.sale_status === 'refunded') refundEmails.add(email);
       }
+      // Contar quantos dos contratos desta safra têm parceria atribuída à semana anterior.
+      let contratosComParceriaSemanaAnterior = 0;
+      for (const email of emailMap.keys()) {
+        if (prevWeekPartnerEmails.has(email)) contratosComParceriaSemanaAnterior++;
+      }
       return {
         contratos: emailMap.size,
         reembolsos: refundEmails.size,
         partnerEmails: Array.from(partnerEmails),
+        contratosComParceriaSemanaAnterior,
       };
     },
     staleTime: 30000,
@@ -267,6 +308,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
 
     return {
       contratosPagos: contratosData?.contratos ?? 0,
+      contratosComParceriaSemanaAnterior: contratosData?.contratosComParceriaSemanaAnterior ?? 0,
       semanasAnteriores,
       semanasAnterioresRealizadas,
       semanasAnterioresAgendadas,
