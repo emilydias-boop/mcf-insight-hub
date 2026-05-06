@@ -1,60 +1,46 @@
-## Mudança de regra do Carrinho R2
+## Contexto
 
-Hoje o ciclo da safra opera entre dois cortes (ex.: Sex 12:00 da semana anterior → Sex 12:00 da semana atual). A nova regra elimina o corte intra-dia: a safra passa a ser uma janela **fixa de 7 dias corridos**, alinhada com a janela de Contratos.
+Hoje no card "Contratos" desta semana aparecem leads que:
+- Pagaram A000 Qui/Sex (safra atual) ✅
+- Fizeram R2 Qui/Sex (safra atual) ✅
+- **Mas a parceria deles foi paga numa janela `vendasParceria` da semana ANTERIOR** (Sex anterior 12:00 → Seg desta semana 23:59)
 
-### Nova regra (alinhada com sua resposta)
+Esses leads não são "parceiros novos desta semana" — eles já foram contabilizados como parceria no carrinho passado. Você precisa de um indicador para identificá-los.
 
-- **Safra operacional do Carrinho** = `Quinta 00:00 → Quarta 23:59:59` (mesma janela já usada hoje para "Contratos Pagos").
-- **Não existe mais** o "corte de sexta 12:00" para fechar/abrir safra. Quem paga A000 dentro da semana Qui→Qua é da safra atual, ponto.
-- **Card "Semanas Anteriores ↩"** continua existindo, mas com critério diferente: agora marca leads com R2 marcada nesta semana cujo contrato A000 foi pago **antes da quinta 00:00** desta safra (ou seja, semanas calendário anteriores). Maria Isabel, Roberto Cezar, Baroli, Pri, Italo, etc. (todos pagos 30/04) deixam de ser ↩.
-- **Janela de Vendas Parceria** (a regra própria da parceria que você mencionou): permanece como está hoje (Sex 00:00 → Seg 23:59 da semana seguinte). Não mexer.
-- **Parceiros agora aparecem nos KPIs** com badge/flag visual "Parceria":
-  - Removemos a exclusão global por `partnerEmailsSet` no loop de `useR2CarrinhoKPIs`.
-  - Em vez de pular o lead, marcamos uma flag `isParceria` no row (lead também comprou A001-A009 / R001 / INCORPORADOR / Renovação / Parceria dentro da janela de parceria).
-  - Cada card (R2 Agendadas, Realizadas, No-Show, Pendentes, Aprovados, Fora) ganha um sub-indicador `Parceria: N` mostrando quantos daquele bucket também compraram parceria.
-  - O card "Contratos Pagos" mantém a exclusão de parceiros (regra core de "contratos novos") — sem mudança ali.
+## Mudança proposta
 
-### Implementação
+### 1. Nova métrica em `useR2CarrinhoKPIs.ts`
 
-**1. `src/lib/carrinhoWeekBoundaries.ts`** — `getCarrinhoMetricBoundaries`
-- `r2Meetings`, `aprovados`, `carrinhoOperacional` passam a usar `{ start: thuStart, end: wedEnd }` (mesma janela de `contratos`).
-- `previousCutoff` / `safraOpeningCutoff` viram `thuStart` (Qui 00:00 desta safra) — usado só para classificar "semana anterior" no novo critério.
-- `vendasParceria` permanece inalterado (Sex 00:00 → Seg 23:59).
+Adicionar `contratosComParceriaSemanaAnterior: number`:
 
-**2. `src/hooks/useR2CarrinhoKPIs.ts`**
-- Remover o `continue` que pula parceiros (linha ~182). Manter `partnerEmailsSet` apenas para:
-  - Excluir do `contratosPagos` (já feito na query).
-  - Calcular nova métrica `parceriaPorBucket` (contagem de parceiros em cada card).
-- Adicionar campos no `R2CarrinhoKPIs`:
-  - `parceriaR2Agendadas`, `parceriaR2Realizadas`, `parceriaNoShowR2`, `parceriaPendentes`, `parceriaAprovados`, `parceriaForaDoCarrinho`.
-- Recalcular `semanasAnteriores*` usando o novo `previousCutoff` = Qui 00:00.
+- Para a janela `vendasParceria` da **semana ANTERIOR** (Sex passada 12:00 → Seg desta semana 23:59 da safra anterior), buscar todos os emails que compraram parceria (A001-A009/R001/INCORPORADOR/Renovação/Parceria).
+- Cruzar com os emails que estão no `contratosPagos` desta safra (A000 pago Qui→Qua atual).
+- Contar a interseção.
 
-**3. `src/hooks/useR2PendingLeads.ts`** (linha ~398)
-- O `previousCutoff` passado por `useR2CarrinhoKPIs` agora é Qui 00:00, então `pendentesAgendamentoSemanasAnteriores` automaticamente passa a refletir o novo critério (contrato pago em semana calendário anterior). Sem mudança de código.
+Implementação: nova query paralela à existente `r2-carrinho-contratos`, calculando `boundaries` da semana anterior (`weekStart - 7`, `weekEnd - 7`) via `getCarrinhoMetricBoundaries`, pegando `vendasParceria.start` e `vendasParceria.end` daquela semana, e buscando parcerias nessa janela. Depois interseccionar com o `emailMap` dos contratos atuais.
 
-**4. `src/hooks/useCarrinhoUnifiedData.ts`** (linhas 93-94)
-- `p_previous_cutoff` agora será `thuStart` em vez do corte de sexta. Sem mudança de código (vem de `boundaries.carrinhoOperacional.start`).
+### 2. Sub-badge no card "Contratos" em `R2Carrinho.tsx`
 
-**5. `src/pages/crm/R2Carrinho.tsx`**
-- Em cada card de KPI, adicionar linha pequena "Parceria: N" (com mesmo estilo dos sub-badges ↩) quando N > 0.
-- Atualizar tooltips: o de "Semanas Anteriores" precisa explicar o novo critério (semana calendário anterior, não corte de sexta). O do "Contratos Pagos" continua igual.
+Adicionar abaixo do número de contratos:
+- `★ {N} c/ parceria da semana anterior`
+- Tooltip: "Contratos pagos nesta safra cujo lead já havia comprado parceria na janela de parceria da semana anterior (Sex 12:00 → Seg 23:59 da safra passada). Por isso aparecem aqui em contratos novos, mas operacionalmente já são parceiros."
 
-**6. `supabase/functions/weekly-manager-report/index.ts`** (linha 328+)
-- Alinhar o `currentCutoff` / `previousCutoff` para Qui 00:00 / Qua 23:59 da semana, mantendo paridade com a UI.
+### 3. (Opcional) Drill-down
 
-**7. Memórias**
-- Atualizar `mem://reporting/carrinho-safra-operational-logic-v6` → v7: nova janela fixa Qui→Qua, sem corte de sexta para safra.
-- Atualizar `mem://business-logic/r2-carrinho-semanas-anteriores-criteria`: novo critério (contrato em semana calendário anterior).
-- Adicionar memória nova `mem://business-logic/carrinho-parceria-indicator`: parceiros aparecem nos KPIs com indicador, mas seguem fora de "Contratos novos".
-- Atualizar Core do índice: remover regra de "corte de sexta" se houver referência implícita.
+Tornar o badge clicável abrindo modal com nome, email, data do A000, data da parceria e produto.
 
-### Pontos de atenção
+## Resultado
 
-- A configuração `dia_corte` / `horario_corte` continua existindo para a janela de **Vendas Parceria** (Sex 00:00 → Seg 23:59) e para o `getActiveCartReferenceDate` (qual safra exibir como ativa quando o usuário entra na página). Não vamos remover do schema, só não usaremos mais para definir a janela operacional do Carrinho.
-- Vou validar que o card "Semanas Anteriores" cai para perto de 0 nesta semana (espera-se que só fique quem realmente tem R2 desta semana mas contrato de semana calendário anterior — provavelmente Bruno Cesar, Alexandre Donizete, Alexsandro Moreira, Mateus, Paulo Henrique etc., que apareciam nos sub-badges ↩ da safra de 24-30/04).
+- Card "Contratos" continua mostrando o total real (ex.: 21).
+- Sub-badge mostra quantos desses (ex.: 4) já tinham parceria contabilizada na semana anterior.
+- Você consegue responder "por que esse lead conta em contratos se ele é parceiro?" → "porque a parceria dele foi atribuída à semana passada".
 
-### Validação esperada após o deploy
+## Detalhes técnicos
 
-Para a semana atual (30/04 → 06/05), card Contratos = **21**, e a soma deve fechar:
-`R2 Realizadas + R2 Agendadas + No-Show + Pendentes + Reembolso (+ desistentes/fora se houver) = 21`.
-Maria Isabel, Roberto Cezar, Baroli, Pri, Italo, Victor, Claudio Almeida, Giovana → todos contam como **safra atual** agora.
+- Em `useR2CarrinhoKPIs.ts`, dentro da query `r2-carrinho-contratos`:
+  - Calcular `prevBoundaries = getCarrinhoMetricBoundaries(subDays(weekStart, 7), subDays(weekEnd, 7), previousConfig, undefined)`.
+  - Query adicional em `hubla_transactions` com `sale_date BETWEEN prevBoundaries.vendasParceria.start AND prevBoundaries.vendasParceria.end` e o mesmo filtro `or(...)` de produtos de parceria.
+  - Coletar `prevWeekPartnerEmails: Set<string>`.
+  - No `emailMap` de contratos desta safra, contar quantos emails pertencem a `prevWeekPartnerEmails` → retornar como `contratosComParceriaSemanaAnterior`.
+- Adicionar campo no tipo `R2CarrinhoKPIs` e propagar até `R2Carrinho.tsx`.
+- Renderizar como `Badge` discreto dentro do card "Contratos" usando o mesmo padrão visual dos outros sub-indicadores (`★ N c/ parceria nova` já existente em outros cards).
