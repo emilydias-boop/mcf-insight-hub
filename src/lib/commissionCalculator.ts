@@ -1,4 +1,5 @@
 import { TipoProduto } from '@/types/consorcio';
+import { ComissaoScheduleItem, ComissaoBase, ConsorcioProduto } from '@/types/consorcioProdutos';
 
 // Tabela de comissões SELECT
 const COMISSAO_SELECT: Record<number, number> = {
@@ -36,59 +37,101 @@ function getPercentualParcelinha(numeroParcela: number): number {
   return 0;
 }
 
+// Contexto opcional do produto: se fornecido, usa o cronograma customizado
+// e a base de cálculo definida no cadastro de produto.
+export interface ProdutoComissaoContext {
+  schedule?: ComissaoScheduleItem[] | null;
+  base?: ComissaoBase;
+  valorParcela?: number;
+  valorVenda?: number;
+}
+
+function getPercentualFromContext(
+  ctx: ProdutoComissaoContext | undefined,
+  tipoProduto: TipoProduto,
+  numeroParcela: number
+): { percentual: number; usouCustom: boolean } {
+  if (ctx?.schedule && ctx.schedule.length > 0) {
+    const item = ctx.schedule.find((s) => s.parcela === numeroParcela);
+    return { percentual: item?.percentual ?? 0, usouCustom: true };
+  }
+  // Fallback hardcoded
+  if (tipoProduto === 'select') return { percentual: getPercentualSelect(numeroParcela), usouCustom: false };
+  return { percentual: getPercentualParcelinha(numeroParcela), usouCustom: false };
+}
+
+function getBaseValor(
+  valorCredito: number,
+  ctx: ProdutoComissaoContext | undefined
+): number {
+  const base = ctx?.base ?? 'valor_credito';
+  if (base === 'valor_parcela') return ctx?.valorParcela ?? valorCredito;
+  if (base === 'valor_venda') return ctx?.valorVenda ?? valorCredito;
+  return valorCredito;
+}
+
 // Função principal para calcular comissão
 export function calcularComissao(
   valorCredito: number,
   tipoProduto: TipoProduto,
-  numeroParcela: number
+  numeroParcela: number,
+  ctx?: ProdutoComissaoContext
 ): number {
-  let percentual: number;
-  
-  if (tipoProduto === 'select') {
-    percentual = getPercentualSelect(numeroParcela);
-  } else {
-    percentual = getPercentualParcelinha(numeroParcela);
-  }
-  
-  return (valorCredito * percentual) / 100;
+  const { percentual } = getPercentualFromContext(ctx, tipoProduto, numeroParcela);
+  const base = getBaseValor(valorCredito, ctx);
+  return (base * percentual) / 100;
+}
+
+// Helper para construir contexto a partir de um produto cadastrado
+export function comissaoContextFromProduto(
+  produto?: Pick<ConsorcioProduto, 'comissao_schedule' | 'comissao_base'> | null
+): ProdutoComissaoContext | undefined {
+  if (!produto) return undefined;
+  return {
+    schedule: produto.comissao_schedule ?? null,
+    base: produto.comissao_base ?? 'valor_credito',
+  };
 }
 
 // Calcula comissão total prevista para uma carta
 export function calcularComissaoTotal(
   valorCredito: number,
-  tipoProduto: TipoProduto
+  tipoProduto: TipoProduto,
+  ctx?: ProdutoComissaoContext
 ): number {
   let total = 0;
-  const maxParcelas = tipoProduto === 'select' ? 8 : 12;
-  
-  for (let i = 1; i <= maxParcelas; i++) {
-    total += calcularComissao(valorCredito, tipoProduto, i);
+  if (ctx?.schedule && ctx.schedule.length > 0) {
+    for (const item of ctx.schedule) {
+      total += calcularComissao(valorCredito, tipoProduto, item.parcela, ctx);
+    }
+    return total;
   }
-  
+  const maxParcelas = tipoProduto === 'select' ? 8 : 12;
+  for (let i = 1; i <= maxParcelas; i++) {
+    total += calcularComissao(valorCredito, tipoProduto, i, ctx);
+  }
   return total;
 }
 
 // Retorna o percentual formatado
 export function getPercentualFormatado(
   tipoProduto: TipoProduto,
-  numeroParcela: number
+  numeroParcela: number,
+  ctx?: ProdutoComissaoContext
 ): string {
-  let percentual: number;
-  
-  if (tipoProduto === 'select') {
-    percentual = getPercentualSelect(numeroParcela);
-  } else {
-    percentual = getPercentualParcelinha(numeroParcela);
-  }
-  
+  const { percentual } = getPercentualFromContext(ctx, tipoProduto, numeroParcela);
   return `${percentual.toFixed(2)}%`;
 }
 
 // Retorna todas as parcelas com comissão para um tipo de produto
-export function getParcelasComComissao(tipoProduto: TipoProduto): number[] {
-  if (tipoProduto === 'select') {
-    return [1, 2, 3, 4, 5, 6, 7, 8];
+export function getParcelasComComissao(
+  tipoProduto: TipoProduto,
+  ctx?: ProdutoComissaoContext
+): number[] {
+  if (ctx?.schedule && ctx.schedule.length > 0) {
+    return ctx.schedule.map((s) => s.parcela).sort((a, b) => a - b);
   }
+  if (tipoProduto === 'select') return [1, 2, 3, 4, 5, 6, 7, 8];
   return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 }
 
@@ -96,22 +139,17 @@ export function getParcelasComComissao(tipoProduto: TipoProduto): number[] {
 export function calcularResumoComissoes(
   valorCredito: number,
   tipoProduto: TipoProduto,
-  parcelasPagas: number[]
+  parcelasPagas: number[],
+  ctx?: ProdutoComissaoContext
 ): {
   total: number;
   recebida: number;
   pendente: number;
 } {
-  const total = calcularComissaoTotal(valorCredito, tipoProduto);
-  
+  const total = calcularComissaoTotal(valorCredito, tipoProduto, ctx);
   let recebida = 0;
   for (const parcela of parcelasPagas) {
-    recebida += calcularComissao(valorCredito, tipoProduto, parcela);
+    recebida += calcularComissao(valorCredito, tipoProduto, parcela, ctx);
   }
-  
-  return {
-    total,
-    recebida,
-    pendente: total - recebida,
-  };
+  return { total, recebida, pendente: total - recebida };
 }
