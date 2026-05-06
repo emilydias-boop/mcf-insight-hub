@@ -247,7 +247,7 @@ export default function R2Carrinho() {
             const b = getCarrinhoMetricBoundaries(weekStart, weekEnd, config, prevConfig);
             return (
               <div className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
-                <p>Janela do Carrinho (R2s): {format(b.carrinhoOperacional.start, "dd/MM HH:mm", { locale: ptBR })} → {format(b.carrinhoOperacional.end, "dd/MM HH:mm", { locale: ptBR })}</p>
+                <p>Janela do Carrinho (R2s): {format(b.carrinhoOperacional.start, "dd/MM HH:mm", { locale: ptBR })} → {format(b.carrinhoOperacional.end, "dd/MM HH:mm", { locale: ptBR })} (Qui→Qua, sem corte de sexta)</p>
                 <p>Janela de Vendas Parceria: {format(b.vendasParceria.start, "dd/MM HH:mm", { locale: ptBR })} → {format(b.vendasParceria.end, "dd/MM HH:mm", { locale: ptBR })}</p>
               </div>
             );
