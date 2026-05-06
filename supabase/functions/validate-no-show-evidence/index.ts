@@ -445,7 +445,7 @@ Deno.serve(async (req) => {
       if (attendee_id) {
         const { data: att, error: attErr } = await adminClient
           .from("meeting_slot_attendees")
-          .select("id, meeting_slot_id, attendee_phone")
+          .select("id, meeting_slot_id, attendee_phone, deal_id")
           .eq("id", attendee_id)
           .maybeSingle();
 
@@ -457,6 +457,15 @@ Deno.serve(async (req) => {
         if (meeting_slot_id && att.meeting_slot_id !== meeting_slot_id) {
           return new Response(JSON.stringify({
             error: "O lead selecionado não pertence a este horário. Atualize a página e tente novamente.",
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        // GUARD CRÍTICO: o deal_id enviado precisa ser o mesmo do attendee selecionado.
+        // Sem isto, em slot multi-lead um SDR pode abrir o drawer do lead A, escolher o
+        // participante B e gravar a validação cruzada (deal=A + attendee=B).
+        // Caso histórico: Edney/Diogo/Roseane (06/05/2026).
+        if (deal_id && att.deal_id && att.deal_id !== deal_id) {
+          return new Response(JSON.stringify({
+            error: "O lead selecionado pertence a outro negócio. Abra o card correto desse lead e tente novamente.",
           }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         if (lead_phone && att.attendee_phone) {
