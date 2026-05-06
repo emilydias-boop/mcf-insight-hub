@@ -202,13 +202,6 @@ export default function R2Carrinho() {
       parceria: displayKpis?.parceriaR2Realizadas ?? 0,
     },
     {
-      label: 'Reembolso',
-      value: displayKpis?.reembolsos ?? 0,
-      color: 'bg-red-500',
-      fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
-      parceria: displayKpis?.parceriaForaDoCarrinho ?? 0,
-    },
-    {
       label: 'Aprovados',
       value: displayKpis?.aprovados ?? 0,
       color: 'bg-emerald-500',
@@ -216,6 +209,13 @@ export default function R2Carrinho() {
       title:
         'Leads desta safra aprovados no R2 dentro do corte do carrinho ' +
         '(elegíveis para vendas de parceria nesta safra).',
+    },
+    {
+      label: 'Reembolso',
+      value: displayKpis?.reembolsos ?? 0,
+      color: 'bg-red-500',
+      fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
+      parceria: displayKpis?.parceriaForaDoCarrinho ?? 0,
     },
     // ===== Linha 2 (alinhada por coluna) =====
     {
@@ -246,15 +246,15 @@ export default function R2Carrinho() {
         'Atualiza em realtime: se o lead for reagendado, sai desta contagem.',
     },
     {
-      label: 'Desistente',
-      value: displayKpis?.desistentes ?? 0,
-      color: 'bg-red-500/60',
-    },
-    {
       label: 'Reprovado',
       value: displayKpis?.reprovados ?? 0,
       color: 'bg-emerald-500/60',
       title: 'Leads desta safra com status R2 = "Reprovado" na janela operacional do carrinho.',
+    },
+    {
+      label: 'Desistente',
+      value: displayKpis?.desistentes ?? 0,
+      color: 'bg-red-500/60',
     },
   ];
 
