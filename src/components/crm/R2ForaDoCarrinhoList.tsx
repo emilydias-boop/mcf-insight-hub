@@ -10,6 +10,8 @@ import { R2ForaDoCarrinhoAttendee } from '@/hooks/useR2ForaDoCarrinhoData';
 interface R2ForaDoCarrinhoListProps {
   attendees: R2ForaDoCarrinhoAttendee[];
   isLoading?: boolean;
+  /** Início da safra (Qui 00:00). Usado para marcar "Sem. Anterior" nos itens. */
+  weekStart?: Date;
 }
 
 const STATUS_FILTERS = [
@@ -21,8 +23,16 @@ const STATUS_FILTERS = [
   { value: 'Cancelado', label: 'Cancelado' },
 ];
 
-export function R2ForaDoCarrinhoList({ attendees, isLoading }: R2ForaDoCarrinhoListProps) {
+export function R2ForaDoCarrinhoList({ attendees, isLoading, weekStart }: R2ForaDoCarrinhoListProps) {
   const [statusFilter, setStatusFilter] = useState('all');
+  const safraStartTs = weekStart
+    ? (() => { const d = new Date(weekStart); d.setHours(0,0,0,0); return d.getTime(); })()
+    : null;
+  const isFromPreviousWeek = (att: R2ForaDoCarrinhoAttendee) => {
+    if (safraStartTs === null) return false;
+    if (!att.contract_paid_at) return false;
+    return new Date(att.contract_paid_at).getTime() < safraStartTs;
+  };
 
   const filteredAttendees = statusFilter === 'all' 
     ? attendees 
@@ -110,6 +120,15 @@ export function R2ForaDoCarrinhoList({ attendees, isLoading }: R2ForaDoCarrinhoL
                     <span className="font-medium">
                       {att.attendee_name || att.deal_name || 'Sem nome'}
                     </span>
+                    {isFromPreviousWeek(att) && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700"
+                        title={`Contrato pago em ${format(new Date(att.contract_paid_at!), 'dd/MM')} (semana anterior)`}
+                      >
+                        Sem. Anterior
+                      </Badge>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>
