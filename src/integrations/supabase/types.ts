@@ -11605,6 +11605,7 @@ export type Database = {
         Returns: string
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
       evaluate_sdr_reschedule: {
         Args: { _bu: string; _deal_id: string; _meeting_type?: string }
