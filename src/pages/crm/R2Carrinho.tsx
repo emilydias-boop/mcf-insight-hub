@@ -158,6 +158,7 @@ export default function R2Carrinho() {
     sub?: { label: string; value: number; fromPrevious?: number };
     fromPrevious?: number;
     subTitle?: string;
+    parceria?: number;
   }> = [
     {
       label: 'Contratos',
@@ -165,8 +166,8 @@ export default function R2Carrinho() {
       color: 'bg-blue-500',
       sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
       subTitle:
-        'Leads desta safra com contrato pago ANTES do corte de abertura desta safra (Sex 12:00 da semana anterior). ' +
-        'Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) NÃO entram nesta contagem. ' +
+        'Leads desta safra com R2 nesta semana cujo contrato A000 foi pago em SEMANA CALENDÁRIO ANTERIOR (antes da quinta 00:00 desta safra). ' +
+        'Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) NÃO entram em "Contratos" novos. ' +
         'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
         'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +
         'No-Show (' + (displayKpis?.semanasAnterioresNoShow ?? 0) + ') + ' +
@@ -190,6 +191,7 @@ export default function R2Carrinho() {
         fromPrevious: displayKpis?.pendentesAgendamentoSemanasAnteriores ?? 0,
       },
       fromPrevious: displayKpis?.semanasAnterioresAgendadas ?? 0,
+      parceria: displayKpis?.parceriaR2Agendadas ?? 0,
     },
     {
       label: 'R2 Realizadas',
@@ -199,6 +201,7 @@ export default function R2Carrinho() {
       fromPrevious: displayKpis?.semanasAnterioresRealizadas ?? 0,
       subTitle:
         `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}`,
+      parceria: displayKpis?.parceriaR2Realizadas ?? 0,
     },
     {
       label: 'Reembolso',
@@ -206,6 +209,7 @@ export default function R2Carrinho() {
       color: 'bg-red-500',
       sub: { label: 'Desistente', value: displayKpis?.desistentes ?? 0 },
       fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
+      parceria: displayKpis?.parceriaForaDoCarrinho ?? 0,
     },
   ];
 
