@@ -1,27 +1,32 @@
-## Reclassificar Ricardo Gomes Vendeth como Outside (não conta para o Closer)
+## Objetivo
 
-### Regra do sistema
-A lógica de Outside é simples: **`contract_paid_at < scheduled_at`** (ver `useCloserContractsList.ts` linha 87). Quando o contrato foi pago antes da R1, o sistema:
-- ✅ Exclui da conversão/contratos do Closer
-- ✅ Mantém o `contract_paid` no attendee (lead aparece como ganho na agenda)
-- ✅ Atribui ao SDR como Outside (via `useOutsideDetectionBatch`/`useSdrOutsideMetrics` quando há transação Hubla)
+Marcar **Mauro Elias** como **Outside** no sistema de conversão do Closer, com data real de pagamento do contrato em **02/04/2025**.
 
-### Estado atual (problema)
-- `scheduled_at` = 2026-04-28 18:30:00
-- `contract_paid_at` = 2026-04-28 18:30:00 (igual → conta como Closer)
+## Situação atual
 
-### Ação
-Antecipar `contract_paid_at` para 1 dia antes da R1, garantindo que `contract_paid_at < scheduled_at`:
+Mauro tem 2 registros em `meeting_slot_attendees`:
 
-- Attendee `ebc92763-908e-44c6-b590-73284be3d11b`
-- Novo `contract_paid_at` = **2026-04-27 18:30:00+00** (1 dia antes da R1)
-- Mantém `status = 'contract_paid'`
-- Mantém deal no estágio "Contrato Pago"
+| Attendee ID | R1 em | Status | contract_paid_at |
+|---|---|---|---|
+| `9c5e904a-...c44` | 24/04/2026 | no_show | NULL |
+| `69db7b72-...e75` | 29/04/2026 | completed | NULL |
 
-### Resultado
-- ❌ NÃO entra na conversão do Closer (Thaynara)
-- ✅ Aparece como Contrato Pago no funil/lead
-- ⚠️ Para entrar nas métricas de Outside do SDR ainda precisaria de uma `hubla_transactions` vinculada (não foi solicitado agora)
+O contrato foi pago em **02/04/2025** — anterior a ambos os R1, portanto Outside.
 
-### Execução
-1 migration de UPDATE em `meeting_slot_attendees`. Sem alteração de código.
+## Mudança proposta (1 UPDATE)
+
+No attendee `69db7b72-e464-47b4-9c2f-1598f4c96e75` (R1 realizado de 29/04/2026):
+
+- `status` → `'contract_paid'`
+- `contract_paid_at` → `2025-04-02T12:00:00+00:00`
+
+## Resultado
+
+- Como `contract_paid_at` (02/04/2025) é anterior ao R1 (29/04/2026), o sistema classifica como **Outside**.
+- Mauro **NÃO** conta na conversão da Thaynara (Closer).
+- Aparece como "Contrato Pago" no funil/lead com a data correta de 02/04/2025.
+- R1 de 24/04 (no_show) permanece inalterado.
+
+## Fora de escopo
+
+- Não criar registro em `hubla_transactions` (manteria invisível para Outside Detection do SDR, igual ao Ricardo).
