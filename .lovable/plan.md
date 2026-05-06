@@ -1,84 +1,60 @@
-## Diagnóstico definitivo do "órfão"
+## Mudança de regra do Carrinho R2
 
-Investiguei o **Alexandre Donizete de Souza** (deal `82ab1397...`) no banco e confirmei o que você viu:
+Hoje o ciclo da safra opera entre dois cortes (ex.: Sex 12:00 da semana anterior → Sex 12:00 da semana atual). A nova regra elimina o corte intra-dia: a safra passa a ser uma janela **fixa de 7 dias corridos**, alinhada com a janela de Contratos.
 
-| Campo | Valor |
-|---|---|
-| Stage atual | **Contrato Pago** (PIPELINE INSIDE SALES) |
-| `contract_paid_at` | 27/abr 14:29 — **antes** do corte da safra atual (Sex 02/mai 12:00) ✓ semana anterior |
-| R2 agendada | **06/mai 18:15 UTC = 15:15 BRT** ✓ hoje |
-| `meeting_slots.status` | `scheduled` ✓ agendada |
-| `meeting_slot_attendees.status` | **`rescheduled`** ← ⚠️ aqui está o problema |
-| `r2_status_id` | `NULL` |
-| `is_partner` | `false` |
+### Nova regra (alinhada com sua resposta)
 
-Ele **não é parceiro** e **tem R2 marcada para hoje 15:15**. Ele deveria contar como **R2 Agendada ↩ (Semanas Anteriores)**, mas está caindo no bucket "Outros".
+- **Safra operacional do Carrinho** = `Quinta 00:00 → Quarta 23:59:59` (mesma janela já usada hoje para "Contratos Pagos").
+- **Não existe mais** o "corte de sexta 12:00" para fechar/abrir safra. Quem paga A000 dentro da semana Qui→Qua é da safra atual, ponto.
+- **Card "Semanas Anteriores ↩"** continua existindo, mas com critério diferente: agora marca leads com R2 marcada nesta semana cujo contrato A000 foi pago **antes da quinta 00:00** desta safra (ou seja, semanas calendário anteriores). Maria Isabel, Roberto Cezar, Baroli, Pri, Italo, etc. (todos pagos 30/04) deixam de ser ↩.
+- **Janela de Vendas Parceria** (a regra própria da parceria que você mencionou): permanece como está hoje (Sex 00:00 → Seg 23:59 da semana seguinte). Não mexer.
+- **Parceiros agora aparecem nos KPIs** com badge/flag visual "Parceria":
+  - Removemos a exclusão global por `partnerEmailsSet` no loop de `useR2CarrinhoKPIs`.
+  - Em vez de pular o lead, marcamos uma flag `isParceria` no row (lead também comprou A001-A009 / R001 / INCORPORADOR / Renovação / Parceria dentro da janela de parceria).
+  - Cada card (R2 Agendadas, Realizadas, No-Show, Pendentes, Aprovados, Fora) ganha um sub-indicador `Parceria: N` mostrando quantos daquele bucket também compraram parceria.
+  - O card "Contratos Pagos" mantém a exclusão de parceiros (regra core de "contratos novos") — sem mudança ali.
 
-## Causa raiz
+### Implementação
 
-O lead foi reagendado em algum momento (`is_reschedule = true` no attendee). Quando isso acontece, o `attendee.status` fica como `'rescheduled'` mesmo que o slot novo esteja com `status = 'scheduled'` e ativo no futuro.
+**1. `src/lib/carrinhoWeekBoundaries.ts`** — `getCarrinhoMetricBoundaries`
+- `r2Meetings`, `aprovados`, `carrinhoOperacional` passam a usar `{ start: thuStart, end: wedEnd }` (mesma janela de `contratos`).
+- `previousCutoff` / `safraOpeningCutoff` viram `thuStart` (Qui 00:00 desta safra) — usado só para classificar "semana anterior" no novo critério.
+- `vendasParceria` permanece inalterado (Sex 00:00 → Seg 23:59).
 
-A classificação em `useR2CarrinhoKPIs.ts` (linhas 200–211) faz:
+**2. `src/hooks/useR2CarrinhoKPIs.ts`**
+- Remover o `continue` que pula parceiros (linha ~182). Manter `partnerEmailsSet` apenas para:
+  - Excluir do `contratosPagos` (já feito na query).
+  - Calcular nova métrica `parceriaPorBucket` (contagem de parceiros em cada card).
+- Adicionar campos no `R2CarrinhoKPIs`:
+  - `parceriaR2Agendadas`, `parceriaR2Realizadas`, `parceriaNoShowR2`, `parceriaPendentes`, `parceriaAprovados`, `parceriaForaDoCarrinho`.
+- Recalcular `semanasAnteriores*` usando o novo `previousCutoff` = Qui 00:00.
 
-```ts
-} else if (isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
-  semanasAnterioresAgendadas++;
-}
-```
+**3. `src/hooks/useR2PendingLeads.ts`** (linha ~398)
+- O `previousCutoff` passado por `useR2CarrinhoKPIs` agora é Qui 00:00, então `pendentesAgendamentoSemanasAnteriores` automaticamente passa a refletir o novo critério (contrato pago em semana calendário anterior). Sem mudança de código.
 
-Onde `SCHEDULED_STATES = ['invited', 'scheduled', 'pending', 'pre_scheduled']`. Como o `attendee_status` é `'rescheduled'`, ele falha esse teste e cai no `else { semanasAnterioresOutros++ }`.
+**4. `src/hooks/useCarrinhoUnifiedData.ts`** (linhas 93-94)
+- `p_previous_cutoff` agora será `thuStart` em vez do corte de sexta. Sem mudança de código (vem de `boundaries.carrinhoOperacional.start`).
 
-Mas a função `isAgendada` (em `useCarrinhoUnifiedData.ts` linha 137) usa o `meeting_status` (do slot), não o `attendee_status`:
+**5. `src/pages/crm/R2Carrinho.tsx`**
+- Em cada card de KPI, adicionar linha pequena "Parceria: N" (com mesmo estilo dos sub-badges ↩) quando N > 0.
+- Atualizar tooltips: o de "Semanas Anteriores" precisa explicar o novo critério (semana calendário anterior, não corte de sexta). O do "Contratos Pagos" continua igual.
 
-```ts
-return row.meeting_status !== 'cancelled' && row.meeting_status !== 'rescheduled';
-```
+**6. `supabase/functions/weekly-manager-report/index.ts`** (linha 328+)
+- Alinhar o `currentCutoff` / `previousCutoff` para Qui 00:00 / Qua 23:59 da semana, mantendo paridade com a UI.
 
-E o `meeting_status` do Alexandre é `scheduled` (o slot novo após reagendamento). Ou seja, **a regra está dupla e inconsistente**: um trecho confia no slot, o outro descarta o attendee `rescheduled`.
+**7. Memórias**
+- Atualizar `mem://reporting/carrinho-safra-operational-logic-v6` → v7: nova janela fixa Qui→Qua, sem corte de sexta para safra.
+- Atualizar `mem://business-logic/r2-carrinho-semanas-anteriores-criteria`: novo critério (contrato em semana calendário anterior).
+- Adicionar memória nova `mem://business-logic/carrinho-parceria-indicator`: parceiros aparecem nos KPIs com indicador, mas seguem fora de "Contratos novos".
+- Atualizar Core do índice: remover regra de "corte de sexta" se houver referência implícita.
 
-Note também que esse mesmo bug acontece no KPI principal **R2 Agendadas** (linha 181) — leads reagendados ficam invisíveis lá também.
+### Pontos de atenção
 
-## Plano de correção
+- A configuração `dia_corte` / `horario_corte` continua existindo para a janela de **Vendas Parceria** (Sex 00:00 → Seg 23:59) e para o `getActiveCartReferenceDate` (qual safra exibir como ativa quando o usuário entra na página). Não vamos remover do schema, só não usaremos mais para definir a janela operacional do Carrinho.
+- Vou validar que o card "Semanas Anteriores" cai para perto de 0 nesta semana (espera-se que só fique quem realmente tem R2 desta semana mas contrato de semana calendário anterior — provavelmente Bruno Cesar, Alexandre Donizete, Alexsandro Moreira, Mateus, Paulo Henrique etc., que apareciam nos sub-badges ↩ da safra de 24-30/04).
 
-### 1. Tratar `attendee.status = 'rescheduled'` como agendado válido quando o slot ainda está ativo
+### Validação esperada após o deploy
 
-Em `src/hooks/useR2CarrinhoKPIs.ts`, alterar a checagem de "agendada" para considerar `rescheduled` quando o **slot** está em estado válido (não cancelado e com data futura/válida).
-
-Substituir nas duas ocorrências (linhas 181 e 207):
-
-- **Antes**: `isAgendada(row) && SCHEDULED_STATES.has(attendee_status)`
-- **Depois**: `isAgendada(row) && (SCHEDULED_STATES.has(attendee_status) || attendee_status === 'rescheduled')`
-
-Justificativa: o `isAgendada` já garante que o slot não foi cancelado/desmarcado. Se o attendee virou `rescheduled` mas o slot atual está `scheduled`, é porque foi remarcado para um novo horário válido — deve contar como agendado.
-
-### 2. Validar com o Alexandre
-
-Após a mudança:
-- **R2 Agendadas (total)**: +1 (Alexandre passa a contar)
-- **R2 Agendadas ↩ (semanas anteriores)**: 2 → 3
-- **Outros (semanas anteriores)**: 1 → 0
-- **Total Semanas Anteriores**: continua 11
-- **Soma dos sub-cards**: 3 + 7 + 1 + 0 + 0 = **11** ✓ fecha sem precisar do bucket "Outros"
-
-### 3. Drill-down (lista detalhada)
-
-Verificar `src/hooks/useR2PendingLeads.ts` (`useR2PendingLeadsBreakdown`) — se ele usa a mesma classificação, aplicar a mesma correção para que o Alexandre apareça na coluna "Agendadas" do detalhamento, não em "Outros".
-
-### 4. Limpeza opcional (recomendada)
-
-Como agora "Outros" fica zerado nos casos esperados, manter o bucket `semanasAnterioresOutros` como **rede de segurança** (logging/diagnóstico) mas não exibir como linha no tooltip a menos que `> 0`. Isso evita confusão futura.
-
-### 5. Memória
-
-Atualizar `mem://business-logic/r2-carrinho-semanas-anteriores-criteria.md` adicionando a regra:
-
-> Leads com `attendee.status = 'rescheduled'` cujo slot atual está em estado válido (`meeting_status` ≠ cancelled/rescheduled) DEVEM contar como **R2 Agendada**. O `attendee.status = 'rescheduled'` reflete o histórico do attendee, não o estado atual do slot.
-
-## Arquivos afetados
-
-- `src/hooks/useR2CarrinhoKPIs.ts` — duas linhas (181 e 207)
-- `src/hooks/useR2PendingLeads.ts` — verificar e aplicar mesma regra se necessário
-- `src/pages/crm/R2Carrinho.tsx` — tooltip (esconder linha "Outros" se zero)
-- `mem://business-logic/r2-carrinho-semanas-anteriores-criteria.md` — documentar a regra
-
-Sem migração de banco. Mudança puramente de classificação no frontend.
+Para a semana atual (30/04 → 06/05), card Contratos = **21**, e a soma deve fechar:
+`R2 Realizadas + R2 Agendadas + No-Show + Pendentes + Reembolso (+ desistentes/fora se houver) = 21`.
+Maria Isabel, Roberto Cezar, Baroli, Pri, Italo, Victor, Claudio Almeida, Giovana → todos contam como **safra atual** agora.
