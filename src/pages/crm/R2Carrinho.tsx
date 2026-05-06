@@ -208,6 +208,15 @@ export default function R2Carrinho() {
       fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
       parceria: displayKpis?.parceriaForaDoCarrinho ?? 0,
     },
+    {
+      label: 'Aprovados',
+      value: displayKpis?.aprovados ?? 0,
+      color: 'bg-emerald-500',
+      parceria: displayKpis?.parceriaAprovados ?? 0,
+      title:
+        'Leads desta safra aprovados no R2 dentro do corte do carrinho ' +
+        '(elegíveis para vendas de parceria nesta safra).',
+    },
     // ===== Linha 2 (alinhada por coluna) =====
     {
       label: 'Semanas Anteriores',
@@ -240,6 +249,12 @@ export default function R2Carrinho() {
       label: 'Desistente',
       value: displayKpis?.desistentes ?? 0,
       color: 'bg-red-500/60',
+    },
+    {
+      label: 'Reprovado',
+      value: displayKpis?.reprovados ?? 0,
+      color: 'bg-emerald-500/60',
+      title: 'Leads desta safra com status R2 = "Reprovado" na janela operacional do carrinho.',
     },
   ];
 
@@ -342,7 +357,7 @@ export default function R2Carrinho() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpiCards.map((kpi, idx) => (
           kpi === null ? (
             <div key={`kpi-spacer-${idx}`} aria-hidden />
