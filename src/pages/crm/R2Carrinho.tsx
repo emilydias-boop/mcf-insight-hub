@@ -340,7 +340,10 @@ export default function R2Carrinho() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {kpiCards.map((kpi) => (
+        {kpiCards.map((kpi, idx) => (
+          kpi === null ? (
+            <div key={`kpi-spacer-${idx}`} aria-hidden />
+          ) : (
           <Card key={kpi.label}>
             <CardContent className="p-3">
               <div className="flex items-start gap-3">
@@ -370,6 +373,7 @@ export default function R2Carrinho() {
               </div>
             </CardContent>
           </Card>
+          )
         ))}
       </div>
 
