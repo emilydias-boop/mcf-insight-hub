@@ -328,6 +328,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       produto_codigo: 'auto',
       condicao_pagamento: 'convencional',
       inclui_seguro: false,
+      objetivo: 'imovel',
       // Controle adicional
       valor_comissao: undefined,
       e_transferencia: false,
