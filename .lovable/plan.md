@@ -1,60 +1,40 @@
-## Objetivo
+## Contexto
 
-Corrigir as janelas do Carrinho R2 para refletir as três janelas distintas que o usuário descreveu.
+Contato: **Josias Rabelo Junior** (joraju2004@yahoo.com.br)
+Deal: `b02b91c7-3dd4-4f9a-9662-a9500f74fb65` — A010 Consultoria, pipeline Inside Sales, `original_sdr_email = mayara.souza@minhacasafinanciada.com` (já está correto no deal).
 
-## Regras corretas
+Há **dois attendees** R1 ligados a esse deal:
 
-| Bloco | Janela |
-|---|---|
-| **Safra (Contratos + R1)** | **Qui 00:00 → Qua 23:59** — fixa, sem corte intra-dia |
-| **Janela do Carrinho R2** (R2s, Aprovados, operacional) | **Sáb 00:00 → Sex (dia/horário do corte)** da semana seguinte |
-| **Vendas Parceria** | **Sex (corte) → Dom 23:59** da mesma semana |
+| Data | Status | booked_by (SDR) | contract_paid_at |
+|---|---|---|---|
+| 29/04/2026 17:15 | `no_show` | Mayara ✅ | — |
+| 06/05/2026 06:06 | `contract_paid` | **NULL** ❌ | 06/05 06:06 |
 
-Exemplo (safra atual 30/04 Qui → 06/05 Qua, corte Sex 08/05 12:00):
-- Safra Contratos / R1: 30/04 00:00 → 06/05 23:59
-- Janela Carrinho R2: **02/05 00:00 (Sáb) → 08/05 12:00 (Sex corte)**
-- Vendas Parceria: **08/05 12:00 (Sex corte) → 10/05 23:59 (Dom)**
+O contrato pago foi registrado num R1 "Outside Lead" (criado automaticamente sem booked_by). Por isso, na aba "Minhas Reuniões / Contratos" da Mayara o contrato não aparece — a atribuição de SDR para fins de fechamento usa `booked_by` no attendee de R1 vinculado ao `contract_paid_at`, conforme regra **SDR Attribution Hierarchy** (`booked_by > pipeline owner > general owner`).
 
-## Mudanças (apenas frontend / lógica de janelas)
+## O que precisa mudar
 
-### 1. `src/lib/carrinhoWeekBoundaries.ts` — `getCarrinhoMetricBoundaries`
+Atualizar **somente** o attendee `3d70438d-365e-4a48-9f40-95a2a6c74e8b` (R1 de 06/05, contract_paid):
 
-| Métrica | Janela nova |
-|---|---|
-| `contratos` | Qui 00:00 → Qua 23:59 (mantém) |
-| `r1Meetings` | Qui 00:00 → Qua 23:59 (mantém) |
-| `r2Meetings` | **Sáb 00:00 → Sex(corte com horário)** |
-| `aprovados` | **Sáb 00:00 → Sex(corte com horário)** |
-| `carrinhoOperacional` | **Sáb 00:00 → Sex(corte com horário)** |
-| `vendasParceria` | **Sex(corte com horário) → Dom 23:59** (mesma semana, em vez de Seg) |
-| `previousCutoff` / `safraOpeningCutoff` | Qui 00:00 da safra (mantém) |
+```sql
+UPDATE meeting_slot_attendees
+SET booked_by = '39162395-dec0-40b2-94ed-3a7443013e44'  -- Mayara Souza
+WHERE id = '3d70438d-365e-4a48-9f40-95a2a6c74e8b';
+```
 
-Detalhes de cálculo:
-- "Sáb" = `weekStart + 2 dias` à 00:00 local (sábado dentro do intervalo Qui→Qua da safra).
-- "Sex(corte)" = já existe como `currentCutoff` (dia derivado de `dia_corte`/`dias` + `horario_corte`).
-- "Dom" = `currentCutoffDay + 2 dias` às 23:59:59.999 local.
+Isso faz com que:
+- A SDR Mayara apareça como **intermediadora** desse R1.
+- O contrato seja contabilizado para ela em fechamento, KPIs de equipe e listagem de contratos do SDR (`useSdrContractsFromAgenda`).
+- O `original_sdr_email` do deal já é Mayara, então não precisa mexer no `crm_deals`.
+- Não toca no R1 de 29/04 (que já está OK como no-show da Mayara).
 
-### 2. UI do header em `/crm/r2-carrinho`
+## Passos
 
-Atualizar o chip "Janela do Carrinho (R2s)" para usar `boundaries.carrinhoOperacional` (vai exibir, p.ex., "02/05 00:00 → 08/05 12:00"). Atualizar também o texto de "Vendas Parceria" caso esteja exibido, refletindo Sex(corte) → Dom.
+1. Criar migration `supabase/migrations/<timestamp>_attribute_josias_contract_to_mayara.sql` com o UPDATE acima.
+2. Validar pós-migration:
+   - `meeting_slot_attendees.booked_by` do attendee 06/05 = profile da Mayara.
+   - Reabrir a tela do SDR Mayara → seção Contratos do mês 2026-05 deve listar "Josias Rabelo Junior".
 
-### 3. Memória
+## Riscos
 
-Atualizar `mem://reporting/carrinho-safra-operational-logic-v6` → v7 com as três janelas:
-- Safra (Contratos/R1) fixa Qui→Qua
-- Carrinho R2 (R2s/Aprovados/operacional) Sáb→Sex(corte)
-- Vendas Parceria Sex(corte)→Dom
-
-## Fora de escopo
-
-- Sem mudança em schema, RPC SQL ou edge functions.
-- Sem mudança em métricas de SDR, R1, Contratos.
-- Hooks de KPI (incluindo `useSDRCarrinhoMetrics`, `useCarrinhoUnifiedData`) já consomem `boundaries.*` e herdam o ajuste automaticamente.
-
-## Validação
-
-Na safra atual (30/04 → 06/05, corte 08/05 12:00):
-- Header: "Janela do Carrinho (R2s): 02/05 00:00 → 08/05 12:00".
-- Aprovados / R2 contam apenas eventos Sáb 02/05 → Sex 08/05 12:00.
-- Contratos pagos e R1 continuam Qui→Qua.
-- Vendas Parceria contam Sex 08/05 12:00 → Dom 10/05 23:59.
+- Operação pontual num único registro, sem efeito em comissão de Closer (continua atribuído ao closer atual `0d4a5264...`) nem em deduplicação. Reversível com UPDATE inverso (`booked_by = NULL`).
