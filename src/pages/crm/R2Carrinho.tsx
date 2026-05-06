@@ -231,7 +231,10 @@ export default function R2Carrinho() {
       label: 'No-Show R2',
       value: displayKpis?.noShowR2 ?? 0,
       color: 'bg-green-500/60',
-      title: `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}`,
+      fromPrevious: displayKpis?.semanasAnterioresNoShow ?? 0,
+      title:
+        `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}. ` +
+        'Atualiza em realtime: se o lead for reagendado, sai desta contagem.',
     },
     {
       label: 'Desistente',
