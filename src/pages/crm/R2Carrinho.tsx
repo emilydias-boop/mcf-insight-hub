@@ -175,6 +175,7 @@ export default function R2Carrinho() {
         ((displayKpis?.semanasAnterioresOutros ?? 0) > 0
           ? ' + Outros estados — sem status normal (' + displayKpis!.semanasAnterioresOutros + ')'
           : '') + '.',
+      parceria: displayKpis?.contratosComParceriaSemanaAnterior ?? 0,
     },
     {
       label: 'Próxima Semana',
