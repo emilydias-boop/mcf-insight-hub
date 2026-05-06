@@ -16,6 +16,8 @@ export interface R2CarrinhoKPIs {
   semanasAnterioresAgendadas: number;
   semanasAnterioresNoShow: number;
   semanasAnterioresForaDoCarrinho: number;
+  /** Leads de semanas anteriores que não caem em nenhum dos 4 buckets (ex.: rescheduled, sem status). */
+  semanasAnterioresOutros: number;
   /** Leads desta safra que foram empurrados para a próxima semana (status ou agendamento). */
   proximaSemana: number;
   r2Agendadas: number;
@@ -39,11 +41,13 @@ export interface R2CarrinhoKPIs {
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const { data: unifiedData, isLoading: unifiedLoading } = useCarrinhoUnifiedData(weekStart, weekEnd, carrinhoConfig, previousConfig);
-  const previousCutoffForPending = useMemo(
-    () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).previousCutoff,
+  // Início da safra (Qui 00:00) — usado para determinar "semana anterior" tanto em
+  // sub-cards quanto no breakdown dos Pendentes.
+  const safraStartForPending = useMemo(
+    () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).contratos.start,
     [weekStart, weekEnd, carrinhoConfig, previousConfig]
   );
-  const pendentesBreakdown = useR2PendingLeadsBreakdown(previousCutoffForPending);
+  const pendentesBreakdown = useR2PendingLeadsBreakdown(safraStartForPending);
   
   // Contratos pagos still comes from hubla_transactions (not part of the RPC)
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -53,7 +57,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
   
   const { data: contratosData, isLoading: contratosLoading } = useQuery({
     queryKey: ['r2-carrinho-contratos', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), cutoffDayKey, cutoffKey, prevCutoffDayKey, prevCutoffKey],
-    queryFn: async (): Promise<{ contratos: number; reembolsos: number }> => {
+    queryFn: async (): Promise<{ contratos: number; reembolsos: number; partnerEmails: string[] }> => {
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       
       const { data: contratosTx } = await supabase
@@ -86,7 +90,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
           'product_name.ilike.A004%,product_name.ilike.A005%,product_name.ilike.A006%,' +
           'product_name.ilike.A007%,product_name.ilike.A008%,product_name.ilike.A009%,' +
           'product_name.ilike.R001%,product_name.ilike.INCORPORADOR%,' +
-          'product_name.ilike.%Renovação%,product_name.ilike.%Renovacao%'
+          'product_name.ilike.%Renovação%,product_name.ilike.%Renovacao%,' +
+          'product_name.ilike.Parceria%'
         )
         .gte('sale_date', boundaries.contratos.start.toISOString())
         .lte('sale_date', boundaries.contratos.end.toISOString());
@@ -109,7 +114,11 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         emailMap.set(email, true);
         if (tx.sale_status === 'refunded') refundEmails.add(email);
       }
-      return { contratos: emailMap.size, reembolsos: refundEmails.size };
+      return {
+        contratos: emailMap.size,
+        reembolsos: refundEmails.size,
+        partnerEmails: Array.from(partnerEmails),
+      };
     },
     staleTime: 30000,
   });
@@ -117,7 +126,11 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
   // Derive KPIs from unified data
   const kpis = useMemo((): R2CarrinhoKPIs | undefined => {
     if (!unifiedData) return undefined;
-    
+
+    // Set de emails de parceiros: leads cujo email aparece aqui são EXCLUÍDOS
+    // de TODOS os KPIs operacionais (regra core: parceiros não entram em métricas).
+    const partnerEmailsSet = new Set<string>(contratosData?.partnerEmails ?? []);
+
     let r2Agendadas = 0;
     let r2Realizadas = 0;
     let foraDoCarrinho = 0;
@@ -130,15 +143,18 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let semanasAnterioresAgendadas = 0;
     let semanasAnterioresNoShow = 0;
     let semanasAnterioresForaDoCarrinho = 0;
+    let semanasAnterioresOutros = 0;
     let proximaSemana = 0;
     let noShowR2 = 0;
     let desistentes = 0;
 
     // Janela operacional (corte anterior → corte atual) para R2 agendadas/realizadas/fora.
-    const { carrinhoOperacional, previousCutoff } = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    // Para "semana anterior" usamos o INÍCIO da safra (Qui 00:00), não o previousCutoff (Sex 12:00).
+    const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
+    const { carrinhoOperacional } = boundaries;
     const opStart = carrinhoOperacional.start.getTime();
     const opEnd = carrinhoOperacional.end.getTime();
-    const prevCutoffTs = previousCutoff.getTime();
+    const safraStartTs = boundaries.contratos.start.getTime();
     const inOperationalWindow = (row: CarrinhoLeadRow) => {
       if (row.is_encaixado) return true;
       if (!row.scheduled_at) return false;
@@ -155,6 +171,10 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
 
     const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled']);
     for (const row of unifiedData) {
+      // Excluir parceiros de TODOS os KPIs (regra core).
+      const rowEmail = (row.contact_email || '').toLowerCase().trim();
+      if (rowEmail && partnerEmailsSet.has(rowEmail)) continue;
+
       const opOk = inOperationalWindow(row);
       // R2 Agendadas: apenas pendentes (ainda não realizadas / no-show / contrato)
       if (opOk && isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
@@ -167,12 +187,13 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       if (isPendente(row)) pendentes++;
       if (isEmAnalise(row)) emAnalise++;
 
-      // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago antes do corte de abertura desta safra.
+      // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago ANTES do início desta safra (Qui 00:00).
       if (opOk && row.effective_contract_date) {
         const contractTs = new Date(row.effective_contract_date).getTime();
-        if (contractTs < prevCutoffTs) {
+        if (contractTs < safraStartTs) {
           semanasAnteriores++;
           // Sub-quebra pelo bucket operacional onde o lead aparece hoje.
+          // Garantia: a soma dos sub-buckets bate com o total via o bucket "Outros".
           if (isRealizada(row)) {
             semanasAnterioresRealizadas++;
           } else if (
@@ -184,6 +205,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
             semanasAnterioresForaDoCarrinho++;
           } else if (isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
             semanasAnterioresAgendadas++;
+          } else {
+            semanasAnterioresOutros++;
           }
         }
       }
@@ -211,6 +234,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       semanasAnterioresAgendadas,
       semanasAnterioresNoShow,
       semanasAnterioresForaDoCarrinho,
+      semanasAnterioresOutros,
       proximaSemana,
       r2Agendadas,
       pendentesAgendamento: pendentesBreakdown.total,
