@@ -11,6 +11,11 @@ export interface R2CarrinhoKPIs {
   contratosPagos: number;
   /** Leads que entraram nesta safra mas o contrato foi pago em semanas anteriores. */
   semanasAnteriores: number;
+  /** Quebra dos "Semanas Anteriores" pelo bucket operacional atual em que estão. */
+  semanasAnterioresRealizadas: number;
+  semanasAnterioresAgendadas: number;
+  semanasAnterioresNoShow: number;
+  semanasAnterioresForaDoCarrinho: number;
   /** Leads desta safra que foram empurrados para a próxima semana (status ou agendamento). */
   proximaSemana: number;
   r2Agendadas: number;
@@ -86,6 +91,10 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let pendentes = 0;
     let emAnalise = 0;
     let semanasAnteriores = 0;
+    let semanasAnterioresRealizadas = 0;
+    let semanasAnterioresAgendadas = 0;
+    let semanasAnterioresNoShow = 0;
+    let semanasAnterioresForaDoCarrinho = 0;
     let proximaSemana = 0;
     let noShowR2 = 0;
     let desistentes = 0;
@@ -126,7 +135,22 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago antes do corte de abertura desta safra.
       if (opOk && row.effective_contract_date) {
         const contractTs = new Date(row.effective_contract_date).getTime();
-        if (contractTs < prevCutoffTs) semanasAnteriores++;
+        if (contractTs < prevCutoffTs) {
+          semanasAnteriores++;
+          // Sub-quebra pelo bucket operacional onde o lead aparece hoje.
+          if (isRealizada(row)) {
+            semanasAnterioresRealizadas++;
+          } else if (
+            (row.attendee_status || '').toLowerCase() === 'no_show' ||
+            (row.meeting_status || '').toLowerCase() === 'no_show'
+          ) {
+            semanasAnterioresNoShow++;
+          } else if (isForaDoCarrinho(row)) {
+            semanasAnterioresForaDoCarrinho++;
+          } else if (isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
+            semanasAnterioresAgendadas++;
+          }
+        }
       }
 
       // Próxima Semana: status R2 = "próxima semana" OU agendado após o corte atual (próxima janela).
@@ -148,6 +172,10 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     return {
       contratosPagos: contratosData?.contratos ?? 0,
       semanasAnteriores,
+      semanasAnterioresRealizadas,
+      semanasAnterioresAgendadas,
+      semanasAnterioresNoShow,
+      semanasAnterioresForaDoCarrinho,
       proximaSemana,
       r2Agendadas,
       pendentesAgendamento,

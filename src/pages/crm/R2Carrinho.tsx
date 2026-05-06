@@ -156,12 +156,16 @@ export default function R2Carrinho() {
     value: number;
     color: string;
     sub?: { label: string; value: number };
+    fromPrevious?: number;
+    subTitle?: string;
   }> = [
     {
       label: 'Contratos',
       value: displayKpis?.contratosPagos ?? 0,
       color: 'bg-blue-500',
       sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
+      subTitle:
+        'Total de leads desta safra com contrato pago em semanas anteriores. Já estão somados em R2 Realizadas, R2 Agendadas, No-Show R2 e Reembolso/Desistente — veja o detalhe "↩ X" em cada card.',
     },
     {
       label: 'Próxima Semana',
@@ -173,18 +177,23 @@ export default function R2Carrinho() {
       value: displayKpis?.r2Agendadas ?? 0,
       color: 'bg-indigo-500',
       sub: { label: 'Pendentes', value: displayKpis?.pendentesAgendamento ?? 0 },
+      fromPrevious: displayKpis?.semanasAnterioresAgendadas ?? 0,
     },
     {
       label: 'R2 Realizadas',
       value: displayKpis?.r2Realizadas ?? 0,
       color: 'bg-green-500',
       sub: { label: 'No-Show R2', value: displayKpis?.noShowR2 ?? 0 },
+      fromPrevious: displayKpis?.semanasAnterioresRealizadas ?? 0,
+      subTitle:
+        `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}`,
     },
     {
       label: 'Reembolso',
       value: displayKpis?.reembolsos ?? 0,
       color: 'bg-red-500',
       sub: { label: 'Desistente', value: displayKpis?.desistentes ?? 0 },
+      fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
     },
   ];
 
@@ -298,8 +307,19 @@ export default function R2Carrinho() {
                   <p className="text-2xl font-bold leading-tight">
                     {kpisLoading ? '...' : kpi.value}
                   </p>
+                  {!kpisLoading && (kpi.fromPrevious ?? 0) > 0 && (
+                    <p
+                      className="text-[11px] text-muted-foreground mt-0.5 truncate"
+                      title="Leads desta safra cujo contrato foi pago em semanas anteriores e que caem neste bucket."
+                    >
+                      ↩ {kpi.fromPrevious} de sem. anteriores
+                    </p>
+                  )}
                   {kpi.sub && (
-                    <div className="mt-1.5 pt-1.5 border-t border-border/50">
+                    <div
+                      className="mt-1.5 pt-1.5 border-t border-border/50"
+                      title={kpi.subTitle}
+                    >
                       <p className="text-[11px] text-muted-foreground truncate">{kpi.sub.label}</p>
                       <p className="text-sm font-semibold leading-tight">
                         {kpisLoading ? '...' : kpi.sub.value}
