@@ -93,16 +93,13 @@ export function useR2CarrinhoData(
     if (filter === 'aprovados') {
       filtered = filtered.filter(isCarrinhoEligible);
     } else if (filter === 'aprovados_proxima_safra') {
-      // Inclui:
-      //  (a) aprovados cujo contrato caiu fora do corte desta safra (isProximaSafra clássico)
-      //  (b) qualquer lead com R2 agendada APÓS o fim operacional desta safra
-      //      (mesmo bucket do KPI "Próxima Semana") — assim os 3 leads que aparecem
-      //      no KPI também aparecem na aba.
+      // Aba "Próxima Semana": espelha o KPI — apenas leads com R2 agendada
+      // APÓS o fim operacional desta safra (até +7 dias).
+      const nextSafraEndTs = opEnd + 7 * 24 * 60 * 60 * 1000;
       filtered = filtered.filter((r) => {
-        if (isProximaSafra(r)) return true;
         if (!r.scheduled_at) return false;
         const t = new Date(r.scheduled_at).getTime();
-        if (t < opEnd) return false;
+        if (t < opEnd || t > nextSafraEndTs) return false;
         const status = (r.attendee_status || '').toLowerCase();
         if (status === 'cancelled' || status === 'rescheduled') return false;
         return true;
