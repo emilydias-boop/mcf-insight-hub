@@ -35,6 +35,7 @@ export type ConsorcioProdutoInput = Partial<Omit<ConsorcioProduto, 'id' | 'creat
 };
 
 export function useCreateConsorcioProduto() {
+  // returns mutation
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ConsorcioProdutoInput) => {
