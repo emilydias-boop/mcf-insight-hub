@@ -91,7 +91,9 @@ const Negocios = () => {
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
-  const canDelete = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const isPrivilegedDeleter = ['admin', 'manager', 'coordenador'].includes(role || '');
+  const isOwnerDeleter = role === 'sdr' || role === 'closer';
+  const canDelete = isPrivilegedDeleter || isOwnerDeleter;
   
   // Usar BU ativa (do contexto da rota ou do perfil do usuário)
   const activeBU = useActiveBU();
