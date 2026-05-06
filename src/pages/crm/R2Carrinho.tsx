@@ -411,7 +411,7 @@ export default function R2Carrinho() {
             </span>
           </TabsTrigger>
           <TabsTrigger value="proxima_safra" className="flex items-center gap-2">
-            📦 Próxima Safra
+            📅 Próxima Semana
             <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
               {proximaSafraData.length}
             </span>
@@ -468,8 +468,8 @@ export default function R2Carrinho() {
             isLoading={proximaSafraLoading}
             weekStart={weekStart}
             weekEnd={weekEnd}
-            emptyMessage="Nenhum aprovado para a próxima safra"
-            countLabel="próxima safra"
+            emptyMessage="Nenhum lead com R2 agendada para a próxima semana"
+            countLabel="próxima semana"
             showEncaixarButton
           />
         </TabsContent>
