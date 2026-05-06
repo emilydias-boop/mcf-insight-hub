@@ -170,8 +170,10 @@ export default function R2Carrinho() {
         'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
         'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +
         'No-Show (' + (displayKpis?.semanasAnterioresNoShow ?? 0) + ') + ' +
-        'Reembolso/Desistente (' + (displayKpis?.semanasAnterioresForaDoCarrinho ?? 0) + ') + ' +
-        'Outros estados — reagendado/sem status (' + (displayKpis?.semanasAnterioresOutros ?? 0) + ').',
+        'Reembolso/Desistente (' + (displayKpis?.semanasAnterioresForaDoCarrinho ?? 0) + ')' +
+        ((displayKpis?.semanasAnterioresOutros ?? 0) > 0
+          ? ' + Outros estados — sem status normal (' + displayKpis!.semanasAnterioresOutros + ')'
+          : '') + '.',
     },
     {
       label: 'Próxima Semana',
