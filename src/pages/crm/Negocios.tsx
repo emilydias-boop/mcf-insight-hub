@@ -917,10 +917,23 @@ const Negocios = () => {
       <DeleteDealsConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        count={selectedDealIds.size}
+        count={
+          isOwnerDeleter && !isPrivilegedDeleter
+            ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
+            : selectedDealIds.size
+        }
         isDeleting={bulkDelete.isPending}
         onConfirm={() => {
-          bulkDelete.mutate(Array.from(selectedDealIds), {
+          let ids = Array.from(selectedDealIds);
+          if (isOwnerDeleter && !isPrivilegedDeleter) {
+            const ownIds = new Set(
+              (dealsData || [])
+                .filter((d: any) => d.owner_profile_id === user?.id)
+                .map((d: any) => d.id)
+            );
+            ids = ids.filter((id) => ownIds.has(id));
+          }
+          bulkDelete.mutate(ids, {
             onSuccess: () => {
               setDeleteDialogOpen(false);
               handleClearSelection();
