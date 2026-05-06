@@ -1,40 +1,43 @@
 ---
 name: R2 Carrinho Semanas Anteriores Criteria
-description: Critérios para classificar lead como "semana anterior" e exclusão de parceiros nos KPIs do Carrinho R2
+description: Janela fixa Qui→Qua, "semana anterior" = contrato em semana calendário anterior, parceiros aparecem com indicador
 type: feature
 ---
-# R2 Carrinho — "Semanas Anteriores" e exclusão de parceiros
+# R2 Carrinho — Safra fixa Qui→Qua, "Semanas Anteriores" e indicador de parceria
 
-## Cutoff de "semana anterior"
+## Safra operacional (a partir de 06/05/2026)
+
+A safra do Carrinho R2 é uma janela **FIXA de 7 dias corridos**: Quinta 00:00 → Quarta 23:59.
+Não existe mais corte intra-dia (sexta 12:00) para fechar/abrir safra. As janelas
+`contratos`, `r2Meetings`, `aprovados`, `r1Meetings` e `carrinhoOperacional` são
+todas iguais a essa janela em `getCarrinhoMetricBoundaries`.
+
+`previousCutoff` / `safraOpeningCutoff` agora representam **Quinta 00:00 desta safra**.
+
+## Cutoff de "semana anterior" (novo critério)
 
 Um lead é classificado como **"semana anterior"** no painel R2 Carrinho quando:
 
-- Está na janela operacional desta safra (`carrinhoOperacional`: corte anterior → corte atual), E
-- `effective_contract_date < boundaries.previousCutoff` (Sex 12:00 da semana anterior)
+- Está na janela operacional desta safra (Qui 00:00 → Qua 23:59), E
+- `effective_contract_date < boundaries.previousCutoff` (= Qui 00:00 desta safra)
 
-**Regra de negócio:** o ciclo do carrinho ABRE no corte da sexta. Quem pagou contrato
-antes desse corte — mesmo que tenha sido na própria quinta da safra atual — é considerado
-"vindo de semana anterior", pois entrou na safra ANTES do carrinho abrir.
+**Regra de negócio:** quem pagou A000 dentro da própria semana calendário Qui→Qua é
+da safra atual. Só são "Semanas Anteriores" leads cujo R2 caiu nesta semana mas o
+contrato A000 foi pago em uma semana calendário ANTERIOR.
 
-NÃO usar `boundaries.contratos.start` (Qui 00:00) como referência: a janela de contratos
-existe só para contagem de "Contratos Pagos" e tem semântica diferente do carrinho operacional.
+`previousCutoff` agora coincide com `boundaries.contratos.start` por design — é o mesmo Qui 00:00.
 
-## Exclusão de parceiros nos KPIs operacionais
+## Parceiros: indicador, NÃO exclusão
 
-A regra core "Partner/renewal products A001-A009, R001, INCORPORADOR são excluídos
-das métricas" aplica-se a **TODOS** os KPIs do Carrinho R2, não só ao `contratosPagos`.
+Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) **AGORA APARECEM**
+nos KPIs operacionais do Carrinho R2 com um sub-indicador `★ N c/ parceria`.
+A regra core "parceiros excluídos das métricas" continua valendo APENAS para o
+card `contratosPagos` (contratos novos), o que é feito na query SQL via `partnerEmails`.
 
-Em `useR2CarrinhoKPIs`, o `Set<partnerEmails>` (construído cruzando hubla_transactions
-por A001-A009/R001/INCORPORADOR/Renovação/Parceria na janela de contratos) é usado
-como filtro logo no início do loop de `unifiedData`:
-
-```ts
-const rowEmail = (row.contact_email || '').toLowerCase().trim();
-if (rowEmail && partnerEmailsSet.has(rowEmail)) continue;
-```
-
-Isso evita que parceiros apareçam em `r2Realizadas`, `r2Agendadas`, `noShowR2`,
-`aprovados`, `semanasAnteriores`, `pendentes`, `desistentes`, `foraDoCarrinho`.
+Em `useR2CarrinhoKPIs`, o `partnerEmailsSet` é usado APENAS para incrementar
+contadores `parceriaR2Agendadas`, `parceriaR2Realizadas`, `parceriaNoShowR2`,
+`parceriaPendentes`, `parceriaAprovados`, `parceriaForaDoCarrinho` — NÃO mais
+como filtro de `continue` no loop. NÃO reintroduzir o `continue` por parceiro.
 
 ## Bucket "Outros"
 
@@ -68,12 +71,13 @@ ficava invisível no card R2 Agendadas e o "↩ Outros" subia indevidamente.
 ## Pendentes ↩
 
 `useR2PendingLeadsBreakdown(previousCutoff)` recebe o `previousCutoff` do carrinho
-(Sex 12:00 da semana anterior). Mesmo critério aplicado: contrato pago antes do
-corte de abertura da safra = lead vindo de semanas anteriores.
+(agora = Qui 00:00 desta safra). Contrato pago antes desse marco = "semana anterior".
 
 ## Critério de aceitação
 
 - Soma dos sub-cards `↩ X` (Realizadas + Agendadas + No-Show + Fora + Outros) = total `Semanas Anteriores`
-- Parceiros (ex.: cliente que comprou A001 na safra) não aparecem em nenhum KPI
-- Leads com contrato pago entre Qui 00:00 e Sex 12:00 da própria safra SÃO contados
-  como "semana anterior" (ciclo operacional só abre no corte da sexta)
+- Parceiros aparecem em todos os KPIs operacionais com indicador `★ N c/ parceria`,
+  e ficam excluídos APENAS do card `contratosPagos` (contratos novos)
+- Leads com contrato pago dentro da semana Qui→Qua da própria safra contam como
+  safra atual (não são mais "semana anterior")
+- Janela de Vendas Parceria mantém regra própria: Sex 00:00 → Seg 23:59 da semana seguinte
