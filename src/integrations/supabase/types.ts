@@ -2826,6 +2826,36 @@ export type Database = {
           },
         ]
       }
+      consorcio_objetivo_options: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          label: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       consorcio_origem_options: {
         Row: {
           created_at: string | null
@@ -3096,6 +3126,8 @@ export type Database = {
           grupo_padrao: string | null
           id: string
           nome: string
+          objetivo_option_id: string | null
+          prazo_maximo_venda: number | null
           prazos_disponiveis: number[]
           seguro_vida_percentual: number | null
           taxa_adm_200: number | null
@@ -3116,6 +3148,8 @@ export type Database = {
           grupo_padrao?: string | null
           id?: string
           nome: string
+          objetivo_option_id?: string | null
+          prazo_maximo_venda?: number | null
           prazos_disponiveis: number[]
           seguro_vida_percentual?: number | null
           taxa_adm_200?: number | null
@@ -3136,6 +3170,8 @@ export type Database = {
           grupo_padrao?: string | null
           id?: string
           nome?: string
+          objetivo_option_id?: string | null
+          prazo_maximo_venda?: number | null
           prazos_disponiveis?: number[]
           seguro_vida_percentual?: number | null
           taxa_adm_200?: number | null
@@ -3145,7 +3181,15 @@ export type Database = {
           taxa_antecipada_tipo?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_produtos_objetivo_option_id_fkey"
+            columns: ["objetivo_option_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_objetivo_options"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       consorcio_proposals: {
         Row: {
