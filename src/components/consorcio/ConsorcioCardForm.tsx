@@ -1146,6 +1146,29 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                   />
                 </div>
 
+                {/* Objetivo da carta */}
+                <FormField
+                  control={form.control}
+                  name="objetivo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Objetivo da Carta *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="imovel">Imóvel</SelectItem>
+                          <SelectItem value="auto">Auto</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 {/* Seguro de vida opcional */}
                 <FormField
                   control={form.control}
