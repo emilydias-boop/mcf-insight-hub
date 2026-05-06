@@ -433,6 +433,7 @@ export default function R2Carrinho() {
             aprovadosAttendees={aprovadosData}
             isLoading={agendadasLoading}
             onSelectAttendee={handleSelectAttendee}
+            weekStart={weekStart}
           />
         </TabsContent>
 
