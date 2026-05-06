@@ -1,50 +1,49 @@
-## Problema
+## Contexto
 
-No card **Próxima Semana** da safra atual (30/04 → 06/05) aparece **0**, mas existem 3 leads (Alexsandro, Jeferson, Maria) que pagaram contrato nesta safra e têm R2 agendada na próxima safra (07/05 → 13/05). Eles deveriam aparecer no contador.
+Lead `joraju2004@yahoo.com.br` (Josias Rabelo Junior) comprou um Contrato CLS pelo **link pessoal do William** (oferta `Contrato CLS - WF Caução 497`), mas o linker automático do Hubla vinculou o pagamento ao R1 do **Julio** (slot 06/05 13:30 UTC), pois esse era o R1 ativo mais próximo no calendário.
 
-## Causa raiz
+Como o pagamento (06:06 UTC) é anterior ao R1 do Julio (13:30 UTC), a regra Outside descarta a venda do card "Contratos" do Julio, e ela também não aparece para o William (que não tem R1 com o lead).
 
-`useR2CarrinhoKPIs.proximaSemana` é calculado iterando `unifiedData`, que vem da RPC `get_carrinho_r2_attendees` chamada com janela `[carrinhoOperacional.start, r2Meetings.end]` — ou seja, **somente Qui 00:00 → Qua 23:59 da safra atual**.
+Resultado: a venda existe no Hubla mas some de todos os painéis de Closer.
 
-Leads cuja R2 está agendada **depois** do `wedEnd` (próxima safra) nunca entram no `unifiedData`. A condição `isAfterCurrentCutoff(row)` em `useR2CarrinhoKPIs.ts:295` nunca é atingida porque esses rows simplesmente não estão no array.
+## Decisão
 
-## Correção
+Correção pontual via SQL, sem mexer na regra geral de Outside nem criar mapeamento automático de iniciais agora.
 
-Em `src/hooks/useCarrinhoUnifiedData.ts`, estender a janela enviada para a RPC para também cobrir a **próxima safra** (mais 7 dias após `wedEnd`), de modo que leads com R2 agendada na próxima semana sejam carregados.
+## O que fazer
 
-```ts
-// useCarrinhoUnifiedData.ts (queryFn)
-const nextSafraEnd = addDays(boundaries.r2Meetings.end, 7);
+**Passo único — reatribuir o pagamento do Julio para o William:**
 
-const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
-  p_week_start: weekStartStr,
-  p_window_start: boundaries.carrinhoOperacional.start.toISOString(),
-  p_window_end: nextSafraEnd.toISOString(),   // ← estender +7d
-  p_apply_contract_cutoff: true,
-  p_previous_cutoff: boundaries.carrinhoOperacional.start.toISOString(),
-});
-```
+Criar/usar um R1 do William para o lead Josias e mover o `contract_paid_at` para esse atendente, deixando o atendente do Julio limpo (status volta para `scheduled` ou `no_show`, sem `contract_paid_at`).
 
-E garantir que os outros KPIs operacionais (R2 Agendadas, R2 Realizadas, Fora do Carrinho, No-Show, Semanas Anteriores) **continuem usando `inOperationalWindow(row)`** — eles já filtram por `opEnd` da safra atual, então a extensão da janela de fetch não os contamina. Apenas o `proximaSemana` (que já usa `isAfterCurrentCutoff`) passará a enxergar esses leads.
+Como o William não tem R1 agendado com esse lead, o caminho mais limpo é:
 
-Adicionalmente, o filtro de "Próxima Semana" deve **limitar ao final da próxima safra** para não contar leads agendados muito longe (ex: 2 semanas à frente):
+1. Criar um `meeting_slot` "sintético" para o William na data/hora do pagamento (06/05 06:06 UTC), com `meeting_type='r1'` e `status='completed'`, marcado como origem manual de reconciliação.
+2. Criar um `meeting_slot_attendees` ligando o `deal_id` do Josias a esse novo slot, com `status='contract_paid'`, `contract_paid_at='2026-05-06 06:06:08.794+00'`, `is_partner=false`.
+3. Limpar o atendente do Julio: `contract_paid_at=NULL`, `status='no_show'` (ou `scheduled` se preferir não penalizar o Julio com no-show indevido — recomendo **`no_show`** porque o lead realmente não compareceu ao R1 dele já que tinha comprado de manhã).
+4. Atualizar a `hubla_transactions` linkada (`linked_attendee_id`) para apontar ao novo atendente do William.
 
-```ts
-const nextSafraEndTs = addDays(carrinhoOperacional.end, 7).getTime();
-const isInNextSafra = (row: CarrinhoLeadRow) => {
-  if (!row.scheduled_at) return false;
-  const t = new Date(row.scheduled_at).getTime();
-  return t >= opEnd && t <= nextSafraEndTs;
-};
-// substituir isAfterCurrentCutoff(row) por isInNextSafra(row) na linha 295
-```
+Após isso, o card "Contratos" do William passa de 2 → 3 e o total da equipe vai para 4 (David, Raul, Josias do William + Marcão da Thayná).
 
-## Validação
+## Detalhes técnicos
 
-Após ajuste, na safra 30/04→06/05 o card **Próxima Semana** deve passar de **0 → 3** (Alexsandro 07/05, Jeferson 11/05, Maria 12/05), e o tooltip/lista deve mostrar esses leads.
+**Tabelas tocadas (apenas dados, sem schema):**
+- `meeting_slots`: INSERT de 1 slot para William (`closer_id='0d4a5264-258f-4ba4-bef1-afea307eed2b'`, `scheduled_at='2026-05-06 06:06:08+00'`, `meeting_type='r1'`, `status='completed'`, observação interna "Reconciliação manual — venda via link pessoal WF").
+- `meeting_slot_attendees`: INSERT do attendee William (status `contract_paid`, com `contract_paid_at`).
+- `meeting_slot_attendees`: UPDATE no attendee `4c77deba-0312-438d-9eb8-468184450980` (Julio) → `contract_paid_at=NULL`, `status='no_show'`.
+- `hubla_transactions`: UPDATE em `e54c677c-cfa6-4a22-ad44-e3b455fcfd9c` → `linked_attendee_id` apontando ao novo attendee, `linked_method='manual'`, `linked_by_user_id` do admin que rodar.
 
-## Não muda
+**Validação pós-execução:**
+- Conferir que `useR1CloserMetrics` no `/crm/reunioes-equipe` mostra William=3, Thayná=1, Julio=0 (na fatia dele), total Contratos=4.
+- Conferir que o KPI "Outside" não dobra (a Hubla transaction continua com 1 linked_attendee_id, só mudou para qual).
+- Conferir que o card de "No-Show" do Julio sobe em 1 (efeito esperado, já que ele tinha um R1 agendado que não foi convertido).
 
-- Lógica de Contratos, Semanas Anteriores, R2 Agendadas/Realizadas, No-Show, Reembolso, Aprovados — todos continuam restritos à janela operacional via `opOk`.
-- RPC `get_carrinho_r2_attendees` não muda.
-- Não toca no Carrinho da próxima semana (já mostra esses 3 corretamente).
+## O que NÃO está no escopo
+
+- Não vou alterar a regra `paid < scheduled = Outside` (você pediu só correção pontual).
+- Não vou criar tabela de mapeamento iniciais→Closer agora (fica para uma tarefa futura quando você quiser automatizar).
+- Não vou mexer no linker automático do Hubla (`auto-link-hubla-transactions` ou similar).
+
+## Risco
+
+Baixo. São 4 operações de dados sobre 1 lead específico, todas reversíveis. Vou registrar os IDs antes/depois na resposta para você poder auditar.
