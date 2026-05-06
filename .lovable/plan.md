@@ -1,40 +1,47 @@
-## Contexto
+## Problema
 
-Contato: **Josias Rabelo Junior** (joraju2004@yahoo.com.br)
-Deal: `b02b91c7-3dd4-4f9a-9662-a9500f74fb65` — A010 Consultoria, pipeline Inside Sales, `original_sdr_email = mayara.souza@minhacasafinanciada.com` (já está correto no deal).
+No `/crm/reunioes-equipe`, o card **CONTRATOS = 7** é clicável e abre o modal "Contratos pagos", mas a lista mostra **0 lead(s) — "Nenhum lead encontrado neste bucket."**.
 
-Há **dois attendees** R1 ligados a esse deal:
+## Causa raiz
 
-| Data | Status | booked_by (SDR) | contract_paid_at |
-|---|---|---|---|
-| 29/04/2026 17:15 | `no_show` | Mayara ✅ | — |
-| 06/05/2026 06:06 | `contract_paid` | **NULL** ❌ | 06/05 06:06 |
+O número do KPI e o filtro do drilldown usam fontes diferentes:
 
-O contrato pago foi registrado num R1 "Outside Lead" (criado automaticamente sem booked_by). Por isso, na aba "Minhas Reuniões / Contratos" da Mayara o contrato não aparece — a atribuição de SDR para fins de fechamento usa `booked_by` no attendee de R1 vinculado ao `contract_paid_at`, conforme regra **SDR Attribution Hierarchy** (`booked_by > pipeline owner > general owner`).
+- **KPI (7)** → `enrichedKPIs.totalContratos`, que conta attendees com `contract_paid_at` dentro do período (mesma lógica de `get_sdr_metrics_from_agenda`).
+- **Drilldown** → `KpiDrillDownDialog`, no `case "contratos"`, filtra apenas por `m.status_atual` contendo "contrato pago" / "proposta fechada" — ou seja, pela **stage atual do deal**, e **sem aplicar janela de período**.
 
-## O que precisa mudar
+Resultado: leads cuja R1 ocorreu fora do mês, ou cuja stage do deal já mudou, ou cujo `status_atual` no array `allMeetings` não foi materializado como "Contrato Pago", **não aparecem**, mesmo tendo `contract_paid_at` no período.
 
-Atualizar **somente** o attendee `3d70438d-365e-4a48-9f40-95a2a6c74e8b` (R1 de 06/05, contract_paid):
+Confirmações no código:
+- `src/components/sdr/KpiDrillDownDialog.tsx` linhas 166–169 e 209–210: `isContratoStage(m.status_atual)` e `case "contratos": return isContratoStage(m.status_atual);` — sem `inRange(...)` e sem olhar `attendee_status`/`contract_paid_at`.
+- `src/components/sdr/TeamKPICards.tsx` linhas 140–149: o card usa `kpis.totalContratos` (contagem por `contract_paid_at`).
+- `src/pages/crm/ReunioesEquipe.tsx` linha 863: o dialog recebe `allMeetings`, que vem do `useTeamMeetingsData` filtrado por `scheduled_at` no período.
 
-```sql
-UPDATE meeting_slot_attendees
-SET booked_by = '39162395-dec0-40b2-94ed-3a7443013e44'  -- Mayara Souza
-WHERE id = '3d70438d-365e-4a48-9f40-95a2a6c74e8b';
-```
+## Correção
 
-Isso faz com que:
-- A SDR Mayara apareça como **intermediadora** desse R1.
-- O contrato seja contabilizado para ela em fechamento, KPIs de equipe e listagem de contratos do SDR (`useSdrContractsFromAgenda`).
-- O `original_sdr_email` do deal já é Mayara, então não precisa mexer no `crm_deals`.
-- Não toca no R1 de 29/04 (que já está OK como no-show da Mayara).
+Alinhar o bucket `"contratos"` à mesma regra do KPI: contar/listar attendees cujo **contrato foi pago dentro do período**, independente de quando a R1 foi marcada.
 
-## Passos
+### 1. `src/components/sdr/KpiDrillDownDialog.tsx`
+- Trocar a regra do `case "contratos"` em `filterByBucket`:
+  - Antes: `return isContratoStage(m.status_atual);`
+  - Depois: filtrar por reuniões cujo `attendee_status === 'contract_paid'` **ou** `attendee_status === 'refunded'` **e** com `contract_paid_at` dentro de `[startDate, endDate]`. Como `MeetingV2` ainda não expõe `contract_paid_at`, usar fallback: se `attendee_status` for contract_paid/refunded e a reunião estiver no período via `scheduled_at`, incluir; caso contrário, ler de campo novo opcional `contract_paid_at` quando disponível.
+- Atualizar o label do bucket para deixar claro que é por data de pagamento ("Contratos pagos no período (por data de pagamento)").
 
-1. Criar migration `supabase/migrations/<timestamp>_attribute_josias_contract_to_mayara.sql` com o UPDATE acima.
-2. Validar pós-migration:
-   - `meeting_slot_attendees.booked_by` do attendee 06/05 = profile da Mayara.
-   - Reabrir a tela do SDR Mayara → seção Contratos do mês 2026-05 deve listar "Josias Rabelo Junior".
+### 2. `src/hooks/useSdrMetricsV2.ts` (interface `MeetingV2`)
+- Adicionar campo opcional `contract_paid_at?: string | null` para que o drilldown possa filtrar pela data correta. A RPC `get_sdr_meetings_from_agenda` já tem esse dado por attendee — basta projetá-lo no resultado.
 
-## Riscos
+### 3. `src/pages/crm/ReunioesEquipe.tsx`
+- Garantir que o `allMeetings` passado ao dialog inclua attendees com `contract_paid_at` no período, mesmo que `scheduled_at` esteja fora da janela. Hoje `useTeamMeetingsData` filtra por `scheduled_at`. Para o bucket de contratos é preciso uma fonte adicional: ou estender o hook para incluir esses attendees, ou passar uma lista paralela `meetingsContratos` ao dialog (similar ao que já é feito com `meetingsRaw` para no-show e `pendentesOverride` para pendentes).
 
-- Operação pontual num único registro, sem efeito em comissão de Closer (continua atribuído ao closer atual `0d4a5264...`) nem em deduplicação. Reversível com UPDATE inverso (`booked_by = NULL`).
+### 4. RPC (apenas se necessário)
+- Se `get_sdr_meetings_from_agenda` ainda não retornar `contract_paid_at`, adicionar esse campo ao SELECT (mudança não destrutiva). Caso já retorne, basta tipar e propagar no front.
+
+## Resultado esperado
+
+Card **CONTRATOS 7** ↔ modal lista exatamente **7 leads**, mostrando lead, telefone, SDR (intermediador), closer, data agendada e badge "Contrato Pago". Funciona inclusive para contratos pagos no mês cuja R1 ocorreu em meses anteriores (caso típico do Josias Rabelo Junior já corrigido).
+
+## Detalhes técnicos
+
+- Fonte de verdade dos KPIs: `get_sdr_metrics_from_agenda` (conta `contract_paid_at` no mês, `meeting_type='r1'`, `is_partner=false`, `status<>'cancelled'`, `booked_by=profile`).
+- A correção espelha exatamente essa regra no front-end do drilldown.
+- Não envolve mudanças em RLS nem em lógica de comissão; é apenas alinhamento de visualização.
+- Reaproveita o padrão já usado para `no_show`/`pendentes` (fontes paralelas via props `meetingsRaw` / `pendentesOverride`).
