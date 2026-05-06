@@ -86,10 +86,15 @@ export function useCarrinhoUnifiedData(
       const boundaries = getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
+      // Estende a janela em +7 dias para incluir leads desta safra cuja R2
+      // foi agendada para a próxima safra (KPI "Próxima Semana").
+      const extendedEnd = new Date(boundaries.r2Meetings.end);
+      extendedEnd.setDate(extendedEnd.getDate() + 7);
+
       const { data, error } = await supabase.rpc('get_carrinho_r2_attendees', {
         p_week_start: weekStartStr,
         p_window_start: boundaries.carrinhoOperacional.start.toISOString(),
-        p_window_end: boundaries.r2Meetings.end.toISOString(),
+        p_window_end: extendedEnd.toISOString(),
         p_apply_contract_cutoff: true,
         p_previous_cutoff: boundaries.carrinhoOperacional.start.toISOString(),
       });
