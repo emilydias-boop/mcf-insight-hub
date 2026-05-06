@@ -1169,8 +1169,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="imovel">Imóvel</SelectItem>
-                          <SelectItem value="auto">Auto</SelectItem>
+                          {objetivoOptions.map((o) => (
+                            <SelectItem key={o.id} value={o.name}>{o.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
