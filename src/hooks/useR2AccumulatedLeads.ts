@@ -97,7 +97,23 @@ export function useR2AccumulatedLeads(currentWeekStart: Date, currentWeekEnd: Da
           .select('customer_email')
           .in('customer_email', allEmailVariants)
           .eq('sale_status', 'completed')
-          .or('product_name.ilike.%A001%,product_name.ilike.%A002%,product_name.ilike.%A003%,product_name.ilike.%A004%,product_name.ilike.%A009%,product_name.ilike.%INCORPORADOR%,product_name.ilike.%ANTICRISE%');
+          .or([
+            'product_name.ilike.%A001%',
+            'product_name.ilike.%A002%',
+            'product_name.ilike.%A003%',
+            'product_name.ilike.%A004%',
+            'product_name.ilike.%A005%',
+            'product_name.ilike.%A006%',
+            'product_name.ilike.%A007%',
+            'product_name.ilike.%A008%',
+            'product_name.ilike.%A009%',
+            'product_name.ilike.%R001%',
+            'product_name.ilike.%INCORPORADOR%',
+            'product_name.ilike.%ANTICRISE%',
+            'product_name.ilike.%Renovação Parceiro%',
+            'product_name.ilike.%The CLUB%',
+            'product_name.ilike.%SÓCIOS MCF%',
+          ].join(','));
 
         const resolvedEmails = new Set<string>();
         for (const tx of partnerTx || []) {
