@@ -39,6 +39,8 @@ export interface R2CarrinhoKPIs {
   foraDoCarrinho: number;
   aprovados: number;
   aprovadosForaCorte: number;
+  /** Leads desta safra com status R2 = "Reprovado" na janela operacional. */
+  reprovados: number;
   pendentes: number;
   emAnalise: number;
   /** Indicadores de PARCERIA por bucket: leads que também compraram A001-A009/R001/INCORPORADOR/Renovação/Parceria na janela. */
@@ -197,6 +199,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let proximaSemana = 0;
     let noShowR2 = 0;
     let desistentes = 0;
+    let reprovados = 0;
     // Indicadores de parceria por bucket: parceiros AGORA aparecem nos KPIs (não são mais excluídos);
     // contamos quantos de cada bucket também compraram parceria para mostrar como sub-indicador.
     let parceriaR2Agendadas = 0;
@@ -307,6 +310,9 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
 
       // Desistente: status R2 contém "desistente" na janela operacional.
       if (opOk && statusContains(row, 'desistente')) desistentes++;
+
+      // Reprovado: status R2 contém "reprovado" na janela operacional.
+      if (opOk && statusContains(row, 'reprovado')) reprovados++;
     }
 
     return {
@@ -326,6 +332,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       noShowR2,
       reembolsos: contratosData?.reembolsos ?? 0,
       desistentes,
+      reprovados,
       foraDoCarrinho,
       aprovados,
       aprovadosForaCorte,
