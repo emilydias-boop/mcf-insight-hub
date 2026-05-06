@@ -331,6 +331,14 @@ export default function R2Carrinho() {
                       ↩ {kpi.fromPrevious} de sem. anteriores
                     </p>
                   )}
+                  {!kpisLoading && (kpi.parceria ?? 0) > 0 && (
+                    <p
+                      className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5 truncate"
+                      title="Leads neste bucket que TAMBÉM compraram parceria/renovação (A001-A009, R001, INCORPORADOR, Renovação, Parceria) na janela."
+                    >
+                      ★ {kpi.parceria} c/ parceria
+                    </p>
+                  )}
                   {kpi.sub && (
                     <div
                       className="mt-1.5 pt-1.5 border-t border-border/50"
