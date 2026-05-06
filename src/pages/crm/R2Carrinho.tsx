@@ -165,7 +165,13 @@ export default function R2Carrinho() {
       color: 'bg-blue-500',
       sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
       subTitle:
-        'Total de leads desta safra com contrato pago em semanas anteriores. Já estão somados em R2 Realizadas, R2 Agendadas, No-Show R2 e Reembolso/Desistente — veja o detalhe "↩ X" em cada card.',
+        'Leads desta safra com contrato pago ANTES do início desta safra (Qui 00:00). ' +
+        'Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) NÃO entram nesta contagem. ' +
+        'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
+        'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +
+        'No-Show (' + (displayKpis?.semanasAnterioresNoShow ?? 0) + ') + ' +
+        'Reembolso/Desistente (' + (displayKpis?.semanasAnterioresForaDoCarrinho ?? 0) + ') + ' +
+        'Outros estados — reagendado/sem status (' + (displayKpis?.semanasAnterioresOutros ?? 0) + ').',
     },
     {
       label: 'Próxima Semana',
