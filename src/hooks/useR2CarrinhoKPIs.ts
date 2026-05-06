@@ -66,11 +66,40 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
         return true;
       });
 
+      // Buscar emails que também compraram produto de PARCERIA/RENOVAÇÃO na mesma safra.
+      // Esses clientes são tratados como recorrência/parceiro pela Hubla e devem ser
+      // excluídos da contagem de "Contratos novos" (regra: Partner/renewal products
+      // A001-A009, R001, INCORPORADOR são excluídos das métricas).
+      const { data: partnerTx } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, hubla_id, source, product_name, installment_number, sale_status')
+        .eq('sale_status', 'completed')
+        .in('source', ['hubla', 'manual', 'make', 'mcfpay', 'kiwify'])
+        .or(
+          'product_name.ilike.A001%,product_name.ilike.A002%,product_name.ilike.A003%,' +
+          'product_name.ilike.A004%,product_name.ilike.A005%,product_name.ilike.A006%,' +
+          'product_name.ilike.A007%,product_name.ilike.A008%,product_name.ilike.A009%,' +
+          'product_name.ilike.R001%,product_name.ilike.INCORPORADOR%,' +
+          'product_name.ilike.%Renovação%,product_name.ilike.%Renovacao%'
+        )
+        .gte('sale_date', boundaries.contratos.start.toISOString())
+        .lte('sale_date', boundaries.contratos.end.toISOString());
+
+      const partnerEmails = new Set<string>();
+      for (const tx of partnerTx || []) {
+        if (tx.hubla_id?.startsWith('newsale-')) continue;
+        if (tx.installment_number && tx.installment_number > 1) continue;
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (email) partnerEmails.add(email);
+      }
+
       const emailMap = new Map<string, boolean>();
       const refundEmails = new Set<string>();
       for (const tx of validTx) {
         const email = (tx.customer_email || '').toLowerCase().trim();
         if (!email) continue;
+        // Excluir clientes que também compraram produto de parceria/renovação na safra.
+        if (partnerEmails.has(email)) continue;
         emailMap.set(email, true);
         if (tx.sale_status === 'refunded') refundEmails.add(email);
       }
