@@ -44,6 +44,7 @@ import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
@@ -138,7 +139,7 @@ const formSchema = z.object({
   produto_codigo: z.string().optional(),
   condicao_pagamento: z.enum(['convencional', '50', '25']).optional(),
   inclui_seguro: z.boolean().optional(),
-  objetivo: z.enum(['auto', 'imovel'], { required_error: 'Objetivo é obrigatório' }),
+  objetivo: z.string().min(1, { message: 'Objetivo é obrigatório' }),
   vendedor_name: z.string().optional(),
   
   // PF
