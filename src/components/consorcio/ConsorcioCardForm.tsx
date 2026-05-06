@@ -582,6 +582,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           produto_codigo: (card as any).produto_embracon || 'auto',
           condicao_pagamento: ((card as any).condicao_pagamento || 'convencional') as 'convencional' | '50' | '25',
           inclui_seguro: (card as any).inclui_seguro_vida || false,
+          objetivo: ((card as any).objetivo as 'auto' | 'imovel') || 'imovel',
           // Controle adicional
           valor_comissao: card.valor_comissao ? Number(card.valor_comissao) : undefined,
           e_transferencia: card.e_transferencia || false,
@@ -612,6 +613,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           produto_codigo: 'auto',
           condicao_pagamento: 'convencional',
           inclui_seguro: false,
+          objetivo: (d as any).objetivo || 'imovel',
           // Controle
           valor_comissao: undefined,
           e_transferencia: d.e_transferencia || false,
@@ -889,6 +891,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       produto_embracon: data.produto_codigo || undefined,
       condicao_pagamento: data.condicao_pagamento || undefined,
       inclui_seguro_vida: data.inclui_seguro || false,
+      objetivo: data.objetivo,
       parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
       parcela_demais: calculoParcela?.parcelaDemais || undefined,
       
