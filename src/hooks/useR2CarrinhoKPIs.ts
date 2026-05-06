@@ -3,12 +3,16 @@ import { CarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
 import { useR2PendingLeadsBreakdown } from '@/hooks/useR2PendingLeads';
 
 export interface R2CarrinhoKPIs {
   contratosPagos: number;
+  /** Contratos desta safra cujo lead já havia comprado parceria na janela
+   *  `vendasParceria` da semana ANTERIOR (Sex passada 12:00 → Seg desta semana 23:59).
+   *  Explica por que esses leads aparecem em "Contratos novos" mesmo já sendo parceiros. */
+  contratosComParceriaSemanaAnterior: number;
   /** Leads que entraram nesta safra mas o contrato foi pago em semanas anteriores. */
   semanasAnteriores: number;
   /** Quebra dos "Semanas Anteriores" pelo bucket operacional atual em que estão. */
