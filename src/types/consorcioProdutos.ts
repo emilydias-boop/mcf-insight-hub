@@ -17,9 +17,24 @@ export interface ConsorcioProduto {
   ativo: boolean;
   objetivo_option_id?: string | null;
   prazo_maximo_venda?: number | null;
+  comissao_schedule?: ComissaoScheduleItem[] | null;
+  comissao_base?: ComissaoBase;
   created_at: string;
   updated_at: string;
 }
+
+export type ComissaoBase = 'valor_credito' | 'valor_parcela' | 'valor_venda';
+
+export interface ComissaoScheduleItem {
+  parcela: number;
+  percentual: number;
+}
+
+export const COMISSAO_BASE_OPTIONS: { value: ComissaoBase; label: string }[] = [
+  { value: 'valor_credito', label: 'Valor do crédito' },
+  { value: 'valor_parcela', label: 'Valor da parcela' },
+  { value: 'valor_venda', label: 'Valor da venda' },
+];
 
 export interface ConsorcioCredito {
   id: string;
