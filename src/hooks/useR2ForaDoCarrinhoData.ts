@@ -17,6 +17,7 @@ export interface R2ForaDoCarrinhoAttendee {
   deal_name: string | null;
   contact_phone: string | null;
   meeting_id: string;
+  contract_paid_at: string | null;
 }
 
 export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
@@ -51,6 +52,7 @@ export function useR2ForaDoCarrinhoData(weekStart: Date, weekEnd: Date, carrinho
         deal_name: row.deal_name,
         contact_phone: row.contact_phone,
         meeting_id: row.meeting_slot_id || '',
+        contract_paid_at: row.contract_paid_at || row.r1_contract_paid_at || null,
       }))
       .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
   }, [unifiedData, weekStart, weekEnd, carrinhoConfig, previousConfig]);
