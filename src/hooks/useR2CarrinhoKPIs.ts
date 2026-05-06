@@ -308,6 +308,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
 
     return {
       contratosPagos: contratosData?.contratos ?? 0,
+      contratosComParceriaSemanaAnterior: contratosData?.contratosComParceriaSemanaAnterior ?? 0,
       semanasAnteriores,
       semanasAnterioresRealizadas,
       semanasAnterioresAgendadas,
