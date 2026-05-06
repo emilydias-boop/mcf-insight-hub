@@ -44,6 +44,10 @@ export interface MeetingV2 {
   ordem_no_show?: number | null;
   total_no_shows_deal?: number | null;
   conta_no_show?: boolean | null;
+  /** Data em que o contrato deste lead foi pago (vinda do attendee).
+   *  Usada pelo drilldown do card "Contratos" para alinhar a lista
+   *  com o KPI (que conta por contract_paid_at no período). */
+  contract_paid_at?: string | null;
 }
 
 export interface MetricsSummary {

@@ -46,7 +46,7 @@ const BUCKET_LABELS: Record<KpiBucket, string> = {
   no_show: "No-Shows",
   sem_status: "Sem Status (invited / rescheduled / sem_sucesso)",
   pendentes: "Pendentes / Sem Desfecho — reuniões que não viraram Realizada nem No-Show",
-  contratos: "Contratos pagos",
+  contratos: "Contratos pagos no período (por data de pagamento)",
 };
 
 function inRange(iso: string | null | undefined, start: Date | null, end: Date | null): boolean {
@@ -168,6 +168,11 @@ function isContratoStage(s?: string | null): boolean {
   return v.includes("contrato pago") || v.includes("proposta fechada");
 }
 
+function isContratoPagoStatus(s?: string | null): boolean {
+  const v = (s || "").toLowerCase();
+  return v === "contract_paid" || v === "refunded";
+}
+
 function filterByBucket(
   meetings: MeetingV2[],
   bucket: KpiBucket,
@@ -207,7 +212,21 @@ function filterByBucket(
           !isNoShowStatus(m.attendee_status)
         );
       case "contratos":
-        return isContratoStage(m.status_atual);
+        // Alinhado ao KPI (get_sdr_metrics_from_agenda): conta attendees
+        // cujo contract_paid_at está dentro do período. Fallback: se a
+        // RPC não devolver contract_paid_at mas o status do attendee for
+        // contract_paid/refunded e a reunião estiver no período, inclui.
+        if (m.contract_paid_at) {
+          return inRange(m.contract_paid_at, start, end);
+        }
+        if (isContratoPagoStatus(m.attendee_status)) {
+          return inRange(m.scheduled_at || m.data_agendamento, start, end);
+        }
+        // Mantém compatibilidade com fontes legadas que só carregam status_atual
+        return (
+          isContratoStage(m.status_atual) &&
+          inRange(m.scheduled_at || m.data_agendamento, start, end)
+        );
       default:
         return false;
     }

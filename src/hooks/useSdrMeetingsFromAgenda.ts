@@ -25,6 +25,7 @@ interface AgendaMeetingRow {
   ordem_no_show: number | null;
   total_no_shows_deal: number | null;
   conta_no_show: boolean | null;
+  contract_paid_at?: string | null;
 }
 
 interface UseSdrMeetingsFromAgendaParams {
@@ -116,6 +117,7 @@ export function useSdrMeetingsFromAgenda({
           ordem_no_show: row.ordem_no_show ?? null,
           total_no_shows_deal: row.total_no_shows_deal ?? null,
           conta_no_show: row.conta_no_show ?? null,
+          contract_paid_at: row.contract_paid_at ?? null,
         };
       });
     },

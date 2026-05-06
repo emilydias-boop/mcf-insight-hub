@@ -12092,6 +12092,7 @@ export type Database = {
               contact_email: string
               contact_name: string
               contact_phone: string
+              contract_paid_at: string
               data_agendamento: string
               deal_id: string
               deal_name: string
