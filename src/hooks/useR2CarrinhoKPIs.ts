@@ -170,7 +170,12 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       return (row.r2_status_name || '').toLowerCase().includes(needle);
     };
 
-    const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled']);
+    // 'rescheduled' incluído: quando o attendee foi remarcado, o status do attendee fica
+    // 'rescheduled' mesmo quando o slot novo está ativo (meeting_status = 'scheduled').
+    // O isAgendada(row) já garante que o slot atual não foi cancelado/desmarcado,
+    // então tratamos esse caso como agendamento válido. Sem isso, o lead some do KPI
+    // R2 Agendadas e cai no bucket "Outros" de Semanas Anteriores (caso Alexandre Donizete).
+    const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled', 'rescheduled']);
     for (const row of unifiedData) {
       // Excluir parceiros de TODOS os KPIs (regra core).
       const rowEmail = (row.contact_email || '').toLowerCase().trim();
