@@ -37,6 +37,13 @@ export interface R2CarrinhoKPIs {
   aprovadosForaCorte: number;
   pendentes: number;
   emAnalise: number;
+  /** Indicadores de PARCERIA por bucket: leads que também compraram A001-A009/R001/INCORPORADOR/Renovação/Parceria na janela. */
+  parceriaR2Agendadas: number;
+  parceriaR2Realizadas: number;
+  parceriaNoShowR2: number;
+  parceriaPendentes: number;
+  parceriaAprovados: number;
+  parceriaForaDoCarrinho: number;
 }
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
@@ -149,6 +156,14 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     let proximaSemana = 0;
     let noShowR2 = 0;
     let desistentes = 0;
+    // Indicadores de parceria por bucket: parceiros AGORA aparecem nos KPIs (não são mais excluídos);
+    // contamos quantos de cada bucket também compraram parceria para mostrar como sub-indicador.
+    let parceriaR2Agendadas = 0;
+    let parceriaR2Realizadas = 0;
+    let parceriaNoShowR2 = 0;
+    let parceriaPendentes = 0;
+    let parceriaAprovados = 0;
+    let parceriaForaDoCarrinho = 0;
 
     // Janela operacional (corte anterior → corte atual) para R2 agendadas/realizadas/fora.
     // Para "semana anterior" usamos o `previousCutoff` (Sex 12:00) — o carrinho abre no corte da sexta.
@@ -177,20 +192,36 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
     // R2 Agendadas e cai no bucket "Outros" de Semanas Anteriores (caso Alexandre Donizete).
     const SCHEDULED_STATES = new Set(['invited', 'scheduled', 'pending', 'pre_scheduled', 'rescheduled']);
     for (const row of unifiedData) {
-      // Excluir parceiros de TODOS os KPIs (regra core).
+      // Parceiros NÃO são mais excluídos dos KPIs operacionais — apenas marcamos
+      // a flag para incrementar os contadores de "Parceria" em cada bucket.
+      // (A exclusão de parceiros do `contratosPagos` continua na query, pois
+      // contratos novos não devem incluir quem comprou parceria/renovação.)
       const rowEmail = (row.contact_email || '').toLowerCase().trim();
-      if (rowEmail && partnerEmailsSet.has(rowEmail)) continue;
+      const isParceria = !!rowEmail && partnerEmailsSet.has(rowEmail);
 
       const opOk = inOperationalWindow(row);
       // R2 Agendadas: apenas pendentes (ainda não realizadas / no-show / contrato)
       if (opOk && isAgendada(row) && SCHEDULED_STATES.has((row.attendee_status || '').toLowerCase())) {
         r2Agendadas++;
+        if (isParceria) parceriaR2Agendadas++;
       }
-      if (opOk && isRealizada(row)) r2Realizadas++;
-      if (opOk && isForaDoCarrinho(row)) foraDoCarrinho++;
-      if (isCarrinhoEligible(row)) aprovados++;
+      if (opOk && isRealizada(row)) {
+        r2Realizadas++;
+        if (isParceria) parceriaR2Realizadas++;
+      }
+      if (opOk && isForaDoCarrinho(row)) {
+        foraDoCarrinho++;
+        if (isParceria) parceriaForaDoCarrinho++;
+      }
+      if (isCarrinhoEligible(row)) {
+        aprovados++;
+        if (isParceria) parceriaAprovados++;
+      }
       else if (isProximaSafra(row)) aprovadosForaCorte++;
-      if (isPendente(row)) pendentes++;
+      if (isPendente(row)) {
+        pendentes++;
+        if (isParceria) parceriaPendentes++;
+      }
       if (isEmAnalise(row)) emAnalise++;
 
       // Semanas Anteriores: R2 nesta janela operacional, mas contrato pago ANTES do corte de abertura desta safra (Sex 12:00).
@@ -227,6 +258,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       // No-Show R2: realtime — janela operacional, attendee/meeting status no_show.
       if (opOk && (status === 'no_show' || (row.meeting_status || '').toLowerCase() === 'no_show')) {
         noShowR2++;
+        if (isParceria) parceriaNoShowR2++;
       }
 
       // Desistente: status R2 contém "desistente" na janela operacional.
@@ -254,6 +286,12 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       aprovadosForaCorte,
       pendentes,
       emAnalise,
+      parceriaR2Agendadas,
+      parceriaR2Realizadas,
+      parceriaNoShowR2,
+      parceriaPendentes,
+      parceriaAprovados,
+      parceriaForaDoCarrinho,
     };
   }, [unifiedData, contratosData, pendentesBreakdown.total, pendentesBreakdown.semanasAnteriores, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
