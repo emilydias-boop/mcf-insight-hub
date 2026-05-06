@@ -4,4 +4,4 @@
 - [Consórcio Reserva vs Contratação](mem://features/consorcio-reserva-vs-contratacao) — tipo_registro reserva|contratacao; reservas geram parcelas 'previsto'.
 - [Funil Cohort R1+30d](mem://features/funil-cohort-r1-30d) — Funil por Canal agora é cohort sequencial: base = R1 Agendada na janela, eventos contam até 30d após R1.
 - [No-Show Inconclusive Pending](mem://business-logic/no-show-inconclusive-pending-review) — Inconclusive+justificativa exige aprovação do gestor antes de virar no-show.
-- [R2 Carrinho Semanas Anteriores](mem://business-logic/r2-carrinho-semanas-anteriores-criteria) — Cutoff = início da safra (Qui 00:00); parceiros excluídos de TODOS os KPIs do Carrinho R2; bucket "Outros" fecha a soma.
+- [R2 Carrinho Semanas Anteriores](mem://business-logic/r2-carrinho-semanas-anteriores-criteria) — Safra fixa Qui 00:00→Qua 23:59 (sem corte de sexta); parceiros aparecem nos KPIs com indicador `★ N c/ parceria`, excluídos APENAS do card Contratos; bucket "Outros" fecha a soma.
