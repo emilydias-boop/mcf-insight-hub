@@ -147,6 +147,7 @@ export default function ConsorcioPage() {
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [origemFilter, setOrigemFilter] = useState<string>('todos');
+  const [objetivoFilter, setObjetivoFilter] = useState<string>('todos');
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
     startDate: undefined,
     endDate: undefined,
@@ -195,6 +196,7 @@ export default function ConsorcioPage() {
     diaVencimento: vencimentoFilter !== 'todos' ? Number(vencimentoFilter) : undefined,
     grupo: grupoFilter !== 'todos' ? grupoFilter : undefined,
     origem: origemFilter !== 'todos' ? origemFilter : undefined,
+    objetivo: objetivoFilter !== 'todos' ? (objetivoFilter as 'auto' | 'imovel') : undefined,
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
@@ -246,7 +248,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -320,7 +322,7 @@ export default function ConsorcioPage() {
   const handleExportCSV = () => {
     if (!sortedCards || sortedCards.length === 0) return;
 
-    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
+    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Objetivo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
     const rows = sortedCards.map((card, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
@@ -335,6 +337,7 @@ export default function ConsorcioPage() {
         format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy'),
         format(proximoVencimento, 'dd/MM/yyyy'),
         card.tipo_produto,
+        card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '-',
         card.categoria === 'inside' ? 'Inside' : 'Life',
         origemConfig?.label || card.origem,
         card.status,
