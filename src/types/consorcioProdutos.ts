@@ -15,6 +15,8 @@ export interface ConsorcioProduto {
   seguro_vida_percentual: number;
   grupo_padrao?: string;
   ativo: boolean;
+  objetivo_option_id?: string | null;
+  prazo_maximo_venda?: number | null;
   created_at: string;
   updated_at: string;
 }

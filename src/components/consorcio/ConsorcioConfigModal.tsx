@@ -26,6 +26,22 @@ import {
   ConsorcioOrigemOption,
   ConsorcioVendedorOption,
 } from '@/hooks/useConsorcioConfigOptions';
+import {
+  useConsorcioObjetivoOptions,
+  useCreateConsorcioObjetivoOption,
+  useUpdateConsorcioObjetivoOption,
+  useDeleteConsorcioObjetivoOption,
+  ConsorcioObjetivoOption,
+} from '@/hooks/useConsorcioObjetivoOptions';
+import {
+  useConsorcioProdutos,
+  useCreateConsorcioProduto,
+  useUpdateConsorcioProduto,
+  useDeleteConsorcioProduto,
+} from '@/hooks/useConsorcioProdutos';
+import { ConsorcioProduto } from '@/types/consorcioProdutos';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const COLOR_PRESETS = [
   '#3B82F6', // blue
@@ -119,7 +135,7 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configurações do Consórcio</DialogTitle>
         </DialogHeader>
@@ -130,6 +146,8 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="origens">Origens</TabsTrigger>
             <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
+            <TabsTrigger value="objetivos">Objetivos</TabsTrigger>
+            <TabsTrigger value="produtos">Produtos</TabsTrigger>
           </TabsList>
 
           {/* Tipos Tab */}
@@ -278,9 +296,287 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
               </Button>
             </div>
           </TabsContent>
+
+          {/* Objetivos Tab */}
+          <TabsContent value="objetivos" className="space-y-4">
+            <ObjetivosTab />
+          </TabsContent>
+
+          {/* Produtos Tab */}
+          <TabsContent value="produtos" className="space-y-4">
+            <ProdutosTab />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============ Objetivos Tab ============
+
+function ObjetivosTab() {
+  const { data: objetivos = [] } = useConsorcioObjetivoOptions();
+  const create = useCreateConsorcioObjetivoOption();
+  const update = useUpdateConsorcioObjetivoOption();
+  const remove = useDeleteConsorcioObjetivoOption();
+  const [novo, setNovo] = useState({ name: '', label: '' });
+
+  const handleAdd = () => {
+    if (!novo.name.trim() || !novo.label.trim()) return;
+    create.mutate({
+      name: novo.name.toLowerCase().replace(/\s+/g, '_'),
+      label: novo.label,
+      display_order: objetivos.length,
+    });
+    setNovo({ name: '', label: '' });
+  };
+
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        Gerencie os objetivos da carta (ex: Imóvel, Auto, Pesado). Os produtos cadastrados serão filtrados por objetivo.
+      </p>
+      <div className="space-y-2">
+        {objetivos.map((o: ConsorcioObjetivoOption) => (
+          <ObjetivoItem
+            key={o.id}
+            item={o}
+            onUpdate={(data) => update.mutate({ id: o.id, ...data })}
+            onDelete={() => remove.mutate(o.id)}
+          />
+        ))}
+      </div>
+      <div className="flex gap-2 items-center pt-4 border-t">
+        <Input
+          placeholder="Nome interno (ex: pesado)"
+          value={novo.name}
+          onChange={(e) => setNovo((p) => ({ ...p, name: e.target.value }))}
+          className="flex-1"
+        />
+        <Input
+          placeholder="Label (ex: Pesado)"
+          value={novo.label}
+          onChange={(e) => setNovo((p) => ({ ...p, label: e.target.value }))}
+          className="flex-1"
+        />
+        <Button onClick={handleAdd} size="icon" disabled={create.isPending}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function ObjetivoItem({
+  item,
+  onUpdate,
+  onDelete,
+}: {
+  item: ConsorcioObjetivoOption;
+  onUpdate: (data: Partial<ConsorcioObjetivoOption>) => void;
+  onDelete: () => void;
+}) {
+  const [label, setLabel] = useState(item.label);
+  return (
+    <div className="flex gap-2 items-center p-2 bg-muted/50 rounded-lg">
+      <Input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        onBlur={() => label !== item.label && onUpdate({ label })}
+        className="flex-1"
+      />
+      <Button variant="ghost" size="icon" onClick={onDelete}>
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
+// ============ Produtos Tab ============
+
+function ProdutosTab() {
+  const { data: produtos = [] } = useConsorcioProdutos();
+  const { data: objetivos = [] } = useConsorcioObjetivoOptions();
+  const create = useCreateConsorcioProduto();
+  const update = useUpdateConsorcioProduto();
+  const remove = useDeleteConsorcioProduto();
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<ConsorcioProduto | null>(null);
+
+  const handleSave = (data: any) => {
+    if (editing) {
+      update.mutate({ id: editing.id, ...data }, {
+        onSuccess: () => { setEditing(null); setShowForm(false); }
+      });
+    } else {
+      create.mutate(data, {
+        onSuccess: () => setShowForm(false)
+      });
+    }
+  };
+
+  const objetivoLabel = (id?: string | null) =>
+    objetivos.find((o) => o.id === id)?.label || '—';
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Cadastre produtos por objetivo. O sistema usará automaticamente o produto correto conforme objetivo + valor de crédito + tipo.
+        </p>
+        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }}>
+          <Plus className="h-4 w-4 mr-1" /> Novo produto
+        </Button>
+      </div>
+
+      {showForm && (
+        <ProdutoForm
+          objetivos={objetivos}
+          initial={editing}
+          onCancel={() => { setEditing(null); setShowForm(false); }}
+          onSave={handleSave}
+          isPending={create.isPending || update.isPending}
+        />
+      )}
+
+      <div className="space-y-2">
+        {produtos.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">Nenhum produto cadastrado.</p>
+        )}
+        {produtos.map((p) => (
+          <div key={p.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg text-sm">
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">
+                {p.codigo} — {p.nome}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Objetivo: <strong>{objetivoLabel(p.objetivo_option_id)}</strong> ·
+                Faixa: R$ {p.faixa_credito_min.toLocaleString('pt-BR')} – R$ {p.faixa_credito_max.toLocaleString('pt-BR')} ·
+                Taxa antecipada: {p.taxa_antecipada_percentual}% ({p.taxa_antecipada_tipo === 'dividida_12' ? 'dividida em 12' : '1ª parcela'}) ·
+                Prazo máx: {p.prazo_maximo_venda ?? '—'}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(p); setShowForm(true); }}>
+              Editar
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (confirm(`Remover produto ${p.codigo}?`)) remove.mutate(p.id);
+            }}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ProdutoForm({
+  objetivos,
+  initial,
+  onSave,
+  onCancel,
+  isPending,
+}: {
+  objetivos: ConsorcioObjetivoOption[];
+  initial: ConsorcioProduto | null;
+  onSave: (data: any) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [form, setForm] = useState({
+    codigo: initial?.codigo || '',
+    nome: initial?.nome || '',
+    objetivo_option_id: initial?.objetivo_option_id || objetivos[0]?.id || '',
+    faixa_credito_min: initial?.faixa_credito_min ?? 0,
+    faixa_credito_max: initial?.faixa_credito_max ?? 0,
+    taxa_antecipada_percentual: initial?.taxa_antecipada_percentual ?? 1.2,
+    taxa_antecipada_tipo: (initial?.taxa_antecipada_tipo || 'dividida_12') as 'primeira_parcela' | 'dividida_12',
+    taxa_adm_200: initial?.taxa_adm_200 ?? 20,
+    taxa_adm_220: initial?.taxa_adm_220 ?? 22,
+    taxa_adm_240: initial?.taxa_adm_240 ?? 25,
+    fundo_reserva: initial?.fundo_reserva ?? 2,
+    seguro_vida_percentual: initial?.seguro_vida_percentual ?? 0.0610,
+    prazo_maximo_venda: initial?.prazo_maximo_venda ?? 240,
+  });
+
+  const set = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = () => {
+    if (!form.codigo.trim() || !form.nome.trim() || !form.objetivo_option_id) return;
+    onSave(form);
+  };
+
+  return (
+    <div className="border rounded-lg p-4 space-y-3 bg-card">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Código">
+          <Input value={form.codigo} onChange={(e) => set('codigo', e.target.value)} />
+        </Field>
+        <Field label="Nome">
+          <Input value={form.nome} onChange={(e) => set('nome', e.target.value)} />
+        </Field>
+        <Field label="Objetivo">
+          <Select value={form.objetivo_option_id} onValueChange={(v) => set('objetivo_option_id', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {objetivos.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Tipo de taxa antecipada">
+          <Select value={form.taxa_antecipada_tipo} onValueChange={(v: any) => set('taxa_antecipada_tipo', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="primeira_parcela">Cobrar na 1ª parcela</SelectItem>
+              <SelectItem value="dividida_12">Diluída em 12</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Faixa crédito mínimo (R$)">
+          <Input type="number" value={form.faixa_credito_min} onChange={(e) => set('faixa_credito_min', Number(e.target.value))} />
+        </Field>
+        <Field label="Faixa crédito máximo (R$)">
+          <Input type="number" value={form.faixa_credito_max} onChange={(e) => set('faixa_credito_max', Number(e.target.value))} />
+        </Field>
+        <Field label="Taxa antecipada (%)">
+          <Input type="number" step="0.01" value={form.taxa_antecipada_percentual} onChange={(e) => set('taxa_antecipada_percentual', Number(e.target.value))} />
+        </Field>
+        <Field label="Prazo máximo de venda (meses)">
+          <Input type="number" value={form.prazo_maximo_venda} onChange={(e) => set('prazo_maximo_venda', Number(e.target.value))} />
+        </Field>
+        <Field label="Taxa adm 200m (%)">
+          <Input type="number" step="0.01" value={form.taxa_adm_200} onChange={(e) => set('taxa_adm_200', Number(e.target.value))} />
+        </Field>
+        <Field label="Taxa adm 220m (%)">
+          <Input type="number" step="0.01" value={form.taxa_adm_220} onChange={(e) => set('taxa_adm_220', Number(e.target.value))} />
+        </Field>
+        <Field label="Taxa adm 240m (%)">
+          <Input type="number" step="0.01" value={form.taxa_adm_240} onChange={(e) => set('taxa_adm_240', Number(e.target.value))} />
+        </Field>
+        <Field label="Fundo reserva (%)">
+          <Input type="number" step="0.01" value={form.fundo_reserva} onChange={(e) => set('fundo_reserva', Number(e.target.value))} />
+        </Field>
+        <Field label="Seguro vida (%)">
+          <Input type="number" step="0.0001" value={form.seguro_vida_percentual} onChange={(e) => set('seguro_vida_percentual', Number(e.target.value))} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+        <Button size="sm" onClick={submit} disabled={isPending}>
+          {initial ? 'Salvar alterações' : 'Criar produto'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      {children}
+    </div>
   );
 }
 

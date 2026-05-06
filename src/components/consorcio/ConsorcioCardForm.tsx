@@ -44,6 +44,7 @@ import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
@@ -138,7 +139,7 @@ const formSchema = z.object({
   produto_codigo: z.string().optional(),
   condicao_pagamento: z.enum(['convencional', '50', '25']).optional(),
   inclui_seguro: z.boolean().optional(),
-  objetivo: z.enum(['auto', 'imovel'], { required_error: 'Objetivo é obrigatório' }),
+  objetivo: z.string().min(1, { message: 'Objetivo é obrigatório' }),
   vendedor_name: z.string().optional(),
   
   // PF
@@ -381,6 +382,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
+  const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
+  const objetivoWatch = form.watch('objetivo');
+  const objetivoSelecionado = useMemo(
+    () => objetivoOptions.find((o) => o.name === objetivoWatch),
+    [objetivoOptions, objetivoWatch]
+  );
 
   // Find product that matches selected code or auto-detect from credit value
   const produtoSelecionado = useMemo(() => {
@@ -394,13 +401,15 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     const tipoProduto = form.watch('tipo_produto');
     const taxaTipo = tipoProduto === 'parcelinha' ? 'dividida_12' : 'primeira_parcela';
     
-    return produtos.find(p => 
+    return produtos.find(p =>
       p.ativo &&
       valorCredito >= p.faixa_credito_min &&
       valorCredito <= p.faixa_credito_max &&
-      p.taxa_antecipada_tipo === taxaTipo
+      p.taxa_antecipada_tipo === taxaTipo &&
+      // Filter by objetivo when selected; products linked to an objetivo only apply to that one
+      (!objetivoSelecionado || !p.objetivo_option_id || p.objetivo_option_id === objetivoSelecionado.id)
     );
-  }, [produtos, produtoCodigo, valorCredito, form]);
+  }, [produtos, produtoCodigo, valorCredito, form, objetivoSelecionado]);
 
   // Fetch credits for the selected product to get tabulated values
   const { data: creditos } = useConsorcioCreditos(produtoSelecionado?.id);
@@ -891,7 +900,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       produto_embracon: data.produto_codigo || undefined,
       condicao_pagamento: data.condicao_pagamento || undefined,
       inclui_seguro_vida: data.inclui_seguro || false,
-      objetivo: data.objetivo,
+      objetivo: data.objetivo as any,
       parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
       parcela_demais: calculoParcela?.parcelaDemais || undefined,
       
@@ -1160,8 +1169,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="imovel">Imóvel</SelectItem>
-                          <SelectItem value="auto">Auto</SelectItem>
+                          {objetivoOptions.map((o) => (
+                            <SelectItem key={o.id} value={o.name}>{o.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

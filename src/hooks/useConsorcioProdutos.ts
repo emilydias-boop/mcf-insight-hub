@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ConsorcioProduto, ConsorcioCredito } from '@/types/consorcioProdutos';
+import { toast } from 'sonner';
 
 export function useConsorcioProdutos() {
   return useQuery({
@@ -21,6 +22,61 @@ export function useConsorcioProdutos() {
         seguro_vida_percentual: item.seguro_vida_percentual || 0.0610,
       })) as ConsorcioProduto[];
     },
+  });
+}
+
+export type ConsorcioProdutoInput = Partial<Omit<ConsorcioProduto, 'id' | 'created_at' | 'updated_at'>> & {
+  codigo: string;
+  nome: string;
+  faixa_credito_min: number;
+  faixa_credito_max: number;
+  taxa_antecipada_percentual: number;
+  taxa_antecipada_tipo: 'primeira_parcela' | 'dividida_12';
+};
+
+export function useCreateConsorcioProduto() {
+  // returns mutation
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ConsorcioProdutoInput) => {
+      const { error } = await supabase.from('consorcio_produtos').insert(input as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consorcio-produtos'] });
+      toast.success('Produto criado');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao criar produto'),
+  });
+}
+
+export function useUpdateConsorcioProduto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: Partial<ConsorcioProduto> & { id: string }) => {
+      const { error } = await supabase.from('consorcio_produtos').update(patch as any).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consorcio-produtos'] });
+      toast.success('Produto atualizado');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar produto'),
+  });
+}
+
+export function useDeleteConsorcioProduto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('consorcio_produtos').update({ ativo: false }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consorcio-produtos'] });
+      toast.success('Produto removido');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao remover produto'),
   });
 }
 
