@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { toast } from 'sonner';
 
-export type AutoDialerState = 'idle' | 'running' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'finished';
 
 export interface AutoDialerLead {
   dealId: string;
@@ -242,6 +242,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
           if (stateRef.current === 'running') {
             advanceToNext();
           }
+          // Se estiver pausado, o avanço ocorrerá no resume().
           return;
         }
 
@@ -277,6 +278,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
             advanceToNext();
           }
         }
+        // Se estiver 'paused', apenas registramos o resultado;
+        // o resume() decide se redisca o atual ou avança.
       };
 
       // Delay de 1.5s para garantir que o AMD callback do Twilio chegue antes
@@ -290,7 +293,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
   // ===== API =====
   const loadQueue = useCallback((leads: AutoDialerLead[]) => {
-    if (state === 'running' || state === 'paused-in-call') {
+    if (state === 'running' || state === 'paused' || state === 'paused-in-call' || state === 'paused-qualifying') {
       toast.error('Pause ou pare a fila atual antes de carregar outra');
       return;
     }
@@ -313,20 +316,49 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   }, [queue.length, state, currentIndex, dialIndex]);
 
   const pause = useCallback(() => {
-    if (state === 'running') {
-      setState('idle');
-      clearTimers();
-      setInCallDrawerOpen(false);
-      toast.info('Fila pausada');
+    if (state !== 'running') return;
+    clearTimers();
+    isAdvancingRef.current = false;
+    // Cancela chamada que ainda está tocando/conectando (não derruba uma já atendida)
+    if (callStatus === 'ringing' || callStatus === 'connecting') {
+      try { hangUp(); } catch (e) { console.warn('[autodialer] hangUp on pause failed', e); }
     }
-  }, [state, clearTimers]);
+    // Se o lead atual estava 'in-progress' mas não foi atendido, devolve para 'pending'
+    const lead = queueRef.current[currentIndexRef.current];
+    if (lead) {
+      setResults(prev => {
+        const cur = prev[lead.dealId];
+        if (cur === 'in-progress') {
+          return { ...prev, [lead.dealId]: 'pending' as LeadResult };
+        }
+        return prev;
+      });
+    }
+    setInCallDrawerOpen(false);
+    setState('paused');
+    toast.info('Fila pausada');
+  }, [state, clearTimers, callStatus, hangUp]);
 
   const resume = useCallback(() => {
-    if (state === 'idle' && queue.length > 0 && currentIndex >= 0 && currentIndex < queue.length - 1) {
-      setState('running');
-      advanceToNext();
+    if (state !== 'paused') return;
+    if (queue.length === 0 || currentIndex < 0) return;
+    const lead = queue[currentIndex];
+    if (!lead) return;
+    const currentResult = results[lead.dealId];
+    setState('running');
+    if (currentResult === 'pending' || currentResult === 'in-progress' || currentResult === undefined) {
+      // Redisca o lead atual
+      dialIndex(currentIndex);
+    } else {
+      // Já finalizado — avança para o próximo (ou marca finished se for o último)
+      if (currentIndex >= queue.length - 1) {
+        setState('finished');
+        toast.success('Fila concluída');
+      } else {
+        advanceToNext();
+      }
     }
-  }, [state, queue.length, currentIndex, advanceToNext]);
+  }, [state, queue, currentIndex, results, dialIndex, advanceToNext]);
 
   const skipCurrent = useCallback(() => {
     const lead = queueRef.current[currentIndexRef.current];

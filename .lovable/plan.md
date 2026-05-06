@@ -1,47 +1,60 @@
 ## Problema
 
-No `/crm/reunioes-equipe`, o card **CONTRATOS = 7** é clicável e abre o modal "Contratos pagos", mas a lista mostra **0 lead(s) — "Nenhum lead encontrado neste bucket."**.
+Ao clicar em **Pausar** no discador automático, ele fica "processando" e não volta a fazer ligações ao retomar. Isso acontece por 4 bugs em `src/contexts/AutoDialerContext.tsx`:
 
-## Causa raiz
+1. **`pause()` reusa o estado `'idle'`** (mesmo estado de "fila nunca iniciada"), em vez de um estado próprio `'paused'`. A UI e a lógica não distinguem os dois.
+2. **`resume()` exige `currentIndex < queue.length - 1`** — se a pausa ocorre no último lead ou logo após avançar, retomar não faz nada.
+3. **Race condition** entre `pause()` e o `setTimeout(handleCompletion, 1500)` que decide o próximo passo após uma chamada terminar — quando o callback dispara, o estado já é `'idle'` e ele aborta sem avançar `currentIndex`. Ao retomar, o índice está "preso" no lead anterior.
+4. **`pause()` não derruba chamada em andamento** — se pausar durante `ringing`/`connecting`, a ligação fica viva no Twilio e o estado interno fica inconsistente.
 
-O número do KPI e o filtro do drilldown usam fontes diferentes:
+## Solução
 
-- **KPI (7)** → `enrichedKPIs.totalContratos`, que conta attendees com `contract_paid_at` dentro do período (mesma lógica de `get_sdr_metrics_from_agenda`).
-- **Drilldown** → `KpiDrillDownDialog`, no `case "contratos"`, filtra apenas por `m.status_atual` contendo "contrato pago" / "proposta fechada" — ou seja, pela **stage atual do deal**, e **sem aplicar janela de período**.
+Refatorar `pause` / `resume` e os handlers internos para usar um estado de pausa explícito.
 
-Resultado: leads cuja R1 ocorreu fora do mês, ou cuja stage do deal já mudou, ou cujo `status_atual` no array `allMeetings` não foi materializado como "Contrato Pago", **não aparecem**, mesmo tendo `contract_paid_at` no período.
+### Mudanças em `src/contexts/AutoDialerContext.tsx`
 
-Confirmações no código:
-- `src/components/sdr/KpiDrillDownDialog.tsx` linhas 166–169 e 209–210: `isContratoStage(m.status_atual)` e `case "contratos": return isContratoStage(m.status_atual);` — sem `inRange(...)` e sem olhar `attendee_status`/`contract_paid_at`.
-- `src/components/sdr/TeamKPICards.tsx` linhas 140–149: o card usa `kpis.totalContratos` (contagem por `contract_paid_at`).
-- `src/pages/crm/ReunioesEquipe.tsx` linha 863: o dialog recebe `allMeetings`, que vem do `useTeamMeetingsData` filtrado por `scheduled_at` no período.
+1. **Adicionar estado `'paused'`** ao tipo `AutoDialerState`:
+   ```ts
+   export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+   ```
 
-## Correção
+2. **`pause()` passa a:**
+   - Setar estado para `'paused'` (não mais `'idle'`).
+   - Limpar todos os timers (ring + advance).
+   - Cancelar chamada em andamento se `callStatus` for `ringing` / `connecting` (não derrubar `in-progress` — neste caso já estamos em `paused-in-call`).
+   - Resetar `isAdvancingRef.current = false` para permitir avanço futuro.
+   - Se o lead atual estava `in-progress` mas não foi atendido, voltar resultado para `'pending'` para ele ser rediscado no resume.
 
-Alinhar o bucket `"contratos"` à mesma regra do KPI: contar/listar attendees cujo **contrato foi pago dentro do período**, independente de quando a R1 foi marcada.
+3. **`resume()` passa a:**
+   - Só exigir `state === 'paused' && currentIndex >= 0 && currentIndex < queue.length`.
+   - Se o lead atual ainda está `pending` ou `in-progress` (não foi finalizado), **rediscar o índice atual** (`dialIndex(currentIndex)`).
+   - Se o lead atual já foi finalizado (answered/no-answer/failed/skipped), avançar para o próximo (`advanceToNext`).
+   - Se já estiver no fim da fila, marcar como `'finished'`.
 
-### 1. `src/components/sdr/KpiDrillDownDialog.tsx`
-- Trocar a regra do `case "contratos"` em `filterByBucket`:
-  - Antes: `return isContratoStage(m.status_atual);`
-  - Depois: filtrar por reuniões cujo `attendee_status === 'contract_paid'` **ou** `attendee_status === 'refunded'` **e** com `contract_paid_at` dentro de `[startDate, endDate]`. Como `MeetingV2` ainda não expõe `contract_paid_at`, usar fallback: se `attendee_status` for contract_paid/refunded e a reunião estiver no período via `scheduled_at`, incluir; caso contrário, ler de campo novo opcional `contract_paid_at` quando disponível.
-- Atualizar o label do bucket para deixar claro que é por data de pagamento ("Contratos pagos no período (por data de pagamento)").
+4. **`handleCompletion` (linha 221-280)** passa a:
+   - Verificar `stateRef.current === 'running' || stateRef.current === 'paused'`.
+   - Se `paused`: registrar resultado normalmente, mas **não disparar `retryCurrent` nem `advanceToNext`** — apenas atualizar o estado do lead. O próximo passo fica para o `resume()` decidir.
 
-### 2. `src/hooks/useSdrMetricsV2.ts` (interface `MeetingV2`)
-- Adicionar campo opcional `contract_paid_at?: string | null` para que o drilldown possa filtrar pela data correta. A RPC `get_sdr_meetings_from_agenda` já tem esse dado por attendee — basta projetá-lo no resultado.
+5. **`loadQueue` e `start`** passam a tratar `'paused'` como bloqueador igual a `'running'` na hora de carregar nova fila.
 
-### 3. `src/pages/crm/ReunioesEquipe.tsx`
-- Garantir que o `allMeetings` passado ao dialog inclua attendees com `contract_paid_at` no período, mesmo que `scheduled_at` esteja fora da janela. Hoje `useTeamMeetingsData` filtra por `scheduled_at`. Para o bucket de contratos é preciso uma fonte adicional: ou estender o hook para incluir esses attendees, ou passar uma lista paralela `meetingsContratos` ao dialog (similar ao que já é feito com `meetingsRaw` para no-show e `pendentesOverride` para pendentes).
+### Mudanças nos componentes consumidores
 
-### 4. RPC (apenas se necessário)
-- Se `get_sdr_meetings_from_agenda` ainda não retornar `contract_paid_at`, adicionar esse campo ao SELECT (mudança não destrutiva). Caso já retorne, basta tipar e propagar no front.
+6. **`src/components/sdr/AutoDialerPanel.tsx`** e **`AutoDialerInCallBanner.tsx`**:
+   - Adicionar `'paused'` na lógica de exibição do botão Retomar.
+   - Mostrar badge "Pausado" quando estado for `'paused'`.
+   - Habilitar botão "Retomar" quando estado for `'paused'` (hoje provavelmente verifica `'idle'`, o que confunde com fila nova).
 
-## Resultado esperado
+### Validação
 
-Card **CONTRATOS 7** ↔ modal lista exatamente **7 leads**, mostrando lead, telefone, SDR (intermediador), closer, data agendada e badge "Contrato Pago". Funciona inclusive para contratos pagos no mês cuja R1 ocorreu em meses anteriores (caso típico do Josias Rabelo Junior já corrigido).
+- Verificar TypeScript não quebra em outros consumidores de `AutoDialerState` (`rg "AutoDialerState\\|state ===" src/`).
+- Testar fluxo: iniciar fila → pausar durante ringing → retomar (deve rediscar mesmo lead).
+- Testar: pausar durante in-progress (paused-in-call) → desligar → continuar.
+- Testar: pausar no último lead → retomar (deve marcar finished, não travar).
 
-## Detalhes técnicos
+## Arquivos afetados
 
-- Fonte de verdade dos KPIs: `get_sdr_metrics_from_agenda` (conta `contract_paid_at` no mês, `meeting_type='r1'`, `is_partner=false`, `status<>'cancelled'`, `booked_by=profile`).
-- A correção espelha exatamente essa regra no front-end do drilldown.
-- Não envolve mudanças em RLS nem em lógica de comissão; é apenas alinhamento de visualização.
-- Reaproveita o padrão já usado para `no_show`/`pendentes` (fontes paralelas via props `meetingsRaw` / `pendentesOverride`).
+- `src/contexts/AutoDialerContext.tsx` (principal)
+- `src/components/sdr/AutoDialerPanel.tsx` (UI do botão)
+- `src/components/sdr/AutoDialerInCallBanner.tsx` (UI do banner)
+
+Sem mudanças de banco, sem edge functions, sem secrets.

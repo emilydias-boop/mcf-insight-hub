@@ -123,7 +123,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     ad.loadQueue(leads);
   };
 
-  const isActive = ad.state === 'running' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
+  const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -329,9 +329,13 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
               <Button size="sm" variant="outline" onClick={ad.pause} className="flex-1">
                 <Pause className="h-4 w-4 mr-1" /> Pausar
               </Button>
-            ) : ad.state === 'idle' && ad.currentIndex < ad.queue.length - 1 ? (
-              <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={ad.currentIndex < 0 ? ad.start : ad.resume}>
-                <Play className="h-4 w-4 mr-1" /> {ad.currentIndex < 0 ? 'Iniciar' : 'Retomar'}
+            ) : ad.state === 'paused' ? (
+              <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={ad.resume}>
+                <Play className="h-4 w-4 mr-1" /> Retomar
+              </Button>
+            ) : ad.state === 'idle' ? (
+              <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={ad.start} disabled={ad.queue.length === 0}>
+                <Play className="h-4 w-4 mr-1" /> Iniciar
               </Button>
             ) : ad.state === 'finished' ? (
               <div className="flex-1 text-center text-xs text-muted-foreground">Fila concluída</div>
