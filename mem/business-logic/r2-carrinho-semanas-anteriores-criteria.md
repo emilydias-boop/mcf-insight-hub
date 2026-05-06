@@ -10,10 +10,14 @@ type: feature
 Um lead é classificado como **"semana anterior"** no painel R2 Carrinho quando:
 
 - Está na janela operacional desta safra (`carrinhoOperacional`: corte anterior → corte atual), E
-- `effective_contract_date < boundaries.contratos.start` (Qui 00:00 da safra atual)
+- `effective_contract_date < boundaries.previousCutoff` (Sex 12:00 da semana anterior)
 
-**NÃO usar `previousCutoff` (Sex 12:00)** como referência — isso classifica falsamente
-como "semana anterior" qualquer contrato pago entre Qui 00:00 e Sex 12:00 da própria safra.
+**Regra de negócio:** o ciclo do carrinho ABRE no corte da sexta. Quem pagou contrato
+antes desse corte — mesmo que tenha sido na própria quinta da safra atual — é considerado
+"vindo de semana anterior", pois entrou na safra ANTES do carrinho abrir.
+
+NÃO usar `boundaries.contratos.start` (Qui 00:00) como referência: a janela de contratos
+existe só para contagem de "Contratos Pagos" e tem semântica diferente do carrinho operacional.
 
 ## Exclusão de parceiros nos KPIs operacionais
 
@@ -41,12 +45,13 @@ sempre bate com o total `semanasAnteriores`.
 
 ## Pendentes ↩
 
-`useR2PendingLeadsBreakdown(safraStart)` recebe **`boundaries.contratos.start`**
-(Qui 00:00), não o `previousCutoff`. Mesmo critério aplicado: contrato pago antes
-do início da safra = lead vindo de semanas anteriores.
+`useR2PendingLeadsBreakdown(previousCutoff)` recebe o `previousCutoff` do carrinho
+(Sex 12:00 da semana anterior). Mesmo critério aplicado: contrato pago antes do
+corte de abertura da safra = lead vindo de semanas anteriores.
 
 ## Critério de aceitação
 
 - Soma dos sub-cards `↩ X` (Realizadas + Agendadas + No-Show + Fora + Outros) = total `Semanas Anteriores`
 - Parceiros (ex.: cliente que comprou A001 na safra) não aparecem em nenhum KPI
-- Leads com contrato pago na própria Quinta da safra atual NÃO são "semana anterior"
+- Leads com contrato pago entre Qui 00:00 e Sex 12:00 da própria safra SÃO contados
+  como "semana anterior" (ciclo operacional só abre no corte da sexta)
