@@ -25,6 +25,7 @@ interface ConsorcioFilters {
   diaVencimento?: number;
   grupo?: string;
   origem?: string;
+  objetivo?: 'auto' | 'imovel';
 }
 
 const CONSORCIO_CARD_LIST_SELECT = `
@@ -87,6 +88,9 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
       }
       if (filters.origem) {
         query = query.eq('origem', filters.origem);
+      }
+      if (filters.objetivo) {
+        query = query.eq('objetivo', filters.objetivo);
       }
 
       const { data, error } = await query;

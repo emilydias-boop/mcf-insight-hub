@@ -147,6 +147,7 @@ export default function ConsorcioPage() {
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [origemFilter, setOrigemFilter] = useState<string>('todos');
+  const [objetivoFilter, setObjetivoFilter] = useState<string>('todos');
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
     startDate: undefined,
     endDate: undefined,
@@ -195,6 +196,7 @@ export default function ConsorcioPage() {
     diaVencimento: vencimentoFilter !== 'todos' ? Number(vencimentoFilter) : undefined,
     grupo: grupoFilter !== 'todos' ? grupoFilter : undefined,
     origem: origemFilter !== 'todos' ? origemFilter : undefined,
+    objetivo: objetivoFilter !== 'todos' ? (objetivoFilter as 'auto' | 'imovel') : undefined,
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
@@ -246,7 +248,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -320,7 +322,7 @@ export default function ConsorcioPage() {
   const handleExportCSV = () => {
     if (!sortedCards || sortedCards.length === 0) return;
 
-    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
+    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Objetivo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
     const rows = sortedCards.map((card, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
@@ -335,6 +337,7 @@ export default function ConsorcioPage() {
         format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy'),
         format(proximoVencimento, 'dd/MM/yyyy'),
         card.tipo_produto,
+        card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '-',
         card.categoria === 'inside' ? 'Inside' : 'Life',
         origemConfig?.label || card.origem,
         card.status,
@@ -593,6 +596,17 @@ export default function ConsorcioPage() {
           </SelectContent>
         </Select>
 
+        <Select value={objetivoFilter} onValueChange={setObjetivoFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Objetivo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Objetivo</SelectItem>
+            <SelectItem value="auto">🚗 Auto</SelectItem>
+            <SelectItem value="imovel">🏠 Imóvel</SelectItem>
+          </SelectContent>
+        </Select>
+
         <ConsorcioPeriodFilter 
           value={dateRangeFilter} 
           onChange={setDateRangeFilter} 
@@ -620,6 +634,7 @@ export default function ConsorcioPage() {
                 <TableHead>DT Contratação</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Objetivo</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
@@ -670,6 +685,15 @@ export default function ConsorcioPage() {
                         <Badge variant="outline" className="capitalize">
                           {card.tipo_produto}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {card.objetivo === 'auto' ? (
+                          <Badge variant="outline">🚗 Auto</Badge>
+                        ) : card.objetivo === 'imovel' ? (
+                          <Badge variant="outline">🏠 Imóvel</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {(() => {
