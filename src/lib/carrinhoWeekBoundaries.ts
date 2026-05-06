@@ -60,12 +60,17 @@ export interface CarrinhoMetricBoundaries {
 /**
  * Calcula janelas de data específicas por tipo de métrica do carrinho.
  *
- * Ciclo do carrinho (exemplo: safra Qui 03/04 - Qua 09/04, carrinho sexta 10/04):
- * - Contratos:       Qui 03/04 00:00 → Qua 09/04 23:59
- * - R2 Agendadas:    corte anterior → corte atual
- * - Aprovados:       corte anterior → corte atual
- * - Vendas Parceria: Sex 10/04 00:00 → Seg 13/04 23:59
- * - R1 Realizadas:   Qui 03/04 00:00 → Qua 09/04 23:59
+ * Nova regra (a partir de 06/05/2026): a SAFRA do Carrinho é uma janela fixa
+ * de 7 dias corridos Quinta 00:00 → Quarta 23:59. Não há mais corte intra-dia
+ * (sexta 12:00) para fechar/abrir safra. A janela `vendasParceria` mantém
+ * a regra própria (Sex 00:00 → Seg 23:59 da semana seguinte).
+ *
+ * Ciclo do carrinho (exemplo: safra Qui 03/04 - Qua 09/04):
+ * - Contratos:        Qui 03/04 00:00 → Qua 09/04 23:59
+ * - R2 Agendadas:     Qui 03/04 00:00 → Qua 09/04 23:59
+ * - Aprovados:        Qui 03/04 00:00 → Qua 09/04 23:59
+ * - Vendas Parceria:  Sex 04/04 00:00 → Seg 14/04 23:59 (corte de sexta usado APENAS aqui)
+ * - R1 Realizadas:    Qui 03/04 00:00 → Qua 09/04 23:59
  *
  * @param weekStart Quinta-feira início da semana (Thu-Wed)
  * @param weekEnd   Quarta-feira fim da semana (Thu-Wed)
@@ -135,22 +140,25 @@ export function getCarrinhoMetricBoundaries(
     prevCutHour, prevCutMinute || 0, 0, 0
   );
 
-  // R2 Meetings e Aprovados: janela do CARRINHO = corte ANTERIOR → corte ATUAL.
-  // O cutoff define o fechamento/abertura operacional: R2s após o corte da semana anterior entram nesta safra,
-  // e R2s após o corte atual entram na próxima safra.
-  // Vendas parceria: corte desta semana → Seg 23:59 da semana seguinte (captura boletos atrasados).
+  // NOVA REGRA: R2 Meetings, Aprovados e operacional do Carrinho usam a janela
+  // FIXA Qui 00:00 → Qua 23:59 (mesma janela de Contratos).
+  // O `previousCutoff` agora representa Qui 00:00 desta safra — usado para
+  // classificar "Semanas Anteriores" (lead com R2 nesta safra mas contrato pago
+  // em semana calendário anterior).
+  // Vendas parceria continua usando o corte de sexta: corte desta semana → Seg 23:59 da semana seguinte.
   const nextMonday = addDays(weekEnd, 5);
   const nextMondayEnd = localEndOfDay(nextMonday);
+  const safraStart = thuStart; // Qui 00:00 desta safra
 
   return {
     contratos: { start: thuStart, end: wedEnd },
-    r2Meetings: { start: previousCutoff, end: currentCutoff },
-    aprovados: { start: previousCutoff, end: currentCutoff },
+    r2Meetings: { start: thuStart, end: wedEnd },
+    aprovados: { start: thuStart, end: wedEnd },
     vendasParceria: { start: currentCutoff, end: nextMondayEnd },
     r1Meetings: { start: thuStart, end: wedEnd },
-    previousCutoff,
-    safraOpeningCutoff: previousCutoff,
-    carrinhoOperacional: { start: previousCutoff, end: currentCutoff },
+    previousCutoff: safraStart,
+    safraOpeningCutoff: safraStart,
+    carrinhoOperacional: { start: thuStart, end: wedEnd },
   };
 }
 
