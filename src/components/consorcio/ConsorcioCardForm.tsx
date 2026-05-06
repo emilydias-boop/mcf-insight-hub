@@ -892,7 +892,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       produto_embracon: data.produto_codigo || undefined,
       condicao_pagamento: data.condicao_pagamento || undefined,
       inclui_seguro_vida: data.inclui_seguro || false,
-      objetivo: data.objetivo,
+      objetivo: data.objetivo as any,
       parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
       parcela_demais: calculoParcela?.parcelaDemais || undefined,
       
