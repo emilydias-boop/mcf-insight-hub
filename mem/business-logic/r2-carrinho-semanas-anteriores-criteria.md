@@ -1,0 +1,52 @@
+---
+name: R2 Carrinho Semanas Anteriores Criteria
+description: Critérios para classificar lead como "semana anterior" e exclusão de parceiros nos KPIs do Carrinho R2
+type: feature
+---
+# R2 Carrinho — "Semanas Anteriores" e exclusão de parceiros
+
+## Cutoff de "semana anterior"
+
+Um lead é classificado como **"semana anterior"** no painel R2 Carrinho quando:
+
+- Está na janela operacional desta safra (`carrinhoOperacional`: corte anterior → corte atual), E
+- `effective_contract_date < boundaries.contratos.start` (Qui 00:00 da safra atual)
+
+**NÃO usar `previousCutoff` (Sex 12:00)** como referência — isso classifica falsamente
+como "semana anterior" qualquer contrato pago entre Qui 00:00 e Sex 12:00 da própria safra.
+
+## Exclusão de parceiros nos KPIs operacionais
+
+A regra core "Partner/renewal products A001-A009, R001, INCORPORADOR são excluídos
+das métricas" aplica-se a **TODOS** os KPIs do Carrinho R2, não só ao `contratosPagos`.
+
+Em `useR2CarrinhoKPIs`, o `Set<partnerEmails>` (construído cruzando hubla_transactions
+por A001-A009/R001/INCORPORADOR/Renovação/Parceria na janela de contratos) é usado
+como filtro logo no início do loop de `unifiedData`:
+
+```ts
+const rowEmail = (row.contact_email || '').toLowerCase().trim();
+if (rowEmail && partnerEmailsSet.has(rowEmail)) continue;
+```
+
+Isso evita que parceiros apareçam em `r2Realizadas`, `r2Agendadas`, `noShowR2`,
+`aprovados`, `semanasAnteriores`, `pendentes`, `desistentes`, `foraDoCarrinho`.
+
+## Bucket "Outros"
+
+`semanasAnterioresOutros` captura leads de semana anterior cujo estado não cai em
+nenhum dos 4 buckets visíveis (Realizada/Agendada/No-Show/Fora). Caso típico:
+`attendee_status='rescheduled'` em slot ainda `scheduled`. A soma dos 5 sub-buckets
+sempre bate com o total `semanasAnteriores`.
+
+## Pendentes ↩
+
+`useR2PendingLeadsBreakdown(safraStart)` recebe **`boundaries.contratos.start`**
+(Qui 00:00), não o `previousCutoff`. Mesmo critério aplicado: contrato pago antes
+do início da safra = lead vindo de semanas anteriores.
+
+## Critério de aceitação
+
+- Soma dos sub-cards `↩ X` (Realizadas + Agendadas + No-Show + Fora + Outros) = total `Semanas Anteriores`
+- Parceiros (ex.: cliente que comprou A001 na safra) não aparecem em nenhum KPI
+- Leads com contrato pago na própria Quinta da safra atual NÃO são "semana anterior"
