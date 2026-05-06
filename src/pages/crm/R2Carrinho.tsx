@@ -155,9 +155,8 @@ export default function R2Carrinho() {
     label: string;
     value: number;
     color: string;
-    sub?: { label: string; value: number; fromPrevious?: number };
     fromPrevious?: number;
-    subTitle?: string;
+    title?: string;
     parceria?: number;
     parceriaLabel?: string;
     parceriaTitle?: string;
@@ -166,8 +165,7 @@ export default function R2Carrinho() {
       label: 'Contratos',
       value: displayKpis?.contratosPagos ?? 0,
       color: 'bg-blue-500',
-      sub: { label: 'Semanas Anteriores', value: displayKpis?.semanasAnteriores ?? 0 },
-      subTitle:
+      title:
         'Leads desta safra com R2 nesta semana cujo contrato A000 foi pago em SEMANA CALENDÁRIO ANTERIOR (antes da quinta 00:00 desta safra). ' +
         'Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) NÃO entram em "Contratos" novos. ' +
         'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
@@ -185,6 +183,16 @@ export default function R2Carrinho() {
         '(Sex passada 12:00 → Seg desta semana 23:59). Por isso esses leads aparecem aqui em "Contratos novos" mesmo já sendo parceiros — a parceria deles foi contabilizada no carrinho passado.',
     },
     {
+      label: 'Semanas Anteriores',
+      value: displayKpis?.semanasAnteriores ?? 0,
+      color: 'bg-blue-500/60',
+      title:
+        'Distribuição: Realizadas (' + (displayKpis?.semanasAnterioresRealizadas ?? 0) + ') + ' +
+        'Agendadas (' + (displayKpis?.semanasAnterioresAgendadas ?? 0) + ') + ' +
+        'No-Show (' + (displayKpis?.semanasAnterioresNoShow ?? 0) + ') + ' +
+        'Reembolso/Desistente (' + (displayKpis?.semanasAnterioresForaDoCarrinho ?? 0) + ').',
+    },
+    {
       label: 'Próxima Semana',
       value: displayKpis?.proximaSemana ?? 0,
       color: 'bg-amber-500',
@@ -193,31 +201,40 @@ export default function R2Carrinho() {
       label: 'R2 Agendadas',
       value: displayKpis?.r2Agendadas ?? 0,
       color: 'bg-indigo-500',
-      sub: {
-        label: 'Pendentes',
-        value: displayKpis?.pendentesAgendamento ?? 0,
-        fromPrevious: displayKpis?.pendentesAgendamentoSemanasAnteriores ?? 0,
-      },
       fromPrevious: displayKpis?.semanasAnterioresAgendadas ?? 0,
       parceria: displayKpis?.parceriaR2Agendadas ?? 0,
+    },
+    {
+      label: 'Pendentes',
+      value: displayKpis?.pendentesAgendamento ?? 0,
+      color: 'bg-indigo-500/60',
+      fromPrevious: displayKpis?.pendentesAgendamentoSemanasAnteriores ?? 0,
+      title: 'Pendentes desta safra (Pendentes desta safra cujo contrato foi pago em semanas anteriores aparecem como ↩).',
     },
     {
       label: 'R2 Realizadas',
       value: displayKpis?.r2Realizadas ?? 0,
       color: 'bg-green-500',
-      sub: { label: 'No-Show R2', value: displayKpis?.noShowR2 ?? 0 },
       fromPrevious: displayKpis?.semanasAnterioresRealizadas ?? 0,
-      subTitle:
-        `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}`,
       parceria: displayKpis?.parceriaR2Realizadas ?? 0,
+    },
+    {
+      label: 'No-Show R2',
+      value: displayKpis?.noShowR2 ?? 0,
+      color: 'bg-green-500/60',
+      title: `No-Show R2 desta safra vindo de semanas anteriores: ${displayKpis?.semanasAnterioresNoShow ?? 0}`,
     },
     {
       label: 'Reembolso',
       value: displayKpis?.reembolsos ?? 0,
       color: 'bg-red-500',
-      sub: { label: 'Desistente', value: displayKpis?.desistentes ?? 0 },
       fromPrevious: displayKpis?.semanasAnterioresForaDoCarrinho ?? 0,
       parceria: displayKpis?.parceriaForaDoCarrinho ?? 0,
+    },
+    {
+      label: 'Desistente',
+      value: displayKpis?.desistentes ?? 0,
+      color: 'bg-red-500/60',
     },
   ];
 
@@ -320,14 +337,14 @@ export default function R2Carrinho() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-3">
         {kpiCards.map((kpi) => (
           <Card key={kpi.label}>
-            <CardContent className="p-4">
+            <CardContent className="p-3">
               <div className="flex items-start gap-3">
-                <div className={`w-2 h-10 rounded-full ${kpi.color}`} />
+                <div className={`w-1.5 h-10 rounded-full ${kpi.color}`} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-muted-foreground truncate">{kpi.label}</p>
+                  <p className="text-xs text-muted-foreground truncate" title={kpi.title}>{kpi.label}</p>
                   <p className="text-2xl font-bold leading-tight">
                     {kpisLoading ? '...' : kpi.value}
                   </p>
@@ -346,25 +363,6 @@ export default function R2Carrinho() {
                     >
                       ★ {kpi.parceria} {kpi.parceriaLabel ?? 'c/ parceria'}
                     </p>
-                  )}
-                  {kpi.sub && (
-                    <div
-                      className="mt-1.5 pt-1.5 border-t border-border/50"
-                      title={kpi.subTitle}
-                    >
-                      <p className="text-[11px] text-muted-foreground truncate">{kpi.sub.label}</p>
-                      <p className="text-sm font-semibold leading-tight">
-                        {kpisLoading ? '...' : kpi.sub.value}
-                      </p>
-                      {!kpisLoading && (kpi.sub.fromPrevious ?? 0) > 0 && (
-                        <p
-                          className="text-[10px] text-muted-foreground mt-0.5 truncate"
-                          title="Pendentes desta safra cujo contrato foi pago em semanas anteriores."
-                        >
-                          ↩ {kpi.sub.fromPrevious} de sem. anteriores
-                        </p>
-                      )}
-                    </div>
                   )}
                 </div>
               </div>
