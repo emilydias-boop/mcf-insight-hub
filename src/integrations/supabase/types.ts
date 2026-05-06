@@ -3421,6 +3421,7 @@ export type Database = {
           nome_completo: string | null
           num_funcionarios: number | null
           numero_contemplacao: string | null
+          objetivo: string | null
           observacoes: string | null
           origem: string
           origem_detalhe: string | null
@@ -3494,6 +3495,7 @@ export type Database = {
           nome_completo?: string | null
           num_funcionarios?: number | null
           numero_contemplacao?: string | null
+          objetivo?: string | null
           observacoes?: string | null
           origem: string
           origem_detalhe?: string | null
@@ -3567,6 +3569,7 @@ export type Database = {
           nome_completo?: string | null
           num_funcionarios?: number | null
           numero_contemplacao?: string | null
+          objetivo?: string | null
           observacoes?: string | null
           origem?: string
           origem_detalhe?: string | null

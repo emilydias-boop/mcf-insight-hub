@@ -35,7 +35,8 @@ const CONSORCIO_CARD_LIST_SELECT = `
   numero_contemplacao, data_contemplacao, motivo_contemplacao, valor_lance, percentual_lance,
   nome_completo, cpf, telefone, email, razao_social, cnpj,
   valor_comissao, e_transferencia, transferido_de, observacoes,
-  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais
+  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais,
+  objetivo
 `;
 
 const CONSORCIO_CARD_EXTRA_SELECT = `
