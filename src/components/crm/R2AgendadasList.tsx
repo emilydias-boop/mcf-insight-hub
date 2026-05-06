@@ -502,6 +502,24 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
                                     Encaixado
                                   </Badge>
                                 )}
+                                {isFromPreviousWeek(att) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700"
+                                    title={`Contrato pago em ${att.contract_paid_at ? format(new Date(att.contract_paid_at), 'dd/MM') : ''} (semana anterior)`}
+                                  >
+                                    Sem. Anterior
+                                  </Badge>
+                                )}
+                                {isFromNextWeek(att) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-700"
+                                    title="R2 agendada para a próxima safra"
+                                  >
+                                    Próx. Semana
+                                  </Badge>
+                                )}
                               </div>
                               {att.partner_name && (
                                 <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
