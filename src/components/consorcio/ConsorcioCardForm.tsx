@@ -382,6 +382,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
   // Fetch vendedor options from configurable table
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
+  const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
+  const objetivoWatch = form.watch('objetivo');
+  const objetivoSelecionado = useMemo(
+    () => objetivoOptions.find((o) => o.name === objetivoWatch),
+    [objetivoOptions, objetivoWatch]
+  );
 
   // Find product that matches selected code or auto-detect from credit value
   const produtoSelecionado = useMemo(() => {
@@ -395,13 +401,15 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     const tipoProduto = form.watch('tipo_produto');
     const taxaTipo = tipoProduto === 'parcelinha' ? 'dividida_12' : 'primeira_parcela';
     
-    return produtos.find(p => 
+    return produtos.find(p =>
       p.ativo &&
       valorCredito >= p.faixa_credito_min &&
       valorCredito <= p.faixa_credito_max &&
-      p.taxa_antecipada_tipo === taxaTipo
+      p.taxa_antecipada_tipo === taxaTipo &&
+      // Filter by objetivo when selected; products linked to an objetivo only apply to that one
+      (!objetivoSelecionado || !p.objetivo_option_id || p.objetivo_option_id === objetivoSelecionado.id)
     );
-  }, [produtos, produtoCodigo, valorCredito, form]);
+  }, [produtos, produtoCodigo, valorCredito, form, objetivoSelecionado]);
 
   // Fetch credits for the selected product to get tabulated values
   const { data: creditos } = useConsorcioCreditos(produtoSelecionado?.id);
