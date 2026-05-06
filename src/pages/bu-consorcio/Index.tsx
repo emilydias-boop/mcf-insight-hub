@@ -596,6 +596,17 @@ export default function ConsorcioPage() {
           </SelectContent>
         </Select>
 
+        <Select value={objetivoFilter} onValueChange={setObjetivoFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Objetivo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Objetivo</SelectItem>
+            <SelectItem value="auto">🚗 Auto</SelectItem>
+            <SelectItem value="imovel">🏠 Imóvel</SelectItem>
+          </SelectContent>
+        </Select>
+
         <ConsorcioPeriodFilter 
           value={dateRangeFilter} 
           onChange={setDateRangeFilter} 
@@ -623,6 +634,7 @@ export default function ConsorcioPage() {
                 <TableHead>DT Contratação</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Objetivo</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
@@ -673,6 +685,15 @@ export default function ConsorcioPage() {
                         <Badge variant="outline" className="capitalize">
                           {card.tipo_produto}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {card.objetivo === 'auto' ? (
+                          <Badge variant="outline">🚗 Auto</Badge>
+                        ) : card.objetivo === 'imovel' ? (
+                          <Badge variant="outline">🏠 Imóvel</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {(() => {
