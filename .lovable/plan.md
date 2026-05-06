@@ -1,48 +1,125 @@
-## Objetivo
 
-No card **R2 Agendadas** do Carrinho R2, o sub-indicador **Pendentes** mostra hoje só o total bruto. Você quer também saber **quantos desses pendentes vieram de semanas anteriores** (contrato pago antes do corte de abertura desta safra), igual já fazemos com `fromPrevious` em R2 Agendadas/Realizadas/Reembolso.
+# Correção: parceiros e cutoff em "Semanas Anteriores" (R2 Carrinho)
 
-## Como funciona hoje
+## Contexto da divergência
 
-- `useR2PendingLeads` retorna a lista realtime de leads com `status='contract_paid'` em R1 que ainda não têm R2 marcada.
-- Cada lead tem `contract_paid_at` (timestamp do pagamento).
-- `useR2PendingLeadsCount` só devolve `length`.
-- O card usa `displayKpis.pendentesAgendamento` (number).
+Na safra ativa (Qui 30/04 → Qua 06/05), o card **"Semanas Anteriores"** mostra 11–12 leads, mas a soma real válida é **5**. Investigação no banco revelou dois bugs combinados que afetam todos os sub-cards (`↩ X de sem. anteriores`).
 
-## Plano
+**Caso emblemático — Emerson Aguiar:**
+- Comprou A001 (parceria) em 04/05 → deveria ser excluído de TODAS as métricas (regra core do projeto).
+- Contrato pago Qui 30/04 11:30 BRT — mesma quinta da safra atual, não veio de semana anterior.
 
-### 1. `src/hooks/useR2PendingLeads.ts`
-Adicionar um segundo hook derivado `useR2PendingLeadsBreakdown(previousCutoff: Date)` que reaproveita o mesmo `useR2PendingLeads` e devolve:
+## Bugs identificados
+
+### Bug 1 — Filtro de parceiros não aplicado nos KPIs operacionais
+
+A regra core diz: "Partner/renewal products A001-A009, R001, INCORPORADOR são excluídos de métricas". Hoje em `useR2CarrinhoKPIs.ts`:
+- ✅ `contratosPagos` exclui parceiros (constrói `partnerEmails` e filtra)
+- ❌ `r2Realizadas`, `r2Agendadas`, `noShowR2`, `aprovados`, `semanasAnteriores`, `pendentes`, `desistentes`, `foraDoCarrinho` — **nenhum** aplica esse filtro
+
+O `Set<partnerEmails>` precisa ser propagado e cruzado com `unifiedData` no loop principal.
+
+### Bug 2 — Cutoff errado para "semana anterior"
+
+Hoje:
 ```ts
-{ total: number; semanasAnteriores: number; safraAtual: number }
+if (contractTs < prevCutoffTs) semanasAnteriores++;
 ```
-- `semanasAnteriores`: leads cujo `contract_paid_at < previousCutoff`.
-- `safraAtual`: o resto.
+Onde `prevCutoffTs` = Sex 12:00 da semana anterior. Resultado: contratos pagos de **Qui 00:00 até Sex 12:00 da própria safra** são falsamente classificados como "semana anterior".
 
-Manter `useR2PendingLeadsCount` intacto para não quebrar outros consumidores.
+Correto:
+```ts
+const safraStartTs = boundaries.contratos.start.getTime(); // Qui 00:00
+if (contractTs < safraStartTs) semanasAnteriores++;
+```
 
-### 2. `src/hooks/useR2CarrinhoKPIs.ts`
-- Calcular `previousCutoff` (já existe via `getCarrinhoMetricBoundaries(...).previousCutoff`).
-- Trocar o uso de `useR2PendingLeadsCount()` por `useR2PendingLeadsBreakdown(previousCutoff)`.
-- Adicionar 2 campos na interface `R2CarrinhoKPIs`:
-  - `pendentesAgendamentoSemanasAnteriores: number`
-  - (manter `pendentesAgendamento` como total para compatibilidade)
-- Popular no retorno.
+## Distribuição real após correção (12 → 5)
 
-### 3. `src/pages/crm/R2Carrinho.tsx`
-No card **R2 Agendadas** (linha ~175-181), adicionar `fromPrevious` ao sub-indicador **Pendentes**. Como o componente atual só suporta `fromPrevious` no card principal, duas opções:
+| Lead | Contrato | Status atual | Após correção |
+|---|---|---|---|
+| Emerson Aguiar | 30/04 | Sem.Ant. Realizada | **Removido (parceiro)** |
+| Cláudio Márcio, Maria Isabel, Victor, Claudio Almeida, Giovana | 30/04 (Qui) | Sem.Ant. Realizada | **Removido (mesma safra)** |
+| Roberto Cezar | 30/04 (Qui) | Sem.Ant. Agendada | **Removido (mesma safra)** |
+| Paulo Henrique | 29/04 | Sem.Ant. Realizada | Mantém ✓ |
+| Mateus Pacheco | 28/04 | Sem.Ant. Realizada | Mantém ✓ |
+| Bruno Cesar | 27/04 | Sem.Ant. No-Show | Mantém ✓ |
+| Alexandre Donizete | 27/04 | (órfão) | Mantém ✓ |
+| Alexsandro Moreira | 07/04 | Sem.Ant. Agendada | Mantém ✓ |
 
-**Opção A (mínima):** Adicionar uma linha extra no `subTitle` (tooltip) do card R2 Agendadas:
-> "Pendentes vindos de semanas anteriores: X"
+**Total esperado pós-correção: 5 leads** (4 verdadeiramente "anteriores" + 1 órfão Alexandre)
+- Sem.Ant. Realizadas: 2 (Paulo, Mateus)
+- Sem.Ant. No-Show: 1 (Bruno)
+- Sem.Ant. Agendadas: 1 (Alexsandro)
+- Sem.Ant. Outros: 1 (Alexandre — `attendee_status='rescheduled'`)
 
-**Opção B (visual):** Estender o tipo do `sub` para aceitar `fromPrevious?: number` e renderizar `↩ X` ao lado do número de Pendentes (mesma convenção visual dos outros cards). Isso requer ajustar o componente que renderiza o KPI card (provavelmente `KPICard` ou inline em `R2Carrinho.tsx`).
+# Plano de implementação
 
-Recomendo **Opção B** para manter consistência visual com os outros cards que já usam `↩ X`.
+## 1. `src/hooks/useR2CarrinhoKPIs.ts`
 
-### Resultado esperado
+**Refatorar para que o filtro de parceiros e o filtro de safra-start se apliquem a todos os KPIs derivados de `unifiedData`:**
 
-Card R2 Agendadas continua mostrando:
-- Valor principal (agendadas) com `↩ X` (de semanas anteriores)
-- Sub: `Pendentes: N` com `↩ M` (pendentes vindos de semanas anteriores)
+a) Mover a construção de `partnerEmails` da `queryFn` interna para fora, ou expor `partnerEmails` (e `refundEmails`) no retorno do `useQuery` `r2-carrinho-contratos` (já está `data: contratosData`).
 
-Sem mudanças de schema. Apenas hooks + UI.
+b) Adicionar `partnerEmails: Set<string>` ao retorno de `contratosData`.
+
+c) No loop principal `for (const row of unifiedData)`:
+   - Calcular `email = (row.contact_email || '').toLowerCase().trim()`
+   - Se `partnerEmails.has(email)` → `continue` (pula o lead inteiro de TODOS os sub-contadores)
+
+d) Trocar comparação de "semana anterior":
+   ```ts
+   const safraStartTs = boundaries.contratos.start.getTime();
+   if (contractTs < safraStartTs) { semanasAnteriores++; ... }
+   ```
+   (em vez de `prevCutoffTs`)
+
+e) Adicionar `semanasAnterioresOutros` para o caso "órfão" (lead em `semanasAnteriores` mas que não cai em nenhum dos 4 buckets — ex.: `attendee_status='rescheduled'`):
+   ```ts
+   if (isRealizada(row)) semanasAnterioresRealizadas++;
+   else if (isNoShow) semanasAnterioresNoShow++;
+   else if (isForaDoCarrinho(row)) semanasAnterioresForaDoCarrinho++;
+   else if (isAgendada(row) && SCHEDULED_STATES.has(...)) semanasAnterioresAgendadas++;
+   else semanasAnterioresOutros++;
+   ```
+
+f) Adicionar `semanasAnterioresOutros` à interface `R2CarrinhoKPIs`.
+
+## 2. `src/hooks/useR2PendingLeads.ts`
+
+Em `useR2PendingLeadsBreakdown(previousCutoff)`:
+- Renomear o parâmetro para `safraStart` (ou aceitar ambos por compatibilidade) e usar a data de **início da safra** (`boundaries.contratos.start`), não o `previousCutoff`.
+
+Em `useR2CarrinhoKPIs.ts`, atualizar a chamada:
+```ts
+const safraStartForPending = useMemo(
+  () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).contratos.start,
+  [...]
+);
+const pendentesBreakdown = useR2PendingLeadsBreakdown(safraStartForPending);
+```
+
+(Bonus opcional: também filtrar parceiros em `useR2PendingLeads` cruzando com `partnerEmails`. Como Pendentes vem de outra fonte, isso fica para uma segunda iteração se aparecer divergência.)
+
+## 3. `src/pages/crm/R2Carrinho.tsx`
+
+- Atualizar a `description` (tooltip) do card "Semanas Anteriores" para mencionar que parceiros são excluídos e que o critério é "contrato pago em safra anterior à atual (antes da Qui 00:00)".
+- Adicionar exibição opcional de `semanasAnterioresOutros` no tooltip do total: `+ X em outros estados (reagendado/sem status)` quando > 0. Isso garante que a soma dos sub-cards bata com o total mostrado.
+
+## 4. Atualizar memória
+
+Salvar nova memória: `mem://business-logic/r2-carrinho-semanas-anteriores-criteria` documentando:
+- Cutoff de "semana anterior" = início da safra (Qui 00:00), NÃO `previousCutoff` (Sex 12:00)
+- Parceiros (A001-A009, R001, INCORPORADOR, Renovação, Parceria) são excluídos de TODOS os KPIs do Carrinho R2, não apenas de `contratosPagos`
+
+## Critério de aceitação
+
+- Card "Semanas Anteriores" mostra **5** (não 11/12) na safra ativa
+- Sub-cards somam exatamente o total: 2 + 1 + 1 + 0 + 1 (outros) = 5
+- Emerson Aguiar não aparece em nenhum KPI (parceiro)
+- Demais leads de Qui 30/04 (Cláudio, Maria, Victor, etc.) deixam de ser marcados como "semana anterior"
+- KPIs operacionais (R2 Realizadas, Agendadas, No-Show) também excluem parceiros — `r2Realizadas` deve cair em pelo menos 1 (o Emerson)
+
+## Riscos
+
+- Excluir parceiros dos KPIs operacionais vai mudar números que hoje os usuários enxergam como "estabelecidos". Vale comunicar antes de mergear que essa correção alinha com a regra core já documentada.
+- Mudar o cutoff afeta histórico — qualquer relatório/print antigo terá números diferentes. Aceitar se a regra de negócio é "Quinta = início da safra".
