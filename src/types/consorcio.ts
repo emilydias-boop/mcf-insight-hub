@@ -226,6 +226,9 @@ export interface CreateConsorcioCardInput {
   inclui_seguro_vida?: boolean;
   parcela_1a_12a?: number;
   parcela_demais?: number;
+
+  // Objetivo da carta (auto | imovel)
+  objetivo?: 'auto' | 'imovel';
   
   // Cadastro retroativo - parcelas já pagas pelo cliente antes do cadastro
   parcelas_pagas_cliente?: number;
