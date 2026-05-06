@@ -20,7 +20,9 @@ export function useConsorcioProdutos() {
         prazos_disponiveis: item.prazos_disponiveis || [200, 220, 240],
         fundo_reserva: item.fundo_reserva || 2,
         seguro_vida_percentual: item.seguro_vida_percentual || 0.0610,
-      })) as ConsorcioProduto[];
+        comissao_schedule: (item as any).comissao_schedule ?? null,
+        comissao_base: (item as any).comissao_base ?? 'valor_credito',
+      })) as unknown as ConsorcioProduto[];
     },
   });
 }

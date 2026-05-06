@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularComissao } from '@/lib/commissionCalculator';
+import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { TipoProduto } from '@/types/consorcio';
 import { toast } from 'sonner';
 
@@ -36,14 +37,15 @@ export function useRecalculateCommissions() {
 
       const tipoProduto = card.tipo_produto as TipoProduto;
       const valorCredito = Number(card.valor_credito);
-      
+      const ctx = await getProdutoComissaoContext(valorCredito, tipoProduto);
+
       let totalAntes = 0;
       let totalDepois = 0;
       let parcelasAtualizadas = 0;
 
       // 3. Recalculate each installment
       for (const inst of installments || []) {
-        const comissaoCorreta = calcularComissao(valorCredito, tipoProduto, inst.numero_parcela);
+        const comissaoCorreta = calcularComissao(valorCredito, tipoProduto, inst.numero_parcela, ctx);
         totalAntes += Number(inst.valor_comissao);
         totalDepois += comissaoCorreta;
 
@@ -101,6 +103,7 @@ export function useRecalculateAllCommissions() {
       for (const card of cards || []) {
         const tipoProduto = card.tipo_produto as TipoProduto;
         const valorCredito = Number(card.valor_credito);
+        const ctx = await getProdutoComissaoContext(valorCredito, tipoProduto);
 
         // Fetch installments for this card
         const { data: installments, error: instError } = await supabase
@@ -111,7 +114,7 @@ export function useRecalculateAllCommissions() {
         if (instError) throw instError;
 
         for (const inst of installments || []) {
-          const comissaoCorreta = calcularComissao(valorCredito, tipoProduto, inst.numero_parcela);
+          const comissaoCorreta = calcularComissao(valorCredito, tipoProduto, inst.numero_parcela, ctx);
 
           if (Math.abs(Number(inst.valor_comissao) - comissaoCorreta) > 0.01) {
             const { error: updateError } = await supabase

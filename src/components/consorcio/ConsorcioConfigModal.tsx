@@ -39,7 +39,7 @@ import {
   useUpdateConsorcioProduto,
   useDeleteConsorcioProduto,
 } from '@/hooks/useConsorcioProdutos';
-import { ConsorcioProduto } from '@/types/consorcioProdutos';
+import { ConsorcioProduto, ComissaoScheduleItem, ComissaoBase, COMISSAO_BASE_OPTIONS } from '@/types/consorcioProdutos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -498,13 +498,50 @@ function ProdutoForm({
     fundo_reserva: initial?.fundo_reserva ?? 2,
     seguro_vida_percentual: initial?.seguro_vida_percentual ?? 0.0610,
     prazo_maximo_venda: initial?.prazo_maximo_venda ?? 240,
+    comissao_base: (initial?.comissao_base ?? 'valor_credito') as ComissaoBase,
+    comissao_schedule: (initial?.comissao_schedule ?? []) as ComissaoScheduleItem[],
   });
+
+  // Faixa helper para popular cronograma rapidamente
+  const [faixa, setFaixa] = useState({ de: 1, ate: 1, percentual: 0 });
 
   const set = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
+  const sortedSchedule = [...form.comissao_schedule].sort((a, b) => a.parcela - b.parcela);
+
+  const updateScheduleItem = (parcela: number, percentual: number) => {
+    setForm((p) => {
+      const others = p.comissao_schedule.filter((s) => s.parcela !== parcela);
+      return { ...p, comissao_schedule: [...others, { parcela, percentual }] };
+    });
+  };
+  const removeScheduleItem = (parcela: number) => {
+    setForm((p) => ({ ...p, comissao_schedule: p.comissao_schedule.filter((s) => s.parcela !== parcela) }));
+  };
+  const addRowEmpty = () => {
+    const next = (sortedSchedule[sortedSchedule.length - 1]?.parcela ?? 0) + 1;
+    updateScheduleItem(next, 0);
+  };
+  const applyFaixa = () => {
+    if (faixa.de < 1 || faixa.ate < faixa.de) return;
+    setForm((p) => {
+      const map = new Map(p.comissao_schedule.map((s) => [s.parcela, s.percentual]));
+      for (let i = faixa.de; i <= faixa.ate; i++) map.set(i, faixa.percentual);
+      return {
+        ...p,
+        comissao_schedule: Array.from(map.entries()).map(([parcela, percentual]) => ({ parcela, percentual })),
+      };
+    });
+  };
+
   const submit = () => {
     if (!form.codigo.trim() || !form.nome.trim() || !form.objetivo_option_id) return;
-    onSave(form);
+    // Normaliza schedule: ordena e remove zeros vazios
+    const schedule = sortedSchedule.filter((s) => s.parcela > 0);
+    onSave({
+      ...form,
+      comissao_schedule: schedule.length > 0 ? schedule : null,
+    });
   };
 
   return (
@@ -561,6 +598,80 @@ function ProdutoForm({
           <Input type="number" step="0.0001" value={form.seguro_vida_percentual} onChange={(e) => set('seguro_vida_percentual', Number(e.target.value))} />
         </Field>
       </div>
+
+      {/* Cronograma de comissão */}
+      <div className="border-t pt-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-sm font-semibold">Cronograma de comissão</Label>
+            <p className="text-xs text-muted-foreground">
+              Defina o % por parcela. Se vazio, usa a tabela padrão (SELECT/PARCELINHA).
+            </p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={addRowEmpty}>
+            <Plus className="h-3 w-3 mr-1" /> Parcela
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Base do percentual">
+            <Select value={form.comissao_base} onValueChange={(v: ComissaoBase) => set('comissao_base', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COMISSAO_BASE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        {/* Helper: aplicar % a uma faixa */}
+        <div className="flex flex-wrap items-end gap-2 p-2 rounded-md bg-muted/40">
+          <div className="space-y-1">
+            <Label className="text-xs">De parcela</Label>
+            <Input type="number" min={1} value={faixa.de} onChange={(e) => setFaixa((p) => ({ ...p, de: Number(e.target.value) }))} className="w-20" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Até parcela</Label>
+            <Input type="number" min={1} value={faixa.ate} onChange={(e) => setFaixa((p) => ({ ...p, ate: Number(e.target.value) }))} className="w-20" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">% comissão</Label>
+            <Input type="number" step="0.01" value={faixa.percentual} onChange={(e) => setFaixa((p) => ({ ...p, percentual: Number(e.target.value) }))} className="w-24" />
+          </div>
+          <Button type="button" size="sm" variant="secondary" onClick={applyFaixa}>
+            Aplicar à faixa
+          </Button>
+        </div>
+
+        {sortedSchedule.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">
+            Nenhuma parcela configurada — usará tabela padrão {form.taxa_antecipada_tipo === 'primeira_parcela' ? 'SELECT' : 'PARCELINHA'}.
+          </p>
+        ) : (
+          <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+            {sortedSchedule.map((item) => (
+              <div key={item.parcela} className="flex items-center gap-2 p-2 bg-muted/30 rounded-md">
+                <span className="text-xs text-muted-foreground w-20">Parcela {item.parcela}</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={item.percentual}
+                  onChange={(e) => updateScheduleItem(item.parcela, Number(e.target.value))}
+                  className="w-28 h-8"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+                <div className="flex-1" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeScheduleItem(item.parcela)}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
         <Button size="sm" onClick={submit} disabled={isPending}>

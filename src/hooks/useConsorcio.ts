@@ -11,6 +11,7 @@ import {
   TipoProduto
 } from '@/types/consorcio';
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
+import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
 import { toast } from 'sonner';
 
@@ -284,6 +285,9 @@ export function useCreateConsorcioCard() {
       let parcelasClientePagasMarcadas = 0;
       const parcelasClienteAlvo = parcelas_pagas_cliente || 0;
 
+      // Lookup produto cadastrado para usar cronograma de comissão customizado
+      const ctxComissao = await getProdutoComissaoContext(input.valor_credito, input.tipo_produto);
+
       for (let i = 1; i <= input.prazo_meses; i++) {
         let dataVencimento: Date;
         if (i === 1) {
@@ -299,7 +303,7 @@ export function useCreateConsorcioCard() {
           const diaAjustado = Math.min(input.dia_vencimento, ultimoDia);
           dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
         }
-        const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i);
+        const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i, ctxComissao);
         
         // Determine if this installment is paid by client or company
         let tipo: 'cliente' | 'empresa';
@@ -454,8 +458,9 @@ export function useUpdateConsorcioCard() {
 
         if (instError) throw instError;
 
+        const ctxUpd = await getProdutoComissaoContext(newValorCredito, newTipoProduto);
         for (const inst of installments || []) {
-          const comissaoCorreta = calcularComissao(newValorCredito, newTipoProduto, inst.numero_parcela);
+          const comissaoCorreta = calcularComissao(newValorCredito, newTipoProduto, inst.numero_parcela, ctxUpd);
 
           if (Math.abs(Number(inst.valor_comissao) - comissaoCorreta) > 0.01) {
             const { error: updateError } = await supabase
