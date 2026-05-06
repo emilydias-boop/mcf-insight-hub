@@ -1,61 +1,48 @@
+## Objetivo
 
-## Diagnóstico
+No card **R2 Agendadas** do Carrinho R2, o sub-indicador **Pendentes** mostra hoje só o total bruto. Você quer também saber **quantos desses pendentes vieram de semanas anteriores** (contrato pago antes do corte de abertura desta safra), igual já fazemos com `fromPrevious` em R2 Agendadas/Realizadas/Reembolso.
 
-Você tem razão: o card **Contratos: 22** está contando 1 a mais do que a Hubla (21).
+## Como funciona hoje
 
-Investiguei no banco e encontrei o caso:
+- `useR2PendingLeads` retorna a lista realtime de leads com `status='contract_paid'` em R1 que ainda não têm R2 marcada.
+- Cada lead tem `contract_paid_at` (timestamp do pagamento).
+- `useR2PendingLeadsCount` só devolve `length`.
+- O card usa `displayKpis.pendentesAgendamento` (number).
 
-**emersondaguiar@gmail.com**
-- 30/04 → A000 - Contrato (completed)
-- 04/05 → **A001 - MCF INCORPORADOR COMPLETO** (completed)
+## Plano
 
-Esse cliente comprou o A001 (renovação/parceria de incorporador) na mesma safra. A Hubla classifica esse cliente como **recorrência/parceiro**, então não conta no "Contratos novos" — por isso ela mostra 21.
-
-Nosso código hoje em `useR2CarrinhoKPIs.ts` só olha para `product_name = 'A000 - Contrato'` e não cruza com produtos de parceria/renovação. Isso viola a regra do projeto:
-
-> Partner/renewal products (A001-A009, R001, etc.) block Inside Sales entry and are excluded from metrics.
-
-Os outros 21 emails da safra estão limpos (só A010 anterior, que é a consultoria normal antes do contrato).
-
-## Solução
-
-Ajustar a query de "Contratos" em `src/hooks/useR2CarrinhoKPIs.ts` para excluir do contador qualquer email que também tenha uma transação `completed` de produto de parceria/renovação **na mesma safra** (Qui 00:00 → Qua 23:59).
-
-### Mudança em `src/hooks/useR2CarrinhoKPIs.ts`
-
-Dentro do `queryFn` da `useQuery` de contratos, depois de buscar os contratos A000:
-
-1. Buscar uma segunda query no mesmo intervalo (`boundaries.contratos.start` → `boundaries.contratos.end`) para transações `completed` cujo `product_name` bate com o padrão de parceria/renovação:
-   - `A001`, `A002`, `A003`, `A004`, `A005`, `A006`, `A007`, `A008`, `A009`, `R001`, `INCORPORADOR`, ou contém "Renovação"/"Renovacao"
-2. Coletar `partnerEmails: Set<string>` (lowercase, trimmed)
-3. Ao montar o `emailMap` final, **pular** qualquer email que esteja em `partnerEmails`
-4. Aplicar a mesma exclusão para `refundEmails` (consistência)
-
-Resultado esperado: **Contratos cai de 22 → 21**, batendo com a Hubla.
-
-### Padrões SQL a usar
-
-```sql
-product_name ~* '^(A00[1-9]|R001|INCORPORADOR)' 
-  OR product_name ILIKE '%Renovação%' 
-  OR product_name ILIKE '%Renovacao%'
+### 1. `src/hooks/useR2PendingLeads.ts`
+Adicionar um segundo hook derivado `useR2PendingLeadsBreakdown(previousCutoff: Date)` que reaproveita o mesmo `useR2PendingLeads` e devolve:
+```ts
+{ total: number; semanasAnteriores: number; safraAtual: number }
 ```
+- `semanasAnteriores`: leads cujo `contract_paid_at < previousCutoff`.
+- `safraAtual`: o resto.
 
-Filtros adicionais idênticos aos contratos A000:
-- `sale_status = 'completed'`
-- `source IN ('hubla','manual','make','mcfpay','kiwify')`
-- `installment_number <= 1`
-- `hubla_id NOT LIKE 'newsale-%'`
+Manter `useR2PendingLeadsCount` intacto para não quebrar outros consumidores.
 
-### Onde NÃO mexer
+### 2. `src/hooks/useR2CarrinhoKPIs.ts`
+- Calcular `previousCutoff` (já existe via `getCarrinhoMetricBoundaries(...).previousCutoff`).
+- Trocar o uso de `useR2PendingLeadsCount()` por `useR2PendingLeadsBreakdown(previousCutoff)`.
+- Adicionar 2 campos na interface `R2CarrinhoKPIs`:
+  - `pendentesAgendamentoSemanasAnteriores: number`
+  - (manter `pendentesAgendamento` como total para compatibilidade)
+- Popular no retorno.
 
-- O loop de `unifiedData` (R2 Agendadas, Realizadas, etc.) **não** muda — ele já reflete a operação de R2 e o lead pode continuar aparecendo lá.
-- "Semanas Anteriores" (11) **não** muda.
-- O esquema do banco **não** muda.
+### 3. `src/pages/crm/R2Carrinho.tsx`
+No card **R2 Agendadas** (linha ~175-181), adicionar `fromPrevious` ao sub-indicador **Pendentes**. Como o componente atual só suporta `fromPrevious` no card principal, duas opções:
 
-## QA depois da mudança
+**Opção A (mínima):** Adicionar uma linha extra no `subTitle` (tooltip) do card R2 Agendadas:
+> "Pendentes vindos de semanas anteriores: X"
 
-Rodar a mesma query manual com a exclusão e validar:
-- Contratos = 21
-- emersondaguiar@gmail.com **fora** da contagem
-- Os outros 21 emails permanecem
+**Opção B (visual):** Estender o tipo do `sub` para aceitar `fromPrevious?: number` e renderizar `↩ X` ao lado do número de Pendentes (mesma convenção visual dos outros cards). Isso requer ajustar o componente que renderiza o KPI card (provavelmente `KPICard` ou inline em `R2Carrinho.tsx`).
+
+Recomendo **Opção B** para manter consistência visual com os outros cards que já usam `↩ X`.
+
+### Resultado esperado
+
+Card R2 Agendadas continua mostrando:
+- Valor principal (agendadas) com `↩ X` (de semanas anteriores)
+- Sub: `Pendentes: N` com `↩ M` (pendentes vindos de semanas anteriores)
+
+Sem mudanças de schema. Apenas hooks + UI.

@@ -380,3 +380,29 @@ export function useR2PendingLeadsCount() {
   const { data: pendingLeads } = useR2PendingLeads();
   return pendingLeads?.length || 0;
 }
+
+/**
+ * Quebra dos pendentes em "safra atual" vs "semanas anteriores",
+ * usando o contract_paid_at de cada lead vs. o corte de abertura
+ * desta safra (previousCutoff do carrinho).
+ */
+export function useR2PendingLeadsBreakdown(previousCutoff: Date | null | undefined) {
+  const { data: pendingLeads } = useR2PendingLeads();
+  const total = pendingLeads?.length || 0;
+  if (!pendingLeads || !previousCutoff) {
+    return { total, semanasAnteriores: 0, safraAtual: total };
+  }
+  const cutoffTs = previousCutoff.getTime();
+  let semanasAnteriores = 0;
+  for (const lead of pendingLeads) {
+    const ref = lead.contract_paid_at;
+    if (!ref) continue;
+    const t = new Date(ref).getTime();
+    if (!Number.isNaN(t) && t < cutoffTs) semanasAnteriores++;
+  }
+  return {
+    total,
+    semanasAnteriores,
+    safraAtual: Math.max(0, total - semanasAnteriores),
+  };
+}

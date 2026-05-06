@@ -155,7 +155,7 @@ export default function R2Carrinho() {
     label: string;
     value: number;
     color: string;
-    sub?: { label: string; value: number };
+    sub?: { label: string; value: number; fromPrevious?: number };
     fromPrevious?: number;
     subTitle?: string;
   }> = [
@@ -176,7 +176,11 @@ export default function R2Carrinho() {
       label: 'R2 Agendadas',
       value: displayKpis?.r2Agendadas ?? 0,
       color: 'bg-indigo-500',
-      sub: { label: 'Pendentes', value: displayKpis?.pendentesAgendamento ?? 0 },
+      sub: {
+        label: 'Pendentes',
+        value: displayKpis?.pendentesAgendamento ?? 0,
+        fromPrevious: displayKpis?.pendentesAgendamentoSemanasAnteriores ?? 0,
+      },
       fromPrevious: displayKpis?.semanasAnterioresAgendadas ?? 0,
     },
     {
@@ -324,6 +328,14 @@ export default function R2Carrinho() {
                       <p className="text-sm font-semibold leading-tight">
                         {kpisLoading ? '...' : kpi.sub.value}
                       </p>
+                      {!kpisLoading && (kpi.sub.fromPrevious ?? 0) > 0 && (
+                        <p
+                          className="text-[10px] text-muted-foreground mt-0.5 truncate"
+                          title="Pendentes desta safra cujo contrato foi pago em semanas anteriores."
+                        >
+                          ↩ {kpi.sub.fromPrevious} de sem. anteriores
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

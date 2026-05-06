@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { getCarrinhoMetricBoundaries } from '@/lib/carrinhoWeekBoundaries';
-import { useR2PendingLeadsCount } from '@/hooks/useR2PendingLeads';
+import { useR2PendingLeadsBreakdown } from '@/hooks/useR2PendingLeads';
 
 export interface R2CarrinhoKPIs {
   contratosPagos: number;
@@ -21,6 +21,8 @@ export interface R2CarrinhoKPIs {
   r2Agendadas: number;
   /** Pendentes de agendamento (Contrato Pago sem R2 marcada). Realtime via useR2PendingLeads. */
   pendentesAgendamento: number;
+  /** Quantos dos pendentes vieram de semanas anteriores (contrato pago antes do corte de abertura desta safra). */
+  pendentesAgendamentoSemanasAnteriores: number;
   r2Realizadas: number;
   /** No-Shows da janela operacional do carrinho. */
   noShowR2: number;
@@ -37,7 +39,11 @@ export interface R2CarrinhoKPIs {
 
 export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig?: CarrinhoConfig, previousConfig?: CarrinhoConfig) {
   const { data: unifiedData, isLoading: unifiedLoading } = useCarrinhoUnifiedData(weekStart, weekEnd, carrinhoConfig, previousConfig);
-  const pendentesAgendamento = useR2PendingLeadsCount();
+  const previousCutoffForPending = useMemo(
+    () => getCarrinhoMetricBoundaries(weekStart, weekEnd, carrinhoConfig, previousConfig).previousCutoff,
+    [weekStart, weekEnd, carrinhoConfig, previousConfig]
+  );
+  const pendentesBreakdown = useR2PendingLeadsBreakdown(previousCutoffForPending);
   
   // Contratos pagos still comes from hubla_transactions (not part of the RPC)
   const cutoffKey = carrinhoConfig?.carrinhos?.[0]?.horario_corte || '12:00';
@@ -207,7 +213,8 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       semanasAnterioresForaDoCarrinho,
       proximaSemana,
       r2Agendadas,
-      pendentesAgendamento,
+      pendentesAgendamento: pendentesBreakdown.total,
+      pendentesAgendamentoSemanasAnteriores: pendentesBreakdown.semanasAnteriores,
       r2Realizadas,
       noShowR2,
       reembolsos: contratosData?.reembolsos ?? 0,
@@ -218,7 +225,7 @@ export function useR2CarrinhoKPIs(weekStart: Date, weekEnd: Date, carrinhoConfig
       pendentes,
       emAnalise,
     };
-  }, [unifiedData, contratosData, pendentesAgendamento, weekStart, weekEnd, carrinhoConfig, previousConfig]);
+  }, [unifiedData, contratosData, pendentesBreakdown.total, pendentesBreakdown.semanasAnteriores, weekStart, weekEnd, carrinhoConfig, previousConfig]);
 
   return {
     data: kpis,
