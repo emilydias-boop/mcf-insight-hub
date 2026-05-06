@@ -1,60 +1,29 @@
-## Problema
+## Marcar Ricardo Gomes Vendeth como Contrato Pago Outside
 
-Ao clicar em **Pausar** no discador automático, ele fica "processando" e não volta a fazer ligações ao retomar. Isso acontece por 4 bugs em `src/contexts/AutoDialerContext.tsx`:
+### Contexto
+- **Lead**: Ricardo Gomes Vendeth (telefone +5562998860906)
+- **Deal**: `724d9aae-975e-4de0-8289-ef6cb35879ef` (origin Inside Sales `e3c04f21...`)
+- **Attendee R1**: `ebc92763-908e-44c6-b590-73284be3d11b` — R1 Realizada em 28/04/2026, status `completed`, sem `contract_paid_at`
+- **Hubla**: nenhuma transação encontrada para esse lead
+- **Stage atual**: "Reunião 01 Realizada"
 
-1. **`pause()` reusa o estado `'idle'`** (mesmo estado de "fila nunca iniciada"), em vez de um estado próprio `'paused'`. A UI e a lógica não distinguem os dois.
-2. **`resume()` exige `currentIndex < queue.length - 1`** — se a pausa ocorre no último lead ou logo após avançar, retomar não faz nada.
-3. **Race condition** entre `pause()` e o `setTimeout(handleCompletion, 1500)` que decide o próximo passo após uma chamada terminar — quando o callback dispara, o estado já é `'idle'` e ele aborta sem avançar `currentIndex`. Ao retomar, o índice está "preso" no lead anterior.
-4. **`pause()` não derruba chamada em andamento** — se pausar durante `ringing`/`connecting`, a ligação fica viva no Twilio e o estado interno fica inconsistente.
+### Ação (via insert/update no banco — sem mexer em código)
 
-## Solução
+1. **Atualizar attendee** `ebc92763-908e-44c6-b590-73284be3d11b`:
+   - `status = 'contract_paid'`
+   - `contract_paid_at = '2026-04-28T18:30:00+00:00'` (data/hora da R1)
 
-Refatorar `pause` / `resume` e os handlers internos para usar um estado de pausa explícito.
+2. **Mover deal** `724d9aae-975e-4de0-8289-ef6cb35879ef` para o stage "Contrato Pago" do mesmo `origin_id` (busca dinâmica via `crm_stages` com `ilike '%contrato%pago%'`).
 
-### Mudanças em `src/contexts/AutoDialerContext.tsx`
+3. **Não criar transação Hubla sintética** — conforme sua escolha, marcação direta no attendee. Como não há `linked_attendee_id` em `hubla_transactions`, ele não aparecerá nos relatórios que dependem da Hubla (faturamento/billing). Ele aparecerá:
+   - ✅ Como Contrato Pago no funil/agenda do Closer
+   - ✅ Nas métricas de Closer baseadas em `contract_paid_at IS NOT NULL`
+   - ⚠️ NÃO entrará no Outside detection padrão (`useSdrOutsideMetrics`/`useOutsideDetectionBatch`), pois ambos exigem uma `hubla_transactions` com `offer_name` Outside válido.
 
-1. **Adicionar estado `'paused'`** ao tipo `AutoDialerState`:
-   ```ts
-   export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'finished';
-   ```
+### ⚠️ Importante sobre "Outside"
+A lógica de Outside hoje **depende de uma transação Hubla** com offer_name em `OUTSIDE_OFFER_NAMES` ('Contrato - Curso R$ 97,00' ou 'Contrato Perfil A - Vitrine A010'). Marcar só o attendee como `contract_paid` faz ele contar como **Contrato Pago normal**, não como **Outside**.
 
-2. **`pause()` passa a:**
-   - Setar estado para `'paused'` (não mais `'idle'`).
-   - Limpar todos os timers (ring + advance).
-   - Cancelar chamada em andamento se `callStatus` for `ringing` / `connecting` (não derrubar `in-progress` — neste caso já estamos em `paused-in-call`).
-   - Resetar `isAdvancingRef.current = false` para permitir avanço futuro.
-   - Se o lead atual estava `in-progress` mas não foi atendido, voltar resultado para `'pending'` para ele ser rediscado no resume.
+Se você quer que ele apareça também nas métricas de **Outside do SDR**, eu preciso criar uma `hubla_transactions` sintética (opção 3 da pergunta original). Posso fazer isso adicionalmente — me avise no chat antes de eu rodar.
 
-3. **`resume()` passa a:**
-   - Só exigir `state === 'paused' && currentIndex >= 0 && currentIndex < queue.length`.
-   - Se o lead atual ainda está `pending` ou `in-progress` (não foi finalizado), **rediscar o índice atual** (`dialIndex(currentIndex)`).
-   - Se o lead atual já foi finalizado (answered/no-answer/failed/skipped), avançar para o próximo (`advanceToNext`).
-   - Se já estiver no fim da fila, marcar como `'finished'`.
-
-4. **`handleCompletion` (linha 221-280)** passa a:
-   - Verificar `stateRef.current === 'running' || stateRef.current === 'paused'`.
-   - Se `paused`: registrar resultado normalmente, mas **não disparar `retryCurrent` nem `advanceToNext`** — apenas atualizar o estado do lead. O próximo passo fica para o `resume()` decidir.
-
-5. **`loadQueue` e `start`** passam a tratar `'paused'` como bloqueador igual a `'running'` na hora de carregar nova fila.
-
-### Mudanças nos componentes consumidores
-
-6. **`src/components/sdr/AutoDialerPanel.tsx`** e **`AutoDialerInCallBanner.tsx`**:
-   - Adicionar `'paused'` na lógica de exibição do botão Retomar.
-   - Mostrar badge "Pausado" quando estado for `'paused'`.
-   - Habilitar botão "Retomar" quando estado for `'paused'` (hoje provavelmente verifica `'idle'`, o que confunde com fila nova).
-
-### Validação
-
-- Verificar TypeScript não quebra em outros consumidores de `AutoDialerState` (`rg "AutoDialerState\\|state ===" src/`).
-- Testar fluxo: iniciar fila → pausar durante ringing → retomar (deve rediscar mesmo lead).
-- Testar: pausar durante in-progress (paused-in-call) → desligar → continuar.
-- Testar: pausar no último lead → retomar (deve marcar finished, não travar).
-
-## Arquivos afetados
-
-- `src/contexts/AutoDialerContext.tsx` (principal)
-- `src/components/sdr/AutoDialerPanel.tsx` (UI do botão)
-- `src/components/sdr/AutoDialerInCallBanner.tsx` (UI do banner)
-
-Sem mudanças de banco, sem edge functions, sem secrets.
+### Execução
+Migration de UPDATE em duas tabelas (`meeting_slot_attendees` + `crm_deals`). Sem alterações de código, sem alterações de schema.
