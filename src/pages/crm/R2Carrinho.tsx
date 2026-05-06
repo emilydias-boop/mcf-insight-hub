@@ -337,7 +337,7 @@ export default function R2Carrinho() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {kpiCards.map((kpi) => (
           <Card key={kpi.label}>
             <CardContent className="p-3">
