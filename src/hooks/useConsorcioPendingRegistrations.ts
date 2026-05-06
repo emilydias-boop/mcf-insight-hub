@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { CreateConsorcioCardInput, TipoDocumento } from '@/types/consorcio';
 import { calcularComissao } from '@/lib/commissionCalculator';
+import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
 
 export interface PendingRegistration {
@@ -447,6 +448,7 @@ export function useOpenCota() {
       const tipoContrato = cotaData.tipo_contrato || 'normal';
       const parcelasEmpresa = cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0;
 
+      const ctxComissao = await getProdutoComissaoContext(cotaData.valor_credito, cotaData.tipo_produto as any);
       for (let i = 1; i <= cotaData.prazo_meses; i++) {
         let dataVencimento: Date;
         if (i === 1) {
@@ -460,7 +462,7 @@ export function useOpenCota() {
           const diaAjustado = Math.min(cotaData.dia_vencimento, ultimoDia);
           dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
         }
-        const valorComissao = calcularComissao(cotaData.valor_credito, cotaData.tipo_produto as any, i);
+        const valorComissao = calcularComissao(cotaData.valor_credito, cotaData.tipo_produto as any, i, ctxComissao);
 
         let tipo: 'cliente' | 'empresa';
         if (tipoContrato === 'intercalado') {
