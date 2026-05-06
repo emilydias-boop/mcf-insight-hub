@@ -41,11 +41,11 @@ export function getCartWeekEnd(date: Date): Date {
 export interface CarrinhoMetricBoundaries {
   /** Contratos pagos: Qui 00:00 → Qua 23:59:59.999 */
   contratos: { start: Date; end: Date };
-  /** R2 meetings: janela operacional FIXA Qui 00:00 → Qua 23:59 (igual a `contratos`). */
+  /** R2 meetings: Sáb 00:00 → Sex(corte com horário). */
   r2Meetings: { start: Date; end: Date };
-  /** Aprovados: janela FIXA Qui 00:00 → Qua 23:59 (igual a `contratos`). */
+  /** Aprovados: Sáb 00:00 → Sex(corte com horário). */
   aprovados: { start: Date; end: Date };
-  /** Vendas parceria: Sex do carrinho 00:00 → Seg 23:59 */
+  /** Vendas parceria: Sex(corte com horário) → Dom 23:59 da mesma semana. */
   vendasParceria: { start: Date; end: Date };
   /** R1 realizadas: mesma janela dos contratos */
   r1Meetings: { start: Date; end: Date };
@@ -53,7 +53,7 @@ export interface CarrinhoMetricBoundaries {
   previousCutoff: Date;
   /** Alias semântico para previousCutoff (Qui 00:00 desta safra). */
   safraOpeningCutoff: Date;
-  /** Janela operacional do carrinho: Qui 00:00 → Qua 23:59 (filtro para R2 agendadas/realizadas/fora). */
+  /** Janela operacional do carrinho: Sáb 00:00 → Sex(corte com horário). */
   carrinhoOperacional: { start: Date; end: Date };
 }
 
