@@ -31,6 +31,8 @@ interface R2AgendadasListProps {
   aprovadosAttendees?: R2CarrinhoAttendee[];
   isLoading?: boolean;
   onSelectAttendee?: (attendee: R2CarrinhoAttendee) => void;
+  /** Início da safra (Qui 00:00). Leads com contrato pago antes disso recebem badge "Sem. Anterior". */
+  weekStart?: Date;
 }
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
@@ -95,7 +97,24 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
   );
 }
 
-export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSelectAttendee }: R2AgendadasListProps) {
+export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSelectAttendee, weekStart }: R2AgendadasListProps) {
+  const safraStartTs = useMemo(() => {
+    if (!weekStart) return null;
+    const d = new Date(weekStart);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, [weekStart]);
+  const isFromPreviousWeek = (att: R2CarrinhoAttendee) => {
+    if (safraStartTs === null) return false;
+    if (!att.contract_paid_at) return false;
+    return new Date(att.contract_paid_at).getTime() < safraStartTs;
+  };
+  const isFromNextWeek = (att: R2CarrinhoAttendee) => {
+    if (safraStartTs === null) return false;
+    const safraEndTs = safraStartTs + 7 * 24 * 60 * 60 * 1000;
+    if (!att.scheduled_at) return false;
+    return new Date(att.scheduled_at).getTime() >= safraEndTs;
+  };
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState<string>('all');
@@ -481,6 +500,24 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
                                 {att.is_encaixado && (
                                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-800 border-amber-300">
                                     Encaixado
+                                  </Badge>
+                                )}
+                                {isFromPreviousWeek(att) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700"
+                                    title={`Contrato pago em ${att.contract_paid_at ? format(new Date(att.contract_paid_at), 'dd/MM') : ''} (semana anterior)`}
+                                  >
+                                    Sem. Anterior
+                                  </Badge>
+                                )}
+                                {isFromNextWeek(att) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0 h-4 bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-700"
+                                    title="R2 agendada para a próxima safra"
+                                  >
+                                    Próx. Semana
                                   </Badge>
                                 )}
                               </div>
