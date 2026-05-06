@@ -26,6 +26,22 @@ import {
   ConsorcioOrigemOption,
   ConsorcioVendedorOption,
 } from '@/hooks/useConsorcioConfigOptions';
+import {
+  useConsorcioObjetivoOptions,
+  useCreateConsorcioObjetivoOption,
+  useUpdateConsorcioObjetivoOption,
+  useDeleteConsorcioObjetivoOption,
+  ConsorcioObjetivoOption,
+} from '@/hooks/useConsorcioObjetivoOptions';
+import {
+  useConsorcioProdutos,
+  useCreateConsorcioProduto,
+  useUpdateConsorcioProduto,
+  useDeleteConsorcioProduto,
+} from '@/hooks/useConsorcioProdutos';
+import { ConsorcioProduto } from '@/types/consorcioProdutos';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const COLOR_PRESETS = [
   '#3B82F6', // blue
@@ -119,7 +135,7 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configurações do Consórcio</DialogTitle>
         </DialogHeader>
@@ -130,6 +146,8 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
             <TabsTrigger value="origens">Origens</TabsTrigger>
             <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
+            <TabsTrigger value="objetivos">Objetivos</TabsTrigger>
+            <TabsTrigger value="produtos">Produtos</TabsTrigger>
           </TabsList>
 
           {/* Tipos Tab */}
