@@ -138,6 +138,7 @@ const formSchema = z.object({
   produto_codigo: z.string().optional(),
   condicao_pagamento: z.enum(['convencional', '50', '25']).optional(),
   inclui_seguro: z.boolean().optional(),
+  objetivo: z.enum(['auto', 'imovel'], { required_error: 'Objetivo é obrigatório' }),
   vendedor_name: z.string().optional(),
   
   // PF
