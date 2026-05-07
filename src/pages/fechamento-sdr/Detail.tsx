@@ -124,9 +124,15 @@ const FechamentoSDRDetail = () => {
   const recalculateWithKpi = useRecalculateWithKpi();
   const authorizeUltrameta = useAuthorizeUltrameta();
 
-  // Calculate values needed for useCalculatedVariavel BEFORE early returns
-  const sdrMetaDiariaEarly = (payout?.sdr as any)?.meta_diaria || 10;
-  const diasUteisMesEarly = payout?.dias_uteis_mes || 19;
+  // Calculate values needed for useCalculatedVariavel BEFORE early returns.
+  // Prioridade da meta diária: plano mensal congelado → payout mensal → cadastro global.
+  // Isso evita que um mês passado (ex.: abril) exiba a meta global atual (ex.: maio).
+  const diasUteisMesEarly = compPlan?.dias_uteis || payout?.dias_uteis_mes || 19;
+  const sdrMetaDiariaEarly = compPlan?.meta_reunioes_agendadas && diasUteisMesEarly > 0
+    ? Math.round(compPlan.meta_reunioes_agendadas / diasUteisMesEarly)
+    : payout?.meta_agendadas_ajustada && diasUteisMesEarly > 0
+      ? Math.round(payout.meta_agendadas_ajustada / diasUteisMesEarly)
+      : (payout?.sdr as any)?.meta_diaria || 10;
   const employeeEarly = (payout as any)?.employee;
   const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
 
@@ -559,8 +565,8 @@ const FechamentoSDRDetail = () => {
               onSave={handleSaveKpi}
               isSaving={recalculateWithKpi.isPending}
               intermediacoes={effectiveIntermediacao}
-              sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
-              diasUteisMes={isProporcional ? payout.dias_uteis_trabalhados! : (payout.dias_uteis_mes || 19)}
+              sdrMetaDiaria={sdrMetaDiaria}
+              diasUteisMes={isProporcional ? payout.dias_uteis_trabalhados! : diasUteisMes}
               roleType={(payout.sdr as any)?.role_type || "sdr"}
               vendasParceria={vendasParceria}
               metaContratosPercentual={metaContratosPercentual}
