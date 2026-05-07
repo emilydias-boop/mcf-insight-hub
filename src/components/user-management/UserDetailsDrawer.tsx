@@ -34,7 +34,7 @@ import {
   useUpdateUserAccess, 
   useUpdateUserPermissions, 
   useUpdateUserIntegrations,
-  useSendPasswordReset,
+  useSetTempPassword,
   useDeleteUser,
   useAddUserRole,
   useRemoveUserRole,
@@ -72,7 +72,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const updateAccess = useUpdateUserAccess();
   const updatePermissions = useUpdateUserPermissions();
   const updateIntegrations = useUpdateUserIntegrations();
-  const sendPasswordReset = useSendPasswordReset();
+  const setTempPassword = useSetTempPassword();
   const deleteUser = useDeleteUser();
   
   const [canBookR2, setCanBookR2] = useState(false);
@@ -248,20 +248,24 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     });
   };
 
-  const handleSendPasswordReset = async () => {
-    if (!userDetails?.email) return;
+  const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null);
+  const [showTempPassword, setShowTempPassword] = useState(false);
 
+  const handleSetTempPassword = async () => {
+    if (!userId) return;
     try {
-      const result = await sendPasswordReset.mutateAsync({ email: userDetails.email });
-      await navigator.clipboard.writeText(result.reset_link);
-      toast.success("Link de redefinição copiado!", {
-        description: "⚠️ Cada link funciona apenas UMA vez. Envie manualmente ao usuário (WhatsApp, email, etc). Se ele já usou ou expirou, gere outro.",
-        duration: 8000,
-      });
-      
+      const result = await setTempPassword.mutateAsync({ userId });
+      setTempPasswordResult(result.temp_password);
+      setShowTempPassword(true);
     } catch {
       // Toast handled in mutation
     }
+  };
+
+  const handleCopyTempPassword = async () => {
+    if (!tempPasswordResult) return;
+    await navigator.clipboard.writeText(tempPasswordResult);
+    toast.success("Senha copiada!");
   };
 
   const handlePermissionsUpdate = () => {
