@@ -322,7 +322,7 @@ export default function ConsorcioPage() {
   const handleExportCSV = () => {
     if (!sortedCards || sortedCards.length === 0) return;
 
-    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Objetivo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
+    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Reserva', 'DT Contratação', 'Vencimento', 'Tipo', 'Objetivo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
     const rows = sortedCards.map((card, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
@@ -334,7 +334,8 @@ export default function ConsorcioPage() {
         card.grupo,
         card.cota,
         card.valor_credito,
-        format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy'),
+        card.data_reserva ? format(parseDateWithoutTimezone(card.data_reserva), 'dd/MM/yyyy') : '-',
+        card.data_contratacao ? format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy') : '-',
         format(proximoVencimento, 'dd/MM/yyyy'),
         card.tipo_produto,
         card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '-',
@@ -631,6 +632,7 @@ export default function ConsorcioPage() {
                 <TableHead className="text-center">Grupo</TableHead>
                 <TableHead className="text-center">Cota</TableHead>
                 <TableHead className="text-right">Valor Crédito</TableHead>
+                <TableHead>DT Reserva</TableHead>
                 <TableHead>DT Contratação</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Tipo</TableHead>
@@ -676,7 +678,14 @@ export default function ConsorcioPage() {
                         {formatCurrencyFull(Number(card.valor_credito))}
                       </TableCell>
                       <TableCell>
-                        {format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy')}
+                        {card.data_reserva
+                          ? format(parseDateWithoutTimezone(card.data_reserva), 'dd/MM/yyyy')
+                          : <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell>
+                        {card.data_contratacao
+                          ? format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy')
+                          : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
                         {format(proximoVencimento, 'dd/MM/yyyy')}
