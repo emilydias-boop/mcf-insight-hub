@@ -1,69 +1,47 @@
-## Causa raiz
+## Problema
 
-Quando você edita o plano OTE de **maio** em `PlansOteTab`, o código (linhas 255-259 de `src/components/fechamento/PlansOteTab.tsx`) faz duas coisas:
+O fluxo atual gera um link de recuperação OTP do Supabase. Esse link é de **uso único** — quando você cola no WhatsApp/email/Slack, o pré-visualizador desses apps abre o link automaticamente para gerar a prévia, **consumindo o token antes do usuário clicar**. Resultado: quando o usuário abre, aparece "link expirado/já utilizado" e ele fica bloqueado.
 
-1. Cria/atualiza o registro de `sdr_comp_plan` com `vigencia_inicio = 2026-05-01` (correto, isolado por mês).
-2. **Atualiza `sdr.meta_diaria` globalmente** — sem dimensão de mês:
+## Solução escolhida: Definir senha temporária direto
 
-```ts
-await supabase.from('sdr')
-  .update({ meta_diaria: values.meta_diaria })
-  .eq('id', sdrId);
-```
+Trocar o botão "Gerar link de reset de senha" por **"Definir senha temporária"**. O admin define (ou gera automaticamente) uma senha, ela é aplicada imediatamente ao usuário via `auth.admin.updateUserById`, e o admin a copia para enviar pelo canal que quiser. Como é uma senha (não um token), nenhum preview de WhatsApp consegue invalidá-la.
 
-A edge function `recalculate-sdr-payout` (linha 1477) calcula a meta de agendadas usando esse `sdr.meta_diaria` global:
+## O que muda
 
-```
-meta_agendadas_ajustada = sdr.meta_diaria × dias_uteis_mes
-```
+### 1. Edge function `admin-send-reset` → renomear/refatorar para `admin-set-temp-password`
 
-Como `sdr.meta_diaria` é um único campo na tabela `sdr` (sem histórico), assim que você salva o plano de maio com meta nova, **abril passa a usar essa mesma meta** quando o fechamento de abril é recalculado/aberto.
+- Continua exigindo que o caller seja admin.
+- Recebe `{ user_id }` (e opcionalmente uma senha customizada).
+- Gera uma senha temporária forte e legível (ex: `Mcf-7K9p-2024`, 12 chars com letras+números+hífen).
+- Chama `supabaseAdmin.auth.admin.updateUserById(user_id, { password })`.
+- Retorna `{ success: true, temp_password }`.
 
-A coluna `sdr_comp_plan.meta_reunioes_agendadas` JÁ existe e é salva por mês (= `meta_diaria × 19`), então a informação correta de meta por mês já está persistida — só não está sendo lida na hora do cálculo.
+### 2. Drawer de detalhes do usuário (`UserDetailsDrawer.tsx` aba Segurança)
 
-## Correção
+- Substituir o botão "Gerar link de reset de senha" por **"Definir senha temporária"**.
+- Ao clicar:
+  - Confirma com `AlertDialog` ("Isso vai sobrescrever a senha atual do usuário. Continuar?").
+  - Chama a nova mutation.
+  - Mostra a senha em um modal com botão "Copiar senha" + instrução: *"Envie esta senha ao usuário pelo canal de sua preferência. Peça para ele trocar em Configurações → Segurança após o primeiro login."*
+  - Senha permanece visível até o admin fechar o modal (com opção mostrar/ocultar).
 
-### 1. `supabase/functions/recalculate-sdr-payout/index.ts`
+### 3. Hook `useUserMutations.ts`
 
-No cálculo do payout (função `calculatePayoutValues`, ~linha 138), derivar `meta_diaria` do próprio `compPlan` daquele mês em vez do `sdr.meta_diaria` global:
+- Substituir `sendPasswordReset` por `setTempPassword` que invoca a nova edge function.
 
-```ts
-const metaDiariaDoMes = compPlan.meta_reunioes_agendadas && compPlan.dias_uteis
-  ? compPlan.meta_reunioes_agendadas / compPlan.dias_uteis
-  : sdrMetaDiaria; // fallback para planos antigos sem o campo
-const metaAgendadasAjustada = Math.round(metaDiariaDoMes * diasUteisReal);
-```
+### 4. Limpeza
 
-Assim cada mês usa a meta congelada no `sdr_comp_plan` daquele período.
+- Remover/deprecar a edge function `admin-send-reset` (ou deixar como redirecionamento legado).
+- Sem mudanças em `/reset-password` — a página continua funcionando para usuários que pedem reset pelo próprio fluxo "Esqueci minha senha".
 
-### 2. `src/components/fechamento/PlansOteTab.tsx` (saveCompPlan, linhas 255-259)
+## Fora de escopo
 
-Só atualizar `sdr.meta_diaria` global se o mês selecionado for o **mês corrente ou futuro** (para não sobrescrever quando o usuário está editando histórico). Tecnicamente:
+- Não mexer no fluxo público de "Esqueci minha senha" do `/auth`.
+- Não enviar email automático (você optou por copiar e enviar manualmente).
+- Sem mudanças de schema no banco.
 
-```ts
-const [year, month] = anoMes.split('-').map(Number);
-const today = new Date();
-const isCurrentOrFuture = year > today.getFullYear()
-  || (year === today.getFullYear() && month >= today.getMonth() + 1);
+## Detalhes técnicos
 
-if (isCurrentOrFuture) {
-  await supabase.from('sdr').update({ meta_diaria: values.meta_diaria }).eq('id', sdrId);
-}
-```
-
-A meta do mês continua sempre persistida em `sdr_comp_plan.meta_reunioes_agendadas` (já acontece), que é a fonte de verdade após a correção #1.
-
-### 3. Backfill (uma vez)
-
-Recalcular o payout de **abril/2026** dos SDRs cujo plano de maio foi editado nos últimos dias, usando agora o `compPlan` correto de abril. Isso restaura os percentuais de abril.
-
-## Validação
-
-- Editar plano de maio do SDR X com meta diária 12 → `sdr.meta_diaria` vira 12 (apenas se maio é mês corrente/futuro), `sdr_comp_plan` de maio salva `meta_reunioes_agendadas = 12 × 19`.
-- Reabrir fechamento de abril do SDR X → meta de agendadas de abril é lida do `sdr_comp_plan` de abril (ex.: 10 × 19 = 190), não muda.
-- Reabrir maio → meta = 12 × dias_uteis de maio.
-
-## Escopo do que NÃO muda
-
-- Nenhuma alteração em UI da Agenda R2.
-- `sdr.meta_diaria` continua existindo (usado em outras telas como `SdrConfigTab`, `InvestigationReportPanel`) — apenas deixa de ser usado pela edge function como única fonte de verdade.
+- Geração de senha: 12 caracteres, sem caracteres ambíguos (`0/O/l/1/I`), formato `Xxx-9999-Xxxx` para facilitar leitura.
+- A nova edge function NÃO precisa novos secrets — usa `SUPABASE_SERVICE_ROLE_KEY` já disponível.
+- A senha trocada invalida sessões ativas do usuário automaticamente (comportamento padrão do Supabase Auth ao mudar senha via admin API).
