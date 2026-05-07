@@ -135,8 +135,13 @@ const calculatePayoutValues = (
   const metricaOrganizacao = metricasAtivas?.find(m => m.nome_metrica === 'organizacao');
   const metricaContratos = metricasAtivas?.find(m => m.nome_metrica === 'contratos');
 
-  // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
-  const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
+  // Meta de agendadas = meta_diaria do MÊS (derivada do compPlan) × dias úteis do mês
+  // Fallback para sdr.meta_diaria global apenas se o compPlan não tiver a meta congelada.
+  const planDiasUteis = compPlan.dias_uteis && compPlan.dias_uteis > 0 ? compPlan.dias_uteis : 19;
+  const metaDiariaDoMes = compPlan.meta_reunioes_agendadas && compPlan.meta_reunioes_agendadas > 0
+    ? compPlan.meta_reunioes_agendadas / planDiasUteis
+    : (sdrMetaDiaria || 0);
+  const metaAgendadasAjustada = Math.round(metaDiariaDoMes * diasUteisReal);
   
   // Meta de Realizadas = 70% das agendadas REAIS (sincronizado com frontend)
   const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
