@@ -206,7 +206,7 @@ export default function ReunioesEquipe() {
   });
 
 
-  // Fetch all SDRs for meta_diaria
+  // Fetch all SDRs for meta_diaria (fallback)
   const { data: allSdrsData } = useSdrsAll();
   
   // Fetch active SDRs from squad for dropdown and base dataset
@@ -261,18 +261,65 @@ export default function ReunioesEquipe() {
     [sdrsInPeriod, nonSdrEmails]
   );
 
-  // Create sdrMetaMap: email -> meta_diaria
+  // Buscar planos de comp vigentes no mês do filtro para usar a meta configurada
+  // no fechamento (meta_reunioes_agendadas) em vez da meta_diaria do cadastro do SDR.
+  const monthStartIso = useMemo(() => format(startOfMonth(start), 'yyyy-MM-dd'), [start]);
+  const { data: compPlansForPeriod } = useQuery({
+    queryKey: ['sdr-comp-plans-for-period', monthStartIso, sdrIds],
+    queryFn: async () => {
+      if (!sdrIds || sdrIds.length === 0) return [] as any[];
+      const { data, error } = await supabase
+        .from('sdr_comp_plan')
+        .select('sdr_id, meta_reunioes_agendadas, dias_uteis, vigencia_inicio, vigencia_fim')
+        .in('sdr_id', sdrIds)
+        .lte('vigencia_inicio', monthStartIso)
+        .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStartIso}`)
+        .order('vigencia_inicio', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: (sdrIds || []).length > 0 && !!monthStartIso,
+    staleTime: 60000,
+  });
+
+  // Create sdrMetaMap: email -> meta diária EFETIVA (= meta_reunioes_agendadas / dias_uteis do plano).
+  // Mantém pro-rata por admissão funcionando ao multiplicar por sdrDiasUteisMap na tabela.
+  // Fallback: meta_diaria do cadastro do SDR (ou 10).
   const sdrMetaMap = useMemo(() => {
     const map = new Map<string, number>();
+    const sdrIdToEmail = new Map<string, string>();
+    (activeSdrsList || []).forEach(s => {
+      if (s.email && s.id) sdrIdToEmail.set(s.id, s.email.toLowerCase());
+    });
+
+    // Pega o plano mais recente por sdr_id (ordenado desc por vigencia_inicio)
+    const planBySdr = new Map<string, { meta: number | null; dias: number | null }>();
+    (compPlansForPeriod || []).forEach((p: any) => {
+      if (!p.sdr_id || planBySdr.has(p.sdr_id)) return;
+      planBySdr.set(p.sdr_id, {
+        meta: p.meta_reunioes_agendadas,
+        dias: p.dias_uteis,
+      });
+    });
+
+    planBySdr.forEach((plan, sdrId) => {
+      const email = sdrIdToEmail.get(sdrId);
+      if (!email) return;
+      if (plan.meta && plan.dias && plan.dias > 0) {
+        map.set(email, plan.meta / plan.dias);
+      }
+    });
+
+    // Fallback para SDRs sem plano vigente: usa meta_diaria do cadastro.
     if (allSdrsData) {
       allSdrsData.forEach(sdr => {
-        if (sdr.email) {
+        if (sdr.email && !map.has(sdr.email.toLowerCase())) {
           map.set(sdr.email.toLowerCase(), sdr.meta_diaria || 10);
         }
       });
     }
     return map;
-  }, [allSdrsData]);
+  }, [compPlansForPeriod, allSdrsData, activeSdrsList]);
 
   // Calculate business days in the selected period
   const diasUteisNoPeriodo = useMemo(() => {
