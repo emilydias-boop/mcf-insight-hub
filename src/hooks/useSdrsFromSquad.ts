@@ -74,7 +74,7 @@ export function useSdrsFromSquad(squad: string) {
 
       return data.filter(s => {
         const email = s.email?.toLowerCase() || '';
-        return !blockedEmails.has(email) && !adminEmails.has(email);
+        return !blockedEmails.has(email) && !adminEmails.has(email) && !desligadosIds.has(s.id);
       });
     },
     staleTime: 60000,
