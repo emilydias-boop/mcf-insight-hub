@@ -138,14 +138,17 @@ export function R2QuickScheduleModal({
   const MAX_PRE_SCHEDULE_PER_SLOT = 2;
 
   // Generate 09:00-20:00 time slots for pre-schedule mode
+  // Inclui: (a) toda a grade real do closer (:15, :45 etc.) +
+  // (b) horários "redondos" :00/:30 entre 09:00 e 20:00 como encaixes.
   const allFreeTimeSlots = useMemo(() => {
-    const slots: string[] = [];
+    const set = new Set<string>();
     for (let h = 9; h <= 20; h++) {
-      slots.push(`${String(h).padStart(2, '0')}:00`);
-      if (h < 20) slots.push(`${String(h).padStart(2, '0')}:30`);
+      set.add(`${String(h).padStart(2, '0')}:00`);
+      if (h < 20) set.add(`${String(h).padStart(2, '0')}:30`);
     }
-    return slots;
-  }, []);
+    allConfiguredSlots.forEach(s => set.add(s.time));
+    return Array.from(set).sort();
+  }, [allConfiguredSlots]);
 
   // Pre-scheduled counts from hook
   const preScheduledCounts = useMemo(() => {
@@ -494,16 +497,16 @@ export function R2QuickScheduleModal({
                     {isPreSchedule ? (
                       allFreeTimeSlots.map(time => {
                         const configured = allConfiguredSlots.find(s => s.time === time);
-                        const isOccupied = configured && !configured.isAvailable;
                         const count = preScheduledCounts[time] || 0;
                         const isFull = count >= MAX_PRE_SCHEDULE_PER_SLOT;
+                        const normalBooked = configured ? configured.currentCount : 0;
                         return (
                           <SelectItem key={time} value={time} disabled={isFull}>
                             <span className="flex items-center gap-2">
                               {time}
                               {isFull && <span className="text-xs text-destructive font-medium">(lotado)</span>}
                               {!isFull && count > 0 && <span className="text-xs text-amber-600">({count}/{MAX_PRE_SCHEDULE_PER_SLOT})</span>}
-                              {!isFull && isOccupied && <span className="text-xs text-amber-600">(ocupado)</span>}
+                              {!isFull && count === 0 && configured && normalBooked > 0 && <span className="text-xs text-amber-600">(encaixe)</span>}
                               {!isFull && !configured && <span className="text-xs text-amber-600">(encaixe)</span>}
                             </span>
                           </SelectItem>
