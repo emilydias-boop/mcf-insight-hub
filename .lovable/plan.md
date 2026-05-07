@@ -1,47 +1,35 @@
-## Problema
+## Plano
 
-O fluxo atual gera um link de recuperação OTP do Supabase. Esse link é de **uso único** — quando você cola no WhatsApp/email/Slack, o pré-visualizador desses apps abre o link automaticamente para gerar a prévia, **consumindo o token antes do usuário clicar**. Resultado: quando o usuário abre, aparece "link expirado/já utilizado" e ele fica bloqueado.
+1. **Usar a meta mensal do fechamento na tabela de SDRs**
+   - Trocar a origem da coluna **Meta** em `/crm/reunioes-equipe`.
+   - Em vez de calcular `meta_diaria × dias úteis`, buscar o plano de fechamento vigente do mês selecionado em `sdr_comp_plan`.
+   - Exibir diretamente `meta_reunioes_agendadas` do plano vigente do SDR para aquele mês.
+   - Isso corrige casos como abril/2026, onde a tela mostra 300/280/240, mas o fechamento configurado tem metas como 190/171/etc.
 
-## Solução escolhida: Definir senha temporária direto
+2. **Remover SDRs desligados fora do período correto**
+   - Ajustar a lista de SDRs válidos do período para considerar `employees.status` e `employees.data_demissao`.
+   - Um SDR só deve aparecer se estava ativo em algum momento dentro do período selecionado.
+   - Como a Juliana tem `data_demissao = 2026-03-23`, ela não deve aparecer em abril/2026 nem meses posteriores.
 
-Trocar o botão "Gerar link de reset de senha" por **"Definir senha temporária"**. O admin define (ou gera automaticamente) uma senha, ela é aplicada imediatamente ao usuário via `auth.admin.updateUserById`, e o admin a copia para enviar pelo canal que quiser. Como é uma senha (não um token), nenhum preview de WhatsApp consegue invalidá-la.
+3. **Corrigir a base histórica do squad**
+   - Atualizar a lógica/RPC `get_sdrs_for_squad_in_period` para não considerar histórico aberto (`valid_to null`) de SDR desligado como se ainda estivesse ativo.
+   - Quando houver desligamento, o fim efetivo do vínculo passa a ser a `data_demissao`.
+   - Também filtrar perfis desativados para não voltarem na foto atual da equipe.
 
-## O que muda
-
-### 1. Edge function `admin-send-reset` → renomear/refatorar para `admin-set-temp-password`
-
-- Continua exigindo que o caller seja admin.
-- Recebe `{ user_id }` (e opcionalmente uma senha customizada).
-- Gera uma senha temporária forte e legível (ex: `Mcf-7K9p-2024`, 12 chars com letras+números+hífen).
-- Chama `supabaseAdmin.auth.admin.updateUserById(user_id, { password })`.
-- Retorna `{ success: true, temp_password }`.
-
-### 2. Drawer de detalhes do usuário (`UserDetailsDrawer.tsx` aba Segurança)
-
-- Substituir o botão "Gerar link de reset de senha" por **"Definir senha temporária"**.
-- Ao clicar:
-  - Confirma com `AlertDialog` ("Isso vai sobrescrever a senha atual do usuário. Continuar?").
-  - Chama a nova mutation.
-  - Mostra a senha em um modal com botão "Copiar senha" + instrução: *"Envie esta senha ao usuário pelo canal de sua preferência. Peça para ele trocar em Configurações → Segurança após o primeiro login."*
-  - Senha permanece visível até o admin fechar o modal (com opção mostrar/ocultar).
-
-### 3. Hook `useUserMutations.ts`
-
-- Substituir `sendPasswordReset` por `setTempPassword` que invoca a nova edge function.
-
-### 4. Limpeza
-
-- Remover/deprecar a edge function `admin-send-reset` (ou deixar como redirecionamento legado).
-- Sem mudanças em `/reset-password` — a página continua funcionando para usuários que pedem reset pelo próprio fluxo "Esqueci minha senha".
-
-## Fora de escopo
-
-- Não mexer no fluxo público de "Esqueci minha senha" do `/auth`.
-- Não enviar email automático (você optou por copiar e enviar manualmente).
-- Sem mudanças de schema no banco.
+4. **Manter métricas e totais alinhados com o que é exibido**
+   - Garantir que cards, total da tabela e contagem de SDRs continuem usando apenas os SDRs válidos no período.
+   - Não alterar a regra de cálculo de agendamentos, R1, no-show ou contratos; apenas a meta exibida e a elegibilidade do SDR na lista.
 
 ## Detalhes técnicos
 
-- Geração de senha: 12 caracteres, sem caracteres ambíguos (`0/O/l/1/I`), formato `Xxx-9999-Xxxx` para facilitar leitura.
-- A nova edge function NÃO precisa novos secrets — usa `SUPABASE_SERVICE_ROLE_KEY` já disponível.
-- A senha trocada invalida sessões ativas do usuário automaticamente (comportamento padrão do Supabase Auth ao mudar senha via admin API).
+- Arquivos prováveis:
+  - `src/pages/crm/ReunioesEquipe.tsx`
+  - `src/components/sdr/SdrSummaryTable.tsx`
+  - `src/hooks/useSdrsFromSquad.ts`
+  - `src/hooks/useSdrsForSquadInPeriod.ts` se necessário
+- Banco:
+  - Migration para ajustar a função `public.get_sdrs_for_squad_in_period`.
+- Fonte da meta:
+  - `sdr_comp_plan.meta_reunioes_agendadas`, filtrando por vigência do mês selecionado.
+- Fonte de desligamento:
+  - `employees.data_demissao` e `employees.status` vinculados por `employees.sdr_id = sdr.id`.
