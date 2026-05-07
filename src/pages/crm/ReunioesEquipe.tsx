@@ -261,6 +261,9 @@ export default function ReunioesEquipe() {
     [sdrsInPeriod, nonSdrEmails]
   );
 
+  // IDs dos SDRs ativos no período (precisa estar declarado antes dos hooks que dependem)
+  const sdrIds = useMemo(() => (activeSdrsList || []).map(s => s.id), [activeSdrsList]);
+
   // Buscar planos de comp vigentes no mês do filtro para usar a meta configurada
   // no fechamento (meta_reunioes_agendadas) em vez da meta_diaria do cadastro do SDR.
   const monthStartIso = useMemo(() => format(startOfMonth(start), 'yyyy-MM-dd'), [start]);
@@ -327,7 +330,6 @@ export default function ReunioesEquipe() {
   }, [start, end]);
 
   // Fetch data_admissao from employees linked to active SDRs
-  const sdrIds = useMemo(() => (activeSdrsList || []).map(s => s.id), [activeSdrsList]);
   const { data: employeeAdmissaoData } = useQuery({
     queryKey: ['employee-admissao-for-sdrs', sdrIds],
     queryFn: async () => {
