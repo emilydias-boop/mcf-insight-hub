@@ -11629,6 +11629,15 @@ export type Database = {
         }
         Returns: string
       }
+      auto_move_deal_to_em_contato: {
+        Args: {
+          p_deal_id: string
+          p_description?: string
+          p_metadata?: Json
+          p_source: string
+        }
+        Returns: boolean
+      }
       build_consorcio_sale_webhook_payload: {
         Args: {
           card: Database["public"]["Tables"]["consortium_cards"]["Row"]
