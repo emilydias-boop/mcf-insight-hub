@@ -137,18 +137,22 @@ export function R2QuickScheduleModal({
 
   const MAX_PRE_SCHEDULE_PER_SLOT = 2;
 
-  // Generate 09:00-20:00 time slots for pre-schedule mode
-  // Inclui: (a) toda a grade real do closer (:15, :45 etc.) +
-  // (b) horários "redondos" :00/:30 entre 09:00 e 20:00 como encaixes.
-  const allFreeTimeSlots = useMemo(() => {
-    const set = new Set<string>();
+  // Fallback :00/:30 (09:00–20:00) usado APENAS quando o closer não
+  // tem nenhum slot configurado no dia e está em modo pré-agendamento.
+  const fallbackHalfHourSlots = useMemo(() => {
+    const arr: string[] = [];
     for (let h = 9; h <= 20; h++) {
-      set.add(`${String(h).padStart(2, '0')}:00`);
-      if (h < 20) set.add(`${String(h).padStart(2, '0')}:30`);
+      arr.push(`${String(h).padStart(2, '0')}:00`);
+      if (h < 20) arr.push(`${String(h).padStart(2, '0')}:30`);
     }
-    allConfiguredSlots.forEach(s => set.add(s.time));
-    return Array.from(set).sort();
-  }, [allConfiguredSlots]);
+    return arr;
+  }, []);
+
+  // Em pré-agendamento: usa a grade real do closer; se vazia, cai no fallback.
+  const preScheduleTimeSlots = useMemo(() => {
+    if (allConfiguredSlots.length > 0) return allConfiguredSlots.map(s => s.time);
+    return fallbackHalfHourSlots;
+  }, [allConfiguredSlots, fallbackHalfHourSlots]);
 
   // Pre-scheduled counts from hook
   const preScheduledCounts = useMemo(() => {
@@ -180,6 +184,11 @@ export function R2QuickScheduleModal({
   useEffect(() => {
     setSelectedTime('');
   }, [selectedCloser, selectedDate]);
+
+  // Reset time when pre-schedule toggle flips (grades podem diferir).
+  useEffect(() => {
+    setSelectedTime('');
+  }, [isPreSchedule]);
 
   // Auto-detect R1 Closer for pre-scheduling
   useEffect(() => {
@@ -495,7 +504,7 @@ export function R2QuickScheduleModal({
                   </SelectTrigger>
                   <SelectContent>
                     {isPreSchedule ? (
-                      allFreeTimeSlots.map(time => {
+                      preScheduleTimeSlots.map(time => {
                         const configured = allConfiguredSlots.find(s => s.time === time);
                         const count = preScheduledCounts[time] || 0;
                         const isFull = count >= MAX_PRE_SCHEDULE_PER_SLOT;
