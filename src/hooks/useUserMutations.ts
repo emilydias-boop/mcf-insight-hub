@@ -243,36 +243,24 @@ export const useUpdateUserAccess = () => {
   });
 };
 
-// ===== NOVA MUTATION: Gerar link de reset de senha via Edge Function (admin) =====
-export const useSendPasswordReset = () => {
+// ===== Definir senha temporária (admin) =====
+export const useSetTempPassword = () => {
   return useMutation({
-    mutationFn: async ({ email }: { email: string }) => {
-      const { data: result, error } = await supabase.functions.invoke("admin-send-reset", {
-        body: { email },
+    mutationFn: async ({ userId, password }: { userId: string; password?: string }) => {
+      const { data: result, error } = await supabase.functions.invoke("admin-set-temp-password", {
+        body: { user_id: userId, password },
       });
 
-      if (error) {
-        throw new Error(error.message || "Erro ao gerar link de reset");
-      }
+      if (error) throw new Error(error.message || "Erro ao definir senha");
+      if (result?.error) throw new Error(result.error);
+      if (!result?.temp_password) throw new Error("Senha não foi retornada");
 
-      if (result?.error) {
-        throw new Error(result.error);
-      }
-
-      if (!result?.reset_link) {
-        throw new Error("Link de reset não foi retornado");
-      }
-
-      return result as { success: boolean; reset_link: string; redirect_to?: string };
+      return result as { success: boolean; temp_password: string };
     },
     onError: (error: any) => {
-      const msg = error.message || "";
-      const isRateLimit = msg.toLowerCase().includes("rate limit") || msg.includes("429");
       toast({
-        title: isRateLimit ? "Limite de envios atingido" : "Erro ao gerar link",
-        description: isRateLimit
-          ? "O email automático está temporariamente limitado. Gere o link novamente em instantes ou use o link manual."
-          : msg,
+        title: "Erro ao definir senha",
+        description: error.message || "Tente novamente",
         variant: "destructive",
       });
     },

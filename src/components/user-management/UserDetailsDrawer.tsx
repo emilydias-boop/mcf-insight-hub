@@ -34,7 +34,7 @@ import {
   useUpdateUserAccess, 
   useUpdateUserPermissions, 
   useUpdateUserIntegrations,
-  useSendPasswordReset,
+  useSetTempPassword,
   useDeleteUser,
   useAddUserRole,
   useRemoveUserRole,
@@ -72,7 +72,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   const updateAccess = useUpdateUserAccess();
   const updatePermissions = useUpdateUserPermissions();
   const updateIntegrations = useUpdateUserIntegrations();
-  const sendPasswordReset = useSendPasswordReset();
+  const setTempPassword = useSetTempPassword();
   const deleteUser = useDeleteUser();
   
   const [canBookR2, setCanBookR2] = useState(false);
@@ -248,20 +248,24 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     });
   };
 
-  const handleSendPasswordReset = async () => {
-    if (!userDetails?.email) return;
+  const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null);
+  const [showTempPassword, setShowTempPassword] = useState(false);
 
+  const handleSetTempPassword = async () => {
+    if (!userId) return;
     try {
-      const result = await sendPasswordReset.mutateAsync({ email: userDetails.email });
-      await navigator.clipboard.writeText(result.reset_link);
-      toast.success("Link de redefinição copiado!", {
-        description: "⚠️ Cada link funciona apenas UMA vez. Envie manualmente ao usuário (WhatsApp, email, etc). Se ele já usou ou expirou, gere outro.",
-        duration: 8000,
-      });
-      
+      const result = await setTempPassword.mutateAsync({ userId });
+      setTempPasswordResult(result.temp_password);
+      setShowTempPassword(true);
     } catch {
       // Toast handled in mutation
     }
+  };
+
+  const handleCopyTempPassword = async () => {
+    if (!tempPasswordResult) return;
+    await navigator.clipboard.writeText(tempPasswordResult);
+    toast.success("Senha copiada!");
   };
 
   const handlePermissionsUpdate = () => {
@@ -618,19 +622,67 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 <CardDescription>Gerenciar credenciais e sessões</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start"
-                  onClick={handleSendPasswordReset}
-                  disabled={sendPasswordReset.isPending}
-                >
-                  {sendPasswordReset.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Mail className="h-4 w-4 mr-2" />
-                  )}
-                  Gerar link de reset de senha
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      disabled={setTempPassword.isPending}
+                    >
+                      {setTempPassword.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <KeyRound className="h-4 w-4 mr-2" />
+                      )}
+                      Definir senha temporária
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Definir senha temporária?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Isso vai sobrescrever a senha atual de <strong>{userDetails?.email}</strong>.
+                        A nova senha será gerada e mostrada na tela para você copiar e enviar
+                        ao usuário pelo canal que preferir (WhatsApp, e-mail, etc).
+                        Sessões ativas dele serão encerradas.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleSetTempPassword}>
+                        Gerar senha
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={showTempPassword} onOpenChange={setShowTempPassword}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Senha temporária gerada</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-3">
+                          <p>
+                            Envie esta senha ao usuário pelo canal de sua preferência. Peça
+                            para ele alterá-la em <strong>Configurações → Segurança</strong> após
+                            o primeiro login.
+                          </p>
+                          <div className="font-mono text-lg p-3 rounded-md bg-muted text-foreground select-all break-all">
+                            {tempPasswordResult}
+                          </div>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <Button variant="outline" onClick={handleCopyTempPassword}>
+                        Copiar senha
+                      </Button>
+                      <AlertDialogAction onClick={() => setShowTempPassword(false)}>
+                        Fechar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <Button 
                   variant="outline" 
                   className="w-full justify-start"
