@@ -1,8 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, User, StickyNote, Loader2 } from 'lucide-react';
+import { Calendar, Clock, User, StickyNote, Loader2, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { useCloserMeetingLinksList } from '@/hooks/useCloserMeetingLinks';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useBUContext } from '@/contexts/BUContext';
+import {
+  useCreateApprovalRequest,
+  useMyApprovalRequests,
+} from '@/hooks/useApprovalRequests';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +46,76 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
   const [rescheduleNote, setRescheduleNote] = useState('');
 
   const rescheduleMeeting = useRescheduleMeeting();
+  const { activeBU } = useBUContext();
+  const dealId = meeting?.deal?.id || meeting?.deal_id || null;
+
+  // Avalia se este reagendamento requer aprovação do gestor
+  const { data: evalResult } = useQuery({
+    queryKey: ['evaluate-sdr-reschedule', dealId, activeBU],
+    enabled: !!dealId && open,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('evaluate_sdr_reschedule' as any, {
+        _deal_id: dealId,
+        _bu: activeBU || null,
+        _meeting_type: 'r1',
+      });
+      if (error) throw error;
+      return data as any;
+    },
+    staleTime: 15_000,
+  });
+
+  const requiresApproval = !!evalResult && evalResult.requires_approval === true;
+  const isAllowed = !evalResult || evalResult.allowed === true;
+
+  const createApprovalRequest = useCreateApprovalRequest();
+  const { data: myApprovals } = useMyApprovalRequests();
+  const existingPendingApproval = useMemo(() => {
+    if (!dealId || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === dealId &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'pending',
+      ) || null
+    );
+  }, [myApprovals, dealId]);
+  const approvedRequest = useMemo(() => {
+    if (!dealId || !myApprovals) return null;
+    return (
+      myApprovals.find(
+        (a) =>
+          a.target_deal_id === dealId &&
+          a.rule_key === 'reschedule_approval_threshold' &&
+          a.status === 'approved',
+      ) || null
+    );
+  }, [myApprovals, dealId]);
+  const isApprovalBlocked = requiresApproval && !approvedRequest;
+
+  const handleRequestApproval = async () => {
+    if (!dealId) return;
+    try {
+      await createApprovalRequest.mutateAsync({
+        bu: activeBU || null,
+        rule_key: 'reschedule_approval_threshold',
+        requester_role: 'sdr',
+        target_deal_id: dealId,
+        payload: {
+          deal_name: meeting?.deal?.name || null,
+          contact_name: meeting?.deal?.contact?.name || null,
+          reason: evalResult?.reason || null,
+          reschedule_count: evalResult?.count ?? null,
+          threshold: evalResult?.threshold ?? null,
+          source: 'reschedule_modal',
+        },
+      });
+      toast.success('Pedido de aprovação enviado ao gestor.');
+    } catch (e: any) {
+      toast.error(`Erro ao enviar pedido: ${e?.message || 'desconhecido'}`);
+    }
+  };
 
   const dayOfWeek = selectedDate ? getDay(selectedDate) : undefined;
   const { data: configuredLinks, isLoading: loadingSlots } = useCloserMeetingLinksList(
@@ -103,6 +181,64 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
               Atual: {format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR })} com {meeting.closer?.name}
             </div>
           </div>
+
+          {/* Banner — aprovação obrigatória */}
+          {isApprovalBlocked && (
+            <div
+              className="rounded-lg border-2 border-destructive/60 bg-destructive/10 p-3 text-sm space-y-3"
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+                <div className="space-y-1">
+                  <div className="font-semibold text-destructive">
+                    Aprovação do gestor necessária
+                  </div>
+                  <p className="leading-snug text-foreground/80">
+                    {evalResult?.reason ||
+                      'Limite de reagendamentos atingido. Solicite aprovação para prosseguir.'}
+                  </p>
+                </div>
+              </div>
+              {existingPendingApproval ? (
+                <div className="text-xs text-muted-foreground italic">
+                  ⏳ Pedido já enviado em{' '}
+                  {format(new Date(existingPendingApproval.created_at), "dd/MM 'às' HH:mm")}
+                  . Aguardando análise do gestor.
+                </div>
+              ) : (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleRequestApproval}
+                  disabled={createApprovalRequest.isPending}
+                >
+                  {createApprovalRequest.isPending
+                    ? 'Enviando...'
+                    : 'Pedir aprovação ao gestor'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Banner — aprovação concedida */}
+          {requiresApproval && approvedRequest && (
+            <div
+              className="rounded-lg border-2 border-green-500/60 bg-green-500/10 p-3 text-sm text-green-800 dark:text-green-300"
+              role="status"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Aprovação concedida</div>
+                  <p className="text-xs leading-snug">
+                    Você está liberado para concluir este reagendamento excepcional.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Original Note */}
           {originalNote && (
@@ -231,8 +367,14 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDate || !selectedTime || !isNoteValid || rescheduleMeeting.isPending}
-            title={!isNoteValid ? 'Informe uma justificativa de pelo menos 10 caracteres' : undefined}
+            disabled={!selectedDate || !selectedTime || !isNoteValid || rescheduleMeeting.isPending || isApprovalBlocked}
+            title={
+              isApprovalBlocked
+                ? 'Aprovação do gestor obrigatória antes de reagendar'
+                : !isNoteValid
+                  ? 'Informe uma justificativa de pelo menos 10 caracteres'
+                  : undefined
+            }
           >
             {rescheduleMeeting.isPending ? 'Reagendando...' : 'Reagendar'}
           </Button>
