@@ -140,7 +140,7 @@ export function SdrSummaryTable({
             {data.map((row) => {
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
               const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
-              const metaPeriodo = metaDiaria * diasEfetivos;
+              const metaPeriodo = Math.round(metaDiaria * diasEfetivos);
               const bateuMeta = row.agendamentos >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 

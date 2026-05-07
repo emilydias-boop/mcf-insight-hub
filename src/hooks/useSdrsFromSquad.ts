@@ -28,6 +28,19 @@ export function useSdrsFromSquad(squad: string) {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
+      // Excluir SDRs já desligados (employees.status = 'desligado' ou data_demissao no passado)
+      const sdrIds = data.map(s => s.id);
+      const { data: emps } = await supabase
+        .from('employees')
+        .select('sdr_id, status, data_demissao')
+        .in('sdr_id', sdrIds);
+      const today = new Date();
+      const desligadosIds = new Set(
+        (emps || [])
+          .filter(e => e.status === 'desligado' || (e.data_demissao && new Date(e.data_demissao) < today))
+          .map(e => e.sdr_id)
+      );
+
       // Cross-check with profiles to exclude blocked/deactivated users
       const emails = data.map(s => s.email?.toLowerCase()).filter(Boolean) as string[];
       const { data: profiles } = await supabase
@@ -61,7 +74,7 @@ export function useSdrsFromSquad(squad: string) {
 
       return data.filter(s => {
         const email = s.email?.toLowerCase() || '';
-        return !blockedEmails.has(email) && !adminEmails.has(email);
+        return !blockedEmails.has(email) && !adminEmails.has(email) && !desligadosIds.has(s.id);
       });
     },
     staleTime: 60000,
