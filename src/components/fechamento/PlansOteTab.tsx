@@ -252,11 +252,20 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         if (error) throw error;
       }
       
-      // Atualizar meta_diaria no sdr
-      await supabase
-        .from('sdr')
-        .update({ meta_diaria: values.meta_diaria })
-        .eq('id', sdrId);
+      // Atualizar meta_diaria GLOBAL no sdr apenas se o mês selecionado for o corrente ou futuro.
+      // Caso contrário, editar plano de mês passado sobrescreveria a meta global e contaminaria
+      // o cálculo de outros meses (a meta por mês fica congelada em sdr_comp_plan.meta_reunioes_agendadas).
+      const [yearSel, monthSel] = anoMes.split('-').map(Number);
+      const today = new Date();
+      const isCurrentOrFuture =
+        yearSel > today.getFullYear() ||
+        (yearSel === today.getFullYear() && monthSel >= today.getMonth() + 1);
+      if (isCurrentOrFuture) {
+        await supabase
+          .from('sdr')
+          .update({ meta_diaria: values.meta_diaria })
+          .eq('id', sdrId);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
