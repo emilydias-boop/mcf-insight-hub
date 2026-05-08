@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EditLeadDialog } from './EditLeadDialog';
 import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
+import { extractPhoneFromDeal } from '@/lib/phoneUtils';
 
 interface SdrSummaryBlockProps {
   deal: any;
@@ -25,9 +26,13 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
   const productName = deal?.product_name || customFields?.produto || customFields?.product_name || 'A010';
+
+  // Fallback: alguns leads (importados via webhook) têm o telefone só em custom_fields,
+  // sem registro em crm_contacts. Mostramos esse número aqui também.
+  const displayPhone = contact?.phone || extractPhoneFromDeal(deal, contact) || '';
   
   const handleStartEditPhone = () => {
-    setPhoneValue(contact?.phone || '');
+    setPhoneValue(displayPhone);
     setEditingPhone(true);
   };
   
@@ -143,7 +148,7 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
           ) : (
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground">
-                {contact?.phone || 'Sem telefone'}
+                {displayPhone || 'Sem telefone'}
               </span>
               <Button
                 size="icon"
