@@ -673,6 +673,8 @@ const FechamentoSDRDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      <PayoutConfigDialog open={configOpen} onOpenChange={setConfigOpen} payout={payout} />
     </div>
   );
 };
