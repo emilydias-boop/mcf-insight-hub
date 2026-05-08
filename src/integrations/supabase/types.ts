@@ -10018,6 +10018,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          role_type: string
           sdr_id: string
           squad: string
           valid_from: string
@@ -10026,6 +10027,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          role_type?: string
           sdr_id: string
           squad: string
           valid_from: string
@@ -10034,6 +10036,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          role_type?: string
           sdr_id?: string
           squad?: string
           valid_from?: string
