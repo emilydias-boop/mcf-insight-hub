@@ -120,10 +120,15 @@ const calculatePayoutValues = (
   calendarIfoodMensal?: number, 
   diasUteisMes?: number, 
   isCloser: boolean = false,
-  metricasAtivas?: MetricaAtiva[]
+  metricasAtivas?: MetricaAtiva[],
+  configOverrides?: Record<string, number> | null
 ) => {
   // Dias úteis do mês (do calendário ou padrão)
-  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
+  const diasUteisReal = configOverrides?.dias_uteis_mes ?? diasUteisMes ?? compPlan.dias_uteis ?? 19;
+  const diasUteisTrabalhadosOverride = configOverrides?.dias_uteis_trabalhados ?? null;
+  const overrideProRataRatio = diasUteisTrabalhadosOverride != null && diasUteisTrabalhadosOverride < diasUteisReal && diasUteisReal > 0
+    ? diasUteisTrabalhadosOverride / diasUteisReal
+    : 1;
 
   // Verificar se há métricas ativas configuradas
   const hasActiveMetrics = metricasAtivas && metricasAtivas.length > 0;
@@ -141,13 +146,27 @@ const calculatePayoutValues = (
   const metaDiariaDoMes = compPlan.meta_reunioes_agendadas && compPlan.meta_reunioes_agendadas > 0
     ? compPlan.meta_reunioes_agendadas / planDiasUteis
     : (sdrMetaDiaria || 0);
-  const metaAgendadasAjustada = Math.round(metaDiariaDoMes * diasUteisReal);
+  const hasMetaAgendadasOverride = configOverrides?.meta_agendadas_ajustada != null;
+  let metaAgendadasAjustada = hasMetaAgendadasOverride
+    ? configOverrides!.meta_agendadas_ajustada
+    : Math.round(metaDiariaDoMes * diasUteisReal);
+  if (!hasMetaAgendadasOverride && overrideProRataRatio < 1) {
+    metaAgendadasAjustada = Math.round(metaAgendadasAjustada * overrideProRataRatio);
+  }
   
   // Meta de Realizadas = 70% das agendadas REAIS (sincronizado com frontend)
-  const metaRealizadasAjustada = Math.round((kpi.reunioes_agendadas || 0) * 0.7);
+  const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada ?? Math.round((kpi.reunioes_agendadas || 0) * 0.7);
   
   // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
-  const metaTentativasAjustada = isCloser ? 0 : Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
+  const hasMetaTentativasOverride = configOverrides?.meta_tentativas_ajustada != null;
+  let metaTentativasAjustada = isCloser
+    ? 0
+    : hasMetaTentativasOverride
+      ? configOverrides!.meta_tentativas_ajustada
+      : Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
+  if (!isCloser && !hasMetaTentativasOverride && overrideProRataRatio < 1) {
+    metaTentativasAjustada = Math.round(metaTentativasAjustada * overrideProRataRatio);
+  }
 
   // Calcular percentuais
   const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
@@ -237,14 +256,15 @@ const calculatePayoutValues = (
   }
 
   const valor_variavel_total = valor_reunioes_agendadas + valor_reunioes_realizadas + valor_tentativas + valor_organizacao;
-  const valor_fixo = compPlan.fixo_valor;
+  const valor_fixo = overrideProRataRatio < 1 ? Math.round(compPlan.fixo_valor * overrideProRataRatio) : compPlan.fixo_valor;
   const total_conta = valor_fixo + valor_variavel_total;
 
   // Para Closers: média global considera apenas 2 indicadores (agendadas e realizadas)
   const pct_media_global = isCloser
     ? (cappedPctAgendadas + cappedPctRealizadas) / 2
     : (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
-  const ifood_mensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
+  const ifoodMensalBase = calendarIfoodMensal ?? compPlan.ifood_mensal;
+  const ifood_mensal = overrideProRataRatio < 1 ? Math.round(ifoodMensalBase * overrideProRataRatio) : ifoodMensalBase;
   const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
   const total_ifood = ifood_mensal + ifood_ultrameta;
 
@@ -739,7 +759,7 @@ serve(async (req) => {
         let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
         let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
         
-        if (isProporcional) {
+        if (isProporcional && configOverrides?.dias_uteis_trabalhados == null) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
           console.log(`   📊 Período efetivo: ${dataInicioEfetiva.toISOString().split('T')[0]} a ${dataFimEfetiva.toISOString().split('T')[0]}`);
         }
@@ -1295,6 +1315,16 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = finalContratos;
         }
 
+        // Buscar payout existente ANTES do cálculo para aplicar config_overrides
+        // no próprio cálculo, não apenas nos campos salvos depois.
+        const { data: existingPayout } = await supabase
+          .from('sdr_month_payout')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .maybeSingle();
+        const configOverrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
+
         // Calculate values - lógica diferente para Closers com métricas ativas
         // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
         const diasUteisMes = isCloser && calendarData?.dias_uteis_closer != null
@@ -1483,7 +1513,8 @@ serve(async (req) => {
             calendarIfoodMensal, 
             diasUteisMes, 
             isCloser,
-            metricasAtivas.length > 0 ? metricasAtivas : undefined
+            metricasAtivas.length > 0 ? metricasAtivas : undefined,
+            configOverrides
           );
           
           // AJUSTE: Verificar se a BU do SDR bateu ultrameta do time
@@ -1514,14 +1545,6 @@ serve(async (req) => {
           dias_uteis_mes: calculatedValues.dias_uteis_mes,
           meta_agendadas_ajustada: calculatedValues.meta_agendadas_ajustada,
         });
-
-        // Get existing payout to preserve ifood_ultrameta_autorizado
-        const { data: existingPayout } = await supabase
-          .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .single();
 
         // Only update if not LOCKED or APPROVED
         if (existingPayout?.status === 'LOCKED') {
