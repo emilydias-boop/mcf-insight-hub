@@ -117,17 +117,14 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     );
   };
 
-  const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean }) => {
+  const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
     if (!stageId || !stageDeals) return;
     // IDs já discados nesta sessão (qualquer resultado != 'pending') — para
     // que ao "Carregar próximos" depois de uma rodada não voltem os mesmos leads.
-    const alreadyDialed = new Set<string>(
-      opts?.excludeAlreadyDialed
-        ? Object.entries(ad.results)
-            .filter(([, r]) => r && r !== 'pending')
-            .map(([id]) => id)
-        : []
-    );
+    const fromResults = opts?.excludeAlreadyDialed
+      ? Object.entries(ad.results).filter(([, r]) => r && r !== 'pending').map(([id]) => id)
+      : [];
+    const alreadyDialed = new Set<string>([...(opts?.excludeIds || []), ...fromResults]);
     const leads: AutoDialerLead[] = stageDeals
       .map((d: any) => {
         const phone = getDealPhone(d);
@@ -375,8 +372,12 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                     variant="outline"
                     className="ml-auto"
                     onClick={() => {
+                      // Captura IDs já discados ANTES do stop() (que limpa results)
+                      const dialedIds = Object.entries(ad.results)
+                        .filter(([, r]) => r && r !== 'pending')
+                        .map(([id]) => id);
                       ad.stop();
-                      setTimeout(() => loadFromStage({ excludeAlreadyDialed: true }), 50);
+                      setTimeout(() => loadFromStage({ excludeIds: dialedIds }), 50);
                     }}
                   >
                     Carregar próximos
