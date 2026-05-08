@@ -1323,16 +1323,6 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = finalContratos;
         }
 
-        // Buscar payout existente ANTES do cálculo para aplicar config_overrides
-        // no próprio cálculo, não apenas nos campos salvos depois.
-        const { data: existingPayout } = await supabase
-          .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento, componentes_conta')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .maybeSingle();
-        const configOverrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
-
         // Calculate values - lógica diferente para Closers com métricas ativas
         // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
         const diasUteisMes = isCloser && calendarData?.dias_uteis_closer != null
