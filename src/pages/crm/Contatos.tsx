@@ -16,6 +16,10 @@ import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/compon
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
 import { DuplicateToInsideDialog } from '@/components/crm/DuplicateToInsideDialog';
+import { BulkTransferDialog } from '@/components/crm/BulkTransferDialog';
+import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
+import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
+import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useDuplicateToInsideSales } from '@/hooks/useLimboLeads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
@@ -43,6 +47,9 @@ const Contatos = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pipelineModalOpen, setPipelineModalOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [changeOwnerDialogOpen, setChangeOwnerDialogOpen] = useState(false);
+  const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
+  const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -64,6 +71,7 @@ const Contatos = () => {
   const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize, buOriginIds && buOriginIds.length > 0 ? buOriginIds : undefined);
   const syncMutation = useSyncClintData();
   const duplicateMutation = useDuplicateToInsideSales();
+  const bulkTransfer = useBulkTransfer();
 
   const contactsData = data?.contacts || [];
   const totalCount = data?.totalCount || 0;
@@ -153,6 +161,17 @@ const Contatos = () => {
   };
 
   const allFilteredSelected = filteredContacts.length > 0 && filteredContacts.every(c => selectedIds.has(c.id));
+
+  // Map selected contacts -> their latest deal (for bulk Negócios actions)
+  const selectedDeals = useMemo(
+    () => filteredContacts.filter(c => selectedIds.has(c.id) && c.latestDeal?.id).map(c => c.latestDeal!),
+    [filteredContacts, selectedIds]
+  );
+  const selectedDealIds = useMemo(() => selectedDeals.map(d => d.id), [selectedDeals]);
+  const commonOriginId = useMemo(() => {
+    const origins = new Set(selectedDeals.map(d => d.origin_id).filter(Boolean));
+    return origins.size === 1 ? Array.from(origins)[0] : undefined;
+  }, [selectedDeals]);
 
   // Pagination range
   const getPaginationRange = () => {
@@ -424,14 +443,41 @@ const Contatos = () => {
             onTransfer={() => setPipelineModalOpen(true)}
             onClearSelection={() => setSelectedIds(new Set())}
             isTransferring={false}
+            transferLabel="Enviar p/ Pipeline..."
             onDuplicate={activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
+            onChangeOwner={selectedDealIds.length > 0 ? () => setChangeOwnerDialogOpen(true) : undefined}
+            isChangingOwner={bulkTransfer.isPending}
+            onMoveStage={selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
+            onMovePipeline={selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
           />
 
           <SendToPipelineModal
             open={pipelineModalOpen}
             onOpenChange={setPipelineModalOpen}
             selectedContactIds={Array.from(selectedIds)}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkTransferDialog
+            open={changeOwnerDialogOpen}
+            onOpenChange={setChangeOwnerDialogOpen}
+            selectedDealIds={selectedDealIds}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkMoveStageDialog
+            open={moveStageDialogOpen}
+            onOpenChange={setMoveStageDialogOpen}
+            selectedDealIds={selectedDealIds}
+            originId={commonOriginId}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkMovePipelineDialog
+            open={movePipelineDialogOpen}
+            onOpenChange={setMovePipelineDialogOpen}
+            selectedDealIds={selectedDealIds}
             onSuccess={() => setSelectedIds(new Set())}
           />
 

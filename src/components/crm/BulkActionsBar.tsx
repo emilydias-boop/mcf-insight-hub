@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft, FolderOutput } from 'lucide-react';
+import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft, FolderOutput, UserCog } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -14,6 +14,9 @@ interface BulkActionsBarProps {
   isMovingStage?: boolean;
   onMovePipeline?: () => void;
   isMovingPipeline?: boolean;
+  onChangeOwner?: () => void;
+  isChangingOwner?: boolean;
+  transferLabel?: string;
 }
 
 export const BulkActionsBar = ({
@@ -29,12 +32,15 @@ export const BulkActionsBar = ({
   isMovingStage = false,
   onMovePipeline,
   isMovingPipeline = false,
+  onChangeOwner,
+  isChangingOwner = false,
+  transferLabel,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4">
-      <div className="flex items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg">
+      <div className="flex flex-wrap items-center gap-3 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg max-w-[95vw]">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5" />
           <span className="font-medium">
@@ -56,8 +62,25 @@ export const BulkActionsBar = ({
           ) : (
             <UserPlus className="h-4 w-4" />
           )}
-          Transferir para...
+          {transferLabel || 'Transferir para...'}
         </Button>
+
+        {onChangeOwner && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onChangeOwner}
+            disabled={isChangingOwner || isTransferring || isDuplicating}
+            className="gap-2"
+          >
+            {isChangingOwner ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserCog className="h-4 w-4" />
+            )}
+            Trocar dono
+          </Button>
+        )}
 
         {onMoveStage && (
           <Button
@@ -71,6 +94,9 @@ export const BulkActionsBar = ({
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ArrowRightLeft className="h-4 w-4" />
+            )}
+            Mover Estágio
+          </Button>
         )}
 
         {onMovePipeline && (
@@ -87,9 +113,6 @@ export const BulkActionsBar = ({
               <FolderOutput className="h-4 w-4" />
             )}
             Mover Pipeline
-          </Button>
-        )}
-            Mover Estágio
           </Button>
         )}
 
