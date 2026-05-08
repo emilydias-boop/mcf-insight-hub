@@ -751,19 +751,36 @@ serve(async (req) => {
         const dataFimEfetiva = dataDemissaoDate && dataDemissaoDate < fimMesDate 
           ? dataDemissaoDate : fimMesDate;
         
-        // Contar dias úteis (simples: excluir sáb/dom)
+        // Conjunto de dias não-úteis (feriados nacionais + paradas da empresa) do calendário oficial
+        const nonWorkingSet = new Set<string>();
+        const collectDates = (arr: any) => {
+          if (!Array.isArray(arr)) return;
+          for (const item of arr) {
+            const d = typeof item === 'string' ? item : item?.data || item?.date;
+            if (typeof d === 'string' && d.length >= 10) nonWorkingSet.add(d.slice(0, 10));
+          }
+        };
+        collectDates((calendarData as any)?.feriados_nacionais);
+        collectDates((calendarData as any)?.paradas_empresa);
+
+        // Contar dias úteis (excluir sáb/dom + feriados/paradas oficiais)
         const countBusinessDays = (start: Date, end: Date): number => {
           let count = 0;
           const cur = new Date(start);
           while (cur <= end) {
             const dow = cur.getDay();
-            if (dow !== 0 && dow !== 6) count++;
+            const iso = cur.toISOString().split('T')[0];
+            if (dow !== 0 && dow !== 6 && !nonWorkingSet.has(iso)) count++;
             cur.setDate(cur.getDate() + 1);
           }
           return count;
         };
         
-        const diasUteisMesTotal = countBusinessDays(inicioMesDate, fimMesDate);
+        // Denominador oficial: dias úteis do calendário (exclui feriados); fallback para weekdays
+        const diasUteisMesCalendar = (calendarData as any)?.dias_uteis_final ?? null;
+        const diasUteisMesTotal = diasUteisMesCalendar && diasUteisMesCalendar > 0
+          ? Number(diasUteisMesCalendar)
+          : countBusinessDays(inicioMesDate, fimMesDate);
         let diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
         let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
         let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
