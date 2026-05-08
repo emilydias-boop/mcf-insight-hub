@@ -1,4 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { IntermediacoesList } from "@/components/sdr-fechamento/IntermediacoesLi
 import { CloserContractsList } from "@/components/sdr-fechamento/CloserContractsList";
 import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
 import { ManualPayoutForm } from "@/components/sdr-fechamento/ManualPayoutForm";
+import { PayoutConfigDialog } from "@/components/sdr-fechamento/PayoutConfigDialog";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
 import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
@@ -34,6 +36,7 @@ import {
   Download,
   Trash2,
   User,
+  Settings2,
 } from "lucide-react";
 
 // Component wrapper for dynamic indicators section
@@ -100,6 +103,7 @@ const FechamentoSDRDetail = () => {
   const fromMonth = searchParams.get('from');
   const fromBu = searchParams.get('bu');
   const { user, role } = useAuth();
+  const [configOpen, setConfigOpen] = useState(false);
 
   const { data: payout, isLoading } = useSdrPayoutDetail(payoutId);
   const { data: compPlan } = useSdrCompPlan(payout?.sdr_id, payout?.ano_mes || "");
@@ -400,6 +404,10 @@ const FechamentoSDRDetail = () => {
             <>
               {canEdit && (
                 <>
+                  <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+                    <Settings2 className="h-3.5 w-3.5 mr-1.5" />
+                    Configurar
+                  </Button>
                   {payout.status === "DRAFT" && (
                     <Button size="sm" onClick={handleApprove} disabled={updateStatus.isPending}>
                       <Check className="h-3.5 w-3.5 mr-1.5" />
