@@ -322,32 +322,83 @@ export default function ConsorcioPage() {
   const handleExportCSV = () => {
     if (!sortedCards || sortedCards.length === 0) return;
 
-    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Reserva', 'DT Contratação', 'Vencimento', 'Tipo', 'Objetivo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
-    const rows = sortedCards.map((card, index) => {
+    const esc = (v: any) => {
+      if (v === null || v === undefined || v === '') return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",;\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const fmtDate = (d: any) => (d ? format(parseDateWithoutTimezone(d), 'dd/MM/yyyy') : '');
+
+    const headers = [
+      'Nº', 'Status', 'Tipo Pessoa', 'Categoria', 'Origem', 'Origem Detalhe', 'Tipo Produto', 'Objetivo',
+      // Cota
+      'Grupo', 'Cota', 'Valor Crédito', 'Dia Vencimento', 'Próximo Vencimento', 'DT Reserva', 'DT Contratação',
+      'Valor Parcela', 'Parcelas Pagas', 'Total Parcelas', 'Saldo Devedor',
+      // Comissão
+      'Comissão (R$)', 'Comissão Recebida', 'Comissão Pendente',
+      // Vendedor
+      'Responsável', 'Vendedor ID',
+      // PF
+      'Nome Completo', 'CPF', 'RG', 'Data Nascimento', 'Estado Civil', 'CPF Cônjuge',
+      'Telefone', 'Email', 'Profissão', 'Tipo Servidor', 'Renda', 'Patrimônio', 'PIX',
+      'CEP', 'Rua', 'Número', 'Complemento', 'Bairro', 'Cidade', 'Estado',
+      // PJ
+      'Razão Social', 'CNPJ', 'Natureza Jurídica', 'Inscrição Estadual', 'Data Fundação',
+      'Telefone Comercial', 'Email Comercial', 'Faturamento Mensal', 'Nº Funcionários',
+      'CEP Comercial', 'Rua Comercial', 'Número Comercial', 'Complemento Comercial',
+      'Bairro Comercial', 'Cidade Comercial', 'Estado Comercial',
+      // Extras
+      'É Transferência', 'Transferido De', 'Observações',
+    ];
+
+    const rows = sortedCards.map((card: any, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
       const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
-      
+
       return [
         index + 1,
-        displayName || '-',
+        card.status,
+        card.tipo_pessoa === 'pf' ? 'PF' : 'PJ',
+        card.categoria === 'inside' ? 'Inside' : 'Life',
+        origemConfig?.label || card.origem,
+        card.origem_detalhe,
+        card.tipo_produto,
+        card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '',
         card.grupo,
         card.cota,
         card.valor_credito,
-        card.data_reserva ? format(parseDateWithoutTimezone(card.data_reserva), 'dd/MM/yyyy') : '-',
-        card.data_contratacao ? format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy') : '-',
+        card.dia_vencimento,
         format(proximoVencimento, 'dd/MM/yyyy'),
-        card.tipo_produto,
-        card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '-',
-        card.categoria === 'inside' ? 'Inside' : 'Life',
-        origemConfig?.label || card.origem,
-        card.status,
-        getFirstTwoNames(card.vendedor_name),
+        fmtDate(card.data_reserva),
+        fmtDate(card.data_contratacao),
+        card.valor_parcela ?? '',
+        card.parcelas_pagas ?? '',
+        card.total_parcelas ?? '',
+        card.saldo_devedor ?? '',
         card.valor_comissao || 0,
-      ];
+        card.valor_comissao_recebida ?? '',
+        card.valor_comissao_pendente ?? '',
+        getFirstTwoNames(card.vendedor_name) || displayName ? card.vendedor_name : '',
+        card.vendedor_id,
+        // PF
+        card.nome_completo, card.cpf, card.rg, fmtDate(card.data_nascimento), card.estado_civil, card.cpf_conjuge,
+        card.telefone, card.email, card.profissao, card.tipo_servidor, card.renda, card.patrimonio, card.pix,
+        card.endereco_cep, card.endereco_rua, card.endereco_numero, card.endereco_complemento,
+        card.endereco_bairro, card.endereco_cidade, card.endereco_estado,
+        // PJ
+        card.razao_social, card.cnpj, card.natureza_juridica, card.inscricao_estadual, fmtDate(card.data_fundacao),
+        card.telefone_comercial, card.email_comercial, card.faturamento_mensal, card.num_funcionarios,
+        card.endereco_comercial_cep, card.endereco_comercial_rua, card.endereco_comercial_numero,
+        card.endereco_comercial_complemento, card.endereco_comercial_bairro,
+        card.endereco_comercial_cidade, card.endereco_comercial_estado,
+        // Extras
+        card.e_transferencia ? 'Sim' : 'Não', card.transferido_de, card.observacoes,
+      ].map(esc);
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    // BOM for Excel UTF-8 compatibility
+    const csvContent = '\uFEFF' + [headers.map(esc).join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
