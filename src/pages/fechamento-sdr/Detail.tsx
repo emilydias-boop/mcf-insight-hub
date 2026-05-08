@@ -131,7 +131,8 @@ const FechamentoSDRDetail = () => {
   // Calculate values needed for useCalculatedVariavel BEFORE early returns.
   // Prioridade da meta diária: plano mensal congelado → payout mensal → cadastro global.
   // Isso evita que um mês passado (ex.: abril) exiba a meta global atual (ex.: maio).
-  const diasUteisMesEarly = compPlan?.dias_uteis || payout?.dias_uteis_mes || 19;
+  // Override do payout (config específica do fechamento) tem prioridade sobre o comp_plan
+  const diasUteisMesEarly = payout?.dias_uteis_mes || compPlan?.dias_uteis || 19;
   const sdrMetaDiariaEarly = compPlan?.meta_reunioes_agendadas && diasUteisMesEarly > 0
     ? Math.round(compPlan.meta_reunioes_agendadas / diasUteisMesEarly)
     : payout?.meta_agendadas_ajustada && diasUteisMesEarly > 0
