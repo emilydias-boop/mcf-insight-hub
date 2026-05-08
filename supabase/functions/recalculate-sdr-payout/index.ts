@@ -1315,6 +1315,16 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = finalContratos;
         }
 
+        // Buscar payout existente ANTES do cálculo para aplicar config_overrides
+        // no próprio cálculo, não apenas nos campos salvos depois.
+        const { data: existingPayout } = await supabase
+          .from('sdr_month_payout')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .maybeSingle();
+        const configOverrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
+
         // Calculate values - lógica diferente para Closers com métricas ativas
         // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
         const diasUteisMes = isCloser && calendarData?.dias_uteis_closer != null
@@ -1503,7 +1513,8 @@ serve(async (req) => {
             calendarIfoodMensal, 
             diasUteisMes, 
             isCloser,
-            metricasAtivas.length > 0 ? metricasAtivas : undefined
+            metricasAtivas.length > 0 ? metricasAtivas : undefined,
+            configOverrides
           );
           
           // AJUSTE: Verificar se a BU do SDR bateu ultrameta do time
@@ -1534,14 +1545,6 @@ serve(async (req) => {
           dias_uteis_mes: calculatedValues.dias_uteis_mes,
           meta_agendadas_ajustada: calculatedValues.meta_agendadas_ajustada,
         });
-
-        // Get existing payout to preserve ifood_ultrameta_autorizado
-        const { data: existingPayout } = await supabase
-          .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .single();
 
         // Only update if not LOCKED or APPROVED
         if (existingPayout?.status === 'LOCKED') {
