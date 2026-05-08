@@ -524,6 +524,15 @@ serve(async (req) => {
         const isCloser = sdr.role_type === 'closer';
         console.log(`   ⏳ Processando ${isCloser ? 'Closer' : 'SDR'}: ${sdr.name} (${sdr.id}) - BU: ${sdr.squad || 'N/A'}`);
 
+        // Buscar payout existente cedo: config_overrides afeta pró-rata/metas antes do cálculo final.
+        const { data: existingPayout } = await supabase
+          .from('sdr_month_payout')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento, componentes_conta')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .maybeSingle();
+        const configOverrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
+
         // ===== BUSCAR MÉTRICAS - LÓGICA DIFERENTE PARA SDR VS CLOSER =====
         let reunioesAgendadas = 0;
         let noShows = 0;
@@ -758,6 +767,14 @@ serve(async (req) => {
         let diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
         let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
         let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+
+        if (configOverrides?.dias_uteis_trabalhados != null) {
+          const diasUteisBaseOverride = Number(configOverrides.dias_uteis_mes ?? diasUteisMesTotal);
+          diasUteisTrabalhados = Number(configOverrides.dias_uteis_trabalhados);
+          isProporcional = diasUteisBaseOverride > 0 && diasUteisTrabalhados < diasUteisBaseOverride;
+          ratioProRata = isProporcional ? diasUteisTrabalhados / diasUteisBaseOverride : 1;
+          console.log(`   🛠️ PRO-RATA override para ${sdr.name}: ${diasUteisTrabalhados}/${diasUteisBaseOverride} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
+        }
         
         if (isProporcional && configOverrides?.dias_uteis_trabalhados == null) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
@@ -932,18 +949,12 @@ serve(async (req) => {
               cargoHistoricoNome = cargoHist.nome_exibicao;
             }
           } else {
-            // Fallback: match por OTE+fixo para comp_plans antigos sem cargo_catalogo_id
-            const { data: cargoHist } = await supabase
-              .from('cargos_catalogo')
-              .select('nivel, nome_exibicao')
-              .eq('ote_total', compPlan.ote_total)
-              .eq('fixo_valor', compPlan.fixo_valor)
-              .order('nivel', { ascending: true })
-              .limit(1)
-              .maybeSingle();
-            if (cargoHist) {
-              cargoHistoricoNivel = cargoHist.nivel;
-              cargoHistoricoNome = cargoHist.nome_exibicao;
+            // Fallback seguro: OTE+fixo é ambíguo entre BUs; usar o cargo do employee/histórico quando os valores batem.
+            if (cargoInfo &&
+                Number(cargoInfo.ote_total) === Number(compPlan.ote_total) &&
+                Number(cargoInfo.fixo_valor) === Number(compPlan.fixo_valor)) {
+              cargoHistoricoNivel = cargoInfo.nivel ?? null;
+              cargoHistoricoNome = cargoInfo.nome_exibicao ?? null;
             }
           }
           if (cargoHistoricoNivel) {
@@ -1043,10 +1054,12 @@ serve(async (req) => {
           }
         }
         
+        const shouldSyncCompPlanCargoId = !!employeeData?.cargo_catalogo_id && !compPlan?.cargo_catalogo_id;
         if (compPlan && cargoInfo && !compPlanHasOwnCargo && (
           compPlan.fixo_valor !== cargoInfo.fixo_valor ||
           compPlan.variavel_total !== cargoInfo.variavel_valor ||
-          compPlan.ote_total !== cargoInfo.ote_total
+          compPlan.ote_total !== cargoInfo.ote_total ||
+          shouldSyncCompPlanCargoId
         )) {
           console.log(`   🔄 SYNC: Comp plan desatualizado para ${sdr.name}. Cargo: Fixo=${cargoInfo.fixo_valor}, Var=${cargoInfo.variavel_valor}, OTE=${cargoInfo.ote_total}. CompPlan: Fixo=${compPlan.fixo_valor}, Var=${compPlan.variavel_total}, OTE=${compPlan.ote_total}`);
           
@@ -1056,6 +1069,9 @@ serve(async (req) => {
             ote_total: cargoInfo.ote_total,
             updated_at: new Date().toISOString(),
           };
+          if (shouldSyncCompPlanCargoId) {
+            updateData.cargo_catalogo_id = employeeData.cargo_catalogo_id;
+          }
           
           // Recalcular distribuição dos valores variáveis proporcionalmente
           if (compPlan.variavel_total > 0 && cargoInfo.variavel_valor > 0) {
@@ -1314,16 +1330,6 @@ serve(async (req) => {
             .eq('id', kpi.id);
           kpi.intermediacoes_contrato = finalContratos;
         }
-
-        // Buscar payout existente ANTES do cálculo para aplicar config_overrides
-        // no próprio cálculo, não apenas nos campos salvos depois.
-        const { data: existingPayout } = await supabase
-          .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento, componentes_conta')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .maybeSingle();
-        const configOverrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
 
         // Calculate values - lógica diferente para Closers com métricas ativas
         // Usar dias_uteis_closer para closers, com fallback para dias_uteis_final
