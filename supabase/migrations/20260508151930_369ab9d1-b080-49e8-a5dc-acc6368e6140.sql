@@ -1,0 +1,2 @@
+ALTER TABLE public.sdr_month_payout ADD COLUMN IF NOT EXISTS config_overrides jsonb;
+COMMENT ON COLUMN public.sdr_month_payout.config_overrides IS 'Overrides manuais por payout (dias_uteis_mes, dias_uteis_trabalhados, meta_agendadas_ajustada, meta_realizadas_ajustada, meta_tentativas_ajustada). Aplicado APÓS recálculo automático para preservar config específica do coordenador.';

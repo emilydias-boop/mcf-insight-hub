@@ -55,12 +55,25 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
 
   const save = useMutation({
     mutationFn: async () => {
-      const updates: Record<string, number | null> = {
+      const overrides: Record<string, number | null> = {
         dias_uteis_mes: toNum(form.dias_uteis_mes),
         dias_uteis_trabalhados: toNum(form.dias_uteis_trabalhados),
         meta_agendadas_ajustada: toNum(form.meta_agendadas_ajustada),
         meta_realizadas_ajustada: toNum(form.meta_realizadas_ajustada),
         meta_tentativas_ajustada: toNum(form.meta_tentativas_ajustada),
+      };
+      // Mantém apenas os campos efetivamente preenchidos (não-null)
+      const cleaned: Record<string, number> = {};
+      Object.entries(overrides).forEach(([k, v]) => {
+        if (v != null) cleaned[k] = v;
+      });
+
+      // Salva tanto os campos diretos (efeito imediato) quanto a coluna
+      // `config_overrides`, que é reaplicada após o "Salvar e Recalcular"
+      // para não ser sobrescrita pelo cálculo automático.
+      const updates: Record<string, any> = {
+        ...overrides,
+        config_overrides: Object.keys(cleaned).length > 0 ? cleaned : null,
       };
       const { error } = await supabase
         .from("sdr_month_payout")
