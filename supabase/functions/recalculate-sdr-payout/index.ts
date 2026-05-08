@@ -1620,6 +1620,12 @@ serve(async (req) => {
           console.log(`   🔄 SEGMENTOS de cargo aplicados para ${sdr.name}: Fixo total = R$ ${payoutFields.valor_fixo} (soma de ${cargoSegments.length} segmentos)`);
         }
 
+        // ===== COMPOSIÇÃO DA CONTA: somente fixo? =====
+        if (componentesContaPayout === 'somente_fixo') {
+          payoutFields.total_conta = payoutFields.valor_fixo;
+          console.log(`   🧮 SOMENTE FIXO aplicado para ${sdr.name}: Total = R$ ${payoutFields.total_conta} (variável ignorado)`);
+        }
+
         // ===== APLICAR CONFIG_OVERRIDES (configuração específica do coordenador) =====
         // Estes valores foram setados manualmente via dialog "Configurar" e devem
         // sobrescrever qualquer valor calculado automaticamente.
