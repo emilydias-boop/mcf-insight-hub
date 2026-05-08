@@ -1,31 +1,35 @@
-## Confirmado
+## Objetivo
 
-- **Fabíola** ← contrato real Hubla da Andressa (R$460,76, 25/04/2026).
-- **Erivaldo** continua como contrato pago, mas como **outside 2024** (separado, não compartilha com a Fabíola).
+Remover Marcio Dantas da aba **SDRs** da tela `/crm/reunioes-equipe` no BU Incorporador, sem afetar sua presença correta na aba **Closers** (com 55 R1 Agendadas, 25 Realizadas, 1 Contrato) nem seu papel atual de SDR no Consórcio.
 
-## Etapa 1 — Vínculo Hubla Andressa → Fabíola
+## Causa raiz
 
-- `hubla_transactions` `60004b22-…`: `linked_attendee_id` = `41619faa-…` (Fabíola), `linked_method='manual'`, `linked_at=now()`
-- `meeting_slot_attendees` `41619faa-…` (Fabíola): `status='contract_paid'`, `contract_paid_at='2026-04-25 19:04:11.279+00'`
-- `crm_deals` `773b2e2c-…` (Fabíola): stage → "Contrato Pago" (`062927f5-…`)
+A tabela `sdr_squad_history` tem uma linha incorreta:
 
-## Etapa 2 — 8 outside 2024 (sem Hubla)
-
-`status='contract_paid'`, `contract_paid_at='2024-01-01 12:00:00+00'`, deal → "Contrato Pago" (`062927f5-…`):
-
-| # | Lead | Attendee ID | Deal ID |
+| sdr_id | squad | valid_from | valid_to |
 |---|---|---|---|
-| 1 | Carlos | b23529bc-… | 6c71148e-… |
-| 2 | Victor Caixeiro | f084e422-… | 6c62d6cd-… |
-| 3 | Filipe Amaral | b967f678-… | 31aedb86-… |
-| 4 | Vinicius/Luciano | 32fb2c6b-… | d9827cae-… |
-| 5 | Diogo Giuseppin | 5e471746-… | 5ce3eb15-… |
-| 6 | Ricardo Gomes | ebc92763-… | 724d9aae-… |
-| 7 | Mauro Elias | 69db7b72-… | 3eafd87f-… |
-| 8 | **Erivaldo Pinheiro** | 6677878a-… | 34772584-… |
+| Marcio Dantas | **incorporador** | 16/03/2026 | 08/05/2026 |
+| Marcio Dantas | consorcio | 08/05/2026 | (aberto) |
 
-> O vínculo da transação Hubla sai do Erivaldo (na Etapa 1) e ele recebe `contract_paid_at='2024-01-01'` aqui. Sem nova transação Hubla.
+Marcio nunca foi SDR de incorporador — sempre foi closer dessa BU, e só virou SDR ao migrar para o Consórcio em 08/05. A linha `incorporador` foi criada por engano (provavelmente quando o `role_type` virou `sdr`).
 
-## Resultado p/ Thayna
+## Correção
 
-9 contratos pagos: 1 real abril/26 (Fabíola) + 8 outside jan/24.
+Apagar a linha de histórico equivocada e manter apenas a de Consórcio:
+
+```sql
+DELETE FROM public.sdr_squad_history
+WHERE sdr_id = '1b949ca6-c97d-4a01-8da9-105dca5ded86'
+  AND squad = 'incorporador';
+```
+
+## Resultado esperado
+
+- Aba **SDRs (Incorporador)**: Marcio some — passa a ter 9 SDRs em vez de 10.
+- Aba **Closers (Incorporador)**: Marcio continua igual (55/25/28/1 etc.) — esses dados vêm de `meeting_slot_attendees.closer_id` e não dependem de `sdr_squad_history`.
+- BU **Consórcio**: Marcio continua aparecendo como SDR a partir de 08/05.
+- Histórico de outros meses não é afetado (ele aparece zerado em qualquer aba SDR de Incorporador, pois nunca foi SDR lá de fato).
+
+## Sem mudanças de código
+
+Apenas uma operação de DELETE pontual no banco. Nenhum hook, função ou componente precisa ser alterado — a lógica de `get_sdrs_for_squad_in_period` está correta, o problema é dado sujo.
