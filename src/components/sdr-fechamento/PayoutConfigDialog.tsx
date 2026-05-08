@@ -56,6 +56,37 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
     meta_realizadas_ajustada: "",
     meta_tentativas_ajustada: "",
   });
+  const [cargoMode, setCargoMode] = useState<"pro_rata" | "cargo_unico">("pro_rata");
+  const [cargoIdFechamento, setCargoIdFechamento] = useState<string>("");
+
+  // Cargos disponíveis: vindos de cargo_segments do mês + cargo atual do funcionário
+  const segments = ((payout as any)?.cargo_segments || []) as Array<{ cargo_catalogo_id: string; cargo_nome: string }>;
+  const { data: cargosOptions } = useQuery({
+    queryKey: ["payout-cargo-options", payout.id, payout.sdr_id, open],
+    enabled: open,
+    queryFn: async () => {
+      const ids = new Set<string>();
+      segments.forEach((s) => s.cargo_catalogo_id && ids.add(s.cargo_catalogo_id));
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("cargo_catalogo_id")
+        .eq("profile_id", payout.sdr_id)
+        .maybeSingle();
+      const empCargo = (emp as any)?.cargo_catalogo_id;
+      if (empCargo) ids.add(empCargo);
+      if (ids.size === 0) return [] as Array<{ id: string; nome: string; fixo: number; ote: number }>;
+      const { data } = await supabase
+        .from("cargos_catalogo")
+        .select("id, nome_exibicao, fixo_valor, ote_total")
+        .in("id", Array.from(ids));
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        nome: c.nome_exibicao,
+        fixo: Number(c.fixo_valor || 0),
+        ote: Number(c.ote_total || 0),
+      }));
+    },
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +97,8 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
       meta_realizadas_ajustada: (payout as any).meta_realizadas_ajustada != null ? String((payout as any).meta_realizadas_ajustada) : "",
       meta_tentativas_ajustada: (payout as any).meta_tentativas_ajustada != null ? String((payout as any).meta_tentativas_ajustada) : "",
     });
+    setCargoMode((payout as any).cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata");
+    setCargoIdFechamento(((payout as any).cargo_catalogo_id_fechamento as string) || "");
   }, [open, payout]);
 
   const save = useMutation({
