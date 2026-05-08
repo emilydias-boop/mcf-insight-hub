@@ -133,10 +133,13 @@ const FechamentoSDRDetail = () => {
   // Isso evita que um mês passado (ex.: abril) exiba a meta global atual (ex.: maio).
   // Override do payout (config específica do fechamento) tem prioridade sobre o comp_plan
   const diasUteisMesEarly = payout?.dias_uteis_mes || compPlan?.dias_uteis || 19;
-  const sdrMetaDiariaEarly = compPlan?.meta_reunioes_agendadas && diasUteisMesEarly > 0
-    ? Math.round(compPlan.meta_reunioes_agendadas / diasUteisMesEarly)
-    : payout?.meta_agendadas_ajustada && diasUteisMesEarly > 0
-      ? Math.round(payout.meta_agendadas_ajustada / diasUteisMesEarly)
+  // Meta diária deve ser derivada dos dias úteis ORIGINAIS do plano (não do override),
+  // para que reduzir os dias úteis aplique pro-rata sem inflar a meta diária.
+  const diasUteisPlano = compPlan?.dias_uteis || 19;
+  const sdrMetaDiariaEarly = compPlan?.meta_reunioes_agendadas && diasUteisPlano > 0
+    ? Math.round(compPlan.meta_reunioes_agendadas / diasUteisPlano)
+    : payout?.meta_agendadas_ajustada && diasUteisPlano > 0
+      ? Math.round(payout.meta_agendadas_ajustada / diasUteisPlano)
       : (payout?.sdr as any)?.meta_diaria || 10;
   const employeeEarly = (payout as any)?.employee;
   const effectiveVariavelEarly = compPlan?.variavel_total || employeeEarly?.cargo_catalogo?.variavel_valor || 1200;
