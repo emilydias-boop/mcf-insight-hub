@@ -1,35 +1,53 @@
-## Plano
+## Objetivo
 
-1. **Usar a meta mensal do fechamento na tabela de SDRs**
-   - Trocar a origem da coluna **Meta** em `/crm/reunioes-equipe`.
-   - Em vez de calcular `meta_diaria × dias úteis`, buscar o plano de fechamento vigente do mês selecionado em `sdr_comp_plan`.
-   - Exibir diretamente `meta_reunioes_agendadas` do plano vigente do SDR para aquele mês.
-   - Isso corrige casos como abril/2026, onde a tela mostra 300/280/240, mas o fechamento configurado tem metas como 190/171/etc.
+Corrigir vínculos/atribuições de contratos para a closer Thayna:
 
-2. **Remover SDRs desligados fora do período correto**
-   - Ajustar a lista de SDRs válidos do período para considerar `employees.status` e `employees.data_demissao`.
-   - Um SDR só deve aparecer se estava ativo em algum momento dentro do período selecionado.
-   - Como a Juliana tem `data_demissao = 2026-03-23`, ela não deve aparecer em abril/2026 nem meses posteriores.
+1. **Fabíola Beatriz** — recebe o contrato real da Hubla da Andressa da Silva Carreira (R$460,76, 25/04). Hoje esse contrato está vinculado errado ao attendee Erivaldo Pinheiro.
+2. **7 leads outside 2024** — marcar como contrato pago antigo (sem Hubla), com data fixa em **2024-01-01**.
 
-3. **Corrigir a base histórica do squad**
-   - Atualizar a lógica/RPC `get_sdrs_for_squad_in_period` para não considerar histórico aberto (`valid_to null`) de SDR desligado como se ainda estivesse ativo.
-   - Quando houver desligamento, o fim efetivo do vínculo passa a ser a `data_demissao`.
-   - Também filtrar perfis desativados para não voltarem na foto atual da equipe.
+---
 
-4. **Manter métricas e totais alinhados com o que é exibido**
-   - Garantir que cards, total da tabela e contagem de SDRs continuem usando apenas os SDRs válidos no período.
-   - Não alterar a regra de cálculo de agendamentos, R1, no-show ou contratos; apenas a meta exibida e a elegibilidade do SDR na lista.
+## Etapa 1 — Revínculo do contrato da Andressa → Fabíola
+
+Operações via insert tool (UPDATE):
+
+- `hubla_transactions` id `60004b22-a686-44c8-bc51-a8de43d1ea9d` (Andressa, R$460,76):
+  - `linked_attendee_id` → `41619faa-4cec-4aac-b934-2447a8fa398c` (Fabíola, R1 25/04 com Thayna)
+  - `linked_method` → `manual`, `linked_at` → `now()`
+
+- `meeting_slot_attendees` id `41619faa…` (Fabíola):
+  - `status` = `contract_paid`
+  - `contract_paid_at` = `2026-04-25 19:04:11.279+00` (sale_date Hubla)
+
+- `meeting_slot_attendees` id `6677878a-3dee-4909-acd4-090e622cb6b1` (Erivaldo Pinheiro):
+  - `status` = `completed`, `contract_paid_at` = `null`
+
+- `crm_deals` `773b2e2c-…` (Fabíola): mover para stage "Contrato Pago" da pipeline correspondente.
+- `crm_deals` `34772584-…` (Erivaldo): mover de "Contrato Pago" de volta para "Reunião 01 Realizada".
+
+---
+
+## Etapa 2 — 7 leads outside 2024
+
+Para cada attendee abaixo: `status = 'contract_paid'`, `contract_paid_at = '2024-01-01 12:00:00+00'`. Sem criar `hubla_transactions`. Mover deal correspondente para stage "Contrato Pago" da pipeline de origem.
+
+| # | Lead | Telefone | R1 Thayna | Status atual |
+|---|---|---|---|---|
+| 1 | Carlos | 67 9960-5844 | 07/04 19:45 | completed |
+| 2 | Victor Caixeiro | 32988112033 | 09/04 19:15 | completed |
+| 3 | Filipe Amaral | 54997038463 | 15/04 21:00 | completed (Venda Realizada) |
+| 4 | Luciano Gazen / Vinicius Barbosa | 22997084461 | 17/04 13:45 | completed |
+| 5 | Diogo Giuseppin | 19971094264 | 24/04 19:45 | completed |
+| 6 | Ricardo Gomes | 62998860906 | 28/04 18:30 | contract_paid (sobrescrever data) |
+| 7 | Mauro Elias | 5193935610 | 29/04 20:00 | contract_paid (sobrescrever data) |
+
+> **NBC Engenharia** já está em No-Show e não entra na correção (não conta como R1 Realizada).
+> **Fabíola** NÃO entra nos outside — ela recebe o contrato real da Andressa (Etapa 1).
+
+---
 
 ## Detalhes técnicos
 
-- Arquivos prováveis:
-  - `src/pages/crm/ReunioesEquipe.tsx`
-  - `src/components/sdr/SdrSummaryTable.tsx`
-  - `src/hooks/useSdrsFromSquad.ts`
-  - `src/hooks/useSdrsForSquadInPeriod.ts` se necessário
-- Banco:
-  - Migration para ajustar a função `public.get_sdrs_for_squad_in_period`.
-- Fonte da meta:
-  - `sdr_comp_plan.meta_reunioes_agendadas`, filtrando por vigência do mês selecionado.
-- Fonte de desligamento:
-  - `employees.data_demissao` e `employees.status` vinculados por `employees.sdr_id = sdr.id`.
+- Tudo é DML (UPDATE), executado em uma única migração de dados via insert tool.
+- Stage "Contrato Pago" resolvida dinamicamente por `origin_id` do deal + `ilike '%contrato%pago%'` (mesma lógica de `useLinkContractToAttendee.ts`).
+- Após execução: validar em "Closer Performance" do Thayna que os 7 leads + Fabíola aparecem em Contrato Pago e somem de "R1 Realizada"; e que Erivaldo voltou para R1 Realizada.
