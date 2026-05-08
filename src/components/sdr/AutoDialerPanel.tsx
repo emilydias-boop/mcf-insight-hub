@@ -367,7 +367,22 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                 <Play className="h-4 w-4 mr-1" /> Iniciar
               </Button>
             ) : ad.state === 'finished' ? (
-              <div className="flex-1 text-center text-xs text-muted-foreground">Fila concluída</div>
+              <div className="flex-1 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Fila concluída</span>
+                {mode === 'pipeline' && stageId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ml-auto"
+                    onClick={() => {
+                      ad.stop();
+                      setTimeout(() => loadFromStage({ excludeAlreadyDialed: true }), 50);
+                    }}
+                  >
+                    Carregar próximos
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="flex-1 text-center text-xs text-muted-foreground">
                 {ad.state === 'paused-in-call' ? 'Em ligação...' : 'Aguardando qualificação...'}
