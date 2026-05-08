@@ -346,12 +346,36 @@ const FechamentoSDRDetail = () => {
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
   const effectiveKpi = effectiveKpiEarly;
 
-  // Pro-rata display
-  const isProporcional = payout.dias_uteis_trabalhados != null 
-    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
-  const effectiveFixoDisplay = isProporcional
-    ? Math.round(effectiveFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+  // ===== Modo "cargo único" do fechamento =====
+  // Quando o coordenador escolhe um cargo específico para usar cheio (sem pro-rata por mudança de cargo),
+  // os cards de OTE/Fixo/Variável refletem esse cargo escolhido, e o pro-rata por segmento é desativado.
+  const cargoMode = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
+  const cargoSegmentsList = ((payout as any)?.cargo_segments || []) as Array<any>;
+  const cargoFechamentoId = (payout as any)?.cargo_catalogo_id_fechamento as string | null;
+  const cargoFechamento = cargoMode === "cargo_unico" && cargoFechamentoId
+    ? cargoSegmentsList.find((s: any) => s.cargo_catalogo_id === cargoFechamentoId)
+    : null;
+  // Sobrescreve OTE/Fixo se houver cargo único configurado e for diferente do cargo padrão
+  const overrideOTE = cargoFechamento?.ote ? null : null; // segmentos têm ote pro-rata; precisamos do cheio
+  // Buscamos diretamente do cargo_catalogo via empregado caso o id bata
+  const matchedCargo = cargoFechamentoId && employee?.cargo_catalogo?.id === cargoFechamentoId
+    ? employee.cargo_catalogo : null;
+  const displayFixo = cargoMode === "cargo_unico" && matchedCargo?.fixo_valor
+    ? Number(matchedCargo.fixo_valor)
     : effectiveFixo;
+  const displayOTE = cargoMode === "cargo_unico" && matchedCargo?.ote_total
+    ? Number(matchedCargo.ote_total)
+    : effectiveOTE;
+
+  // Pro-rata display
+  const isProporcional = cargoMode !== "cargo_unico"
+    && payout.dias_uteis_trabalhados != null 
+    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
+  const effectiveFixoDisplay = cargoMode === "cargo_unico"
+    ? displayFixo
+    : (isProporcional
+      ? Math.round(displayFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+      : displayFixo);
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
