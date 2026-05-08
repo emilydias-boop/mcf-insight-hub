@@ -1660,6 +1660,8 @@ serve(async (req) => {
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
             ifood_ultrameta_autorizado_em: existingPayout?.ifood_ultrameta_autorizado_em || null,
             config_overrides: existingPayout?.config_overrides || null,
+            cargo_mode: cargoModePayout,
+            cargo_catalogo_id_fechamento: cargoIdFechamento,
           }, {
             onConflict: 'sdr_id,ano_mes',
           })
