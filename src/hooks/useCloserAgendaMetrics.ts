@@ -46,7 +46,8 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         .from('closers')
         .select('id')
         .ilike('email', sdr.email)
-        .eq('is_active', true)
+        .order('is_active', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (closerError || !closer?.id) {
