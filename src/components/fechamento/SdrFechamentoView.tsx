@@ -22,7 +22,12 @@ interface SdrFechamentoViewProps {
 export function SdrFechamentoView({ payout, sdrId, anoMes, kpi, compPlan }: SdrFechamentoViewProps) {
   const { metricas, isLoading: metricasLoading } = useActiveMetricsForSdr(sdrId, anoMes);
 
-  const diasUteisMes = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
+  const diasUteisMesOriginal = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
+  const diasTrabalhados = (payout as any).dias_uteis_trabalhados;
+  const isProporcional = diasTrabalhados != null && diasTrabalhados < diasUteisMesOriginal;
+  // Aplica pro-rata: usa dias trabalhados quando há admissão/desligamento no mês,
+  // mantendo as metas dos indicadores alinhadas com o formulário de KPI e o cálculo do variável.
+  const diasUteisMes = isProporcional ? diasTrabalhados : diasUteisMesOriginal;
   const sdrMetaDiaria = payout.sdr?.meta_diaria || 3;
   const variavelTotal = compPlan?.variavel_total || (payout.sdr?.meta_diaria && payout.sdr.meta_diaria >= 3 ? 1200 : 400);
 
