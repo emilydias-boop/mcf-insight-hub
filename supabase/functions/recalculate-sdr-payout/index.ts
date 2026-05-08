@@ -1583,7 +1583,11 @@ serve(async (req) => {
         const { pct_no_show, mult_no_show, ...payoutFields } = calculatedValues;
 
         // ===== APLICAR PRO-RATA SE PROPORCIONAL =====
-        if (isProporcional) {
+        // Se configOverrides.dias_uteis_trabalhados foi usado, calculatePayoutValues
+        // já aplicou overrideProRataRatio em valor_fixo/ifood_mensal/metas.
+        // Evita pró-rata duplicado.
+        const proRataAlreadyApplied = configOverrides?.dias_uteis_trabalhados != null;
+        if (isProporcional && !proRataAlreadyApplied) {
           // Pro-rata no fixo
           payoutFields.valor_fixo = Math.round(payoutFields.valor_fixo * ratioProRata);
           // Pro-rata no iFood mensal
