@@ -177,6 +177,44 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
 
         <div className="space-y-4 py-2">
           <div>
+            <h4 className="text-xs font-semibold text-muted-foreground mb-2">CARGO DO FECHAMENTO</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Modo de cálculo</Label>
+                <Select value={cargoMode} onValueChange={(v) => setCargoMode(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pro_rata">Pro-rata por segmentos (padrão)</SelectItem>
+                    <SelectItem value="cargo_unico">Cargo único (cheio)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cargo base</Label>
+                <Select
+                  value={cargoIdFechamento}
+                  onValueChange={setCargoIdFechamento}
+                  disabled={cargoMode !== "cargo_unico"}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o cargo" /></SelectTrigger>
+                  <SelectContent>
+                    {(cargosOptions || []).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.nome} (Fixo R$ {c.fixo.toLocaleString("pt-BR")} / OTE R$ {c.ote.toLocaleString("pt-BR")})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              <strong>Pro-rata:</strong> soma cada cargo proporcional aos dias úteis. <strong>Cargo único:</strong> usa o cargo escolhido cheio (sem dividir por mudança de cargo).
+            </p>
+          </div>
+
+          <Separator />
+
+          <div>
             <h4 className="text-xs font-semibold text-muted-foreground mb-2">DIAS ÚTEIS</h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
