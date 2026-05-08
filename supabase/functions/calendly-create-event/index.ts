@@ -619,6 +619,7 @@ serve(async (req) => {
                   (evalResult as any)?.reason ||
                   'Limite de reagendamentos atingido. Aprovação do gestor obrigatória.',
                 rule: evalResult,
+                bu: dealBu,
               }),
               {
                 status: 200,

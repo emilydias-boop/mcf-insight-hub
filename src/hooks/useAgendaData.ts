@@ -1422,6 +1422,50 @@ export function useCreateMeeting() {
         if (data.error === 'slot_full') {
           throw new Error(data.message || 'Horário lotado — não é possível adicionar mais leads');
         }
+        if (data.error === 'rule_violation_reschedule_threshold') {
+          // Auto-cria pedido de aprovação para o gestor (se ainda não existir).
+          try {
+            const { data: userRes } = await supabase.auth.getUser();
+            const uid = userRes?.user?.id;
+            if (uid) {
+              const { data: existing } = await supabase
+                .from('rule_approval_requests' as any)
+                .select('id')
+                .eq('requested_by', uid)
+                .eq('target_deal_id', dealId)
+                .eq('rule_key', 'reschedule_approval_threshold')
+                .eq('status', 'pending')
+                .maybeSingle();
+              if (!existing) {
+                await supabase.from('rule_approval_requests' as any).insert({
+                  bu: data.bu ?? null,
+                  rule_key: 'reschedule_approval_threshold',
+                  requester_role: 'sdr',
+                  requested_by: uid,
+                  target_deal_id: dealId,
+                  status: 'pending',
+                  payload: {
+                    source: 'calendly_create_event_block',
+                    reason: data.rule?.reason || data.message || null,
+                    reschedule_count: data.rule?.count ?? null,
+                    threshold: data.rule?.threshold ?? null,
+                    scheduled_at: scheduledAt.toISOString(),
+                    closer_id: closerId,
+                  },
+                });
+              }
+              queryClient.invalidateQueries({ queryKey: ['my-approval-requests'] });
+              queryClient.invalidateQueries({ queryKey: ['approval-requests-pending'] });
+              queryClient.invalidateQueries({ queryKey: ['approval-requests-pending-count'] });
+            }
+          } catch (apprErr) {
+            console.warn('[create-meeting] falha ao criar pedido de aprovação automático', apprErr);
+          }
+          throw new Error(
+            data.message ||
+              'Limite de reagendamentos atingido. Pedido de aprovação enviado ao gestor.',
+          );
+        }
         throw new Error(data.error || 'Erro ao agendar reunião');
       }
       
