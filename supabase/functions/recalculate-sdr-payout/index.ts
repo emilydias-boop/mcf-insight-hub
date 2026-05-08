@@ -1518,7 +1518,7 @@ serve(async (req) => {
         // Get existing payout to preserve ifood_ultrameta_autorizado
         const { data: existingPayout } = await supabase
           .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes)
           .single();
@@ -1574,6 +1574,29 @@ serve(async (req) => {
           console.log(`   🔄 SEGMENTOS de cargo aplicados para ${sdr.name}: Fixo total = R$ ${payoutFields.valor_fixo} (soma de ${cargoSegments.length} segmentos)`);
         }
 
+        // ===== APLICAR CONFIG_OVERRIDES (configuração específica do coordenador) =====
+        // Estes valores foram setados manualmente via dialog "Configurar" e devem
+        // sobrescrever qualquer valor calculado automaticamente.
+        const overrides = (existingPayout?.config_overrides || null) as Record<string, number> | null;
+        let diasUteisTrabalhadosOverride: number | null = null;
+        if (overrides && typeof overrides === 'object') {
+          const allowedKeys = [
+            'dias_uteis_mes',
+            'meta_agendadas_ajustada',
+            'meta_realizadas_ajustada',
+            'meta_tentativas_ajustada',
+          ];
+          allowedKeys.forEach((k) => {
+            if (overrides[k] != null) {
+              (payoutFields as any)[k] = overrides[k];
+            }
+          });
+          if (overrides['dias_uteis_trabalhados'] != null) {
+            diasUteisTrabalhadosOverride = overrides['dias_uteis_trabalhados'];
+          }
+          console.log(`   🛠️ CONFIG_OVERRIDES aplicado para ${sdr.name}:`, overrides);
+        }
+
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
           .from('sdr_month_payout')
@@ -1581,7 +1604,9 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...payoutFields,
-            dias_uteis_trabalhados: (isProporcional || hasMultipleCargoSegments) ? diasUteisTrabalhados : null,
+            dias_uteis_trabalhados: diasUteisTrabalhadosOverride != null
+              ? diasUteisTrabalhadosOverride
+              : ((isProporcional || hasMultipleCargoSegments) ? diasUteisTrabalhados : null),
             nivel_vigente: cargoHistoricoNivel ?? cargoInfo?.nivel ?? sdr.nivel ?? null,
             cargo_vigente: cargoHistoricoNome ?? cargoInfo?.nome_exibicao ?? null,
             cargo_segments: hasMultipleCargoSegments ? cargoSegments : null,
@@ -1589,6 +1614,7 @@ serve(async (req) => {
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
             ifood_ultrameta_autorizado_em: existingPayout?.ifood_ultrameta_autorizado_em || null,
+            config_overrides: existingPayout?.config_overrides || null,
           }, {
             onConflict: 'sdr_id,ano_mes',
           })
