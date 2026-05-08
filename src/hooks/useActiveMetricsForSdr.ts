@@ -62,7 +62,9 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
         .from('employees')
         .select('cargo_catalogo_id')
         .eq('sdr_id', sdrId)
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'desligado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (employeeError) {
