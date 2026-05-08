@@ -759,7 +759,7 @@ serve(async (req) => {
         let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
         let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
         
-        if (isProporcional) {
+        if (isProporcional && configOverrides?.dias_uteis_trabalhados == null) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
           console.log(`   📊 Período efetivo: ${dataInicioEfetiva.toISOString().split('T')[0]} a ${dataFimEfetiva.toISOString().split('T')[0]}`);
         }
