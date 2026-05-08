@@ -354,19 +354,23 @@ const FechamentoSDRDetail = () => {
   const cargoMode = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
   const cargoSegmentsList = ((payout as any)?.cargo_segments || []) as Array<any>;
   const cargoFechamentoId = (payout as any)?.cargo_catalogo_id_fechamento as string | null;
-  const cargoFechamento = cargoMode === "cargo_unico" && cargoFechamentoId
-    ? cargoSegmentsList.find((s: any) => s.cargo_catalogo_id === cargoFechamentoId)
-    : null;
-  // Sobrescreve OTE/Fixo se houver cargo único configurado e for diferente do cargo padrão
-  const overrideOTE = cargoFechamento?.ote ? null : null; // segmentos têm ote pro-rata; precisamos do cheio
-  // Buscamos diretamente do cargo_catalogo via empregado caso o id bata
-  const matchedCargo = cargoFechamentoId && employee?.cargo_catalogo?.id === cargoFechamentoId
-    ? employee.cargo_catalogo : null;
-  const displayFixo = cargoMode === "cargo_unico" && matchedCargo?.fixo_valor
-    ? Number(matchedCargo.fixo_valor)
+  const { data: cargoFechamentoData } = useQuery({
+    queryKey: ["cargo-fechamento", cargoFechamentoId],
+    enabled: cargoMode === "cargo_unico" && !!cargoFechamentoId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("cargos_catalogo")
+        .select("id, nome_exibicao, fixo_valor, ote_total, variavel_valor")
+        .eq("id", cargoFechamentoId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const displayFixo = cargoMode === "cargo_unico" && cargoFechamentoData?.fixo_valor
+    ? Number(cargoFechamentoData.fixo_valor)
     : effectiveFixo;
-  const displayOTE = cargoMode === "cargo_unico" && matchedCargo?.ote_total
-    ? Number(matchedCargo.ote_total)
+  const displayOTE = cargoMode === "cargo_unico" && cargoFechamentoData?.ote_total
+    ? Number(cargoFechamentoData.ote_total)
     : effectiveOTE;
 
   // Pro-rata display
