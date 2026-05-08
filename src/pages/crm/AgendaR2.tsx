@@ -57,6 +57,7 @@ import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { R2ContractLifecyclePanel } from "@/components/crm/R2ContractLifecyclePanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
+import { LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from "@/types/r2Agenda";
 import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
 import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
 import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
