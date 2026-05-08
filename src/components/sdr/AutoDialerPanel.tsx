@@ -104,17 +104,34 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     setPasted('');
   };
 
+  // Phone pode vir do contato vinculado OU do custom_fields do deal
+  // (leads importados/webhook frequentemente não têm crm_contact e
+  // armazenam o telefone em custom_fields.complete_phone / phone)
+  const getDealPhone = (d: any): string => {
+    const cf = (d?.custom_fields || {}) as Record<string, any>;
+    return (
+      d?.crm_contacts?.phone ||
+      cf.complete_phone ||
+      cf.phone ||
+      ''
+    );
+  };
+
   const loadFromStage = () => {
     if (!stageId || !stageDeals) return;
     const leads: AutoDialerLead[] = stageDeals
-      .filter((d: any) => d.crm_contacts?.phone)
-      .map((d: any) => ({
-        dealId: d.id,
-        contactId: d.contact_id || null,
-        originId: d.origin_id || null,
-        name: d.crm_contacts?.name || d.name || 'Lead',
-        phone: d.crm_contacts?.phone || '',
-      }))
+      .map((d: any) => {
+        const phone = getDealPhone(d);
+        if (!phone) return null;
+        return {
+          dealId: d.id,
+          contactId: d.contact_id || null,
+          originId: d.origin_id || null,
+          name: d.crm_contacts?.name || d.name || 'Lead',
+          phone,
+        } as AutoDialerLead;
+      })
+      .filter((x): x is AutoDialerLead => !!x)
       .slice(0, 100);
     if (leads.length === 0) {
       toast.error('Nenhum lead com telefone neste estágio');
@@ -299,7 +316,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                 >
                   {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   {stageId
-                    ? `Carregar ${stageDeals?.filter((d: any) => d.crm_contacts?.phone).length || 0} leads do estágio`
+                    ? `Carregar ${stageDeals?.filter((d: any) => !!getDealPhone(d)).length || 0} leads do estágio`
                     : 'Carregar leads do estágio'}
                 </Button>
               </div>
