@@ -229,6 +229,27 @@ export const useSdrPayouts = (anoMes: string, filters?: {
       
       if (empError) throw empError;
 
+      // Step 2.5: Fetch sdr_squad_history overlapping this month, so SDRs that
+      // changed BU mid-month appear in BOTH BUs (allowing pro-rata acerto).
+      const [yearStr, monthStr] = anoMes.split('-');
+      const monthStart = `${yearStr}-${monthStr}-01T00:00:00Z`;
+      const monthEndDate = new Date(Number(yearStr), Number(monthStr), 0, 23, 59, 59);
+      const monthEnd = monthEndDate.toISOString();
+      const { data: squadHistory } = await supabase
+        .from('sdr_squad_history')
+        .select('sdr_id, squad, valid_from, valid_to')
+        .lte('valid_from', monthEnd)
+        .or(`valid_to.is.null,valid_to.gte.${monthStart}`);
+
+      const sdrToHistoricalSquads = new Map<string, Set<string>>();
+      squadHistory?.forEach((h: any) => {
+        if (!h.sdr_id || !h.squad) return;
+        if (!sdrToHistoricalSquads.has(h.sdr_id)) {
+          sdrToHistoricalSquads.set(h.sdr_id, new Set());
+        }
+        sdrToHistoricalSquads.get(h.sdr_id)!.add(h.squad);
+      });
+
       // Create a map of sdr_id → employee for quick lookup (use first match = most recently updated)
       interface EmployeeWithCargo {
         departamento: string | null;
@@ -271,6 +292,10 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         
         // Attach employee data to payout for display
         (payout as any).employee = employee || null;
+        // Attach historical squads (overlapping the month) for BU filtering
+        (payout as any).historicalSquads = Array.from(
+          sdrToHistoricalSquads.get(payout.sdr_id) || []
+        );
         
         return payout;
       });
@@ -308,6 +333,14 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         // Cascaded priority: departamento_vigente > employees.departamento > sdr.squad
         if (filters.squad && filters.squad !== 'all') {
           result = result.filter(p => {
+            // 0. Match if SDR was in this BU at any point during the month
+            //    (sdr_squad_history overlap). This makes mid-month BU changes
+            //    visible in BOTH BUs for pro-rata acerto.
+            const historicalSquads: string[] = (p as any).historicalSquads || [];
+            if (historicalSquads.includes(filters.squad)) {
+              return true;
+            }
+
             // 1. Priority: Frozen department from payout (departamento_vigente)
             const frozenDept = (p as any).departamento_vigente;
             const canonicalFromFrozen = normalizeDeptToBU(frozenDept);
