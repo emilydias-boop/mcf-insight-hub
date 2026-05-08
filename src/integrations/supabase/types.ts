@@ -9785,6 +9785,7 @@ export type Database = {
           aprovado_por: string | null
           cargo_segments: Json | null
           cargo_vigente: string | null
+          config_overrides: Json | null
           created_at: string | null
           departamento_vigente: string | null
           dias_uteis_mes: number | null
@@ -9827,6 +9828,7 @@ export type Database = {
           aprovado_por?: string | null
           cargo_segments?: Json | null
           cargo_vigente?: string | null
+          config_overrides?: Json | null
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
@@ -9869,6 +9871,7 @@ export type Database = {
           aprovado_por?: string | null
           cargo_segments?: Json | null
           cargo_vigente?: string | null
+          config_overrides?: Json | null
           created_at?: string | null
           departamento_vigente?: string | null
           dias_uteis_mes?: number | null
