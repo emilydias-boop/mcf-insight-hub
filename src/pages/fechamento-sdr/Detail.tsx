@@ -375,9 +375,6 @@ const FechamentoSDRDetail = () => {
   const displayVariavel = cargoMode === "cargo_unico" && cargoFechamentoData?.variavel_valor
     ? Number(cargoFechamentoData.variavel_valor)
     : (payout.valor_variavel_total || 0);
-  const displayTotalConta = cargoMode === "cargo_unico"
-    ? effectiveFixoDisplay + displayVariavel
-    : (payout.total_conta || 0);
 
   // Pro-rata display
   const isProporcional = cargoMode !== "cargo_unico"
@@ -388,6 +385,9 @@ const FechamentoSDRDetail = () => {
     : (isProporcional
       ? Math.round(displayFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
       : displayFixo);
+  const displayTotalConta = cargoMode === "cargo_unico"
+    ? effectiveFixoDisplay + displayVariavel
+    : (payout.total_conta || 0);
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
