@@ -368,21 +368,34 @@ export default function AgendaR2() {
 
   // Export list handler for Bruna (names + phones)
   const handleExportList = () => {
-    const headers = ['Nome', 'Telefone', 'Closer', 'Data/Hora', 'Status'];
+    const headers = [
+      'Hora', 'Lead', 'Telefone', 'Sócio', 'Perfil',
+      'Comparecimento', 'Closer', 'Vídeo', 'Status Final', 'Termômetro'
+    ];
+    const profileLabel = (v: string | null | undefined) =>
+      LEAD_PROFILE_OPTIONS.find(o => o.value === v)?.label || '';
+    const attendanceLabel = (v: string | null | undefined) =>
+      ATTENDANCE_STATUS_OPTIONS.find(o => o.value === v)?.label || v || '';
+    const videoLabel = (v: string | null | undefined) =>
+      VIDEO_STATUS_OPTIONS.find(o => o.value === v)?.label || (v === 'pendente' ? 'Pendente' : v || '');
+
     const rows = filteredMeetings.flatMap(m => {
       return (m.attendees || []).map(att => [
+        format(new Date(m.scheduled_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
         att.name || att.deal?.contact?.name || 'Sem nome',
         att.phone || att.deal?.contact?.phone || '-',
+        att.partner_name || '',
+        profileLabel(att.lead_profile),
+        attendanceLabel(att.status),
         m.closer?.name || '-',
-        format(new Date(m.scheduled_at), 'dd/MM HH:mm', { locale: ptBR }),
-        att.status === 'completed' ? 'Realizada' :
-        att.status === 'no_show' ? 'No-show' :
-        att.status === 'invited' ? 'Agendada' : att.status
+        videoLabel(att.video_status),
+        att.r2_status?.name || '',
+        (att.thermometers || []).map(t => t.name).join('; '),
       ]);
     });
 
     const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
