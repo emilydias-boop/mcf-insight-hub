@@ -767,6 +767,14 @@ serve(async (req) => {
         let diasUteisTrabalhados = countBusinessDays(dataInicioEfetiva, dataFimEfetiva);
         let isProporcional = diasUteisTrabalhados < diasUteisMesTotal;
         let ratioProRata = diasUteisMesTotal > 0 ? diasUteisTrabalhados / diasUteisMesTotal : 1;
+
+        if (configOverrides?.dias_uteis_trabalhados != null) {
+          const diasUteisBaseOverride = Number(configOverrides.dias_uteis_mes ?? diasUteisMesTotal);
+          diasUteisTrabalhados = Number(configOverrides.dias_uteis_trabalhados);
+          isProporcional = diasUteisBaseOverride > 0 && diasUteisTrabalhados < diasUteisBaseOverride;
+          ratioProRata = isProporcional ? diasUteisTrabalhados / diasUteisBaseOverride : 1;
+          console.log(`   🛠️ PRO-RATA override para ${sdr.name}: ${diasUteisTrabalhados}/${diasUteisBaseOverride} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
+        }
         
         if (isProporcional && configOverrides?.dias_uteis_trabalhados == null) {
           console.log(`   📊 PRO-RATA: ${sdr.name} trabalhou ${diasUteisTrabalhados}/${diasUteisMesTotal} dias úteis (${(ratioProRata * 100).toFixed(1)}%)`);
