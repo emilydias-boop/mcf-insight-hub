@@ -9787,6 +9787,7 @@ export type Database = {
           cargo_mode: string
           cargo_segments: Json | null
           cargo_vigente: string | null
+          componentes_conta: string
           config_overrides: Json | null
           created_at: string | null
           departamento_vigente: string | null
@@ -9832,6 +9833,7 @@ export type Database = {
           cargo_mode?: string
           cargo_segments?: Json | null
           cargo_vigente?: string | null
+          componentes_conta?: string
           config_overrides?: Json | null
           created_at?: string | null
           departamento_vigente?: string | null
@@ -9877,6 +9879,7 @@ export type Database = {
           cargo_mode?: string
           cargo_segments?: Json | null
           cargo_vigente?: string | null
+          componentes_conta?: string
           config_overrides?: Json | null
           created_at?: string | null
           departamento_vigente?: string | null
