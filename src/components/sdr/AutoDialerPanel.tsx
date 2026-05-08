@@ -80,8 +80,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
     stageId
       ? (restrictToSdrOrigins && pipelineId
-          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 100 }
-          : { stageId, limit: 100 })
+          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
+          : { stageId, limit: 1000 })
       : {}
   );
 
@@ -117,12 +117,19 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     );
   };
 
-  const loadFromStage = () => {
+  const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
     if (!stageId || !stageDeals) return;
+    // IDs já discados nesta sessão (qualquer resultado != 'pending') — para
+    // que ao "Carregar próximos" depois de uma rodada não voltem os mesmos leads.
+    const fromResults = opts?.excludeAlreadyDialed
+      ? Object.entries(ad.results).filter(([, r]) => r && r !== 'pending').map(([id]) => id)
+      : [];
+    const alreadyDialed = new Set<string>([...(opts?.excludeIds || []), ...fromResults]);
     const leads: AutoDialerLead[] = stageDeals
       .map((d: any) => {
         const phone = getDealPhone(d);
         if (!phone) return null;
+        if (alreadyDialed.has(d.id)) return null;
         return {
           dealId: d.id,
           contactId: d.contact_id || null,
@@ -132,9 +139,11 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         } as AutoDialerLead;
       })
       .filter((x): x is AutoDialerLead => !!x)
-      .slice(0, 100);
+      .slice(0, 1000);
     if (leads.length === 0) {
-      toast.error('Nenhum lead com telefone neste estágio');
+      toast.error(opts?.excludeAlreadyDialed
+        ? 'Não há mais leads novos neste estágio'
+        : 'Nenhum lead com telefone neste estágio');
       return;
     }
     ad.loadQueue(leads);
@@ -311,7 +320,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                   size="sm"
                   variant="outline"
                   className="w-full"
-                  onClick={loadFromStage}
+                  onClick={() => loadFromStage()}
                   disabled={!stageId || dealsLoading}
                 >
                   {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -355,7 +364,26 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                 <Play className="h-4 w-4 mr-1" /> Iniciar
               </Button>
             ) : ad.state === 'finished' ? (
-              <div className="flex-1 text-center text-xs text-muted-foreground">Fila concluída</div>
+              <div className="flex-1 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Fila concluída</span>
+                {mode === 'pipeline' && stageId && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ml-auto"
+                    onClick={() => {
+                      // Captura IDs já discados ANTES do stop() (que limpa results)
+                      const dialedIds = Object.entries(ad.results)
+                        .filter(([, r]) => r && r !== 'pending')
+                        .map(([id]) => id);
+                      ad.stop();
+                      setTimeout(() => loadFromStage({ excludeIds: dialedIds }), 50);
+                    }}
+                  >
+                    Carregar próximos
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="flex-1 text-center text-xs text-muted-foreground">
                 {ad.state === 'paused-in-call' ? 'Em ligação...' : 'Aguardando qualificação...'}

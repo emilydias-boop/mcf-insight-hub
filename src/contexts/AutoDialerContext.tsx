@@ -52,7 +52,7 @@ interface AutoDialerContextType {
 
 const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
 
-const MAX_QUEUE = 100;
+const MAX_QUEUE = 1000;
 
 export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const {
