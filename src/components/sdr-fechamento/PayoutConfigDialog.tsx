@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Settings2, Loader2 } from "lucide-react";
+import { Settings2, Loader2, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { SdrMonthPayout } from "@/types/sdr-fechamento";
 
 interface PayoutConfigDialogProps {
@@ -33,6 +34,19 @@ const toNum = (v: string): number | null => {
 
 export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigDialogProps) {
   const queryClient = useQueryClient();
+
+  // Overrides realmente aplicados (persistidos em config_overrides após o último Salvar/Recalcular)
+  const appliedOverrides = ((payout as any)?.config_overrides || {}) as Record<string, number>;
+  const isApplied = (key: keyof FormState) => appliedOverrides[key] != null;
+  const appliedCount = Object.keys(appliedOverrides).length;
+
+  const AppliedBadge = ({ field }: { field: keyof FormState }) =>
+    isApplied(field) ? (
+      <Badge variant="outline" className="h-4 px-1.5 text-[10px] gap-1 border-emerald-500/40 text-emerald-500">
+        <CheckCircle2 className="h-2.5 w-2.5" />
+        Aplicado: {appliedOverrides[field]}
+      </Badge>
+    ) : null;
 
   const [form, setForm] = useState<FormState>({
     dias_uteis_mes: "",
@@ -114,12 +128,26 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
           </DialogDescription>
         </DialogHeader>
 
+        {appliedCount > 0 ? (
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-500 flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {appliedCount} override{appliedCount > 1 ? "s" : ""} ativo{appliedCount > 1 ? "s" : ""} — preservado{appliedCount > 1 ? "s" : ""} no recálculo.
+          </div>
+        ) : (
+          <div className="rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+            Nenhum override ativo. Os valores estão sendo calculados automaticamente.
+          </div>
+        )}
+
         <div className="space-y-4 py-2">
           <div>
             <h4 className="text-xs font-semibold text-muted-foreground mb-2">DIAS ÚTEIS</h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="dum" className="text-xs">Dias úteis do mês</Label>
+                <Label htmlFor="dum" className="text-xs flex items-center gap-1.5">
+                  Dias úteis do mês
+                  <AppliedBadge field="dias_uteis_mes" />
+                </Label>
                 <Input
                   id="dum"
                   type="number"
@@ -131,7 +159,10 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="dut" className="text-xs">Dias que contam para meta</Label>
+                <Label htmlFor="dut" className="text-xs flex items-center gap-1.5">
+                  Dias que contam para meta
+                  <AppliedBadge field="dias_uteis_trabalhados" />
+                </Label>
                 <Input
                   id="dut"
                   type="number"
@@ -154,7 +185,10 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
             <h4 className="text-xs font-semibold text-muted-foreground mb-2">METAS PERSONALIZADAS (sobrescreve cálculo padrão)</h4>
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="ma" className="text-xs">Meta agendamentos</Label>
+                <Label htmlFor="ma" className="text-xs flex items-center gap-1.5">
+                  Meta agendamentos
+                  <AppliedBadge field="meta_agendadas_ajustada" />
+                </Label>
                 <Input
                   id="ma"
                   type="number"
@@ -165,7 +199,10 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="mr" className="text-xs">Meta reuniões realizadas</Label>
+                <Label htmlFor="mr" className="text-xs flex items-center gap-1.5">
+                  Meta reuniões realizadas
+                  <AppliedBadge field="meta_realizadas_ajustada" />
+                </Label>
                 <Input
                   id="mr"
                   type="number"
@@ -176,7 +213,10 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="mt" className="text-xs">Meta tentativas de ligação</Label>
+                <Label htmlFor="mt" className="text-xs flex items-center gap-1.5">
+                  Meta tentativas de ligação
+                  <AppliedBadge field="meta_tentativas_ajustada" />
+                </Label>
                 <Input
                   id="mt"
                   type="number"
