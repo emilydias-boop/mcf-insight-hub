@@ -122,6 +122,8 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
       const updates: Record<string, any> = {
         ...overrides,
         config_overrides: Object.keys(cleaned).length > 0 ? cleaned : null,
+        cargo_mode: cargoMode,
+        cargo_catalogo_id_fechamento: cargoMode === "cargo_unico" ? (cargoIdFechamento || null) : null,
       };
       const { error } = await supabase
         .from("sdr_month_payout")
