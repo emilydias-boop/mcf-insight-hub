@@ -1,35 +1,37 @@
-## Objetivo
+## Promover Thayna para Closer Inside N3 em abril/2026
 
-Remover Marcio Dantas da aba **SDRs** da tela `/crm/reunioes-equipe` no BU Incorporador, sem afetar sua presença correta na aba **Closers** (com 55 R1 Agendadas, 25 Realizadas, 1 Contrato) nem seu papel atual de SDR no Consórcio.
+### Contexto
 
-## Causa raiz
+Hoje a Thayna (sdr_id `66a5a9ea-6d48-4831-b91c-7d79cf00aac2`) tem em `sdr_comp_plan` o cargo **Closer Inside N2** vigente desde 2026-04-01 (sem data fim). Isso faz o Fechamento puxar a meta de Contratos Pagos do N2 (35%), e não os 40% que você configurou no N3.
 
-A tabela `sdr_squad_history` tem uma linha incorreta:
+### O que fazer
 
-| sdr_id | squad | valid_from | valid_to |
-|---|---|---|---|
-| Marcio Dantas | **incorporador** | 16/03/2026 | 08/05/2026 |
-| Marcio Dantas | consorcio | 08/05/2026 | (aberto) |
+1. **Encerrar o registro N2 vigente** em `sdr_comp_plan`
+   - Setar `vigencia_fim = 2026-03-31` no plano N2 que hoje está com `vigencia_inicio=2026-04-01` (ou seja, anular esse plano marcando-o como já encerrado antes de abril).
 
-Marcio nunca foi SDR de incorporador — sempre foi closer dessa BU, e só virou SDR ao migrar para o Consórcio em 08/05. A linha `incorporador` foi criada por engano (provavelmente quando o `role_type` virou `sdr`).
+2. **Criar novo registro N3 para abril/2026**
+   - `sdr_id = 66a5a9ea-...`
+   - `cargo_catalogo_id = d7bdc06e-d63a-49b8-9ccc-c9c8f06aa037` (Closer Inside N3)
+   - `vigencia_inicio = 2026-04-01`
+   - `vigencia_fim = NULL`
+   - `status = APPROVED`
 
-## Correção
+3. **Recalcular o payout DRAFT de abril/2026 da Thayna**
+   - Atualizar `sdr_month_payout` (`id=2eb63f95-...`):
+     - `cargo_vigente = 'Closer Inside N3'`
+     - `nivel_vigente = 3`
+     - `cargo_catalogo_id_fechamento = d7bdc06e-...`
+   - O hook `useActiveMetricsForSdr` passa a resolver as métricas pelo cargo N3 → Contratos Pagos = 40% das Realizadas.
+   - Tela vai recalcular Variável e Total ao abrir/clicar "Salvar e Recalcular".
 
-Apagar a linha de histórico equivocada e manter apenas a de Consórcio:
+### Detalhes técnicos
 
-```sql
-DELETE FROM public.sdr_squad_history
-WHERE sdr_id = '1b949ca6-c97d-4a01-8da9-105dca5ded86'
-  AND squad = 'incorporador';
-```
+- Operação 100% de dados (INSERT/UPDATE em `sdr_comp_plan` e `sdr_month_payout`). Nenhum arquivo de código será alterado.
+- Memória `Payout Recalculation Sync` é respeitada: ao alinhar `cargo_catalogo_id_fechamento` com o cargo global N3, o recálculo automático volta a funcionar normalmente.
+- Se preferir manter histórico, em vez de "anular" o plano N2 de abril podemos apenas trocar o `cargo_catalogo_id` desse mesmo registro para N3 — mais simples e preserva o id. Recomendo essa abordagem.
 
-## Resultado esperado
+### Validação após execução
 
-- Aba **SDRs (Incorporador)**: Marcio some — passa a ter 9 SDRs em vez de 10.
-- Aba **Closers (Incorporador)**: Marcio continua igual (55/25/28/1 etc.) — esses dados vêm de `meeting_slot_attendees.closer_id` e não dependem de `sdr_squad_history`.
-- BU **Consórcio**: Marcio continua aparecendo como SDR a partir de 08/05.
-- Histórico de outros meses não é afetado (ele aparece zerado em qualquer aba SDR de Incorporador, pois nunca foi SDR lá de fato).
-
-## Sem mudanças de código
-
-Apenas uma operação de DELETE pontual no banco. Nenhum hook, função ou componente precisa ser alterado — a lógica de `get_sdrs_for_squad_in_period` está correta, o problema é dado sujo.
+- Conferir em `/fechamento-sdr/2eb63f95-...?from=2026-04&bu=incorporador`:
+  - Cabeçalho mostra "Closer Inside N3", OTE 9.000, Fixo 6.300.
+  - Linha "Contratos Pagos" mostra **Meta: 40% de 166 Realizadas = 66**.
