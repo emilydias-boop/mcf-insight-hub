@@ -477,7 +477,7 @@ const FechamentoSDRDetail = () => {
                     </Badge>
                   )}
                 </div>
-                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveOTE)}</div>
+                <div className="text-xl font-bold mt-1">{formatCurrency(displayOTE)}</div>
               </CardContent>
             </Card>
 
