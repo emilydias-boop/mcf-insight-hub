@@ -170,6 +170,22 @@ const FechamentoSDRDetail = () => {
     diasUteisTrabalhados: payout?.dias_uteis_trabalhados,
   });
 
+  // ===== Cargo único do fechamento (declarado ANTES dos early returns para manter ordem dos hooks) =====
+  const cargoModeEarly = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
+  const cargoFechamentoIdEarly = ((payout as any)?.cargo_catalogo_id_fechamento as string | null) || null;
+  const { data: cargoFechamentoData } = useQuery({
+    queryKey: ["cargo-fechamento", cargoFechamentoIdEarly],
+    enabled: cargoModeEarly === "cargo_unico" && !!cargoFechamentoIdEarly,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("cargos_catalogo")
+        .select("id, nome_exibicao, fixo_valor, ote_total, variavel_valor")
+        .eq("id", cargoFechamentoIdEarly!)
+        .maybeSingle();
+      return data;
+    },
+  });
+
   const removeAdjustment = useRemoveAdjustment();
   const isAdmin = role === "admin";
   const isManager = role === "manager" || role === "coordenador";
@@ -351,22 +367,10 @@ const FechamentoSDRDetail = () => {
   // ===== Modo "cargo único" do fechamento =====
   // Quando o coordenador escolhe um cargo específico para usar cheio (sem pro-rata por mudança de cargo),
   // os cards de OTE/Fixo/Variável refletem esse cargo escolhido, e o pro-rata por segmento é desativado.
-  const cargoMode = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
+  const cargoMode = cargoModeEarly;
   const componentesConta = (payout as any)?.componentes_conta === "somente_fixo" ? "somente_fixo" : "fixo_variavel";
   const cargoSegmentsList = ((payout as any)?.cargo_segments || []) as Array<any>;
-  const cargoFechamentoId = (payout as any)?.cargo_catalogo_id_fechamento as string | null;
-  const { data: cargoFechamentoData } = useQuery({
-    queryKey: ["cargo-fechamento", cargoFechamentoId],
-    enabled: cargoMode === "cargo_unico" && !!cargoFechamentoId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("cargos_catalogo")
-        .select("id, nome_exibicao, fixo_valor, ote_total, variavel_valor")
-        .eq("id", cargoFechamentoId!)
-        .maybeSingle();
-      return data;
-    },
-  });
+  const cargoFechamentoId = cargoFechamentoIdEarly;
   const displayFixo = cargoMode === "cargo_unico" && cargoFechamentoData?.fixo_valor
     ? Number(cargoFechamentoData.fixo_valor)
     : effectiveFixo;
