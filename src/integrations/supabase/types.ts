@@ -9783,6 +9783,8 @@ export type Database = {
           ano_mes: string
           aprovado_em: string | null
           aprovado_por: string | null
+          cargo_catalogo_id_fechamento: string | null
+          cargo_mode: string
           cargo_segments: Json | null
           cargo_vigente: string | null
           config_overrides: Json | null
@@ -9826,6 +9828,8 @@ export type Database = {
           ano_mes: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_catalogo_id_fechamento?: string | null
+          cargo_mode?: string
           cargo_segments?: Json | null
           cargo_vigente?: string | null
           config_overrides?: Json | null
@@ -9869,6 +9873,8 @@ export type Database = {
           ano_mes?: string
           aprovado_em?: string | null
           aprovado_por?: string | null
+          cargo_catalogo_id_fechamento?: string | null
+          cargo_mode?: string
           cargo_segments?: Json | null
           cargo_vigente?: string | null
           config_overrides?: Json | null
@@ -9908,6 +9914,13 @@ export type Database = {
           valor_variavel_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sdr_month_payout_cargo_catalogo_id_fechamento_fkey"
+            columns: ["cargo_catalogo_id_fechamento"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sdr_month_payout_nfse_id_fkey"
             columns: ["nfse_id"]

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Settings2, Loader2, CheckCircle2 } from "lucide-react";
@@ -55,6 +56,37 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
     meta_realizadas_ajustada: "",
     meta_tentativas_ajustada: "",
   });
+  const [cargoMode, setCargoMode] = useState<"pro_rata" | "cargo_unico">("pro_rata");
+  const [cargoIdFechamento, setCargoIdFechamento] = useState<string>("");
+
+  // Cargos disponíveis: vindos de cargo_segments do mês + cargo atual do funcionário
+  const segments = ((payout as any)?.cargo_segments || []) as Array<{ cargo_catalogo_id: string; cargo_nome: string }>;
+  const { data: cargosOptions } = useQuery({
+    queryKey: ["payout-cargo-options", payout.id, payout.sdr_id, open],
+    enabled: open,
+    queryFn: async () => {
+      const ids = new Set<string>();
+      segments.forEach((s) => s.cargo_catalogo_id && ids.add(s.cargo_catalogo_id));
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("cargo_catalogo_id")
+        .eq("profile_id", payout.sdr_id)
+        .maybeSingle();
+      const empCargo = (emp as any)?.cargo_catalogo_id;
+      if (empCargo) ids.add(empCargo);
+      if (ids.size === 0) return [] as Array<{ id: string; nome: string; fixo: number; ote: number }>;
+      const { data } = await supabase
+        .from("cargos_catalogo")
+        .select("id, nome_exibicao, fixo_valor, ote_total")
+        .in("id", Array.from(ids));
+      return (data || []).map((c: any) => ({
+        id: c.id,
+        nome: c.nome_exibicao,
+        fixo: Number(c.fixo_valor || 0),
+        ote: Number(c.ote_total || 0),
+      }));
+    },
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +97,8 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
       meta_realizadas_ajustada: (payout as any).meta_realizadas_ajustada != null ? String((payout as any).meta_realizadas_ajustada) : "",
       meta_tentativas_ajustada: (payout as any).meta_tentativas_ajustada != null ? String((payout as any).meta_tentativas_ajustada) : "",
     });
+    setCargoMode((payout as any).cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata");
+    setCargoIdFechamento(((payout as any).cargo_catalogo_id_fechamento as string) || "");
   }, [open, payout]);
 
   const save = useMutation({
@@ -88,6 +122,8 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
       const updates: Record<string, any> = {
         ...overrides,
         config_overrides: Object.keys(cleaned).length > 0 ? cleaned : null,
+        cargo_mode: cargoMode,
+        cargo_catalogo_id_fechamento: cargoMode === "cargo_unico" ? (cargoIdFechamento || null) : null,
       };
       const { error } = await supabase
         .from("sdr_month_payout")
@@ -140,6 +176,44 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
         )}
 
         <div className="space-y-4 py-2">
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground mb-2">CARGO DO FECHAMENTO</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Modo de cálculo</Label>
+                <Select value={cargoMode} onValueChange={(v) => setCargoMode(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pro_rata">Pro-rata por segmentos (padrão)</SelectItem>
+                    <SelectItem value="cargo_unico">Cargo único (cheio)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cargo base</Label>
+                <Select
+                  value={cargoIdFechamento}
+                  onValueChange={setCargoIdFechamento}
+                  disabled={cargoMode !== "cargo_unico"}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o cargo" /></SelectTrigger>
+                  <SelectContent>
+                    {(cargosOptions || []).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.nome} (Fixo R$ {c.fixo.toLocaleString("pt-BR")} / OTE R$ {c.ote.toLocaleString("pt-BR")})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              <strong>Pro-rata:</strong> soma cada cargo proporcional aos dias úteis. <strong>Cargo único:</strong> usa o cargo escolhido cheio (sem dividir por mudança de cargo).
+            </p>
+          </div>
+
+          <Separator />
+
           <div>
             <h4 className="text-xs font-semibold text-muted-foreground mb-2">DIAS ÚTEIS</h4>
             <div className="grid grid-cols-2 gap-3">

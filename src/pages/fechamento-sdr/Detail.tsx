@@ -1,5 +1,7 @@
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -346,12 +348,40 @@ const FechamentoSDRDetail = () => {
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
   const effectiveKpi = effectiveKpiEarly;
 
-  // Pro-rata display
-  const isProporcional = payout.dias_uteis_trabalhados != null 
-    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
-  const effectiveFixoDisplay = isProporcional
-    ? Math.round(effectiveFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+  // ===== Modo "cargo único" do fechamento =====
+  // Quando o coordenador escolhe um cargo específico para usar cheio (sem pro-rata por mudança de cargo),
+  // os cards de OTE/Fixo/Variável refletem esse cargo escolhido, e o pro-rata por segmento é desativado.
+  const cargoMode = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
+  const cargoSegmentsList = ((payout as any)?.cargo_segments || []) as Array<any>;
+  const cargoFechamentoId = (payout as any)?.cargo_catalogo_id_fechamento as string | null;
+  const { data: cargoFechamentoData } = useQuery({
+    queryKey: ["cargo-fechamento", cargoFechamentoId],
+    enabled: cargoMode === "cargo_unico" && !!cargoFechamentoId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("cargos_catalogo")
+        .select("id, nome_exibicao, fixo_valor, ote_total, variavel_valor")
+        .eq("id", cargoFechamentoId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+  const displayFixo = cargoMode === "cargo_unico" && cargoFechamentoData?.fixo_valor
+    ? Number(cargoFechamentoData.fixo_valor)
     : effectiveFixo;
+  const displayOTE = cargoMode === "cargo_unico" && cargoFechamentoData?.ote_total
+    ? Number(cargoFechamentoData.ote_total)
+    : effectiveOTE;
+
+  // Pro-rata display
+  const isProporcional = cargoMode !== "cargo_unico"
+    && payout.dias_uteis_trabalhados != null 
+    && payout.dias_uteis_trabalhados < (payout.dias_uteis_mes || diasUteisMes);
+  const effectiveFixoDisplay = cargoMode === "cargo_unico"
+    ? displayFixo
+    : (isProporcional
+      ? Math.round(displayFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
+      : displayFixo);
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
@@ -453,7 +483,7 @@ const FechamentoSDRDetail = () => {
                     </Badge>
                   )}
                 </div>
-                <div className="text-xl font-bold mt-1">{formatCurrency(effectiveOTE)}</div>
+                <div className="text-xl font-bold mt-1">{formatCurrency(displayOTE)}</div>
               </CardContent>
             </Card>
 

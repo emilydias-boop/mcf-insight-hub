@@ -1581,7 +1581,29 @@ serve(async (req) => {
         }
 
         // ===== SOBRESCREVER COM SOMA POR SEGMENTOS DE CARGO (mudança de cargo no meio do mês) =====
-        if (hasMultipleCargoSegments) {
+        const cargoModePayout: string = (existingPayout as any)?.cargo_mode || 'pro_rata';
+        const cargoIdFechamento: string | null = (existingPayout as any)?.cargo_catalogo_id_fechamento || null;
+
+        if (cargoModePayout === 'cargo_unico') {
+          // MODO CARGO ÚNICO: usar o cargo escolhido cheio (sem pro-rata por segmentos nem por dias)
+          let chosenCargoId = cargoIdFechamento;
+          if (!chosenCargoId && cargoSegments.length > 0) {
+            // fallback: cargo com mais dias úteis no mês
+            chosenCargoId = [...cargoSegments].sort((a, b) => b.dias_uteis - a.dias_uteis)[0].cargo_catalogo_id;
+          }
+          if (chosenCargoId) {
+            const { data: cargoChosen } = await supabase
+              .from('cargos_catalogo')
+              .select('id, nome_exibicao, ote_total, fixo_valor, variavel_valor, nivel')
+              .eq('id', chosenCargoId)
+              .maybeSingle();
+            if (cargoChosen) {
+              payoutFields.valor_fixo = Math.round(Number(cargoChosen.fixo_valor || 0));
+              payoutFields.total_conta = payoutFields.valor_fixo + payoutFields.valor_variavel_total;
+              console.log(`   🎯 CARGO ÚNICO aplicado para ${sdr.name}: ${cargoChosen.nome_exibicao} (Fixo R$ ${payoutFields.valor_fixo} cheio)`);
+            }
+          }
+        } else if (hasMultipleCargoSegments) {
           // Soma fixo proporcional por cargo de cada segmento
           const fixoFromSegments = cargoSegments.reduce((sum, s) => sum + s.fixo, 0);
           payoutFields.valor_fixo = fixoFromSegments;
@@ -1638,6 +1660,8 @@ serve(async (req) => {
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
             ifood_ultrameta_autorizado_em: existingPayout?.ifood_ultrameta_autorizado_em || null,
             config_overrides: existingPayout?.config_overrides || null,
+            cargo_mode: cargoModePayout,
+            cargo_catalogo_id_fechamento: cargoIdFechamento,
           }, {
             onConflict: 'sdr_id,ano_mes',
           })
