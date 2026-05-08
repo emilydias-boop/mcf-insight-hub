@@ -80,8 +80,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
     stageId
       ? (restrictToSdrOrigins && pipelineId
-          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 100 }
-          : { stageId, limit: 100 })
+          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
+          : { stageId, limit: 1000 })
       : {}
   );
 
@@ -117,12 +117,22 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     );
   };
 
-  const loadFromStage = () => {
+  const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean }) => {
     if (!stageId || !stageDeals) return;
+    // IDs já discados nesta sessão (qualquer resultado != 'pending') — para
+    // que ao "Carregar próximos" depois de uma rodada não voltem os mesmos leads.
+    const alreadyDialed = new Set<string>(
+      opts?.excludeAlreadyDialed
+        ? Object.entries(ad.results)
+            .filter(([, r]) => r && r !== 'pending')
+            .map(([id]) => id)
+        : []
+    );
     const leads: AutoDialerLead[] = stageDeals
       .map((d: any) => {
         const phone = getDealPhone(d);
         if (!phone) return null;
+        if (alreadyDialed.has(d.id)) return null;
         return {
           dealId: d.id,
           contactId: d.contact_id || null,
@@ -132,9 +142,11 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         } as AutoDialerLead;
       })
       .filter((x): x is AutoDialerLead => !!x)
-      .slice(0, 100);
+      .slice(0, 1000);
     if (leads.length === 0) {
-      toast.error('Nenhum lead com telefone neste estágio');
+      toast.error(opts?.excludeAlreadyDialed
+        ? 'Não há mais leads novos neste estágio'
+        : 'Nenhum lead com telefone neste estágio');
       return;
     }
     ad.loadQueue(leads);
