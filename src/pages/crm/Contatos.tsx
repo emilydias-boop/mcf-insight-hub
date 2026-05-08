@@ -443,14 +443,41 @@ const Contatos = () => {
             onTransfer={() => setPipelineModalOpen(true)}
             onClearSelection={() => setSelectedIds(new Set())}
             isTransferring={false}
+            transferLabel="Enviar p/ Pipeline..."
             onDuplicate={activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
+            onChangeOwner={selectedDealIds.length > 0 ? () => setChangeOwnerDialogOpen(true) : undefined}
+            isChangingOwner={bulkTransfer.isPending}
+            onMoveStage={selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
+            onMovePipeline={selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
           />
 
           <SendToPipelineModal
             open={pipelineModalOpen}
             onOpenChange={setPipelineModalOpen}
             selectedContactIds={Array.from(selectedIds)}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkTransferDialog
+            open={changeOwnerDialogOpen}
+            onOpenChange={setChangeOwnerDialogOpen}
+            selectedDealIds={selectedDealIds}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkMoveStageDialog
+            open={moveStageDialogOpen}
+            onOpenChange={setMoveStageDialogOpen}
+            selectedDealIds={selectedDealIds}
+            originId={commonOriginId}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkMovePipelineDialog
+            open={movePipelineDialogOpen}
+            onOpenChange={setMovePipelineDialogOpen}
+            selectedDealIds={selectedDealIds}
             onSuccess={() => setSelectedIds(new Set())}
           />
 
