@@ -58,6 +58,7 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
   });
   const [cargoMode, setCargoMode] = useState<"pro_rata" | "cargo_unico">("pro_rata");
   const [cargoIdFechamento, setCargoIdFechamento] = useState<string>("");
+  const [componentesConta, setComponentesConta] = useState<"fixo_variavel" | "somente_fixo">("fixo_variavel");
 
   // Cargos disponíveis: vindos de cargo_segments do mês + cargo atual do funcionário
   const segments = ((payout as any)?.cargo_segments || []) as Array<{ cargo_catalogo_id: string; cargo_nome: string }>;
@@ -99,6 +100,7 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
     });
     setCargoMode((payout as any).cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata");
     setCargoIdFechamento(((payout as any).cargo_catalogo_id_fechamento as string) || "");
+    setComponentesConta((payout as any).componentes_conta === "somente_fixo" ? "somente_fixo" : "fixo_variavel");
   }, [open, payout]);
 
   const save = useMutation({
@@ -124,6 +126,7 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
         config_overrides: Object.keys(cleaned).length > 0 ? cleaned : null,
         cargo_mode: cargoMode,
         cargo_catalogo_id_fechamento: cargoMode === "cargo_unico" ? (cargoIdFechamento || null) : null,
+        componentes_conta: componentesConta,
       };
       const { error } = await supabase
         .from("sdr_month_payout")
@@ -210,6 +213,19 @@ export function PayoutConfigDialog({ open, onOpenChange, payout }: PayoutConfigD
             <p className="text-[11px] text-muted-foreground mt-1.5">
               <strong>Pro-rata:</strong> soma cada cargo proporcional aos dias úteis. <strong>Cargo único:</strong> usa o cargo escolhido cheio (sem dividir por mudança de cargo).
             </p>
+            <div className="mt-3 space-y-1.5">
+              <Label className="text-xs">Composição da conta</Label>
+              <Select value={componentesConta} onValueChange={(v) => setComponentesConta(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixo_variavel">Fixo + Variável (padrão)</SelectItem>
+                  <SelectItem value="somente_fixo">Somente Fixo</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                <strong>Somente Fixo:</strong> a conta total considera apenas o fixo (variável é ignorado).
+              </p>
+            </div>
           </div>
 
           <Separator />

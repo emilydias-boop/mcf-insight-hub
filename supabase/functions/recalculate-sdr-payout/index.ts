@@ -1319,7 +1319,7 @@ serve(async (req) => {
         // no próprio cálculo, não apenas nos campos salvos depois.
         const { data: existingPayout } = await supabase
           .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento, componentes_conta')
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes)
           .maybeSingle();
@@ -1583,6 +1583,7 @@ serve(async (req) => {
         // ===== SOBRESCREVER COM SOMA POR SEGMENTOS DE CARGO (mudança de cargo no meio do mês) =====
         const cargoModePayout: string = (existingPayout as any)?.cargo_mode || 'pro_rata';
         const cargoIdFechamento: string | null = (existingPayout as any)?.cargo_catalogo_id_fechamento || null;
+        const componentesContaPayout: string = (existingPayout as any)?.componentes_conta || 'fixo_variavel';
 
         if (cargoModePayout === 'cargo_unico') {
           // MODO CARGO ÚNICO: usar o cargo escolhido cheio (sem pro-rata por segmentos nem por dias)
@@ -1617,6 +1618,12 @@ serve(async (req) => {
             });
           }
           console.log(`   🔄 SEGMENTOS de cargo aplicados para ${sdr.name}: Fixo total = R$ ${payoutFields.valor_fixo} (soma de ${cargoSegments.length} segmentos)`);
+        }
+
+        // ===== COMPOSIÇÃO DA CONTA: somente fixo? =====
+        if (componentesContaPayout === 'somente_fixo') {
+          payoutFields.total_conta = payoutFields.valor_fixo;
+          console.log(`   🧮 SOMENTE FIXO aplicado para ${sdr.name}: Total = R$ ${payoutFields.total_conta} (variável ignorado)`);
         }
 
         // ===== APLICAR CONFIG_OVERRIDES (configuração específica do coordenador) =====
@@ -1662,6 +1669,7 @@ serve(async (req) => {
             config_overrides: existingPayout?.config_overrides || null,
             cargo_mode: cargoModePayout,
             cargo_catalogo_id_fechamento: cargoIdFechamento,
+            componentes_conta: componentesContaPayout,
           }, {
             onConflict: 'sdr_id,ano_mes',
           })

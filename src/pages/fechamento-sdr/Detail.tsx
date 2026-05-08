@@ -352,6 +352,7 @@ const FechamentoSDRDetail = () => {
   // Quando o coordenador escolhe um cargo específico para usar cheio (sem pro-rata por mudança de cargo),
   // os cards de OTE/Fixo/Variável refletem esse cargo escolhido, e o pro-rata por segmento é desativado.
   const cargoMode = (payout as any)?.cargo_mode === "cargo_unico" ? "cargo_unico" : "pro_rata";
+  const componentesConta = (payout as any)?.componentes_conta === "somente_fixo" ? "somente_fixo" : "fixo_variavel";
   const cargoSegmentsList = ((payout as any)?.cargo_segments || []) as Array<any>;
   const cargoFechamentoId = (payout as any)?.cargo_catalogo_id_fechamento as string | null;
   const { data: cargoFechamentoData } = useQuery({
@@ -372,9 +373,10 @@ const FechamentoSDRDetail = () => {
   const displayOTE = cargoMode === "cargo_unico" && cargoFechamentoData?.ote_total
     ? Number(cargoFechamentoData.ote_total)
     : effectiveOTE;
-  const displayVariavel = cargoMode === "cargo_unico" && cargoFechamentoData?.variavel_valor
+  const displayVariavelRaw = cargoMode === "cargo_unico" && cargoFechamentoData?.variavel_valor
     ? Number(cargoFechamentoData.variavel_valor)
     : (payout.valor_variavel_total || 0);
+  const displayVariavel = componentesConta === "somente_fixo" ? 0 : displayVariavelRaw;
 
   // Pro-rata display
   const isProporcional = cargoMode !== "cargo_unico"
@@ -385,9 +387,11 @@ const FechamentoSDRDetail = () => {
     : (isProporcional
       ? Math.round(displayFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
       : displayFixo);
-  const displayTotalConta = cargoMode === "cargo_unico"
-    ? effectiveFixoDisplay + displayVariavel
-    : (payout.total_conta || 0);
+  const displayTotalConta = componentesConta === "somente_fixo"
+    ? effectiveFixoDisplay
+    : (cargoMode === "cargo_unico"
+      ? effectiveFixoDisplay + displayVariavel
+      : (payout.total_conta || 0));
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
