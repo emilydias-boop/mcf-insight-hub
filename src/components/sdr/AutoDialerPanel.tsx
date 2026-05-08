@@ -323,7 +323,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                   size="sm"
                   variant="outline"
                   className="w-full"
-                  onClick={loadFromStage}
+                  onClick={() => loadFromStage()}
                   disabled={!stageId || dealsLoading}
                 >
                   {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
