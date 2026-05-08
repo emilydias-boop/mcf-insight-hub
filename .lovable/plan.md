@@ -1,22 +1,23 @@
-## Promover Julio para Closer Inside N2 em abril/2026
+## Problema
+A exportação atual da Agenda R2 (botão "Exportar Lista") só inclui 5 colunas: Nome, Telefone, Closer, Data/Hora e um Status simplificado (apenas Comparecimento). Faltam as colunas que aparecem na tela: Sócio, Perfil, Vídeo, Status Final (Aprovado/Carrinho etc.) e Termômetro.
 
-### Diagnóstico
+## Solução
+Atualizar `handleExportList` em `src/pages/crm/AgendaR2.tsx` para incluir todas as colunas exibidas na lista R2.
 
-- Julio (`sdr_id=21393c7b-faa7-42e2-b1d8-920e3a808b33`) tem em `sdr_comp_plan` o cargo **Closer Inside N1** (`c2909e20-3bfc-4a9f-853f-97f065af099a`) vigente desde 2026-04-01.
-- O payout de abril/2026 (`id=db16a333-4f0f-4f8d-84cd-65e15eb6bdee`) está com `cargo_vigente='Closer Inside N1'`, `nivel_vigente=1` e `status=APPROVED`.
-- Por isso o Fechamento ainda exibe N1, mesmo que você tenha mudado o cargo dele em outro lugar.
+### Novas colunas no CSV exportado
+1. **Hora** — `format(scheduled_at, 'dd/MM/yyyy HH:mm')`
+2. **Lead** — nome do attendee/contato
+3. **Telefone**
+4. **Sócio** — `attendee.partner_name`
+5. **Perfil** — `attendee.lead_profile` (label legível via `LEAD_PROFILE_OPTIONS`)
+6. **Comparecimento** — status traduzido (Realizada / No-show / Agendada / Pré-agendado etc.)
+7. **Closer** — `meeting.closer.name`
+8. **Vídeo** — `attendee.video_status` (Ok / Pendente)
+9. **Status Final** — `attendee.r2_status?.name` (Aprovado, Carrinho, etc.)
+10. **Termômetro** — nomes dos `attendee.thermometers` separados por `; `
 
-### O que fazer (operação de dados)
-
-1. **`sdr_comp_plan`** — trocar o cargo do registro vigente (vigencia_inicio=2026-04-01) para **Closer Inside N2** (`fd8d5a86-4687-4e89-b00d-84e7e5bcd563`).
-2. **`sdr_month_payout`** (id `db16a333-…`) — atualizar:
-   - `cargo_vigente = 'Closer Inside N2'`
-   - `nivel_vigente = 2`
-   - `cargo_catalogo_id_fechamento = fd8d5a86-…`
-   - `status = 'DRAFT'` (para destravar recálculo, já que estava APPROVED)
-
-Após executar, abra o fechamento do Julio e clique em "Salvar e Recalcular" para refletir a meta nova (35% para N2).
-
-### Observação
-
-O payout estava aprovado. Reverter para DRAFT vai reabrir o fechamento dele para edição/recálculo. Se preferir manter o histórico aprovado intacto e gerar um ajuste, me avise antes.
+### Detalhes técnicos
+- Manter formato CSV com BOM UTF-8 (já implementado).
+- Usar os mesmos mapas de label já presentes no projeto (`ATTENDANCE_STATUS_OPTIONS`, `LEAD_PROFILE_OPTIONS`, `VIDEO_STATUS_OPTIONS`) para garantir os mesmos rótulos da UI; importar de onde `R2ListViewTable.tsx` os importa.
+- Escapar aspas duplas dentro das células (`cell.replace(/"/g, '""')`).
+- Não alterar a lógica de filtragem (`filteredMeetings`) — mantém o mesmo recorte que o usuário vê.
