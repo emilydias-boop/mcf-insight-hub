@@ -1,37 +1,22 @@
-## Promover Thayna para Closer Inside N3 em abril/2026
+## Promover Julio para Closer Inside N2 em abril/2026
 
-### Contexto
+### Diagnóstico
 
-Hoje a Thayna (sdr_id `66a5a9ea-6d48-4831-b91c-7d79cf00aac2`) tem em `sdr_comp_plan` o cargo **Closer Inside N2** vigente desde 2026-04-01 (sem data fim). Isso faz o Fechamento puxar a meta de Contratos Pagos do N2 (35%), e não os 40% que você configurou no N3.
+- Julio (`sdr_id=21393c7b-faa7-42e2-b1d8-920e3a808b33`) tem em `sdr_comp_plan` o cargo **Closer Inside N1** (`c2909e20-3bfc-4a9f-853f-97f065af099a`) vigente desde 2026-04-01.
+- O payout de abril/2026 (`id=db16a333-4f0f-4f8d-84cd-65e15eb6bdee`) está com `cargo_vigente='Closer Inside N1'`, `nivel_vigente=1` e `status=APPROVED`.
+- Por isso o Fechamento ainda exibe N1, mesmo que você tenha mudado o cargo dele em outro lugar.
 
-### O que fazer
+### O que fazer (operação de dados)
 
-1. **Encerrar o registro N2 vigente** em `sdr_comp_plan`
-   - Setar `vigencia_fim = 2026-03-31` no plano N2 que hoje está com `vigencia_inicio=2026-04-01` (ou seja, anular esse plano marcando-o como já encerrado antes de abril).
+1. **`sdr_comp_plan`** — trocar o cargo do registro vigente (vigencia_inicio=2026-04-01) para **Closer Inside N2** (`fd8d5a86-4687-4e89-b00d-84e7e5bcd563`).
+2. **`sdr_month_payout`** (id `db16a333-…`) — atualizar:
+   - `cargo_vigente = 'Closer Inside N2'`
+   - `nivel_vigente = 2`
+   - `cargo_catalogo_id_fechamento = fd8d5a86-…`
+   - `status = 'DRAFT'` (para destravar recálculo, já que estava APPROVED)
 
-2. **Criar novo registro N3 para abril/2026**
-   - `sdr_id = 66a5a9ea-...`
-   - `cargo_catalogo_id = d7bdc06e-d63a-49b8-9ccc-c9c8f06aa037` (Closer Inside N3)
-   - `vigencia_inicio = 2026-04-01`
-   - `vigencia_fim = NULL`
-   - `status = APPROVED`
+Após executar, abra o fechamento do Julio e clique em "Salvar e Recalcular" para refletir a meta nova (35% para N2).
 
-3. **Recalcular o payout DRAFT de abril/2026 da Thayna**
-   - Atualizar `sdr_month_payout` (`id=2eb63f95-...`):
-     - `cargo_vigente = 'Closer Inside N3'`
-     - `nivel_vigente = 3`
-     - `cargo_catalogo_id_fechamento = d7bdc06e-...`
-   - O hook `useActiveMetricsForSdr` passa a resolver as métricas pelo cargo N3 → Contratos Pagos = 40% das Realizadas.
-   - Tela vai recalcular Variável e Total ao abrir/clicar "Salvar e Recalcular".
+### Observação
 
-### Detalhes técnicos
-
-- Operação 100% de dados (INSERT/UPDATE em `sdr_comp_plan` e `sdr_month_payout`). Nenhum arquivo de código será alterado.
-- Memória `Payout Recalculation Sync` é respeitada: ao alinhar `cargo_catalogo_id_fechamento` com o cargo global N3, o recálculo automático volta a funcionar normalmente.
-- Se preferir manter histórico, em vez de "anular" o plano N2 de abril podemos apenas trocar o `cargo_catalogo_id` desse mesmo registro para N3 — mais simples e preserva o id. Recomendo essa abordagem.
-
-### Validação após execução
-
-- Conferir em `/fechamento-sdr/2eb63f95-...?from=2026-04&bu=incorporador`:
-  - Cabeçalho mostra "Closer Inside N3", OTE 9.000, Fixo 6.300.
-  - Linha "Contratos Pagos" mostra **Meta: 40% de 166 Realizadas = 66**.
+O payout estava aprovado. Reverter para DRAFT vai reabrir o fechamento dele para edição/recálculo. Se preferir manter o histórico aprovado intacto e gerar um ajuste, me avise antes.
