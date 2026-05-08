@@ -372,6 +372,9 @@ const FechamentoSDRDetail = () => {
   const displayOTE = cargoMode === "cargo_unico" && cargoFechamentoData?.ote_total
     ? Number(cargoFechamentoData.ote_total)
     : effectiveOTE;
+  const displayVariavel = cargoMode === "cargo_unico" && cargoFechamentoData?.variavel_valor
+    ? Number(cargoFechamentoData.variavel_valor)
+    : (payout.valor_variavel_total || 0);
 
   // Pro-rata display
   const isProporcional = cargoMode !== "cargo_unico"
@@ -382,6 +385,9 @@ const FechamentoSDRDetail = () => {
     : (isProporcional
       ? Math.round(displayFixo * (payout.dias_uteis_trabalhados! / (payout.dias_uteis_mes || diasUteisMes)))
       : displayFixo);
+  const displayTotalConta = cargoMode === "cargo_unico"
+    ? effectiveFixoDisplay + displayVariavel
+    : (payout.total_conta || 0);
 
   // Closer-specific intermediações count (use agenda data for Closers)
   const effectiveIntermediacao = isCloser && closerMetrics.data 
@@ -517,14 +523,14 @@ const FechamentoSDRDetail = () => {
                       RH
                     </Badge>
                   )}
-                  {!employee?.fechamento_manual && Math.abs(calculatedVariavel.total - (payout.valor_variavel_total || 0)) > 1 && (
+                  {cargoMode !== "cargo_unico" && !employee?.fechamento_manual && Math.abs(calculatedVariavel.total - (payout.valor_variavel_total || 0)) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.valor_variavel_total || 0)}
+                  {formatCurrency(displayVariavel)}
                 </div>
               </CardContent>
             </Card>
@@ -534,14 +540,14 @@ const FechamentoSDRDetail = () => {
                 <div className="flex items-center gap-1.5 text-primary text-xs">
                   <CreditCard className="h-3.5 w-3.5" />
                   Total Conta
-                  {!employee?.fechamento_manual && Math.abs((effectiveFixoDisplay + calculatedVariavel.total) - (payout.total_conta || 0)) > 1 && (
+                  {!employee?.fechamento_manual && Math.abs((effectiveFixoDisplay + displayVariavel) - displayTotalConta) > 1 && (
                     <Badge variant="destructive" className="text-[9px] h-4 ml-1">
                       Recalcular
                     </Badge>
                   )}
                 </div>
                 <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.total_conta || 0)}
+                  {formatCurrency(displayTotalConta)}
                 </div>
               </CardContent>
             </Card>

@@ -1319,7 +1319,7 @@ serve(async (req) => {
         // no próprio cálculo, não apenas nos campos salvos depois.
         const { data: existingPayout } = await supabase
           .from('sdr_month_payout')
-          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status, config_overrides, cargo_mode, cargo_catalogo_id_fechamento')
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes)
           .maybeSingle();
