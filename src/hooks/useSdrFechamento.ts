@@ -731,7 +731,9 @@ export const useRecalculatePayout = () => {
           )
         `)
         .eq('sdr_id', sdrId)
-        .eq('status', 'ativo')
+        .in('status', ['ativo', 'desligado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       // Determinar se é Closer baseado no cargo ou role_type
