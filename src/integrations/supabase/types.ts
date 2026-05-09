@@ -1243,44 +1243,68 @@ export type Database = {
       automation_templates: {
         Row: {
           activecampaign_template_id: string | null
+          approval_rejected_reason: string | null
+          approval_status: string
+          approval_submitted_at: string | null
+          approval_updated_at: string | null
+          buttons_config: Json
+          category: string | null
           channel: Database["public"]["Enums"]["automation_channel"]
           content: string
           created_at: string | null
           created_by: string | null
           id: string
           is_active: boolean | null
+          language: string | null
           name: string
           subject: string | null
           twilio_template_sid: string | null
           updated_at: string | null
+          variable_count: number | null
           variables: string[] | null
         }
         Insert: {
           activecampaign_template_id?: string | null
+          approval_rejected_reason?: string | null
+          approval_status?: string
+          approval_submitted_at?: string | null
+          approval_updated_at?: string | null
+          buttons_config?: Json
+          category?: string | null
           channel: Database["public"]["Enums"]["automation_channel"]
           content: string
           created_at?: string | null
           created_by?: string | null
           id?: string
           is_active?: boolean | null
+          language?: string | null
           name: string
           subject?: string | null
           twilio_template_sid?: string | null
           updated_at?: string | null
+          variable_count?: number | null
           variables?: string[] | null
         }
         Update: {
           activecampaign_template_id?: string | null
+          approval_rejected_reason?: string | null
+          approval_status?: string
+          approval_submitted_at?: string | null
+          approval_updated_at?: string | null
+          buttons_config?: Json
+          category?: string | null
           channel?: Database["public"]["Enums"]["automation_channel"]
           content?: string
           created_at?: string | null
           created_by?: string | null
           id?: string
           is_active?: boolean | null
+          language?: string | null
           name?: string
           subject?: string | null
           twilio_template_sid?: string | null
           updated_at?: string | null
+          variable_count?: number | null
           variables?: string[] | null
         }
         Relationships: []
