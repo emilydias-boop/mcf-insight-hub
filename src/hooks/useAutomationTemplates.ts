@@ -57,7 +57,7 @@ export function useAutomationTemplates(channel?: 'whatsapp' | 'email') {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as AutomationTemplate[];
+      return (data || []) as unknown as AutomationTemplate[];
     },
   });
 }
@@ -75,7 +75,7 @@ export function useAutomationTemplate(id: string | null) {
         .maybeSingle();
 
       if (error) throw error;
-      return data as AutomationTemplate | null;
+      return (data ?? null) as unknown as AutomationTemplate | null;
     },
     enabled: !!id,
   });
