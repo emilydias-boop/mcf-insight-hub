@@ -214,3 +214,9 @@ verify_jwt = false
 
 [functions.outbound-webhook-dispatcher]
 verify_jwt = false
+
+[functions.twilio-content-manage]
+verify_jwt = false
+
+[functions.twilio-content-status-poll]
+verify_jwt = false
