@@ -13,8 +13,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, MessageCircle, Mail, Eye } from "lucide-react";
-import { useAutomationTemplate, useCreateTemplate, useUpdateTemplate, AutomationTemplate } from "@/hooks/useAutomationTemplates";
+import { Loader2, Save, MessageCircle, Mail, Eye, Plus, Trash2, RefreshCw, Send, Cloud } from "lucide-react";
+import {
+  useAutomationTemplate,
+  useCreateTemplate,
+  useUpdateTemplate,
+  AutomationTemplate,
+  TemplateButton,
+  ApprovalStatus,
+} from "@/hooks/useAutomationTemplates";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useCreateTwilioContent,
+  useSubmitTwilioContent,
+  useRefreshTwilioContent,
+} from "@/hooks/useTwilioContent";
 import { TemplatePreview } from "./TemplatePreview";
 
 interface TemplateEditorDialogProps {
@@ -26,12 +45,25 @@ interface TemplateEditorDialogProps {
 
 const AVAILABLE_VARIABLES = ['nome', 'sdr', 'data', 'link', 'produto', 'empresa', 'telefone', 'email'];
 
+const STATUS_LABEL: Record<ApprovalStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  draft: { label: 'Rascunho', variant: 'outline' },
+  pending: { label: 'Aguardando Meta', variant: 'secondary' },
+  approved: { label: 'Aprovado', variant: 'default' },
+  rejected: { label: 'Rejeitado', variant: 'destructive' },
+  paused: { label: 'Pausado', variant: 'destructive' },
+  disabled: { label: 'Desativado', variant: 'destructive' },
+  unknown: { label: 'Desconhecido', variant: 'outline' },
+};
+
 export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', open, onOpenChange }: TemplateEditorDialogProps) {
   const isEditing = !!templateId;
   const { data: template, isLoading } = useAutomationTemplate(templateId);
   
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
+  const createTwilio = useCreateTwilioContent();
+  const submitTwilio = useSubmitTwilioContent();
+  const refreshTwilio = useRefreshTwilioContent();
 
   // Form state
   const [name, setName] = useState("");
@@ -42,6 +74,9 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   const [activecampaignTemplateId, setActivecampaignTemplateId] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [category, setCategory] = useState<'utility' | 'marketing' | 'authentication'>('utility');
+  const [language, setLanguage] = useState('pt_BR');
+  const [buttons, setButtons] = useState<TemplateButton[]>([]);
 
   // Reset form when template changes
   useEffect(() => {
@@ -53,6 +88,9 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setTwilioTemplateSid(template.twilio_template_sid || "");
       setActivecampaignTemplateId(template.activecampaign_template_id || "");
       setIsActive(template.is_active);
+      setCategory(template.category ?? 'utility');
+      setLanguage(template.language ?? 'pt_BR');
+      setButtons(template.buttons_config ?? []);
     } else {
       setName("");
       setChannel(defaultChannel);
@@ -61,8 +99,14 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setTwilioTemplateSid("");
       setActivecampaignTemplateId("");
       setIsActive(true);
+      setCategory('utility');
+      setLanguage('pt_BR');
+      setButtons([]);
     }
   }, [template, open, defaultChannel]);
+
+  const approvalStatus: ApprovalStatus = template?.approval_status ?? 'draft';
+  const isLocked = channel === 'whatsapp' && approvalStatus !== 'draft' && approvalStatus !== 'rejected';
 
   const handleSave = async () => {
     // Extract used variables from content
@@ -79,6 +123,9 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       twilio_template_sid: channel === 'whatsapp' ? twilioTemplateSid || undefined : undefined,
       activecampaign_template_id: channel === 'email' ? activecampaignTemplateId || undefined : undefined,
       is_active: isActive,
+      category: channel === 'whatsapp' ? category : undefined,
+      language: channel === 'whatsapp' ? language : undefined,
+      buttons_config: channel === 'whatsapp' ? buttons : [],
     };
 
     if (isEditing && templateId) {
@@ -94,7 +141,17 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
     setContent(prev => prev + `{{${variable}}}`);
   };
 
+  const addButton = () => {
+    if (buttons.length >= 3) return;
+    setButtons((prev) => [...prev, { type: 'quick_reply', text: '' }]);
+  };
+  const updateButton = (idx: number, patch: Partial<TemplateButton>) => {
+    setButtons((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
+  };
+  const removeButton = (idx: number) => setButtons((prev) => prev.filter((_, i) => i !== idx));
+
   const isSaving = createTemplate.isPending || updateTemplate.isPending;
+  const isTwilioBusy = createTwilio.isPending || submitTwilio.isPending || refreshTwilio.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -123,6 +180,62 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
           </div>
         ) : (
           <div className="flex-1 overflow-auto space-y-4">
+            {/* Status Meta (apenas WhatsApp + edição) */}
+            {isEditing && channel === 'whatsapp' && (
+              <div className="flex items-center justify-between rounded-md border p-3 bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Status Meta:</span>
+                  <Badge variant={STATUS_LABEL[approvalStatus].variant}>
+                    {STATUS_LABEL[approvalStatus].label}
+                  </Badge>
+                  {template?.approval_rejected_reason && approvalStatus === 'rejected' && (
+                    <span className="text-xs text-destructive ml-2">
+                      Motivo: {template.approval_rejected_reason}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!template?.twilio_template_sid && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => templateId && createTwilio.mutate(templateId)}
+                      disabled={isTwilioBusy}
+                    >
+                      <Cloud className="h-3 w-3 mr-1" />
+                      Criar no Twilio
+                    </Button>
+                  )}
+                  {template?.twilio_template_sid && approvalStatus === 'draft' && (
+                    <Button
+                      size="sm"
+                      onClick={() => templateId && submitTwilio.mutate(templateId)}
+                      disabled={isTwilioBusy}
+                    >
+                      <Send className="h-3 w-3 mr-1" />
+                      Submeter à Meta
+                    </Button>
+                  )}
+                  {template?.twilio_template_sid && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => templateId && refreshTwilio.mutate(templateId)}
+                      disabled={isTwilioBusy}
+                    >
+                      <RefreshCw className={`h-3 w-3 ${refreshTwilio.isPending ? 'animate-spin' : ''}`} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isLocked && (
+              <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/30 rounded p-2">
+                Conteúdo congelado: a Meta não permite alterar templates após aprovação. Crie um novo template para mudar a mensagem.
+              </p>
+            )}
+
             {/* Basic Info */}
             <div className="space-y-2">
               <Label htmlFor="name">Nome do Template *</Label>
@@ -184,6 +297,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
                 placeholder="Olá {{nome}}, sua reunião foi agendada para {{data}}..."
                 rows={6}
                 className="font-mono text-sm"
+                disabled={isLocked}
               />
             </div>
 
@@ -209,21 +323,94 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
 
             <Separator />
 
+            {/* Twilio: categoria, idioma e botões (apenas WhatsApp) */}
+            {channel === 'whatsapp' && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-sm">Configuração WhatsApp / Meta</h4>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Select value={category} onValueChange={(v) => setCategory(v as typeof category)} disabled={isLocked}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="utility">Utility (notificações, lembretes)</SelectItem>
+                        <SelectItem value="marketing">Marketing (promoções)</SelectItem>
+                        <SelectItem value="authentication">Authentication (códigos)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Idioma</Label>
+                    <Input value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isLocked} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Botões interativos (até 3)</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={addButton} disabled={isLocked || buttons.length >= 3}>
+                      <Plus className="h-3 w-3 mr-1" /> Adicionar
+                    </Button>
+                  </div>
+                  {buttons.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Sem botões — mensagem será texto puro.</p>
+                  )}
+                  {buttons.map((b, idx) => (
+                    <div key={idx} className="grid grid-cols-[110px_1fr_auto] gap-2 items-end border rounded p-2">
+                      <div>
+                        <Label className="text-xs">Tipo</Label>
+                        <Select
+                          value={b.type}
+                          onValueChange={(v) => updateButton(idx, { type: v as TemplateButton['type'] })}
+                          disabled={isLocked}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="quick_reply">Quick Reply</SelectItem>
+                            <SelectItem value="url">URL</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Texto do botão</Label>
+                        <Input value={b.text} onChange={(e) => updateButton(idx, { text: e.target.value })} disabled={isLocked} />
+                        {b.type === 'url' && (
+                          <Input
+                            placeholder="https://exemplo.com (use {{1}} para variável)"
+                            value={b.url ?? ''}
+                            onChange={(e) => updateButton(idx, { url: e.target.value })}
+                            disabled={isLocked}
+                          />
+                        )}
+                      </div>
+                      <Button type="button" size="icon" variant="ghost" onClick={() => removeButton(idx)} disabled={isLocked}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Separator />
+
             {/* External IDs */}
             <div className="space-y-4">
               <h4 className="font-medium text-sm">Configurações Avançadas</h4>
               
               {channel === 'whatsapp' && (
                 <div className="space-y-2">
-                  <Label htmlFor="twilioSid">Twilio Template SID (opcional)</Label>
+                  <Label htmlFor="twilioSid">Twilio Content SID</Label>
                   <Input
                     id="twilioSid"
                     value={twilioTemplateSid}
                     onChange={(e) => setTwilioTemplateSid(e.target.value)}
                     placeholder="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    disabled={!!template?.twilio_template_sid}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Informe o SID do template aprovado no Twilio para usar templates oficiais do WhatsApp
+                    Preenchido automaticamente após "Criar no Twilio". Cole manualmente apenas se já existir no Console.
                   </p>
                 </div>
               )}
