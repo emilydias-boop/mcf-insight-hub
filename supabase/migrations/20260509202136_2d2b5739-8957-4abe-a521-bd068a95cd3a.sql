@@ -1,0 +1,1 @@
+UPDATE public.employees SET telefone = '11990219017' WHERE lower(email_pessoal) = 'carol.correa@minhacasafinanciada.com';
