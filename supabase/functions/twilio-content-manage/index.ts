@@ -118,6 +118,16 @@ function buildContentPayload(opts: {
   };
 }
 
+async function createTwilioContent(baseUrl: string, auth: string, payload: ReturnType<typeof buildContentPayload>) {
+  const response = await fetch(baseUrl, {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  return { response, data };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -168,12 +178,7 @@ serve(async (req) => {
         variables: (tpl.variables as string[] | null) ?? [],
         buttons: ((tpl.buttons_config as ButtonConfig[] | null) ?? []),
       });
-      const r = await fetch(baseUrl, {
-        method: "POST",
-        headers: { Authorization: auth, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json();
+      const { response: r, data } = await createTwilioContent(baseUrl, auth, payload);
       if (!r.ok) {
         return new Response(JSON.stringify({ success: false, error: data?.message ?? "Twilio error", data }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -195,8 +200,42 @@ serve(async (req) => {
     }
 
     if (action === "submit") {
-      const sid = tpl.twilio_template_sid;
-      if (!sid) throw new Error("Template ainda não foi criado no Twilio (rode 'create' antes)");
+      let sid = tpl.twilio_template_sid as string | null;
+      const approvalStatus = String(tpl.approval_status ?? "draft").toLowerCase();
+
+      // Enquanto o template está em rascunho/rejeitado, o ContentSid remoto pode estar
+      // defasado em relação ao DB. Recriamos antes de submeter para garantir que a
+      // versão enviada à Meta receba os títulos de botão sanitizados.
+      if (!sid || ["draft", "rejected", "unknown"].includes(approvalStatus)) {
+        const oldSid = sid;
+        const payload = buildContentPayload({
+          friendly_name: tpl.name,
+          language: tpl.language ?? "pt_BR",
+          content: tpl.content,
+          variables: (tpl.variables as string[] | null) ?? [],
+          buttons: ((tpl.buttons_config as ButtonConfig[] | null) ?? []),
+        });
+        const { response: createResponse, data: createData } = await createTwilioContent(baseUrl, auth, payload);
+        if (!createResponse.ok || !createData?.sid) {
+          return new Response(JSON.stringify({ success: false, error: createData?.message ?? "Twilio error", data: createData }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          });
+        }
+        sid = createData.sid as string;
+        await sb
+          .from("automation_templates")
+          .update({
+            twilio_template_sid: sid,
+            approval_status: "draft",
+            variable_count: ((tpl.variables as string[] | null) ?? []).length,
+            approval_updated_at: new Date().toISOString(),
+          })
+          .eq("id", templateId);
+        if (oldSid && oldSid !== sid) {
+          await fetch(`${baseUrl}/${oldSid}`, { method: "DELETE", headers: { Authorization: auth } }).catch(() => null);
+        }
+      }
       const payload = {
         name: tpl.name.toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 64),
         category: (tpl.category ?? "utility").toUpperCase(),
