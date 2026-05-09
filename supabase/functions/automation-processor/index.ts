@@ -122,6 +122,37 @@ serve(async (req) => {
           continue;
         }
 
+        // Onda 3: revalida reunião para steps ancorados em meeting_start/meeting_end.
+        // Detecta âncora pelo nome do stage atual do flow (mesma regra do enqueue).
+        const { data: stageMeta } = await supabase
+          .from('crm_stages')
+          .select('stage_name')
+          .eq('id', deal.stage_id)
+          .maybeSingle();
+        const stageNameRaw = (stageMeta?.stage_name || '')
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const isMeetingAnchored =
+          /\b(reuniao|consultoria)\s+(agendad|realizad)/.test(stageNameRaw) ||
+          /\br[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
+          /\b(1a|2a|1°|2°|1\.|2\.)\s*reuniao\s+(agendad|realizad)/.test(stageNameRaw) ||
+          /^agendamento$/.test(stageNameRaw);
+        if (isMeetingAnchored) {
+          const { data: slot } = await supabase
+            .from('meeting_slots')
+            .select('status')
+            .eq('deal_id', item.deal_id)
+            .order('scheduled_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const status = (slot?.status || '').toLowerCase();
+          if (['cancelled', 'no_show', 'rescheduled'].includes(status)) {
+            console.log(`[AUTOMATION-PROCESSOR] Meeting no longer active (${status}) for deal ${item.deal_id}, skipping`);
+            await markAsSkipped(supabase, item.id, `meeting_no_longer_active:${status}`);
+            results.skipped++;
+            continue;
+          }
+        }
+
         // 4. Get contact info for variables
         const { data: contact } = await supabase
           .from('crm_contacts')
