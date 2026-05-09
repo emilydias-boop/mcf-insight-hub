@@ -241,12 +241,38 @@ serve(async (req) => {
         category: (tpl.category ?? "utility").toUpperCase(),
         allow_category_change: true,
       };
-      const r = await fetch(`${baseUrl}/${sid}/ApprovalRequests/whatsapp`, {
-        method: "POST",
-        headers: { Authorization: auth, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json();
+      const submitApproval = async (contentSid: string) =>
+        fetch(`${baseUrl}/${contentSid}/ApprovalRequests/whatsapp`, {
+          method: "POST",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      let r = await submitApproval(sid as string);
+      let data = await r.json();
+      // Se o ContentSid no DB estiver órfão no Twilio (404), recriamos e tentamos de novo.
+      if (r.status === 404) {
+        const oldSid = sid;
+        const recreatePayload = buildContentPayload({
+          friendly_name: tpl.name,
+          language: tpl.language ?? "pt_BR",
+          content: tpl.content,
+          variables: (tpl.variables as string[] | null) ?? [],
+          buttons: ((tpl.buttons_config as ButtonConfig[] | null) ?? []),
+        });
+        const { response: createResponse, data: createData } = await createTwilioContent(baseUrl, auth, recreatePayload);
+        if (createResponse.ok && createData?.sid) {
+          sid = createData.sid as string;
+          await sb
+            .from("automation_templates")
+            .update({ twilio_template_sid: sid, approval_updated_at: new Date().toISOString() })
+            .eq("id", templateId);
+          if (oldSid && oldSid !== sid) {
+            await fetch(`${baseUrl}/${oldSid}`, { method: "DELETE", headers: { Authorization: auth } }).catch(() => null);
+          }
+          r = await submitApproval(sid);
+          data = await r.json();
+        }
+      }
       if (!r.ok) {
         return new Response(JSON.stringify({ success: false, error: data?.message ?? "Twilio error", data }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
