@@ -160,8 +160,25 @@ serve(async (req) => {
           ? `https://wa.me/${donoTelefone}`
           : '';
 
-        // Se o template usa dono_telefone/link_wa e não temos telefone do dono → pular
-        const usesDonoPhone = /\{\{\s*dono_(telefone|link_wa)\s*\}\}/i.test(template.content || '');
+        // Determinar papel do dono pelo nome do estágio (mesma cascata do resolve_deal_owner)
+        const { data: stageRow } = await supabase
+          .from('deal_stages')
+          .select('name')
+          .eq('id', deal.stage_id)
+          .maybeSingle();
+        const stageName = (stageRow?.name || '').trim();
+        const isCloserR2 = ['R2 Agendada', 'Contrato Pago'].includes(stageName);
+        const isCloserR1 = ['R1 Agendada', 'R1 Realizada', 'No-Show'].includes(stageName);
+        const WA_DEFAULT_MSG_SDR = 'Olá, quero agendar minha reunião';
+        const WA_DEFAULT_MSG_CLOSER = 'Olá, quero confirmar minha reunião';
+        const msgPorPapel = (isCloserR1 || isCloserR2) ? WA_DEFAULT_MSG_CLOSER : WA_DEFAULT_MSG_SDR;
+        const donoLinkWaAgendar = donoTelefone
+          ? `https://wa.me/${donoTelefone}?text=${encodeURIComponent(msgPorPapel)}`
+          : '';
+
+        // Se o template usa qualquer variável que dependa do telefone do dono → pular se não houver
+        const templateText = `${template.content || ''} ${JSON.stringify(template.buttons_config || [])}`;
+        const usesDonoPhone = /\{\{\s*dono_(telefone|link_wa|link_wa_agendar)\s*\}\}/i.test(templateText);
         if (usesDonoPhone && !donoTelefone) {
           console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem telefone do dono — pulando`);
           await markAsSkipped(supabase, item.id, 'Dono sem telefone cadastrado em employees.telefone');
@@ -178,12 +195,21 @@ serve(async (req) => {
           dono_nome: donoNome,
           dono_telefone: donoTelefone,
           dono_link_wa: donoLinkWa,
+          dono_link_wa_agendar: donoLinkWaAgendar,
           data: new Date().toLocaleDateString('pt-BR'),
           link: ''
         };
 
         const content = replaceVariables(template.content, variables);
         const subject = template.subject ? replaceVariables(template.subject, variables) : undefined;
+
+        // Monta ContentVariables posicional respeitando a ordem definida em template.variables.
+        // Sem isso, Twilio recebe valores trocados (ex.: {{2}} = email em vez de dono_link_wa_agendar).
+        const templateVarNames: string[] = Array.isArray(template.variables) ? template.variables : [];
+        const contentVariables: Record<string, string> = {};
+        templateVarNames.forEach((name, idx) => {
+          contentVariables[String(idx + 1)] = variables[name] ?? '';
+        });
 
         // 8. Send via appropriate channel
         let sendResult: { success: boolean; externalId?: string; error?: string };
@@ -193,7 +219,8 @@ serve(async (req) => {
             to: contact.phone,
             templateSid: template.twilio_template_sid,
             content,
-            variables
+            variables,
+            contentVariables,
           });
         } else if (step.channel === 'email') {
           sendResult = await sendEmail(supabase, {
@@ -309,7 +336,7 @@ function replaceVariables(content: string, variables: Record<string, string>): s
 
 async function sendWhatsApp(
   supabase: any,
-  params: { to: string; templateSid?: string; content: string; variables: Record<string, string> }
+  params: { to: string; templateSid?: string; content: string; variables: Record<string, string>; contentVariables?: Record<string, string> }
 ): Promise<{ success: boolean; externalId?: string; error?: string }> {
   try {
     if (!params.to) {
@@ -322,7 +349,8 @@ async function sendWhatsApp(
         to: params.to,
         templateSid: params.templateSid,
         body: params.content,
-        variables: params.variables
+        variables: params.variables,
+        contentVariables: params.contentVariables,
       }
     });
 
