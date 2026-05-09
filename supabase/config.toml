@@ -223,3 +223,6 @@ verify_jwt = false
 
 [functions.wa-redirect]
 verify_jwt = false
+
+[functions.automation-test-send]
+verify_jwt = false
