@@ -11,6 +11,7 @@ interface SendRequest {
   body?: string;
   templateSid?: string;
   variables?: Record<string, string>;
+  contentVariables?: Record<string, string>;
   dealId?: string;
 }
 
@@ -23,7 +24,7 @@ serve(async (req) => {
     const body: SendRequest = await req.json();
     console.log('[TWILIO-WHATSAPP] Request:', JSON.stringify({ to: body.to, hasTemplate: !!body.templateSid }));
 
-    const { to, body: messageBody, templateSid, variables, dealId } = body;
+    const { to, body: messageBody, templateSid, variables, contentVariables, dealId } = body;
 
     if (!to) {
       throw new Error('Missing required field: to');
@@ -64,15 +65,18 @@ serve(async (req) => {
       // Use Content SID for template messages
       formData.append('ContentSid', templateSid);
       
-      // Add template variables if provided
-      if (variables) {
-        const contentVariables: Record<string, string> = {};
+      // Preferimos contentVariables já numerado (ordem alinhada ao template.variables).
+      // Fallback: numerar `variables` por ordem de inserção (compat com callers antigos).
+      if (contentVariables && Object.keys(contentVariables).length > 0) {
+        formData.append('ContentVariables', JSON.stringify(contentVariables));
+      } else if (variables) {
+        const numbered: Record<string, string> = {};
         let index = 1;
-        for (const [key, value] of Object.entries(variables)) {
-          contentVariables[String(index)] = value;
+        for (const [, value] of Object.entries(variables)) {
+          numbered[String(index)] = value;
           index++;
         }
-        formData.append('ContentVariables', JSON.stringify(contentVariables));
+        formData.append('ContentVariables', JSON.stringify(numbered));
       }
     } else if (messageBody) {
       // Free-form message (only works in sandbox or after 24h window)

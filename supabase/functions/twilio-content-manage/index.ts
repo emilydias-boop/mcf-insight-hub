@@ -77,6 +77,18 @@ function buildContentPayload(opts: {
     samples[i] = `Exemplo ${name}`;
   });
 
+  // Aplica a mesma substituição {{var}} → {{N}} nas URLs dos botões
+  // (Twilio só interpola placeholders posicionais; nomeados ficam literais).
+  const interpolateButtonUrl = (raw: string): string => {
+    let out = raw;
+    variables.forEach((name, idx) => {
+      const i = String(idx + 1);
+      const re = new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, "g");
+      out = out.replace(re, `{{${i}}}`);
+    });
+    return out;
+  };
+
   let types: Record<string, unknown>;
 
   if (buttons.length === 0) {
@@ -92,7 +104,7 @@ function buildContentPayload(opts: {
           actions: buttons.map((b) => {
             const title = sanitizeTitle(b.text);
             return b.type === "url"
-              ? { type: "URL", title, url: b.url ?? "https://example.com" }
+              ? { type: "URL", title, url: interpolateButtonUrl(b.url ?? "https://example.com") }
               : { type: "QUICK_REPLY", title, id: b.id ?? title };
           }),
         },
