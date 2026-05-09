@@ -76,9 +76,8 @@ serve(async (req) => {
       .eq('stage_id', newStageId)
       .eq('is_active', true);
 
-    // Filter by trigger type
-    const triggerFilter = triggerType === 'enter' ? 'stage_enter' : 'stage_exit';
-    flowQuery = flowQuery.eq('trigger_on', triggerFilter);
+    // Filter by trigger type (enum automation_trigger has values 'enter' | 'exit')
+    flowQuery = flowQuery.eq('trigger_on', triggerType);
 
     // Filter by origin if specified in flow
     if (originId) {
