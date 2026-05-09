@@ -125,13 +125,13 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   const approvalStatus: ApprovalStatus = template?.approval_status ?? 'draft';
   const isLocked = channel === 'whatsapp' && approvalStatus !== 'draft' && approvalStatus !== 'rejected';
 
-  const handleSave = async () => {
+  const buildPayload = (): Partial<AutomationTemplate> => {
     // Extract used variables from content
     const usedVariables = AVAILABLE_VARIABLES.filter(v => 
       content.includes(`{{${v}}}`)
     );
 
-    const data: Partial<AutomationTemplate> = {
+    return {
       name,
       channel,
       content,
@@ -145,14 +145,41 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       buttons_config: channel === 'whatsapp' ? buttons : [],
       business_units: businessUnits,
     };
+  };
 
+  const persist = async (): Promise<string | null> => {
+    const data = buildPayload();
     if (isEditing && templateId) {
       await updateTemplate.mutateAsync({ id: templateId, ...data });
-    } else {
-      await createTemplate.mutateAsync(data);
+      return templateId;
     }
-    
-    onOpenChange(false);
+    const created = await createTemplate.mutateAsync(data);
+    return (created as { id?: string } | null)?.id ?? null;
+  };
+
+  const handleSave = async () => {
+    try {
+      await persist();
+      onOpenChange(false);
+    } catch (e) {
+      // hooks já mostram toast de erro
+    }
+  };
+
+  const handleSaveAndSubmit = async () => {
+    try {
+      const id = await persist();
+      if (!id) return;
+      // Se já tem SID, pula criação
+      const hasSid = !!template?.twilio_template_sid || !!twilioTemplateSid;
+      if (!hasSid) {
+        await createTwilio.mutateAsync(id);
+      }
+      await submitTwilio.mutateAsync(id);
+      onOpenChange(false);
+    } catch (e) {
+      // toasts já exibidos pelos hooks; mantém diálogo aberto
+    }
   };
 
   const insertVariable = (variable: string) => {
@@ -504,14 +531,31 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={!name || !content || isSaving}>
+            <Button
+              variant={channel === 'whatsapp' ? 'outline' : 'default'}
+              onClick={handleSave}
+              disabled={!name || !content || isSaving || isTwilioBusy}
+            >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              {isEditing ? "Salvar" : "Criar Template"}
+              {channel === 'whatsapp' ? 'Salvar rascunho' : (isEditing ? 'Salvar' : 'Criar Template')}
             </Button>
+            {channel === 'whatsapp' && (
+              <Button
+                onClick={handleSaveAndSubmit}
+                disabled={!name || !content || isSaving || isTwilioBusy || isLocked}
+              >
+                {(isSaving || isTwilioBusy) ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                Salvar e Enviar para Meta
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
