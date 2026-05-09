@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,15 +37,45 @@ type Result = {
   contentVariables?: Record<string, string>;
 };
 
+type Employee = {
+  id: string;
+  nome_completo: string;
+  email_pessoal: string | null;
+  telefone: string | null;
+};
+
+const DEFAULT_OWNER_EMAIL = "carol.correa@minhacasafinanciada.com";
+
 export function TemplateTestSendDialog({ templateId, templateName, open, onOpenChange }: Props) {
   const { toast } = useToast();
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("Cliente Teste");
-  const [ownerPhone, setOwnerPhone] = useState("");
-  const [ownerName, setOwnerName] = useState("");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [ownerId, setOwnerId] = useState<string>("");
   const [role, setRole] = useState<"sdr" | "closer">("sdr");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, nome_completo, email_pessoal, telefone")
+        .not("telefone", "is", null)
+        .order("nome_completo");
+      if (error) {
+        toast({ title: "Erro ao carregar funcionários", description: error.message, variant: "destructive" });
+        return;
+      }
+      const list = (data || []) as Employee[];
+      setEmployees(list);
+      const carol = list.find((e) => e.email_pessoal?.toLowerCase() === DEFAULT_OWNER_EMAIL);
+      setOwnerId(carol?.id || list[0]?.id || "");
+    })();
+  }, [open, toast]);
+
+  const owner = useMemo(() => employees.find((e) => e.id === ownerId), [employees, ownerId]);
 
   const handleClose = (next: boolean) => {
     if (!next) {
@@ -60,6 +90,10 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
       toast({ title: "Telefone obrigatório", variant: "destructive" });
       return;
     }
+    if (!owner?.telefone) {
+      toast({ title: "Selecione um dono com telefone cadastrado", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {
@@ -68,8 +102,8 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
           templateId,
           phone,
           name,
-          ownerPhone: ownerPhone || phone,
-          ownerName: ownerName || "Equipe MCF",
+          ownerPhone: owner.telefone,
+          ownerName: owner.nome_completo,
           role,
         },
       });
@@ -115,23 +149,23 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Telefone do dono (botão)</Label>
-              <Input
-                placeholder="default = telefone destino"
-                value={ownerPhone}
-                onChange={(e) => setOwnerPhone(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Nome do dono</Label>
-              <Input
-                placeholder="Equipe MCF"
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
-              />
-            </div>
+          <div className="space-y-1">
+            <Label>Dono (employee)</Label>
+            <Select value={ownerId} onValueChange={setOwnerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um funcionário" />
+              </SelectTrigger>
+              <SelectContent>
+                {employees.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nome_completo} — {e.telefone}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Token <code>wa_agendar_token</code> será gerado para este dono.
+            </p>
           </div>
 
           <div className="space-y-1">
