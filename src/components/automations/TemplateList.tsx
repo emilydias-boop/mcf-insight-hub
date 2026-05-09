@@ -9,9 +9,10 @@ import {
   MessageCircle, 
   Mail,
   Loader2,
-  Copy
+  RefreshCw
 } from "lucide-react";
-import { useAutomationTemplates, useDeleteTemplate } from "@/hooks/useAutomationTemplates";
+import { useAutomationTemplates, useDeleteTemplate, ApprovalStatus } from "@/hooks/useAutomationTemplates";
+import { useSyncAllTwilioStatus } from "@/hooks/useTwilioContent";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import {
   AlertDialog,
@@ -25,9 +26,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+const STATUS_BADGE: Record<ApprovalStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  draft: { label: 'Rascunho', variant: 'outline' },
+  pending: { label: 'Aguardando Meta', variant: 'secondary' },
+  approved: { label: 'Aprovado', variant: 'default' },
+  rejected: { label: 'Rejeitado', variant: 'destructive' },
+  paused: { label: 'Pausado', variant: 'destructive' },
+  disabled: { label: 'Desativado', variant: 'destructive' },
+  unknown: { label: '—', variant: 'outline' },
+};
+
 export function TemplateList() {
   const { data: templates, isLoading } = useAutomationTemplates();
   const deleteTemplate = useDeleteTemplate();
+  const syncAll = useSyncAllTwilioStatus();
   
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -96,9 +108,16 @@ export function TemplateList() {
                   )}
                   <CardTitle className="text-base">{template.name}</CardTitle>
                 </div>
-                <Badge variant={template.is_active ? "default" : "secondary"}>
-                  {template.is_active ? "Ativo" : "Inativo"}
-                </Badge>
+                <div className="flex items-center gap-1">
+                  {template.channel === 'whatsapp' && (
+                    <Badge variant={STATUS_BADGE[template.approval_status ?? 'draft'].variant}>
+                      {STATUS_BADGE[template.approval_status ?? 'draft'].label}
+                    </Badge>
+                  )}
+                  <Badge variant={template.is_active ? "default" : "secondary"}>
+                    {template.is_active ? "Ativo" : "Inativo"}
+                  </Badge>
+                </div>
               </div>
               {template.subject && (
                 <CardDescription className="mt-1">
@@ -185,10 +204,21 @@ export function TemplateList() {
               Email ({emailTemplates.length})
             </TabsTrigger>
           </TabsList>
-          <Button onClick={() => handleCreateNew('whatsapp')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => syncAll.mutate()}
+              disabled={syncAll.isPending}
+              title="Consulta a Meta sob demanda — atualiza status de todos os templates pendentes"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncAll.isPending ? 'animate-spin' : ''}`} />
+              Sincronizar status
+            </Button>
+            <Button onClick={() => handleCreateNew('whatsapp')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Template
+            </Button>
+          </div>
         </div>
 
         <TabsContent value="whatsapp">
