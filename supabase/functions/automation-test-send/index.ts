@@ -146,6 +146,7 @@ Deno.serve(async (req) => {
     formData.append('To', toWhatsApp);
     formData.append('ContentSid', template.twilio_template_sid);
     formData.append('ContentVariables', JSON.stringify(contentVariables));
+    formData.append('StatusCallback', `${supabaseUrl}/functions/v1/twilio-status-webhook`);
 
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const auth = btoa(`${accountSid}:${authToken}`);
