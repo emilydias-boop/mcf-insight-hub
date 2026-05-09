@@ -220,3 +220,6 @@ verify_jwt = false
 
 [functions.twilio-content-status-poll]
 verify_jwt = false
+
+[functions.wa-redirect]
+verify_jwt = false
