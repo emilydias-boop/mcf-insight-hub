@@ -266,6 +266,33 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
               />
             </div>
 
+            {/* Business Units Scope */}
+            <div className="space-y-2">
+              <Label>Escopo de Business Unit</Label>
+              <p className="text-xs text-muted-foreground">
+                Selecione as BUs onde este template pode ser usado. Nenhuma selecionada = <strong>Global</strong> (disponível para todas).
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <Badge
+                  variant={businessUnits.length === 0 ? 'default' : 'outline'}
+                  className="cursor-pointer"
+                  onClick={() => setBusinessUnits([])}
+                >
+                  Global
+                </Badge>
+                {ALL_BUS.map((bu) => (
+                  <Badge
+                    key={bu}
+                    variant={businessUnits.includes(bu) ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => toggleBU(bu)}
+                  >
+                    {BU_LABELS[bu]}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
             {/* Channel Selection */}
             <div className="space-y-2">
               <Label>Canal</Label>
