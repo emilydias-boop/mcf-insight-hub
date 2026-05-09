@@ -2,6 +2,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+export type ApprovalStatus =
+  | 'draft'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'paused'
+  | 'disabled'
+  | 'unknown';
+
+export interface TemplateButton {
+  type: 'url' | 'quick_reply';
+  text: string;
+  url?: string;
+  url_param_key?: string;
+  id?: string;
+}
+
 export interface AutomationTemplate {
   id: string;
   name: string;
@@ -12,6 +29,14 @@ export interface AutomationTemplate {
   twilio_template_sid?: string;
   activecampaign_template_id?: string;
   is_active: boolean;
+  approval_status?: ApprovalStatus;
+  approval_submitted_at?: string | null;
+  approval_updated_at?: string | null;
+  approval_rejected_reason?: string | null;
+  buttons_config?: TemplateButton[];
+  category?: 'utility' | 'marketing' | 'authentication';
+  language?: string;
+  variable_count?: number;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -72,6 +97,10 @@ export function useCreateTemplate() {
           twilio_template_sid: template.twilio_template_sid,
           activecampaign_template_id: template.activecampaign_template_id,
           is_active: template.is_active ?? true,
+          buttons_config: (template.buttons_config ?? []) as unknown as never,
+          category: template.category ?? 'utility',
+          language: template.language ?? 'pt_BR',
+          variable_count: template.variables?.length ?? 0,
         })
         .select()
         .single();
@@ -106,6 +135,10 @@ export function useUpdateTemplate() {
           twilio_template_sid: updates.twilio_template_sid,
           activecampaign_template_id: updates.activecampaign_template_id,
           is_active: updates.is_active,
+          buttons_config: updates.buttons_config as unknown as never,
+          category: updates.category,
+          language: updates.language,
+          variable_count: updates.variables?.length,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
