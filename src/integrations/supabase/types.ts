@@ -12320,11 +12320,22 @@ export type Database = {
         Returns: undefined
       }
       normalize_document: { Args: { doc: string }; Returns: string }
+      normalize_owner_phone: { Args: { _raw: string }; Returns: string }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
+      }
+      resolve_deal_owner: {
+        Args: { _deal_id: string }
+        Returns: {
+          email: string
+          first_name: string
+          full_name: string
+          profile_id: string
+          telefone: string
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

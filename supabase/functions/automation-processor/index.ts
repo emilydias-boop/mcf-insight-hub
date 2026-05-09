@@ -150,31 +150,36 @@ serve(async (req) => {
           continue;
         }
 
-        // 6. Get deal owner info for SDR variable
-        const { data: dealWithOwner } = await supabase
-          .from('crm_deals')
-          .select('owner_id, original_sdr_email')
-          .eq('id', item.deal_id)
-          .maybeSingle();
+        // 6. Resolver dono dinâmico (SDR/Closer conforme estágio)
+        const { data: ownerRows } = await supabase
+          .rpc('resolve_deal_owner', { _deal_id: item.deal_id });
+        const owner = Array.isArray(ownerRows) ? ownerRows[0] : ownerRows;
+        const donoNome = owner?.first_name || owner?.full_name || '';
+        const donoTelefone = owner?.telefone || '';
+        const donoLinkWa = donoTelefone
+          ? `https://wa.me/${donoTelefone}`
+          : '';
 
-        let sdrName = '';
-        if (dealWithOwner?.owner_id) {
-          const { data: ownerProfile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', dealWithOwner.owner_id)
-            .maybeSingle();
-          sdrName = ownerProfile?.full_name || '';
+        // Se o template usa dono_telefone/link_wa e não temos telefone do dono → pular
+        const usesDonoPhone = /\{\{\s*dono_(telefone|link_wa)\s*\}\}/i.test(template.content || '');
+        if (usesDonoPhone && !donoTelefone) {
+          console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem telefone do dono — pulando`);
+          await markAsSkipped(supabase, item.id, 'Dono sem telefone cadastrado em employees.telefone');
+          results.skipped++;
+          continue;
         }
 
         // 7. Build message content with variables
-        const variables = {
+        const variables: Record<string, string> = {
           nome: contact.name || '',
           email: contact.email || '',
           telefone: contact.phone || '',
-          sdr: sdrName,
+          sdr: donoNome, // retrocompat
+          dono_nome: donoNome,
+          dono_telefone: donoTelefone,
+          dono_link_wa: donoLinkWa,
           data: new Date().toLocaleDateString('pt-BR'),
-          link: '' // Can be customized per template
+          link: ''
         };
 
         const content = replaceVariables(template.content, variables);
