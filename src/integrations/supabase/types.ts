@@ -1247,6 +1247,7 @@ export type Database = {
           approval_status: string
           approval_submitted_at: string | null
           approval_updated_at: string | null
+          business_units: string[]
           buttons_config: Json
           category: string | null
           channel: Database["public"]["Enums"]["automation_channel"]
@@ -1269,6 +1270,7 @@ export type Database = {
           approval_status?: string
           approval_submitted_at?: string | null
           approval_updated_at?: string | null
+          business_units?: string[]
           buttons_config?: Json
           category?: string | null
           channel: Database["public"]["Enums"]["automation_channel"]
@@ -1291,6 +1293,7 @@ export type Database = {
           approval_status?: string
           approval_submitted_at?: string | null
           approval_updated_at?: string | null
+          business_units?: string[]
           buttons_config?: Json
           category?: string | null
           channel?: Database["public"]["Enums"]["automation_channel"]
