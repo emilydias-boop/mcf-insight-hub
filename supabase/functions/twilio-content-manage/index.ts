@@ -59,6 +59,13 @@ function buildContentPayload(opts: {
 }) {
   const { friendly_name, language, content, variables, buttons } = opts;
 
+  // Twilio proíbe [_*~{}\n] em títulos de botão. Substituímos {{var}} pelo nome da
+  // variável (sem chaves) e removemos demais caracteres inválidos.
+  const sanitizeTitle = (raw: string): string => {
+    const noVars = (raw ?? "").replace(/\{\{\s*([^}]+?)\s*\}\}/g, "$1");
+    return noVars.replace(/[_*~{}\n\r]/g, "").trim().slice(0, 25);
+  };
+
   // Twilio espera placeholders {{1}}, {{2}} … no body. Convertemos {{nome}} → {{1}} preservando ordem
   // e construímos um mapa de variáveis "samples".
   let twilioBody = content;
@@ -82,18 +89,22 @@ function buildContentPayload(opts: {
       types = {
         "twilio/call-to-action": {
           body: twilioBody,
-          actions: buttons.map((b) =>
-            b.type === "url"
-              ? { type: "URL", title: b.text, url: b.url ?? "https://example.com" }
-              : { type: "QUICK_REPLY", title: b.text, id: b.id ?? b.text },
-          ),
+          actions: buttons.map((b) => {
+            const title = sanitizeTitle(b.text);
+            return b.type === "url"
+              ? { type: "URL", title, url: b.url ?? "https://example.com" }
+              : { type: "QUICK_REPLY", title, id: b.id ?? title };
+          }),
         },
       };
     } else {
       types = {
         "twilio/quick-reply": {
           body: twilioBody,
-          actions: buttons.map((b) => ({ title: b.text, id: b.id ?? b.text })),
+          actions: buttons.map((b) => {
+            const title = sanitizeTitle(b.text);
+            return { title, id: b.id ?? title };
+          }),
         },
       };
     }
