@@ -178,9 +178,20 @@ serve(async (req) => {
         // Texto já URL-encoded para uso em URL de botão Twilio (prefixo fixo é obrigatório).
         const waAgendarText = encodeURIComponent(msgPorPapel);
 
+        // Token único (base64url) com {p,t} para o redirector wa-redirect.
+        // Necessário porque a Meta só aceita 1 variável no FINAL da URL do botão CTA.
+        let waAgendarToken = '';
+        if (donoTelefone) {
+          const payload = JSON.stringify({ p: donoTelefone.replace(/\D/g, ''), t: msgPorPapel });
+          waAgendarToken = btoa(payload)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+        }
+
         // Se o template usa qualquer variável que dependa do telefone do dono → pular se não houver
         const templateText = `${template.content || ''} ${JSON.stringify(template.buttons_config || [])}`;
-        const usesDonoPhone = /\{\{\s*(dono_(telefone|link_wa|link_wa_agendar)|wa_agendar_text)\s*\}\}/i.test(templateText);
+        const usesDonoPhone = /\{\{\s*(dono_(telefone|link_wa|link_wa_agendar)|wa_agendar_text|wa_agendar_token)\s*\}\}/i.test(templateText);
         if (usesDonoPhone && !donoTelefone) {
           console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem telefone do dono — pulando`);
           await markAsSkipped(supabase, item.id, 'Dono sem telefone cadastrado em employees.telefone');
@@ -199,6 +210,7 @@ serve(async (req) => {
           dono_link_wa: donoLinkWa,
           dono_link_wa_agendar: donoLinkWaAgendar,
           wa_agendar_text: waAgendarText,
+          wa_agendar_token: waAgendarToken,
           data: new Date().toLocaleDateString('pt-BR'),
           link: ''
         };
