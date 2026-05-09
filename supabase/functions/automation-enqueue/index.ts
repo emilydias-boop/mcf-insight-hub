@@ -16,6 +16,114 @@ interface EnqueueRequest {
   triggerType: 'enter' | 'exit';
 }
 
+type AutomationAnchor = 'enqueue_time' | 'meeting_start' | 'meeting_end' | 'contract_paid_at';
+
+const MIN_LEAD_TIME_MINUTES = 15;
+
+/**
+ * Detecta a âncora temporal a partir do nome do stage.
+ * Regra simples (Onda 3):
+ *  - "agendada/agendamento" de reunião → meeting_start (offset = -delay, antes da reunião)
+ *  - "realizada" de reunião → meeting_end (offset = +delay, depois da reunião)
+ *  - "contrato pago/fechado/convertido/parcela paga" → contract_paid_at (+delay)
+ *  - default → enqueue_time (+delay, comportamento atual)
+ */
+function detectAnchorFromStage(stageName: string | null | undefined): {
+  anchor: AutomationAnchor;
+  direction: 'before' | 'after';
+} {
+  if (!stageName) return { anchor: 'enqueue_time', direction: 'after' };
+  const s = stageName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  // Reunião agendada (R1/R2/1ª/2ª)
+  if (
+    /\b(reuniao|consultoria)\s+agendad/.test(s) ||
+    /\br[12]\s+agendad/.test(s) ||
+    /\b(1a|2a|1°|2°|1\.|2\.)\s*reuniao\s+agendad/.test(s) ||
+    /^agendamento$/.test(s)
+  ) {
+    return { anchor: 'meeting_start', direction: 'before' };
+  }
+
+  // Reunião realizada
+  if (
+    /\b(reuniao|consultoria)\s+realizad/.test(s) ||
+    /\br[12]\s+realizad/.test(s) ||
+    /\b(1a|2a|1°|2°)\s*reuniao\s+realizad/.test(s)
+  ) {
+    return { anchor: 'meeting_end', direction: 'after' };
+  }
+
+  // Pagamento / fechamento
+  if (
+    /contrato\s*pago/.test(s) ||
+    /consorcio\s*fechado/.test(s) ||
+    /^fechado$/.test(s) ||
+    /^convertido$/.test(s) ||
+    /1[°o]?\s*parcela\s*paga/.test(s)
+  ) {
+    return { anchor: 'contract_paid_at', direction: 'after' };
+  }
+
+  return { anchor: 'enqueue_time', direction: 'after' };
+}
+
+/**
+ * Resolve o timestamp da âncora consultando o banco.
+ * Retorna null se a âncora não estiver disponível (fallback para enqueue_time).
+ */
+async function resolveAnchorTime(
+  supabase: any,
+  dealId: string,
+  anchor: AutomationAnchor
+): Promise<Date | null> {
+  if (anchor === 'enqueue_time') return null;
+
+  if (anchor === 'meeting_start' || anchor === 'meeting_end') {
+    // Pega o meeting_slot mais recente (não cancelado) do deal
+    const { data: slot } = await supabase
+      .from('meeting_slots')
+      .select('scheduled_at, duration_minutes, status')
+      .eq('deal_id', dealId)
+      .not('status', 'in', '("cancelled","no_show","rescheduled")')
+      .order('scheduled_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!slot?.scheduled_at) return null;
+    const start = new Date(slot.scheduled_at);
+    if (anchor === 'meeting_end') {
+      const dur = Number(slot.duration_minutes) || 60;
+      return new Date(start.getTime() + dur * 60_000);
+    }
+    return start;
+  }
+
+  if (anchor === 'contract_paid_at') {
+    // Procura contract_paid_at em meeting_slot_attendees para o deal
+    const { data: slots } = await supabase
+      .from('meeting_slots')
+      .select('id')
+      .eq('deal_id', dealId);
+    const slotIds = (slots || []).map((s: any) => s.id);
+    if (slotIds.length === 0) return null;
+    const { data: attendees } = await supabase
+      .from('meeting_slot_attendees')
+      .select('contract_paid_at')
+      .in('meeting_slot_id', slotIds)
+      .not('contract_paid_at', 'is', null)
+      .order('contract_paid_at', { ascending: false })
+      .limit(1);
+    const paidAt = attendees?.[0]?.contract_paid_at;
+    return paidAt ? new Date(paidAt) : null;
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -102,6 +210,21 @@ serve(async (req) => {
 
     console.log(`[AUTOMATION-ENQUEUE] Found ${flows.length} active flows`);
 
+    // 2.1. Detectar âncora a partir do nome do stage (Onda 3)
+    const { data: stageRow } = await supabase
+      .from('crm_stages')
+      .select('stage_name')
+      .eq('id', newStageId)
+      .maybeSingle();
+    const stageName = stageRow?.stage_name || '';
+    const detected = detectAnchorFromStage(stageName);
+    const anchorTime = await resolveAnchorTime(supabase, dealId, detected.anchor);
+    const effectiveAnchor: AutomationAnchor = anchorTime ? detected.anchor : 'enqueue_time';
+    console.log(
+      `[AUTOMATION-ENQUEUE] Stage="${stageName}" detected=${detected.anchor}/${detected.direction} ` +
+      `anchorTime=${anchorTime?.toISOString() || 'null'} effective=${effectiveAnchor}`
+    );
+
     // 3. Get automation settings
     const { data: settings } = await supabase
       .from('automation_settings')
@@ -142,13 +265,21 @@ serve(async (req) => {
       }
 
       for (const step of steps) {
-        // Calculate scheduled time
-        let scheduledAt = new Date(now);
-        
-        // Add delays
-        if (step.delay_days) scheduledAt.setDate(scheduledAt.getDate() + step.delay_days);
-        if (step.delay_hours) scheduledAt.setHours(scheduledAt.getHours() + step.delay_hours);
-        if (step.delay_minutes) scheduledAt.setMinutes(scheduledAt.getMinutes() + step.delay_minutes);
+        // Calcula offset total em minutos a partir dos campos de delay
+        const delayMinutesTotal =
+          (step.delay_days || 0) * 24 * 60 +
+          (step.delay_hours || 0) * 60 +
+          (step.delay_minutes || 0);
+
+        let scheduledAt: Date;
+        if (effectiveAnchor !== 'enqueue_time' && anchorTime) {
+          // Onda 3: delay relativo à âncora. before = subtrai, after = soma.
+          const signed = detected.direction === 'before' ? -delayMinutesTotal : delayMinutesTotal;
+          scheduledAt = new Date(anchorTime.getTime() + signed * 60_000);
+        } else {
+          // Comportamento atual: a partir de "agora"
+          scheduledAt = new Date(now.getTime() + delayMinutesTotal * 60_000);
+        }
 
         // Adjust for business hours if enabled
         if (flow.respect_business_hours) {
@@ -158,6 +289,16 @@ serve(async (req) => {
             flow.business_hours_end || settingsMap.business_hours_end || '18:00',
             flow.exclude_weekends ?? settingsMap.exclude_weekends ?? true
           );
+        }
+
+        // Salvaguarda min_lead_time: nunca agendar no passado / quase-passado
+        const minLeadCutoff = new Date(now.getTime() + MIN_LEAD_TIME_MINUTES * 60_000);
+        if (scheduledAt < minLeadCutoff) {
+          console.log(
+            `[AUTOMATION-ENQUEUE] Skipping step ${step.id}: scheduledAt ${scheduledAt.toISOString()} ` +
+            `< minLead ${minLeadCutoff.toISOString()} (anchor=${effectiveAnchor})`
+          );
+          continue;
         }
 
         // Insert into queue
@@ -176,7 +317,10 @@ serve(async (req) => {
           console.error(`[AUTOMATION-ENQUEUE] Error inserting queue item:`, insertError);
         } else {
           totalEnqueued++;
-          console.log(`[AUTOMATION-ENQUEUE] Scheduled ${step.channel} for ${scheduledAt.toISOString()}`);
+          console.log(
+            `[AUTOMATION-ENQUEUE] Scheduled ${step.channel} for ${scheduledAt.toISOString()} ` +
+            `(anchor=${effectiveAnchor}, delay=${delayMinutesTotal}min, dir=${detected.direction})`
+          );
         }
       }
     }
