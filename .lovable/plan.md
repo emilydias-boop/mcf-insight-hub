@@ -1,92 +1,87 @@
-# Onda 2 — Schema do banco (preparação)
+# Onda 3 (revisada) — Âncora detectada automaticamente pelo stage
 
-Migration única, **zero impacto em produção**: tudo com defaults que preservam o comportamento atual.
+Mudança de filosofia: o usuário **nunca configura âncora**. O sistema decide sozinho qual data usar como referência olhando o **nome do stage** ao qual o flow está vinculado.
 
-## Migration
+Resultado: editor de Step continua igual ao de hoje (canal + template + delay + ativo). Zero novo campo na UI. A inteligência fica escondida no `automation-enqueue`.
 
-### 1. Enums novos
-```sql
-CREATE TYPE public.automation_anchor AS ENUM (
-  'enqueue_time',     -- comportamento atual
-  'meeting_start',
-  'meeting_end',
-  'contract_paid_at'
-);
+---
 
-CREATE TYPE public.automation_step_kind AS ENUM (
-  'confirmation',
-  'reminder',
-  'followup',
-  'custom'
-);
-```
+## Como a detecção funciona
 
-### 2. Colunas novas em `automation_steps`
-```sql
-ALTER TABLE public.automation_steps
-  ADD COLUMN anchor                public.automation_anchor    NOT NULL DEFAULT 'enqueue_time',
-  ADD COLUMN offset_minutes        integer                     NOT NULL DEFAULT 0,
-  ADD COLUMN min_lead_time_minutes integer                     NOT NULL DEFAULT 0,
-  ADD COLUMN respect_send_window   boolean                     NOT NULL DEFAULT true,
-  ADD COLUMN step_kind             public.automation_step_kind NOT NULL DEFAULT 'custom';
-```
+Quando um deal entra num stage e dispara um flow, o `automation-enqueue` consulta o `stage_name` e classifica em uma de 4 âncoras via regex (case + accent-insensitive):
 
-Defaults garantem: `anchor=enqueue_time` + `offset=0` ≡ comportamento atual baseado em `delay_days/hours/minutes`.
+| Padrão no nome do stage | Âncora aplicada | Significado prático |
+|---|---|---|
+| contém `reunião agendada`, `r1 agendada`, `r2 agendada`, `1ª reunião agendada`, `2ª reunião agendada` | `meeting_start` | "delay" do step passa a contar **a partir do horário da reunião** (negativo = antes). |
+| contém `reunião realizada`, `r1 realizada`, `r2 realizada` | `meeting_end` | conta a partir do fim da reunião (followup pós-call). |
+| contém `contrato pago`, `consórcio fechado`, `fechado`, `convertido`, `1° parcela paga` | `contract_paid_at` | conta a partir do pagamento (boas-vindas, onboarding). |
+| qualquer outro stage | `enqueue_time` | comportamento atual — conta a partir de quando o lead caiu no flow. |
 
-### 3. Tabela nova `automation_routing_rules` (vazia)
-```sql
-CREATE TABLE public.automation_routing_rules (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  flow_id      uuid NOT NULL REFERENCES public.automation_flows(id) ON DELETE CASCADE,
-  origin_id    uuid REFERENCES public.crm_origins(id),
-  product_code text,
-  bu           text,
-  priority     integer NOT NULL DEFAULT 100,
-  is_active    boolean NOT NULL DEFAULT true,
-  conditions   jsonb   NOT NULL DEFAULT '{}'::jsonb,
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now()
-);
+A tabela de regras vive como **constante no código do edge function** (fácil ajustar). Não há UI nem tabela de banco para configurar isso — é convenção.
 
-CREATE INDEX idx_routing_rules_flow   ON public.automation_routing_rules(flow_id);
-CREATE INDEX idx_routing_rules_lookup ON public.automation_routing_rules(origin_id, bu, product_code) WHERE is_active;
+## Como o "delay" passa a ser interpretado
 
-CREATE TRIGGER trg_routing_rules_updated
-  BEFORE UPDATE ON public.automation_routing_rules
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+Hoje o usuário preenche `delay_days/hours/minutes` (sempre positivo). Com a detecção automática:
 
-ALTER TABLE public.automation_routing_rules ENABLE ROW LEVEL SECURITY;
+- Stage tipo **enqueue_time** → mesmo comportamento de hoje (delay positivo somado a "agora").
+- Stage tipo **meeting_start / meeting_end / contract_paid_at** → o delay vira **offset relativo à âncora**.
+  - Convenção: se o nome do flow ou step contém palavras-chave como `lembrete`, `confirmação`, `antes` → **offset negativo** (ex: 1h antes da reunião).
+  - Se contém `followup`, `pós`, `depois`, `recovery` → **offset positivo** (ex: 30 min depois).
+  - Se nada disso, default é **positivo** (mantém retrocompatibilidade).
 
-CREATE POLICY "Admins manage routing rules"
-  ON public.automation_routing_rules FOR ALL TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'))
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+Como **não existe no editor** um sinal claro de "antes vs depois", a forma mais limpa é: **nome do flow** decide. O usuário já nomeia flows tipo "Lembrete R1 1h antes" ou "Followup pós-R1 30min", então a heurística é natural.
 
-CREATE POLICY "Authenticated read routing rules"
-  ON public.automation_routing_rules FOR SELECT TO authenticated
-  USING (true);
-```
+> Opção alternativa (se quiser mais previsível): em vez de heurística por nome, tratar todo step de stage de reunião como `meeting_start - delay` (sempre **antes**) e todo step de `meeting_end / contract_paid_at` como `+delay` (sempre **depois**). Mais simples, menos mágico. Eu **recomendo essa**.
 
-### 4. Quatro chaves novas em `automation_settings`
-A tabela `system_settings` **não existe** no projeto; já se usa `automation_settings (key, value jsonb)`. Mantém o padrão:
-```sql
-INSERT INTO public.automation_settings (key, value) VALUES
-  ('automation_timezone',          '"America/Sao_Paulo"'::jsonb),
-  ('automation_send_window_start', '"09:00"'::jsonb),
-  ('automation_send_window_end',   '"20:00"'::jsonb),
-  ('leticia_whatsapp',             '""'::jsonb)
-ON CONFLICT (key) DO NOTHING;
-```
+## Salvaguardas automáticas (sem UI)
 
-## Validação pós-migration
-1. `SELECT anchor, offset_minutes, step_kind FROM automation_steps LIMIT 5;` → todos com defaults.
-2. Disparar automação ativa existente → comportamento idêntico.
-3. `SELECT * FROM automation_routing_rules;` → vazio.
-4. `SELECT key FROM automation_settings WHERE key LIKE 'automation_%' OR key='leticia_whatsapp';` → 4 chaves.
-5. Rodar linter para confirmar RLS limpo.
+1. **min_lead_time = 15 min** fixo: se a âncora calculada cair no passado ou em menos de 15 min, o step é skippado (não envia mensagem atrasada).
+2. **Reunião cancelada/no-show** → o `automation-processor` revalida no T+0 lendo `meeting_slots.status` e cancela o envio se a reunião não está mais ativa.
+3. **`respect_business_hours`** continua respeitando o que o flow já tem configurado (zero mudança aqui).
+4. **Sem âncora disponível** (ex: stage de reunião mas o deal não tem `meeting_slots`) → fallback automático para `enqueue_time` (comportamento atual). Nunca quebra.
 
-## Fora de escopo (Ondas 3+)
-- Qualquer leitura/uso dos novos campos em código (frontend ou edge functions).
-- Trigger em `meeting_slots`.
-- UI nos editores de Step / Flow / Settings.
-- Avaliação de `automation_routing_rules` no `automation-enqueue`.
+## O que muda no banco
+
+Os campos `anchor`, `offset_minutes`, `min_lead_time_minutes`, `step_kind` da Onda 2 **continuam existindo mas viram cache/auditoria**: o enqueue grava neles o que **detectou** para cada step quando agendou (útil para debug nos logs/admin). Não precisa de UI para editar.
+
+`respect_send_window` da Onda 2 não é usado nesta onda (fica reservado pro futuro).
+
+## O que muda no código
+
+**1. `automation-enqueue/index.ts`**
+- Nova função `detectAnchorFromStage(stageName)` → retorna `{anchor, defaultDirection: 'before'|'after'}`.
+- Nova função `resolveAnchorTime(deal, anchor, supabase)` → busca `meeting_slots.scheduled_at` ou `crm_deals.contract_paid_at` conforme a âncora; retorna `null` se não houver.
+- Bloco de cálculo do `scheduledAt`:
+  - Se âncora ≠ enqueue_time **e** anchor time existe → `scheduledAt = anchorTime ± delay`.
+  - Senão → fallback `now() + delay` (comportamento atual).
+- Skip se `scheduledAt < now() + 15min`.
+- Persiste no `automation_queue` o `anchor` resolvido + `scheduled_at` final (já tem coluna `anchor_resolved` se quiser; senão fica só nos logs).
+
+**2. `automation-processor/index.ts`**
+- Antes de enviar, se o step tinha âncora `meeting_start`/`meeting_end`, relê `meeting_slots.status` do deal.
+- Se status ∈ `cancelled`, `no_show`, `rescheduled` → marca queue item como `cancelled` com motivo `meeting_no_longer_active` e pula.
+
+**3. UI — zero mudança.** `StepEditorDialog`, `FlowList`, `AutomationSettings`: tudo igual.
+
+**4. (Opcional) `AutomationLogs`** — adicionar uma colunazinha "Âncora detectada" lendo o campo `anchor` que o enqueue gravou. Ajuda admin a entender o que aconteceu sem nova configuração.
+
+## Validação (rodada manual após implementação)
+
+1. Flow ativo num stage tipo `LEAD A` (sem âncora) → comportamento idêntico ao de hoje. ✅
+2. Flow novo de teste no stage `1ª Reunião Agendada` com delay 1h → enviado **1h antes** do `meeting_slots.scheduled_at`. ✅
+3. Mesmo cenário, mas reunião marcada como `no_show` antes do envio → mensagem cancelada no processor. ✅
+4. Stage `1ª Reunião Agendada` mas deal sem meeting_slot → fallback `enqueue_time`, não quebra. ✅
+5. `automation_logs` mostra `anchor=meeting_start` no detalhe. ✅
+
+## Impacto em métricas
+**Zero.** Nada toca em `meeting_slots`, `crm_deals`, `calls`, `sdr_squad_history`, performance ou fechamento. Só altera `scheduled_at` dos itens em `automation_queue`.
+
+## Fora de escopo
+- UI para editar âncora (não existe — é automática).
+- Tabela `automation_routing_rules` (continua vazia — Onda 4+).
+- Trigger SQL em `meeting_slots` (continua sendo cron — Onda 5).
+- Desligar `meeting-reminders-cron` (Onda 5, depois de validar em produção).
+
+---
+
+**Decisão pendente** que afeta a implementação: usar **regra simples** (stage de reunião = sempre **antes**, stage de fim/pagamento = sempre **depois**) **ou** **heurística por nome do flow** (palavras-chave decidem direção)? Recomendo a regra simples — mais previsível, sem surpresas.
