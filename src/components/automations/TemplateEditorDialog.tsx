@@ -21,6 +21,7 @@ import {
   AutomationTemplate,
   TemplateButton,
   ApprovalStatus,
+  TemplateBU,
 } from "@/hooks/useAutomationTemplates";
 import {
   Select,
@@ -44,6 +45,16 @@ interface TemplateEditorDialogProps {
 }
 
 const AVAILABLE_VARIABLES = ['nome', 'sdr', 'data', 'link', 'produto', 'empresa', 'telefone', 'email'];
+
+const BU_LABELS: Record<TemplateBU, string> = {
+  incorporador: 'Incorporador',
+  consorcio: 'Consórcio',
+  credito: 'Crédito',
+  projetos: 'Projetos',
+  leilao: 'Leilão',
+  marketing: 'Marketing',
+};
+const ALL_BUS: TemplateBU[] = ['incorporador', 'consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
 
 const STATUS_LABEL: Record<ApprovalStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   draft: { label: 'Rascunho', variant: 'outline' },
@@ -77,6 +88,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   const [category, setCategory] = useState<'utility' | 'marketing' | 'authentication'>('utility');
   const [language, setLanguage] = useState('pt_BR');
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<TemplateBU[]>([]);
 
   // Reset form when template changes
   useEffect(() => {
@@ -91,6 +103,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setCategory(template.category ?? 'utility');
       setLanguage(template.language ?? 'pt_BR');
       setButtons(template.buttons_config ?? []);
+      setBusinessUnits(template.business_units ?? []);
     } else {
       setName("");
       setChannel(defaultChannel);
@@ -102,6 +115,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setCategory('utility');
       setLanguage('pt_BR');
       setButtons([]);
+      setBusinessUnits([]);
     }
   }, [template, open, defaultChannel]);
 
@@ -126,6 +140,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       category: channel === 'whatsapp' ? category : undefined,
       language: channel === 'whatsapp' ? language : undefined,
       buttons_config: channel === 'whatsapp' ? buttons : [],
+      business_units: businessUnits,
     };
 
     if (isEditing && templateId) {
@@ -149,6 +164,10 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
     setButtons((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
   };
   const removeButton = (idx: number) => setButtons((prev) => prev.filter((_, i) => i !== idx));
+
+  const toggleBU = (bu: TemplateBU) => {
+    setBusinessUnits((prev) => (prev.includes(bu) ? prev.filter((b) => b !== bu) : [...prev, bu]));
+  };
 
   const isSaving = createTemplate.isPending || updateTemplate.isPending;
   const isTwilioBusy = createTwilio.isPending || submitTwilio.isPending || refreshTwilio.isPending;
