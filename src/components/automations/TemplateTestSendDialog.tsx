@@ -37,6 +37,15 @@ type Result = {
   contentVariables?: Record<string, string>;
 };
 
+type LiveStatus = {
+  status?: string;
+  errorCode?: string | number | null;
+  errorMessage?: string | null;
+  dateUpdated?: string;
+  to?: string;
+  from?: string;
+};
+
 type Employee = {
   id: string;
   nome_completo: string;
@@ -55,6 +64,8 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
   const [role, setRole] = useState<"sdr" | "closer">("sdr");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -80,6 +91,7 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
   const handleClose = (next: boolean) => {
     if (!next) {
       setResult(null);
+      setLiveStatus(null);
     }
     onOpenChange(next);
   };
@@ -96,6 +108,7 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
     }
     setLoading(true);
     setResult(null);
+    setLiveStatus(null);
     try {
       const { data, error } = await supabase.functions.invoke("automation-test-send", {
         body: {
@@ -119,6 +132,36 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
       toast({ title: "Erro", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckStatus = async () => {
+    if (!result?.messageSid) return;
+    setChecking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("automation-test-status", {
+        body: { sid: result.messageSid },
+      });
+      if (error) throw error;
+      const d: any = data;
+      if (!d?.success) throw new Error(d?.error || "Falha ao consultar status");
+      setLiveStatus({
+        status: d.status,
+        errorCode: d.errorCode,
+        errorMessage: d.errorMessage,
+        dateUpdated: d.dateUpdated,
+        to: d.to,
+        from: d.from,
+      });
+      toast({
+        title: `Status: ${d.status}`,
+        description: d.errorCode ? `Erro ${d.errorCode}: ${d.errorMessage}` : "Sem erro reportado",
+        variant: d.errorCode ? "destructive" : "default",
+      });
+    } catch (e: any) {
+      toast({ title: "Erro ao verificar", description: e.message, variant: "destructive" });
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -203,6 +246,28 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
                 </div>
               ) : (
                 <div className="mt-2 text-xs text-destructive">{result.error}</div>
+              )}
+              {result.success && (
+                <div className="mt-3 space-y-2">
+                  <Button size="sm" variant="outline" onClick={handleCheckStatus} disabled={checking}>
+                    {checking ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : null}
+                    Verificar status agora
+                  </Button>
+                  {liveStatus && (
+                    <div className="rounded border bg-muted/40 p-2 text-xs space-y-1">
+                      <div><strong>Status Twilio:</strong> {liveStatus.status}</div>
+                      {liveStatus.errorCode ? (
+                        <div className="text-destructive">
+                          <strong>Erro {liveStatus.errorCode}:</strong> {liveStatus.errorMessage}
+                        </div>
+                      ) : (
+                        <div className="text-green-700">Sem erro reportado pelo Twilio.</div>
+                      )}
+                      <div>Atualizado em: {liveStatus.dateUpdated}</div>
+                      <div>De: {liveStatus.from} → {liveStatus.to}</div>
+                    </div>
+                  )}
+                </div>
               )}
               {result.contentVariables && (
                 <details className="mt-2 text-xs">
