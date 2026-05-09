@@ -1153,6 +1153,60 @@ export type Database = {
           },
         ]
       }
+      automation_routing_rules: {
+        Row: {
+          bu: string | null
+          conditions: Json
+          created_at: string
+          flow_id: string
+          id: string
+          is_active: boolean
+          origin_id: string | null
+          priority: number
+          product_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          bu?: string | null
+          conditions?: Json
+          created_at?: string
+          flow_id: string
+          id?: string
+          is_active?: boolean
+          origin_id?: string | null
+          priority?: number
+          product_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bu?: string | null
+          conditions?: Json
+          created_at?: string
+          flow_id?: string
+          id?: string
+          is_active?: boolean
+          origin_id?: string | null
+          priority?: number
+          product_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_routing_rules_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_routing_rules_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_settings: {
         Row: {
           description: string | null
@@ -1182,6 +1236,7 @@ export type Database = {
       }
       automation_steps: {
         Row: {
+          anchor: Database["public"]["Enums"]["automation_anchor"]
           channel: Database["public"]["Enums"]["automation_channel"]
           conditions: Json | null
           created_at: string | null
@@ -1191,11 +1246,16 @@ export type Database = {
           flow_id: string
           id: string
           is_active: boolean | null
+          min_lead_time_minutes: number
+          offset_minutes: number
           order_index: number | null
+          respect_send_window: boolean
+          step_kind: Database["public"]["Enums"]["automation_step_kind"]
           template_id: string
           updated_at: string | null
         }
         Insert: {
+          anchor?: Database["public"]["Enums"]["automation_anchor"]
           channel: Database["public"]["Enums"]["automation_channel"]
           conditions?: Json | null
           created_at?: string | null
@@ -1205,11 +1265,16 @@ export type Database = {
           flow_id: string
           id?: string
           is_active?: boolean | null
+          min_lead_time_minutes?: number
+          offset_minutes?: number
           order_index?: number | null
+          respect_send_window?: boolean
+          step_kind?: Database["public"]["Enums"]["automation_step_kind"]
           template_id: string
           updated_at?: string | null
         }
         Update: {
+          anchor?: Database["public"]["Enums"]["automation_anchor"]
           channel?: Database["public"]["Enums"]["automation_channel"]
           conditions?: Json | null
           created_at?: string | null
@@ -1219,7 +1284,11 @@ export type Database = {
           flow_id?: string
           id?: string
           is_active?: boolean | null
+          min_lead_time_minutes?: number
+          offset_minutes?: number
           order_index?: number | null
+          respect_send_window?: boolean
+          step_kind?: Database["public"]["Enums"]["automation_step_kind"]
           template_id?: string
           updated_at?: string | null
         }
@@ -12390,6 +12459,11 @@ export type Database = {
         | "outro"
       assignment_status: "ativo" | "devolvido" | "transferido"
       auction_status: "ativo" | "encerrado" | "cancelado"
+      automation_anchor:
+        | "enqueue_time"
+        | "meeting_start"
+        | "meeting_end"
+        | "contract_paid_at"
       automation_channel: "whatsapp" | "email" | "sms"
       automation_status:
         | "pending"
@@ -12400,6 +12474,7 @@ export type Database = {
         | "replied"
         | "failed"
         | "cancelled"
+      automation_step_kind: "confirmation" | "reminder" | "followup" | "custom"
       automation_trigger: "enter" | "exit"
       billing_agreement_status:
         | "em_aberto"
@@ -12686,6 +12761,12 @@ export const Constants = {
       ],
       assignment_status: ["ativo", "devolvido", "transferido"],
       auction_status: ["ativo", "encerrado", "cancelado"],
+      automation_anchor: [
+        "enqueue_time",
+        "meeting_start",
+        "meeting_end",
+        "contract_paid_at",
+      ],
       automation_channel: ["whatsapp", "email", "sms"],
       automation_status: [
         "pending",
@@ -12697,6 +12778,7 @@ export const Constants = {
         "failed",
         "cancelled",
       ],
+      automation_step_kind: ["confirmation", "reminder", "followup", "custom"],
       automation_trigger: ["enter", "exit"],
       billing_agreement_status: [
         "em_aberto",
