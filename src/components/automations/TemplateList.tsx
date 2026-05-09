@@ -9,11 +9,13 @@ import {
   MessageCircle, 
   Mail,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Send
 } from "lucide-react";
 import { useAutomationTemplates, useDeleteTemplate, ApprovalStatus, TemplateBU } from "@/hooks/useAutomationTemplates";
 import { useSyncAllTwilioStatus } from "@/hooks/useTwilioContent";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { TemplateTestSendDialog } from "./TemplateTestSendDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyBU } from "@/hooks/useMyBU";
 import {
@@ -68,6 +70,7 @@ export function TemplateList() {
   const [creatingChannel, setCreatingChannel] = useState<'whatsapp' | 'email'>('whatsapp');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [buFilter, setBuFilter] = useState<'all' | 'global' | TemplateBU>('all');
+  const [testingTemplate, setTestingTemplate] = useState<{ id: string; name: string } | null>(null);
 
   const handleDelete = () => {
     if (deletingTemplateId) {
@@ -220,6 +223,17 @@ export function TemplateList() {
                   <Pencil className="h-3 w-3 mr-1" />
                   Editar
                 </Button>
+                {template.channel === 'whatsapp' && template.twilio_template_sid && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTestingTemplate({ id: template.id, name: template.name })}
+                    title="Disparar este template para um número de teste"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Testar
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="icon"
@@ -327,6 +341,14 @@ export function TemplateList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Test Send Dialog */}
+      <TemplateTestSendDialog
+        templateId={testingTemplate?.id ?? null}
+        templateName={testingTemplate?.name}
+        open={!!testingTemplate}
+        onOpenChange={(o) => !o && setTestingTemplate(null)}
+      />
     </>
   );
 }
