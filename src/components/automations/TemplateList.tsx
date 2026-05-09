@@ -260,6 +260,18 @@ export function TemplateList() {
             </TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
+            <Select value={buFilter} onValueChange={(v) => setBuFilter(v as typeof buFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="BU" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as BUs</SelectItem>
+                <SelectItem value="global">Apenas Global</SelectItem>
+                {ALL_BUS.map((bu) => (
+                  <SelectItem key={bu} value={bu}>{BU_LABELS[bu]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={() => syncAll.mutate()}
