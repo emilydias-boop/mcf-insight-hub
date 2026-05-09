@@ -44,7 +44,10 @@ interface TemplateEditorDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const AVAILABLE_VARIABLES = ['nome', 'sdr', 'data', 'link', 'produto', 'empresa', 'telefone', 'email'];
+const AVAILABLE_VARIABLES = [
+  'nome', 'sdr', 'data', 'link', 'produto', 'empresa', 'telefone', 'email',
+  'dono_nome', 'dono_telefone', 'dono_link_wa',
+];
 
 const BU_LABELS: Record<TemplateBU, string> = {
   incorporador: 'Incorporador',
