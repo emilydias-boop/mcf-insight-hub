@@ -1,38 +1,49 @@
-## Onda 1 — Editor de Templates Twilio (atualização sob demanda)
+## Como saber em qual BU cada mensagem opera
 
-Continuação do plano aprovado, **sem cron**. A função `twilio-content-status-poll` já criada vira backend de um botão manual.
+Hoje a tabela `automation_templates` **não tem campo de BU** — qualquer template aparece para qualquer fluxo, em qualquer BU. Já a tabela `automation_flows` tem `origin_id` (pipeline), e cada pipeline pertence a uma BU via `BU_PIPELINE_MAP` (ver `NegociosAccessGuard.tsx`).
 
-### O que já está pronto
-- ✅ Migration aplicada em `automation_templates` (`approval_status`, `approval_submitted_at`, `approval_updated_at`, `approval_rejected_reason`, `buttons_config`, `category`, `language`, `variable_count`).
-- ✅ Edge function `twilio-content-manage` (ações `list`, `create`, `submit`, `status`, `delete_remote`).
-- ✅ Edge function `twilio-content-status-poll` (varre todos os `pending` de uma vez).
+Ou seja, hoje a BU só é definida **indiretamente, no fluxo** (via pipeline). O template em si é "global". Isso é ruim para WhatsApp Business, porque cada BU tem tom de voz, assinatura e até números remetentes diferentes — e a Meta aprova o conteúdo, não o uso.
 
-### O que falta nesta leva
+## Proposta
 
-1. **Hook `useAutomationTemplates.ts`** — incluir os novos campos no tipo `AutomationTemplate` e no insert/update.
+Adicionar **escopo de BU explícito no template**, com 3 modos:
 
-2. **`TemplateEditorDialog.tsx`** — estender com:
-   - Seletor de **Categoria** (utility / marketing / authentication) e **Idioma** (pt_BR padrão).
-   - Editor de **Botões** (até 3): tipo URL ou Quick Reply, texto, URL opcional. Reordenar/remover.
-   - **Badge de status** Meta (cores: cinza draft, amarelo pending, verde approved, vermelho rejected).
-   - Mostrar `approval_rejected_reason` quando rejeitado.
-   - Botão **"Criar no Twilio"** (chama `twilio-content-manage` action `create`) — só aparece se ainda não tem `twilio_template_sid`.
-   - Botão **"Submeter à Meta"** (action `submit`) — só aparece com SID e status `draft`.
-   - Botão **"Atualizar status"** (action `status`) — sempre que tiver SID, ao lado do badge.
-   - Bloquear edição de `content`/`buttons_config` quando status ≠ `draft` (Meta congela conteúdo aprovado).
+1. **Global** (padrão) — template disponível para fluxos de qualquer BU. Útil para mensagens utilitárias genéricas (ex: "Sua reunião foi confirmada").
+2. **Específico de uma BU** — só aparece em fluxos cuja pipeline pertence àquela BU (ex: template "Boas-vindas Consórcio" só nas pipelines de Consórcio).
+3. **Multi-BU** — lista de BUs permitidas (ex: Incorporador + Crédito).
 
-3. **Lista de templates (`TemplatesTab` em `/admin/automacoes`)**:
-   - Coluna nova: **Status Meta** (badge).
-   - Botão no header: **"Sincronizar status"** → invoca `twilio-content-status-poll`, mostra toast com X atualizados, refetch.
+### Mudanças
 
-4. **Hook auxiliar `useTwilioContent.ts`** — wrappers `useCreateTwilioContent`, `useSubmitTwilioContent`, `useRefreshTwilioContent`, `useSyncAllTwilioStatus` (todos `useMutation` chamando `supabase.functions.invoke`).
+**Banco** (migration nova):
+- `automation_templates.business_units text[] null` — array de BUs permitidas. `null` ou `[]` = Global.
+- Index GIN para filtro rápido.
 
-### Fora de escopo desta leva (ondas seguintes)
-- Trigger em `meeting_slots`, novo motor de cadência, flow piloto — Ondas 2 a 5.
+**Backend / Hooks:**
+- `useAutomationTemplates`: aceitar `business_units`, filtrar por BU ativa quando o seletor pedir.
+- Em `StepEditorDialog`, ao listar templates, filtrar por BU do fluxo (derivada do `origin_id` via `BU_PIPELINE_MAP`). Mostrar "Global" + "Da BU X" agrupados.
 
-### Validação
-1. Criar template "teste_aprovacao_lovable" no CRM com 1 botão URL.
-2. Clicar **Criar no Twilio** → confirma `twilio_template_sid` salvo no DB.
-3. Clicar **Submeter à Meta** → status vai pra `pending`.
-4. Clicar **Atualizar status** depois de algumas horas → vê `approved`/`rejected`.
-5. Lista mostra badge correto; **Sincronizar status** atualiza todos os pendentes em um clique.
+**UI — `TemplateEditorDialog`:**
+- Novo campo "Business Unit" com:
+  - Radio: `Global` / `Específico`
+  - Se Específico: multi-select com as 6 BUs (`incorporador`, `consorcio`, `credito`, `projetos`, `leilao`, `marketing`).
+- Validação: se Submeter à Meta com BU específica, copiar a BU pro nome interno (sugestão: `bu_consorcio_boas_vindas`) — ajuda a achar na Twilio.
+
+**UI — `TemplateList` (`/admin/automacoes` aba Templates):**
+- Filtro no topo: dropdown "BU" com opções (Todas / Global / Incorporador / Consórcio / ...).
+- Badge no card mostrando "Global" ou as BUs (chips coloridos).
+- Para usuários **não-admin**, filtrar automaticamente pela BU ativa do usuário (via `useActiveBU`) e esconder os de outras BUs.
+
+### O que isso resolve
+
+- Operador da BU Consórcio só vê templates dela ao montar fluxos — sem risco de pegar template de Incorporador por engano.
+- Admin vê tudo, mas com filtro claro.
+- Permite no futuro ter **número de WhatsApp por BU** (cada BU usa um Messaging Service Twilio diferente) sem quebrar o que já existe.
+
+### Fora do escopo
+
+- Não muda número remetente Twilio agora — só o vínculo lógico. Se você quiser também escolher o `messaging_service_sid` por BU, é uma onda separada (envolve config de senders).
+- Não toca em `automation_flows` — ele continua amarrado pelo `origin_id`.
+
+### Pergunta antes de implementar
+
+Você quer que **eu já force**, para usuário não-admin, ver só templates da BU dele, ou prefere deixar **só como filtro visual** e qualquer pessoa poder usar qualquer template?
