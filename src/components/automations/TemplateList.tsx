@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,18 @@ import {
   Loader2,
   RefreshCw
 } from "lucide-react";
-import { useAutomationTemplates, useDeleteTemplate, ApprovalStatus } from "@/hooks/useAutomationTemplates";
+import { useAutomationTemplates, useDeleteTemplate, ApprovalStatus, TemplateBU } from "@/hooks/useAutomationTemplates";
 import { useSyncAllTwilioStatus } from "@/hooks/useTwilioContent";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMyBU } from "@/hooks/useMyBU";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,15 +45,29 @@ const STATUS_BADGE: Record<ApprovalStatus, { label: string; variant: 'default' |
   unknown: { label: '—', variant: 'outline' },
 };
 
+const BU_LABELS: Record<TemplateBU, string> = {
+  incorporador: 'Incorporador',
+  consorcio: 'Consórcio',
+  credito: 'Crédito',
+  projetos: 'Projetos',
+  leilao: 'Leilão',
+  marketing: 'Marketing',
+};
+const ALL_BUS: TemplateBU[] = ['incorporador', 'consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
+
 export function TemplateList() {
   const { data: templates, isLoading } = useAutomationTemplates();
   const deleteTemplate = useDeleteTemplate();
   const syncAll = useSyncAllTwilioStatus();
+  const { hasAnyRole } = useAuth();
+  const { data: myBUs = [] } = useMyBU();
+  const isAdmin = hasAnyRole('admin', 'manager');
   
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [creatingChannel, setCreatingChannel] = useState<'whatsapp' | 'email'>('whatsapp');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [buFilter, setBuFilter] = useState<'all' | 'global' | TemplateBU>('all');
 
   const handleDelete = () => {
     if (deletingTemplateId) {
@@ -58,8 +81,28 @@ export function TemplateList() {
     setIsCreating(true);
   };
 
-  const whatsappTemplates = templates?.filter(t => t.channel === 'whatsapp') || [];
-  const emailTemplates = templates?.filter(t => t.channel === 'email') || [];
+  // Apply BU filter: explicit dropdown + auto-restrict for non-admins
+  const visibleTemplates = useMemo(() => {
+    if (!templates) return [];
+    return templates.filter((t) => {
+      const tBUs = (t.business_units ?? []) as TemplateBU[];
+      const isGlobal = tBUs.length === 0;
+
+      // Auto-restrict for non-admins: must be global OR include one of user's BUs
+      if (!isAdmin) {
+        const allowedByUserBU = isGlobal || tBUs.some((bu) => (myBUs as TemplateBU[]).includes(bu));
+        if (!allowedByUserBU) return false;
+      }
+
+      // Explicit filter
+      if (buFilter === 'all') return true;
+      if (buFilter === 'global') return isGlobal;
+      return tBUs.includes(buFilter);
+    });
+  }, [templates, isAdmin, myBUs, buFilter]);
+
+  const whatsappTemplates = visibleTemplates.filter(t => t.channel === 'whatsapp');
+  const emailTemplates = visibleTemplates.filter(t => t.channel === 'email');
 
   if (isLoading) {
     return (
@@ -119,6 +162,18 @@ export function TemplateList() {
                   </Badge>
                 </div>
               </div>
+          {/* BU chips */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(template.business_units ?? []).length === 0 ? (
+              <Badge variant="outline" className="text-xs">Global</Badge>
+            ) : (
+              (template.business_units as TemplateBU[]).map((bu) => (
+                <Badge key={bu} variant="secondary" className="text-xs">
+                  {BU_LABELS[bu]}
+                </Badge>
+              ))
+            )}
+          </div>
               {template.subject && (
                 <CardDescription className="mt-1">
                   Assunto: {template.subject}
@@ -205,6 +260,18 @@ export function TemplateList() {
             </TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
+            <Select value={buFilter} onValueChange={(v) => setBuFilter(v as typeof buFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="BU" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as BUs</SelectItem>
+                <SelectItem value="global">Apenas Global</SelectItem>
+                {ALL_BUS.map((bu) => (
+                  <SelectItem key={bu} value={bu}>{BU_LABELS[bu]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={() => syncAll.mutate()}

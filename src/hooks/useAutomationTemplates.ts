@@ -19,6 +19,8 @@ export interface TemplateButton {
   id?: string;
 }
 
+export type TemplateBU = 'incorporador' | 'consorcio' | 'credito' | 'projetos' | 'leilao' | 'marketing';
+
 export interface AutomationTemplate {
   id: string;
   name: string;
@@ -37,6 +39,7 @@ export interface AutomationTemplate {
   category?: 'utility' | 'marketing' | 'authentication';
   language?: string;
   variable_count?: number;
+  business_units?: TemplateBU[];
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -101,6 +104,7 @@ export function useCreateTemplate() {
           category: template.category ?? 'utility',
           language: template.language ?? 'pt_BR',
           variable_count: template.variables?.length ?? 0,
+          business_units: (template.business_units ?? []) as unknown as never,
         })
         .select()
         .single();
@@ -139,6 +143,7 @@ export function useUpdateTemplate() {
           category: updates.category,
           language: updates.language,
           variable_count: updates.variables?.length,
+          business_units: updates.business_units as unknown as never,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
