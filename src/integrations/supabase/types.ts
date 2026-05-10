@@ -12390,6 +12390,14 @@ export type Database = {
       }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
+      recalc_automation_queue_for_deal: {
+        Args: {
+          p_anchor_kind: string
+          p_deal_id: string
+          p_new_anchor_at: string
+        }
+        Returns: undefined
+      }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       reset_distribution_counters: {
