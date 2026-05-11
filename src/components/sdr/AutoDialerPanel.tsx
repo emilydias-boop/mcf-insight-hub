@@ -6,6 +6,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { isValidPhoneNumber } from '@/lib/phoneUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Pause, SkipForward, Square, Trash2, Loader2, Phone, PhoneOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -92,8 +94,20 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   };
 
   const loadFromPaste = () => {
-    const lines = pasted.split(/[\n,;]/).map(s => s.trim()).filter(Boolean);
-    const leads: AutoDialerLead[] = lines.map((phone, i) => ({
+    // Aceita quebras de linha, vírgula, ponto-e-vírgula, tabulação ou espaços
+    // como separadores — usuários frequentemente colam tudo numa linha só.
+    const tokens = pasted.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    const valid: string[] = [];
+    const invalid: string[] = [];
+    tokens.forEach(t => {
+      if (isValidPhoneNumber(t)) valid.push(t);
+      else invalid.push(t);
+    });
+    if (valid.length === 0) {
+      toast.error('Nenhum telefone válido encontrado. Cole 1 número por linha (ex: 11987654321).');
+      return;
+    }
+    const leads: AutoDialerLead[] = valid.map((phone, i) => ({
       dealId: `manual-${Date.now()}-${i}`,
       contactId: null,
       originId: null,
@@ -101,6 +115,11 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       phone,
     }));
     ad.loadQueue(leads);
+    if (invalid.length > 0) {
+      toast.warning(`${valid.length} telefone(s) carregado(s). ${invalid.length} ignorado(s) por formato inválido.`);
+    } else {
+      toast.success(`${valid.length} telefone(s) carregado(s) na fila.`);
+    }
     setPasted('');
   };
 
@@ -334,12 +353,15 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
             {mode === 'paste' && (
               <div className="space-y-2">
                 <div className="text-[10px] text-muted-foreground uppercase">Telefones (1 por linha)</div>
-                <Input
-                  placeholder="11987654321&#10;11991234567"
+                <Textarea
+                  placeholder={"11987654321\n11991234567\n11999998888"}
                   value={pasted}
                   onChange={(e) => setPasted(e.target.value)}
-                  className="h-8 text-xs font-mono"
+                  className="min-h-[120px] text-xs font-mono"
                 />
+                <div className="text-[10px] text-muted-foreground">
+                  Aceita quebra de linha, vírgula, ponto-e-vírgula ou espaço como separador.
+                </div>
                 <Button size="sm" variant="outline" className="w-full" disabled={!pasted.trim()} onClick={loadFromPaste}>
                   Carregar lista colada
                 </Button>
