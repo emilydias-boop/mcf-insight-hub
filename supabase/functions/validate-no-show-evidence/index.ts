@@ -445,7 +445,7 @@ Deno.serve(async (req) => {
       if (attendee_id) {
         const { data: att, error: attErr } = await adminClient
           .from("meeting_slot_attendees")
-          .select("id, meeting_slot_id, attendee_phone, deal_id")
+          .select("id, meeting_slot_id, attendee_phone, attendee_name, deal_id")
           .eq("id", attendee_id)
           .maybeSingle();
 
@@ -464,8 +464,20 @@ Deno.serve(async (req) => {
         // participante B e gravar a validação cruzada (deal=A + attendee=B).
         // Caso histórico: Edney/Diogo/Roseane (06/05/2026).
         if (deal_id && att.deal_id && att.deal_id !== deal_id) {
+          console.warn(
+            `[no-show-guard] deal mismatch: sent deal_id=${deal_id} attendee_id=${attendee_id} attendee_deal_id=${att.deal_id} attendee_name=${att.attendee_name}`,
+          );
+          const nome = (att.attendee_name || "").trim() || "outro lead";
           return new Response(JSON.stringify({
-            error: "O lead selecionado pertence a outro negócio. Abra o card correto desse lead e tente novamente.",
+            error:
+              `Você está marcando no-show no card errado. O participante selecionado neste horário é "${nome}", ` +
+              `mas o card aberto é de outro negócio. Abra o card de "${nome}" (no CRM ou na lista de leads do slot) e tente novamente.`,
+            details: {
+              expected_deal_id: att.deal_id,
+              sent_deal_id: deal_id,
+              attendee_id,
+              attendee_name: att.attendee_name,
+            },
           }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
         if (lead_phone && att.attendee_phone) {
