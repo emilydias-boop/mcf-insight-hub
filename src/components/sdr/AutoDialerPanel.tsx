@@ -102,7 +102,67 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     setStageId(null);
   };
 
-  const loadFromPaste = () => {
+  const phoneSuffix9 = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    return digits.length >= 9 ? digits.slice(-9) : digits;
+  };
+
+  const lookupLeadsByPhones = async (
+    phones: string[],
+  ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>> => {
+    const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+    const suffixToPhone = new Map<string, string>();
+    phones.forEach(p => {
+      const suf = phoneSuffix9(p);
+      if (suf.length >= 8) suffixToPhone.set(suf, p);
+    });
+    if (suffixToPhone.size === 0) return map;
+
+    const orFilter = Array.from(suffixToPhone.keys())
+      .map(suf => `phone.ilike.%${suf}`)
+      .join(',');
+
+    const { data: contacts, error: cErr } = await supabase
+      .from('crm_contacts')
+      .select('id, name, phone')
+      .or(orFilter)
+      .limit(2000);
+    if (cErr || !contacts || contacts.length === 0) return map;
+
+    const contactIds = contacts.map(c => c.id);
+    const { data: deals } = await supabase
+      .from('crm_deals')
+      .select('id, name, contact_id, origin_id, created_at')
+      .in('contact_id', contactIds)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false })
+      .limit(2000);
+
+    // Mantém o deal mais recente por contato
+    const newestByContact = new Map<string, any>();
+    (deals || []).forEach((d: any) => {
+      if (!newestByContact.has(d.contact_id)) newestByContact.set(d.contact_id, d);
+    });
+
+    contacts.forEach(c => {
+      const suf = phoneSuffix9(c.phone || '');
+      const orig = suffixToPhone.get(suf);
+      if (!orig) return;
+      const d = newestByContact.get(c.id);
+      if (!d) return;
+      // Não sobrescreve se já temos um match (o primeiro contato encontrado vence)
+      if (map.has(orig)) return;
+      map.set(orig, {
+        dealId: d.id,
+        contactId: c.id,
+        originId: d.origin_id || null,
+        name: c.name || d.name || 'Lead',
+      });
+    });
+    return map;
+  };
+
+  const loadFromPaste = async () => {
     // Extrai telefones mesmo quando vêm misturados com nomes, numeração da lista
     // e observações (ex: "1. Maria +55 11 99999-8888 Completo").
     const tokens = extractPhoneCandidates(pasted);
@@ -123,19 +183,42 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       toast.error('Nenhum telefone válido encontrado. Cole 1 número por linha (ex: 11987654321).');
       return;
     }
-    const leads: AutoDialerLead[] = valid.map((phone, i) => ({
-      dealId: `manual-${Date.now()}-${i}`,
-      contactId: null,
-      originId: null,
-      name: `Avulso ${i + 1}`,
-      phone,
-    }));
-    ad.loadQueue(leads);
-    if (invalid.length > 0) {
-      toast.warning(`${valid.length} telefone(s) carregado(s). ${invalid.length} ignorado(s) por formato inválido.`);
-    } else {
-      toast.success(`${valid.length} telefone(s) carregado(s) na fila.`);
+    // Faz lookup dos leads pelo sufixo de 9 dígitos do telefone
+    let matchedMap = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+    try {
+      matchedMap = await lookupLeadsByPhones(valid);
+    } catch (e) {
+      console.warn('[autodialer] lookup por telefone falhou', e);
     }
+
+    let matchedCount = 0;
+    const leads: AutoDialerLead[] = valid.map((phone, i) => {
+      const m = matchedMap.get(phone);
+      if (m) {
+        matchedCount++;
+        return {
+          dealId: m.dealId,
+          contactId: m.contactId,
+          originId: m.originId,
+          name: m.name,
+          phone,
+        };
+      }
+      return {
+        dealId: `manual-${Date.now()}-${i}`,
+        contactId: null,
+        originId: null,
+        name: `Avulso ${i + 1}`,
+        phone,
+      };
+    });
+    ad.loadQueue(leads);
+    const parts: string[] = [`${valid.length} telefone(s) carregado(s)`];
+    if (matchedCount > 0) parts.push(`${matchedCount} vinculado(s) a leads do CRM`);
+    if (invalid.length > 0) parts.push(`${invalid.length} ignorado(s) por formato inválido`);
+    const msg = parts.join(' · ');
+    if (invalid.length > 0) toast.warning(msg);
+    else toast.success(msg);
     setPasted('');
   };
 
