@@ -688,7 +688,6 @@ export default function ConsorcioPage() {
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Objetivo</TableHead>
-                <TableHead>Categoria</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Responsável</TableHead>
@@ -754,19 +753,6 @@ export default function ConsorcioPage() {
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const categoriaConfig = categoriaOptions.find(c => c.name === card.categoria) 
-                            || CATEGORIA_OPTIONS.find(c => c.value === card.categoria);
-                          return categoriaConfig ? (
-                            <Badge style={{ backgroundColor: 'color' in categoriaConfig ? categoriaConfig.color : undefined }} className="text-white">
-                              {categoriaConfig.label}
-                            </Badge>
-                          ) : (
-                          <span className="text-muted-foreground">-</span>
-                          );
-                        })()}
                       </TableCell>
                       <TableCell>
                         {(() => {
