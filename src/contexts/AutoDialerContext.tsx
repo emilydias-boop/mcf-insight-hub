@@ -53,6 +53,8 @@ interface AutoDialerContextType {
 const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
 
 const MAX_QUEUE = 1000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | null | undefined) => !!value && UUID_REGEX.test(value);
 
 export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const {
@@ -137,7 +139,10 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
     try {
       const normalized = normalizePhoneNumber(lead.phone);
-      await makeCall(normalized, lead.dealId, lead.contactId || undefined, lead.originId || undefined);
+      const crmDealId = isUuid(lead.dealId) ? lead.dealId : undefined;
+      const crmContactId = isUuid(lead.contactId) ? lead.contactId : undefined;
+      const crmOriginId = isUuid(lead.originId) ? lead.originId : undefined;
+      await makeCall(normalized, crmDealId, crmContactId, crmOriginId);
     } catch (e) {
       console.error('[autodialer] makeCall error', e);
       setLeadResult(lead.dealId, 'failed');
@@ -251,14 +256,15 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
         setLeadResult(lead.dealId, result);
 
         // Registra atividade de tentativa
-        if (currentCallId) {
+        const crmDealId = isUuid(lead.dealId) ? lead.dealId : null;
+        if (currentCallId && crmDealId) {
           const currentAttempt = attemptsRef.current[lead.dealId] || 1;
           const description = isVoicemail
             ? `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — caixa postal detectada`
             : `Tentativa automática ${currentAttempt}/${maxAttemptsRef.current} — não atendeu`;
           const resultTag = isVoicemail ? 'caixa_postal' : 'nao_atendeu';
           supabase.from('deal_activities').insert({
-            deal_id: lead.dealId,
+            deal_id: crmDealId,
             activity_type: 'call_result',
             description,
             metadata: { result: resultTag, auto_dialer: true, attempt: currentAttempt, max_attempts: maxAttemptsRef.current, voicemail: isVoicemail } as any,

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { isValidPhoneNumber } from '@/lib/phoneUtils';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@/lib/phoneUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Pause, SkipForward, Square, Trash2, Loader2, Phone, PhoneOff, CheckCircle2, XCircle, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,15 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const PHONE_CANDIDATE_REGEX = /(?:\+?55[\s().-]*)?(?:\(?\d{2}\)?[\s().-]*)?\d{4,5}[\s.-]*\d{4}/g;
+
+const extractPhoneCandidates = (value: string): string[] => {
+  const matches = value.match(PHONE_CANDIDATE_REGEX);
+  if (matches && matches.length > 0) return matches.map((match) => match.trim());
+
+  return value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean);
+};
 
 export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const ad = useAutoDialer();
@@ -94,13 +103,20 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   };
 
   const loadFromPaste = () => {
-    // Aceita quebras de linha, vírgula, ponto-e-vírgula, tabulação ou espaços
-    // como separadores — usuários frequentemente colam tudo numa linha só.
-    const tokens = pasted.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    // Extrai telefones mesmo quando vêm misturados com nomes, numeração da lista
+    // e observações (ex: "1. Maria +55 11 99999-8888 Completo").
+    const tokens = extractPhoneCandidates(pasted);
     const valid: string[] = [];
     const invalid: string[] = [];
+    const seen = new Set<string>();
     tokens.forEach(t => {
-      if (isValidPhoneNumber(t)) valid.push(t);
+      if (isValidPhoneNumber(t)) {
+        const normalized = normalizePhoneNumber(t);
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          valid.push(normalized);
+        }
+      }
       else invalid.push(t);
     });
     if (valid.length === 0) {
