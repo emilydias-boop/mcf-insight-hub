@@ -244,35 +244,43 @@ serve(async (req) => {
     }
 
     // ============================================================
-    // AUTO-MOVE deal para "Em contato" quando:
-    //   - chamada completou (status = completed)
-    //   - duração >= 30 segundos
-    //   - AnsweredBy = 'human' OU não foi marcado como voicemail
-    //   - deal está em uma das stages anteriores a R1 Agendada
+    // AUTO-MOVE deal para "Em contato" em QUALQUER tentativa finalizada:
+    //   - completed, no-answer, busy, failed, canceled
+    //   - a tentativa em si já caracteriza contato
+    //   - função RPC é idempotente (só move se stage atual for inicial)
     // ============================================================
-    if (callStatus === 'completed') {
+    const TERMINAL_STATUSES = ['completed', 'no-answer', 'busy', 'failed', 'canceled'];
+    if (callStatus && TERMINAL_STATUSES.includes(callStatus)) {
       try {
         const durationSec = parseInt(callDuration || '0') || 0;
-        // Mover para "Em contato" em QUALQUER chamada completa (independente de duração / AMD)
         const { data: callRow } = await supabase
           .from('calls')
           .select('id, deal_id, answered_by, outcome')
           .eq('twilio_call_sid', callSid)
           .maybeSingle();
         if (callRow?.deal_id) {
+          const statusLabel: Record<string, string> = {
+            'completed': `chamada Twilio (atendida, ${durationSec}s)`,
+            'no-answer': 'tentativa de chamada Twilio (não atendida)',
+            'busy': 'tentativa de chamada Twilio (ocupado)',
+            'failed': 'tentativa de chamada Twilio (falhou)',
+            'canceled': 'tentativa de chamada Twilio (cancelada)',
+          };
+          const description = `Movido automaticamente para "Em contato" — ${statusLabel[callStatus] || callStatus}`;
           const { data: moved, error: rpcErr } = await supabase.rpc('auto_move_deal_to_em_contato', {
             p_deal_id: callRow.deal_id,
             p_source: 'twilio_call',
-            p_description: `Movido automaticamente para "Em contato" — chamada Twilio (duração ${durationSec}s)`,
+            p_description: description,
             p_metadata: {
               call_sid: callSid,
               call_id: callRow.id,
+              call_status: callStatus,
               duration_seconds: durationSec,
               answered_by: answeredBy || callRow?.answered_by || null,
             },
           });
           if (rpcErr) console.error('[Em contato] RPC erro:', rpcErr);
-          else console.log(`[Em contato] call ${callSid} → moved=${moved}`);
+          else console.log(`[Em contato] call ${callSid} (${callStatus}) → moved=${moved}`);
         }
       } catch (autoMoveErr) {
         console.error('[Em contato] Erro no auto-move:', autoMoveErr);
