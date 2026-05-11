@@ -83,6 +83,8 @@ interface TwilioContextType {
 const TwilioContext = createContext<TwilioContextType | null>(null);
 
 const TWILIO_TEST_ORIGIN_NAME = 'Twilio – Teste';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value: string | null | undefined) => !!value && UUID_REGEX.test(value);
 
 const getTwilioErrorText = (error: unknown) => {
   const err = error as {
@@ -406,14 +408,18 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCallStatus('connecting');
       setCallDuration(0);
 
+      const safeDealId = isUuid(dealId) ? dealId : null;
+      const safeContactId = isUuid(contactId) ? contactId : null;
+      const safeOriginId = isUuid(originId) ? originId : (isUuid(testPipelineId) ? testPipelineId : null);
+
       // Create call record in database using direct insert
       const insertResult = await (supabase as any)
         .from('calls')
         .insert({
           user_id: user.id,
-          deal_id: dealId || null,
-          contact_id: contactId || null,
-          origin_id: originId || testPipelineId,
+          deal_id: safeDealId,
+          contact_id: safeContactId,
+          origin_id: safeOriginId,
           to_number: phoneNumber,
           direction: 'outbound',
           status: 'initiated',
@@ -430,7 +436,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       
       callId = insertResult.data.id;
       setCurrentCallId(callId);
-      setCurrentCallDealId(dealId || null);
+      setCurrentCallDealId(safeDealId);
 
       const connectWithCurrentDevice = async () => {
         const activeDevice = deviceRef.current || device;
