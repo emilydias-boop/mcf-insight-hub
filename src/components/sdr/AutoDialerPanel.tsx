@@ -102,23 +102,38 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     setStageId(null);
   };
 
-  const phoneSuffix9 = (phone: string) => {
+  // Sufixos para casar telefone com DDD + número.
+  // 11 dígitos = celular (DDD + 9). 10 dígitos = fixo / celular antigo (DDD + 8).
+  // Nunca usamos só 9 — perderia o DDD e cruzaria pessoas distintas.
+  const phoneSuffixes = (phone: string): string[] => {
     const digits = phone.replace(/\D/g, '');
-    return digits.length >= 9 ? digits.slice(-9) : digits;
+    const sufs = new Set<string>();
+    if (digits.length >= 11) sufs.add(digits.slice(-11));
+    if (digits.length >= 10) sufs.add(digits.slice(-10));
+    return Array.from(sufs);
+  };
+  const matchesPhone = (storedPhone: string, originalNorm: string): boolean => {
+    const a = storedPhone.replace(/\D/g, '');
+    const b = originalNorm.replace(/\D/g, '');
+    if (!a || !b) return false;
+    // Casa se um termina com o sufixo de 11/10 dígitos do outro
+    const sufB11 = b.length >= 11 ? b.slice(-11) : null;
+    const sufB10 = b.length >= 10 ? b.slice(-10) : null;
+    if (sufB11 && a.endsWith(sufB11)) return true;
+    if (sufB10 && a.endsWith(sufB10)) return true;
+    return false;
   };
 
   const lookupLeadsByPhones = async (
     phones: string[],
   ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>> => {
     const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
-    const suffixToPhone = new Map<string, string>();
-    phones.forEach(p => {
-      const suf = phoneSuffix9(p);
-      if (suf.length >= 8) suffixToPhone.set(suf, p);
-    });
-    if (suffixToPhone.size === 0) return map;
+    // Coleta todos os sufixos (11 e 10) de todos os telefones
+    const allSuffixes = new Set<string>();
+    phones.forEach(p => phoneSuffixes(p).forEach(s => allSuffixes.add(s)));
+    if (allSuffixes.size === 0) return map;
 
-    const orFilter = Array.from(suffixToPhone.keys())
+    const orFilter = Array.from(allSuffixes)
       .map(suf => `phone.ilike.%${suf}`)
       .join(',');
 
@@ -144,14 +159,14 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       if (!newestByContact.has(d.contact_id)) newestByContact.set(d.contact_id, d);
     });
 
-    contacts.forEach(c => {
-      const suf = phoneSuffix9(c.phone || '');
-      const orig = suffixToPhone.get(suf);
-      if (!orig) return;
+    // Para cada telefone original, escolhe o contato cujo telefone armazenado
+    // bate exatamente pelo sufixo de 11 ou 10 dígitos (DDD + número).
+    phones.forEach(orig => {
+      if (map.has(orig)) return;
+      const c = contacts.find(ct => matchesPhone(ct.phone || '', orig));
+      if (!c) return;
       const d = newestByContact.get(c.id);
       if (!d) return;
-      // Não sobrescreve se já temos um match (o primeiro contato encontrado vence)
-      if (map.has(orig)) return;
       map.set(orig, {
         dealId: d.id,
         contactId: c.id,
