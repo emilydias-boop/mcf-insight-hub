@@ -54,6 +54,8 @@ import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2Status
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { cn } from '@/lib/utils';
 import { R2SemSucessoModal } from './R2SemSucessoModal';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2PendingLeadsPanelProps {
   closers: R2CloserWithAvailability[];
@@ -82,6 +84,16 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
     if (r1CloserFilter === 'all') return pendingLeads;
     return pendingLeads.filter(lead => lead.meeting_slot?.closer?.id === r1CloserFilter);
   }, [pendingLeads, r1CloserFilter]);
+
+  // Resolver canal A010/ANAMNESE/Outro em batch
+  const channelInputs: R2LeadInput[] = useMemo(() => filteredLeads.map((l) => ({
+    key: l.id,
+    email: l.deal?.contact?.email || null,
+    phone: l.attendee_phone || l.deal?.contact?.phone || null,
+    dealId: l.deal?.id || null,
+    scheduledAt: l.meeting_slot?.scheduled_at || l.contract_paid_at || null,
+  })), [filteredLeads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   const handleScheduleR2 = (lead: R2PendingLead) => {
     setSelectedLead(lead);
@@ -215,6 +227,12 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                         <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 shrink-0">
                           Contrato Pago
                         </Badge>
+                        <R2LeadBadges
+                          channel={channelMap.get(lead.id)?.channel}
+                          r1CloserName={lead.meeting_slot?.closer?.name || null}
+                          isContractPaid={true}
+                          scheduledAt={lead.meeting_slot?.scheduled_at || lead.contract_paid_at}
+                        />
                       </div>
 
                       {phone && (
