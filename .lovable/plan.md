@@ -1,58 +1,54 @@
-# Badges de Canal + Marcação Especial em todas as listas R2/Carrinho
+# Auto-Discador: drawer não abre quando o lead atende
 
-## Objetivo
-Hoje o badge de Marcação Especial e o emoji de canal só aparecem no **Calendário** e no **Drawer** da Agenda R2. O usuário quer ver, em qualquer lugar que mostre um lead R2, dois chips ao lado do nome:
-1. **Canal** — `A010` / `ANAMNESE` / `Outro` (sempre visível)
-2. **Marcação Especial** — quando bater regra (ex.: "Anamnese Letícia")
+## Sintoma confirmado pelo usuário
 
-## Componente reutilizável
-Criar `src/components/crm/R2LeadBadges.tsx` recebendo:
-- `email`, `phone` (para detectar A010 via `hubla_transactions`)
-- `tags` (para detectar ANAMNESE)
-- `r1CloserName`, `isContractPaid`, `scheduledAt`
-- `size` ('sm' | 'md')
+Banner verde "📞 atendeu!" aparece (logo `state` chega em `paused-in-call`), mas o `DealDetailsDrawer` que deveria montar ao lado **não abre**. A fila pode ter mistura de leads do CRM e telefones colados.
 
-Renderiza:
-- Chip de canal com cor/ícone padrão
-- Chip da regra casada (usa `matchR2SpecialMarking` já existente)
+## Hipóteses (ordenadas por probabilidade)
 
-## Hook unificado
-Criar `src/hooks/useR2LeadsChannelMap.ts` que recebe lista de `{email, phone}` e retorna `Map<key, 'A010'|'ANAMNESE'|'Outro'>` aplicando as mesmas regras já documentadas em `mem://business-logic/agenda-r1-channel-classification` (lookup batched em `hubla_transactions`, window 30d, tag exata `ANAMNESE`). Reusa lógica de `MeetingsList.classifySimple` para garantir consistência.
+1. **Lead com `dealId` no formato `manual-*`** — `AutoDialerDealDrawer` bloqueia explicitamente:
+   ```ts
+   const isRealDeal = !!dealId && !dealId.startsWith('manual-');
+   const open = state === 'paused-in-call' && inCallDrawerOpen && isRealDeal;
+   ```
+   Se o telefone colado **não** casou com nenhum deal do CRM em `AutoDialerPanel` (linha 223 cria `dealId: manual-${Date.now()}-${i}`), o drawer nunca abre — by design. O usuário pode esperar que abra mesmo assim.
 
-## Telas a atualizar
+2. **Conflito de z-index Banner × Sheet** — `AutoDialerInCallBanner` é renderizado com `z-[120]`, e o `SheetContent` do Radix usa `z-50`. O banner sobreposto pode estar interceptando o foco/click inicial e fazendo o Radix disparar `onOpenChange(false)` por "interaction outside", fechando o drawer no mesmo frame em que ele tenta abrir.
 
-### Agenda R2
-- `R2PendingLeadsPanel.tsx` — Pendentes (lead Pago aguardando R2)
-- `R2PreScheduledTab.tsx` — Pré-Agendados
-- `R2NoShowsPanel.tsx` — No-Shows
-- `R2SemSucessoPanel.tsx` — Sem Sucesso
-- `R2ListViewTable.tsx` — aba Lista
-- `R2AgendadasList.tsx` — aba Por Sócio (se houver lead listado)
-- Aba **Relatório**: localizar arquivo (provavelmente `R2ReportLeadHistoryDialog` + a tabela principal de relatório) e adicionar coluna "Canal" + chip de marcação na coluna Lead.
+3. **Race com `setDrawerState` do `TwilioContext`** — o `useEffect` em `DealDetailsDrawer` (linhas 53-55) chama `setDrawerState(open, dealId)` toda vez que `open` muda. Se outro consumidor do contexto reagir e fechar o drawer, vira loop.
 
-### Carrinho R2
-- `R2AprovadosList.tsx`
-- `R2AccumulatedList.tsx`
-- `R2ForaDoCarrinhoList.tsx`
-- `R2VendasList.tsx`
-- `R2AgendadasList.tsx` (já listado acima)
-- `R2MetricsPanel.tsx` — só se listar leads
-- Tabela "Todas R2s" do Carrinho — localizar componente e atualizar
+4. **`currentLead.dealId` nulo/undefined** — se a fila for populada com objetos sem `dealId`, `isRealDeal=false` e o drawer some.
 
-## Dados necessários nos hooks
-Verificar se cada hook já expõe `email`, `phone`, `tags`, `r1_closer_name`, `contract_paid_at`, `scheduled_at`. Se faltar tag, ampliar a query/RPC; se faltar r1_closer ou contract_paid_at, propagar a partir da fonte (Carrinho RPC já tem `r1_closer_name`, `r1_contract_paid_at`).
+## Plano de correção
 
-## Critérios de aceitação
-- Em todas as listas acima, ao lado do nome do lead aparece chip "A010", "ANAMNESE" ou "Outro".
-- Quando o lead casa com uma regra ativa de Marcação Especial (mesmo Closer R1, mesmo canal, dentro da vigência, contrato pago se exigido), aparece também o chip da regra com sua cor/ícone/label.
-- Calendário e Drawer continuam funcionando como já estão (apenas usar o mesmo componente para consistência visual).
-- Sem mudar lógica de negócio: classificação de canal segue exatamente as regras já existentes (`mem://business-logic/agenda-r1-channel-classification`).
+### Passo 1 — Instrumentar para confirmar a hipótese
+Adicionar `console.debug` em `AutoDialerDealDrawer` mostrando `state`, `currentLead?.dealId`, `inCallDrawerOpen`, `isRealDeal` e `open` toda vez que mudar. Pedir ao usuário um teste rápido para identificar qual hipótese é real.
 
-## Riscos
-- Cada hook tem shape diferente — vai exigir pequenos ajustes em ~10 arquivos.
-- Lookup de A010 é por `hubla_transactions` em batch; com listas grandes pode pesar. Mitigação: 1 query única por tela com `.in('customer_email', emails)` + `.in()` de sufixos de telefone, cacheada por React Query com `staleTime` longo.
+### Passo 2 — Corrigir baseado no diagnóstico
 
-## Detalhes técnicos
-- Reaproveitar `matchR2SpecialMarking` e `useActiveR2SpecialMarkings`.
-- Para classificação de canal, extrair `classifyChannelWith30dRule` para `src/lib/channelClassifier.ts` (já existe arquivo) se ainda não estiver lá, e consumir nos dois lugares (MeetingsList + novo hook).
-- Componente `R2LeadBadges` aceita `channel` já resolvido (pra quem quiser passar pronto) OU `email`+`phone` (faz lookup via hook).
+**Se for hipótese 1 (manual-*):**
+- Permitir abrir o drawer também para leads colados que **casaram** com um deal real (já é o caso, esses não têm prefixo `manual-`).
+- Para leads verdadeiramente avulsos (sem CRM), trocar o "drawer rico" por um drawer simplificado mostrando apenas nome/telefone + botões de qualificação rápida, ou deixar o banner verde ser a única UI.
+
+**Se for hipótese 2 (z-index/interaction outside):**
+- Ajustar o banner para `pointer-events-none` no container e `pointer-events-auto` apenas nos botões internos, evitando que o Radix Dialog interprete o banner como "click fora".
+- Alternativa: aumentar `z-index` do `SheetContent` quando aberto pelo auto-discador (variant) ou abaixar o banner para `z-40` enquanto o drawer está aberto.
+
+**Se for hipótese 3 (race com setDrawerState):**
+- Tornar `setDrawerState` idempotente (só atualizar se mudou) e/ou desacoplar do `AutoDialerDealDrawer` (não chamar quando a origem do open é o auto-discador).
+
+**Se for hipótese 4 (dealId vazio):**
+- Garantir que toda entrada na fila do `AutoDialerPanel` carregue o `dealId` retornado pelo match no CRM antes de iniciar a discagem.
+
+### Passo 3 — Validar
+- Reproduzir 3 cenários: lead 100% CRM, telefone colado que casou, telefone colado que não casou.
+- Em cada um, verificar que o banner aparece **e** o drawer abre (ou, no terceiro caso, que a UI mínima esperada aparece).
+- Remover os `console.debug` após confirmação.
+
+## Detalhes técnicos relevantes
+
+- Arquivos envolvidos: `src/components/sdr/AutoDialerDealDrawer.tsx`, `src/components/sdr/AutoDialerInCallBanner.tsx`, `src/contexts/AutoDialerContext.tsx` (linha 209: `setInCallDrawerOpen(true)` no `in-progress`), `src/components/crm/DealDetailsDrawer.tsx` (linhas 53-55 e 77).
+- O drawer está montado globalmente em `MainLayout.tsx`, então não há problema de rota.
+- `currentLead` vem de `queue[currentIndex]`; em `AutoDialerPanel.tsx:223` os leads avulsos são marcados com `dealId: manual-...`.
+
+Sem mexer em business logic (Twilio/Telephony, atribuição, qualificação) — só na camada de apresentação que decide montar o drawer.
