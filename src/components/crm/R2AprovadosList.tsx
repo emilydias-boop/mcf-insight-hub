@@ -159,6 +159,15 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
 
   const hasActiveFilters = searchTerm || closerFilter !== 'all' || dateFilter !== 'all';
 
+  const channelInputs: R2LeadInput[] = useMemo(() => displayedAttendees.map((a) => ({
+    key: a.id,
+    email: a.contact_email,
+    phone: a.attendee_phone || a.contact_phone,
+    dealId: a.deal_id,
+    scheduledAt: a.scheduled_at || a.display_scheduled_at,
+  })), [displayedAttendees]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
+
   const generateReport = () => {
     const dateStr = format(weekEnd, 'dd/MM', { locale: ptBR });
     let report = `*Carrinho ${dateStr}*\n\n`;
