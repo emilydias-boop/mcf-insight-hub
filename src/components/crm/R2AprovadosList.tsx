@@ -370,6 +370,12 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
                             Encaixado
                           </Badge>
                         )}
+                        <R2LeadBadges
+                          channel={channelMap.get(att.id)?.channel}
+                          r1CloserName={att.r1_closer_name}
+                          isContractPaid={!!att.contract_paid_at}
+                          scheduledAt={att.scheduled_at || att.display_scheduled_at}
+                        />
                       </div>
                       {att.partner_name && (
                         <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
