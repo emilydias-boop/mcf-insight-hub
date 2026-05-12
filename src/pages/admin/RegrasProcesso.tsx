@@ -504,9 +504,12 @@ function EditRuleDialog({
 /* ---------------- Pending approvals ---------------- */
 function PendingTab() {
   const { data: pending = [], isLoading } = usePendingApprovals();
+  const { data: enriched = [], isLoading: loadingEnriched } =
+    useEnrichedPendingApprovals(pending);
   const review = useReviewApprovalRequest();
   const [reviewing, setReviewing] = useState<{ req: ApprovalRequest; action: "approved" | "rejected" } | null>(null);
   const [notes, setNotes] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const handleConfirm = async () => {
     if (!reviewing) return;
@@ -529,81 +532,27 @@ function PendingTab() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading || (pending.length > 0 && loadingEnriched) ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : pending.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">
             Nenhum pedido pendente. ✨
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Quando</TableHead>
-                <TableHead>BU</TableHead>
-                <TableHead>Solicitante</TableHead>
-                <TableHead>Regra</TableHead>
-                <TableHead>Detalhes</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pending.map((req) => (
-                <TableRow key={req.id}>
-                  <TableCell className="text-xs">
-                    {format(new Date(req.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{req.bu ?? "global"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-xs font-mono">{req.requested_by.slice(0, 8)}</div>
-                    <Badge variant="secondary" className="text-xs uppercase">{req.requester_role}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">{RULE_LABELS[req.rule_key]?.title ?? req.rule_key}</TableCell>
-                  <TableCell className="text-xs max-w-md">
-                    {(() => {
-                      const info = formatPayloadHumano(req.rule_key, req.payload);
-                      return (
-                        <div className="space-y-1">
-                          <p className="text-sm leading-snug">{info.resumo}</p>
-                          {info.lead && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Lead:</span> {info.lead}
-                            </p>
-                          )}
-                          {info.motivo && info.motivo !== info.resumo && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Motivo do sistema:</span>{" "}
-                              {info.motivo}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => setReviewing({ req, action: "approved" })}
-                      >
-                        <Check className="h-3 w-3 mr-1" /> Aprovar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setReviewing({ req, action: "rejected" })}
-                      >
-                        <X className="h-3 w-3 mr-1" /> Rejeitar
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="space-y-3">
+            {enriched.map((req) => (
+              <PendingApprovalCard
+                key={req.id}
+                req={req}
+                expanded={!!expanded[req.id]}
+                onToggle={() =>
+                  setExpanded((s) => ({ ...s, [req.id]: !s[req.id] }))
+                }
+                onApprove={() => setReviewing({ req, action: "approved" })}
+                onReject={() => setReviewing({ req, action: "rejected" })}
+              />
+            ))}
+          </div>
         )}
       </CardContent>
 
