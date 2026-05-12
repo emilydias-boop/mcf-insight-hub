@@ -30,6 +30,9 @@ import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { useLeadProfile } from '@/hooks/useLeadProfile';
 import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
+import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
+import { matchR2SpecialMarking } from '@/types/r2SpecialMarking';
+import { useAttendeeChannels } from '@/hooks/useAttendeeChannels';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
