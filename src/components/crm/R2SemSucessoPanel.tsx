@@ -24,6 +24,8 @@ import { useRecognizePartner } from '@/hooks/useRecognizePartner';
 import { useRecognizeRecurrence } from '@/hooks/useRecognizeRecurrence';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2SemSucessoPanelProps {
   closers: R2CloserWithAvailability[];
@@ -58,6 +60,15 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
       availability: [],
     }));
   }, [closers]);
+
+  const channelInputs: R2LeadInput[] = useMemo(() => leads.map((l: any) => ({
+    key: l.id,
+    email: l.deal?.contact?.email || null,
+    phone: l.attendee_phone || l.deal?.contact?.phone || null,
+    dealId: l.deal?.id || null,
+    scheduledAt: l.meeting_slot?.scheduled_at || null,
+  })), [leads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   if (isLoading) {
     return (
@@ -125,6 +136,12 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
                             {tentativas} tentativa{tentativas !== 1 ? 's' : ''}
                           </Badge>
                         )}
+                        <R2LeadBadges
+                          channel={channelMap.get(lead.id)?.channel}
+                          r1CloserName={lead.meeting_slot?.closer?.name || null}
+                          isContractPaid={false}
+                          scheduledAt={lead.meeting_slot?.scheduled_at}
+                        />
                       </div>
 
                       {phone && (
