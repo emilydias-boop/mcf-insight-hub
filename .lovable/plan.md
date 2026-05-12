@@ -1,65 +1,58 @@
-# Marcações Especiais na Agenda R2
+# Badges de Canal + Marcação Especial em todas as listas R2/Carrinho
 
-Sistema configurável (não hardcoded para Letícia) para destacar visualmente leads que combinam Closer R1 + canal + contrato pago, com cor/ícone/label escolhidos pelo gestor.
+## Objetivo
+Hoje o badge de Marcação Especial e o emoji de canal só aparecem no **Calendário** e no **Drawer** da Agenda R2. O usuário quer ver, em qualquer lugar que mostre um lead R2, dois chips ao lado do nome:
+1. **Canal** — `A010` / `ANAMNESE` / `Outro` (sempre visível)
+2. **Marcação Especial** — quando bater regra (ex.: "Anamnese Letícia")
 
-## 1. Banco de dados
+## Componente reutilizável
+Criar `src/components/crm/R2LeadBadges.tsx` recebendo:
+- `email`, `phone` (para detectar A010 via `hubla_transactions`)
+- `tags` (para detectar ANAMNESE)
+- `r1CloserName`, `isContractPaid`, `scheduledAt`
+- `size` ('sm' | 'md')
 
-Nova tabela `r2_special_markings` (gerenciada via modal na própria Agenda R2):
+Renderiza:
+- Chip de canal com cor/ícone padrão
+- Chip da regra casada (usa `matchR2SpecialMarking` já existente)
 
-| Coluna | Tipo | Descrição |
-|---|---|---|
-| `id` | uuid | PK |
-| `name` | text | Nome interno ("Anamnese — Letícia Faustino") |
-| `closer_r1_employee_id` | uuid → employees | Closer R1 alvo (Letícia). Obrigatório |
-| `required_channel` | text | 'ANAMNESE' \| 'A010' \| 'OUTRO' \| null (qualquer) |
-| `require_contract_paid` | boolean | Default `true` — só marca depois do pagamento |
-| `bg_color` | text | HSL ou hex (ex. `#7c3aed`) |
-| `text_color` | text | Cor do texto/badge |
-| `icon` | text | Emoji ou nome lucide (📋, 🔥, etc.) |
-| `badge_label` | text | "Anamnese Letícia" |
-| `active` | boolean | Default `true` |
-| `created_at`, `updated_at`, `created_by` | — | Auditoria |
+## Hook unificado
+Criar `src/hooks/useR2LeadsChannelMap.ts` que recebe lista de `{email, phone}` e retorna `Map<key, 'A010'|'ANAMNESE'|'Outro'>` aplicando as mesmas regras já documentadas em `mem://business-logic/agenda-r1-channel-classification` (lookup batched em `hubla_transactions`, window 30d, tag exata `ANAMNESE`). Reusa lógica de `MeetingsList.classifySimple` para garantir consistência.
 
-RLS: SELECT para `authenticated`; INSERT/UPDATE/DELETE para `admin`/`diretor`/`gestor` via `has_role`.
+## Telas a atualizar
 
-## 2. Configuração (na Agenda R2)
+### Agenda R2
+- `R2PendingLeadsPanel.tsx` — Pendentes (lead Pago aguardando R2)
+- `R2PreScheduledTab.tsx` — Pré-Agendados
+- `R2NoShowsPanel.tsx` — No-Shows
+- `R2SemSucessoPanel.tsx` — Sem Sucesso
+- `R2ListViewTable.tsx` — aba Lista
+- `R2AgendadasList.tsx` — aba Por Sócio (se houver lead listado)
+- Aba **Relatório**: localizar arquivo (provavelmente `R2ReportLeadHistoryDialog` + a tabela principal de relatório) e adicionar coluna "Canal" + chip de marcação na coluna Lead.
 
-Novo botão **"Marcações"** no header da Agenda R2 (ao lado de "Status/Tags" e "Closers"), visível só para não-closers.
+### Carrinho R2
+- `R2AprovadosList.tsx`
+- `R2AccumulatedList.tsx`
+- `R2ForaDoCarrinhoList.tsx`
+- `R2VendasList.tsx`
+- `R2AgendadasList.tsx` (já listado acima)
+- `R2MetricsPanel.tsx` — só se listar leads
+- Tabela "Todas R2s" do Carrinho — localizar componente e atualizar
 
-Abre `R2SpecialMarkingsConfigModal` com:
-- Lista de regras existentes (cards mostrando preview da cor/badge).
-- Botão "Nova Marcação" → form: Closer R1 (select de employees ativos), Canal (Anamnese/A010/Outro/Qualquer), Exigir Contrato Pago (switch, default ON), Background, Texto, Ícone, Label, Ativo.
-- Editar / Excluir cada regra.
+## Dados necessários nos hooks
+Verificar se cada hook já expõe `email`, `phone`, `tags`, `r1_closer_name`, `contract_paid_at`, `scheduled_at`. Se faltar tag, ampliar a query/RPC; se faltar r1_closer ou contract_paid_at, propagar a partir da fonte (Carrinho RPC já tem `r1_closer_name`, `r1_contract_paid_at`).
 
-## 3. Aplicação visual
+## Critérios de aceitação
+- Em todas as listas acima, ao lado do nome do lead aparece chip "A010", "ANAMNESE" ou "Outro".
+- Quando o lead casa com uma regra ativa de Marcação Especial (mesmo Closer R1, mesmo canal, dentro da vigência, contrato pago se exigido), aparece também o chip da regra com sua cor/ícone/label.
+- Calendário e Drawer continuam funcionando como já estão (apenas usar o mesmo componente para consistência visual).
+- Sem mudar lógica de negócio: classificação de canal segue exatamente as regras já existentes (`mem://business-logic/agenda-r1-channel-classification`).
 
-Hook `useR2SpecialMarkings()` carrega regras ativas e expõe `matchMarking(attendee)` que retorna a primeira regra que casa:
+## Riscos
+- Cada hook tem shape diferente — vai exigir pequenos ajustes em ~10 arquivos.
+- Lookup de A010 é por `hubla_transactions` em batch; com listas grandes pode pesar. Mitigação: 1 query única por tela com `.in('customer_email', emails)` + `.in()` de sufixos de telefone, cacheada por React Query com `staleTime` longo.
 
-1. Channel do attendee (via `useAttendeeChannels` já existente) bate com `required_channel` (ou regra é "qualquer").
-2. `m.r1_closer.id` (do `R2MeetingRow`) bate com `closer_r1_employee_id`.
-3. Se `require_contract_paid=true`: deal está em estágio "Contrato Pago" OU `contract_paid_at IS NOT NULL`.
-
-Onde aplicar:
-- **Calendário** (`AgendaCalendar` slots da Agenda R2): aplica `style={{ backgroundColor: marking.bg_color, color: marking.text_color }}` no card e injeta `{marking.icon} {marking.badge_label}` em vez do emoji genérico do canal.
-- **Lista** (`R2ListViewTable`): linha ganha barra lateral colorida + badge.
-- **Drawer** (`R2MeetingDetailDrawer`): banner no topo (acima de "Participantes") com `bg_color` cheio: ícone + label + texto "Closer R1: {name} • Canal: {channel} • Contrato Pago".
-
-## 4. Fluxo de detecção do "contrato pago"
-
-Reusa o que já existe — não calcula nada novo:
-- `deal.stage_name === 'Contrato Pago'` OU
-- `deal.contract_paid_at IS NOT NULL` (já carregado em vários lugares; adicionar no `useR2MeetingsExtended` se ainda não vier).
-
-## 5. Detalhes técnicos
-
-- Migração cria tabela + RLS + índice em `(closer_r1_employee_id, active)`.
-- Tipos: `src/types/r2SpecialMarking.ts`.
-- Hooks: `src/hooks/useR2SpecialMarkings.ts` (CRUD + matcher).
-- Componentes novos: `R2SpecialMarkingsConfigModal.tsx`, `R2SpecialMarkingForm.tsx`, `R2MarkingBadge.tsx`.
-- AgendaR2 passa `r1_closer` (já existe em `R2MeetingRow`) para o `AgendaCalendar` via `meetingsAsMeetingSlots` (atualmente perdido — adicionar campo `r1_closer` na slot).
-- Sem mudança de regra de negócio: é só camada de visualização + config administrativa.
-
-## Fora de escopo
-
-- Não cria tags reais no CRM nem altera dados do deal — é apenas marcação visual derivada das regras.
-- Não envia notificação automática quando uma marca é atribuída (pode ser próxima iteração).
+## Detalhes técnicos
+- Reaproveitar `matchR2SpecialMarking` e `useActiveR2SpecialMarkings`.
+- Para classificação de canal, extrair `classifyChannelWith30dRule` para `src/lib/channelClassifier.ts` (já existe arquivo) se ainda não estiver lá, e consumir nos dois lugares (MeetingsList + novo hook).
+- Componente `R2LeadBadges` aceita `channel` já resolvido (pra quem quiser passar pronto) OU `email`+`phone` (faz lookup via hook).
