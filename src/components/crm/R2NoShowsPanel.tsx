@@ -540,16 +540,11 @@ export function R2NoShowsPanel({ closers, parentViewMode, parentSelectedDate, pa
 
       {/* No-Show Cards Grid */}
       {!isLoading && filteredLeads.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredLeads.map((lead) => (
-            <NoShowCard
-              key={lead.id}
-              lead={lead}
-              onReschedule={() => handleReschedule(lead)}
-              onClick={() => handleOpenDrawer(lead)}
-            />
-          ))}
-        </div>
+        <NoShowCardsGrid
+          leads={filteredLeads}
+          onReschedule={handleReschedule}
+          onOpenDrawer={handleOpenDrawer}
+        />
       )}
 
       {/* Detail Drawer */}
