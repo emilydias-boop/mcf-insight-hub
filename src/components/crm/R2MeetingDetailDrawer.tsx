@@ -110,6 +110,19 @@ export function R2MeetingDetailDrawer({
   // ("Rendered more hooks than during the previous render").
   const { data: leadProfile } = useLeadProfile(contactId, attendee?.deal_id);
 
+  // Special markings (Anamnese + Closer R1 etc.) — chamados ANTES do early-return
+  // para manter ordem de hooks estável entre renders.
+  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+  const channelMap = useAttendeeChannels(
+    (meeting?.attendees || []).map(a => ({
+      id: a.id,
+      email: a.deal?.contact?.email || a.email || null,
+      phone: a.deal?.contact?.phone || a.phone || null,
+      scheduledAt: meeting?.scheduled_at || null,
+      tags: (a.deal?.contact?.tags as any) || [],
+    }))
+  );
+
   if (!meeting) return null;
 
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
@@ -257,17 +270,6 @@ export function R2MeetingDetailDrawer({
     }
   };
 
-  // Special markings (Anamnese + Closer R1 etc.)
-  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
-  const channelMap = useAttendeeChannels(
-    (meeting?.attendees || []).map(a => ({
-      id: a.id,
-      email: a.deal?.contact?.email || a.email || null,
-      phone: a.deal?.contact?.phone || a.phone || null,
-      scheduledAt: meeting?.scheduled_at || null,
-      tags: (a.deal?.contact?.tags as any) || [],
-    }))
-  );
   const drawerMarking = (() => {
     if (!meeting?.r1_closer?.name || specialMarkings.length === 0) return null;
     for (const a of meeting.attendees || []) {
