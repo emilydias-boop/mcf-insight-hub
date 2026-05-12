@@ -63,6 +63,7 @@ import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
 import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
 import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
+import { R2SpecialMarkingsConfigModal } from "@/components/crm/R2SpecialMarkingsConfigModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
 import { Badge } from "@/components/ui/badge";
@@ -100,6 +101,7 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+  const [markingsConfigOpen, setMarkingsConfigOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const handleAvailabilityConfigClose = useCallback((open: boolean) => {
