@@ -486,6 +486,10 @@ export default function AgendaR2() {
                 <Sliders className="h-4 w-4 mr-2" />
                 Status/Tags
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setMarkingsConfigOpen(true)}>
+                <Sliders className="h-4 w-4 mr-2" />
+                Marcações
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" />
                 Closers
