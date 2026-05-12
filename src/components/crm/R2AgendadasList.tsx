@@ -25,6 +25,8 @@ import { R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { cn } from '@/lib/utils';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import { toast } from 'sonner';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2AgendadasListProps {
   attendees: R2CarrinhoAttendee[];
@@ -241,6 +243,16 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
 
   // Check if any filter is active
   const hasActiveFilters = searchTerm || closerFilter !== 'all' || dateFilter !== 'all' || statusFilter !== 'all' || positionFilter !== 'all';
+
+  // Batch classify channel (A010/ANAMNESE/Outro) para os leads visíveis
+  const channelInputs: R2LeadInput[] = useMemo(() => filteredAttendees.map((att) => ({
+    key: att.id,
+    email: att.contact_email,
+    phone: att.attendee_phone || att.contact_phone,
+    dealId: att.deal_id,
+    scheduledAt: att.scheduled_at,
+  })), [filteredAttendees]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   // Clear all filters
   const clearFilters = () => {
@@ -525,6 +537,12 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
                                     Próx. Semana
                                   </Badge>
                                 )}
+                                <R2LeadBadges
+                                  channel={channelMap.get(att.id)?.channel}
+                                  r1CloserName={att.r1_closer_name}
+                                  isContractPaid={!!att.contract_paid_at}
+                                  scheduledAt={att.scheduled_at}
+                                />
                               </div>
                               {att.partner_name && (
                                 <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
