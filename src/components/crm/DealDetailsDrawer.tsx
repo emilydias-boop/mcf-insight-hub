@@ -78,7 +78,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0 flex flex-col">
+      <SheetContent
+        className="bg-card border-border w-full sm:max-w-2xl overflow-hidden p-0 flex flex-col"
+        onInteractOutside={(e) => {
+          // Não fechar quando o usuário interage com o banner do auto-discador
+          // (que renderiza acima do Sheet com z-[120]).
+          const target = e.target as HTMLElement | null;
+          if (target?.closest('[data-autodialer-banner]')) {
+            e.preventDefault();
+          }
+        }}
+      >
         {isLoading ? (
           <div className="space-y-4 p-4">
             <div className="space-y-2">
