@@ -49,6 +49,7 @@ import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { ConsorciadoSearchPanel } from './ConsorciadoSearchPanel';
 import type { ConsorciadoMatch } from '@/hooks/useConsorciadoSearch';
+import { supabase } from '@/integrations/supabase/client';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import {
   ESTADO_CIVIL_OPTIONS,
