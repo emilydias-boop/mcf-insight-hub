@@ -25,10 +25,12 @@ import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
 import { ProductFilterPopover } from './ProductFilterPopover';
 import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
+import { TEMPERATURE_META, type LeadTemperature } from './LeadTemperatureSelector';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
 export type OutsideFilter = 'all' | 'outside_only' | 'outside_worked' | 'outside_not_worked' | 'not_outside';
+export type TemperatureFilter = 'all' | 'none' | 'quente' | 'morno' | 'frio';
 
 import type { TagFilterRule, TagOperator } from './TagFilterPopover';
 
@@ -47,6 +49,7 @@ export interface DealFiltersState {
   productOperator: ProductOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
+  temperature: TemperatureFilter;
 }
 
 interface DealFiltersProps {
@@ -151,6 +154,7 @@ export const DealFilters = ({
     filters.productFilters.length > 0,
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
+    filters.temperature !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -511,6 +515,50 @@ export const DealFilters = ({
           />
         </PopoverContent>
       </Popover>
+
+      {/* Filtro de Temperatura do Lead */}
+      <Select
+        value={filters.temperature}
+        onValueChange={(value) => onChange({ ...filters, temperature: value as TemperatureFilter })}
+      >
+        <SelectTrigger className="w-[150px]">
+          <div className="flex items-center gap-2">
+            {filters.temperature !== 'all' && filters.temperature !== 'none' ? (
+              <span className={`w-2 h-2 rounded-full ${TEMPERATURE_META[filters.temperature as Exclude<LeadTemperature, null>].dot}`} />
+            ) : (
+              <span className="w-2 h-2 rounded-full border border-muted-foreground" />
+            )}
+            <SelectValue placeholder="Temperatura" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas temperaturas</SelectItem>
+          <SelectItem value="quente">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Quente
+            </span>
+          </SelectItem>
+          <SelectItem value="morno">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              Morno
+            </span>
+          </SelectItem>
+          <SelectItem value="frio">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Frio
+            </span>
+          </SelectItem>
+          <SelectItem value="none">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full border border-muted-foreground" />
+              Sem classificação
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
       
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>
