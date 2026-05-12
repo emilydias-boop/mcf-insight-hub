@@ -248,6 +248,10 @@ export default function AgendaR2() {
         video_conference_link: null,
         google_event_id: null,
         created_at: m.created_at || "",
+        // Pass r1_closer info on the slot so AgendaCalendar can apply special markings
+        ...((m as any).r1_closer
+          ? ({ r1_closer: (m as any).r1_closer } as any)
+          : {}),
         closer: m.closer
           ? {
               id: m.closer.id,
