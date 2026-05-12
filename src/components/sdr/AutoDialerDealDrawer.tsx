@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAutoDialer } from '@/contexts/AutoDialerContext';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 
@@ -15,6 +16,16 @@ export function AutoDialerDealDrawer() {
   const dealId = currentLead?.dealId ?? null;
   const isRealDeal = !!dealId && !dealId.startsWith('manual-');
   const open = state === 'paused-in-call' && inCallDrawerOpen && isRealDeal;
+
+  useEffect(() => {
+    console.debug('[AutoDialerDrawer]', {
+      state,
+      dealId,
+      isRealDeal,
+      inCallDrawerOpen,
+      open,
+    });
+  }, [state, dealId, isRealDeal, inCallDrawerOpen, open]);
 
   return (
     <DealDetailsDrawer
