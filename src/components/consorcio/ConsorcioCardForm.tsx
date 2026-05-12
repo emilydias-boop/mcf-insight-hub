@@ -1766,6 +1766,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
               {/* Tab: Dados Pessoais (PF) */}
               {tipoPessoa === 'pf' && (
                 <TabsContent value="dados" className="space-y-4">
+                  {!isEditing && (
+                    <ConsorciadoSearchPanel tipoPessoa="pf" onSelect={applyConsorciadoMatch} />
+                  )}
                   <FormField
                     control={form.control}
                     name="nome_completo"
