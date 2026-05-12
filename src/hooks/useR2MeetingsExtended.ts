@@ -52,6 +52,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
               contact_id,
               custom_fields,
               origin:crm_origins(name),
+              stage:crm_stages(stage_name),
               contact:crm_contacts(
                 id,
                 name,

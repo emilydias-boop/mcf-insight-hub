@@ -68,6 +68,8 @@ import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
 import { useBUContext } from '@/contexts/BUContext';
 import { useAttendeeChannels, CHANNEL_EMOJI } from '@/hooks/useAttendeeChannels';
+import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
+import { matchR2SpecialMarking, R2SpecialMarking } from '@/types/r2SpecialMarking';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
@@ -316,6 +318,34 @@ export function AgendaCalendar({
     );
   }, [meetings]);
   const channelMap = useAttendeeChannels(channelInputs);
+
+  // R2 special markings (only relevant when this calendar shows R2 meetings).
+  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+  const markingByAttendee = useMemo(() => {
+    const map = new Map<string, R2SpecialMarking>();
+    if (meetingType !== 'r2' || specialMarkings.length === 0) return map;
+    meetings.forEach(m => {
+      m.attendees?.forEach(att => {
+        const r1Name =
+          (att as any).r1_closer_name ||
+          (m as any).r1_closer?.name ||
+          null;
+        if (!r1Name) return;
+        const stageName =
+          (att as any).deal?.stage_name ||
+          (att as any).stage_name ||
+          null;
+        const channel = channelMap.get(att.id);
+        const matched = matchR2SpecialMarking(specialMarkings, {
+          channel: channel as any,
+          r1CloserName: r1Name,
+          isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+        });
+        if (matched) map.set(att.id, matched);
+      });
+    });
+    return map;
+  }, [meetings, specialMarkings, channelMap, meetingType]);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
@@ -1538,6 +1568,10 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                     );
                                     const displayAttendees = allAttendees.slice(0, isCompact ? 4 : 4);
                                     const remaining = allAttendees.length - displayAttendees.length;
+                                    // Special marking applied to the whole slot if any attendee matches
+                                    const slotMarking = allAttendees
+                                      .map(a => markingByAttendee.get(a.id))
+                                      .find(Boolean);
                                     
                                     return (
                                       <Draggable 
@@ -1559,12 +1593,15 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       'absolute inset-0 text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
                                                       isCompact ? 'p-0.5 text-[10px]' : 'p-1.5',
                                                       STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
-                                                      STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
+                                                      slotMarking ? '' : (STATUS_BG_COLORS[firstMeeting.status] || 'bg-card'),
                                                       dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                                     )}
                                                     style={{ 
                                                       height: `${cardHeight}px`,
                                                       ...dragProvided.draggableProps.style,
+                                                      ...(slotMarking
+                                                        ? { backgroundColor: slotMarking.bg_color, color: slotMarking.text_color }
+                                                        : {}),
                                                     }}
                                                   >
                                           {/* Compact layout for 3+ closers: header + participants list */}
@@ -1604,7 +1641,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                             <span className="text-muted-foreground">•</span>
                                                           </>
                                                         )}
-                                                        {channelMap.get(att.id) && (
+                                                        {markingByAttendee.get(att.id) ? (
+                                                          <span title={markingByAttendee.get(att.id)!.badge_label}>
+                                                            {markingByAttendee.get(att.id)!.icon}
+                                                          </span>
+                                                        ) : channelMap.get(att.id) && (
                                                           <span title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
                                                         )}
                                                         <span className="truncate flex-1">
@@ -1656,7 +1697,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="text-muted-foreground">•</span>
                                                       </>
                                                     )}
-                                                    {channelMap.get(att.id) && (
+                                                    {markingByAttendee.get(att.id) ? (
+                                                      <span className="text-[10px]" title={markingByAttendee.get(att.id)!.badge_label}>
+                                                        {markingByAttendee.get(att.id)!.icon}
+                                                      </span>
+                                                    ) : channelMap.get(att.id) && (
                                                       <span className="text-[10px]" title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
                                                     )}
                                                     <span className="truncate flex-1">

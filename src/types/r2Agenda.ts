@@ -57,6 +57,10 @@ export interface R2AttendeeExtended {
     origin?: {
       name: string;
     } | null;
+    stage?: {
+      stage_name: string | null;
+    } | null;
+    stage_name?: string | null;
     custom_fields?: {
       profissao?: string;
       estado?: string;

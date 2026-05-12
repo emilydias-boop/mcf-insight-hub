@@ -63,6 +63,7 @@ import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
 import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
 import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
+import { R2SpecialMarkingsConfigModal } from "@/components/crm/R2SpecialMarkingsConfigModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
 import { Badge } from "@/components/ui/badge";
@@ -100,6 +101,7 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+  const [markingsConfigOpen, setMarkingsConfigOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const handleAvailabilityConfigClose = useCallback((open: boolean) => {
@@ -246,6 +248,10 @@ export default function AgendaR2() {
         video_conference_link: null,
         google_event_id: null,
         created_at: m.created_at || "",
+        // Pass r1_closer info on the slot so AgendaCalendar can apply special markings
+        ...((m as any).r1_closer
+          ? ({ r1_closer: (m as any).r1_closer } as any)
+          : {}),
         closer: m.closer
           ? {
               id: m.closer.id,
@@ -292,6 +298,10 @@ export default function AgendaR2() {
                   id: a.deal.id,
                   name: a.deal.name || "",
                   tags: (a.deal.contact?.tags as any) || [],
+                  stage_name:
+                    (a.deal as any).stage?.stage_name ||
+                    (a.deal as any).stage_name ||
+                    null,
                   contact: a.deal.contact
                     ? {
                         email: a.deal.contact.email || null,
@@ -299,6 +309,8 @@ export default function AgendaR2() {
                       }
                     : undefined,
                 },
+                r1_closer_name: (m as any).r1_closer?.name || null,
+                r1_closer_id: (m as any).r1_closer?.id || null,
               } as any)
             : {}),
         })) as any,
@@ -483,6 +495,10 @@ export default function AgendaR2() {
               <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
                 <Sliders className="h-4 w-4 mr-2" />
                 Status/Tags
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setMarkingsConfigOpen(true)}>
+                <Sliders className="h-4 w-4 mr-2" />
+                Marcações
               </Button>
               <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" />
@@ -912,6 +928,9 @@ export default function AgendaR2() {
 
       {/* Status Config Modal */}
       <R2StatusConfigModal open={statusConfigOpen} onOpenChange={setStatusConfigOpen} />
+
+      {/* Marcações Especiais R2 */}
+      <R2SpecialMarkingsConfigModal open={markingsConfigOpen} onOpenChange={setMarkingsConfigOpen} />
     </div>
   );
 }
