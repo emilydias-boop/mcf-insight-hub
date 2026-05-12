@@ -227,7 +227,29 @@ Deno.serve(async (req) => {
         const { data: lastValidation } = await activeQuery.maybeSingle();
         if (lastValidation) {
           const wasRejectedByManager = lastValidation.manager_review_status === "rejected";
-          if (!wasRejectedByManager) {
+
+          // Se o attendee foi reagendado / teve o status revertido (ex.: trigger
+          // de same-day reschedule, ou gestor reabriu manualmente), o no-show
+          // anterior não está mais ativo e o SDR deve poder enviar nova evidência.
+          let attendeeStatusReverted = false;
+          if (!wasRejectedByManager && attendee_id) {
+            const { data: att } = await adminClient
+              .from("meeting_slot_attendees")
+              .select("status, meeting_slot_id")
+              .eq("id", attendee_id)
+              .maybeSingle();
+            const currentStatus = (att?.status ?? "").toLowerCase();
+            // status que indicam no-show ainda ativo (ou desfecho final que não deveria ser sobrescrito)
+            const stillActive = ["no_show", "contract_paid", "completed", "refunded"].includes(currentStatus);
+            if (!stillActive) {
+              attendeeStatusReverted = true;
+              console.log(
+                `[validate-no-show] Attendee ${attendee_id} status atual='${currentStatus}' (não é no-show ativo) — liberando reenvio apesar de validação anterior ${lastValidation.id}.`,
+              );
+            }
+          }
+
+          if (!wasRejectedByManager && !attendeeStatusReverted) {
             await adminClient.from("no_show_blocked_attempts").insert({
               deal_id: deal_id ?? null,
               meeting_slot_id: meeting_slot_id ?? null,
@@ -245,7 +267,10 @@ Deno.serve(async (req) => {
               bu_origin_id: bu_origin_id ?? null,
             });
             return new Response(JSON.stringify({
-              error: "Já existe uma solicitação de No-Show ativa para esta reunião. Aguarde a decisão do gestor antes de enviar uma nova evidência.",
+              error:
+                "Já existe uma solicitação de No-Show ativa para esta reunião (status atual: " +
+                (lastValidation.manager_review_status ?? lastValidation.final_status ?? "—") +
+                "). Aguarde a decisão do gestor antes de enviar uma nova evidência. Se a reunião foi reagendada, atualize a página e tente novamente.",
               code: "duplicate_active_validation",
               existing_validation_id: lastValidation.id,
               existing_status: lastValidation.final_status,
