@@ -198,8 +198,10 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
         const matchesName = name.includes(search);
         const matchesPhone = searchNormalized.length > 0 && phone.includes(searchNormalized);
         const matchesEmail = email.includes(search);
-        
-        if (!matchesName && !matchesPhone && !matchesEmail) {
+        const r1Closer = (att.r1_closer_name || '').toLowerCase();
+        const matchesR1Closer = r1Closer.includes(search);
+
+        if (!matchesName && !matchesPhone && !matchesEmail && !matchesR1Closer) {
           return false;
         }
       }
@@ -257,11 +259,12 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
       const name = att.attendee_name || att.deal_name || 'Sem nome';
       const phone = att.attendee_phone || att.contact_phone || '-';
       const closer = att.closer_name || '-';
+      const closerR1 = att.r1_closer_name || '-';
       const dateTime = format(new Date(att.scheduled_at), 'dd/MM HH:mm');
       const statusR2 = att.r2_status_name || '-';
       const position = STATUS_LABELS[att.status]?.label || att.status || '-';
       
-      report += `${name}\t${phone}\t${closer}\t${dateTime}\t${statusR2}\t${position}\n`;
+      report += `${name}\t${phone}\t${closerR1}\t${closer}\t${dateTime}\t${statusR2}\t${position}\n`;
     });
     
     return report;
@@ -282,11 +285,12 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['Nome', 'Telefone', 'Email', 'Closer', 'Data/Hora', 'Status R2', 'Posição'];
+    const headers = ['Nome', 'Telefone', 'Email', 'Closer R1', 'Closer R2', 'Data/Hora', 'Status R2', 'Posição'];
     const rows = filteredAttendees.map(att => [
       att.attendee_name || att.deal_name || 'Sem nome',
       att.attendee_phone || att.contact_phone || '-',
       att.contact_email || '-',
+      att.r1_closer_name || '-',
       att.closer_name || '-',
       format(new Date(att.scheduled_at), 'dd/MM/yyyy HH:mm'),
       att.r2_status_name || '-',
@@ -475,6 +479,7 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
                       <TableRow>
                         <TableHead className="w-[80px]">Horário</TableHead>
                         <TableHead className="w-auto">Nome Lead</TableHead>
+                        <TableHead className="w-[150px] min-w-[150px]">Closer R1</TableHead>
                         <TableHead className="w-[160px] min-w-[160px]">Closer R2</TableHead>
                         <TableHead className="w-[90px]">Dia R1</TableHead>
                         <TableHead className="w-[90px]">Dia Compra</TableHead>
@@ -525,6 +530,11 @@ export function R2AgendadasList({ attendees, aprovadosAttendees, isLoading, onSe
                                 <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell className="w-[150px] min-w-[150px]">
+                            <span className="truncate whitespace-nowrap text-sm text-muted-foreground">
+                              {att.r1_closer_name || '-'}
+                            </span>
                           </TableCell>
                           <TableCell className="w-[160px] min-w-[160px]">
                             <div className="flex items-center gap-2">
