@@ -319,6 +319,34 @@ export function AgendaCalendar({
   }, [meetings]);
   const channelMap = useAttendeeChannels(channelInputs);
 
+  // R2 special markings (only relevant when this calendar shows R2 meetings).
+  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+  const markingByAttendee = useMemo(() => {
+    const map = new Map<string, R2SpecialMarking>();
+    if (meetingType !== 'r2' || specialMarkings.length === 0) return map;
+    meetings.forEach(m => {
+      m.attendees?.forEach(att => {
+        const r1Name =
+          (att as any).r1_closer_name ||
+          (m as any).r1_closer?.name ||
+          null;
+        if (!r1Name) return;
+        const stageName =
+          (att as any).deal?.stage_name ||
+          (att as any).stage_name ||
+          null;
+        const channel = channelMap.get(att.id);
+        const matched = matchR2SpecialMarking(specialMarkings, {
+          channel: channel as any,
+          r1CloserName: r1Name,
+          isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+        });
+        if (matched) map.set(att.id, matched);
+      });
+    });
+    return map;
+  }, [meetings, specialMarkings, channelMap, meetingType]);
+
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
     return meetings.filter(m => m.closer_id === closerFilter);
