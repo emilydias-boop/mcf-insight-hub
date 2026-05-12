@@ -132,8 +132,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
 
   const lookupLeadsByPhones = async (
     phones: string[],
-  ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>> => {
-    const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+  ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>> => {
+    const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>();
     // Coleta todos os sufixos (11 e 10) de todos os telefones
     const allSuffixes = new Set<string>();
     phones.forEach(p => phoneSuffixes(p).forEach(s => allSuffixes.add(s)));
@@ -147,37 +147,58 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       .from('crm_contacts')
       .select('id, name, phone')
       .or(orFilter)
-      .limit(2000);
+      .limit(5000);
     if (cErr || !contacts || contacts.length === 0) return map;
 
     const contactIds = contacts.map(c => c.id);
+    // Inclui deals arquivados também — preferimos um deal arquivado a marcar
+    // o lead como "manual" (assim o drawer ainda abre e o operador vê o histórico).
     const { data: deals } = await supabase
       .from('crm_deals')
-      .select('id, name, contact_id, origin_id, created_at')
+      .select('id, name, contact_id, origin_id, created_at, is_archived')
       .in('contact_id', contactIds)
-      .eq('is_archived', false)
       .order('created_at', { ascending: false })
-      .limit(2000);
+      .limit(5000);
 
-    // Mantém o deal mais recente por contato
+    // Mantém o deal mais recente por contato — preferindo não-arquivado
     const newestByContact = new Map<string, any>();
     (deals || []).forEach((d: any) => {
-      if (!newestByContact.has(d.contact_id)) newestByContact.set(d.contact_id, d);
+      const existing = newestByContact.get(d.contact_id);
+      if (!existing) {
+        newestByContact.set(d.contact_id, d);
+        return;
+      }
+      // Se o atual é arquivado e o novo não, troca
+      if (existing.is_archived && !d.is_archived) {
+        newestByContact.set(d.contact_id, d);
+      }
     });
 
     // Para cada telefone original, escolhe o contato cujo telefone armazenado
-    // bate exatamente pelo sufixo de 11 ou 10 dígitos (DDD + número).
+    // bate pelo sufixo de 11 ou 10 dígitos (DDD + número), com fallback de variante 9-extra.
     phones.forEach(orig => {
       if (map.has(orig)) return;
       const c = contacts.find(ct => matchesPhone(ct.phone || '', orig));
       if (!c) return;
       const d = newestByContact.get(c.id);
-      if (!d) return;
+      if (!d) {
+        // Contato existe mas sem deal — ainda assim retornamos o contactId
+        // como "manual com nome", para o operador ter o nome no banner.
+        map.set(orig, {
+          dealId: `manual-contact-${c.id}`,
+          contactId: c.id,
+          originId: null,
+          name: c.name || 'Lead',
+          archived: false,
+        });
+        return;
+      }
       map.set(orig, {
         dealId: d.id,
         contactId: c.id,
         originId: d.origin_id || null,
         name: c.name || d.name || 'Lead',
+        archived: !!d.is_archived,
       });
     });
     return map;
@@ -205,7 +226,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       return;
     }
     // Faz lookup dos leads pelo sufixo de 9 dígitos do telefone
-    let matchedMap = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+    let matchedMap = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>();
     try {
       matchedMap = await lookupLeadsByPhones(valid);
     } catch (e) {
@@ -213,15 +234,21 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
 
     let matchedCount = 0;
+    let archivedCount = 0;
+    let onlyContactCount = 0;
     const leads: AutoDialerLead[] = valid.map((phone, i) => {
       const m = matchedMap.get(phone);
       if (m) {
-        matchedCount++;
+        if (m.dealId.startsWith('manual-contact-')) onlyContactCount++;
+        else {
+          matchedCount++;
+          if (m.archived) archivedCount++;
+        }
         return {
           dealId: m.dealId,
           contactId: m.contactId,
           originId: m.originId,
-          name: m.name,
+          name: m.archived ? `${m.name} (arquivado)` : m.name,
           phone,
         };
       }
@@ -235,7 +262,16 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     });
     ad.loadQueue(leads);
     const parts: string[] = [`${valid.length} telefone(s) carregado(s)`];
-    if (matchedCount > 0) parts.push(`${matchedCount} vinculado(s) a leads do CRM`);
+    if (matchedCount > 0) {
+      parts.push(
+        archivedCount > 0
+          ? `${matchedCount} vinculado(s) ao CRM (${archivedCount} arquivado${archivedCount > 1 ? 's' : ''})`
+          : `${matchedCount} vinculado(s) a leads do CRM`,
+      );
+    }
+    if (onlyContactCount > 0) parts.push(`${onlyContactCount} só com contato (sem deal)`);
+    const unmatched = valid.length - matchedCount - onlyContactCount;
+    if (unmatched > 0) parts.push(`${unmatched} sem match (avulso)`);
     if (invalid.length > 0) parts.push(`${invalid.length} ignorado(s) por formato inválido`);
     const msg = parts.join(' · ');
     if (invalid.length > 0) toast.warning(msg);
