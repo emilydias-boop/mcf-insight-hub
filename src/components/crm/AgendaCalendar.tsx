@@ -1568,6 +1568,10 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                     );
                                     const displayAttendees = allAttendees.slice(0, isCompact ? 4 : 4);
                                     const remaining = allAttendees.length - displayAttendees.length;
+                                    // Special marking applied to the whole slot if any attendee matches
+                                    const slotMarking = allAttendees
+                                      .map(a => markingByAttendee.get(a.id))
+                                      .find(Boolean);
                                     
                                     return (
                                       <Draggable 
@@ -1589,12 +1593,15 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       'absolute inset-0 text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
                                                       isCompact ? 'p-0.5 text-[10px]' : 'p-1.5',
                                                       STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
-                                                      STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
+                                                      slotMarking ? '' : (STATUS_BG_COLORS[firstMeeting.status] || 'bg-card'),
                                                       dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                                     )}
                                                     style={{ 
                                                       height: `${cardHeight}px`,
                                                       ...dragProvided.draggableProps.style,
+                                                      ...(slotMarking
+                                                        ? { backgroundColor: slotMarking.bg_color, color: slotMarking.text_color }
+                                                        : {}),
                                                     }}
                                                   >
                                           {/* Compact layout for 3+ closers: header + participants list */}
