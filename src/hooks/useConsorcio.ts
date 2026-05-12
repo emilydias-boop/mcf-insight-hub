@@ -411,9 +411,12 @@ export function useUpdateConsorcioCard() {
         }
       }
 
-      // 1. Sanitizar campos vazios antes de enviar ao banco
+      // 1. Sanitizar: remover undefined (não enviado) e converter '' em null
+      // para permitir que o usuário limpe campos durante a edição.
       const cleanedData = Object.fromEntries(
-        Object.entries(cardData).filter(([_, v]) => v !== '' && v !== undefined)
+        Object.entries(cardData)
+          .filter(([_, v]) => v !== undefined)
+          .map(([k, v]) => [k, v === '' ? null : v])
       );
 
       const { error: cardError } = await supabase
