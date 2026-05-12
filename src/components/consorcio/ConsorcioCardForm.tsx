@@ -47,6 +47,8 @@ import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVe
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
+import { ConsorciadoSearchPanel } from './ConsorciadoSearchPanel';
+import type { ConsorciadoMatch } from '@/hooks/useConsorciadoSearch';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import {
   ESTADO_CIVIL_OPTIONS,
@@ -358,6 +360,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const tipoRegistroWatch = form.watch('tipo_registro') || 'contratacao';
   const dataReservaWatch = form.watch('data_reserva');
   const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
+
+  const applyConsorciadoMatch = (m: ConsorciadoMatch) => {
+    const setIfEmpty = (field: any, value: any) => {
+      if (value == null || value === '') return;
+      const current = form.getValues(field);
+      if (current === undefined || current === null || current === '') {
+        form.setValue(field, value, { shouldDirty: true, shouldValidate: false });
+      }
+    };
+    if (tipoPessoa === 'pf') {
+      setIfEmpty('nome_completo', m.nome || m.razao_social);
+      setIfEmpty('cpf', m.cpf_cnpj);
+      setIfEmpty('telefone', m.telefone);
+      setIfEmpty('email', m.email);
+    } else {
+      setIfEmpty('razao_social', m.razao_social || m.nome);
+      setIfEmpty('cnpj', m.cpf_cnpj);
+      setIfEmpty('telefone_comercial', m.telefone);
+      setIfEmpty('email_comercial', m.email);
+    }
+  };
 
   // Detectar cadastro retroativo (data de contratação anterior ao mês atual)
   const isCadastroRetroativo = useMemo(() => {
@@ -1743,6 +1766,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
               {/* Tab: Dados Pessoais (PF) */}
               {tipoPessoa === 'pf' && (
                 <TabsContent value="dados" className="space-y-4">
+                  {!isEditing && (
+                    <ConsorciadoSearchPanel tipoPessoa="pf" onSelect={applyConsorciadoMatch} />
+                  )}
                   <FormField
                     control={form.control}
                     name="nome_completo"
@@ -2019,6 +2045,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
               {/* Tab: Dados da Empresa (PJ) */}
               {tipoPessoa === 'pj' && (
                 <TabsContent value="dados" className="space-y-4">
+                  {!isEditing && (
+                    <ConsorciadoSearchPanel tipoPessoa="pj" onSelect={applyConsorciadoMatch} />
+                  )}
                   <FormField
                     control={form.control}
                     name="razao_social"
