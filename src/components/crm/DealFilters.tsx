@@ -25,10 +25,12 @@ import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
 import { ProductFilterPopover } from './ProductFilterPopover';
 import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
+import { TEMPERATURE_META, type LeadTemperature } from './LeadTemperatureSelector';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
 export type OutsideFilter = 'all' | 'outside_only' | 'outside_worked' | 'outside_not_worked' | 'not_outside';
+export type TemperatureFilter = 'all' | 'none' | 'quente' | 'morno' | 'frio';
 
 import type { TagFilterRule, TagOperator } from './TagFilterPopover';
 
@@ -47,6 +49,7 @@ export interface DealFiltersState {
   productOperator: ProductOperator;
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
+  temperature: TemperatureFilter;
 }
 
 interface DealFiltersProps {
@@ -151,6 +154,7 @@ export const DealFilters = ({
     filters.productFilters.length > 0,
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
+    filters.temperature !== 'all',
   ].filter(Boolean).length;
   
   return (
