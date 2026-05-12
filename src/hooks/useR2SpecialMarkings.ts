@@ -26,6 +26,8 @@ export function useR2SpecialMarkings() {
         icon: r.icon,
         badge_label: r.badge_label,
         active: r.active,
+        valid_from: r.valid_from || null,
+        valid_until: r.valid_until || null,
         created_at: r.created_at,
         updated_at: r.updated_at,
       }));
@@ -63,6 +65,8 @@ export function useUpsertR2SpecialMarking() {
         icon: rest.icon || '📋',
         badge_label: rest.badge_label,
         active: rest.active ?? true,
+        valid_from: rest.valid_from || null,
+        valid_until: rest.valid_until || null,
       };
       if (id) {
         const { error } = await supabase

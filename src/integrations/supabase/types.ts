@@ -8972,6 +8972,8 @@ export type Database = {
           required_channel: string | null
           text_color: string
           updated_at: string
+          valid_from: string | null
+          valid_until: string | null
         }
         Insert: {
           active?: boolean
@@ -8987,6 +8989,8 @@ export type Database = {
           required_channel?: string | null
           text_color?: string
           updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
         }
         Update: {
           active?: boolean
@@ -9002,6 +9006,8 @@ export type Database = {
           required_channel?: string | null
           text_color?: string
           updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
         }
         Relationships: [
           {
