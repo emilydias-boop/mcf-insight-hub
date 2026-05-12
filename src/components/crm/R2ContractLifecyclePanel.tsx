@@ -14,6 +14,8 @@ import { useContractLifecycleReport, ContractLifecycleRow, ContractSituacao, Pen
 import { DealDetailsDrawer } from "./DealDetailsDrawer";
 import { getCartWeekStart, getCartWeekEnd } from "@/lib/carrinhoWeekBoundaries";
 import { EncaixarSemanaDialog } from "./EncaixarSemanaDialog";
+import { useR2LeadsChannelMap, R2LeadInput } from "@/hooks/useR2LeadsChannelMap";
+import { R2LeadBadges } from "./R2LeadBadges";
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '—';
@@ -373,6 +375,16 @@ export function R2ContractLifecyclePanel() {
     () => filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
     [filteredRows, currentPage]
   );
+
+  // Batch classify channel (A010/ANAMNESE/Outro) das linhas visíveis
+  const channelInputs: R2LeadInput[] = useMemo(() => paginatedRows.map((r) => ({
+    key: r.id,
+    email: null,
+    phone: r.phone,
+    dealId: r.dealId,
+    scheduledAt: r.r2Date || r.contractPaidAt,
+  })), [paginatedRows]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   useEffect(() => { setPage(1); }, [expandedKpi, activeSubFilter, searchTerm, dateMode, customRange, weekDate]);
 
@@ -822,7 +834,15 @@ export function R2ContractLifecyclePanel() {
                       className={cn(row.dealId ? "cursor-pointer hover:bg-muted/70" : "")}
                     >
                       <TableCell className="font-medium whitespace-nowrap max-w-[180px] truncate">
-                        {row.leadName || '—'}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate">{row.leadName || '—'}</span>
+                          <R2LeadBadges
+                            channel={channelMap.get(row.id)?.channel}
+                            r1CloserName={row.r1CloserName}
+                            isContractPaid={!!row.contractPaidAt}
+                            scheduledAt={row.r2Date || row.contractPaidAt}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {formatPhone(row.phone)}
