@@ -22,6 +22,7 @@ import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { LossReasonCard } from './LossReasonCard';
 import { LeadProfileSection } from './LeadProfileSection';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
+import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperatureSelector';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
@@ -139,6 +140,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 onQualify={() => setShowQualification(true)}
                 onDeleted={() => onOpenChange(false)}
               />
+
+              {/* ===== TEMPERATURA DO LEAD (Quente/Morno/Frio) ===== */}
+              <div className="rounded-lg border bg-muted/20 px-3 py-2 flex items-center justify-between">
+                <LeadTemperatureSelector
+                  dealId={deal.id}
+                  value={(deal as any).lead_temperature as LeadTemperature}
+                  onChanged={() => refetchDeal()}
+                />
+              </div>
               
               {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
               <NextActionBlockCompact
