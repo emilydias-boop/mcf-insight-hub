@@ -1,36 +1,65 @@
-## Objetivo
-Mover o lead para a stage **"Em contato"** em **toda tentativa de ligação finalizada**, atendida ou não — porque a tentativa em si já caracteriza contato.
+# Marcações Especiais na Agenda R2
 
-## Mudança (1 arquivo)
-`supabase/functions/twilio-voice-webhook/index.ts`
+Sistema configurável (não hardcoded para Letícia) para destacar visualmente leads que combinam Closer R1 + canal + contrato pago, com cor/ícone/label escolhidos pelo gestor.
 
-Hoje o auto-move só dispara quando `CallStatus === 'completed'`. Vou ampliar para incluir todos os status terminais que o Twilio envia para uma chamada que efetivamente saiu:
+## 1. Banco de dados
 
-- `completed` (já existe)
-- `no-answer`
-- `busy`
-- `failed`
-- `canceled`
+Nova tabela `r2_special_markings` (gerenciada via modal na própria Agenda R2):
 
-A função SQL `auto_move_deal_to_em_contato` continua igual — ela já é idempotente (só move se a stage atual for Novo Lead / Lead Qualificado / Lead Gratuito / Lead Instagram / ANAMNESE INCOMPLETA / Sem Interesse). Se o lead já está em "Em contato" ou em qualquer stage adiante (R1 Agendada etc.), nada acontece.
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | uuid | PK |
+| `name` | text | Nome interno ("Anamnese — Letícia Faustino") |
+| `closer_r1_employee_id` | uuid → employees | Closer R1 alvo (Letícia). Obrigatório |
+| `required_channel` | text | 'ANAMNESE' \| 'A010' \| 'OUTRO' \| null (qualquer) |
+| `require_contract_paid` | boolean | Default `true` — só marca depois do pagamento |
+| `bg_color` | text | HSL ou hex (ex. `#7c3aed`) |
+| `text_color` | text | Cor do texto/badge |
+| `icon` | text | Emoji ou nome lucide (📋, 🔥, etc.) |
+| `badge_label` | text | "Anamnese Letícia" |
+| `active` | boolean | Default `true` |
+| `created_at`, `updated_at`, `created_by` | — | Auditoria |
 
-### Descrição registrada em `deal_activities`
-Vou ajustar a `p_description` para refletir o resultado real, ex.:
-- `Movido automaticamente para "Em contato" — chamada Twilio (atendida, 47s)`
-- `Movido automaticamente para "Em contato" — tentativa de chamada Twilio (não atendida)`
-- `Movido automaticamente para "Em contato" — tentativa de chamada Twilio (ocupado)`
+RLS: SELECT para `authenticated`; INSERT/UPDATE/DELETE para `admin`/`diretor`/`gestor` via `has_role`.
 
-E `p_metadata` ganha `call_status` (completed/no-answer/busy/failed/canceled) além dos campos atuais (`call_sid`, `call_id`, `duration_seconds`, `answered_by`).
+## 2. Configuração (na Agenda R2)
 
-## O que **não** muda
-- Nenhuma alteração em SQL / função RPC / migração.
-- Nenhum impacto em métricas de chamada, gravação, AMD, ou em qualquer outra automação.
-- Stages whitelisted continuam as mesmas (lead já qualificado / em reunião não regride).
-- Chamadas que nem foram tentadas (status `queued`/`initiated` apenas) continuam não movendo — só os 5 status terminais acima.
+Novo botão **"Marcações"** no header da Agenda R2 (ao lado de "Status/Tags" e "Closers"), visível só para não-closers.
 
-## Bug paralelo observado nos logs
-```
-[Em contato] RPC erro: invalid input syntax for type uuid:
-"nicola.ricci@minhacasafinanciada.com"
-```
-Isso é independente desta mudança (parece que em algum caminho o `deal_id` da `calls` ficou com um e-mail). Posso abrir um plano separado se quiser investigar.
+Abre `R2SpecialMarkingsConfigModal` com:
+- Lista de regras existentes (cards mostrando preview da cor/badge).
+- Botão "Nova Marcação" → form: Closer R1 (select de employees ativos), Canal (Anamnese/A010/Outro/Qualquer), Exigir Contrato Pago (switch, default ON), Background, Texto, Ícone, Label, Ativo.
+- Editar / Excluir cada regra.
+
+## 3. Aplicação visual
+
+Hook `useR2SpecialMarkings()` carrega regras ativas e expõe `matchMarking(attendee)` que retorna a primeira regra que casa:
+
+1. Channel do attendee (via `useAttendeeChannels` já existente) bate com `required_channel` (ou regra é "qualquer").
+2. `m.r1_closer.id` (do `R2MeetingRow`) bate com `closer_r1_employee_id`.
+3. Se `require_contract_paid=true`: deal está em estágio "Contrato Pago" OU `contract_paid_at IS NOT NULL`.
+
+Onde aplicar:
+- **Calendário** (`AgendaCalendar` slots da Agenda R2): aplica `style={{ backgroundColor: marking.bg_color, color: marking.text_color }}` no card e injeta `{marking.icon} {marking.badge_label}` em vez do emoji genérico do canal.
+- **Lista** (`R2ListViewTable`): linha ganha barra lateral colorida + badge.
+- **Drawer** (`R2MeetingDetailDrawer`): banner no topo (acima de "Participantes") com `bg_color` cheio: ícone + label + texto "Closer R1: {name} • Canal: {channel} • Contrato Pago".
+
+## 4. Fluxo de detecção do "contrato pago"
+
+Reusa o que já existe — não calcula nada novo:
+- `deal.stage_name === 'Contrato Pago'` OU
+- `deal.contract_paid_at IS NOT NULL` (já carregado em vários lugares; adicionar no `useR2MeetingsExtended` se ainda não vier).
+
+## 5. Detalhes técnicos
+
+- Migração cria tabela + RLS + índice em `(closer_r1_employee_id, active)`.
+- Tipos: `src/types/r2SpecialMarking.ts`.
+- Hooks: `src/hooks/useR2SpecialMarkings.ts` (CRUD + matcher).
+- Componentes novos: `R2SpecialMarkingsConfigModal.tsx`, `R2SpecialMarkingForm.tsx`, `R2MarkingBadge.tsx`.
+- AgendaR2 passa `r1_closer` (já existe em `R2MeetingRow`) para o `AgendaCalendar` via `meetingsAsMeetingSlots` (atualmente perdido — adicionar campo `r1_closer` na slot).
+- Sem mudança de regra de negócio: é só camada de visualização + config administrativa.
+
+## Fora de escopo
+
+- Não cria tags reais no CRM nem altera dados do deal — é apenas marcação visual derivada das regras.
+- Não envia notificação automática quando uma marca é atribuída (pode ser próxima iteração).
