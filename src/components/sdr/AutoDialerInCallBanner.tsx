@@ -48,7 +48,7 @@ export function AutoDialerInCallBanner() {
       'fixed top-4 left-1/2 -translate-x-1/2 z-[120] w-[min(92vw,720px)]',
       'rounded-xl border-2 border-green-500 bg-green-500/15 backdrop-blur-md shadow-2xl shadow-green-500/30',
       'px-4 py-3 flex items-center gap-3 animate-in slide-in-from-top-4',
-    )}>
+    )} data-autodialer-banner="">
       <button
         type="button"
         onClick={() => setInCallDrawerOpen(true)}
