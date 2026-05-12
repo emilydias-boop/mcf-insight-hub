@@ -515,6 +515,50 @@ export const DealFilters = ({
           />
         </PopoverContent>
       </Popover>
+
+      {/* Filtro de Temperatura do Lead */}
+      <Select
+        value={filters.temperature}
+        onValueChange={(value) => onChange({ ...filters, temperature: value as TemperatureFilter })}
+      >
+        <SelectTrigger className="w-[150px]">
+          <div className="flex items-center gap-2">
+            {filters.temperature !== 'all' && filters.temperature !== 'none' ? (
+              <span className={`w-2 h-2 rounded-full ${TEMPERATURE_META[filters.temperature as Exclude<LeadTemperature, null>].dot}`} />
+            ) : (
+              <span className="w-2 h-2 rounded-full border border-muted-foreground" />
+            )}
+            <SelectValue placeholder="Temperatura" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas temperaturas</SelectItem>
+          <SelectItem value="quente">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Quente
+            </span>
+          </SelectItem>
+          <SelectItem value="morno">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              Morno
+            </span>
+          </SelectItem>
+          <SelectItem value="frio">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Frio
+            </span>
+          </SelectItem>
+          <SelectItem value="none">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full border border-muted-foreground" />
+              Sem classificação
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
       
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>
