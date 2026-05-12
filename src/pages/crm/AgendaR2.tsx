@@ -918,6 +918,9 @@ export default function AgendaR2() {
 
       {/* Status Config Modal */}
       <R2StatusConfigModal open={statusConfigOpen} onOpenChange={setStatusConfigOpen} />
+
+      {/* Marcações Especiais R2 */}
+      <R2SpecialMarkingsConfigModal open={markingsConfigOpen} onOpenChange={setMarkingsConfigOpen} />
     </div>
   );
 }
