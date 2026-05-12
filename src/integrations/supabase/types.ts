@@ -8957,6 +8957,62 @@ export type Database = {
           },
         ]
       }
+      r2_special_markings: {
+        Row: {
+          active: boolean
+          badge_label: string
+          bg_color: string
+          closer_r1_employee_id: string
+          created_at: string
+          created_by: string | null
+          icon: string
+          id: string
+          name: string
+          require_contract_paid: boolean
+          required_channel: string | null
+          text_color: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          badge_label: string
+          bg_color?: string
+          closer_r1_employee_id: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          name: string
+          require_contract_paid?: boolean
+          required_channel?: string | null
+          text_color?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          badge_label?: string
+          bg_color?: string
+          closer_r1_employee_id?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          name?: string
+          require_contract_paid?: boolean
+          required_channel?: string | null
+          text_color?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "r2_special_markings_closer_r1_employee_id_fkey"
+            columns: ["closer_r1_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       r2_status_options: {
         Row: {
           color: string
