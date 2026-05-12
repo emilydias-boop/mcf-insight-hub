@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Settings2, ClipboardList, History, Check, X, Loader2, Info, Sparkles } from "lucide-react";
+import { Settings2, ClipboardList, History, Check, X, Loader2, Info, Sparkles, ChevronDown, ChevronRight, User, Phone, MapPin, Calendar, Package } from "lucide-react";
 import { NoShowAISettingsCard } from "@/components/admin/NoShowAISettingsCard";
 import { toast } from "sonner";
 import { BU_OPTIONS, BusinessUnit } from "@/hooks/useMyBU";
@@ -31,6 +31,8 @@ import {
   useApprovalHistory,
   useReviewApprovalRequest,
   ApprovalRequest,
+  useEnrichedPendingApprovals,
+  EnrichedApproval,
 } from "@/hooks/useApprovalRequests";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
