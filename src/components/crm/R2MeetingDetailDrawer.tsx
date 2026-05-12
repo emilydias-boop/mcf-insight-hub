@@ -257,6 +257,34 @@ export function R2MeetingDetailDrawer({
     }
   };
 
+  // Special markings (Anamnese + Closer R1 etc.)
+  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+  const channelMap = useAttendeeChannels(
+    (meeting?.attendees || []).map(a => ({
+      id: a.id,
+      email: a.deal?.contact?.email || a.email || null,
+      phone: a.deal?.contact?.phone || a.phone || null,
+      scheduledAt: meeting?.scheduled_at || null,
+      tags: (a.deal?.contact?.tags as any) || [],
+    }))
+  );
+  const drawerMarking = (() => {
+    if (!meeting?.r1_closer?.name || specialMarkings.length === 0) return null;
+    for (const a of meeting.attendees || []) {
+      const stageName =
+        (a as any).deal?.stage?.stage_name ||
+        (a as any).deal?.stage_name ||
+        null;
+      const m = matchR2SpecialMarking(specialMarkings, {
+        channel: channelMap.get(a.id) as any,
+        r1CloserName: meeting.r1_closer.name,
+        isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+      });
+      if (m) return m;
+    }
+    return null;
+  })();
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:w-[40vw] sm:min-w-[400px] sm:max-w-none p-0 flex flex-col">
@@ -274,6 +302,22 @@ export function R2MeetingDetailDrawer({
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
+            {drawerMarking && (
+              <div
+                className="rounded-lg p-3 flex items-center gap-3 shadow-sm"
+                style={{ backgroundColor: drawerMarking.bg_color, color: drawerMarking.text_color }}
+              >
+                <span className="text-xl">{drawerMarking.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm">{drawerMarking.badge_label}</div>
+                  <div className="text-xs opacity-90 truncate">
+                    Closer R1: {meeting.r1_closer?.name}
+                    {drawerMarking.required_channel ? ` • Canal: ${drawerMarking.required_channel}` : ''}
+                    {drawerMarking.require_contract_paid ? ' • Contrato Pago' : ''}
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Participant Selection */}
             {meeting.attendees && meeting.attendees.length > 0 && (
               <div className="space-y-3">
