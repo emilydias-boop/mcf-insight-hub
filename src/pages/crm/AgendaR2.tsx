@@ -258,6 +258,10 @@ export default function AgendaR2() {
           ? {
               id: m.attendees[0].deal.id,
               name: m.attendees[0].deal.name || "",
+              // Pass tags for channel classification (ANAMNESE/A010) in AgendaCalendar
+              ...(m.attendees[0].deal.contact?.tags
+                ? { tags: m.attendees[0].deal.contact.tags as any }
+                : {}),
               contact: m.attendees[0].deal.contact
                 ? {
                     id: "",
@@ -281,7 +285,23 @@ export default function AgendaR2() {
           notes: null,
           closer_notes: null,
           already_builds: a.already_builds,
-        })),
+          // expose deal tags + contact for channel classification
+          ...(a.deal
+            ? ({
+                deal: {
+                  id: a.deal.id,
+                  name: a.deal.name || "",
+                  tags: (a.deal.contact?.tags as any) || [],
+                  contact: a.deal.contact
+                    ? {
+                        email: a.deal.contact.email || null,
+                        phone: a.deal.contact.phone || null,
+                      }
+                    : undefined,
+                },
+              } as any)
+            : {}),
+        })) as any,
       }),
     );
   }, [filteredMeetings]);
