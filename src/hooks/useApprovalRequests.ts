@@ -20,6 +20,260 @@ export interface ApprovalRequest {
   updated_at: string;
 }
 
+export interface EnrichedApproval extends ApprovalRequest {
+  requester_name: string | null;
+  requester_email: string | null;
+  deal: {
+    id: string;
+    name: string | null;
+    contact_name: string | null;
+    contact_phone: string | null;
+    contact_email: string | null;
+    stage_name: string | null;
+    origin_name: string | null;
+    owner_id: string | null;
+    owner_name: string | null;
+    product_name: string | null;
+  } | null;
+  current_meeting: {
+    scheduled_at: string | null;
+    status: string | null;
+    closer_id: string | null;
+    closer_name: string | null;
+    meeting_type: string | null;
+  } | null;
+  movements: Array<{
+    id: string;
+    created_at: string;
+    movement_type: string | null;
+    from_scheduled_at: string | null;
+    to_scheduled_at: string | null;
+    from_closer_name: string | null;
+    to_closer_name: string | null;
+    moved_by_name: string | null;
+    reason: string | null;
+  }>;
+}
+
+/** Enriquecimento (nome SDR, dados do lead, reunião alvo, histórico). */
+export function useEnrichedPendingApprovals(requests: ApprovalRequest[]) {
+  return useQuery({
+    queryKey: [
+      "approval-requests-enriched",
+      requests.map((r) => r.id).sort().join(","),
+    ],
+    enabled: requests.length > 0,
+    staleTime: 30_000,
+    queryFn: async (): Promise<EnrichedApproval[]> => {
+      const userIds = Array.from(
+        new Set(requests.map((r) => r.requested_by).filter(Boolean)),
+      );
+      const dealIds = Array.from(
+        new Set(requests.map((r) => r.target_deal_id).filter(Boolean) as string[]),
+      );
+
+      const [profilesRes, dealsRes] = await Promise.all([
+        userIds.length
+          ? supabase
+              .from("profiles")
+              .select("id, full_name, email")
+              .in("id", userIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        dealIds.length
+          ? supabase
+              .from("crm_deals")
+              .select(
+                "id, name, contact_id, stage_id, origin_id, owner_id, owner_profile_id, product_name",
+              )
+              .in("id", dealIds)
+          : Promise.resolve({ data: [], error: null } as any),
+      ]);
+
+      const profiles = (profilesRes.data || []) as any[];
+      const deals = (dealsRes.data || []) as any[];
+
+      const contactIds = Array.from(
+        new Set(deals.map((d) => d.contact_id).filter(Boolean)),
+      );
+      const stageIds = Array.from(
+        new Set(deals.map((d) => d.stage_id).filter(Boolean)),
+      );
+      const originIds = Array.from(
+        new Set(deals.map((d) => d.origin_id).filter(Boolean)),
+      );
+      const ownerProfileIds = Array.from(
+        new Set(deals.map((d) => d.owner_profile_id).filter(Boolean)),
+      );
+
+      const [contactsRes, stagesRes, originsRes, ownersRes, slotsRes] =
+        await Promise.all([
+          contactIds.length
+            ? supabase
+                .from("crm_contacts")
+                .select("id, name, phone, email")
+                .in("id", contactIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          stageIds.length
+            ? supabase
+                .from("crm_stages")
+                .select("id, stage_name")
+                .in("id", stageIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          originIds.length
+            ? supabase
+                .from("crm_origins")
+                .select("id, name, display_name")
+                .in("id", originIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          ownerProfileIds.length
+            ? supabase
+                .from("profiles")
+                .select("id, full_name, email")
+                .in("id", ownerProfileIds)
+            : Promise.resolve({ data: [], error: null } as any),
+          dealIds.length
+            ? supabase
+                .from("meeting_slots")
+                .select(
+                  "id, deal_id, scheduled_at, status, closer_id, meeting_type",
+                )
+                .in("deal_id", dealIds)
+                .in("status", ["scheduled", "rescheduled"])
+                .order("scheduled_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null } as any),
+        ]);
+
+      const slots = (slotsRes.data || []) as any[];
+      const closerIds = Array.from(
+        new Set(slots.map((s) => s.closer_id).filter(Boolean)),
+      );
+
+      // Atendentes para encontrar movement logs (precisamos do attendee_id por deal).
+      const [closersRes, attendeesRes] = await Promise.all([
+        closerIds.length
+          ? supabase
+              .from("profiles")
+              .select("id, full_name")
+              .in("id", closerIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        dealIds.length
+          ? supabase
+              .from("meeting_slot_attendees")
+              .select("id, deal_id, created_at")
+              .in("deal_id", dealIds)
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null } as any),
+      ]);
+
+      const attendees = (attendeesRes.data || []) as any[];
+      const attendeeIds = attendees.map((a) => a.id);
+
+      const movementsRes = attendeeIds.length
+        ? await supabase
+            .from("attendee_movement_logs")
+            .select(
+              "id, attendee_id, created_at, movement_type, from_scheduled_at, to_scheduled_at, from_closer_name, to_closer_name, moved_by_name, reason",
+            )
+            .in("attendee_id", attendeeIds)
+            .order("created_at", { ascending: false })
+        : { data: [] as any[] };
+
+      const profileById = new Map<string, any>(
+        profiles.map((p) => [p.id, p]),
+      );
+      const dealById = new Map<string, any>(deals.map((d) => [d.id, d]));
+      const contactById = new Map<string, any>(
+        ((contactsRes.data || []) as any[]).map((c) => [c.id, c]),
+      );
+      const stageById = new Map<string, any>(
+        ((stagesRes.data || []) as any[]).map((s) => [s.id, s]),
+      );
+      const originById = new Map<string, any>(
+        ((originsRes.data || []) as any[]).map((o) => [o.id, o]),
+      );
+      const ownerById = new Map<string, any>(
+        ((ownersRes.data || []) as any[]).map((o) => [o.id, o]),
+      );
+      const closerById = new Map<string, any>(
+        ((closersRes.data || []) as any[]).map((c) => [c.id, c]),
+      );
+
+      // mais recente reunião por deal
+      const slotByDeal = new Map<string, any>();
+      for (const s of slots) {
+        if (!slotByDeal.has(s.deal_id)) slotByDeal.set(s.deal_id, s);
+      }
+
+      // movements por deal (via attendee → deal)
+      const attendeeToDeal = new Map<string, string>();
+      for (const a of attendees) attendeeToDeal.set(a.id, a.deal_id);
+      const movementsByDeal = new Map<string, any[]>();
+      for (const m of (movementsRes.data || []) as any[]) {
+        const dealId = attendeeToDeal.get(m.attendee_id);
+        if (!dealId) continue;
+        const arr = movementsByDeal.get(dealId) || [];
+        arr.push(m);
+        movementsByDeal.set(dealId, arr);
+      }
+
+      return requests.map((req) => {
+        const requester = profileById.get(req.requested_by);
+        const deal = req.target_deal_id ? dealById.get(req.target_deal_id) : null;
+        const contact = deal?.contact_id ? contactById.get(deal.contact_id) : null;
+        const stage = deal?.stage_id ? stageById.get(deal.stage_id) : null;
+        const origin = deal?.origin_id ? originById.get(deal.origin_id) : null;
+        const owner = deal?.owner_profile_id
+          ? ownerById.get(deal.owner_profile_id)
+          : null;
+        const slot = req.target_deal_id ? slotByDeal.get(req.target_deal_id) : null;
+        const closer = slot?.closer_id ? closerById.get(slot.closer_id) : null;
+        const movements =
+          (req.target_deal_id && movementsByDeal.get(req.target_deal_id)) || [];
+
+        return {
+          ...req,
+          requester_name: requester?.full_name ?? null,
+          requester_email: requester?.email ?? null,
+          deal: deal
+            ? {
+                id: deal.id,
+                name: deal.name ?? null,
+                contact_name: contact?.name ?? null,
+                contact_phone: contact?.phone ?? null,
+                contact_email: contact?.email ?? null,
+                stage_name: stage?.stage_name ?? null,
+                origin_name: origin?.display_name ?? origin?.name ?? null,
+                owner_id: deal.owner_profile_id ?? null,
+                owner_name: owner?.full_name ?? null,
+                product_name: deal.product_name ?? null,
+              }
+            : null,
+          current_meeting: slot
+            ? {
+                scheduled_at: slot.scheduled_at,
+                status: slot.status,
+                closer_id: slot.closer_id,
+                closer_name: closer?.full_name ?? null,
+                meeting_type: slot.meeting_type ?? null,
+              }
+            : null,
+          movements: movements.map((m) => ({
+            id: m.id,
+            created_at: m.created_at,
+            movement_type: m.movement_type,
+            from_scheduled_at: m.from_scheduled_at,
+            to_scheduled_at: m.to_scheduled_at,
+            from_closer_name: m.from_closer_name,
+            to_closer_name: m.to_closer_name,
+            moved_by_name: m.moved_by_name,
+            reason: m.reason,
+          })),
+        };
+      });
+    },
+  });
+}
+
 /** Lista pedidos pendentes (para aprovadores). */
 export function usePendingApprovals(buFilter?: string | null) {
   return useQuery({

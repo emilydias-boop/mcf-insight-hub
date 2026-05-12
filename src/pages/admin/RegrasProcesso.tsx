@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Settings2, ClipboardList, History, Check, X, Loader2, Info, Sparkles } from "lucide-react";
+import { Settings2, ClipboardList, History, Check, X, Loader2, Info, Sparkles, ChevronDown, ChevronRight, User, Phone, MapPin, Calendar, Package } from "lucide-react";
 import { NoShowAISettingsCard } from "@/components/admin/NoShowAISettingsCard";
 import { toast } from "sonner";
 import { BU_OPTIONS, BusinessUnit } from "@/hooks/useMyBU";
@@ -31,6 +31,8 @@ import {
   useApprovalHistory,
   useReviewApprovalRequest,
   ApprovalRequest,
+  useEnrichedPendingApprovals,
+  EnrichedApproval,
 } from "@/hooks/useApprovalRequests";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -502,9 +504,12 @@ function EditRuleDialog({
 /* ---------------- Pending approvals ---------------- */
 function PendingTab() {
   const { data: pending = [], isLoading } = usePendingApprovals();
+  const { data: enriched = [], isLoading: loadingEnriched } =
+    useEnrichedPendingApprovals(pending);
   const review = useReviewApprovalRequest();
   const [reviewing, setReviewing] = useState<{ req: ApprovalRequest; action: "approved" | "rejected" } | null>(null);
   const [notes, setNotes] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const handleConfirm = async () => {
     if (!reviewing) return;
@@ -527,81 +532,27 @@ function PendingTab() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading || (pending.length > 0 && loadingEnriched) ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : pending.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">
             Nenhum pedido pendente. ✨
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Quando</TableHead>
-                <TableHead>BU</TableHead>
-                <TableHead>Solicitante</TableHead>
-                <TableHead>Regra</TableHead>
-                <TableHead>Detalhes</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pending.map((req) => (
-                <TableRow key={req.id}>
-                  <TableCell className="text-xs">
-                    {format(new Date(req.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{req.bu ?? "global"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-xs font-mono">{req.requested_by.slice(0, 8)}</div>
-                    <Badge variant="secondary" className="text-xs uppercase">{req.requester_role}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">{RULE_LABELS[req.rule_key]?.title ?? req.rule_key}</TableCell>
-                  <TableCell className="text-xs max-w-md">
-                    {(() => {
-                      const info = formatPayloadHumano(req.rule_key, req.payload);
-                      return (
-                        <div className="space-y-1">
-                          <p className="text-sm leading-snug">{info.resumo}</p>
-                          {info.lead && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Lead:</span> {info.lead}
-                            </p>
-                          )}
-                          {info.motivo && info.motivo !== info.resumo && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">Motivo do sistema:</span>{" "}
-                              {info.motivo}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => setReviewing({ req, action: "approved" })}
-                      >
-                        <Check className="h-3 w-3 mr-1" /> Aprovar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setReviewing({ req, action: "rejected" })}
-                      >
-                        <X className="h-3 w-3 mr-1" /> Rejeitar
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="space-y-3">
+            {enriched.map((req) => (
+              <PendingApprovalCard
+                key={req.id}
+                req={req}
+                expanded={!!expanded[req.id]}
+                onToggle={() =>
+                  setExpanded((s) => ({ ...s, [req.id]: !s[req.id] }))
+                }
+                onApprove={() => setReviewing({ req, action: "approved" })}
+                onReject={() => setReviewing({ req, action: "rejected" })}
+              />
+            ))}
+          </div>
         )}
       </CardContent>
 
@@ -642,6 +593,204 @@ function PendingTab() {
 
 /* ---------------- History ---------------- */
 function HistoryTab() {
+  return <HistoryTabImpl />;
+}
+
+function PendingApprovalCard({
+  req,
+  expanded,
+  onToggle,
+  onApprove,
+  onReject,
+}: {
+  req: EnrichedApproval;
+  expanded: boolean;
+  onToggle: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const info = formatPayloadHumano(req.rule_key, req.payload);
+  const requesterLabel =
+    req.requester_name || req.requester_email || `Usuário ${req.requested_by.slice(0, 8)}`;
+  const meetingDate = req.current_meeting?.scheduled_at
+    ? format(new Date(req.current_meeting.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+    : null;
+
+  return (
+    <Card className="border-l-4 border-l-amber-500">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline">{req.bu ?? "global"}</Badge>
+              <Badge variant="secondary" className="uppercase text-xs">{req.requester_role}</Badge>
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(req.created_at), "dd/MM HH:mm", { locale: ptBR })}
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold">
+              {RULE_LABELS[req.rule_key]?.title ?? req.rule_key}
+            </h3>
+            <p className="text-sm text-foreground">{info.resumo}</p>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <Button size="sm" variant="default" onClick={onApprove}>
+              <Check className="h-3 w-3 mr-1" /> Aprovar
+            </Button>
+            <Button size="sm" variant="destructive" onClick={onReject}>
+              <X className="h-3 w-3 mr-1" /> Rejeitar
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+          <div className="text-xs space-y-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <User className="h-3 w-3" /> Solicitante
+            </div>
+            <div className="font-medium text-sm">{requesterLabel}</div>
+            {req.requester_email && req.requester_name && (
+              <div className="text-muted-foreground">{req.requester_email}</div>
+            )}
+          </div>
+
+          <div className="text-xs space-y-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <User className="h-3 w-3" /> Lead
+            </div>
+            {req.deal ? (
+              <>
+                <div className="font-medium text-sm">
+                  {req.deal.contact_name || req.deal.name || "—"}
+                </div>
+                {req.deal.contact_phone && (
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Phone className="h-3 w-3" /> {req.deal.contact_phone}
+                  </div>
+                )}
+                {req.deal.contact_email && (
+                  <div className="text-muted-foreground">{req.deal.contact_email}</div>
+                )}
+              </>
+            ) : (
+              <div className="text-muted-foreground">Lead não vinculado</div>
+            )}
+          </div>
+
+          <div className="text-xs space-y-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <MapPin className="h-3 w-3" /> Onde está
+            </div>
+            {req.deal ? (
+              <>
+                <div className="font-medium text-sm">{req.deal.stage_name || "—"}</div>
+                {req.deal.origin_name && (
+                  <div className="text-muted-foreground">Pipeline: {req.deal.origin_name}</div>
+                )}
+                {req.deal.owner_name && (
+                  <div className="text-muted-foreground">Owner: {req.deal.owner_name}</div>
+                )}
+                {req.deal.product_name && (
+                  <div className="text-muted-foreground flex items-center gap-1">
+                    <Package className="h-3 w-3" /> {req.deal.product_name}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-muted-foreground">—</div>
+            )}
+          </div>
+
+          <div className="text-xs space-y-1">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Calendar className="h-3 w-3" /> Reunião sendo reagendada
+            </div>
+            {req.current_meeting ? (
+              <>
+                <div className="font-medium text-sm">
+                  {meetingDate}
+                  {req.current_meeting.meeting_type && (
+                    <Badge variant="outline" className="ml-2 text-[10px] uppercase">
+                      {req.current_meeting.meeting_type}
+                    </Badge>
+                  )}
+                </div>
+                {req.current_meeting.closer_name && (
+                  <div className="text-muted-foreground">Closer: {req.current_meeting.closer_name}</div>
+                )}
+                <div className="text-muted-foreground">Status: {req.current_meeting.status}</div>
+              </>
+            ) : (
+              <div className="text-muted-foreground">Nenhuma reunião ativa encontrada</div>
+            )}
+          </div>
+        </div>
+
+        <div className="pt-2 border-t">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Histórico de movimentações ({req.movements.length})
+          </button>
+          {expanded && (
+            <div className="mt-2 space-y-2">
+              {req.movements.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Sem movimentações registradas para este lead.
+                </p>
+              ) : (
+                req.movements.map((m) => (
+                  <div key={m.id} className="text-xs border rounded-md p-2 bg-muted/30 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-[10px]">
+                        {m.movement_type || "movimento"}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        {format(new Date(m.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    {(m.from_scheduled_at || m.to_scheduled_at) && (
+                      <div className="text-muted-foreground">
+                        {m.from_scheduled_at && format(new Date(m.from_scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                        {m.from_scheduled_at && m.to_scheduled_at && " → "}
+                        {m.to_scheduled_at && format(new Date(m.to_scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                      </div>
+                    )}
+                    {(m.from_closer_name || m.to_closer_name) && (
+                      <div className="text-muted-foreground">
+                        Closer: {m.from_closer_name || "—"}
+                        {m.to_closer_name && m.to_closer_name !== m.from_closer_name ? ` → ${m.to_closer_name}` : ""}
+                      </div>
+                    )}
+                    {m.moved_by_name && (
+                      <div className="text-muted-foreground">Por: {m.moved_by_name}</div>
+                    )}
+                    {m.reason && (
+                      <div className="text-foreground">
+                        <span className="font-medium">Motivo:</span> {m.reason}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {info.motivo && info.motivo !== info.resumo && (
+          <div className="text-xs text-muted-foreground pt-1 border-t">
+            <span className="font-medium text-foreground">Motivo do sistema:</span> {info.motivo}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HistoryTabImpl() {
   const { data: history = [], isLoading } = useApprovalHistory();
   return (
     <Card>
