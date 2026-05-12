@@ -605,6 +605,15 @@ const Negocios = () => {
             break;
         }
       }
+      // Filtro Temperatura do Lead
+      if (filters.temperature !== 'all') {
+        const t = (deal as any).lead_temperature ?? null;
+        if (filters.temperature === 'none') {
+          if (t) return false;
+        } else if (t !== filters.temperature) {
+          return false;
+        }
+      }
       // Filtro Outside
       if (filters.outsideFilter !== 'all') {
         if (!outsideMap) return false;
