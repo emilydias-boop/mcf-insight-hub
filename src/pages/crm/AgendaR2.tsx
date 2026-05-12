@@ -268,7 +268,6 @@ export default function AgendaR2() {
                     name: m.attendees[0].deal.contact.name,
                     phone: m.attendees[0].deal.contact.phone || null,
                     email: m.attendees[0].deal.contact.email || null,
-                    tags: (m.attendees[0].deal.contact.tags as any) || null,
                   }
                 : undefined,
             }
@@ -286,21 +285,23 @@ export default function AgendaR2() {
           notes: null,
           closer_notes: null,
           already_builds: a.already_builds,
-          // expose deal tags so AgendaCalendar can classify channel per attendee
-          deal: a.deal
-            ? {
-                id: a.deal.id,
-                tags: (a.deal.contact?.tags as any) || [],
-                contact: a.deal.contact
-                  ? {
-                      email: a.deal.contact.email || null,
-                      phone: a.deal.contact.phone || null,
-                      tags: (a.deal.contact.tags as any) || null,
-                    }
-                  : undefined,
-              }
-            : undefined,
-        })),
+          // expose deal tags + contact for channel classification
+          ...(a.deal
+            ? ({
+                deal: {
+                  id: a.deal.id,
+                  name: a.deal.name || "",
+                  tags: (a.deal.contact?.tags as any) || [],
+                  contact: a.deal.contact
+                    ? {
+                        email: a.deal.contact.email || null,
+                        phone: a.deal.contact.phone || null,
+                      }
+                    : undefined,
+                },
+              } as any)
+            : {}),
+        })) as any,
       }),
     );
   }, [filteredMeetings]);
