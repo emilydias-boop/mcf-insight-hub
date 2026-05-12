@@ -200,6 +200,39 @@ function NoShowCard({
   );
 }
 
+function NoShowCardsGrid({
+  leads,
+  onReschedule,
+  onOpenDrawer,
+}: {
+  leads: R2NoShowLead[];
+  onReschedule: (lead: R2NoShowLead) => void;
+  onOpenDrawer: (lead: R2NoShowLead) => void;
+}) {
+  const channelInputs: R2LeadInput[] = useMemo(() => leads.map((l) => ({
+    key: l.id,
+    email: l.email,
+    phone: l.phone,
+    dealId: l.deal_id,
+    scheduledAt: l.scheduled_at,
+  })), [leads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {leads.map((lead) => (
+        <NoShowCard
+          key={lead.id}
+          lead={lead}
+          onReschedule={() => onReschedule(lead)}
+          onClick={() => onOpenDrawer(lead)}
+          channel={channelMap.get(lead.id)?.channel}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function R2NoShowsPanel({ closers, parentViewMode, parentSelectedDate, parentRangeStart, parentRangeEnd }: R2NoShowsPanelProps) {
   // Map parent viewMode to panel dateFilter
   const mapViewMode = (vm?: 'day' | 'week' | 'month'): DateFilterType => {
