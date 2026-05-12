@@ -57,6 +57,8 @@ const emptyForm = {
   icon: '📋',
   badge_label: '',
   active: true,
+  valid_from: '' as string,
+  valid_until: '' as string,
 };
 
 export function R2SpecialMarkingsConfigModal({ open, onOpenChange }: Props) {
@@ -84,6 +86,8 @@ export function R2SpecialMarkingsConfigModal({ open, onOpenChange }: Props) {
       icon: r.icon,
       badge_label: r.badge_label,
       active: r.active,
+      valid_from: (r.valid_from || '').slice(0, 10),
+      valid_until: (r.valid_until || '').slice(0, 10),
     });
     setEditing(true);
   };
@@ -105,6 +109,8 @@ export function R2SpecialMarkingsConfigModal({ open, onOpenChange }: Props) {
         icon: form.icon || '📋',
         badge_label: form.badge_label.trim(),
         active: form.active,
+        valid_from: form.valid_from || null,
+        valid_until: form.valid_until || null,
       });
       toast.success(form.id ? 'Marcação atualizada' : 'Marcação criada');
       setEditing(false);
@@ -165,6 +171,16 @@ export function R2SpecialMarkingsConfigModal({ open, onOpenChange }: Props) {
                       Closer R1: <strong>{r.closer_r1_name || '—'}</strong>
                       {' • '}Canal: <strong>{r.required_channel || 'Qualquer'}</strong>
                       {' • '}Contrato pago: <strong>{r.require_contract_paid ? 'Sim' : 'Não'}</strong>
+                      {(r.valid_from || r.valid_until) && (
+                        <>
+                          {' • '}Vigência:{' '}
+                          <strong>
+                            {r.valid_from ? r.valid_from.slice(0, 10) : '—'}
+                            {' → '}
+                            {r.valid_until ? r.valid_until.slice(0, 10) : '∞'}
+                          </strong>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">
@@ -234,6 +250,31 @@ export function R2SpecialMarkingsConfigModal({ open, onOpenChange }: Props) {
                 checked={form.require_contract_paid}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, require_contract_paid: v }))}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Vigência — início</Label>
+                <Input
+                  type="date"
+                  value={form.valid_from}
+                  onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Só aplica a partir desta data (opcional).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Vigência — fim</Label>
+                <Input
+                  type="date"
+                  value={form.valid_until}
+                  onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Para de aplicar após esta data (opcional).
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">

@@ -279,6 +279,7 @@ export function R2MeetingDetailDrawer({
         channel: channelMap.get(a.id) as any,
         r1CloserName: meeting.r1_closer.name,
         isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+        referenceDate: meeting.scheduled_at || null,
       });
       if (m) return m;
     }

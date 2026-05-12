@@ -340,6 +340,7 @@ export function AgendaCalendar({
           channel: channel as any,
           r1CloserName: r1Name,
           isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+          referenceDate: m.scheduled_at || null,
         });
         if (matched) map.set(att.id, matched);
       });
