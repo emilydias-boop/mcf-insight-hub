@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption, LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from '@/types/r2Agenda';
 import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2ListViewTableProps {
   meetings: R2MeetingRow[];
@@ -56,6 +58,15 @@ export function R2ListViewTable({
       }))
     );
   }, [meetings]);
+
+  const channelInputs: R2LeadInput[] = useMemo(() => rows.map(({ meeting, attendee, key }) => ({
+    key,
+    email: (attendee as any).email || (attendee as any).deal?.contact?.email || null,
+    phone: (attendee as any).phone || (attendee as any).deal?.contact?.phone || null,
+    dealId: (attendee as any).deal_id || (attendee as any).deal?.id || null,
+    scheduledAt: meeting.scheduled_at || null,
+  })), [rows]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   const handleQuickUpdate = (attendeeId: string, field: string, value: unknown) => {
     updateAttendee.mutate({
@@ -128,7 +139,15 @@ export function R2ListViewTable({
                 {/* Lead (nome + telefone) */}
                 <TableCell onClick={e => e.stopPropagation()}>
                   <div className="space-y-0.5">
-                    <div className="font-medium text-sm">{contactName}</div>
+                    <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                      <span>{contactName}</span>
+                      <R2LeadBadges
+                        channel={channelMap.get(key)?.channel}
+                        r1CloserName={(attendee as any).r1_closer_name || null}
+                        isContractPaid={(attendee as any).status === 'contract_paid'}
+                        scheduledAt={meeting.scheduled_at}
+                      />
+                    </div>
                     {contactPhone && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Phone className="h-3 w-3" />
