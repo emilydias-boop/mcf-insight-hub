@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Check, X, Phone, Calendar, User, Loader2, Clock, AlertTriangle, StickyNote, ArrowRightLeft } from 'lucide-react';
@@ -28,6 +28,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { R2AttendeeExtended, R2MeetingRow } from '@/types/r2Agenda';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 // Hook to check which pre-scheduled leads have configured daily slots
 function usePreScheduledSlotCheck(leads: ReturnType<typeof useR2PreScheduledLeads>['data']) {
@@ -72,6 +74,19 @@ export function R2PreScheduledTab() {
   const cancelMutation = useCancelR2PreScheduled();
   const { data: slotChecks = {} } = usePreScheduledSlotCheck(leads);
   const [transferTarget, setTransferTarget] = useState<{ attendee: R2AttendeeExtended; meeting: R2MeetingRow } | null>(null);
+
+  const channelInputs: R2LeadInput[] = useMemo(() => leads.map((l: any) => {
+    const meetingSlot = l.meeting_slot as any;
+    const deal = l.deal as any;
+    return {
+      key: l.id,
+      email: deal?.contact?.email || null,
+      phone: l.attendee_phone || deal?.contact?.phone || null,
+      dealId: l.deal_id || deal?.id || null,
+      scheduledAt: meetingSlot?.scheduled_at || null,
+    };
+  }), [leads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   if (isLoading) {
     return (
@@ -129,7 +144,17 @@ export function R2PreScheduledTab() {
 
             return (
               <TableRow key={lead.id}>
-                <TableCell className="font-medium">{name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span>{name}</span>
+                    <R2LeadBadges
+                      channel={channelMap.get(lead.id)?.channel}
+                      r1CloserName={null}
+                      isContractPaid={false}
+                      scheduledAt={meetingSlot?.scheduled_at}
+                    />
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1 text-sm">
                     <Phone className="h-3 w-3 text-muted-foreground" />
