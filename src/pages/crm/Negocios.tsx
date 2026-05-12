@@ -80,6 +80,7 @@ const Negocios = () => {
     activityPriority: 'all',
     outsideFilter: 'all',
   });
+  // (temperature filter default set above)
   
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
