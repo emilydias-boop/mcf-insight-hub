@@ -361,7 +361,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const dataReservaWatch = form.watch('data_reserva');
   const parcelasPagasClienteWatch = form.watch('parcelas_pagas_cliente') || 0;
 
-  const applyConsorciadoMatch = (m: ConsorciadoMatch) => {
+  const applyConsorciadoMatch = async (m: ConsorciadoMatch) => {
     const setIfEmpty = (field: any, value: any) => {
       if (value == null || value === '') return;
       const current = form.getValues(field);
@@ -379,6 +379,51 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       setIfEmpty('cnpj', m.cpf_cnpj);
       setIfEmpty('telefone_comercial', m.telefone);
       setIfEmpty('email_comercial', m.email);
+    }
+
+    // Para cotas anteriores, busca o registro completo e preenche endereço + dados extras
+    if (m.source === 'consortium') {
+      try {
+        const { data: full } = await supabase
+          .from('consortium_cards')
+          .select('data_nascimento, rg, estado_civil, cpf_conjuge, profissao, tipo_servidor, renda, patrimonio, pix, endereco_cep, endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, natureza_juridica, inscricao_estadual, data_fundacao, faturamento_mensal, num_funcionarios, endereco_comercial_cep, endereco_comercial_rua, endereco_comercial_numero, endereco_comercial_complemento, endereco_comercial_bairro, endereco_comercial_cidade, endereco_comercial_estado')
+          .eq('id', m.id)
+          .maybeSingle();
+        if (!full) return;
+        if (tipoPessoa === 'pf') {
+          setIfEmpty('data_nascimento', full.data_nascimento ? parseDateWithoutTimezone(full.data_nascimento) : undefined);
+          setIfEmpty('rg', full.rg);
+          setIfEmpty('estado_civil', full.estado_civil);
+          setIfEmpty('cpf_conjuge', full.cpf_conjuge);
+          setIfEmpty('profissao', full.profissao);
+          setIfEmpty('tipo_servidor', full.tipo_servidor);
+          setIfEmpty('renda', full.renda ? Number(full.renda) : undefined);
+          setIfEmpty('patrimonio', full.patrimonio ? Number(full.patrimonio) : undefined);
+          setIfEmpty('pix', full.pix);
+          setIfEmpty('endereco_cep', full.endereco_cep);
+          setIfEmpty('endereco_rua', full.endereco_rua);
+          setIfEmpty('endereco_numero', full.endereco_numero);
+          setIfEmpty('endereco_complemento', full.endereco_complemento);
+          setIfEmpty('endereco_bairro', full.endereco_bairro);
+          setIfEmpty('endereco_cidade', full.endereco_cidade);
+          setIfEmpty('endereco_estado', full.endereco_estado);
+        } else {
+          setIfEmpty('natureza_juridica', full.natureza_juridica);
+          setIfEmpty('inscricao_estadual', full.inscricao_estadual);
+          setIfEmpty('data_fundacao', full.data_fundacao ? parseDateWithoutTimezone(full.data_fundacao) : undefined);
+          setIfEmpty('faturamento_mensal', full.faturamento_mensal ? Number(full.faturamento_mensal) : undefined);
+          setIfEmpty('num_funcionarios', full.num_funcionarios ? Number(full.num_funcionarios) : undefined);
+          setIfEmpty('endereco_comercial_cep', full.endereco_comercial_cep);
+          setIfEmpty('endereco_comercial_rua', full.endereco_comercial_rua);
+          setIfEmpty('endereco_comercial_numero', full.endereco_comercial_numero);
+          setIfEmpty('endereco_comercial_complemento', full.endereco_comercial_complemento);
+          setIfEmpty('endereco_comercial_bairro', full.endereco_comercial_bairro);
+          setIfEmpty('endereco_comercial_cidade', full.endereco_comercial_cidade);
+          setIfEmpty('endereco_comercial_estado', full.endereco_comercial_estado);
+        }
+      } catch (e) {
+        console.warn('[autofill] failed to fetch full consortium record', e);
+      }
     }
   };
 
