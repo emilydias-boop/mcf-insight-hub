@@ -54,6 +54,8 @@ import { IncorporadorTransactionDrawer } from '@/components/incorporador/Incorpo
 import { LinkAttendeeDialog } from '@/components/crm/LinkAttendeeDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -136,6 +138,16 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
     const start = (currentPage - 1) * pageSize;
     return vendas.slice(start, start + pageSize);
   }, [vendas, currentPage, pageSize]);
+
+  // Batch classify channel (A010/ANAMNESE/Outro) das vendas visíveis
+  const channelInputs: R2LeadInput[] = useMemo(() => paginatedVendas.map((v) => ({
+    key: v.id,
+    email: v.customer_email,
+    phone: v.customer_phone,
+    scheduledAt: v.r2_scheduled_at || v.sale_date,
+    tags: null,
+  })), [paginatedVendas]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   const handleRefresh = () => {
     refetch();
@@ -421,9 +433,16 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium truncate max-w-[150px]" title={venda.customer_name || ''}>
-                          {venda.customer_name || '-'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium truncate max-w-[150px]" title={venda.customer_name || ''}>
+                            {venda.customer_name || '-'}
+                          </span>
+                          <R2LeadBadges
+                            channel={channelMap.get(venda.id)?.channel}
+                            scheduledAt={venda.r2_scheduled_at || venda.sale_date}
+                            hideOutro
+                          />
+                        </div>
                         {venda.r2_closer_name && (
                           <span 
                             className="text-xs px-1.5 py-0.5 rounded-full w-fit mt-1"
