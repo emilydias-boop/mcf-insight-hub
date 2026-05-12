@@ -298,6 +298,10 @@ export default function AgendaR2() {
                   id: a.deal.id,
                   name: a.deal.name || "",
                   tags: (a.deal.contact?.tags as any) || [],
+                  stage_name:
+                    (a.deal as any).stage?.stage_name ||
+                    (a.deal as any).stage_name ||
+                    null,
                   contact: a.deal.contact
                     ? {
                         email: a.deal.contact.email || null,
@@ -305,6 +309,8 @@ export default function AgendaR2() {
                       }
                     : undefined,
                 },
+                r1_closer_name: (m as any).r1_closer?.name || null,
+                r1_closer_id: (m as any).r1_closer?.id || null,
               } as any)
             : {}),
         })) as any,
