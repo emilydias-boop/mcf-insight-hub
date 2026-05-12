@@ -40,6 +40,9 @@ import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { R2MeetingSlot, R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { cn } from '@/lib/utils';
 import { LEAD_PROFILE_OPTIONS, R2MeetingRow } from '@/types/r2Agenda';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
+import { SimpleChannel } from '@/lib/r2ChannelClassify';
 
 interface R2NoShowsPanelProps {
   closers: R2CloserWithAvailability[];
@@ -53,10 +56,12 @@ function NoShowCard({
   lead, 
   onReschedule,
   onClick,
+  channel,
 }: { 
   lead: R2NoShowLead; 
   onReschedule: () => void;
   onClick: () => void;
+  channel?: SimpleChannel;
 }) {
   const profileLabel = LEAD_PROFILE_OPTIONS.find(p => p.value === lead.lead_profile)?.label || lead.lead_profile;
   
@@ -65,9 +70,15 @@ function NoShowCard({
       <CardContent className="p-4">
         {/* Header: Name + Reschedule Button */}
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="w-2 h-2 rounded-full bg-destructive" />
             <h3 className="font-semibold text-base">{lead.name}</h3>
+            <R2LeadBadges
+              channel={channel}
+              r1CloserName={lead.r1_closer_name}
+              isContractPaid={false}
+              scheduledAt={lead.scheduled_at}
+            />
           </div>
           <Button 
             size="sm" 
@@ -186,6 +197,39 @@ function NoShowCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function NoShowCardsGrid({
+  leads,
+  onReschedule,
+  onOpenDrawer,
+}: {
+  leads: R2NoShowLead[];
+  onReschedule: (lead: R2NoShowLead) => void;
+  onOpenDrawer: (lead: R2NoShowLead) => void;
+}) {
+  const channelInputs: R2LeadInput[] = useMemo(() => leads.map((l) => ({
+    key: l.id,
+    email: l.email,
+    phone: l.phone,
+    dealId: l.deal_id,
+    scheduledAt: l.scheduled_at,
+  })), [leads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {leads.map((lead) => (
+        <NoShowCard
+          key={lead.id}
+          lead={lead}
+          onReschedule={() => onReschedule(lead)}
+          onClick={() => onOpenDrawer(lead)}
+          channel={channelMap.get(lead.id)?.channel}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -529,16 +573,11 @@ export function R2NoShowsPanel({ closers, parentViewMode, parentSelectedDate, pa
 
       {/* No-Show Cards Grid */}
       {!isLoading && filteredLeads.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredLeads.map((lead) => (
-            <NoShowCard
-              key={lead.id}
-              lead={lead}
-              onReschedule={() => handleReschedule(lead)}
-              onClick={() => handleOpenDrawer(lead)}
-            />
-          ))}
-        </div>
+        <NoShowCardsGrid
+          leads={filteredLeads}
+          onReschedule={handleReschedule}
+          onOpenDrawer={handleOpenDrawer}
+        />
       )}
 
       {/* Detail Drawer */}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ShoppingCart, Phone, User, Bell, Filter } from 'lucide-react';
@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { R2ForaDoCarrinhoAttendee } from '@/hooks/useR2ForaDoCarrinhoData';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2ForaDoCarrinhoListProps {
   attendees: R2ForaDoCarrinhoAttendee[];
@@ -37,6 +39,15 @@ export function R2ForaDoCarrinhoList({ attendees, isLoading, weekStart }: R2Fora
   const filteredAttendees = statusFilter === 'all' 
     ? attendees 
     : attendees.filter(a => a.r2_status_name === statusFilter);
+
+  const channelInputs: R2LeadInput[] = useMemo(() => filteredAttendees.map((a) => ({
+    key: a.id,
+    email: null,
+    phone: a.attendee_phone || a.contact_phone,
+    dealId: null,
+    scheduledAt: a.scheduled_at,
+  })), [filteredAttendees]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   if (isLoading) {
     return <div className="flex justify-center py-8">Carregando...</div>;
@@ -129,6 +140,12 @@ export function R2ForaDoCarrinhoList({ attendees, isLoading, weekStart }: R2Fora
                         Sem. Anterior
                       </Badge>
                     )}
+                    <R2LeadBadges
+                      channel={channelMap.get(att.id)?.channel}
+                      r1CloserName={null}
+                      isContractPaid={!!att.contract_paid_at}
+                      scheduledAt={att.scheduled_at}
+                    />
                   </div>
                 </TableCell>
                 <TableCell>

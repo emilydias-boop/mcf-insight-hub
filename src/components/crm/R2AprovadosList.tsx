@@ -14,6 +14,8 @@ import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { EncaixarSemanaDialog } from './EncaixarSemanaDialog';
 import { toast } from 'sonner';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 interface R2AprovadosListProps {
   attendees: R2CarrinhoAttendee[];
   isLoading?: boolean;
@@ -156,6 +158,15 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
   };
 
   const hasActiveFilters = searchTerm || closerFilter !== 'all' || dateFilter !== 'all';
+
+  const channelInputs: R2LeadInput[] = useMemo(() => displayedAttendees.map((a) => ({
+    key: a.id,
+    email: a.contact_email,
+    phone: a.attendee_phone || a.contact_phone,
+    dealId: a.deal_id,
+    scheduledAt: a.scheduled_at || a.display_scheduled_at,
+  })), [displayedAttendees]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   const generateReport = () => {
     const dateStr = format(weekEnd, 'dd/MM', { locale: ptBR });
@@ -359,6 +370,12 @@ export function R2AprovadosList({ attendees, isLoading, weekStart, weekEnd, empt
                             Encaixado
                           </Badge>
                         )}
+                        <R2LeadBadges
+                          channel={channelMap.get(att.id)?.channel}
+                          r1CloserName={att.r1_closer_name}
+                          isContractPaid={!!att.contract_paid_at}
+                          scheduledAt={att.scheduled_at || att.display_scheduled_at}
+                        />
                       </div>
                       {att.partner_name && (
                         <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>

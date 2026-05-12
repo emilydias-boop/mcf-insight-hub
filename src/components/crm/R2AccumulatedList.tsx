@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 import { EncaixarSemanaDialog } from './EncaixarSemanaDialog';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 
 interface R2AccumulatedListProps {
   leads: R2AccumulatedLead[];
@@ -60,6 +62,15 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, anchorWeekStar
 
   const proximaSemanaCount = searchFiltered.filter(l => l.origin_type === 'proxima_semana').length;
   const semR2Count = searchFiltered.filter(l => l.origin_type === 'sem_r2').length;
+
+  const channelInputs: R2LeadInput[] = useMemo(() => paginatedLeads.map((l) => ({
+    key: l.id,
+    email: l.contact_email,
+    phone: l.attendee_phone || l.contact_phone,
+    dealId: l.deal_id,
+    scheduledAt: l.scheduled_at,
+  })), [paginatedLeads]);
+  const channelMap = useR2LeadsChannelMap(channelInputs);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -173,11 +184,17 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, anchorWeekStar
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">
                       {lead.attendee_name || lead.deal_name || 'Sem nome'}
                     </span>
+                    <R2LeadBadges
+                      channel={channelMap.get(lead.id)?.channel}
+                      r1CloserName={(lead as any).r1_closer_name || null}
+                      isContractPaid={!!(lead as any).contract_paid_at}
+                      scheduledAt={lead.scheduled_at}
+                    />
                   </div>
                 </TableCell>
                 <TableCell>
