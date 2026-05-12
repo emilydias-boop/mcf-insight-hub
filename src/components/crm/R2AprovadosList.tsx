@@ -14,6 +14,8 @@ import { useAprovadoAgreementsBatch } from '@/hooks/useAprovadoAgreements';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { EncaixarSemanaDialog } from './EncaixarSemanaDialog';
 import { toast } from 'sonner';
+import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
+import { R2LeadBadges } from './R2LeadBadges';
 interface R2AprovadosListProps {
   attendees: R2CarrinhoAttendee[];
   isLoading?: boolean;
