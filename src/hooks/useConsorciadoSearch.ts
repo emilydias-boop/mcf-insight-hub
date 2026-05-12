@@ -24,6 +24,8 @@ export interface ConsorciadoMatch {
   grupo?: string | null;
   cota?: string | null;
   status?: string | null;
+  // full record (preenchido sob demanda para autofill completo)
+  full?: any;
 }
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
