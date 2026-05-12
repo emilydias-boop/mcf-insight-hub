@@ -6,3 +6,4 @@
 - [No-Show Inconclusive Pending](mem://business-logic/no-show-inconclusive-pending-review) — Inconclusive+justificativa exige aprovação do gestor antes de virar no-show.
 - [R2 Carrinho Semanas Anteriores](mem://business-logic/r2-carrinho-semanas-anteriores-criteria) — Safra fixa Qui 00:00→Qua 23:59 (sem corte de sexta); parceiros aparecem nos KPIs com indicador `★ N c/ parceria`, excluídos APENAS do card Contratos; bucket "Outros" fecha a soma.
 - [SDR Meta Diária Monthly Isolation](mem://business-logic/sdr-meta-diaria-monthly-isolation) — Meta de agendadas vem do compPlan do mês; edição de mês passado não toca sdr.meta_diaria global.
+- [Lead Temperature Classification](mem://features/lead-temperature-classification) — Quente/Morno/Frio (red/orange/blue) em crm_deals.lead_temperature, dot no kanban e filtro no auto-discador.

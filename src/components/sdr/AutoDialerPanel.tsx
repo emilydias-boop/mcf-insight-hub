@@ -19,6 +19,7 @@ import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
 import { useAuth } from '@/contexts/AuthContext';
 import { isSdrRole } from '@/components/auth/NegociosAccessGuard';
 import { toast } from 'sonner';
+import { TEMPERATURE_META, type LeadTemperature } from '@/components/crm/LeadTemperatureSelector';
 
 interface Props {
   open: boolean;
@@ -76,6 +77,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const [mode, setMode] = useState<'pipeline' | 'paste'>('pipeline');
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [stageId, setStageId] = useState<string | null>(null);
+  // Filtro opcional por temperatura: null = todos
+  const [tempFilter, setTempFilter] = useState<LeadTemperature>(null);
 
   const { data: stages, isLoading: stagesLoading } = useCRMStages(pipelineId || undefined);
 
@@ -305,6 +308,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         const phone = getDealPhone(d);
         if (!phone) return null;
         if (alreadyDialed.has(d.id)) return null;
+        if (tempFilter && d.lead_temperature !== tempFilter) return null;
         return {
           dealId: d.id,
           contactId: d.contact_id || null,
@@ -316,9 +320,13 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       .filter((x): x is AutoDialerLead => !!x)
       .slice(0, 1000);
     if (leads.length === 0) {
-      toast.error(opts?.excludeAlreadyDialed
-        ? 'Não há mais leads novos neste estágio'
-        : 'Nenhum lead com telefone neste estágio');
+      toast.error(
+        tempFilter
+          ? `Nenhum lead "${TEMPERATURE_META[tempFilter].label}" com telefone neste estágio`
+          : opts?.excludeAlreadyDialed
+            ? 'Não há mais leads novos neste estágio'
+            : 'Nenhum lead com telefone neste estágio',
+      );
       return;
     }
     ad.loadQueue(leads);
@@ -491,6 +499,45 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
+                {/* Filtro por Temperatura */}
+                <div>
+                  <label className="text-[10px] text-muted-foreground uppercase">Temperatura</label>
+                  <div className="flex items-center gap-1 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setTempFilter(null)}
+                      className={cn(
+                        'flex-1 text-[11px] py-1 rounded border transition-colors',
+                        tempFilter === null
+                          ? 'bg-primary/15 border-primary text-primary font-medium'
+                          : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted',
+                      )}
+                    >
+                      Todos
+                    </button>
+                    {(['quente', 'morno', 'frio'] as const).map((t) => {
+                      const meta = TEMPERATURE_META[t];
+                      const active = tempFilter === t;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTempFilter(active ? null : t)}
+                          className={cn(
+                            'flex items-center justify-center gap-1 flex-1 text-[11px] py-1 rounded border transition-colors',
+                            active
+                              ? `${meta.bg} ${meta.text} font-medium`
+                              : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted',
+                          )}
+                          title={meta.label}
+                        >
+                          <span className={cn('h-2.5 w-2.5 rounded-full', meta.dot)} />
+                          <span className="hidden sm:inline">{meta.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
@@ -500,7 +547,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                 >
                   {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   {stageId
-                    ? `Carregar ${stageDeals?.filter((d: any) => !!getDealPhone(d)).length || 0} leads do estágio`
+                    ? `Carregar ${stageDeals?.filter((d: any) => !!getDealPhone(d) && (!tempFilter || d.lead_temperature === tempFilter)).length || 0} leads${tempFilter ? ` ${TEMPERATURE_META[tempFilter].label.toLowerCase()}s` : ''} do estágio`
                     : 'Carregar leads do estágio'}
                 </Button>
               </div>

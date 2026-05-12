@@ -4522,6 +4522,7 @@ export type Database = {
           is_duplicate: boolean | null
           last_contact_at: string | null
           last_worked_at: string | null
+          lead_temperature: string | null
           merged_at: string | null
           merged_into_deal_id: string | null
           name: string
@@ -4560,6 +4561,7 @@ export type Database = {
           is_duplicate?: boolean | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          lead_temperature?: string | null
           merged_at?: string | null
           merged_into_deal_id?: string | null
           name: string
@@ -4598,6 +4600,7 @@ export type Database = {
           is_duplicate?: boolean | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          lead_temperature?: string | null
           merged_at?: string | null
           merged_into_deal_id?: string | null
           name?: string

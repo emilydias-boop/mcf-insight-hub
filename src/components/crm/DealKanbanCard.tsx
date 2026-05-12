@@ -32,6 +32,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
 import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 import { cn } from "@/lib/utils";
+import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
 
 const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
   ligar: <Phone className="h-2.5 w-2.5" />,
@@ -424,7 +425,10 @@ export const DealKanbanCard = ({
 
         {/* Linha 2: Nome do Lead + tempo na stage */}
         <div className="flex items-center justify-between gap-1">
-          <span className="font-medium text-sm truncate">{contactName || deal.name}</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <LeadTemperatureDot value={(deal.lead_temperature ?? null) as LeadTemperature} />
+            <span className="font-medium text-sm truncate">{contactName || deal.name}</span>
+          </div>
           {stageTimeShort && (
             <Tooltip>
               <TooltipTrigger asChild>
