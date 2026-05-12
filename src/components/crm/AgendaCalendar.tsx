@@ -1697,7 +1697,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="text-muted-foreground">•</span>
                                                       </>
                                                     )}
-                                                    {channelMap.get(att.id) && (
+                                                    {markingByAttendee.get(att.id) ? (
+                                                      <span className="text-[10px]" title={markingByAttendee.get(att.id)!.badge_label}>
+                                                        {markingByAttendee.get(att.id)!.icon}
+                                                      </span>
+                                                    ) : channelMap.get(att.id) && (
                                                       <span className="text-[10px]" title={channelMap.get(att.id)}>{CHANNEL_EMOJI[channelMap.get(att.id)!]}</span>
                                                     )}
                                                     <span className="truncate flex-1">
