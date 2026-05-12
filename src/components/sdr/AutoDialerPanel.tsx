@@ -103,25 +103,31 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   };
 
   // Sufixos para casar telefone com DDD + número.
-  // 11 dígitos = celular (DDD + 9). 10 dígitos = fixo / celular antigo (DDD + 8).
-  // Nunca usamos só 9 — perderia o DDD e cruzaria pessoas distintas.
+  // 11 dígitos = celular novo (DDD + 9 + 8). 10 dígitos = celular antigo / fixo (DDD + 8).
+  // Para celulares novos geramos também a variante "sem o 9" (DDD + 8) para casar com
+  // contatos antigos. Nunca usamos só 8/9 dígitos sem DDD — cruzaria pessoas distintas.
   const phoneSuffixes = (phone: string): string[] => {
     const digits = phone.replace(/\D/g, '');
     const sufs = new Set<string>();
-    if (digits.length >= 11) sufs.add(digits.slice(-11));
-    if (digits.length >= 10) sufs.add(digits.slice(-10));
+    if (digits.length >= 11) {
+      const s11 = digits.slice(-11); // DDD(2) + 9 + 8
+      sufs.add(s11);
+      // Variante sem o "9" inicial do celular: DDD(2) + 8 = 10 dígitos
+      if (s11[2] === '9') sufs.add(s11.slice(0, 2) + s11.slice(3));
+    } else if (digits.length === 10) {
+      const s10 = digits.slice(-10); // DDD(2) + 8
+      sufs.add(s10);
+      // Variante com "9" adicionado (celular novo): DDD(2) + 9 + 8 = 11 dígitos
+      sufs.add(s10.slice(0, 2) + '9' + s10.slice(2));
+    }
     return Array.from(sufs);
   };
+
   const matchesPhone = (storedPhone: string, originalNorm: string): boolean => {
     const a = storedPhone.replace(/\D/g, '');
-    const b = originalNorm.replace(/\D/g, '');
-    if (!a || !b) return false;
-    // Casa se um termina com o sufixo de 11/10 dígitos do outro
-    const sufB11 = b.length >= 11 ? b.slice(-11) : null;
-    const sufB10 = b.length >= 10 ? b.slice(-10) : null;
-    if (sufB11 && a.endsWith(sufB11)) return true;
-    if (sufB10 && a.endsWith(sufB10)) return true;
-    return false;
+    if (!a) return false;
+    const variants = phoneSuffixes(originalNorm);
+    return variants.some((suf) => suf.length >= 10 && a.endsWith(suf));
   };
 
   const lookupLeadsByPhones = async (
