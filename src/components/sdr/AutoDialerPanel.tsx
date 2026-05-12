@@ -19,6 +19,7 @@ import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
 import { useAuth } from '@/contexts/AuthContext';
 import { isSdrRole } from '@/components/auth/NegociosAccessGuard';
 import { toast } from 'sonner';
+import { TEMPERATURE_META, type LeadTemperature } from '@/components/crm/LeadTemperatureSelector';
 
 interface Props {
   open: boolean;
@@ -76,6 +77,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   const [mode, setMode] = useState<'pipeline' | 'paste'>('pipeline');
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [stageId, setStageId] = useState<string | null>(null);
+  // Filtro opcional por temperatura: null = todos
+  const [tempFilter, setTempFilter] = useState<LeadTemperature>(null);
 
   const { data: stages, isLoading: stagesLoading } = useCRMStages(pipelineId || undefined);
 
@@ -305,6 +308,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         const phone = getDealPhone(d);
         if (!phone) return null;
         if (alreadyDialed.has(d.id)) return null;
+        if (tempFilter && d.lead_temperature !== tempFilter) return null;
         return {
           dealId: d.id,
           contactId: d.contact_id || null,
@@ -316,9 +320,13 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       .filter((x): x is AutoDialerLead => !!x)
       .slice(0, 1000);
     if (leads.length === 0) {
-      toast.error(opts?.excludeAlreadyDialed
-        ? 'Não há mais leads novos neste estágio'
-        : 'Nenhum lead com telefone neste estágio');
+      toast.error(
+        tempFilter
+          ? `Nenhum lead "${TEMPERATURE_META[tempFilter].label}" com telefone neste estágio`
+          : opts?.excludeAlreadyDialed
+            ? 'Não há mais leads novos neste estágio'
+            : 'Nenhum lead com telefone neste estágio',
+      );
       return;
     }
     ad.loadQueue(leads);
