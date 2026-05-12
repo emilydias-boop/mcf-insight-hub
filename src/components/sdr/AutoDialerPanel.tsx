@@ -103,31 +103,37 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   };
 
   // Sufixos para casar telefone com DDD + número.
-  // 11 dígitos = celular (DDD + 9). 10 dígitos = fixo / celular antigo (DDD + 8).
-  // Nunca usamos só 9 — perderia o DDD e cruzaria pessoas distintas.
+  // 11 dígitos = celular novo (DDD + 9 + 8). 10 dígitos = celular antigo / fixo (DDD + 8).
+  // Para celulares novos geramos também a variante "sem o 9" (DDD + 8) para casar com
+  // contatos antigos. Nunca usamos só 8/9 dígitos sem DDD — cruzaria pessoas distintas.
   const phoneSuffixes = (phone: string): string[] => {
     const digits = phone.replace(/\D/g, '');
     const sufs = new Set<string>();
-    if (digits.length >= 11) sufs.add(digits.slice(-11));
-    if (digits.length >= 10) sufs.add(digits.slice(-10));
+    if (digits.length >= 11) {
+      const s11 = digits.slice(-11); // DDD(2) + 9 + 8
+      sufs.add(s11);
+      // Variante sem o "9" inicial do celular: DDD(2) + 8 = 10 dígitos
+      if (s11[2] === '9') sufs.add(s11.slice(0, 2) + s11.slice(3));
+    } else if (digits.length === 10) {
+      const s10 = digits.slice(-10); // DDD(2) + 8
+      sufs.add(s10);
+      // Variante com "9" adicionado (celular novo): DDD(2) + 9 + 8 = 11 dígitos
+      sufs.add(s10.slice(0, 2) + '9' + s10.slice(2));
+    }
     return Array.from(sufs);
   };
+
   const matchesPhone = (storedPhone: string, originalNorm: string): boolean => {
     const a = storedPhone.replace(/\D/g, '');
-    const b = originalNorm.replace(/\D/g, '');
-    if (!a || !b) return false;
-    // Casa se um termina com o sufixo de 11/10 dígitos do outro
-    const sufB11 = b.length >= 11 ? b.slice(-11) : null;
-    const sufB10 = b.length >= 10 ? b.slice(-10) : null;
-    if (sufB11 && a.endsWith(sufB11)) return true;
-    if (sufB10 && a.endsWith(sufB10)) return true;
-    return false;
+    if (!a) return false;
+    const variants = phoneSuffixes(originalNorm);
+    return variants.some((suf) => suf.length >= 10 && a.endsWith(suf));
   };
 
   const lookupLeadsByPhones = async (
     phones: string[],
-  ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>> => {
-    const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+  ): Promise<Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>> => {
+    const map = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>();
     // Coleta todos os sufixos (11 e 10) de todos os telefones
     const allSuffixes = new Set<string>();
     phones.forEach(p => phoneSuffixes(p).forEach(s => allSuffixes.add(s)));
@@ -141,37 +147,58 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       .from('crm_contacts')
       .select('id, name, phone')
       .or(orFilter)
-      .limit(2000);
+      .limit(5000);
     if (cErr || !contacts || contacts.length === 0) return map;
 
     const contactIds = contacts.map(c => c.id);
+    // Inclui deals arquivados também — preferimos um deal arquivado a marcar
+    // o lead como "manual" (assim o drawer ainda abre e o operador vê o histórico).
     const { data: deals } = await supabase
       .from('crm_deals')
-      .select('id, name, contact_id, origin_id, created_at')
+      .select('id, name, contact_id, origin_id, created_at, is_archived')
       .in('contact_id', contactIds)
-      .eq('is_archived', false)
       .order('created_at', { ascending: false })
-      .limit(2000);
+      .limit(5000);
 
-    // Mantém o deal mais recente por contato
+    // Mantém o deal mais recente por contato — preferindo não-arquivado
     const newestByContact = new Map<string, any>();
     (deals || []).forEach((d: any) => {
-      if (!newestByContact.has(d.contact_id)) newestByContact.set(d.contact_id, d);
+      const existing = newestByContact.get(d.contact_id);
+      if (!existing) {
+        newestByContact.set(d.contact_id, d);
+        return;
+      }
+      // Se o atual é arquivado e o novo não, troca
+      if (existing.is_archived && !d.is_archived) {
+        newestByContact.set(d.contact_id, d);
+      }
     });
 
     // Para cada telefone original, escolhe o contato cujo telefone armazenado
-    // bate exatamente pelo sufixo de 11 ou 10 dígitos (DDD + número).
+    // bate pelo sufixo de 11 ou 10 dígitos (DDD + número), com fallback de variante 9-extra.
     phones.forEach(orig => {
       if (map.has(orig)) return;
       const c = contacts.find(ct => matchesPhone(ct.phone || '', orig));
       if (!c) return;
       const d = newestByContact.get(c.id);
-      if (!d) return;
+      if (!d) {
+        // Contato existe mas sem deal — ainda assim retornamos o contactId
+        // como "manual com nome", para o operador ter o nome no banner.
+        map.set(orig, {
+          dealId: `manual-contact-${c.id}`,
+          contactId: c.id,
+          originId: null,
+          name: c.name || 'Lead',
+          archived: false,
+        });
+        return;
+      }
       map.set(orig, {
         dealId: d.id,
         contactId: c.id,
         originId: d.origin_id || null,
         name: c.name || d.name || 'Lead',
+        archived: !!d.is_archived,
       });
     });
     return map;
@@ -199,7 +226,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
       return;
     }
     // Faz lookup dos leads pelo sufixo de 9 dígitos do telefone
-    let matchedMap = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string }>();
+    let matchedMap = new Map<string, { dealId: string; contactId: string; originId: string | null; name: string; archived: boolean }>();
     try {
       matchedMap = await lookupLeadsByPhones(valid);
     } catch (e) {
@@ -207,15 +234,21 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
 
     let matchedCount = 0;
+    let archivedCount = 0;
+    let onlyContactCount = 0;
     const leads: AutoDialerLead[] = valid.map((phone, i) => {
       const m = matchedMap.get(phone);
       if (m) {
-        matchedCount++;
+        if (m.dealId.startsWith('manual-contact-')) onlyContactCount++;
+        else {
+          matchedCount++;
+          if (m.archived) archivedCount++;
+        }
         return {
           dealId: m.dealId,
           contactId: m.contactId,
           originId: m.originId,
-          name: m.name,
+          name: m.archived ? `${m.name} (arquivado)` : m.name,
           phone,
         };
       }
@@ -229,7 +262,16 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     });
     ad.loadQueue(leads);
     const parts: string[] = [`${valid.length} telefone(s) carregado(s)`];
-    if (matchedCount > 0) parts.push(`${matchedCount} vinculado(s) a leads do CRM`);
+    if (matchedCount > 0) {
+      parts.push(
+        archivedCount > 0
+          ? `${matchedCount} vinculado(s) ao CRM (${archivedCount} arquivado${archivedCount > 1 ? 's' : ''})`
+          : `${matchedCount} vinculado(s) a leads do CRM`,
+      );
+    }
+    if (onlyContactCount > 0) parts.push(`${onlyContactCount} só com contato (sem deal)`);
+    const unmatched = valid.length - matchedCount - onlyContactCount;
+    if (unmatched > 0) parts.push(`${unmatched} sem match (avulso)`);
     if (invalid.length > 0) parts.push(`${invalid.length} ignorado(s) por formato inválido`);
     const msg = parts.join(' · ');
     if (invalid.length > 0) toast.warning(msg);
