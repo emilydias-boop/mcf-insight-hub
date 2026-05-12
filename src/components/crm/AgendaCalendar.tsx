@@ -68,6 +68,8 @@ import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 import { usePartnerProductDetectionBatch } from '@/hooks/usePartnerProductDetection';
 import { useBUContext } from '@/contexts/BUContext';
 import { useAttendeeChannels, CHANNEL_EMOJI } from '@/hooks/useAttendeeChannels';
+import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
+import { matchR2SpecialMarking, R2SpecialMarking } from '@/types/r2SpecialMarking';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
