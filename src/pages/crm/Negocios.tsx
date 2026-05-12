@@ -79,8 +79,8 @@ const Negocios = () => {
     productOperator: 'and',
     activityPriority: 'all',
     outsideFilter: 'all',
+    temperature: 'all',
   });
-  // (temperature filter default set above)
   
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
@@ -672,6 +672,7 @@ const Negocios = () => {
       productOperator: 'and',
       activityPriority: 'all',
       outsideFilter: 'all',
+      temperature: 'all',
     });
   };
   
