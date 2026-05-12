@@ -792,6 +792,8 @@ function PendingApprovalCard({
 
 function HistoryTabImpl() {
   const { data: history = [], isLoading } = useApprovalHistory();
+  const { data: enriched = [], isLoading: loadingEnriched } =
+    useEnrichedPendingApprovals(history);
   return (
     <Card>
       <CardHeader>
@@ -799,7 +801,7 @@ function HistoryTabImpl() {
         <CardDescription>Últimos 100 pedidos resolvidos.</CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading || (history.length > 0 && loadingEnriched) ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : history.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">Sem histórico.</div>
@@ -810,13 +812,16 @@ function HistoryTabImpl() {
                 <TableHead>Quando</TableHead>
                 <TableHead>BU</TableHead>
                 <TableHead>Solicitante</TableHead>
+                <TableHead>Lead</TableHead>
+                <TableHead>Etapa</TableHead>
+                <TableHead>Reunião</TableHead>
                 <TableHead>Regra</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Notas</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {history.map((req) => (
+              {enriched.map((req) => (
                 <TableRow key={req.id}>
                   <TableCell className="text-xs">
                     {req.reviewed_at
@@ -826,7 +831,54 @@ function HistoryTabImpl() {
                   <TableCell>
                     <Badge variant="outline">{req.bu ?? "global"}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs font-mono">{req.requested_by.slice(0, 8)}</TableCell>
+                  <TableCell className="text-xs">
+                    <div className="font-medium">
+                      {req.requester_name || req.requester_email || req.requested_by.slice(0, 8)}
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] uppercase mt-0.5">
+                      {req.requester_role}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {req.deal ? (
+                      <div>
+                        <div className="font-medium">
+                          {req.deal.contact_name || req.deal.name || "—"}
+                        </div>
+                        {req.deal.contact_phone && (
+                          <div className="text-muted-foreground">{req.deal.contact_phone}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {req.deal ? (
+                      <div>
+                        <div>{req.deal.stage_name || "—"}</div>
+                        {req.deal.origin_name && (
+                          <div className="text-muted-foreground">{req.deal.origin_name}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {req.current_meeting?.scheduled_at ? (
+                      <div>
+                        <div>
+                          {format(new Date(req.current_meeting.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                        </div>
+                        {req.current_meeting.closer_name && (
+                          <div className="text-muted-foreground">{req.current_meeting.closer_name}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs">{RULE_LABELS[req.rule_key]?.title ?? req.rule_key}</TableCell>
                   <TableCell>
                     <Badge
