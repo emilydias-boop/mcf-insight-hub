@@ -51,6 +51,8 @@ import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
 import { DeleteDealsConfirmDialog } from '@/components/crm/DeleteDealsConfirmDialog';
 import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
 import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
+import { BulkAddTagDialog } from '@/components/crm/BulkAddTagDialog';
+import { BulkDistributeSdrsDialog } from '@/components/crm/BulkDistributeSdrsDialog';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
@@ -90,6 +92,9 @@ const Negocios = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
+  const [addTagDialogOpen, setAddTagDialogOpen] = useState(false);
+  const [distributeSdrsDialogOpen, setDistributeSdrsDialogOpen] = useState(false);
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
   const isPrivilegedDeleter = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -922,6 +927,12 @@ const Negocios = () => {
         isDeleting={bulkDelete.isPending}
         onMoveStage={() => setMoveStageDialogOpen(true)}
         onMovePipeline={() => setMovePipelineDialogOpen(true)}
+        onAddTag={() => setAddTagDialogOpen(true)}
+        onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
+        onExportSelected={() => {
+          setExportSelectedOnly(true);
+          setExportDialogOpen(true);
+        }}
       />
       
       {/* Dialog de confirmação de exclusão em massa */}
@@ -977,6 +988,24 @@ const Negocios = () => {
         selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
+
+      {/* Dialog de adicionar tag em massa */}
+      <BulkAddTagDialog
+        open={addTagDialogOpen}
+        onOpenChange={setAddTagDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Dialog de distribuir entre SDRs em massa */}
+      <BulkDistributeSdrsDialog
+        open={distributeSdrsDialogOpen}
+        onOpenChange={setDistributeSdrsDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
       
       {/* Modal de configuração inline para single pipeline */}
       {hasSinglePipeline && (buAllowedGroups[0] || buMapping?.origins?.[0]) && (
@@ -1001,8 +1030,15 @@ const Negocios = () => {
       {/* Dialog de exportação */}
       <ExportDealsDialog
         open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        deals={filteredDeals}
+        onOpenChange={(o) => {
+          setExportDialogOpen(o);
+          if (!o) setExportSelectedOnly(false);
+        }}
+        deals={
+          exportSelectedOnly
+            ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id))
+            : filteredDeals
+        }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
