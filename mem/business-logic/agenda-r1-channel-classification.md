@@ -13,10 +13,9 @@ Classificação UNIFICADA — usada na Agenda R1 (`/crm/agenda` aba Lista + filt
 
 **Regra final** (em ordem):
 1. Buyer A010 com venda ≤30 dias → **A010** (mesmo se tiver tag ANAMNESE).
-2. Buyer A010 com venda >30 dias E deal tem tag exata `ANAMNESE` → **ANAMNESE** (lead esfriou e voltou via anamnese completa).
-3. Buyer A010 com venda >30 dias SEM tag ANAMNESE → continua **A010**.
-4. Não-buyer com tag exata `ANAMNESE` → **ANAMNESE**.
-5. Resto → **Outro** (no Funil aparece como `OUTROS`).
+2. Buyer A010 com venda >30 dias → **ANAMNESE** automaticamente (lead esfriou, vira anamnese independente de tag).
+3. Não-buyer com tag exata `ANAMNESE` → **ANAMNESE**.
+4. Resto → **Outro** (no Funil aparece como `OUTROS`).
 
 Implementação:
 - Agenda: `src/components/crm/MeetingsList.tsx` (`classifySimple` + `a010Age`) e `src/pages/crm/Agenda.tsx` (export Excel).
