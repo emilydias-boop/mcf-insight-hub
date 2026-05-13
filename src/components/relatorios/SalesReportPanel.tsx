@@ -779,8 +779,9 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                 mode="range"
                 selected={dateRange}
                 onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange(range as DateRange);
+                  const r = range as DateRange | undefined;
+                  if (r?.from && r?.to) {
+                    setDateRange(r);
                     setDatePreset('custom');
                   }
                 }}
