@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EMPLOYEE_STATUS_LABELS } from '@/types/hr';
-import { ArrowLeft, Pencil, User, Calendar, Users, DollarSign, FileText, History, StickyNote, Shield, ClipboardList, Clock, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Pencil, User, Calendar, Users, DollarSign, FileText, History, StickyNote, Shield, ClipboardList, Clock, ShieldAlert, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
@@ -20,6 +20,8 @@ import EmployeePermissionsTab from '@/components/hr/tabs/EmployeePermissionsTab'
 import EmployeeExamsTab from '@/components/hr/tabs/EmployeeExamsTab';
 import EmployeeTimeTab from '@/components/hr/tabs/EmployeeTimeTab';
 import EmployeeComplianceTab from '@/components/hr/tabs/EmployeeComplianceTab';
+import EmployeeOperationalTab from '@/components/hr/tabs/EmployeeOperationalTab';
+import { useEmployeeOperational } from '@/hooks/useEmployeeOperational';
 
 export default function ColaboradorProfile() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +33,8 @@ export default function ColaboradorProfile() {
   const employee = employees?.find(e => e.id === id);
   const gestor = employee?.gestor_id ? employees?.find(e => e.id === employee.gestor_id) : null;
   const isPJ = employee?.tipo_contrato === 'PJ';
+  const { data: operational } = useEmployeeOperational(employee?.id);
+  const hasOperationalRole = !!operational?.roleSystem;
 
   const jwtClaims = (session as any)?.user?.app_metadata || {};
   const userRole = (session?.user as any)?.user_metadata?.role || '';
@@ -151,6 +155,11 @@ export default function ColaboradorProfile() {
           <TabsTrigger value="permissoes" className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5" /> Permissões
           </TabsTrigger>
+          {hasOperationalRole && (
+            <TabsTrigger value="operacional" className="flex items-center gap-1.5">
+              <Briefcase className="h-3.5 w-3.5" /> Operacional
+            </TabsTrigger>
+          )}
           <TabsTrigger value="avaliacoes" className="flex items-center gap-1.5">
             <ClipboardList className="h-3.5 w-3.5" /> Avaliações
           </TabsTrigger>
@@ -187,6 +196,11 @@ export default function ColaboradorProfile() {
         <TabsContent value="permissoes" className="mt-6">
           <EmployeePermissionsTab employee={employee} />
         </TabsContent>
+        {hasOperationalRole && (
+          <TabsContent value="operacional" className="mt-6">
+            <EmployeeOperationalTab employeeId={employee.id} />
+          </TabsContent>
+        )}
         <TabsContent value="avaliacoes" className="mt-6">
           <EmployeeExamsTab employee={employee} />
         </TabsContent>
