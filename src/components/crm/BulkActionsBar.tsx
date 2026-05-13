@@ -12,6 +12,7 @@ import {
   Tag as TagIcon,
   Download,
   Shuffle,
+  Thermometer,
 } from 'lucide-react';
 
 interface BulkActionsBarProps {
@@ -33,6 +34,7 @@ interface BulkActionsBarProps {
   onAddTag?: () => void;
   onExportSelected?: () => void;
   onDistributeSdrs?: () => void;
+  onSetTemperature?: () => void;
 }
 
 export const BulkActionsBar = ({
@@ -54,6 +56,7 @@ export const BulkActionsBar = ({
   onAddTag,
   onExportSelected,
   onDistributeSdrs,
+  onSetTemperature,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -145,6 +148,19 @@ export const BulkActionsBar = ({
           >
             <TagIcon className="h-4 w-4" />
             Adicionar Tag
+          </Button>
+        )}
+
+        {onSetTemperature && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSetTemperature}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            <Thermometer className="h-4 w-4" />
+            Temperatura
           </Button>
         )}
 

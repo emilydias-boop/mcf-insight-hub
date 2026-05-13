@@ -53,6 +53,7 @@ import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
 import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
 import { BulkAddTagDialog } from '@/components/crm/BulkAddTagDialog';
 import { BulkDistributeSdrsDialog } from '@/components/crm/BulkDistributeSdrsDialog';
+import { BulkSetTemperatureDialog } from '@/components/crm/BulkSetTemperatureDialog';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
@@ -94,6 +95,7 @@ const Negocios = () => {
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
   const [addTagDialogOpen, setAddTagDialogOpen] = useState(false);
   const [distributeSdrsDialogOpen, setDistributeSdrsDialogOpen] = useState(false);
+  const [setTemperatureDialogOpen, setSetTemperatureDialogOpen] = useState(false);
   const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
@@ -929,6 +931,7 @@ const Negocios = () => {
         onMovePipeline={() => setMovePipelineDialogOpen(true)}
         onAddTag={() => setAddTagDialogOpen(true)}
         onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
+        onSetTemperature={() => setSetTemperatureDialogOpen(true)}
         onExportSelected={() => {
           setExportSelectedOnly(true);
           setExportDialogOpen(true);
@@ -1004,6 +1007,14 @@ const Negocios = () => {
         onOpenChange={setDistributeSdrsDialogOpen}
         selectedDealIds={Array.from(selectedDealIds)}
         originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Dialog de definir temperatura em massa */}
+      <BulkSetTemperatureDialog
+        open={setTemperatureDialogOpen}
+        onOpenChange={setSetTemperatureDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
       
