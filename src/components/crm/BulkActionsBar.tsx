@@ -1,5 +1,18 @@
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, UserPlus, X, Loader2, Copy, Trash2, ArrowRightLeft, FolderOutput, UserCog } from 'lucide-react';
+import {
+  CheckCircle2,
+  UserPlus,
+  X,
+  Loader2,
+  Copy,
+  Trash2,
+  ArrowRightLeft,
+  FolderOutput,
+  UserCog,
+  Tag as TagIcon,
+  Download,
+  Shuffle,
+} from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -17,6 +30,9 @@ interface BulkActionsBarProps {
   onChangeOwner?: () => void;
   isChangingOwner?: boolean;
   transferLabel?: string;
+  onAddTag?: () => void;
+  onExportSelected?: () => void;
+  onDistributeSdrs?: () => void;
 }
 
 export const BulkActionsBar = ({
@@ -35,6 +51,9 @@ export const BulkActionsBar = ({
   onChangeOwner,
   isChangingOwner = false,
   transferLabel,
+  onAddTag,
+  onExportSelected,
+  onDistributeSdrs,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -113,6 +132,45 @@ export const BulkActionsBar = ({
               <FolderOutput className="h-4 w-4" />
             )}
             Mover Pipeline
+          </Button>
+        )}
+
+        {onAddTag && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onAddTag}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            <TagIcon className="h-4 w-4" />
+            Adicionar Tag
+          </Button>
+        )}
+
+        {onDistributeSdrs && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onDistributeSdrs}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            <Shuffle className="h-4 w-4" />
+            Distribuir SDRs
+          </Button>
+        )}
+
+        {onExportSelected && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onExportSelected}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Selecionados
           </Button>
         )}
 
