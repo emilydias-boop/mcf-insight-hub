@@ -1,54 +1,79 @@
-# Auto-Discador: drawer não abre quando o lead atende
+# Quedas de ligação dos SDRs — causa raiz e correção
 
-## Sintoma confirmado pelo usuário
+## Diagnóstico
 
-Banner verde "📞 atendeu!" aparece (logo `state` chega em `paused-in-call`), mas o `DealDetailsDrawer` que deveria montar ao lado **não abre**. A fila pode ter mistura de leads do CRM e telefones colados.
+Não é timeout de edge function nem do token Twilio (refresh está OK). A causa real está no **Answering Machine Detection (AMD)** configurado no TwiML.
 
-## Hipóteses (ordenadas por probabilidade)
+Evidência nos logs reais (`twilio-voice-webhook`):
 
-1. **Lead com `dealId` no formato `manual-*`** — `AutoDialerDealDrawer` bloqueia explicitamente:
-   ```ts
-   const isRealDeal = !!dealId && !dealId.startsWith('manual-');
-   const open = state === 'paused-in-call' && inCallDrawerOpen && isRealDeal;
-   ```
-   Se o telefone colado **não** casou com nenhum deal do CRM em `AutoDialerPanel` (linha 223 cria `dealId: manual-${Date.now()}-${i}`), o drawer nunca abre — by design. O usuário pode esperar que abra mesmo assim.
+```
+✅ Voicemail detected, hung up call CA2a26... (AnsweredBy=unknown)
+✅ Voicemail detected, hung up call CA49e2... (AnsweredBy=machine_end_beep)
+```
 
-2. **Conflito de z-index Banner × Sheet** — `AutoDialerInCallBanner` é renderizado com `z-[120]`, e o `SheetContent` do Radix usa `z-50`. O banner sobreposto pode estar interceptando o foco/click inicial e fazendo o Radix disparar `onOpenChange(false)` por "interaction outside", fechando o drawer no mesmo frame em que ele tenta abrir.
+Dois problemas combinados em `supabase/functions/twilio-voice-twiml/index.ts` + `twilio-voice-webhook/index.ts`:
 
-3. **Race com `setDrawerState` do `TwilioContext`** — o `useEffect` em `DealDetailsDrawer` (linhas 53-55) chama `setDrawerState(open, dealId)` toda vez que `open` muda. Se outro consumidor do contexto reagir e fechar o drawer, vira loop.
+1. **`unknown` é tratado como máquina** → quando o AMD do Twilio não consegue decidir (humano fala curto, ambiente barulhento, "alô?" rápido), o webhook derruba a chamada do lead atendido.
+2. **`machineDetection="DetectMessageEnd"`** → esse modo espera o BIPE da caixa postal antes de decidir. Para isso ele mantém o áudio aberto por até ~30s "ouvindo". Se o humano fala e dá uma pausa de silêncio, o AMD classifica como `machine_end_silence` ou `machine_end_beep` e o webhook desliga **com o SDR já em conversa**.
 
-4. **`currentLead.dealId` nulo/undefined** — se a fila for populada com objetos sem `dealId`, `isRealDeal=false` e o drawer some.
+Ambos os comportamentos batem com o relato de "ligação caiu durante a conversa".
 
-## Plano de correção
+## Correção
 
-### Passo 1 — Instrumentar para confirmar a hipótese
-Adicionar `console.debug` em `AutoDialerDealDrawer` mostrando `state`, `currentLead?.dealId`, `inCallDrawerOpen`, `isRealDeal` e `open` toda vez que mudar. Pedir ao usuário um teste rápido para identificar qual hipótese é real.
+### 1. Mudar o modo de AMD para o mais seguro (`twilio-voice-twiml/index.ts`)
 
-### Passo 2 — Corrigir baseado no diagnóstico
+Trocar:
+```
+machineDetection="DetectMessageEnd"
+```
+por:
+```
+machineDetection="Enable"
+machineDetectionTimeout="5"
+machineDetectionSpeechThreshold="2400"
+machineDetectionSpeechEndThreshold="1200"
+machineDetectionSilenceTimeout="5000"
+```
 
-**Se for hipótese 1 (manual-*):**
-- Permitir abrir o drawer também para leads colados que **casaram** com um deal real (já é o caso, esses não têm prefixo `manual-`).
-- Para leads verdadeiramente avulsos (sem CRM), trocar o "drawer rico" por um drawer simplificado mostrando apenas nome/telefone + botões de qualificação rápida, ou deixar o banner verde ser a única UI.
+- `Enable` decide humano/máquina **antes** de a chamada conectar ao SDR (não fica "ouvindo" durante a conversa).
+- `machineDetectionTimeout=5` limita a 5s a janela de detecção; se passar disso, Twilio devolve `unknown` e a chamada segue normal.
+- Os demais parâmetros tornam a detecção mais conservadora (menos falso-positivo de "máquina" em humanos).
 
-**Se for hipótese 2 (z-index/interaction outside):**
-- Ajustar o banner para `pointer-events-none` no container e `pointer-events-auto` apenas nos botões internos, evitando que o Radix Dialog interprete o banner como "click fora".
-- Alternativa: aumentar `z-index` do `SheetContent` quando aberto pelo auto-discador (variant) ou abaixar o banner para `z-40` enquanto o drawer está aberto.
+### 2. Não derrubar mais quando `AnsweredBy=unknown` (`twilio-voice-webhook/index.ts`)
 
-**Se for hipótese 3 (race com setDrawerState):**
-- Tornar `setDrawerState` idempotente (só atualizar se mudou) e/ou desacoplar do `AutoDialerDealDrawer` (não chamar quando a origem do open é o auto-discador).
+Trocar a condição:
+```ts
+const isMachine = answeredBy.startsWith('machine') || answeredBy === 'fax' || answeredBy === 'unknown';
+```
+por:
+```ts
+const isMachine = answeredBy.startsWith('machine') || answeredBy === 'fax';
+// 'unknown' = AMD não decidiu → tratar como humano, NÃO desligar
+```
 
-**Se for hipótese 4 (dealId vazio):**
-- Garantir que toda entrada na fila do `AutoDialerPanel` carregue o `dealId` retornado pelo match no CRM antes de iniciar a discagem.
+Quando vier `unknown`, apenas registrar `outcome` informativo (ex.: `amd_unknown`) sem chamar a API REST de hangup.
 
-### Passo 3 — Validar
-- Reproduzir 3 cenários: lead 100% CRM, telefone colado que casou, telefone colado que não casou.
-- Em cada um, verificar que o banner aparece **e** o drawer abre (ou, no terceiro caso, que a UI mínima esperada aparece).
-- Remover os `console.debug` após confirmação.
+### 3. (Opcional, recomendado) Logar `AnsweredBy` no card de qualificação
 
-## Detalhes técnicos relevantes
+Já temos a coluna no `calls`. Apenas exibir um pequeno selo "Possível caixa postal" quando `AnsweredBy` começar com `machine_*` ajudaria o SDR a entender o motivo de uma queda futura, sem afetar a chamada.
 
-- Arquivos envolvidos: `src/components/sdr/AutoDialerDealDrawer.tsx`, `src/components/sdr/AutoDialerInCallBanner.tsx`, `src/contexts/AutoDialerContext.tsx` (linha 209: `setInCallDrawerOpen(true)` no `in-progress`), `src/components/crm/DealDetailsDrawer.tsx` (linhas 53-55 e 77).
-- O drawer está montado globalmente em `MainLayout.tsx`, então não há problema de rota.
-- `currentLead` vem de `queue[currentIndex]`; em `AutoDialerPanel.tsx:223` os leads avulsos são marcados com `dealId: manual-...`.
+## Por que isso resolve
 
-Sem mexer em business logic (Twilio/Telephony, atribuição, qualificação) — só na camada de apresentação que decide montar o drawer.
+- O SDR só será desconectado automaticamente quando o Twilio tiver **certeza** (`machine_start`, `machine_end_beep`, `machine_end_silence`, `machine_end_other`, `fax`) e essa decisão acontece nos primeiros ~5s, antes da fala humana.
+- Casos ambíguos (`unknown`) deixam de derrubar a conversa.
+- Mantemos o benefício original do AMD: cair em caixa postal continua sendo desligado automaticamente.
+
+## Arquivos alterados
+
+- `supabase/functions/twilio-voice-twiml/index.ts` — parâmetros do `<Number machineDetection=...>`
+- `supabase/functions/twilio-voice-webhook/index.ts` — condição `isMachine` e branch do hangup
+- (opcional) `src/components/crm/InlineCallControls.tsx` ou modal de qualificação — selo "Possível caixa postal"
+
+Sem mudanças de schema, sem migration, sem mexer no fluxo do auto-dialer no front. As edge functions são re-deployadas automaticamente.
+
+## Validação após deploy
+
+1. Abrir a `Discadora` e ligar para 5–10 leads.
+2. Conferir nos logs do `twilio-voice-webhook` que chamadas com `AnsweredBy=unknown` **não** geram mais a linha `✅ Voicemail detected, hung up call ...`.
+3. Confirmar com os SDRs que pararam as quedas no meio da conversa.
+4. Caixa postal real deve continuar desligando sozinha (`machine_end_*`).

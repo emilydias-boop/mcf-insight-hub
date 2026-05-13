@@ -82,7 +82,11 @@ serve(async (req) => {
     recordingStatusCallbackEvent="completed"
     action="${escapeXml(webhookUrl)}">
     <Number
-      machineDetection="DetectMessageEnd"
+      machineDetection="Enable"
+      machineDetectionTimeout="5"
+      machineDetectionSpeechThreshold="2400"
+      machineDetectionSpeechEndThreshold="1200"
+      machineDetectionSilenceTimeout="5000"
       amdStatusCallback="${escapeXml(amdCallbackUrl)}"
       amdStatusCallbackMethod="POST">${escapeXml(cleanNumber)}</Number>
   </Dial>
