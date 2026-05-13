@@ -47,12 +47,14 @@ serve(async (req) => {
     // Twilio sends AnsweredBy: human | machine_start | machine_end_beep
     //                        | machine_end_silence | machine_end_other
     //                        | fax | unknown
-    // If detected as machine/fax/unknown → derruba a chamada e marca voicemail
+    // Só derruba se Twilio tiver CERTEZA (machine_*, fax). 'unknown' = trata como humano.
     // ============================================================
     if (callbackType === 'amd' && answeredBy) {
       console.log(`AMD result: ${answeredBy} for CallSid=${callSid}, callRecordId=${callRecordIdFromUrl}`);
 
-      const isMachine = answeredBy.startsWith('machine') || answeredBy === 'fax' || answeredBy === 'unknown';
+      // 'unknown' = AMD não conseguiu decidir → NÃO desliga, deixa o SDR conversar
+      const isMachine = answeredBy.startsWith('machine') || answeredBy === 'fax';
+      const isUnknown = answeredBy === 'unknown';
 
       const amdUpdates: Record<string, any> = {
         answered_by: answeredBy,
@@ -60,6 +62,8 @@ serve(async (req) => {
       };
       if (isMachine) {
         amdUpdates.outcome = 'voicemail';
+      } else if (isUnknown) {
+        amdUpdates.outcome = 'amd_unknown';
       }
 
       // Update call record (try by CallSid first, fallback to callRecordId)
