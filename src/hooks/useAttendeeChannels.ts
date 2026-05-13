@@ -42,8 +42,7 @@ export function classifyAttendeeChannel(opts: {
   const norm = opts.tags.map(t => (t || '').trim().toUpperCase());
   const hasAnamnese = norm.some(t => t === 'ANAMNESE');
   if (isBuyer && !isStale) return 'A010';
-  if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
-  if (isBuyer && isStale && !hasAnamnese) return 'A010';
+  if (isBuyer && isStale) return 'ANAMNESE';
   if (hasAnamnese) return 'ANAMNESE';
   return 'Outro';
 }
