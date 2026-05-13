@@ -23,6 +23,7 @@ import { LossReasonCard } from './LossReasonCard';
 import { LeadProfileSection } from './LeadProfileSection';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperatureSelector';
+import { LeadTagsManager } from './LeadTagsManager';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
@@ -149,6 +150,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   onChanged={() => refetchDeal()}
                 />
               </div>
+
+              {/* ===== TAGS DO LEAD ===== */}
+              <LeadTagsManager
+                dealId={deal.id}
+                originId={deal.origin_id}
+                tags={(deal as any).tags}
+                customFields={deal.custom_fields as any}
+                onChanged={() => refetchDeal()}
+              />
               
               {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
               <NextActionBlockCompact

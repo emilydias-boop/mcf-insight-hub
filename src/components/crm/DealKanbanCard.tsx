@@ -21,6 +21,7 @@ import {
   Clock,
   Video,
   AlertCircle,
+  Star,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { toast } from "sonner";
@@ -351,9 +352,26 @@ export const DealKanbanCard = ({
               Remarcado
             </Badge>
           )}
+          {/* Tag Principal (destacada) */}
+          {(() => {
+            const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
+            if (!primary) return null;
+            return (
+              <Badge
+                variant="default"
+                className="text-[10px] px-1.5 py-0 gap-0.5 bg-amber-500 hover:bg-amber-500 text-white border-0"
+                title={`Tag principal: ${primary}`}
+              >
+                <Star className="h-2.5 w-2.5 fill-white" />
+                {primary}
+              </Badge>
+            );
+          })()}
           {deal.tags
             ?.filter((tag: any) => {
               const name = typeof tag === 'string' ? tag : tag.name;
+              const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
+              if (primary && name?.toLowerCase() === primary.toLowerCase()) return false;
               return name?.toLowerCase() !== 'base clint';
             })
             .slice(0, 2)
