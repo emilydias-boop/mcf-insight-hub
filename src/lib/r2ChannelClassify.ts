@@ -9,9 +9,10 @@
  * - Outro: qualquer outra coisa.
  *
  * Window de 30 dias: se a venda A010 mais recente é > 30 dias antes da
- * referenceDate (scheduled_at do evento), o lead "esfriou" e é
- * reclassificado automaticamente como ANAMNESE (independente de tag).
- * Dentro de 30 dias permanece A010.
+ * referenceDate (scheduled_at do evento), trata como "esfriado":
+ *   - se também tem tag exata ANAMNESE (lead entrou no fluxo de anamnese)
+ *     → reclassifica como ANAMNESE
+ *   - senão → continua A010
  */
 
 export type SimpleChannel = 'A010' | 'ANAMNESE' | 'Outro';
@@ -52,7 +53,8 @@ export function classifySimpleChannel(opts: {
   const hasAnamnese = norm.some(t => t === 'ANAMNESE');
 
   if (isBuyer && !isStale) return 'A010';
-  if (isBuyer && isStale) return 'ANAMNESE';
+  if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
+  if (isBuyer && isStale) return 'A010';
   if (hasAnamnese) return 'ANAMNESE';
   return 'Outro';
 }

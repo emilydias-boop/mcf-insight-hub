@@ -383,7 +383,8 @@ export default function Agenda() {
       // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA.
       const hasAnamnese = norm.some((t) => t === 'ANAMNESE');
       if (isBuyer && !isStale) return 'A010';
-      if (isBuyer && isStale) return 'ANAMNESE';
+      if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
+      if (isBuyer && isStale) return 'A010';
       if (hasAnamnese) return 'ANAMNESE';
       return 'Outro';
     };
