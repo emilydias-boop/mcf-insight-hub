@@ -27,6 +27,31 @@ export interface R2SpecialMarkingMatchInput {
 const norm = (v: string | null | undefined) =>
   (v || '').toString().trim().toLowerCase();
 
+/** Tokens significativos do nome (ignora iniciais soltas e palavras curtas). */
+function nameTokens(v: string | null | undefined): string[] {
+  return norm(v)
+    .replace(/[^a-z0-9\sáàâãéèêíïóôõöúüçñ]/gi, ' ')
+    .split(/\s+/)
+    .filter(t => t.length >= 3);
+}
+
+/** True se os nomes "casam": um conjunto de tokens é subconjunto do outro.
+ *  Resolve casos como "Leticia Faustino" (employees) vs "Leticia Faustino C" (closers). */
+function namesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const an = norm(a);
+  const bn = norm(b);
+  if (!an || !bn) return false;
+  if (an === bn) return true;
+  const at = nameTokens(a);
+  const bt = nameTokens(b);
+  if (!at.length || !bt.length) return false;
+  const aSet = new Set(at);
+  const bSet = new Set(bt);
+  const aInB = at.every(t => bSet.has(t));
+  const bInA = bt.every(t => aSet.has(t));
+  return aInB || bInA;
+}
+
 function toYmd(d: Date | string | null | undefined): string | null {
   if (!d) return null;
   if (typeof d === 'string') return d.slice(0, 10);
@@ -56,7 +81,7 @@ export function matchR2SpecialMarking(
 
   for (const rule of rules) {
     if (!rule.active) continue;
-    if (norm(rule.closer_r1_name) !== r1) continue;
+    if (!namesMatch(rule.closer_r1_name, input.r1CloserName)) continue;
     if (rule.required_channel && rule.required_channel !== channelKey) continue;
     if (rule.require_contract_paid && !input.isContractPaid) continue;
     if (rule.valid_from && refYmd && refYmd < rule.valid_from.slice(0, 10)) continue;
