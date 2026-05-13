@@ -51,6 +51,8 @@ import { ExportDealsDialog } from '@/components/crm/ExportDealsDialog';
 import { DeleteDealsConfirmDialog } from '@/components/crm/DeleteDealsConfirmDialog';
 import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
 import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
+import { BulkAddTagDialog } from '@/components/crm/BulkAddTagDialog';
+import { BulkDistributeSdrsDialog } from '@/components/crm/BulkDistributeSdrsDialog';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
@@ -90,6 +92,9 @@ const Negocios = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
+  const [addTagDialogOpen, setAddTagDialogOpen] = useState(false);
+  const [distributeSdrsDialogOpen, setDistributeSdrsDialogOpen] = useState(false);
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false);
   const bulkTransfer = useBulkTransfer();
   const bulkDelete = useBulkDeleteDeals();
   const isPrivilegedDeleter = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -922,6 +927,12 @@ const Negocios = () => {
         isDeleting={bulkDelete.isPending}
         onMoveStage={() => setMoveStageDialogOpen(true)}
         onMovePipeline={() => setMovePipelineDialogOpen(true)}
+        onAddTag={() => setAddTagDialogOpen(true)}
+        onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
+        onExportSelected={() => {
+          setExportSelectedOnly(true);
+          setExportDialogOpen(true);
+        }}
       />
       
       {/* Dialog de confirmação de exclusão em massa */}
