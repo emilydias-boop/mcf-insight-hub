@@ -12449,6 +12449,7 @@ export type Database = {
         Args: { _ano_mes: string; _reason: string }
         Returns: undefined
       }
+      map_area_to_bu: { Args: { p_area: string }; Returns: string }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
