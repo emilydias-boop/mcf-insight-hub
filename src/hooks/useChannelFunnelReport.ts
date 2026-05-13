@@ -125,10 +125,8 @@ function classifyChannelWith30dRule(opts: {
 
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isBuyer && !isStale) return 'A010';
-  // Buyer esfriado COM tag ANAMNESE → reclassifica
-  if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
-  // Buyer esfriado SEM tag → continua A010
-  if (isBuyer && isStale && !hasAnamneseTag) return 'A010';
+  // Buyer esfriado (>30d) → ANAMNESE automaticamente (independente de tag)
+  if (isBuyer && isStale) return 'ANAMNESE';
   // Não-buyer com tag ANAMNESE → ANAMNESE
   if (hasAnamneseTag) return 'ANAMNESE';
   // Não-buyer com tag ANAMNESE-INCOMPLETA → ANAMNESE INCOMPLETA
