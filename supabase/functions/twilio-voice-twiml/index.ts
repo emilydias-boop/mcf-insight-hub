@@ -72,23 +72,25 @@ serve(async (req) => {
     // Generate TwiML to dial the number with recording + Answering Machine Detection.
     // AMD belongs to the <Number> noun in TwiML; keeping it on <Dial> makes Twilio reject
     // the application instructions and the browser receives HANGUP / 31005.
+    // AMD attributes belong to <Dial>, not <Number>. Putting them on <Number>
+    // makes Twilio reject the TwiML and the call ends immediately as `failed`.
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial 
-    callerId="${escapeXml(callerId || '')}" 
-    timeout="30" 
+  <Dial
+    callerId="${escapeXml(callerId || '')}"
+    timeout="30"
     record="record-from-answer-dual"
     recordingStatusCallback="${escapeXml(webhookUrl)}"
     recordingStatusCallbackEvent="completed"
-    action="${escapeXml(webhookUrl)}">
-    <Number
-      machineDetection="Enable"
-      machineDetectionTimeout="5"
-      machineDetectionSpeechThreshold="2400"
-      machineDetectionSpeechEndThreshold="1200"
-      machineDetectionSilenceTimeout="5000"
-      amdStatusCallback="${escapeXml(amdCallbackUrl)}"
-      amdStatusCallbackMethod="POST">${escapeXml(cleanNumber)}</Number>
+    action="${escapeXml(webhookUrl)}"
+    machineDetection="Enable"
+    machineDetectionTimeout="5"
+    machineDetectionSpeechThreshold="2400"
+    machineDetectionSpeechEndThreshold="1200"
+    machineDetectionSilenceTimeout="5000"
+    amdStatusCallback="${escapeXml(amdCallbackUrl)}"
+    amdStatusCallbackMethod="POST">
+    <Number>${escapeXml(cleanNumber)}</Number>
   </Dial>
 </Response>`;
 
