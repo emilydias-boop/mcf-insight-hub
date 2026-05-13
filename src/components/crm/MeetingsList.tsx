@@ -74,11 +74,8 @@ function classifySimple(opts: {
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isA010Buyer && !isStale) return 'A010';
 
-  // Buyer A010 esfriado (>30d) E tem tag ANAMNESE → reclassifica como ANAMNESE
-  if (isA010Buyer && isStale && hasAnamnese) return 'ANAMNESE';
-
-  // Buyer A010 esfriado SEM tag ANAMNESE → ainda é A010 (regra: precisa ter tag)
-  if (isA010Buyer && isStale && !hasAnamnese) return 'A010';
+  // Buyer A010 esfriado (>30d) → ANAMNESE automaticamente (independente de tag)
+  if (isA010Buyer && isStale) return 'ANAMNESE';
 
   // Não é buyer A010
   if (hasAnamnese) return 'ANAMNESE';
