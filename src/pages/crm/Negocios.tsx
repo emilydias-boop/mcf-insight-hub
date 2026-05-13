@@ -988,6 +988,24 @@ const Negocios = () => {
         selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
+
+      {/* Dialog de adicionar tag em massa */}
+      <BulkAddTagDialog
+        open={addTagDialogOpen}
+        onOpenChange={setAddTagDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Dialog de distribuir entre SDRs em massa */}
+      <BulkDistributeSdrsDialog
+        open={distributeSdrsDialogOpen}
+        onOpenChange={setDistributeSdrsDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
       
       {/* Modal de configuração inline para single pipeline */}
       {hasSinglePipeline && (buAllowedGroups[0] || buMapping?.origins?.[0]) && (
@@ -1012,8 +1030,15 @@ const Negocios = () => {
       {/* Dialog de exportação */}
       <ExportDealsDialog
         open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        deals={filteredDeals}
+        onOpenChange={(o) => {
+          setExportDialogOpen(o);
+          if (!o) setExportSelectedOnly(false);
+        }}
+        deals={
+          exportSelectedOnly
+            ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id))
+            : filteredDeals
+        }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
