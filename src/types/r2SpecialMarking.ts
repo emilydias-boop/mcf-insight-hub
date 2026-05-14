@@ -19,6 +19,10 @@ export interface R2SpecialMarking {
 export interface R2SpecialMarkingMatchInput {
   channel: 'ANAMNESE' | 'A010' | 'Outro' | null | undefined;
   r1CloserName: string | null | undefined;
+  /** Closer who marked the contract as paid (looked up from the deal's
+   *  R1 attendee with contract_paid_at != null). Used as a secondary
+   *  candidate for matching the special-marking rule. */
+  contractPaidCloserName?: string | null | undefined;
   isContractPaid: boolean;
   /** Reference date used to evaluate valid_from / valid_until (e.g. meeting scheduled_at). */
   referenceDate?: Date | string | null;
@@ -69,8 +73,10 @@ export function matchR2SpecialMarking(
   input: R2SpecialMarkingMatchInput
 ): R2SpecialMarking | null {
   if (!rules?.length) return null;
-  const r1 = norm(input.r1CloserName);
-  if (!r1) return null;
+  const candidates = [input.r1CloserName, input.contractPaidCloserName]
+    .map(n => norm(n))
+    .filter(Boolean);
+  if (!candidates.length) return null;
   const channelNorm = (input.channel || '').toString().toUpperCase();
   const channelKey =
     channelNorm === 'ANAMNESE' ? 'ANAMNESE'
@@ -81,7 +87,10 @@ export function matchR2SpecialMarking(
 
   for (const rule of rules) {
     if (!rule.active) continue;
-    if (!namesMatch(rule.closer_r1_name, input.r1CloserName)) continue;
+    const nameOk =
+      namesMatch(rule.closer_r1_name, input.r1CloserName) ||
+      namesMatch(rule.closer_r1_name, input.contractPaidCloserName);
+    if (!nameOk) continue;
     if (rule.required_channel && rule.required_channel !== channelKey) continue;
     if (rule.require_contract_paid && !input.isContractPaid) continue;
     if (rule.valid_from && refYmd && refYmd < rule.valid_from.slice(0, 10)) continue;
