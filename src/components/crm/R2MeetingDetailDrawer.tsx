@@ -302,7 +302,13 @@ export function R2MeetingDetailDrawer({
           !!contractPaidCloserName,
         referenceDate: meeting.scheduled_at || null,
       });
-      if (m) return m;
+      if (m) {
+        return {
+          rule: m,
+          displayCloserName: contractPaidCloserName || meeting?.r1_closer?.name || null,
+          matchedByContractPaidCloser: !!contractPaidCloserName,
+        };
+      }
     }
     return null;
   })();
@@ -327,15 +333,15 @@ export function R2MeetingDetailDrawer({
             {drawerMarking && (
               <div
                 className="rounded-lg p-3 flex items-center gap-3 shadow-sm"
-                style={{ backgroundColor: drawerMarking.bg_color, color: drawerMarking.text_color }}
+                style={{ backgroundColor: drawerMarking.rule.bg_color, color: drawerMarking.rule.text_color }}
               >
-                <span className="text-xl">{drawerMarking.icon}</span>
+                <span className="text-xl">{drawerMarking.rule.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm">{drawerMarking.badge_label}</div>
+                  <div className="font-semibold text-sm">{drawerMarking.rule.badge_label}</div>
                   <div className="text-xs opacity-90 truncate">
-                    Closer R1: {meeting.r1_closer?.name}
-                    {drawerMarking.required_channel ? ` • Canal: ${drawerMarking.required_channel}` : ''}
-                    {drawerMarking.require_contract_paid ? ' • Contrato Pago' : ''}
+                    {drawerMarking.matchedByContractPaidCloser ? 'Contrato por' : 'Closer R1'}: {drawerMarking.displayCloserName || '—'}
+                    {drawerMarking.rule.required_channel ? ` • Canal: ${drawerMarking.rule.required_channel}` : ''}
+                    {drawerMarking.rule.require_contract_paid ? ' • Contrato Pago' : ''}
                   </div>
                 </div>
               </div>
