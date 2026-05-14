@@ -143,7 +143,11 @@ export function R2ListViewTable({
                       <span>{contactName}</span>
                       <R2LeadBadges
                         channel={channelMap.get(key)?.channel}
-                        r1CloserName={(attendee as any).r1_closer_name || null}
+                        r1CloserName={
+                          (attendee as any).r1_closer_name ||
+                          meeting.r1_closer?.name ||
+                          null
+                        }
                         isContractPaid={(attendee as any).status === 'contract_paid'}
                         scheduledAt={meeting.scheduled_at}
                       />
