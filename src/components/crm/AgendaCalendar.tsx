@@ -357,7 +357,9 @@ export function AgendaCalendar({
           channel: channel as any,
           r1CloserName: r1Name,
           contractPaidCloserName,
-          isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+          isContractPaid:
+            (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO' ||
+            !!contractPaidCloserName,
           referenceDate: m.scheduled_at || null,
         });
         if (matched) map.set(att.id, matched);
