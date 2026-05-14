@@ -70,6 +70,7 @@ import { useBUContext } from '@/contexts/BUContext';
 import { useAttendeeChannels, CHANNEL_EMOJI } from '@/hooks/useAttendeeChannels';
 import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
 import { matchR2SpecialMarking, R2SpecialMarking } from '@/types/r2SpecialMarking';
+import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
@@ -321,6 +322,18 @@ export function AgendaCalendar({
 
   // R2 special markings (only relevant when this calendar shows R2 meetings).
   const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+  const r2DealIds = useMemo(() => {
+    if (meetingType !== 'r2') return [] as string[];
+    const ids: string[] = [];
+    meetings.forEach(m => {
+      m.attendees?.forEach(att => {
+        const id = (att as any).deal_id || (att as any).deal?.id;
+        if (id) ids.push(id);
+      });
+    });
+    return ids;
+  }, [meetings, meetingType]);
+  const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(r2DealIds);
   const markingByAttendee = useMemo(() => {
     const map = new Map<string, R2SpecialMarking>();
     if (meetingType !== 'r2' || specialMarkings.length === 0) return map;
@@ -330,7 +343,11 @@ export function AgendaCalendar({
           (att as any).r1_closer_name ||
           (m as any).r1_closer?.name ||
           null;
-        if (!r1Name) return;
+        const dealId = (att as any).deal_id || (att as any).deal?.id || null;
+        const contractPaidCloserName = dealId
+          ? contractPaidClosersByDeal?.get(dealId) || null
+          : null;
+        if (!r1Name && !contractPaidCloserName) return;
         const stageName =
           (att as any).deal?.stage_name ||
           (att as any).stage_name ||
@@ -339,6 +356,7 @@ export function AgendaCalendar({
         const matched = matchR2SpecialMarking(specialMarkings, {
           channel: channel as any,
           r1CloserName: r1Name,
+          contractPaidCloserName,
           isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
           referenceDate: m.scheduled_at || null,
         });
@@ -346,7 +364,7 @@ export function AgendaCalendar({
       });
     });
     return map;
-  }, [meetings, specialMarkings, channelMap, meetingType]);
+  }, [meetings, specialMarkings, channelMap, meetingType, contractPaidClosersByDeal]);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
