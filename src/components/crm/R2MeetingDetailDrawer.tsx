@@ -137,6 +137,8 @@ export function R2MeetingDetailDrawer({
   if (!meeting) return null;
 
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
+  const focusedSdr = attendee?.sdr || meeting.sdr || null;
+  const focusedR1Closer = attendee?.r1_closer || meeting.r1_closer || null;
 
   const isAnamneseLead = (() => {
     if (!leadProfile) return false;
@@ -543,18 +545,18 @@ export function R2MeetingDetailDrawer({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">SDR:</span>
                   <span className="font-medium">
-                    {meeting.sdr?.name || meeting.sdr?.email || '—'}
+                    {focusedSdr?.name || focusedSdr?.email || '—'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Closer R1:</span>
                   <span className="font-medium">
-                    {meeting.r1_closer ? (
+                    {focusedR1Closer ? (
                       <>
-                        {meeting.r1_closer.name}
-                        {meeting.r1_closer.scheduled_at && (
+                        {focusedR1Closer.name}
+                        {focusedR1Closer.scheduled_at && (
                           <span className="text-muted-foreground ml-1">
-                            ({format(parseISO(meeting.r1_closer.scheduled_at), "dd/MM 'às' HH:mm")})
+                            ({format(parseISO(focusedR1Closer.scheduled_at), "dd/MM 'às' HH:mm")})
                           </span>
                         )}
                       </>
