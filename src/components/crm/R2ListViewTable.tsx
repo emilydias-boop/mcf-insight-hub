@@ -164,7 +164,12 @@ export function R2ListViewTable({
                             ((attendee as any).deal_id || (attendee as any).deal?.id || '') as string
                           ) || null
                         }
-                        isContractPaid={(attendee as any).status === 'contract_paid'}
+                        isContractPaid={
+                          (attendee as any).status === 'contract_paid' ||
+                          !!contractPaidClosersByDeal?.get(
+                            ((attendee as any).deal_id || (attendee as any).deal?.id || '') as string
+                          )
+                        }
                         scheduledAt={meeting.scheduled_at}
                       />
                     </div>
