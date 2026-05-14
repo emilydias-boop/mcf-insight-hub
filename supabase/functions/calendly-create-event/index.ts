@@ -417,13 +417,20 @@ serve(async (req) => {
     // contrato pago/won (ver memória `consorcio-week-and-revenue-attribution`
     // e o ajuste paralelo no front em `useAgendaData.ts`/`QuickScheduleModal`).
     let isConsorcioDeal = false;
+    let isOutsideDeal = false;
     try {
       const { data: dealOriginRow } = await supabase
         .from("crm_deals")
-        .select("origin_id")
+        .select("origin_id, tags")
         .eq("id", dealId)
         .maybeSingle();
       const originId = dealOriginRow?.origin_id ?? null;
+      const dealTags = Array.isArray((dealOriginRow as any)?.tags)
+        ? ((dealOriginRow as any).tags as string[])
+        : [];
+      isOutsideDeal = dealTags.some(
+        (t) => (t ?? "").toString().trim().toLowerCase() === "outside",
+      );
       if (originId) {
         const { data: buMaps } = await supabase
           .from("bu_origin_mapping")
@@ -440,12 +447,15 @@ serve(async (req) => {
     if (isConsorcioDeal) {
       console.log("🟢 Deal pertence à BU Consórcio — guards de contract_paid/won serão ignorados");
     }
+    if (isOutsideDeal) {
+      console.log("🟢 Deal Outside — guards de contract_paid/won serão ignorados (R1 pós-venda é o caso de uso)");
+    }
 
     // R2 não aplica os guards de contrato pago / won / duplicate. R2 pode
     // acontecer pós-venda (acompanhamento) ou ser remarcada livremente.
     // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio, onde o
     // mesmo lead pode ter múltiplos contratos/agendamentos ao longo do tempo.
-    if (guardMeetingType === 'r1' && !isConsorcioDeal) {
+    if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
