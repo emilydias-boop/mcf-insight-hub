@@ -89,7 +89,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
       (meetings || []).forEach(m => {
         const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
         attendeesArr.forEach(att => {
-          const deal = att.deal as { contact?: { email?: string; phone?: string } } | null;
+          const deal = att.deal as { owner_id?: string; contact?: { email?: string; phone?: string } } | null;
           if (deal?.contact?.email) contactEmails.push(deal.contact.email.toLowerCase());
           if (deal?.contact?.phone) contactPhones.push(deal.contact.phone);
         });
@@ -273,7 +273,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           const thermIds = (att.thermometer_ids as string[]) || [];
           const statusId = att.r2_status_id as string | null;
           const attDealId = att.deal_id as string | null;
-          const deal = att.deal as { contact?: { email?: string; phone?: string } } | null;
+          const deal = att.deal as { owner_id?: string; contact?: { email?: string; phone?: string } } | null;
           
           // Check if contact has A010 purchase
           const contactEmail = deal?.contact?.email?.toLowerCase();
@@ -295,6 +295,12 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
               .filter(Boolean),
             // R1 qualification note from SDR
             r1_qualification_note: attDealId ? r1NotesMap[attDealId] || null : null,
+            sdr: attDealId && r1SdrMap[attDealId]
+              ? (profilesById[r1SdrMap[attDealId]]
+                  ? { email: r1SdrMap[attDealId], name: profilesById[r1SdrMap[attDealId]].name }
+                  : { email: r1SdrMap[attDealId], name: null })
+              : (deal?.owner_id ? profilesByEmail[deal.owner_id] || { email: deal.owner_id, name: null } : null),
+            r1_closer: attDealId ? r1CloserMap[attDealId] || null : null,
             // Sales channel based on A010 purchase
             sales_channel: isA010 ? 'A010' : 'LIVE',
           };
