@@ -33,6 +33,7 @@ import { describeDuplicatePhoneError } from '@/lib/duplicateContactError';
 import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
 import { matchR2SpecialMarking } from '@/types/r2SpecialMarking';
 import { useAttendeeChannels } from '@/hooks/useAttendeeChannels';
+import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -119,9 +120,19 @@ export function R2MeetingDetailDrawer({
       email: a.deal?.contact?.email || a.email || null,
       phone: a.deal?.contact?.phone || a.phone || null,
       scheduledAt: meeting?.scheduled_at || null,
-      tags: (a.deal?.contact?.tags as any) || [],
+      // Tags vivem no deal (não no contato). Sem isso, leads ANAMNESE
+      // que também compraram A010 há mais de 30 dias caem como "A010"
+      // e a regra de marcação ANAMNESE não casa.
+      tags: ((a.deal as any)?.tags as any) || (a.deal?.contact?.tags as any) || [],
+      dealId: a.deal_id || (a.deal as any)?.id || null,
     }))
   );
+
+  // Closer que recebeu o contrato como pago (fallback para regras de marcação
+  // quando o R1 closer salvo na R2 é diferente de quem fechou o contrato).
+  const drawerDealIds = (meeting?.attendees || [])
+    .map(a => a.deal_id || (a.deal as any)?.id || null);
+  const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(drawerDealIds);
 
   if (!meeting) return null;
 
@@ -271,16 +282,24 @@ export function R2MeetingDetailDrawer({
   };
 
   const drawerMarking = (() => {
-    if (!meeting?.r1_closer?.name || specialMarkings.length === 0) return null;
+    if (specialMarkings.length === 0) return null;
     for (const a of meeting.attendees || []) {
       const stageName =
         (a as any).deal?.stage?.stage_name ||
         (a as any).deal?.stage_name ||
         null;
+      const dealId = a.deal_id || (a as any).deal?.id || null;
+      const contractPaidCloserName = dealId
+        ? contractPaidClosersByDeal?.get(dealId) || null
+        : null;
+      if (!meeting?.r1_closer?.name && !contractPaidCloserName) continue;
       const m = matchR2SpecialMarking(specialMarkings, {
         channel: channelMap.get(a.id) as any,
-        r1CloserName: meeting.r1_closer.name,
-        isContractPaid: (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO',
+        r1CloserName: meeting?.r1_closer?.name || null,
+        contractPaidCloserName,
+        isContractPaid:
+          (stageName || '').toString().toUpperCase() === 'CONTRATO PAGO' ||
+          !!contractPaidCloserName,
         referenceDate: meeting.scheduled_at || null,
       });
       if (m) return m;
