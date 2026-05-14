@@ -53,6 +53,7 @@ export interface R2AttendeeExtended {
   deal?: {
     id: string;
     name: string;
+    tags?: string[] | null;
     origin_id?: string | null;
     origin?: {
       name: string;

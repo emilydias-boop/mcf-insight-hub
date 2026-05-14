@@ -47,6 +47,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             deal:crm_deals(
               id,
               name,
+              tags,
               owner_id,
               origin_id,
               contact_id,
