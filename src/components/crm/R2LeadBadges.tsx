@@ -7,6 +7,9 @@ import { matchR2SpecialMarking } from '@/types/r2SpecialMarking';
 interface R2LeadBadgesProps {
   channel: SimpleChannel | null | undefined;
   r1CloserName?: string | null;
+  /** Name of the closer who marked the contract as paid (secondary
+   *  candidate for matching R2 special markings). */
+  contractPaidCloserName?: string | null;
   isContractPaid?: boolean;
   scheduledAt?: string | Date | null;
   size?: 'xs' | 'sm';
@@ -36,6 +39,7 @@ const CHANNEL_STYLE: Record<SimpleChannel, { label: string; cls: string; emoji: 
 export function R2LeadBadges({
   channel,
   r1CloserName,
+  contractPaidCloserName,
   isContractPaid = false,
   scheduledAt,
   size = 'xs',
@@ -47,6 +51,7 @@ export function R2LeadBadges({
   const matched = matchR2SpecialMarking(rules, {
     channel: channel || null,
     r1CloserName: r1CloserName || null,
+    contractPaidCloserName: contractPaidCloserName || null,
     isContractPaid,
     referenceDate: scheduledAt || null,
   });

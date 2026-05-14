@@ -29,6 +29,7 @@ import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
 import { R2LeadBadges } from './R2LeadBadges';
+import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 
 interface R2ListViewTableProps {
   meetings: R2MeetingRow[];
@@ -67,6 +68,16 @@ export function R2ListViewTable({
     scheduledAt: meeting.scheduled_at || null,
   })), [rows]);
   const channelMap = useR2LeadsChannelMap(channelInputs);
+
+  // Map dealId -> name of the closer who marked the contract as paid.
+  // Used so R2 special markings (e.g. "Anamnese Leticia") still surface
+  // when the contract was paid by a different closer than the R1 closer
+  // saved on the R2 meeting.
+  const dealIds = useMemo(
+    () => rows.map(({ attendee }) => (attendee as any).deal_id || (attendee as any).deal?.id || null),
+    [rows]
+  );
+  const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(dealIds);
 
   const handleQuickUpdate = (attendeeId: string, field: string, value: unknown) => {
     updateAttendee.mutate({
@@ -148,7 +159,17 @@ export function R2ListViewTable({
                           meeting.r1_closer?.name ||
                           null
                         }
-                        isContractPaid={(attendee as any).status === 'contract_paid'}
+                        contractPaidCloserName={
+                          contractPaidClosersByDeal?.get(
+                            ((attendee as any).deal_id || (attendee as any).deal?.id || '') as string
+                          ) || null
+                        }
+                        isContractPaid={
+                          (attendee as any).status === 'contract_paid' ||
+                          !!contractPaidClosersByDeal?.get(
+                            ((attendee as any).deal_id || (attendee as any).deal?.id || '') as string
+                          )
+                        }
                         scheduledAt={meeting.scheduled_at}
                       />
                     </div>
