@@ -152,11 +152,10 @@ export default function ReunioesEquipe() {
       case "custom": {
         const startCustom = customStartDate || startOfMonth(today);
         const endCustom = customEndDate || customStartDate || endOfMonth(today);
+        const s = startOfDay(startCustom);
+        const e = endOfDay(endCustom);
         // Ensure start <= end
-        if (startCustom > endCustom) {
-          return { start: endCustom, end: startCustom };
-        }
-        return { start: startCustom, end: endCustom };
+        return s > e ? { start: e, end: s } : { start: s, end: e };
       }
       default:
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
