@@ -50,6 +50,15 @@ export interface R2AttendeeExtended {
   // Rescheduling tracking
   is_reschedule: boolean | null;
   parent_attendee_id: string | null;
+  sdr?: {
+    email: string;
+    name: string | null;
+  } | null;
+  r1_closer?: {
+    id: string;
+    name: string;
+    scheduled_at: string | null;
+  } | null;
   deal?: {
     id: string;
     name: string;
