@@ -273,7 +273,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           const thermIds = (att.thermometer_ids as string[]) || [];
           const statusId = att.r2_status_id as string | null;
           const attDealId = att.deal_id as string | null;
-          const deal = att.deal as { contact?: { email?: string; phone?: string } } | null;
+          const deal = att.deal as { owner_id?: string; contact?: { email?: string; phone?: string } } | null;
           
           // Check if contact has A010 purchase
           const contactEmail = deal?.contact?.email?.toLowerCase();
