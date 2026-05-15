@@ -286,6 +286,7 @@ const Contatos = () => {
                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Etapa</th>
                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">SDR</th>
                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden xl:table-cell">Closer</th>
+                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Dono atual</th>
                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Parceria</th>
                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden 2xl:table-cell">Organização</th>
                 </tr>
@@ -341,6 +342,9 @@ const Contatos = () => {
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px] hidden xl:table-cell">
                         {contact.closerName || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[140px] hidden lg:table-cell">
+                        {contact.ownerName || '—'}
                       </td>
                       <td className="px-3 py-2.5 hidden lg:table-cell">
                         {partner?.isPartner ? (
