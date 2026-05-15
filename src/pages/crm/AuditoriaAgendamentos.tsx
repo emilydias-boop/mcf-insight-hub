@@ -1,5 +1,7 @@
 import { Shield } from 'lucide-react';
 import { StatusChangesTab } from '@/components/audit/StatusChangesTab';
+import { LeadTransfersTab } from '@/components/audit/LeadTransfersTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function AuditoriaAgendamentos() {
   return (
@@ -16,7 +18,18 @@ export default function AuditoriaAgendamentos() {
         </div>
       </div>
 
-      <StatusChangesTab />
+      <Tabs defaultValue="status" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="status">Mudanças de Status</TabsTrigger>
+          <TabsTrigger value="transfers">Transferências de Leads</TabsTrigger>
+        </TabsList>
+        <TabsContent value="status">
+          <StatusChangesTab />
+        </TabsContent>
+        <TabsContent value="transfers">
+          <LeadTransfersTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
