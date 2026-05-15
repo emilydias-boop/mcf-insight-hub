@@ -538,13 +538,35 @@ Deno.serve(async (req) => {
 
     // ===== AUTO-MARK SALE COMPLETE =====
     // Move deal to "Venda Realizada" and mark attendee as "comprou"
-    const autoMarkResult = await autoMarkSaleComplete(supabase, {
-      customerEmail: body.email.toLowerCase(),
-      customerPhone: body.telefone,
-      productName: body.tipo_parceria || 'Parceria',
-      saleDate,
-      netValue: valorLiquido
-    })
+    // ⚠️ FILTRO: bloquear A000/Caução/Contrato CLS e valores baixos (<= R$500)
+    // para evitar mover deals para "Venda Realizada" sem venda real de parceria high-ticket
+    const productNameRaw = (body.tipo_parceria || 'Parceria').toString()
+    const productNameLower = productNameRaw.toLowerCase()
+    const isLowTicketOrCaucao =
+      valorLiquido <= 500 ||
+      valorBruto <= 500 ||
+      productNameLower.includes('a000') ||
+      productNameLower.includes('cauç') ||
+      productNameLower.includes('caucao') ||
+      productNameLower.includes('contrato cls') ||
+      productNameLower.includes('contrato')
+
+    let autoMarkResult: { success: boolean; dealId?: string; message: string }
+    if (isLowTicketOrCaucao) {
+      console.log(`🚫 [PARCERIA] Auto-move bloqueado: produto="${productNameRaw}", valorLiquido=${valorLiquido}, valorBruto=${valorBruto}. Transação registrada mas deal NÃO movido para Venda Realizada.`)
+      autoMarkResult = {
+        success: false,
+        message: `Auto-move blocked: low-ticket/caução product (${productNameRaw}, R$${valorLiquido})`
+      }
+    } else {
+      autoMarkResult = await autoMarkSaleComplete(supabase, {
+        customerEmail: body.email.toLowerCase(),
+        customerPhone: body.telefone,
+        productName: productNameRaw,
+        saleDate,
+        netValue: valorLiquido
+      })
+    }
 
     const processingTime = Date.now() - startTime
     console.log(`✅ Transaction inserted successfully in ${processingTime}ms:`, data.id)
