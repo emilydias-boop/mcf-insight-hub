@@ -1901,6 +1901,8 @@ export type Database = {
           direction: string | null
           duration_seconds: number | null
           ended_at: string | null
+          follow_up_action: string | null
+          follow_up_at: string | null
           from_number: string | null
           id: string
           notes: string | null
@@ -1909,6 +1911,7 @@ export type Database = {
           recording_url: string | null
           started_at: string | null
           status: string | null
+          summary: string | null
           to_number: string
           twilio_call_sid: string | null
           updated_at: string | null
@@ -1922,6 +1925,8 @@ export type Database = {
           direction?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
+          follow_up_action?: string | null
+          follow_up_at?: string | null
           from_number?: string | null
           id?: string
           notes?: string | null
@@ -1930,6 +1935,7 @@ export type Database = {
           recording_url?: string | null
           started_at?: string | null
           status?: string | null
+          summary?: string | null
           to_number: string
           twilio_call_sid?: string | null
           updated_at?: string | null
@@ -1943,6 +1949,8 @@ export type Database = {
           direction?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
+          follow_up_action?: string | null
+          follow_up_at?: string | null
           from_number?: string | null
           id?: string
           notes?: string | null
@@ -1951,6 +1959,7 @@ export type Database = {
           recording_url?: string | null
           started_at?: string | null
           status?: string | null
+          summary?: string | null
           to_number?: string
           twilio_call_sid?: string | null
           updated_at?: string | null
