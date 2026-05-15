@@ -77,6 +77,7 @@ export const useUserDetails = (userId: string | null) => {
         can_handle_no_show: (profile as any).can_handle_no_show ?? true,
         can_link_contract: (profile as any).can_link_contract ?? false,
         can_cancel_meeting: (profile as any).can_cancel_meeting ?? false,
+        can_transfer_leads: (profile as any).can_transfer_leads ?? false,
         employment: employment || null,
       } as UserDetails;
     },

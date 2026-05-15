@@ -10,6 +10,7 @@ import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
+import { useMyContactsCapabilities } from '@/hooks/useMyContactsCapabilities';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
@@ -37,6 +38,11 @@ const THERMAL_ICONS: Record<string, string> = {
 const Contatos = () => {
   const { role } = useAuth();
   const isReadOnly = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+  const { canTransferLeads } = useMyContactsCapabilities();
+  // Usuário com flag de transferência: pode selecionar e usar "Trocar dono",
+  // mas continua sem acesso às demais ações em massa.
+  const canBulkSelect = !isReadOnly || canTransferLeads;
+  const restrictedToTransfer = isReadOnly && canTransferLeads;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -240,7 +246,7 @@ const Contatos = () => {
       {/* Select all toggle + info */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center justify-between">
-          {!isReadOnly ? (
+          {canBulkSelect ? (
             <div className="flex items-center gap-2">
               <Checkbox
                 checked={allFilteredSelected}
@@ -272,7 +278,7 @@ const Contatos = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {!isReadOnly && <th className="w-10 px-3 py-2.5"></th>}
+                  {canBulkSelect && <th className="w-10 px-3 py-2.5"></th>}
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
@@ -293,7 +299,7 @@ const Contatos = () => {
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => handleContactClick(contact.id)}
                     >
-                      {!isReadOnly && (
+                      {canBulkSelect && (
                         <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedIds.has(contact.id)}
@@ -435,34 +441,40 @@ const Contatos = () => {
         </Card>
       )}
 
-      {/* Bulk actions - hidden for read-only roles */}
-      {!isReadOnly && (
+      {/* Bulk actions */}
+      {canBulkSelect && (
         <>
-           <BulkActionsBar
+          <BulkActionsBar
             selectedCount={selectedIds.size}
-            onTransfer={() => setPipelineModalOpen(true)}
+            onTransfer={restrictedToTransfer ? undefined : () => setPipelineModalOpen(true)}
             onClearSelection={() => setSelectedIds(new Set())}
             isTransferring={false}
             transferLabel="Enviar p/ Pipeline..."
-            onDuplicate={activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
+            onDuplicate={!restrictedToTransfer && activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
             onChangeOwner={selectedDealIds.length > 0 ? () => setChangeOwnerDialogOpen(true) : undefined}
             isChangingOwner={bulkTransfer.isPending}
-            onMoveStage={selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
-            onMovePipeline={selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
-          />
-
-          <SendToPipelineModal
-            open={pipelineModalOpen}
-            onOpenChange={setPipelineModalOpen}
-            selectedContactIds={Array.from(selectedIds)}
-            onSuccess={() => setSelectedIds(new Set())}
+            onMoveStage={!restrictedToTransfer && selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
+            onMovePipeline={!restrictedToTransfer && selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
           />
 
           <BulkTransferDialog
             open={changeOwnerDialogOpen}
             onOpenChange={setChangeOwnerDialogOpen}
             selectedDealIds={selectedDealIds}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+        </>
+      )}
+
+      {/* Bulk actions completas - hidden for read-only roles */}
+      {!isReadOnly && (
+        <>
+
+          <SendToPipelineModal
+            open={pipelineModalOpen}
+            onOpenChange={setPipelineModalOpen}
+            selectedContactIds={Array.from(selectedIds)}
             onSuccess={() => setSelectedIds(new Set())}
           />
 

@@ -17,7 +17,7 @@ import {
 
 interface BulkActionsBarProps {
   selectedCount: number;
-  onTransfer: () => void;
+  onTransfer?: () => void;
   onClearSelection: () => void;
   isTransferring: boolean;
   onDuplicate?: () => void;
@@ -71,21 +71,23 @@ export const BulkActionsBar = ({
         </div>
         
         <div className="h-4 w-px bg-primary-foreground/30" />
-        
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onTransfer}
-          disabled={isTransferring || isDuplicating || isMovingStage}
-          className="gap-2"
-        >
-          {isTransferring ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <UserPlus className="h-4 w-4" />
-          )}
-          {transferLabel || 'Transferir para...'}
-        </Button>
+
+        {onTransfer && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onTransfer}
+            disabled={isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            {isTransferring ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="h-4 w-4" />
+            )}
+            {transferLabel || 'Transferir para...'}
+          </Button>
+        )}
 
         {onChangeOwner && (
           <Button

@@ -85,6 +85,9 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     can_cancel_meeting: false,
   });
   const [savingCapKey, setSavingCapKey] = useState<string | null>(null);
+  // Capabilities CRM
+  const [canTransferLeads, setCanTransferLeads] = useState(false);
+  const [savingCanTransferLeads, setSavingCanTransferLeads] = useState(false);
   // Form state for General tab
   const [generalData, setGeneralData] = useState({
     full_name: "",
@@ -142,6 +145,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         can_link_contract: !!(userDetails as any).can_link_contract,
         can_cancel_meeting: !!(userDetails as any).can_cancel_meeting,
       });
+      setCanTransferLeads(!!(userDetails as any).can_transfer_leads);
     }
   }, [userDetails]);
 
@@ -237,6 +241,26 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       toast.error('Erro ao atualizar permissão');
     } finally {
       setSavingCapKey(null);
+    }
+  };
+
+  const handleToggleCanTransferLeads = async (checked: boolean) => {
+    if (!userId) return;
+    setSavingCanTransferLeads(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ can_transfer_leads: checked } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      setCanTransferLeads(checked);
+      queryClient.invalidateQueries({ queryKey: ['user-details', userId] });
+      queryClient.invalidateQueries({ queryKey: ['my-contacts-capabilities'] });
+      toast.success(checked ? 'Permissão de transferir leads ativada' : 'Permissão de transferir leads desativada');
+    } catch {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setSavingCanTransferLeads(false);
     }
   };
 
@@ -609,6 +633,33 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                       />
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ===== Permissões avançadas do CRM ===== */}
+            {userDetails.role && !['admin', 'manager', 'coordenador'].includes(userDetails.role) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Permissões avançadas do CRM</CardTitle>
+                  <CardDescription>
+                    Libere ações específicas do CRM para este usuário. Admins, managers e coordenadores já têm tudo liberado por padrão.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 min-w-0">
+                      <Label>Transferir leads (Contatos)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Permite selecionar contatos na aba Contatos e transferir o owner do negócio para outro SDR.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={canTransferLeads}
+                      onCheckedChange={handleToggleCanTransferLeads}
+                      disabled={savingCanTransferLeads}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             )}

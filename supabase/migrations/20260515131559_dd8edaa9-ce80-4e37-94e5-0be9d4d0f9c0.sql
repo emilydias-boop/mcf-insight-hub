@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS can_transfer_leads boolean NOT NULL DEFAULT false;
