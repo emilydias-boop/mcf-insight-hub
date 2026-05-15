@@ -246,7 +246,7 @@ const Contatos = () => {
       {/* Select all toggle + info */}
       {filteredContacts.length > 0 && (
         <div className="flex items-center justify-between">
-          {!isReadOnly ? (
+          {canBulkSelect ? (
             <div className="flex items-center gap-2">
               <Checkbox
                 checked={allFilteredSelected}
