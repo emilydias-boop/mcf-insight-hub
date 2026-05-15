@@ -10,6 +10,7 @@ import { Search, Plus, User, RefreshCw, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
+import { useMyContactsCapabilities } from '@/hooks/useMyContactsCapabilities';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { ContactFilters, emptyFilters, type ContactFilterValues } from '@/components/crm/ContactFilters';
@@ -37,6 +38,11 @@ const THERMAL_ICONS: Record<string, string> = {
 const Contatos = () => {
   const { role } = useAuth();
   const isReadOnly = role === 'sdr' || role === 'closer' || role === 'closer_sombra';
+  const { canTransferLeads } = useMyContactsCapabilities();
+  // Usuário com flag de transferência: pode selecionar e usar "Trocar dono",
+  // mas continua sem acesso às demais ações em massa.
+  const canBulkSelect = !isReadOnly || canTransferLeads;
+  const restrictedToTransfer = isReadOnly && canTransferLeads;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -272,7 +278,7 @@ const Contatos = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {!isReadOnly && <th className="w-10 px-3 py-2.5"></th>}
+                  {canBulkSelect && <th className="w-10 px-3 py-2.5"></th>}
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground">Nome</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Email</th>
                   <th className="text-left px-3 py-2.5 font-medium text-muted-foreground hidden lg:table-cell">Telefone</th>
@@ -293,7 +299,7 @@ const Contatos = () => {
                       className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => handleContactClick(contact.id)}
                     >
-                      {!isReadOnly && (
+                      {canBulkSelect && (
                         <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedIds.has(contact.id)}
