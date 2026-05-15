@@ -8733,6 +8733,7 @@ export type Database = {
           can_handle_no_show: boolean
           can_link_contract: boolean
           can_manage_agenda: boolean
+          can_transfer_leads: boolean
           created_at: string | null
           email: string | null
           full_name: string | null
@@ -8752,6 +8753,7 @@ export type Database = {
           can_handle_no_show?: boolean
           can_link_contract?: boolean
           can_manage_agenda?: boolean
+          can_transfer_leads?: boolean
           created_at?: string | null
           email?: string | null
           full_name?: string | null
@@ -8771,6 +8773,7 @@ export type Database = {
           can_handle_no_show?: boolean
           can_link_contract?: boolean
           can_manage_agenda?: boolean
+          can_transfer_leads?: boolean
           created_at?: string | null
           email?: string | null
           full_name?: string | null
