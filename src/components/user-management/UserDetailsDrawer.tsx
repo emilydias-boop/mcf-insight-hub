@@ -636,6 +636,33 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </CardContent>
               </Card>
             )}
+
+            {/* ===== Permissões avançadas do CRM ===== */}
+            {userDetails.role && !['admin', 'manager', 'coordenador'].includes(userDetails.role) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Permissões avançadas do CRM</CardTitle>
+                  <CardDescription>
+                    Libere ações específicas do CRM para este usuário. Admins, managers e coordenadores já têm tudo liberado por padrão.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 min-w-0">
+                      <Label>Transferir leads (Contatos)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Permite selecionar contatos na aba Contatos e transferir o owner do negócio para outro SDR.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={canTransferLeads}
+                      onCheckedChange={handleToggleCanTransferLeads}
+                      disabled={savingCanTransferLeads}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ===== ABA SEGURANÇA ===== */}
