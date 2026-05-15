@@ -52,7 +52,7 @@ interface AutoDialerContextType {
 
 const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
 
-const MAX_QUEUE = 1000;
+const MAX_QUEUE = 10000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value: string | null | undefined) => !!value && UUID_REGEX.test(value);
 
@@ -143,6 +143,18 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       const crmContactId = isUuid(lead.contactId) ? lead.contactId : undefined;
       const crmOriginId = isUuid(lead.originId) ? lead.originId : undefined;
       await makeCall(normalized, crmDealId, crmContactId, crmOriginId);
+      // Carimba a última discagem automática para excluir o lead nos próximos
+      // carregamentos do dia (regra: discado HOJE não volta na fila; após
+      // virar o dia, volta a aparecer).
+      if (crmDealId) {
+        supabase
+          .from('crm_deals')
+          .update({ last_auto_dialer_call_at: new Date().toISOString() })
+          .eq('id', crmDealId)
+          .then(({ error }) => {
+            if (error) console.warn('[autodialer] stamp last_auto_dialer_call_at error', error);
+          });
+      }
     } catch (e) {
       console.error('[autodialer] makeCall error', e);
       setLeadResult(lead.dealId, 'failed');

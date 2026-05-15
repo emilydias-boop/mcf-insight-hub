@@ -4529,6 +4529,7 @@ export type Database = {
           id: string
           is_archived: boolean
           is_duplicate: boolean | null
+          last_auto_dialer_call_at: string | null
           last_contact_at: string | null
           last_worked_at: string | null
           lead_temperature: string | null
@@ -4568,6 +4569,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
+          last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
           lead_temperature?: string | null
@@ -4607,6 +4609,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
+          last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
           lead_temperature?: string | null
