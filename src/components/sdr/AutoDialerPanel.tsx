@@ -341,7 +341,6 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     );
   };
 
-  const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
   const loadFromStage = async (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
     if (!stageId) return;
     setLoadingQueue(true);
