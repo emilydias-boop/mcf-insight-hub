@@ -441,22 +441,35 @@ const Contatos = () => {
         </Card>
       )}
 
-      {/* Bulk actions - hidden for read-only roles */}
-      {!isReadOnly && (
+      {/* Bulk actions */}
+      {canBulkSelect && (
         <>
-           <BulkActionsBar
+          <BulkActionsBar
             selectedCount={selectedIds.size}
-            onTransfer={() => setPipelineModalOpen(true)}
+            onTransfer={restrictedToTransfer ? undefined : () => setPipelineModalOpen(true)}
             onClearSelection={() => setSelectedIds(new Set())}
             isTransferring={false}
             transferLabel="Enviar p/ Pipeline..."
-            onDuplicate={activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
+            onDuplicate={!restrictedToTransfer && activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
             onChangeOwner={selectedDealIds.length > 0 ? () => setChangeOwnerDialogOpen(true) : undefined}
             isChangingOwner={bulkTransfer.isPending}
-            onMoveStage={selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
-            onMovePipeline={selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
+            onMoveStage={!restrictedToTransfer && selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
+            onMovePipeline={!restrictedToTransfer && selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
           />
+
+          <BulkTransferDialog
+            open={changeOwnerDialogOpen}
+            onOpenChange={setChangeOwnerDialogOpen}
+            selectedDealIds={selectedDealIds}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+        </>
+      )}
+
+      {/* Bulk actions completas - hidden for read-only roles */}
+      {!isReadOnly && (
+        <>
 
           <SendToPipelineModal
             open={pipelineModalOpen}
