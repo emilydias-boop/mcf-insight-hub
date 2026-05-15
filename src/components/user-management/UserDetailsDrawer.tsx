@@ -244,6 +244,26 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     }
   };
 
+  const handleToggleCanTransferLeads = async (checked: boolean) => {
+    if (!userId) return;
+    setSavingCanTransferLeads(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ can_transfer_leads: checked } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      setCanTransferLeads(checked);
+      queryClient.invalidateQueries({ queryKey: ['user-details', userId] });
+      queryClient.invalidateQueries({ queryKey: ['my-contacts-capabilities'] });
+      toast.success(checked ? 'Permissão de transferir leads ativada' : 'Permissão de transferir leads desativada');
+    } catch {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setSavingCanTransferLeads(false);
+    }
+  };
+
   const handleSaveBlockedUntil = () => {
     if (!userId) return;
     updateAccess.mutate({ 
