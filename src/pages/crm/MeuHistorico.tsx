@@ -23,19 +23,21 @@ function useTeamSDRs(enabled: boolean) {
     enabled,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: roles, error: rolesErr } = await supabase
         .from('user_roles')
-        .select('user_id, role, profiles:profiles!user_roles_user_id_fkey(full_name)')
+        .select('user_id, role')
         .in('role', ['sdr', 'closer', 'closer_sombra'] as any);
-      if (error) throw error;
-      const map = new Map<string, string>();
-      (data || []).forEach((r: any) => {
-        const name = r.profiles?.full_name || 'Sem nome';
-        map.set(r.user_id, name);
-      });
-      return Array.from(map.entries())
-        .map(([id, name]) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      if (rolesErr) throw rolesErr;
+      const userIds = Array.from(new Set((roles || []).map((r: any) => r.user_id as string).filter(Boolean))) as string[];
+      if (!userIds.length) return [];
+      const { data: profs, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+      if (profErr) throw profErr;
+      const items = (profs || []).map((p: any) => ({ id: p.id as string, name: (p.full_name as string) || 'Sem nome' }));
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      return items;
     },
   });
 }
