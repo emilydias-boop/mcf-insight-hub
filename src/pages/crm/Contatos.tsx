@@ -478,13 +478,6 @@ const Contatos = () => {
             onSuccess={() => setSelectedIds(new Set())}
           />
 
-          <BulkTransferDialog
-            open={changeOwnerDialogOpen}
-            onOpenChange={setChangeOwnerDialogOpen}
-            selectedDealIds={selectedDealIds}
-            onSuccess={() => setSelectedIds(new Set())}
-          />
-
           <BulkMoveStageDialog
             open={moveStageDialogOpen}
             onOpenChange={setMoveStageDialogOpen}
