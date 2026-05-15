@@ -152,6 +152,7 @@ export const useTransferDealOwner = () => {
           deal_id: dealId,
           activity_type: 'owner_change',
           description: `Lead transferido de ${previousOwner || 'N/A'} para ${newOwnerName || newOwnerEmail}`,
+          user_id: userData.user?.id,
           metadata: {
             previous_owner: previousOwner,
             new_owner: newOwnerEmail,
