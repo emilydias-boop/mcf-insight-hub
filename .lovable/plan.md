@@ -1,50 +1,77 @@
 ## Objetivo
 
-Permitir que SDRs específicos (ex.: Caroline Corrêa) possam **transferir leads para outros SDRs** pela aba **CRM → Contatos**, controlado por um toggle individual na ficha do usuário.
+Criar a aba **"Meu Histórico"** dentro do CRM (ao lado de Contatos/Negócios/Agenda R1), exclusiva para SDRs, com tudo o que aconteceu pelas mãos dele — ligações, agendamentos, no-shows e reuniões perdidas — para que ele consiga retomar leads que pediram retorno, responder no WhatsApp ou recuperar agendamentos perdidos.
 
-Hoje qualquer perfil `sdr` / `closer` / `closer_sombra` é tratado como read-only em `Contatos.tsx` (`isReadOnly = true`), o que esconde a barra de ações em massa (incluindo o botão "Trocar SDR/Owner" que abre o `BulkTransferDialog`). Vamos liberar essa ação específica via capability por usuário, no mesmo padrão das permissões avançadas da Agenda.
+## O que a aba mostra
 
-## Mudanças
+Uma página com 4 sub-abas (Tabs internos):
 
-### 1. Banco
-Migration nova adicionando coluna em `profiles`:
-- `can_transfer_leads boolean not null default false`
+1. **Ligações** — todas as `calls` do SDR logado.
+   - Colunas: data/hora, lead (nome + telefone), duração, status, resultado (`outcome`), follow-up (novo campo), resumo (novo campo), botão de player de gravação, link p/ abrir o lead.
+   - Filtros: período (7/30/90 dias), follow-up (Retornar / WhatsApp / Sem interesse / Agendado), busca por nome/telefone.
 
-Admins, managers e coordenadores continuam com tudo liberado por padrão (não usam a flag).
+2. **Agendamentos R1** — R1 marcadas pelo SDR (`agenda_r1.booked_by = me`), com status atual (Agendada / Realizada / No-Show / Contrato Pago).
+   - Colunas: data agendada, lead, closer, status, link para o lead.
 
-### 2. Toggle na ficha do usuário
-Em `src/components/user-management/UserDetailsDrawer.tsx`, dentro do card **"Permissões avançadas"** (renomear de "Permissões avançadas da Agenda" para **"Permissões avançadas"**, já que vai ganhar item fora da agenda; ou manter card e adicionar uma subseção "CRM"):
+3. **No-Shows** — subset onde `attendee_status = 'no_show'`. Reaproveita a estrutura visual de `MeusNoShows`.
 
-Adicionar item:
-- **Transferir leads (Contatos)** — "Permite selecionar contatos na aba Contatos e transferir o owner do negócio para outro SDR."
+4. **Perdidas** — R1 que foram marcadas mas terminaram em `cancelled`/`refunded`/sem contrato após X dias. Mostra o motivo se disponível.
 
-Reaproveitar `handleToggleAgendaCap` generalizando para `handleToggleCap` (mesmo update em `profiles`, mesma invalidação de cache + nova key `my-contacts-capabilities`).
+KPIs no topo: total de ligações, ligações com follow-up pendente (Retornar / WhatsApp), R1 marcadas no período, conversão R1 → Contrato.
 
-Atualizar:
-- `src/hooks/useUsers.ts` (carregar `can_transfer_leads`)
-- `src/types/user-management.ts` (`UserDetails.can_transfer_leads?: boolean`)
+## Novo campo de follow-up nas ligações
 
-### 3. Hook de capability
-Novo `src/hooks/useMyContactsCapabilities.ts` (espelho do `useMyAgendaCapabilities`):
-- admin / manager / coordenador → `canTransferLeads: true`
-- demais → lê `profiles.can_transfer_leads` do usuário logado
+Migration adiciona em `public.calls`:
+- `follow_up_action text` — enum livre: `retornar` | `whatsapp` | `sem_interesse` | `agendado` | `outro` | `null`
+- `follow_up_at timestamptz` — quando o SDR pediu para retornar (opcional, usado no filtro "Retornos hoje")
+- `summary text` — resumo escrito pelo SDR após a ligação
 
-### 4. Liberar ação em Contatos
-Em `src/pages/crm/Contatos.tsx`:
-- Manter `isReadOnly` para criar/editar contato.
-- Introduzir `canTransferLeads` vindo do novo hook.
-- Renderizar `BulkActionsBar` + `BulkTransferDialog` quando `!isReadOnly || canTransferLeads`, mas com props **restritas** quando o usuário não é gestor:
-  - Mostrar somente `onChangeOwner` (abre `BulkTransferDialog`).
-  - Não passar `onTransfer` (Pipeline), `onDuplicate`, `onMoveStage`, `onMovePipeline`.
-- Manter a seleção via checkbox visível para esses usuários.
+Edição inline na linha da Ligação (popover): seleciona ação + data opcional + escreve resumo. Persiste via `update calls`.
 
-Sem mudanças no `BulkTransferDialog` ou no hook `useBulkTransfer` (já fazem o trabalho via `useTransferDealOwner`).
+**Observação sobre IA:** hoje não há transcrição armazenada das gravações Twilio, então o resumo automático por IA não pode ser gerado de forma confiável. O campo `summary` será preenchido manualmente pelo SDR no primeiro release. Numa iteração futura podemos adicionar transcrição via Twilio + resumo via Lovable AI Gateway.
 
-### 5. Memória
-Adicionar `mem://auth/contacts-transfer-capability` documentando a flag e o comportamento (gestores liberados por padrão; SDR precisa do toggle).
+## Visibilidade
+
+- SDR / Closer / Closer Sombra: vêem apenas o que é deles (`calls.user_id = auth.uid()`, `agenda_r1.booked_by = me_email`).
+- Coordenador / Manager / Admin: ganha um filtro **"SDR"** no topo (dropdown com todos os SDRs ativos da BU). Sem filtro = vê todos.
+
+RLS já existente em `calls` cobre o caso individual (Coordenador já consegue selecionar — `mem://security/crm-activity-visibility-coordenador`). Para os SDRs do filtro de gestor, usamos os emails do squad ativo.
+
+## Onde encaixa
+
+- Nova chave `meu-historico` em `BU_VISIBLE_TABS` para todas as BUs (incorporador, consorcio, credito, projetos, leilao).
+- Tab adicionada em `BUCRMLayout.tsx` entre **Agenda R1** e **Meus No-Shows**, com ícone `History`.
+- Liberada para sdr/closer/closer_sombra/coordenador/manager/admin (entra na lista `allowedTabs` para `isAgendaOnly`).
+- Nova rota: `<bu>/crm/meu-historico` apontando para `MeuHistorico.tsx`.
+
+## Arquivos
+
+Novos:
+- `src/pages/crm/MeuHistorico.tsx` — shell com Tabs e KPIs.
+- `src/components/crm/historico/HistoricoLigacoesTab.tsx`
+- `src/components/crm/historico/HistoricoR1Tab.tsx`
+- `src/components/crm/historico/HistoricoNoShowsTab.tsx`
+- `src/components/crm/historico/HistoricoPerdidasTab.tsx`
+- `src/components/crm/historico/CallFollowUpPopover.tsx`
+- `src/hooks/useMeuHistoricoCalls.ts`
+- `src/hooks/useMeuHistoricoR1.ts`
+
+Editados:
+- `src/pages/crm/BUCRMLayout.tsx` — registrar a nova aba e liberar para SDR.
+- `src/App.tsx` — registrar rota em cada BU CRM (`incorporador/crm`, `consorcio/crm`, `credito/crm`, etc.) e na rota legacy `/crm`.
+
+Migration:
+- Adiciona `follow_up_action`, `follow_up_at`, `summary` em `public.calls`.
+
+Memória nova:
+- `mem://features/sdr-meu-historico` documentando a aba, filtros e visibilidade.
 
 ## Validação
-1. Logar como Caroline Corrêa (SDR) → aba Contatos → sem toggle, nenhuma barra de ações aparece (comportamento atual).
-2. Admin ativa o toggle "Transferir leads" na ficha dela → ela passa a ver checkboxes e o botão "Trocar Owner" → consegue abrir `BulkTransferDialog` e transferir negócios para outro SDR.
-3. Outras ações (criar contato, mover pipeline, mover etapa, duplicar) seguem ocultas para ela.
-4. Admin/Manager/Coordenador continuam com a barra completa, independente da flag.
+
+1. SDR (Caroline) entra em `/incorporador/crm/meu-historico` → vê só dela. Aba **Ligações** lista calls dela com filtros funcionando.
+2. SDR marca uma call como **Retornar** → linha ganha badge laranja → filtro "Retornos pendentes" lista ela.
+3. Aba **Agendamentos R1** lista R1 onde `booked_by = email da SDR` com status atual.
+4. Aba **No-Shows** mostra reuniões em `no_show` (mesmo dataset de `MeusNoShows`).
+5. Aba **Perdidas** mostra R1 marcadas que viraram cancelled/refunded.
+6. Coordenador/Admin vê filtro "SDR" e consegue alternar para ver o histórico de outro SDR.
+7. SDR de outra BU não vê aba indevida (filtra por BU).
