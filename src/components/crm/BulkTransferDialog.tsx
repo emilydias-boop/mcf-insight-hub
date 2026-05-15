@@ -36,21 +36,19 @@ export const BulkTransferDialog = ({
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const bulkTransfer = useBulkTransfer();
 
-  // Buscar SDRs e Closers disponíveis
+  // Buscar usuários elegíveis para transferência (mesma BU/squad para SDR/Closer)
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
-    queryKey: ['transfer-users-sdr-closer'],
+    queryKey: ['transfer-users-eligible'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          email,
-          user_roles!inner(role)
-        `)
-        .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
-        .order('full_name');
-      return data || [];
+      const { data, error } = await supabase.rpc('list_transferable_users');
+      if (error) throw error;
+      return (data || []) as Array<{
+        id: string;
+        email: string;
+        full_name: string | null;
+        role: string;
+        squad: string[] | null;
+      }>;
     },
     enabled: open,
   });
@@ -105,7 +103,7 @@ export const BulkTransferDialog = ({
                     <span className="flex items-center gap-2">
                       {user.full_name || user.email}
                       <span className="text-muted-foreground text-xs">
-                        ({user.user_roles?.[0]?.role?.toUpperCase()})
+                        ({(user.role || '').toUpperCase()})
                       </span>
                     </span>
                   </SelectItem>
