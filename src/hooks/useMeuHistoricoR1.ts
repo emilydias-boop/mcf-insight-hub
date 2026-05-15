@@ -62,7 +62,9 @@ export function useMeuHistoricoR1(params: {
         .limit(500);
       if (error) throw error;
 
-      const slotIds = Array.from(new Set((attendees || []).map((a: any) => a.meeting_slot_id).filter(Boolean)));
+      const slotIds = Array.from(
+        new Set((attendees || []).map((a: any) => a.meeting_slot_id as string).filter(Boolean))
+      ) as string[];
       const slotsRes = slotIds.length
         ? await supabase
             .from('meeting_slots')
@@ -71,7 +73,9 @@ export function useMeuHistoricoR1(params: {
         : { data: [], error: null } as any;
       const slotsMap = new Map<string, any>((slotsRes.data || []).map((s: any) => [s.id, s]));
 
-      const closerIds = Array.from(new Set((slotsRes.data || []).map((s: any) => s.closer_id).filter(Boolean)));
+      const closerIds = Array.from(
+        new Set((slotsRes.data || []).map((s: any) => s.closer_id as string).filter(Boolean))
+      ) as string[];
       const closersRes = closerIds.length
         ? await supabase.from('profiles').select('id,full_name').in('id', closerIds)
         : { data: [], error: null } as any;
