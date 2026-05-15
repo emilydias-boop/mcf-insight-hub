@@ -12457,6 +12457,16 @@ export type Database = {
       is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
+      list_transferable_users: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          squad: string[]
+        }[]
+      }
       lock_month: {
         Args: { _ano_mes: string; _reason: string }
         Returns: undefined
