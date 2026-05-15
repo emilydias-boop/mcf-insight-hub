@@ -85,6 +85,9 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     can_cancel_meeting: false,
   });
   const [savingCapKey, setSavingCapKey] = useState<string | null>(null);
+  // Capabilities CRM
+  const [canTransferLeads, setCanTransferLeads] = useState(false);
+  const [savingCanTransferLeads, setSavingCanTransferLeads] = useState(false);
   // Form state for General tab
   const [generalData, setGeneralData] = useState({
     full_name: "",
@@ -142,6 +145,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         can_link_contract: !!(userDetails as any).can_link_contract,
         can_cancel_meeting: !!(userDetails as any).can_cancel_meeting,
       });
+      setCanTransferLeads(!!(userDetails as any).can_transfer_leads);
     }
   }, [userDetails]);
 
