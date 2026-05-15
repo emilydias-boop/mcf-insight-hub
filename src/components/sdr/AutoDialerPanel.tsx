@@ -91,6 +91,9 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
   }, [mode, pipelineId, restrictToSdrOrigins, sdrPipelineOptions]);
 
+  // Mantemos useCRMDeals só para mostrar a CONTAGEM aproximada no botão
+  // (limite do hook = 1000). O carregamento real da fila é paginado abaixo
+  // e respeita o filtro "discado hoje".
   const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
     stageId
       ? (restrictToSdrOrigins && pipelineId
@@ -98,6 +101,49 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
           : { stageId, limit: 1000 })
       : {}
   );
+
+  const [loadingQueue, setLoadingQueue] = useState(false);
+
+  // Início de "hoje" em America/Sao_Paulo (ISO UTC).
+  // Usamos isto para excluir leads já discados HOJE; após virar o dia,
+  // o lead volta a aparecer na fila normalmente.
+  const startOfTodaySaoPauloIso = (): string => {
+    const ymd = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    return new Date(`${ymd}T00:00:00-03:00`).toISOString();
+  };
+
+  // Busca paginada de TODOS os deals elegíveis do estágio (sem cap de 1000),
+  // já filtrando server-side os que foram discados hoje.
+  const fetchEligibleStageDeals = async (): Promise<any[]> => {
+    if (!stageId) return [];
+    const cutoff = startOfTodaySaoPauloIso();
+    const all: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; from < 20000; from += pageSize) {
+      let q = supabase
+        .from('crm_deals')
+        .select('id, name, contact_id, origin_id, custom_fields, lead_temperature, owner_profile_id, crm_contacts(name, phone)')
+        .eq('stage_id', stageId)
+        .eq('is_duplicate', false)
+        .is('archived_at', null)
+        .eq('is_archived', false)
+        .or(`last_auto_dialer_call_at.is.null,last_auto_dialer_call_at.lt.${cutoff}`)
+        .range(from, from + pageSize - 1);
+      if (restrictToSdrOrigins && pipelineId) q = q.eq('origin_id', pipelineId);
+      if (restrictToSdrOrigins && user?.id) q = q.eq('owner_profile_id', user.id);
+      const { data, error } = await q;
+      if (error) { console.error('[autodialer] paginated fetch error', error); break; }
+      const rows = data || [];
+      all.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    return all;
+  };
 
   // Reset stage quando muda pipeline
   const handleSelectPipeline = (id: string | null) => {
@@ -296,40 +342,44 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   };
 
   const loadFromStage = (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
-    if (!stageId || !stageDeals) return;
-    // IDs já discados nesta sessão (qualquer resultado != 'pending') — para
-    // que ao "Carregar próximos" depois de uma rodada não voltem os mesmos leads.
-    const fromResults = opts?.excludeAlreadyDialed
-      ? Object.entries(ad.results).filter(([, r]) => r && r !== 'pending').map(([id]) => id)
-      : [];
-    const alreadyDialed = new Set<string>([...(opts?.excludeIds || []), ...fromResults]);
-    const leads: AutoDialerLead[] = stageDeals
-      .map((d: any) => {
-        const phone = getDealPhone(d);
-        if (!phone) return null;
-        if (alreadyDialed.has(d.id)) return null;
-        if (tempFilter && d.lead_temperature !== tempFilter) return null;
-        return {
-          dealId: d.id,
-          contactId: d.contact_id || null,
-          originId: d.origin_id || null,
-          name: d.crm_contacts?.name || d.name || 'Lead',
-          phone,
-        } as AutoDialerLead;
-      })
-      .filter((x): x is AutoDialerLead => !!x)
-      .slice(0, 1000);
-    if (leads.length === 0) {
-      toast.error(
-        tempFilter
-          ? `Nenhum lead "${TEMPERATURE_META[tempFilter].label}" com telefone neste estágio`
-          : opts?.excludeAlreadyDialed
-            ? 'Não há mais leads novos neste estágio'
-            : 'Nenhum lead com telefone neste estágio',
-      );
-      return;
+  const loadFromStage = async (opts?: { excludeAlreadyDialed?: boolean; excludeIds?: string[] }) => {
+    if (!stageId) return;
+    setLoadingQueue(true);
+    try {
+      const rows = await fetchEligibleStageDeals();
+      // Dedupe local da sessão (não voltar os mesmos no "Carregar próximos")
+      const fromResults = opts?.excludeAlreadyDialed
+        ? Object.entries(ad.results).filter(([, r]) => r && r !== 'pending').map(([id]) => id)
+        : [];
+      const alreadyDialed = new Set<string>([...(opts?.excludeIds || []), ...fromResults]);
+      const leads: AutoDialerLead[] = rows
+        .map((d: any) => {
+          const phone = getDealPhone(d);
+          if (!phone) return null;
+          if (alreadyDialed.has(d.id)) return null;
+          if (tempFilter && d.lead_temperature !== tempFilter) return null;
+          return {
+            dealId: d.id,
+            contactId: d.contact_id || null,
+            originId: d.origin_id || null,
+            name: d.crm_contacts?.name || d.name || 'Lead',
+            phone,
+          } as AutoDialerLead;
+        })
+        .filter((x): x is AutoDialerLead => !!x);
+      if (leads.length === 0) {
+        toast.error(
+          tempFilter
+            ? `Nenhum lead "${TEMPERATURE_META[tempFilter].label}" disponível neste estágio (todos já discados hoje?)`
+            : 'Nenhum lead disponível neste estágio (todos já discados hoje ou sem telefone)',
+        );
+        return;
+      }
+      ad.loadQueue(leads);
+      toast.success(`${leads.length} leads carregados`);
+    } finally {
+      setLoadingQueue(false);
     }
-    ad.loadQueue(leads);
   };
 
   const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
@@ -543,11 +593,11 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                   variant="outline"
                   className="w-full"
                   onClick={() => loadFromStage()}
-                  disabled={!stageId || dealsLoading}
+                  disabled={!stageId || dealsLoading || loadingQueue}
                 >
-                  {dealsLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {(dealsLoading || loadingQueue) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   {stageId
-                    ? `Carregar ${stageDeals?.filter((d: any) => !!getDealPhone(d) && (!tempFilter || d.lead_temperature === tempFilter)).length || 0} leads${tempFilter ? ` ${TEMPERATURE_META[tempFilter].label.toLowerCase()}s` : ''} do estágio`
+                    ? `Carregar leads do estágio${(stageDeals && stageDeals.length >= 1000) ? ' (1000+)' : stageDeals ? ` (~${stageDeals.filter((d: any) => !!getDealPhone(d) && (!tempFilter || d.lead_temperature === tempFilter)).length})` : ''}`
                     : 'Carregar leads do estágio'}
                 </Button>
               </div>
