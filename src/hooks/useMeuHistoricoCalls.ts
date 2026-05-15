@@ -69,7 +69,7 @@ export function useMeuHistoricoCalls(filter: CallsFilter) {
 
       const [dealsRes, profilesRes] = await Promise.all([
         dealIds.length
-          ? supabase.from('crm_deals').select('id,nome_completo,email,telefone').in('id', dealIds)
+          ? supabase.from('crm_deals').select('id,name,contact_id').in('id', dealIds)
           : Promise.resolve({ data: [], error: null } as any),
         userIds.length
           ? supabase.from('profiles').select('id,full_name').in('id', userIds)
@@ -81,14 +81,32 @@ export function useMeuHistoricoCalls(filter: CallsFilter) {
         (profilesRes.data || []).map((p: any) => [p.id, p])
       );
 
+      const contactIds: string[] = Array.from(
+        new Set(
+          ((dealsRes.data || []) as any[])
+            .map((d) => d.contact_id as string | null)
+            .filter((v): v is string => !!v)
+        )
+      );
+      const contactsRes = contactIds.length
+        ? await supabase
+            .from('crm_contacts')
+            .select('id,name,email,phone')
+            .in('id', contactIds)
+        : { data: [] as any[] };
+      const contactsMap = new Map<string, any>(
+        ((contactsRes as any).data || []).map((c: any) => [c.id, c])
+      );
+
       const enriched: HistoricoCall[] = rows.map((r) => {
         const deal = r.deal_id ? dealsMap.get(r.deal_id) : null;
+        const contact = deal?.contact_id ? contactsMap.get(deal.contact_id) : null;
         const profile = r.user_id ? profilesMap.get(r.user_id) : null;
         return {
           ...r,
-          deal_name: deal?.nome_completo ?? null,
-          deal_email: deal?.email ?? null,
-          deal_phone: deal?.telefone ?? null,
+          deal_name: contact?.name ?? deal?.name ?? null,
+          deal_email: contact?.email ?? null,
+          deal_phone: contact?.phone ?? null,
           user_full_name: profile?.full_name ?? null,
         };
       });

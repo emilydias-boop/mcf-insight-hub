@@ -50,7 +50,7 @@ function recordingProxy(url: string | null): string | null {
   if (!url) return null;
   const m = url.match(/Recordings\/([^.\/]+)/);
   if (!m) return url;
-  return `${SUPABASE_URL}/functions/v1/twilio-recording-proxy?recordingSid=${m[1]}`;
+  return `${SUPABASE_URL}/functions/v1/get-recording?recordingSid=${m[1]}`;
 }
 
 interface Props {
