@@ -56,6 +56,7 @@ const ImportarHistorico = lazy(() => import("./pages/crm/ImportarHistorico"));
 const AuditoriaAgendamentos = lazy(() => import("./pages/crm/AuditoriaAgendamentos"));
 const RevisaoNoShows = lazy(() => import("./pages/crm/RevisaoNoShows"));
 const MeusNoShows = lazy(() => import("./pages/crm/MeusNoShows"));
+const MeuHistorico = lazy(() => import("./pages/crm/MeuHistorico"));
 const Agenda = lazy(() => import("./pages/crm/Agenda"));
 const LeadsLimbo = lazy(() => import("./pages/crm/LeadsLimbo"));
 const RetornosParceiros = lazy(() => import("./pages/crm/RetornosParceiros"));
@@ -199,6 +200,7 @@ const App = () => (
                 <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
+                <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
@@ -271,6 +273,7 @@ const App = () => (
                 <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
+                <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="webhook-analytics" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><WebhookAnalytics /></RoleGuard>} />
                 <Route path="configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfiguracoesCRM /></RoleGuard>} />
               </Route>

@@ -11,7 +11,8 @@ import {
   CalendarDays,
   ShoppingCart,
   ClipboardCheck,
-  Inbox
+  Inbox,
+  History
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -23,24 +24,24 @@ import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
+    'agenda', 'meu-historico', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
     'auditoria-agendamentos', 'meus-no-shows', 'configuracoes'
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
+    'agenda', 'meu-historico', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios',
-    'agenda', 'meus-no-shows', 'configuracoes'
+    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
   projetos: [
     'visao-geral', 'contatos', 'negocios',
-    'agenda', 'meus-no-shows', 'configuracoes'
+    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
   leilao: [
     'visao-geral', 'contatos', 'negocios',
-    'agenda', 'meus-no-shows', 'configuracoes'
+    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
   marketing: [],
 };
@@ -90,6 +91,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
     // { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle }, // Oculto até telefones disponíveis
     { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
+    { key: 'meu-historico', to: `${basePath}/meu-historico`, label: 'Meu Histórico', icon: History },
     { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
     { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
     
@@ -119,6 +121,9 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     }
     
     allowedTabs.push('negocios');
+    if (buVisibleTabs.includes('meu-historico')) {
+      allowedTabs.push('meu-historico');
+    }
     // SDR/Closer precisa ver as próprias contestações de no-show
     if (buVisibleTabs.includes('meus-no-shows')) {
       allowedTabs.push('meus-no-shows');
