@@ -31,6 +31,8 @@ export interface EnrichedContact {
   isDuplicate: boolean;
   sdrName: string | null;
   closerName: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
   lastActivity: {
     type: string;
     date: string;
@@ -163,6 +165,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
 
     const sdrEmail = (latestDeal?.original_sdr_email || latestDeal?.owner_id)?.toLowerCase();
     const closerEmail = latestDeal?.r1_closer_email?.toLowerCase();
+    const ownerEmail = latestDeal?.owner_id?.toLowerCase() || null;
     const lastAct = latestDeal ? activityMap[latestDeal.id] || null : null;
 
     return {
@@ -191,6 +194,8 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
       isDuplicate: duplicateSet ? duplicateSet.has(contact.id) : false,
       sdrName: sdrEmail ? (profileMap[sdrEmail] || sdrEmail) : null,
       closerName: closerEmail ? (profileMap[closerEmail] || closerEmail) : null,
+      ownerName: ownerEmail ? (profileMap[ownerEmail] || ownerEmail) : null,
+      ownerEmail,
       lastActivity: lastAct,
     };
   });
