@@ -81,8 +81,12 @@ export function useMeuHistoricoCalls(filter: CallsFilter) {
         (profilesRes.data || []).map((p: any) => [p.id, p])
       );
 
-      const contactIds = Array.from(
-        new Set((dealsRes.data || []).map((d: any) => d.contact_id).filter(Boolean))
+      const contactIds: string[] = Array.from(
+        new Set(
+          ((dealsRes.data || []) as any[])
+            .map((d) => d.contact_id as string | null)
+            .filter((v): v is string => !!v)
+        )
       );
       const contactsRes = contactIds.length
         ? await supabase
