@@ -1,0 +1,1 @@
+UPDATE public.automation_queue SET scheduled_at = now() WHERE status='pending' AND scheduled_at > now();
