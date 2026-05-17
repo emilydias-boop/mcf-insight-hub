@@ -232,7 +232,15 @@ serve(async (req) => {
 
     const settingsMap: Record<string, any> = {};
     settings?.forEach(s => {
-      settingsMap[s.key] = typeof s.value === 'string' ? JSON.parse(s.value) : s.value;
+      if (typeof s.value === 'string') {
+        try {
+          settingsMap[s.key] = JSON.parse(s.value);
+        } catch {
+          settingsMap[s.key] = s.value;
+        }
+      } else {
+        settingsMap[s.key] = s.value;
+      }
     });
 
     // 4. Check if contact is in blacklist
