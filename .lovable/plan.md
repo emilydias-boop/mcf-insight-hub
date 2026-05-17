@@ -1,77 +1,67 @@
-## Objetivo
+# Status atual do funil de automação WhatsApp (API oficial)
 
-Criar a aba **"Meu Histórico"** dentro do CRM (ao lado de Contatos/Negócios/Agenda R1), exclusiva para SDRs, com tudo o que aconteceu pelas mãos dele — ligações, agendamentos, no-shows e reuniões perdidas — para que ele consiga retomar leads que pediram retorno, responder no WhatsApp ou recuperar agendamentos perdidos.
+## O que já está pronto
 
-## O que a aba mostra
+**Infraestrutura Twilio Content API (oficial Meta)**
+- Secrets configurados: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_API_KEY_*`
+- Edge function `twilio-content-manage` (list / create / submit / status / delete_remote)
+- Edge function `twilio-whatsapp-send` (envio com `ContentSid` + `ContentVariables`)
+- Edge function `twilio-status-webhook` (callback de status de mensagem)
 
-Uma página com 4 sub-abas (Tabs internos):
+**Aprovação de templates pelo próprio sistema** ✅
+- Tabela `automation_templates` com `approval_status`, `twilio_template_sid`, `approval_rejected_reason`, `buttons_config`, `category`, `language`, `business_units`
+- `TemplateEditorDialog` mostra "Status Meta" + botões **Criar no Twilio / Submeter à Meta / Refresh**
+- Conteúdo trava (`isLocked`) quando aprovado (regra da Meta)
+- Hoje há **1 template** criado e **aprovado**: "Boa Vindas"
 
-1. **Ligações** — todas as `calls` do SDR logado.
-   - Colunas: data/hora, lead (nome + telefone), duração, status, resultado (`outcome`), follow-up (novo campo), resumo (novo campo), botão de player de gravação, link p/ abrir o lead.
-   - Filtros: período (7/30/90 dias), follow-up (Retornar / WhatsApp / Sem interesse / Agendado), busca por nome/telefone.
+**Motor de fluxos**
+- Tabelas: `automation_flows`, `automation_steps`, `automation_queue`, `automation_logs`, `automation_blacklist`, `automation_routing_rules`, `automation_settings`
+- Trigger `trg_automation_enqueue` em `crm_deals` (enfileira ao mover de stage)
+- Edge function `automation-enqueue` (entrada) e `automation-processor` (despacho)
+- UI completa em `/admin/automacoes`: Fluxos, Cross-Pipeline, Templates, Webhooks IN/OUT, Lembretes, Logs, Configurações
 
-2. **Agendamentos R1** — R1 marcadas pelo SDR (`agenda_r1.booked_by = me`), com status atual (Agendada / Realizada / No-Show / Contrato Pago).
-   - Colunas: data agendada, lead, closer, status, link para o lead.
+## O que falta para fechar (3 bloqueios)
 
-3. **No-Shows** — subset onde `attendee_status = 'no_show'`. Reaproveita a estrutura visual de `MeusNoShows`.
+### 1. Cron do `automation-processor` NÃO está agendado
+`SELECT * FROM cron.job` não retorna nada para automation-processor. Sem isso a fila enche e nada sai. A `AutomationSettings` mostra o SQL mas ele nunca foi executado.
 
-4. **Perdidas** — R1 que foram marcadas mas terminaram em `cancelled`/`refunded`/sem contrato após X dias. Mostra o motivo se disponível.
+**Ação:** rodar via migration:
+```sql
+select cron.schedule(
+  'process-automation-queue',
+  '*/5 * * * *',
+  $$ select net.http_post(
+    url := '.../automation-processor',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <anon>"}'::jsonb,
+    body := '{}'::jsonb
+  ); $$
+);
+```
 
-KPIs no topo: total de ligações, ligações com follow-up pendente (Retornar / WhatsApp), R1 marcadas no período, conversão R1 → Contrato.
+### 2. Webhook de status de template (Twilio → nosso sistema)
+Hoje o status Meta só atualiza quando alguém clica **Refresh** no editor. Para virar automático ao Meta aprovar/rejeitar:
+- Confirmar no painel Twilio Content Editor que o callback aponta para `twilio-status-webhook` (ou criar handler `twilio-content-status-webhook` se o existente só cobre status de mensagem enviada)
+- Alternativa simples: rodar `twilio-content-status-poll` a cada 30min via cron para varrer templates `pending` e atualizar
 
-## Novo campo de follow-up nas ligações
+### 3. Nenhum fluxo nem passo criado ainda
+- `automation_flows`: 0
+- `automation_steps`: 0
 
-Migration adiciona em `public.calls`:
-- `follow_up_action text` — enum livre: `retornar` | `whatsapp` | `sem_interesse` | `agendado` | `outro` | `null`
-- `follow_up_at timestamptz` — quando o SDR pediu para retornar (opcional, usado no filtro "Retornos hoje")
-- `summary text` — resumo escrito pelo SDR após a ligação
+Ou seja, mesmo com o template "Boa Vindas" aprovado, nada dispara porque não existe um Fluxo (stage gatilho + passo apontando para o template).
 
-Edição inline na linha da Ligação (popover): seleciona ação + data opcional + escreve resumo. Persiste via `update calls`.
+**Ação UX:** entrar em `/admin/automacoes` → Fluxos → "Novo Fluxo", escolher stage/origem, adicionar passo com o template "Boa Vindas".
 
-**Observação sobre IA:** hoje não há transcrição armazenada das gravações Twilio, então o resumo automático por IA não pode ser gerado de forma confiável. O campo `summary` será preenchido manualmente pelo SDR no primeiro release. Numa iteração futura podemos adicionar transcrição via Twilio + resumo via Lovable AI Gateway.
+## Roteiro proposto (ordem de execução)
 
-## Visibilidade
+1. **Migration** que agenda o cron do `automation-processor` (5 min) e do `twilio-content-status-poll` (30 min) — desbloqueia disparo automático e atualização de aprovação sem refresh manual
+2. **Validar** que `twilio-status-webhook` cobre status de template; se não cobrir, criar handler dedicado para o callback de aprovação Meta
+3. **Criar o primeiro fluxo real** ligado à stage que você quiser disparar (ex: "Lead novo" → "Boa Vindas") como caso de teste end-to-end
+4. **Smoke test:** mover um deal de teste para a stage → ver entrada em `automation_queue` → cron processa → `automation_logs` mostra `sent` → mensagem chega no WhatsApp
 
-- SDR / Closer / Closer Sombra: vêem apenas o que é deles (`calls.user_id = auth.uid()`, `agenda_r1.booked_by = me_email`).
-- Coordenador / Manager / Admin: ganha um filtro **"SDR"** no topo (dropdown com todos os SDRs ativos da BU). Sem filtro = vê todos.
+## Pequenas melhorias paralelas (opcional)
 
-RLS já existente em `calls` cobre o caso individual (Coordenador já consegue selecionar — `mem://security/crm-activity-visibility-coordenador`). Para os SDRs do filtro de gestor, usamos os emails do squad ativo.
+- Mostrar contagem da fila e last_run do processor no `AutomationMetrics`
+- Botão "Forçar processamento agora" em Configurações chamando `automation-processor` direto
+- Banner amarelo em `/admin/automacoes` quando `cron.job` não tiver o job agendado
 
-## Onde encaixa
-
-- Nova chave `meu-historico` em `BU_VISIBLE_TABS` para todas as BUs (incorporador, consorcio, credito, projetos, leilao).
-- Tab adicionada em `BUCRMLayout.tsx` entre **Agenda R1** e **Meus No-Shows**, com ícone `History`.
-- Liberada para sdr/closer/closer_sombra/coordenador/manager/admin (entra na lista `allowedTabs` para `isAgendaOnly`).
-- Nova rota: `<bu>/crm/meu-historico` apontando para `MeuHistorico.tsx`.
-
-## Arquivos
-
-Novos:
-- `src/pages/crm/MeuHistorico.tsx` — shell com Tabs e KPIs.
-- `src/components/crm/historico/HistoricoLigacoesTab.tsx`
-- `src/components/crm/historico/HistoricoR1Tab.tsx`
-- `src/components/crm/historico/HistoricoNoShowsTab.tsx`
-- `src/components/crm/historico/HistoricoPerdidasTab.tsx`
-- `src/components/crm/historico/CallFollowUpPopover.tsx`
-- `src/hooks/useMeuHistoricoCalls.ts`
-- `src/hooks/useMeuHistoricoR1.ts`
-
-Editados:
-- `src/pages/crm/BUCRMLayout.tsx` — registrar a nova aba e liberar para SDR.
-- `src/App.tsx` — registrar rota em cada BU CRM (`incorporador/crm`, `consorcio/crm`, `credito/crm`, etc.) e na rota legacy `/crm`.
-
-Migration:
-- Adiciona `follow_up_action`, `follow_up_at`, `summary` em `public.calls`.
-
-Memória nova:
-- `mem://features/sdr-meu-historico` documentando a aba, filtros e visibilidade.
-
-## Validação
-
-1. SDR (Caroline) entra em `/incorporador/crm/meu-historico` → vê só dela. Aba **Ligações** lista calls dela com filtros funcionando.
-2. SDR marca uma call como **Retornar** → linha ganha badge laranja → filtro "Retornos pendentes" lista ela.
-3. Aba **Agendamentos R1** lista R1 onde `booked_by = email da SDR` com status atual.
-4. Aba **No-Shows** mostra reuniões em `no_show` (mesmo dataset de `MeusNoShows`).
-5. Aba **Perdidas** mostra R1 marcadas que viraram cancelled/refunded.
-6. Coordenador/Admin vê filtro "SDR" e consegue alternar para ver o histórico de outro SDR.
-7. SDR de outra BU não vê aba indevida (filtra por BU).
+Confirma que quer seguir por aí (cron + 1º fluxo) ou prefere começar pelo polling/webhook de aprovação?
