@@ -358,40 +358,65 @@ function adjustToBusinessHours(
   endTime: string,
   excludeWeekends: boolean
 ): Date {
-  const adjusted = new Date(date);
+  // Operações em America/Sao_Paulo (UTC-3, sem DST desde 2019)
+  const TZ = 'America/Sao_Paulo';
   const [startHour, startMinute] = startTime.split(':').map(Number);
   const [endHour, endMinute] = endTime.split(':').map(Number);
+  const startMin = startHour * 60 + startMinute;
+  const endMin = endHour * 60 + endMinute;
 
-  // Skip to next business day if weekend
-  if (excludeWeekends) {
-    while (adjusted.getDay() === 0 || adjusted.getDay() === 6) {
-      adjusted.setDate(adjusted.getDate() + 1);
-      adjusted.setHours(startHour, startMinute, 0, 0);
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    weekday: 'short', hour12: false,
+  });
+
+  // Constrói um Date a partir de componentes BRT (UTC-3)
+  const fromBrtComponents = (y: number, m: number, d: number, h: number, mi: number) =>
+    new Date(Date.UTC(y, m - 1, d, h + 3, mi, 0, 0));
+
+  const getBrtParts = (dt: Date) => {
+    const parts = fmt.formatToParts(dt).reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value; return acc;
+    }, {});
+    return {
+      year: Number(parts.year),
+      month: Number(parts.month),
+      day: Number(parts.day),
+      hour: Number(parts.hour === '24' ? '0' : parts.hour),
+      minute: Number(parts.minute),
+      weekday: parts.weekday, // Sun, Mon, ...
+    };
+  };
+
+  let cur = new Date(date.getTime());
+
+  // No máximo 14 iterações (cobre fim de semana + ajustes)
+  for (let i = 0; i < 14; i++) {
+    const p = getBrtParts(cur);
+    const isWeekend = p.weekday === 'Sat' || p.weekday === 'Sun';
+    const curMin = p.hour * 60 + p.minute;
+
+    if (excludeWeekends && isWeekend) {
+      // Avança para o próximo dia, início do expediente
+      const next = fromBrtComponents(p.year, p.month, p.day + 1, startHour, startMinute);
+      cur = next;
+      continue;
     }
+
+    if (curMin < startMin) {
+      cur = fromBrtComponents(p.year, p.month, p.day, startHour, startMinute);
+      continue;
+    }
+
+    if (curMin >= endMin) {
+      cur = fromBrtComponents(p.year, p.month, p.day + 1, startHour, startMinute);
+      continue;
+    }
+
+    return cur;
   }
 
-  // Check if within business hours
-  const currentHour = adjusted.getHours();
-  const currentMinute = adjusted.getMinutes();
-  const currentTime = currentHour * 60 + currentMinute;
-  const startTimeMinutes = startHour * 60 + startMinute;
-  const endTimeMinutes = endHour * 60 + endMinute;
-
-  if (currentTime < startTimeMinutes) {
-    // Before business hours - set to start time
-    adjusted.setHours(startHour, startMinute, 0, 0);
-  } else if (currentTime >= endTimeMinutes) {
-    // After business hours - set to next day start time
-    adjusted.setDate(adjusted.getDate() + 1);
-    adjusted.setHours(startHour, startMinute, 0, 0);
-    
-    // Skip weekend if needed
-    if (excludeWeekends) {
-      while (adjusted.getDay() === 0 || adjusted.getDay() === 6) {
-        adjusted.setDate(adjusted.getDate() + 1);
-      }
-    }
-  }
-
-  return adjusted;
+  return cur;
 }
