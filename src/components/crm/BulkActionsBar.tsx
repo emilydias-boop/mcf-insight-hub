@@ -205,7 +205,7 @@ export const BulkActionsBar = ({
             ) : (
               <Copy className="h-4 w-4" />
             )}
-            Duplicar p/ Inside
+            Duplicar p/ Pipeline
           </Button>
         )}
 
