@@ -182,8 +182,11 @@ serve(async (req) => {
         }
 
         // 6. Resolver dono dinâmico (SDR/Closer conforme estágio)
-        const { data: ownerRows } = await supabase
+        const { data: ownerRows, error: ownerErr } = await supabase
           .rpc('resolve_deal_owner', { _deal_id: item.deal_id });
+        if (ownerErr) {
+          console.error(`[AUTOMATION-PROCESSOR] resolve_deal_owner erro deal ${item.deal_id}:`, ownerErr.message);
+        }
         const owner = Array.isArray(ownerRows) ? ownerRows[0] : ownerRows;
         const donoNome = owner?.first_name || owner?.full_name || '';
         const donoTelefone = owner?.telefone || '';
@@ -194,10 +197,10 @@ serve(async (req) => {
         // Determinar papel do dono pelo nome do estágio (mesma cascata do resolve_deal_owner)
         const { data: stageRow } = await supabase
           .from('deal_stages')
-          .select('name')
+          .select('stage_name')
           .eq('id', deal.stage_id)
           .maybeSingle();
-        const stageName = (stageRow?.name || '').trim();
+        const stageName = (stageRow?.stage_name || '').trim();
         const isCloserR2 = ['R2 Agendada', 'Contrato Pago'].includes(stageName);
         const isCloserR1 = ['R1 Agendada', 'R1 Realizada', 'No-Show'].includes(stageName);
         const WA_DEFAULT_MSG_SDR = 'Olá, quero agendar minha reunião';
@@ -218,6 +221,16 @@ serve(async (req) => {
             .replace(/\+/g, '-')
             .replace(/\//g, '_')
             .replace(/=+$/, '');
+        }
+
+        // Defesa: o template WhatsApp tem {{wa_agendar_token}} dentro da URL do botão.
+        // Se vier vazio, Twilio rejeita com 21656 ("Content Variables parameter is invalid").
+        const templateExpectsToken: string[] = Array.isArray(template.variables) ? template.variables : [];
+        if (templateExpectsToken.includes('wa_agendar_token') && !waAgendarToken) {
+          console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem wa_agendar_token (dono sem telefone) — pulando para evitar erro Twilio 21656`);
+          await markAsSkipped(supabase, item.id, 'Dono sem telefone — wa_agendar_token vazio');
+          results.skipped++;
+          continue;
         }
 
         // Se o template usa qualquer variável que dependa do telefone do dono → pular se não houver
