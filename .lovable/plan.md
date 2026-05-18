@@ -1,50 +1,29 @@
-## Diagnóstico
+## Decisão final
 
-A mensagem não foi enviada porque o fluxo "Boas vindas" (`c4957cc5-…`) está com `respect_business_hours = true` e horário 09:00–18:00 BRT. Como o lead entrou em ANAMNESE INCOMPLETA fora desse horário, o enqueue agendou todas as mensagens para **2026-05-18 09:00 BRT**. Hoje há 26 itens `pending` na fila, todos esperando 09:00.
+- **Não reatribuir** os 318 deals da Juliana — ficam com ela mesmo.
+- **Apenas cancelar** os itens da fila ligados a ela para não acumular.
+- Tratar o caso geral de "owner desligado" para o futuro.
 
-Outros pontos confirmados:
-- O trigger SQL está enfileirando corretamente.
-- O `automation-processor` roda a cada 5 min e só pega itens com `scheduled_at <= now()`.
-- Cada movimentação está gerando **2 itens duplicados** na fila (há dois triggers idênticos: `trg_automation_enqueue` e `trg_automation_enqueue_on_deal`).
+## O que eu vou executar (uma migração só)
 
-## O que vou fazer
+1. **Cancelar itens pendentes da Juliana** — `UPDATE automation_queue SET status='skipped', error_message='Owner desligado'` onde o deal pertence a `juliana.rodrigues@…`.
 
-### 1. Boas vindas envia sempre (conforme sua escolha)
+2. **Releasar a fila dos demais** — `UPDATE automation_queue SET scheduled_at = now() WHERE status='pending'`. Processor envia os ~16 restantes em ≤ 5 min.
 
-Desligar o respeito a horário comercial no fluxo "Boas vindas":
-- `automation_flows.respect_business_hours = false` para o flow `c4957cc5-a5bd-4e34-abea-bf3b77170d7c`.
+3. **Remover o trigger duplicado** `trg_automation_enqueue_on_deal` em `crm_deals` (evita 2 itens iguais por movimentação).
 
-Assim, novas entradas em ANAMNESE INCOMPLETA disparam o WhatsApp em até 5 minutos, em qualquer horário/dia.
+4. **Cleanup defensivo permanente** (cron diário) — marca como `skipped` itens pendentes há > 24h cujo owner não tem telefone resolvível ou está desligado.
 
-### 2. Liberar os 26 itens já presos para 09:00
+## Na edge function `automation-processor`
 
-`UPDATE automation_queue SET scheduled_at = now() WHERE status='pending' AND scheduled_at > now()` — o processor pega no próximo ciclo (≤5 min).
+5. **Pular owners desligados** — se `employees.status <> 'ativo'`, marca o item como `skipped` com motivo "Owner desligado". Isso resolve o caso Juliana e qualquer futuro desligamento automaticamente.
 
-### 3. Remover o trigger duplicado (causa do envio em dobro)
-
-Hoje existem dois triggers idênticos em `crm_deals` chamando `automation-enqueue`. Vou manter `trg_automation_enqueue` e remover `trg_automation_enqueue_on_deal`. Isso evita a duplicação que vimos (2 itens iguais por movimentação).
-
-## Detalhes técnicos
-
-Migração única com:
-```sql
--- 1) Boas vindas envia sempre
-UPDATE public.automation_flows
-SET respect_business_hours = false
-WHERE id = 'c4957cc5-a5bd-4e34-abea-bf3b77170d7c';
-
--- 2) Libera fila atual
-UPDATE public.automation_queue
-SET scheduled_at = now()
-WHERE status = 'pending' AND scheduled_at > now();
-
--- 3) Remove trigger duplicado
-DROP TRIGGER IF EXISTS trg_automation_enqueue_on_deal ON public.crm_deals;
-```
-
-Sem mudanças de código nem nas edge functions. Os flows que ainda devem respeitar horário comercial (ex.: lembretes de reunião) continuam intactos — a alteração é só no fluxo "Boas vindas".
+6. **Cancelar itens cujo deal saiu do stage-alvo** antes do `scheduled_at` (evita reenvio fora de contexto, como aconteceu com o caso Antonio Matheus).
 
 ## Validação
 
-- Após aprovar: aguardo o próximo ciclo do cron (≤5 min) e confirmo no `automation_logs` que as mensagens saíram com `status = 'sent'`.
-- Te peço para mover um novo lead para ANAMNESE INCOMPLETA fora do horário comercial — esperado: 1 item na fila (não 2) e envio em até 5 min.
+- Confirmo no `automation_logs` que os ~16 itens dos SDRs ativos viraram `sent` em ≤ 5 min.
+- Confirmo que os 2 itens da Juliana ficaram `skipped` com motivo correto.
+- Teste: mover 1 lead novo para ANAMNESE INCOMPLETA → **1** item na fila (não 2) + WhatsApp em ≤ 5 min, qualquer horário.
+
+Posso aprovar e rodar?
