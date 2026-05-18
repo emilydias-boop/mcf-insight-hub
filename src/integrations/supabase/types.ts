@@ -11864,6 +11864,7 @@ export type Database = {
         Args: { p_email: string; p_origin_id: string; p_phone_suffix: string }
         Returns: string
       }
+      cleanup_stuck_automation_queue: { Args: never; Returns: number }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
