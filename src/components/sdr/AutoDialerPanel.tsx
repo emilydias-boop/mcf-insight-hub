@@ -133,6 +133,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         .is('archived_at', null)
         .eq('is_archived', false)
         .or(`last_auto_dialer_call_at.is.null,last_auto_dialer_call_at.lt.${cutoff}`)
+        .order('created_at', { ascending: false })
         .range(from, from + pageSize - 1);
       if (restrictToSdrOrigins && pipelineId) q = q.eq('origin_id', pipelineId);
       if (restrictToSdrOrigins && user?.id) q = q.eq('owner_profile_id', user.id);
