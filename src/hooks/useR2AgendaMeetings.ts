@@ -26,6 +26,7 @@ export interface R2Meeting {
     deal?: {
       id: string;
       name: string;
+      tags?: string[] | null;
       contact?: {
         name: string;
         email: string | null;
@@ -67,6 +68,7 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
             deal:crm_deals(
               id,
               name,
+              tags,
               contact:crm_contacts(
                 name,
                 email,

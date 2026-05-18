@@ -69,7 +69,10 @@ export function R2CloserColumnCalendar({
       email: (att as any).email || (att as any).deal?.contact?.email || null,
       phone: (att as any).phone || (att as any).deal?.contact?.phone || null,
       scheduledAt: m.scheduled_at,
-      tags: ((att as any).deal?.contact?.tags) ?? [],
+      tags: [
+        ...(((att as any).deal?.tags) ?? []),
+        ...(((att as any).deal?.contact?.tags) ?? []),
+      ],
     }))
   ), [meetings]);
   const channelMap = useAttendeeChannels(channelInputs);
