@@ -9,3 +9,4 @@
 - [Lead Temperature Classification](mem://features/lead-temperature-classification) — Quente/Morno/Frio (red/orange/blue) em crm_deals.lead_temperature, dot no kanban e filtro no auto-discador.
 - [Contacts Transfer Capability](mem://auth/contacts-transfer-capability) — Flag profiles.can_transfer_leads libera "Trocar dono" para SDRs em /crm/contatos.
 - [SDR Meu Histórico](mem://features/sdr-meu-historico) — Aba CRM com Ligações/R1/No-Show/Perdidas + follow_up nas calls; gestores filtram por SDR.
+- [Automation Queue Owner Status](mem://business-logic/automation-queue-owner-status) — Enum 'cancelled' (não 'skipped'); processor cancela itens de owner desligado; cron diário limpa pendentes >24h.
