@@ -1,67 +1,50 @@
-# Status atual do funil de automação WhatsApp (API oficial)
+## Diagnóstico
 
-## O que já está pronto
+A mensagem não foi enviada porque o fluxo "Boas vindas" (`c4957cc5-…`) está com `respect_business_hours = true` e horário 09:00–18:00 BRT. Como o lead entrou em ANAMNESE INCOMPLETA fora desse horário, o enqueue agendou todas as mensagens para **2026-05-18 09:00 BRT**. Hoje há 26 itens `pending` na fila, todos esperando 09:00.
 
-**Infraestrutura Twilio Content API (oficial Meta)**
-- Secrets configurados: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_API_KEY_*`
-- Edge function `twilio-content-manage` (list / create / submit / status / delete_remote)
-- Edge function `twilio-whatsapp-send` (envio com `ContentSid` + `ContentVariables`)
-- Edge function `twilio-status-webhook` (callback de status de mensagem)
+Outros pontos confirmados:
+- O trigger SQL está enfileirando corretamente.
+- O `automation-processor` roda a cada 5 min e só pega itens com `scheduled_at <= now()`.
+- Cada movimentação está gerando **2 itens duplicados** na fila (há dois triggers idênticos: `trg_automation_enqueue` e `trg_automation_enqueue_on_deal`).
 
-**Aprovação de templates pelo próprio sistema** ✅
-- Tabela `automation_templates` com `approval_status`, `twilio_template_sid`, `approval_rejected_reason`, `buttons_config`, `category`, `language`, `business_units`
-- `TemplateEditorDialog` mostra "Status Meta" + botões **Criar no Twilio / Submeter à Meta / Refresh**
-- Conteúdo trava (`isLocked`) quando aprovado (regra da Meta)
-- Hoje há **1 template** criado e **aprovado**: "Boa Vindas"
+## O que vou fazer
 
-**Motor de fluxos**
-- Tabelas: `automation_flows`, `automation_steps`, `automation_queue`, `automation_logs`, `automation_blacklist`, `automation_routing_rules`, `automation_settings`
-- Trigger `trg_automation_enqueue` em `crm_deals` (enfileira ao mover de stage)
-- Edge function `automation-enqueue` (entrada) e `automation-processor` (despacho)
-- UI completa em `/admin/automacoes`: Fluxos, Cross-Pipeline, Templates, Webhooks IN/OUT, Lembretes, Logs, Configurações
+### 1. Boas vindas envia sempre (conforme sua escolha)
 
-## O que falta para fechar (3 bloqueios)
+Desligar o respeito a horário comercial no fluxo "Boas vindas":
+- `automation_flows.respect_business_hours = false` para o flow `c4957cc5-a5bd-4e34-abea-bf3b77170d7c`.
 
-### 1. Cron do `automation-processor` NÃO está agendado
-`SELECT * FROM cron.job` não retorna nada para automation-processor. Sem isso a fila enche e nada sai. A `AutomationSettings` mostra o SQL mas ele nunca foi executado.
+Assim, novas entradas em ANAMNESE INCOMPLETA disparam o WhatsApp em até 5 minutos, em qualquer horário/dia.
 
-**Ação:** rodar via migration:
+### 2. Liberar os 26 itens já presos para 09:00
+
+`UPDATE automation_queue SET scheduled_at = now() WHERE status='pending' AND scheduled_at > now()` — o processor pega no próximo ciclo (≤5 min).
+
+### 3. Remover o trigger duplicado (causa do envio em dobro)
+
+Hoje existem dois triggers idênticos em `crm_deals` chamando `automation-enqueue`. Vou manter `trg_automation_enqueue` e remover `trg_automation_enqueue_on_deal`. Isso evita a duplicação que vimos (2 itens iguais por movimentação).
+
+## Detalhes técnicos
+
+Migração única com:
 ```sql
-select cron.schedule(
-  'process-automation-queue',
-  '*/5 * * * *',
-  $$ select net.http_post(
-    url := '.../automation-processor',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer <anon>"}'::jsonb,
-    body := '{}'::jsonb
-  ); $$
-);
+-- 1) Boas vindas envia sempre
+UPDATE public.automation_flows
+SET respect_business_hours = false
+WHERE id = 'c4957cc5-a5bd-4e34-abea-bf3b77170d7c';
+
+-- 2) Libera fila atual
+UPDATE public.automation_queue
+SET scheduled_at = now()
+WHERE status = 'pending' AND scheduled_at > now();
+
+-- 3) Remove trigger duplicado
+DROP TRIGGER IF EXISTS trg_automation_enqueue_on_deal ON public.crm_deals;
 ```
 
-### 2. Webhook de status de template (Twilio → nosso sistema)
-Hoje o status Meta só atualiza quando alguém clica **Refresh** no editor. Para virar automático ao Meta aprovar/rejeitar:
-- Confirmar no painel Twilio Content Editor que o callback aponta para `twilio-status-webhook` (ou criar handler `twilio-content-status-webhook` se o existente só cobre status de mensagem enviada)
-- Alternativa simples: rodar `twilio-content-status-poll` a cada 30min via cron para varrer templates `pending` e atualizar
+Sem mudanças de código nem nas edge functions. Os flows que ainda devem respeitar horário comercial (ex.: lembretes de reunião) continuam intactos — a alteração é só no fluxo "Boas vindas".
 
-### 3. Nenhum fluxo nem passo criado ainda
-- `automation_flows`: 0
-- `automation_steps`: 0
+## Validação
 
-Ou seja, mesmo com o template "Boa Vindas" aprovado, nada dispara porque não existe um Fluxo (stage gatilho + passo apontando para o template).
-
-**Ação UX:** entrar em `/admin/automacoes` → Fluxos → "Novo Fluxo", escolher stage/origem, adicionar passo com o template "Boa Vindas".
-
-## Roteiro proposto (ordem de execução)
-
-1. **Migration** que agenda o cron do `automation-processor` (5 min) e do `twilio-content-status-poll` (30 min) — desbloqueia disparo automático e atualização de aprovação sem refresh manual
-2. **Validar** que `twilio-status-webhook` cobre status de template; se não cobrir, criar handler dedicado para o callback de aprovação Meta
-3. **Criar o primeiro fluxo real** ligado à stage que você quiser disparar (ex: "Lead novo" → "Boa Vindas") como caso de teste end-to-end
-4. **Smoke test:** mover um deal de teste para a stage → ver entrada em `automation_queue` → cron processa → `automation_logs` mostra `sent` → mensagem chega no WhatsApp
-
-## Pequenas melhorias paralelas (opcional)
-
-- Mostrar contagem da fila e last_run do processor no `AutomationMetrics`
-- Botão "Forçar processamento agora" em Configurações chamando `automation-processor` direto
-- Banner amarelo em `/admin/automacoes` quando `cron.job` não tiver o job agendado
-
-Confirma que quer seguir por aí (cron + 1º fluxo) ou prefere começar pelo polling/webhook de aprovação?
+- Após aprovar: aguardo o próximo ciclo do cron (≤5 min) e confirmo no `automation_logs` que as mensagens saíram com `status = 'sent'`.
+- Te peço para mover um novo lead para ANAMNESE INCOMPLETA fora do horário comercial — esperado: 1 item na fila (não 2) e envio em até 5 min.
