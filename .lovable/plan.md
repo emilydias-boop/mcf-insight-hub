@@ -1,29 +1,54 @@
-## Decisão final
+## Objetivo
 
-- **Não reatribuir** os 318 deals da Juliana — ficam com ela mesmo.
-- **Apenas cancelar** os itens da fila ligados a ela para não acumular.
-- Tratar o caso geral de "owner desligado" para o futuro.
+Hoje as marcações especiais R2 (ex.: "Anamnese Letícia") só aparecem no drawer de detalhes e nas abas Lista / Calendário. Na aba **Por Sócio** (`R2CloserColumnCalendar`) o card do lead mostra só o nome e o status, então não dá pra identificar de fora que o Neiton, por exemplo, é Anamnese da Letícia.
 
-## O que eu vou executar (uma migração só)
+## O que muda
 
-1. **Cancelar itens pendentes da Juliana** — `UPDATE automation_queue SET status='skipped', error_message='Owner desligado'` onde o deal pertence a `juliana.rodrigues@…`.
+Adicionar, ao lado do nome de cada participante dentro do bloco do slot na aba "Por Sócio", o mesmo badge colorido de marcação especial que já aparece na Lista/Calendário (ícone + `badge_label`, cores definidas em Configurar Marcações).
 
-2. **Releasar a fila dos demais** — `UPDATE automation_queue SET scheduled_at = now() WHERE status='pending'`. Processor envia os ~16 restantes em ≤ 5 min.
+Mesma regra de matching já usada em `AgendaCalendar.tsx` (linhas 309–369):
+- `useActiveR2SpecialMarkings()` para carregar regras ativas
+- `useAttendeeChannels()` para canal (A010 / ANAMNESE / Outro) por attendee
+- `useContractPaidClosersByDeal()` para casar pelo closer que pagou contrato quando o R1 closer name não bate
+- `matchR2SpecialMarking()` combinando canal + R1 closer / closer do contrato pago + `is_contract_paid` + data de referência (`scheduled_at`)
 
-3. **Remover o trigger duplicado** `trg_automation_enqueue_on_deal` em `crm_deals` (evita 2 itens iguais por movimentação).
+O resultado é um `Map<attendeeId, R2SpecialMarking>` consumido na renderização.
 
-4. **Cleanup defensivo permanente** (cron diário) — marca como `skipped` itens pendentes há > 24h cujo owner não tem telefone resolvível ou está desligado.
+## Onde mexer
 
-## Na edge function `automation-processor`
+**Único arquivo de UI**: `src/components/crm/R2CloserColumnCalendar.tsx`
 
-5. **Pular owners desligados** — se `employees.status <> 'ativo'`, marca o item como `skipped` com motivo "Owner desligado". Isso resolve o caso Juliana e qualquer futuro desligamento automaticamente.
+1. Adicionar imports: `useMemo` já existe; adicionar `useActiveR2SpecialMarkings`, `useAttendeeChannels`, `useContractPaidClosersByDeal`, `matchR2SpecialMarking`, tipo `R2SpecialMarking`.
+2. Construir `channelInputs`, `channelMap`, `r2DealIds`, `contractPaidClosersByDeal` e `markingByAttendee` a partir de `meetings` (mesma lógica do `AgendaCalendar`, simplificada para R2-only).
+3. Dentro do loop `meeting.attendees.slice(0, 2).map(...)` (linhas ~290–313), depois do nome e antes do badge de status, renderizar:
 
-6. **Cancelar itens cujo deal saiu do stage-alvo** antes do `scheduled_at` (evita reenvio fora de contexto, como aconteceu com o caso Antonio Matheus).
+```tsx
+{markingByAttendee.get(att.id) && (
+  <span
+    title={markingByAttendee.get(att.id)!.name}
+    className="text-[9px] px-1 py-0 rounded shrink-0 inline-flex items-center gap-0.5"
+    style={{
+      backgroundColor: markingByAttendee.get(att.id)!.bg_color,
+      color: markingByAttendee.get(att.id)!.text_color,
+    }}
+  >
+    <span aria-hidden>{markingByAttendee.get(att.id)!.icon}</span>
+    {markingByAttendee.get(att.id)!.badge_label}
+  </span>
+)}
+```
+
+4. Ajustar o layout flex da linha do attendee para acomodar o novo chip sem quebrar o status à direita (já é `flex items-center justify-between` — o chip entra no grupo da esquerda junto com o nome).
+5. Opcional: replicar o chip dentro do `TooltipContent` (lista expandida) ao lado do nome, mantendo paridade visual com a Lista.
+
+## Não muda
+
+- Nada de backend / RPC / migração — usa hooks já existentes.
+- Regras de marcação (cadastro em "Marcações") continuam idênticas.
+- Comportamento de clique, tooltip de status, contadores de leads/dia ficam inalterados.
 
 ## Validação
 
-- Confirmo no `automation_logs` que os ~16 itens dos SDRs ativos viraram `sent` em ≤ 5 min.
-- Confirmo que os 2 itens da Juliana ficaram `skipped` com motivo correto.
-- Teste: mover 1 lead novo para ANAMNESE INCOMPLETA → **1** item na fila (não 2) + WhatsApp em ≤ 5 min, qualquer horário.
-
-Posso aprovar e rodar?
+- Abrir `/crm/agenda-r2` → aba **Por Sócio** na semana atual e confirmar que o card do Neiton (Jessica Martins, 11h) exibe o chip "Anamnese Letícia" do lado do nome.
+- Conferir que slots sem marcação aplicável seguem sem chip.
+- Conferir que filtros (closer R1, status) e click → drawer continuam funcionando.
