@@ -30,6 +30,7 @@ import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { R2AttendeeExtended, R2MeetingRow } from '@/types/r2Agenda';
 import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
 import { R2LeadBadges } from './R2LeadBadges';
+import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 
 // Hook to check which pre-scheduled leads have configured daily slots
 function usePreScheduledSlotCheck(leads: ReturnType<typeof useR2PreScheduledLeads>['data']) {
@@ -88,6 +89,12 @@ export function R2PreScheduledTab() {
   }), [leads]);
   const channelMap = useR2LeadsChannelMap(channelInputs);
 
+  const dealIds = useMemo(
+    () => leads.map((l: any) => l.deal_id || l.deal?.id).filter(Boolean) as string[],
+    [leads],
+  );
+  const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(dealIds);
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -141,6 +148,10 @@ export function R2PreScheduledTab() {
             const isPending = confirmMutation.isPending || cancelMutation.isPending;
             const hasSlot = slotChecks[lead.id] ?? true;
             const observations = lead.r2_observations || lead.notes || '';
+            const dealIdForLead = (lead as any).deal_id || (lead as any).deal?.id || null;
+            const contractPaidCloserName = dealIdForLead
+              ? contractPaidClosersByDeal?.get(dealIdForLead) || null
+              : null;
 
             return (
               <TableRow key={lead.id}>
@@ -150,7 +161,8 @@ export function R2PreScheduledTab() {
                     <R2LeadBadges
                       channel={channelMap.get(lead.id)?.channel}
                       r1CloserName={null}
-                      isContractPaid={false}
+                      contractPaidCloserName={contractPaidCloserName}
+                      isContractPaid={!!contractPaidCloserName}
                       scheduledAt={meetingSlot?.scheduled_at}
                     />
                   </div>
