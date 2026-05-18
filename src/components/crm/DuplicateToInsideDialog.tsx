@@ -5,13 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { INSIDE_SALES_ORIGIN_ID } from '@/constants/team';
+import { useCRMOrigins } from '@/hooks/useCRMData';
 
 interface DuplicateToInsideDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
-  onConfirm: (ownerEmail: string, ownerProfileId: string, stageId: string) => void;
+  onConfirm: (ownerEmail: string, ownerProfileId: string, stageId: string, originId: string) => void;
   isLoading: boolean;
 }
 
@@ -24,6 +24,7 @@ export const DuplicateToInsideDialog = ({
 }: DuplicateToInsideDialogProps) => {
   const [selectedSdr, setSelectedSdr] = useState('');
   const [selectedStage, setSelectedStage] = useState('');
+  const [selectedOrigin, setSelectedOrigin] = useState('');
 
   // Fetch profiles with roles via join
   const { data: sdrs = [] } = useQuery({
@@ -47,50 +48,83 @@ export const DuplicateToInsideDialog = ({
     enabled: open,
   });
 
-  // Fetch Inside Sales stages
+  // Fetch all pipelines (origins) — flattened
+  const { data: originsTree } = useCRMOrigins();
+  const flatOrigins = (originsTree || []).flatMap((group: any) => {
+    if (group.children && group.children.length > 0) {
+      return group.children.map((child: any) => ({
+        id: child.id,
+        name: `${group.name} › ${child.name}`,
+      }));
+    }
+    return [{ id: group.id, name: group.name }];
+  });
+
+  // Fetch stages for the selected pipeline
   const { data: stages = [] } = useQuery({
-    queryKey: ['inside-sales-stages-for-duplicate'],
+    queryKey: ['stages-for-duplicate', selectedOrigin],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_stages')
         .select('id, stage_name, stage_order')
-        .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+        .eq('origin_id', selectedOrigin)
         .order('stage_order');
       if (error) throw error;
       return data || [];
     },
-    enabled: open,
+    enabled: open && !!selectedOrigin,
   });
 
-  // Auto-select first stage (Novo Lead)
+  // Auto-select first stage when stages load / origin changes
   useEffect(() => {
     if (stages.length > 0 && !selectedStage) {
       setSelectedStage(stages[0].id);
     }
   }, [stages, selectedStage]);
 
+  // Reset stage when origin changes
+  useEffect(() => {
+    setSelectedStage('');
+  }, [selectedOrigin]);
+
   const handleConfirm = () => {
     const sdr = sdrs.find((s: any) => s.id === selectedSdr);
-    if (!sdr || !selectedStage) return;
-    onConfirm(sdr.email, sdr.id, selectedStage);
+    if (!sdr || !selectedStage || !selectedOrigin) return;
+    onConfirm(sdr.email, sdr.id, selectedStage, selectedOrigin);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Duplicar para Inside Sales</DialogTitle>
+          <DialogTitle>Duplicar para outra Pipeline</DialogTitle>
           <DialogDescription>
-            {selectedCount} contato{selectedCount > 1 ? 's' : ''} será(ão) duplicado(s) como novos deals na pipeline Inside Sales.
+            {selectedCount} contato{selectedCount > 1 ? 's' : ''} será(ão) duplicado(s) como novos deals na pipeline escolhida.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-4">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-foreground">SDR responsável</label>
+            <label className="text-sm font-medium text-foreground">Pipeline destino</label>
+            <Select value={selectedOrigin} onValueChange={setSelectedOrigin}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a pipeline..." />
+              </SelectTrigger>
+              <SelectContent>
+                {flatOrigins.map((o: any) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-foreground">Responsável</label>
             <Select value={selectedSdr} onValueChange={setSelectedSdr}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o SDR..." />
+                <SelectValue placeholder="Selecione o responsável..." />
               </SelectTrigger>
               <SelectContent>
                 {sdrs.map((sdr: any) => (
@@ -104,9 +138,9 @@ export const DuplicateToInsideDialog = ({
 
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-foreground">Estágio</label>
-            <Select value={selectedStage} onValueChange={setSelectedStage}>
+            <Select value={selectedStage} onValueChange={setSelectedStage} disabled={!selectedOrigin}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o estágio..." />
+                <SelectValue placeholder={selectedOrigin ? 'Selecione o estágio...' : 'Selecione a pipeline primeiro'} />
               </SelectTrigger>
               <SelectContent>
                 {stages.map(stage => (
@@ -123,7 +157,7 @@ export const DuplicateToInsideDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancelar
           </Button>
-          <Button onClick={handleConfirm} disabled={!selectedSdr || !selectedStage || isLoading}>
+          <Button onClick={handleConfirm} disabled={!selectedSdr || !selectedStage || !selectedOrigin || isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
