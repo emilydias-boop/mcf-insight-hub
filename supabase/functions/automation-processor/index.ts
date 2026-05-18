@@ -190,6 +190,25 @@ serve(async (req) => {
         const owner = Array.isArray(ownerRows) ? ownerRows[0] : ownerRows;
         const donoNome = owner?.first_name || owner?.full_name || '';
         const donoTelefone = owner?.telefone || '';
+
+        // Defesa: dono desligado → cancela item (não tem para quem mandar)
+        if (owner?.email || owner?.email_pessoal) {
+          const ownerEmail = (owner.email_pessoal || owner.email || '').toLowerCase();
+          if (ownerEmail) {
+            const { data: emp } = await supabase
+              .from('employees')
+              .select('status')
+              .ilike('email_pessoal', ownerEmail)
+              .maybeSingle();
+            if (emp && emp.status && emp.status !== 'ativo') {
+              console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} dono desligado (${ownerEmail}) — cancelando`);
+              await markAsSkipped(supabase, item.id, `Owner desligado (${emp.status})`);
+              results.skipped++;
+              continue;
+            }
+          }
+        }
+
         const donoLinkWa = donoTelefone
           ? `https://wa.me/${donoTelefone}`
           : '';
@@ -378,7 +397,7 @@ async function markAsSkipped(supabase: any, itemId: string, reason: string) {
   await supabase
     .from('automation_queue')
     .update({
-      status: 'skipped',
+      status: 'cancelled',
       error_message: reason,
       processed_at: new Date().toISOString()
     })
