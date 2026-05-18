@@ -376,9 +376,11 @@ export function useDuplicateToInsideSales() {
       ownerEmail: string;
       ownerProfileId: string;
       stageId?: string;
+      originId?: string;
     }) => {
       const NOVO_LEAD_STAGE = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
       const targetStage = params.stageId || NOVO_LEAD_STAGE;
+      const targetOrigin = params.originId || INSIDE_SALES_ORIGIN_ID;
 
       let created = 0;
 
@@ -421,13 +423,13 @@ export function useDuplicateToInsideSales() {
           contactId = newContact.id;
         }
 
-        // Step 2: Check if active deal already exists in Inside Sales for this contact
+        // Step 2: Check if active deal already exists in target pipeline for this contact
         if (contactId) {
           const { data: existingDeal } = await supabase
             .from('crm_deals')
             .select('id')
             .eq('contact_id', contactId)
-            .eq('origin_id', INSIDE_SALES_ORIGIN_ID)
+            .eq('origin_id', targetOrigin)
             .eq('is_duplicate', false)
             .is('archived_at', null)
             .limit(1);
@@ -438,13 +440,13 @@ export function useDuplicateToInsideSales() {
           }
         }
 
-        // Step 3: Create deal in Inside Sales
+        // Step 3: Create deal in target pipeline
         const { data: newDeal, error: dErr } = await supabase
           .from('crm_deals')
           .insert({
             name: lead.name,
             contact_id: contactId,
-            origin_id: INSIDE_SALES_ORIGIN_ID,
+            origin_id: targetOrigin,
             stage_id: targetStage,
             owner_id: params.ownerEmail,
             owner_profile_id: params.ownerProfileId,
@@ -484,8 +486,10 @@ export function useDuplicateToInsideSales() {
       return { created };
     },
     onSuccess: (data) => {
-      toast.success(`${data.created} lead(s) duplicado(s) para Inside Sales!`);
+      toast.success(`${data.created} lead(s) duplicado(s)!`);
       queryClient.invalidateQueries({ queryKey: ['inside-sales-deals-limbo'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-contacts'] });
     },
     onError: (error: any) => {
       toast.error(`Erro ao duplicar: ${error.message}`);
