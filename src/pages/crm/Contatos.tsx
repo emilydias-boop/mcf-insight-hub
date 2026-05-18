@@ -502,7 +502,7 @@ const Contatos = () => {
             onOpenChange={setDuplicateDialogOpen}
             selectedCount={selectedIds.size}
             isLoading={duplicateMutation.isPending}
-            onConfirm={(ownerEmail, ownerProfileId, stageId) => {
+            onConfirm={(ownerEmail, ownerProfileId, stageId, originId) => {
               const leads = filteredContacts
                 .filter(c => selectedIds.has(c.id))
                 .map(c => ({
@@ -512,7 +512,7 @@ const Contatos = () => {
                   sourceContactId: c.id,
                   sourceDealId: c.latestDeal?.id,
                 }));
-              duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId }, {
+              duplicateMutation.mutate({ leads, ownerEmail, ownerProfileId, stageId, originId }, {
                 onSuccess: () => {
                   setSelectedIds(new Set());
                   setDuplicateDialogOpen(false);
