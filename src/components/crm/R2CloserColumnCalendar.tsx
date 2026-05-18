@@ -8,6 +8,10 @@ import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
 import { R2Closer } from "@/hooks/useR2Closers";
 import { R2DailySlotsMap } from "@/hooks/useR2DailySlotsForView";
 import { cn } from "@/lib/utils";
+import { useActiveR2SpecialMarkings } from "@/hooks/useR2SpecialMarkings";
+import { useAttendeeChannels } from "@/hooks/useAttendeeChannels";
+import { useContractPaidClosersByDeal } from "@/hooks/useContractPaidClosersByDeal";
+import { matchR2SpecialMarking, R2SpecialMarking } from "@/types/r2SpecialMarking";
 
 interface R2CloserColumnCalendarProps {
   meetings: R2Meeting[];
@@ -55,6 +59,55 @@ export function R2CloserColumnCalendar({
   onSelectMeeting,
   onSelectSlot,
 }: R2CloserColumnCalendarProps) {
+
+  // ---- R2 Special Markings (ex.: "Anamnese Letícia") ---------------------
+  const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
+
+  const channelInputs = useMemo(() => meetings.flatMap(m =>
+    (m.attendees || []).map(att => ({
+      id: att.id,
+      email: (att as any).email || (att as any).deal?.contact?.email || null,
+      phone: (att as any).phone || (att as any).deal?.contact?.phone || null,
+      scheduledAt: m.scheduled_at,
+      tags: ((att as any).deal?.contact?.tags) ?? [],
+    }))
+  ), [meetings]);
+  const channelMap = useAttendeeChannels(channelInputs);
+
+  const r2DealIds = useMemo(() => {
+    const ids: string[] = [];
+    meetings.forEach(m => m.attendees?.forEach(att => {
+      const id = (att as any).deal_id || (att as any).deal?.id;
+      if (id) ids.push(id);
+    }));
+    return ids;
+  }, [meetings]);
+  const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(r2DealIds);
+
+  const markingByAttendee = useMemo(() => {
+    const map = new Map<string, R2SpecialMarking>();
+    if (!specialMarkings.length) return map;
+    meetings.forEach(m => {
+      m.attendees?.forEach(att => {
+        const dealId = (att as any).deal_id || (att as any).deal?.id || null;
+        const contractPaidCloserName = dealId
+          ? contractPaidClosersByDeal?.get(dealId) || null
+          : null;
+        const r1Name = (att as any).r1_closer_name || (m as any).r1_closer?.name || null;
+        if (!r1Name && !contractPaidCloserName) return;
+        const channel = channelMap.get(att.id);
+        const matched = matchR2SpecialMarking(specialMarkings, {
+          channel: channel as any,
+          r1CloserName: r1Name,
+          contractPaidCloserName,
+          isContractPaid: !!contractPaidCloserName,
+          referenceDate: m.scheduled_at || null,
+        });
+        if (matched) map.set(att.id, matched);
+      });
+    });
+    return map;
+  }, [meetings, specialMarkings, channelMap, contractPaidClosersByDeal]);
 
   // Get all meetings for a specific slot (may have multiple for same time/closer)
   const getMeetingsForSlot = (closerId: string, hour: number, minute: number) => {
@@ -293,6 +346,19 @@ export function R2CloserColumnCalendar({
                                         <span className="truncate font-medium">
                                           {att.name || att.deal?.contact?.name || "Lead"}
                                         </span>
+                                        {markingByAttendee.get(att.id) && (
+                                          <span
+                                            title={markingByAttendee.get(att.id)!.name}
+                                            className="text-[9px] px-1 py-0 rounded shrink-0 inline-flex items-center gap-0.5 font-medium"
+                                            style={{
+                                              backgroundColor: markingByAttendee.get(att.id)!.bg_color,
+                                              color: markingByAttendee.get(att.id)!.text_color,
+                                            }}
+                                          >
+                                            <span aria-hidden>{markingByAttendee.get(att.id)!.icon}</span>
+                                            {markingByAttendee.get(att.id)!.badge_label}
+                                          </span>
+                                        )}
                                         {(att as any).is_reschedule && 
                                          !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                                           <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
