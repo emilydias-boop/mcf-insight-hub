@@ -108,6 +108,7 @@ export default function SdrMeetingsDetailPage() {
     startDate,
     endDate,
     sdrEmailFilter: sdrEmail || undefined,
+    alignedWithKpi: true,
   });
   const allMeetings = allMeetingsQuery.data || [];
 
