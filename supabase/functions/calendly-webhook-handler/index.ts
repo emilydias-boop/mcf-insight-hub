@@ -390,6 +390,14 @@ serve(async (req) => {
         }
 
         // Add attendee record
+        // Fallback de booked_by: webhook público do Calendly não tem auth.uid(),
+        // então herdamos quem abriu o slot (ms.booked_by) para não deixar NULL.
+        const { data: slotRow } = await supabase
+          .from("meeting_slots")
+          .select("booked_by")
+          .eq("id", slotId)
+          .maybeSingle();
+
         const { data: attendee, error: attendeeError } = await supabase
           .from("meeting_slot_attendees")
           .insert({
@@ -397,6 +405,8 @@ serve(async (req) => {
             contact_id: contactId,
             calendly_invitee_uri: inviteeUri,
             status: "confirmed",
+            booked_by: slotRow?.booked_by ?? null,
+            booked_at: new Date().toISOString(),
           })
           .select("id")
           .single();
