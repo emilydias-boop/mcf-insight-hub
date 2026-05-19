@@ -69,6 +69,7 @@ export function useAddLeadToMeeting() {
       contactId?: string;
     }) => {
       // Add attendee directly - no limit on attendees
+      const { data: { user } } = await supabase.auth.getUser();
       const { data: attendee, error: insertError } = await supabase
         .from("meeting_slot_attendees")
         .insert({
@@ -76,6 +77,8 @@ export function useAddLeadToMeeting() {
           deal_id: dealId,
           contact_id: contactId,
           status: "invited",
+          booked_by: user?.id ?? null,
+          booked_at: new Date().toISOString(),
         })
         .select()
         .single();
