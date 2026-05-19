@@ -205,6 +205,7 @@ export function MoveAttendeeModal({
           ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
 
         // Criar novo attendee vinculado ao original (reagendamento)
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         const { data: newAttendee, error: createAttendeeError } = await supabase
           .from('meeting_slot_attendees')
           .insert({
@@ -214,7 +215,8 @@ export function MoveAttendeeModal({
             status: shouldPreserveStatusNoShow ? currentAttendeeStatus : 'rescheduled',
             is_reschedule: !shouldPreserveStatusNoShow,
             parent_attendee_id: attendee.id, // Vincula ao original no-show
-            booked_by: originalAttendee.booked_by,
+            // Fallback: se o original não tinha booked_by, usar o usuário atual
+            booked_by: originalAttendee.booked_by ?? currentUser?.id ?? null,
             booked_at: new Date().toISOString(), // Data do reagendamento
           })
           .select()
