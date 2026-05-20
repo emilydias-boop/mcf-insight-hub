@@ -116,15 +116,28 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
   const meta = event.metadata;
 
   if (event.type === 'call') {
+    const rawUrl: string | undefined = meta.recording_url;
+    let playableUrl: string | null = null;
+    if (rawUrl) {
+      const match = rawUrl.match(/Recordings\/([^.\/]+)/);
+      playableUrl = match && match[1]
+        ? `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/get-recording?recordingSid=${match[1]}`
+        : rawUrl;
+    }
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {meta.direction && <Badge variant="outline" className="text-[10px]">{meta.direction === 'outbound' ? '📞 Saída' : '📲 Entrada'}</Badge>}
-        {meta.duration && <Badge variant="outline" className="text-[10px]">⏱ {meta.duration}</Badge>}
-        {meta.outcome && <Badge variant="outline" className="text-[10px]">{meta.outcome}</Badge>}
-        {meta.recording_url && (
-          <a href={meta.recording_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary underline">
-            🎙 Gravação
-          </a>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          {meta.direction && <Badge variant="outline" className="text-[10px]">{meta.direction === 'outbound' ? '📞 Saída' : '📲 Entrada'}</Badge>}
+          {meta.duration && <Badge variant="outline" className="text-[10px]">⏱ {meta.duration}</Badge>}
+          {meta.outcome && <Badge variant="outline" className="text-[10px]">{meta.outcome}</Badge>}
+        </div>
+        {playableUrl && (
+          <div className="pt-1">
+            <div className="text-[10px] text-muted-foreground mb-1">🎙 Gravação</div>
+            <audio controls preload="none" src={playableUrl} className="w-full h-8">
+              Seu navegador não suporta o player de áudio.
+            </audio>
+          </div>
         )}
       </div>
     );
