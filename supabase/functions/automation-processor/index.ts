@@ -135,6 +135,7 @@ serve(async (req) => {
           /\b(reuniao|consultoria)\s+(agendad|realizad)/.test(stageNameRaw) ||
           /\br[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
           /\b(1a|2a|1°|2°|1\.|2\.)\s*reuniao\s+(agendad|realizad)/.test(stageNameRaw) ||
+          /\breuniao\s+0?[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
           /^agendamento$/.test(stageNameRaw);
         // Carrega o próximo meeting_slot ATIVO do deal para resolver {{data_hora}}, {{closer}} e {{link}}.
         let meetingSlotActive: any = null;
