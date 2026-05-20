@@ -7325,6 +7325,7 @@ export type Database = {
           ac_list_id: number | null
           ac_setup_checklist: Json | null
           ac_setup_confirmed: boolean
+          applies_to_bus: string[] | null
           apply_to_r1: boolean
           apply_to_r2: boolean
           enabled_offsets: string[]
@@ -7339,6 +7340,7 @@ export type Database = {
           ac_list_id?: number | null
           ac_setup_checklist?: Json | null
           ac_setup_confirmed?: boolean
+          applies_to_bus?: string[] | null
           apply_to_r1?: boolean
           apply_to_r2?: boolean
           enabled_offsets?: string[]
@@ -7353,6 +7355,7 @@ export type Database = {
           ac_list_id?: number | null
           ac_setup_checklist?: Json | null
           ac_setup_confirmed?: boolean
+          applies_to_bus?: string[] | null
           apply_to_r1?: boolean
           apply_to_r2?: boolean
           enabled_offsets?: string[]
