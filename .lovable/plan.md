@@ -1,59 +1,65 @@
-# Plano: Smoke test end-to-end + proteção {{2}}
+## Objetivo
+Fazer o `automation-enqueue` ser disparado quando deals são **criados** ou têm o **stage alterado** pelo app, para que fluxos como "Boas-vindas" e "Confirmação R1 Agendada" funcionem para leads manuais/drag-and-drop (hoje só funciona via webhooks externos).
 
-## Parte 1 — Proteção contra variáveis vazias (UI + edge)
+## Mudanças
 
-**Objetivo:** garantir que nenhum envio (teste ou produção) chegue ao Twilio com variável obrigatória vazia, evitando texto quebrado tipo "Data e horário:" sem valor.
+### 1. `src/hooks/useCRMData.ts` — `useCreateCRMDeal`
+Após o insert bem-sucedido (e após `generateTasksForStage`), invocar:
 
-1. **TemplateTestSendDialog (frontend)**
-   - Marcar todas as variáveis do template como obrigatórias no formulário.
-   - Validação com zod: cada variável `min(1)` após `trim()`.
-   - Botão "Enviar teste" desabilitado enquanto houver campo vazio; mensagens de erro inline por variável.
+```ts
+supabase.functions.invoke('automation-enqueue', {
+  body: {
+    dealId: data.id,
+    contactId: data.contact_id,
+    newStageId: data.stage_id,
+    originId: data.origin_id,
+    triggerType: 'enter',
+  },
+}).catch(err => console.error('[automation-enqueue] create:', err));
+```
 
-2. **automation-test-send (edge function)**
-   - Remover o fallback atual `raw && raw.trim() ? raw : ' '`.
-   - Validar entrada com zod: rejeitar com 400 se alguma variável declarada no template vier vazia/whitespace, retornando `{ error: { variable: 'campo X obrigatório' } }`.
+- Não bloqueia a criação se falhar (catch + console).
+- Não aguarda o invoke (fire-and-forget) para não atrasar UX.
 
-3. **send-whatsapp-template (edge function de produção)**
-   - Mesma validação server-side antes de montar `ContentVariables`.
-   - Se vier vazio em produção (bug de upstream), logar em `automation_logs` com status `failed_validation` e não enviar, em vez de mascarar com espaço.
+### 2. `src/hooks/useCRMData.ts` — `useUpdateCRMDeal`
+Dentro do bloco `if (deal.stage_id && previousStageId !== deal.stage_id && data.origin_id)`, após `handleStageChange`, disparar **dois** invokes:
 
-## Parte 2 — Smoke test end-to-end real (Caminho B)
+```ts
+// Cancela pendências do stage antigo + fluxos de saída
+supabase.functions.invoke('automation-enqueue', {
+  body: {
+    dealId: id,
+    contactId: data.contact_id,
+    newStageId: previousStageId,
+    originId: data.origin_id,
+    triggerType: 'exit',
+  },
+}).catch(err => console.error('[automation-enqueue] exit:', err));
 
-**Sem mudanças de código** — apenas roteiro guiado executado por você no preview, com checagem de logs por mim.
+// Enfileira fluxos do novo stage
+supabase.functions.invoke('automation-enqueue', {
+  body: {
+    dealId: id,
+    contactId: data.contact_id,
+    newStageId: deal.stage_id,
+    oldStageId: previousStageId,
+    originId: data.origin_id,
+    triggerType: 'enter',
+  },
+}).catch(err => console.error('[automation-enqueue] enter:', err));
+```
 
-### Pré-checks (eu executo)
-- Confirmar fluxo `Confirmação R1 Incorporador` está `ativo` em `automation_flows`.
-- Confirmar trigger configurado para stage `R1 Agendada` no PIPELINE INSIDE SALES (Incorporador).
-- Confirmar template vinculado ao fluxo e variáveis mapeadas (nome, data_hora, especialista, link).
-
-### Roteiro de execução (você executa)
-1. Em `/crm` → PIPELINE INSIDE SALES → criar deal de teste com:
-   - Nome: seu nome
-   - Telefone: seu WhatsApp pessoal (E.164)
-   - Produto: Incorporador
-2. Mover para stage **"R1 Agendada"** com data/hora futura (>1h) e especialista atribuído.
-3. Aguardar até 60s.
-
-### Verificação (eu executo)
-- Query em `automation_logs` filtrando pelo deal_id → status `sent`, sid Twilio presente.
-- Query em `automation_flow_runs` → run finalizado sem erro.
-- Você confirma recepção no WhatsApp com **todas** as variáveis preenchidas corretamente.
-
-### Critério de sucesso
-- Mensagem chega com nome real, data/hora real, especialista real, link real — nenhum placeholder.
-- Logs registram `status=sent` e `twilio_sid`.
-- Nenhum erro 21656 ou validation no edge log.
-
-## Detalhes técnicos
-
-- **Arquivos editados:**
-  - `src/components/admin/automacoes/TemplateTestSendDialog.tsx` (validação zod + UI)
-  - `supabase/functions/automation-test-send/index.ts` (remover fallback, adicionar validação)
-  - `supabase/functions/send-whatsapp-template/index.ts` (validação server-side + log)
-- **Sem migrations.** Sem mudanças em `automation_flows` ou template.
-- **Limpeza pós-teste:** deletar deal de teste do pipeline e marcar logs como `test_run=true` se a coluna existir.
+A própria edge function já cancela pendentes em `automation_queue` para o deal antes de enfileirar novos (linhas 148-159), então não há risco de duplicação.
 
 ## Fora de escopo
-- Cron de lembretes D-1/M-20 (você optou por end-to-end primeiro).
-- Mudanças no template oficial (corpo da mensagem).
-- Refactor maior do dispatcher de automações.
+- Bug do cron `meeting-reminders-cron` (`crm_deals_2.bu_origem does not exist`) — D-1/M-20 continuam fora do ar até isso ser corrigido (item separado).
+- Trigger Postgres em `crm_deals` (alternativa server-side) — manter no client por enquanto, já que webhooks externos chamam direto a function.
+- Mudanças em templates Twilio ou variáveis.
+
+## Verificação
+1. Criar um deal manual em `/crm/negocios` direto no stage "R1 Agendada" com telefone real.
+2. Em ~30s, verificar:
+   - `automation_queue` tem 1+ linhas `status='pending'` para o `deal_id`.
+   - `automation_logs` (após o worker rodar) tem `status='sent'` + Twilio SID.
+   - WhatsApp recebe `confirmacao_r1_incorporador`.
+3. Mover o mesmo deal para outro stage → confirmar que pendências do stage anterior viram `cancelled` e novos fluxos (se houver) são enfileirados.
