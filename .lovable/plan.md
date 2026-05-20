@@ -1,47 +1,59 @@
-## Objetivo
+# Plano: Smoke test end-to-end + proteção {{2}}
 
-Ligar os 3 fluxos automatizados de WhatsApp para a BU Incorporador, agora que todos os templates estão aprovados pela Meta.
+## Parte 1 — Proteção contra variáveis vazias (UI + edge)
 
-## O que vai acontecer
+**Objetivo:** garantir que nenhum envio (teste ou produção) chegue ao Twilio com variável obrigatória vazia, evitando texto quebrado tipo "Data e horário:" sem valor.
 
-1. **Confirmação no agendamento da R1** — dispara assim que o lead entra no stage "Reunião 01 Agendada" no PIPELINE INSIDE SALES (Incorporador). Template `Confirmação Reunião Agendada — MCF Capital`.
-2. **Lembrete D-1** — enviado 24h antes da R1.
-3. **Lembrete M-20** — enviado 20 minutos antes da R1.
+1. **TemplateTestSendDialog (frontend)**
+   - Marcar todas as variáveis do template como obrigatórias no formulário.
+   - Validação com zod: cada variável `min(1)` após `trim()`.
+   - Botão "Enviar teste" desabilitado enquanto houver campo vazio; mensagens de erro inline por variável.
 
-Os lembretes 2 e 3 são disparados pelo cron `meeting-reminders-cron` (já configurado: `applies_to_bus=['incorporador']`, offsets `d-1` e `m-20`, apenas R1).
+2. **automation-test-send (edge function)**
+   - Remover o fallback atual `raw && raw.trim() ? raw : ' '`.
+   - Validar entrada com zod: rejeitar com 400 se alguma variável declarada no template vier vazia/whitespace, retornando `{ error: { variable: 'campo X obrigatório' } }`.
 
-## Mudanças no banco (data, sem schema)
+3. **send-whatsapp-template (edge function de produção)**
+   - Mesma validação server-side antes de montar `ContentVariables`.
+   - Se vier vazio em produção (bug de upstream), logar em `automation_logs` com status `failed_validation` e não enviar, em vez de mascarar com espaço.
 
-Via insert tool (UPDATE):
+## Parte 2 — Smoke test end-to-end real (Caminho B)
 
-- `automation_flows` id `a8d14cba-406b-4c11-8a6c-47e4e43444dd` → `is_active=true`
-- `meeting_reminder_settings` id `1` → `is_active=true`
+**Sem mudanças de código** — apenas roteiro guiado executado por você no preview, com checagem de logs por mim.
 
-## Validação pós-ativação
+### Pré-checks (eu executo)
+- Confirmar fluxo `Confirmação R1 Incorporador` está `ativo` em `automation_flows`.
+- Confirmar trigger configurado para stage `R1 Agendada` no PIPELINE INSIDE SALES (Incorporador).
+- Confirmar template vinculado ao fluxo e variáveis mapeadas (nome, data_hora, especialista, link).
 
-1. Confirmar na aba **Fluxos** que "Confirmação R1 Agendada — (Incorporador)" aparece como Ativo.
-2. Confirmar na aba **Lembretes Reunião** que o toggle "Sistema ativo" está ligado.
-3. **Smoke test**: agendar 1 R1 de teste no Incorporador com um número pessoal — deve receber a confirmação em segundos.
-4. Para os lembretes, agendar uma R1 para daqui ~25 min e validar disparo do M-20.
-5. Acompanhar `automation_logs` e `meeting_reminders_log` nas primeiras horas para detectar erros do Twilio.
+### Roteiro de execução (você executa)
+1. Em `/crm` → PIPELINE INSIDE SALES → criar deal de teste com:
+   - Nome: seu nome
+   - Telefone: seu WhatsApp pessoal (E.164)
+   - Produto: Incorporador
+2. Mover para stage **"R1 Agendada"** com data/hora futura (>1h) e especialista atribuído.
+3. Aguardar até 60s.
 
-## Riscos / observações
+### Verificação (eu executo)
+- Query em `automation_logs` filtrando pelo deal_id → status `sent`, sid Twilio presente.
+- Query em `automation_flow_runs` → run finalizado sem erro.
+- Você confirma recepção no WhatsApp com **todas** as variáveis preenchidas corretamente.
 
-- `meeting_reminder_settings.ac_setup_confirmed` precisa estar `true` (ou o toggle do UI fica bloqueado). Se estiver `false`, vou setar para `true` no mesmo UPDATE já que estamos usando WhatsApp e não a sequência AC original.
-- Caso o Twilio retorne erro de janela 24h ou template/categoria, os logs vão indicar — sem impacto nos leads.
-- Outras BUs (Consórcio etc.) ficam de fora até termos templates próprios aprovados.
+### Critério de sucesso
+- Mensagem chega com nome real, data/hora real, especialista real, link real — nenhum placeholder.
+- Logs registram `status=sent` e `twilio_sid`.
+- Nenhum erro 21656 ou validation no edge log.
 
 ## Detalhes técnicos
 
-```sql
-UPDATE automation_flows
-SET is_active = true
-WHERE id = 'a8d14cba-406b-4c11-8a6c-47e4e43444dd';
+- **Arquivos editados:**
+  - `src/components/admin/automacoes/TemplateTestSendDialog.tsx` (validação zod + UI)
+  - `supabase/functions/automation-test-send/index.ts` (remover fallback, adicionar validação)
+  - `supabase/functions/send-whatsapp-template/index.ts` (validação server-side + log)
+- **Sem migrations.** Sem mudanças em `automation_flows` ou template.
+- **Limpeza pós-teste:** deletar deal de teste do pipeline e marcar logs como `test_run=true` se a coluna existir.
 
-UPDATE meeting_reminder_settings
-SET is_active = true,
-    ac_setup_confirmed = true
-WHERE id = 1;
-```
-
-Nenhuma migração de schema, nenhum código frontend, nenhuma edge function nova.
+## Fora de escopo
+- Cron de lembretes D-1/M-20 (você optou por end-to-end primeiro).
+- Mudanças no template oficial (corpo da mensagem).
+- Refactor maior do dispatcher de automações.
