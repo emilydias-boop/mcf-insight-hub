@@ -576,7 +576,22 @@ export const useCreateCRMDeal = () => {
           // Don't fail the deal creation if task generation fails
         }
       }
-      
+
+      // Enfileira automações para o stage inicial (boas-vindas, R1 Agendada, etc.)
+      if (data.stage_id && data.contact_id) {
+        supabase.functions
+          .invoke('automation-enqueue', {
+            body: {
+              dealId: data.id,
+              contactId: data.contact_id,
+              newStageId: data.stage_id,
+              originId: data.origin_id,
+              triggerType: 'enter',
+            },
+          })
+          .catch((err) => console.error('[automation-enqueue] create:', err));
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -665,8 +680,37 @@ export const useUpdateCRMDeal = () => {
           data.owner_id,
           data.contact_id
         );
+
+        // Dispara automações: exit do stage antigo + enter no novo
+        if (data.contact_id) {
+          if (previousStageId) {
+            supabase.functions
+              .invoke('automation-enqueue', {
+                body: {
+                  dealId: id,
+                  contactId: data.contact_id,
+                  newStageId: previousStageId,
+                  originId: data.origin_id,
+                  triggerType: 'exit',
+                },
+              })
+              .catch((err) => console.error('[automation-enqueue] exit:', err));
+          }
+          supabase.functions
+            .invoke('automation-enqueue', {
+              body: {
+                dealId: id,
+                contactId: data.contact_id,
+                newStageId: deal.stage_id,
+                oldStageId: previousStageId,
+                originId: data.origin_id,
+                triggerType: 'enter',
+              },
+            })
+            .catch((err) => console.error('[automation-enqueue] enter:', err));
+        }
       }
-      
+
       return data;
     },
     onSuccess: () => {
