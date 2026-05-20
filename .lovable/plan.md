@@ -1,31 +1,46 @@
-# Diagnóstico
+# Painel de Status da Automação em tempo real
 
-A mensagem chegou trocada porque o template **Confirmação Reunião Agendada** (`HXe342197a5ce4f8a1d79ca37d2eff6c52`) está com `variables = [nome, link]` no banco, mas o corpo no Twilio tem 4 placeholders posicionais `{{1}}..{{4}}` (nome, data/hora, closer, link).
+Adicionar bloco visual destacado no topo da página **Admin › Automações** (`/admin/automacoes`) com a saúde do pipeline em tempo real.
 
-Resultado: o `automation-processor` monta `ContentVariables` apenas para `{{1}}=nome` e `{{2}}=link`. O Twilio então:
-- `{{2}}` recebe o link → aparece em "Data e horário"
-- `{{3}}` e `{{4}}` ficam vazios → Twilio renderiza os *sample values* ("Exemplo closer" / "Exemplo link")
+## O que aparece
 
-O template "Lembrete D-1" já está correto (`[nome, data_hora, closer, link]`), por isso é só alinhar este.
+3 cards grandes + ticker de atividade:
 
-# Mudança
-
-Migration de 1 linha:
-
-```sql
-UPDATE public.automation_templates
-SET variables = ARRAY['nome','data_hora','closer','link']
-WHERE id = 'cf53890c-…' -- na verdade: 6ce02063-d194-4338-b48c-11cc331aafdb (Confirmação)
+```text
+┌──────────────┬──────────────┬──────────────┐
+│ PENDENTES    │ CONCLUÍDOS   │ COM ERRO     │
+│   42         │   1.287      │   3          │
+│ na fila      │ hoje         │ últimas 24h  │
+│ ● live       │              │ ⚠ atenção    │
+└──────────────┴──────────────┴──────────────┘
+┌─────────────────────────────────────────────┐
+│ Últimas atividades (auto-atualiza)          │
+│ ✓ 09:42 WhatsApp → ANTONIO MATHEUS (sent)   │
+│ ⏳ 09:41 Email → ... (pending)              │
+│ ✗ 09:40 WhatsApp → ... (failed: timeout)    │
+└─────────────────────────────────────────────┘
 ```
 
-# Validação
+- **Pendentes**: `automation_queue.status = 'pending'` + `automation_logs.status = 'pending'`.
+- **Concluídos (hoje)**: `automation_logs.status IN (sent, delivered, read)` no dia atual.
+- **Com erro (24h)**: `automation_logs.status = 'failed'` nas últimas 24h, com tooltip do último `error_message`.
+- **Ticker**: últimos 8 registros de `automation_logs` (ícone por status, canal, destinatário, hora relativa).
 
-1. Re-disparar `automation-enqueue` + `automation-processor` para o deal de teste do William (slot 21/05/2026 09:00, link `meet.google.com/teste-mcf-001`).
-2. Conferir no WhatsApp (+55 21 96738-5623) que o template chega com:
-   - Data e horário: **21/05/2026 às 09:00**
-   - Especialista: **William Ferreira**
-   - Link: **https://meet.google.com/teste-mcf-001**
+## Tempo real
 
-# Observação
+- Inscrição em `automation_logs` e `automation_queue` via `supabase.channel(...).on('postgres_changes', ...)`.
+- A cada evento → `queryClient.invalidateQueries` das chaves do painel.
+- Indicador "● live" pulsa verde quando o canal está conectado, cinza quando offline.
+- Fallback de polling a cada 15s caso o realtime caia.
 
-Pré-condição: o template no Twilio Content Builder precisa estar registrado com os 4 placeholders nesta ordem posicional. Pelo retorno do teste (link caiu em `{{2}}`), parece ser exatamente o caso — apenas o array no banco está incompleto.
+## Arquivos
+
+- **Novo**: `src/components/automations/AutomationStatusPanel.tsx` — painel + hook interno de subscription.
+- **Novo**: `src/hooks/useAutomationRealtime.ts` — gerencia canal Supabase + invalidações.
+- **Editar**: `src/pages/admin/Automacoes.tsx` — renderiza `<AutomationStatusPanel />` acima de `<AutomationMetrics />` (mantém os existentes).
+- Reaproveita tokens semânticos (`bg-card`, `text-destructive`, `text-success`/`text-green-600` já em uso no projeto).
+
+## Sem mudanças
+
+- Nada de migration nova (tabelas e políticas já existem; admin já lê `automation_logs` e `automation_queue`).
+- Nenhuma edge function alterada.
