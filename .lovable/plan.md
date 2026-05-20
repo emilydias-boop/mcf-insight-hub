@@ -1,54 +1,30 @@
 ## Objetivo
 
-Hoje as marcações especiais R2 (ex.: "Anamnese Letícia") só aparecem no drawer de detalhes e nas abas Lista / Calendário. Na aba **Por Sócio** (`R2CloserColumnCalendar`) o card do lead mostra só o nome e o status, então não dá pra identificar de fora que o Neiton, por exemplo, é Anamnese da Letícia.
+Remover por completo a funcionalidade de "Marcações Especiais R2" — a regra que destacava reuniões da closer **Leticia Faustino** quando o lead era **ANAMNESE** e o contrato estava pago. Vamos parar de captar anamnese paga; o que sobrar (orgânico do Instagram/Live) continua sendo identificado pela tag `ANAMNESE` normalmente, mas sem nenhuma marcação visual especial nem regra por closer.
 
 ## O que muda
 
-Adicionar, ao lado do nome de cada participante dentro do bloco do slot na aba "Por Sócio", o mesmo badge colorido de marcação especial que já aparece na Lista/Calendário (ícone + `badge_label`, cores definidas em Configurar Marcações).
+### 1. Banco de dados (migration)
+- `DROP TABLE public.r2_special_markings CASCADE` (apaga a única regra existente: "Anamnese - Leticia Faustino").
+- Remover policies/triggers associados, se houver.
 
-Mesma regra de matching já usada em `AgendaCalendar.tsx` (linhas 309–369):
-- `useActiveR2SpecialMarkings()` para carregar regras ativas
-- `useAttendeeChannels()` para canal (A010 / ANAMNESE / Outro) por attendee
-- `useContractPaidClosersByDeal()` para casar pelo closer que pagou contrato quando o R1 closer name não bate
-- `matchR2SpecialMarking()` combinando canal + R1 closer / closer do contrato pago + `is_contract_paid` + data de referência (`scheduled_at`)
+### 2. Frontend — arquivos deletados
+- `src/types/r2SpecialMarking.ts`
+- `src/hooks/useR2SpecialMarkings.ts`
+- `src/components/crm/R2SpecialMarkingsConfigModal.tsx`
 
-O resultado é um `Map<attendeeId, R2SpecialMarking>` consumido na renderização.
+### 3. Frontend — arquivos editados (remover imports, hooks e renderização de badge especial)
+- `src/components/crm/AgendaCalendar.tsx` — remover `useActiveR2SpecialMarkings`, `matchR2SpecialMarking` e o `Map` de markings; o calendário volta a renderizar apenas badges padrão de canal (A010/ANAMNESE/Outro).
+- `src/components/crm/R2CloserColumnCalendar.tsx` — idem.
+- `src/components/crm/R2LeadBadges.tsx` — idem; manter o badge de canal normal.
+- `src/components/crm/R2MeetingDetailDrawer.tsx` — idem.
+- `src/pages/crm/AgendaR2.tsx` — remover import do modal, state `markingsConfigOpen`/`setMarkingsConfigOpen`, botão que abre a config e a renderização do `<R2SpecialMarkingsConfigModal />`.
 
-## Onde mexer
+### 4. O que **não** muda
+- Classificação de canal `A010 / ANAMNESE / Outro` continua igual (`r2ChannelClassify.ts`, `useAttendeeChannels`, `useR2LeadsChannelMap`). Leads orgânicos com tag `ANAMNESE` seguem sendo identificados como ANAMNESE — só perdem a marcação visual extra por closer.
+- Nenhuma mudança em fluxo de venda, pagamento de contrato ou comissionamento.
 
-**Único arquivo de UI**: `src/components/crm/R2CloserColumnCalendar.tsx`
-
-1. Adicionar imports: `useMemo` já existe; adicionar `useActiveR2SpecialMarkings`, `useAttendeeChannels`, `useContractPaidClosersByDeal`, `matchR2SpecialMarking`, tipo `R2SpecialMarking`.
-2. Construir `channelInputs`, `channelMap`, `r2DealIds`, `contractPaidClosersByDeal` e `markingByAttendee` a partir de `meetings` (mesma lógica do `AgendaCalendar`, simplificada para R2-only).
-3. Dentro do loop `meeting.attendees.slice(0, 2).map(...)` (linhas ~290–313), depois do nome e antes do badge de status, renderizar:
-
-```tsx
-{markingByAttendee.get(att.id) && (
-  <span
-    title={markingByAttendee.get(att.id)!.name}
-    className="text-[9px] px-1 py-0 rounded shrink-0 inline-flex items-center gap-0.5"
-    style={{
-      backgroundColor: markingByAttendee.get(att.id)!.bg_color,
-      color: markingByAttendee.get(att.id)!.text_color,
-    }}
-  >
-    <span aria-hidden>{markingByAttendee.get(att.id)!.icon}</span>
-    {markingByAttendee.get(att.id)!.badge_label}
-  </span>
-)}
-```
-
-4. Ajustar o layout flex da linha do attendee para acomodar o novo chip sem quebrar o status à direita (já é `flex items-center justify-between` — o chip entra no grupo da esquerda junto com o nome).
-5. Opcional: replicar o chip dentro do `TooltipContent` (lista expandida) ao lado do nome, mantendo paridade visual com a Lista.
-
-## Não muda
-
-- Nada de backend / RPC / migração — usa hooks já existentes.
-- Regras de marcação (cadastro em "Marcações") continuam idênticas.
-- Comportamento de clique, tooltip de status, contadores de leads/dia ficam inalterados.
-
-## Validação
-
-- Abrir `/crm/agenda-r2` → aba **Por Sócio** na semana atual e confirmar que o card do Neiton (Jessica Martins, 11h) exibe o chip "Anamnese Letícia" do lado do nome.
-- Conferir que slots sem marcação aplicável seguem sem chip.
-- Conferir que filtros (closer R1, status) e click → drawer continuam funcionando.
+## Notas técnicas
+- Não há referências cruzadas fora desses 8 arquivos (verificado via grep por `SpecialMarking`/`special_marking`).
+- A regra atual no banco (`id 59de7395-…`, closer `3f298f4e-…`) é a única; o `DROP TABLE` é suficiente.
+- Migrations antigas (`20260512133944_…` e `20260512135130_…`) ficam preservadas no histórico; apenas adicionamos a migration de remoção por cima.
