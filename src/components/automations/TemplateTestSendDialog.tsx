@@ -66,6 +66,8 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
   const [result, setResult] = useState<Result | null>(null);
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const [templateVars, setTemplateVars] = useState<string[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +88,39 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
     })();
   }, [open, toast]);
 
+  // Carrega variáveis declaradas no template
+  useEffect(() => {
+    if (!open || !templateId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("automation_templates")
+        .select("variables")
+        .eq("id", templateId)
+        .maybeSingle();
+      if (error || !data) return;
+      const vars: string[] = Array.isArray((data as any).variables) ? (data as any).variables : [];
+      setTemplateVars(vars);
+      setOverrides((prev) => {
+        const next: Record<string, string> = {};
+        vars.forEach((v) => { next[v] = prev[v] ?? ""; });
+        return next;
+      });
+    })();
+  }, [open, templateId]);
+
   const owner = useMemo(() => employees.find((e) => e.id === ownerId), [employees, ownerId]);
+
+  // Variáveis que o backend já preenche automaticamente — não exigir input
+  const AUTO_FILLED = new Set([
+    "nome", "telefone", "sdr", "dono_nome", "dono_telefone",
+    "dono_link_wa", "dono_link_wa_agendar", "wa_agendar_text",
+    "wa_agendar_token", "data",
+  ]);
+  const requiredVars = useMemo(
+    () => templateVars.filter((v) => !AUTO_FILLED.has(v)),
+    [templateVars]
+  );
+  const missingRequired = requiredVars.filter((v) => !(overrides[v] ?? "").trim());
 
   const handleClose = (next: boolean) => {
     if (!next) {
@@ -106,6 +140,14 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
       toast({ title: "Selecione um dono com telefone cadastrado", variant: "destructive" });
       return;
     }
+    if (missingRequired.length > 0) {
+      toast({
+        title: "Preencha todas as variáveis",
+        description: `Vazias: ${missingRequired.join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
     setLoading(true);
     setResult(null);
     setLiveStatus(null);
@@ -118,6 +160,7 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
           ownerPhone: owner.telefone,
           ownerName: owner.nome_completo,
           role,
+          variableOverrides: overrides,
         },
       });
       if (error) throw error;
@@ -224,6 +267,33 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
             </Select>
           </div>
 
+          {requiredVars.length > 0 && (
+            <div className="space-y-2 rounded-md border border-dashed p-3">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Variáveis do template
+              </Label>
+              {requiredVars.map((v) => (
+                <div key={v} className="space-y-1">
+                  <Label className="text-xs">
+                    {`{{${v}}}`} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={overrides[v] ?? ""}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({ ...prev, [v]: e.target.value }))
+                    }
+                    placeholder={`Valor para ${v}`}
+                  />
+                </div>
+              ))}
+              {missingRequired.length > 0 && (
+                <p className="text-xs text-destructive">
+                  Preencha: {missingRequired.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {result && (
             <div
               className={`rounded-md border p-3 text-sm ${
@@ -285,7 +355,7 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
           <Button variant="outline" onClick={() => handleClose(false)} disabled={loading}>
             Fechar
           </Button>
-          <Button onClick={handleSend} disabled={loading || !phone}>
+          <Button onClick={handleSend} disabled={loading || !phone || missingRequired.length > 0}>
             {loading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
