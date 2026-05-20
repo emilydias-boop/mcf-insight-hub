@@ -1,46 +1,63 @@
-## Entendimento
+# Automação "Reunião Agendada" — Caminho A + B
 
-Você quer **manter as marcações já aplicadas** (reuniões passadas da Leticia Faustino com ANAMNESE + Contrato Pago continuam destacadas no histórico) e apenas **parar de aplicar a regra daqui pra frente**.
+Combinar **lembretes oficiais** (calendário R1/R2) com **mensagem de confirmação no momento do agendamento** (gatilho de estágio).
 
-## Como funciona hoje
+## Fase 0 — Pré-requisito: estabilizar Twilio WhatsApp
 
-A regra `Anamnese - Leticia Faustino` na tabela `r2_special_markings` tem campos `valid_from` (atual: `2026-05-12`) e `valid_until` (atual: `NULL` = vigente). O matcher (`matchR2SpecialMarking`) usa a **data da reunião** (`scheduled_at`) como referência:
+Hoje há **102 falhas** em `twilio-whatsapp-send` nos últimos 7 dias (concentradas 17–18/05, destinos +5583/+5584). Ativar mais fluxos sobre uma base quebrada vai multiplicar o problema.
 
-```ts
-if (rule.valid_until && refYmd > rule.valid_until) continue;
+- Abrir logs detalhados de `twilio-whatsapp-send`, identificar o motivo (template não aprovado, From inválido, número fora de geo permission, opt-out, etc.)
+- Corrigir a causa raiz e validar com 1 envio manual de teste
+- Só seguir para Fase 1 com 0 falhas em 24h
+
+## Fase 1 — Caminho B: Confirmação no agendamento
+
+Mensagem única enviada quando o lead **entra** no estágio "Reunião Agendada". Escopo restrito às BUs de maior volume:
+
+- **Inside Sales Crédito** (`INSIDE SALES - CREDITO` → estágio `REUNIÃO AGENDADA`)
+- **Consórcio** (`Cobrança Consorcio` → `R1 Agendada`; `Efeito Alavanca + Clube` → `R1 Agendada`)
+- **Crédito HE / Construção / Condo / Imóvel Pronto** (4 pipelines, estágio `Reunião agendada`)
+
+Para cada uma: criar 1 linha em `automation_flows` com `trigger_on = enter`, `respect_business_hours = false` (confirmação deve sair na hora), `exclude_weekends = false`.
+
+**Template novo** (precisa aprovação Twilio): `Confirmação R1 Agendada` — variáveis: `{nome_lead}`, `{data_hora}`, `{nome_closer}`, `{link_reuniao}`. Hoje só existe o template `Boa Vindas` aprovado.
+
+**Step único** em `automation_steps`: `step_kind = send_message`, `delay = 0`, `channel = whatsapp`, `template_id = <novo>`.
+
+## Fase 2 — Caminho A: Lembretes oficiais
+
+Ligar `meeting_reminder_settings.is_active = true` (linha id=1 já existe, offsets `d-1, h-4, h-2, h-1, m-20, m-0` configurados, `apply_to_r1 = true`, `apply_to_r2 = true`).
+
+**Antes de ligar:**
+
+- Criar/aprovar **6 templates Twilio** correspondentes aos offsets (ou reusar 2: um "D-1" e um "no dia") — definir com o usuário quantas mensagens distintas faz sentido para o lead receber
+- Validar que `meeting-reminders-cron` (já rodando a cada 5min) consegue ler `agenda_r1` / `agenda_r2` corretamente
+- Definir `fallback_meeting_link` caso o lead não tenha link da sala
+
+Os lembretes reagem a reagendamento e cancelam sozinhos em No-Show — é o mecanismo recomendado para "está chegando".
+
+## Fase 3 — Observabilidade
+
+- Painel em `/admin/automacoes` deve mostrar: enviados, falhados, taxa de entrega por template nas últimas 24h
+- Alerta automático se falhas > 5% em 1h (já existe `automation_logs`, falta o alerta)
+
+## Detalhes técnicos
+
+**Tabelas envolvidas:** `automation_flows`, `automation_steps`, `automation_templates`, `meeting_reminder_settings`, `automation_queue`, `automation_logs`.
+
+**Edge functions tocadas:** `automation-processor` (Caminho B), `meeting-reminders-cron` (Caminho A), `twilio-whatsapp-send` (ambos — precisa fix).
+
+**Deduplicação:** `automation_blacklist` + chave (lead_id, flow_id, step_id) previne reenvio se o card sair/voltar do estágio. Confirmar que está populada corretamente antes de ligar Fase 1.
+
+**Ordem de implementação:**
+
+```text
+Fase 0 (fix Twilio) → Fase 1 (1 BU piloto: Inside Sales) → monitorar 48h
+→ Fase 1 expansão (demais BUs) → Fase 2 (lembretes) → Fase 3 (alertas)
 ```
 
-Ou seja, basta fechar a janela: reuniões com `scheduled_at <= hoje` continuam casando, reuniões futuras não.
+## Decisões necessárias do usuário antes de implementar
 
-## Mudança
-
-**1 única ação — UPDATE na regra existente:**
-
-```sql
-UPDATE public.r2_special_markings
-SET valid_until = CURRENT_DATE,
-    active = true   -- mantém ativa para o histórico ainda renderizar
-WHERE id = '59de7395-7bf3-4fc3-9006-ff6b1bedc28e';
-```
-
-## O que NÃO muda
-
-- Tabela `r2_special_markings` permanece (já foi recriada na migration anterior, vou desfazer aquele DROP recriando-a com o registro original — ver detalhes técnicos).
-- Hooks, types, modal de config e badges no AgendaCalendar / R2CloserColumnCalendar / R2LeadBadges / R2MeetingDetailDrawer / AgendaR2 — tudo permanece como estava antes.
-- Histórico visual da Leticia Faustino: preservado.
-
-## Detalhes técnicos importantes
-
-Na rodada anterior eu já executei `DROP TABLE r2_special_markings CASCADE` e deletei 3 arquivos frontend (`useR2SpecialMarkings.ts`, `R2SpecialMarkingsConfigModal.tsx`, `r2SpecialMarking.ts`). Para atender ao novo pedido preciso reverter isso:
-
-1. **Migration de recriação**: recriar `public.r2_special_markings` com mesma estrutura (colunas, RLS, trigger de updated_at) e **reinserir** o único registro original (`id 59de7395-…`, closer `3f298f4e-ab18-4c37-ad01-e90d98cf6189`, name "Anamnese - Leticia Faustino", required_channel ANAMNESE, require_contract_paid true, badge_label "Anamnese Leticia", bg #7c3aed, text #ffffff, icon 📋, valid_from 2026-05-12) já com **`valid_until = CURRENT_DATE`**.
-2. **Restaurar 3 arquivos** frontend deletados (vou recriar com o conteúdo original).
-3. Imports/uso em `AgendaCalendar.tsx`, `R2CloserColumnCalendar.tsx`, `R2LeadBadges.tsx`, `R2MeetingDetailDrawer.tsx`, `AgendaR2.tsx` — **não preciso alterar**, eles já estavam apontando pros arquivos que vou recriar.
-
-## Resultado final
-
-- Histórico (R2 da Leticia até hoje) continua com o badge roxo "Anamnese Leticia".
-- Qualquer reunião agendada/realizada **a partir de amanhã** não recebe mais a marcação.
-- Configuração permanece editável no modal (caso queiram ajustar a data ou desativar de vez no futuro).
-
-**Confirma esse plano?** Se preferir uma data de corte diferente de "hoje" (ex.: a data em que decidiram parar a captação paga), me diga.
+1. Quais BUs entram no piloto da Fase 1? (sugestão: só Inside Sales)
+2. Quantos lembretes distintos na Fase 2? (sugestão: 2 — D-1 noite e M-20)
+3. Texto/tom dos templates novos (precisa redigir antes de submeter ao Twilio)
