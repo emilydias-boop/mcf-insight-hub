@@ -136,20 +136,36 @@ serve(async (req) => {
           /\br[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
           /\b(1a|2a|1°|2°|1\.|2\.)\s*reuniao\s+(agendad|realizad)/.test(stageNameRaw) ||
           /^agendamento$/.test(stageNameRaw);
+        // Carrega o próximo meeting_slot ATIVO do deal para resolver {{data_hora}}, {{closer}} e {{link}}.
+        let meetingSlotActive: any = null;
+        let meetingCloser: any = null;
         if (isMeetingAnchored) {
-          const { data: slot } = await supabase
+          const { data: slots } = await supabase
             .from('meeting_slots')
-            .select('status')
+            .select('id, scheduled_at, status, meeting_link, video_conference_link, closer_id, meeting_type')
             .eq('deal_id', item.deal_id)
             .order('scheduled_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          const status = (slot?.status || '').toLowerCase();
+            .limit(5);
+          const lastSlot = Array.isArray(slots) && slots.length > 0 ? slots[0] : null;
+          const status = (lastSlot?.status || '').toLowerCase();
           if (['cancelled', 'no_show', 'rescheduled'].includes(status)) {
             console.log(`[AUTOMATION-PROCESSOR] Meeting no longer active (${status}) for deal ${item.deal_id}, skipping`);
             await markAsSkipped(supabase, item.id, `meeting_no_longer_active:${status}`);
             results.skipped++;
             continue;
+          }
+          // Prefere slot futuro/ativo (scheduled/confirmed) sobre o último por data.
+          meetingSlotActive =
+            (Array.isArray(slots) ? slots : []).find((s: any) =>
+              ['scheduled', 'confirmed', 'pending', 'invited'].includes((s.status || '').toLowerCase())
+            ) || lastSlot;
+          if (meetingSlotActive?.closer_id) {
+            const { data: closerRow } = await supabase
+              .from('closers')
+              .select('id, name, calendly_default_link')
+              .eq('id', meetingSlotActive.closer_id)
+              .maybeSingle();
+            meetingCloser = closerRow || null;
           }
         }
 
@@ -263,6 +279,30 @@ serve(async (req) => {
         }
 
         // 7. Build message content with variables
+        // Variáveis de reunião (data_hora, closer, link) — preenchidas só se houver slot.
+        let dataHora = '';
+        let closerNome = '';
+        let meetingLink = '';
+        if (meetingSlotActive?.scheduled_at) {
+          try {
+            const dt = new Date(meetingSlotActive.scheduled_at);
+            // Formata em BRT (America/Sao_Paulo): "21/05/2026 às 09:00"
+            const dateStr = dt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+            const timeStr = dt.toLocaleTimeString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            dataHora = `${dateStr} às ${timeStr}`;
+          } catch (_) { /* ignore */ }
+        }
+        closerNome = meetingCloser?.name || '';
+        meetingLink =
+          meetingSlotActive?.meeting_link ||
+          meetingSlotActive?.video_conference_link ||
+          meetingCloser?.calendly_default_link ||
+          '';
+
         const variables: Record<string, string> = {
           nome: contact.name || '',
           email: contact.email || '',
@@ -275,7 +315,10 @@ serve(async (req) => {
           wa_agendar_text: waAgendarText,
           wa_agendar_token: waAgendarToken,
           data: new Date().toLocaleDateString('pt-BR'),
-          link: ''
+          data_hora: dataHora,
+          closer: closerNome,
+          link: meetingLink,
+          meeting_link: meetingLink,
         };
 
         const content = replaceVariables(template.content, variables);
@@ -286,7 +329,10 @@ serve(async (req) => {
         const templateVarNames: string[] = Array.isArray(template.variables) ? template.variables : [];
         const contentVariables: Record<string, string> = {};
         templateVarNames.forEach((name, idx) => {
-          contentVariables[String(idx + 1)] = variables[name] ?? '';
+          // Twilio rejeita ContentVariables com valor vazio (erro 21656).
+          // Fallback "—" preserva o disparo quando algum campo opcional não foi resolvido.
+          const raw = variables[name];
+          contentVariables[String(idx + 1)] = raw && raw.length > 0 ? raw : '—';
         });
 
         // 8. Send via appropriate channel
