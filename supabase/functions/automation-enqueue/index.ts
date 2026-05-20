@@ -299,14 +299,21 @@ serve(async (req) => {
           );
         }
 
-        // Salvaguarda min_lead_time: nunca agendar no passado / quase-passado
-        const minLeadCutoff = new Date(now.getTime() + MIN_LEAD_TIME_MINUTES * 60_000);
-        if (scheduledAt < minLeadCutoff) {
-          console.log(
-            `[AUTOMATION-ENQUEUE] Skipping step ${step.id}: scheduledAt ${scheduledAt.toISOString()} ` +
-            `< minLead ${minLeadCutoff.toISOString()} (anchor=${effectiveAnchor})`
-          );
-          continue;
+        // Salvaguarda min_lead_time aplica-se SOMENTE a lembretes relativos
+        // (meeting_start/meeting_end/contract_paid_at). Para enqueue_time
+        // permitimos envio imediato (delay 0) — ex.: boas-vindas.
+        if (effectiveAnchor !== 'enqueue_time') {
+          const minLeadCutoff = new Date(now.getTime() + MIN_LEAD_TIME_MINUTES * 60_000);
+          if (scheduledAt < minLeadCutoff) {
+            console.log(
+              `[AUTOMATION-ENQUEUE] Skipping step ${step.id}: scheduledAt ${scheduledAt.toISOString()} ` +
+              `< minLead ${minLeadCutoff.toISOString()} (anchor=${effectiveAnchor})`
+            );
+            continue;
+          }
+        } else if (scheduledAt < now) {
+          // Nunca agendar no passado mesmo para enqueue_time
+          scheduledAt = new Date(now.getTime());
         }
 
         // Insert into queue
