@@ -121,7 +121,9 @@ Deno.serve(async (req) => {
     const templateVarNames: string[] = Array.isArray(template.variables) ? template.variables : [];
     const contentVariables: Record<string, string> = {};
     templateVarNames.forEach((name, idx) => {
-      contentVariables[String(idx + 1)] = variables[name] ?? '';
+      // Twilio rejects empty strings em ContentVariables — usar placeholder " " quando vazio
+      const raw = variables[name];
+      contentVariables[String(idx + 1)] = raw && raw.trim().length > 0 ? raw : ' ';
     });
 
     const renderedContent = replaceVariables(template.content || '', variables);
