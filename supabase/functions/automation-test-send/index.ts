@@ -14,6 +14,7 @@ interface TestSendBody {
   ownerPhone?: string;    // telefone do dono p/ wa_agendar_token (default = phone)
   ownerName?: string;     // nome do dono p/ {{dono_nome}}
   role?: 'sdr' | 'closer'; // muda mensagem padrão do botão
+  variableOverrides?: Record<string, string>; // overrides explícitos por nome de variável
 }
 
 function buildToken(phone: string, text: string): string {
@@ -118,12 +119,32 @@ Deno.serve(async (req) => {
       link: '',
     };
 
+    // Aplica overrides explícitos do dialog (têm prioridade sobre os derivados)
+    if (body.variableOverrides && typeof body.variableOverrides === 'object') {
+      for (const [k, v] of Object.entries(body.variableOverrides)) {
+        if (typeof v === 'string') variables[k] = v;
+      }
+    }
+
     const templateVarNames: string[] = Array.isArray(template.variables) ? template.variables : [];
+
+    // Validação: rejeita se alguma variável obrigatória do template ficar vazia.
+    const missing: string[] = [];
+    templateVarNames.forEach((name) => {
+      const v = variables[name];
+      if (!v || typeof v !== 'string' || v.trim().length === 0) missing.push(name);
+    });
+    if (missing.length > 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Variáveis obrigatórias vazias: ${missing.join(', ')}`,
+        missingVariables: missing,
+      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const contentVariables: Record<string, string> = {};
     templateVarNames.forEach((name, idx) => {
-      // Twilio rejects empty strings em ContentVariables — usar placeholder " " quando vazio
-      const raw = variables[name];
-      contentVariables[String(idx + 1)] = raw && raw.trim().length > 0 ? raw : ' ';
+      contentVariables[String(idx + 1)] = variables[name];
     });
 
     const renderedContent = replaceVariables(template.content || '', variables);
