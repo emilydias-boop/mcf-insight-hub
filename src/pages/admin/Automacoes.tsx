@@ -5,6 +5,7 @@ import { TemplateList } from "@/components/automations/TemplateList";
 import { AutomationLogs } from "@/components/automations/AutomationLogs";
 import { AutomationSettings } from "@/components/automations/AutomationSettings";
 import { AutomationMetrics } from "@/components/automations/AutomationMetrics";
+import { AutomationStatusPanel } from "@/components/automations/AutomationStatusPanel";
 import { ReplicationRulesEditor } from "@/components/crm/automations/ReplicationRulesEditor";
 import { OutboundWebhookList } from "@/components/automations/OutboundWebhookList";
 import { IncomingWebhooksGlobalList } from "@/components/automations/IncomingWebhooksGlobalList";
@@ -20,6 +21,8 @@ export default function Automacoes() {
           Gerencie fluxos de automação de mensagens por stage do CRM
         </p>
       </div>
+
+      <AutomationStatusPanel />
 
       <AutomationMetrics />
 
