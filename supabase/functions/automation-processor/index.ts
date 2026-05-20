@@ -298,11 +298,56 @@ serve(async (req) => {
           } catch (_) { /* ignore */ }
         }
         closerNome = meetingCloser?.name || '';
-        meetingLink =
-          meetingSlotActive?.meeting_link ||
-          meetingSlotActive?.video_conference_link ||
-          meetingCloser?.calendly_default_link ||
-          '';
+        // Resolver link da agenda real do closer (closer_meeting_links) usando BRT.
+        let linkSource = 'none';
+        if (meetingSlotActive?.closer_id && meetingSlotActive?.scheduled_at) {
+          try {
+            const dt = new Date(meetingSlotActive.scheduled_at);
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Sao_Paulo',
+              weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+            }).formatToParts(dt);
+            const wdMap: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+            const wd = wdMap[parts.find(p => p.type==='weekday')!.value];
+            const hh = parts.find(p => p.type==='hour')!.value.padStart(2,'0');
+            const mm = parts.find(p => p.type==='minute')!.value.padStart(2,'0');
+            const ss = parts.find(p => p.type==='second')!.value.padStart(2,'0');
+            const startTime = `${hh}:${mm}:${ss}`;
+            const { data: linkRow } = await supabase
+              .from('closer_meeting_links')
+              .select('google_meet_link')
+              .eq('closer_id', meetingSlotActive.closer_id)
+              .eq('day_of_week', wd)
+              .eq('start_time', startTime)
+              .maybeSingle();
+            if (linkRow?.google_meet_link) {
+              meetingLink = linkRow.google_meet_link.startsWith('http')
+                ? linkRow.google_meet_link
+                : `https://${linkRow.google_meet_link}`;
+              linkSource = 'closer_meeting_links';
+            }
+          } catch (e) {
+            console.warn('[AUTOMATION-PROCESSOR] closer_meeting_links lookup failed:', (e as any)?.message);
+          }
+        }
+        if (!meetingLink && meetingSlotActive?.meeting_link) {
+          meetingLink = meetingSlotActive.meeting_link;
+          linkSource = 'meeting_slots.meeting_link';
+        }
+        if (!meetingLink && meetingSlotActive?.video_conference_link) {
+          meetingLink = meetingSlotActive.video_conference_link;
+          linkSource = 'meeting_slots.video_conference_link';
+        }
+        console.log(`[AUTOMATION-PROCESSOR] deal=${item.deal_id} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
+
+        // Se o template usa {{link}} ou {{meeting_link}} e não temos link real → não envia.
+        const templateUsesLink = /\{\{\s*(link|meeting_link)\s*\}\}/i.test(templateText);
+        if (isMeetingAnchored && templateUsesLink && !meetingLink) {
+          console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem link da agenda do closer — pulando`);
+          await markAsSkipped(supabase, item.id, 'meeting_link_unresolved');
+          results.skipped++;
+          continue;
+        }
 
         const variables: Record<string, string> = {
           nome: contact.name || '',

@@ -205,9 +205,20 @@ serve(async (req) => {
 
           // Resolve meeting link
           let meetingLink: string | null = null;
+          let linkSource = 'none';
           if (slot.closer_id) {
-            const dayOfWeek = slotDate.getDay();
-            const timeStr = slotDate.toISOString().substring(11, 19);
+            // Calcula day_of_week e start_time em America/Sao_Paulo (BRT),
+            // que é como a agenda do closer está cadastrada.
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'America/Sao_Paulo',
+              weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+            }).formatToParts(slotDate);
+            const wdMap: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+            const dayOfWeek = wdMap[parts.find(p => p.type==='weekday')!.value];
+            const hh = parts.find(p => p.type==='hour')!.value.padStart(2,'0');
+            const mm = parts.find(p => p.type==='minute')!.value.padStart(2,'0');
+            const ss = parts.find(p => p.type==='second')!.value.padStart(2,'0');
+            const timeStr = `${hh}:${mm}:${ss}`;
             const { data: linkRow } = await supabase
               .from('closer_meeting_links')
               .select('google_meet_link')
@@ -215,9 +226,18 @@ serve(async (req) => {
               .eq('day_of_week', dayOfWeek)
               .eq('start_time', timeStr)
               .maybeSingle();
-            meetingLink = linkRow?.google_meet_link || null;
+            if (linkRow?.google_meet_link) {
+              meetingLink = linkRow.google_meet_link.startsWith('http')
+                ? linkRow.google_meet_link
+                : `https://${linkRow.google_meet_link}`;
+              linkSource = 'closer_meeting_links';
+            }
           }
-          if (!meetingLink) meetingLink = fallbackLink;
+          if (!meetingLink && fallbackLink) {
+            meetingLink = fallbackLink;
+            linkSource = 'fallback';
+          }
+          console.log(`[MEETING-REMINDERS-CRON] slot=${slot.id} offset=${offsetKey} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
 
           if (!meetingLink) {
             await supabase.from('meeting_reminders_log').insert({
