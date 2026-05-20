@@ -44,11 +44,49 @@ interface ExportDealsDialogProps {
   onOpenChange: (open: boolean) => void;
   deals: any[];
   stages: Stage[];
+  channelMap?: Map<string, 'a010' | 'bio' | 'live'>;
 }
 
-export const ExportDealsDialog = ({ open, onOpenChange, deals, stages }: ExportDealsDialogProps) => {
+type ExportChannel = 'A010' | 'ANAMNESE_COMPLETA' | 'ANAMNESE_INCOMPLETA' | 'OUTROS';
+
+const CHANNEL_OPTIONS: { key: ExportChannel; label: string }[] = [
+  { key: 'A010', label: 'A010' },
+  { key: 'ANAMNESE_COMPLETA', label: 'Anamnese Completa' },
+  { key: 'ANAMNESE_INCOMPLETA', label: 'Anamnese Incompleta' },
+  { key: 'OUTROS', label: 'Outros' },
+];
+
+function normalizeTagsForChannel(tagsRaw: any): string[] {
+  if (!Array.isArray(tagsRaw)) return [];
+  return tagsRaw.map((t: any) => {
+    if (typeof t === 'string') {
+      if (t.startsWith('{')) {
+        try { return String(JSON.parse(t)?.name ?? t).toUpperCase().trim(); }
+        catch { return t.toUpperCase().trim(); }
+      }
+      return t.toUpperCase().trim();
+    }
+    return String(t?.name ?? '').toUpperCase().trim();
+  });
+}
+
+function getDealChannel(
+  deal: any,
+  channelMap?: Map<string, 'a010' | 'bio' | 'live'>,
+): ExportChannel {
+  if (channelMap?.get(deal.id) === 'a010') return 'A010';
+  const tags = normalizeTagsForChannel(deal.tags);
+  if (tags.some((t) => t === 'ANAMNESE-INCOMPLETA')) return 'ANAMNESE_INCOMPLETA';
+  if (tags.some((t) => t === 'ANAMNESE')) return 'ANAMNESE_COMPLETA';
+  return 'OUTROS';
+}
+
+export const ExportDealsDialog = ({ open, onOpenChange, deals, stages, channelMap }: ExportDealsDialogProps) => {
   const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set(stages.map(s => s.id)));
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set(EXPORT_FIELDS.map(f => f.key)));
+  const [selectedChannels, setSelectedChannels] = useState<Set<ExportChannel>>(
+    new Set(CHANNEL_OPTIONS.map(c => c.key)),
+  );
 
   // Reset selections when stages change
   useMemo(() => {
@@ -87,9 +125,28 @@ export const ExportDealsDialog = ({ open, onOpenChange, deals, stages }: ExportD
     }
   };
 
+  const toggleChannel = (key: ExportChannel) => {
+    setSelectedChannels(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllChannels = () => {
+    if (selectedChannels.size === CHANNEL_OPTIONS.length) {
+      setSelectedChannels(new Set());
+    } else {
+      setSelectedChannels(new Set(CHANNEL_OPTIONS.map(c => c.key)));
+    }
+  };
+
   const filteredDeals = useMemo(() => {
-    return deals.filter(d => selectedStages.has(d.stage_id));
-  }, [deals, selectedStages]);
+    return deals.filter(d =>
+      selectedStages.has(d.stage_id) &&
+      selectedChannels.has(getDealChannel(d, channelMap)),
+    );
+  }, [deals, selectedStages, selectedChannels, channelMap]);
 
   const handleExport = () => {
     const activeFields = EXPORT_FIELDS.filter(f => selectedFields.has(f.key));
@@ -125,6 +182,29 @@ export const ExportDealsDialog = ({ open, onOpenChange, deals, stages }: ExportD
         </DialogHeader>
 
         <ScrollArea className="max-h-[55vh] pr-4">
+          {/* Channels section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold">Canais</h4>
+              <Button variant="ghost" size="sm" onClick={toggleAllChannels} className="text-xs h-7">
+                {selectedChannels.size === CHANNEL_OPTIONS.length ? 'Desmarcar todos' : 'Marcar todos'}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {CHANNEL_OPTIONS.map(channel => (
+                <label key={channel.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={selectedChannels.has(channel.key)}
+                    onCheckedChange={() => toggleChannel(channel.key)}
+                  />
+                  <span className="truncate">{channel.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <Separator className="my-4" />
+
           {/* Stages section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -176,7 +256,7 @@ export const ExportDealsDialog = ({ open, onOpenChange, deals, stages }: ExportD
           </span>
           <Button
             onClick={handleExport}
-            disabled={selectedStages.size === 0 || selectedFields.size === 0 || filteredDeals.length === 0}
+            disabled={selectedStages.size === 0 || selectedChannels.size === 0 || selectedFields.size === 0 || filteredDeals.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
             Exportar Excel
