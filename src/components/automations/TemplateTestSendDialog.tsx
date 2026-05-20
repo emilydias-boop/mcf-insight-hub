@@ -267,6 +267,33 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
             </Select>
           </div>
 
+          {requiredVars.length > 0 && (
+            <div className="space-y-2 rounded-md border border-dashed p-3">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Variáveis do template
+              </Label>
+              {requiredVars.map((v) => (
+                <div key={v} className="space-y-1">
+                  <Label className="text-xs">
+                    {`{{${v}}}`} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={overrides[v] ?? ""}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({ ...prev, [v]: e.target.value }))
+                    }
+                    placeholder={`Valor para ${v}`}
+                  />
+                </div>
+              ))}
+              {missingRequired.length > 0 && (
+                <p className="text-xs text-destructive">
+                  Preencha: {missingRequired.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {result && (
             <div
               className={`rounded-md border p-3 text-sm ${
@@ -328,7 +355,7 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
           <Button variant="outline" onClick={() => handleClose(false)} disabled={loading}>
             Fechar
           </Button>
-          <Button onClick={handleSend} disabled={loading || !phone}>
+          <Button onClick={handleSend} disabled={loading || !phone || missingRequired.length > 0}>
             {loading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
