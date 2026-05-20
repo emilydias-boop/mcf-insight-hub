@@ -44,6 +44,7 @@ interface ExportDealsDialogProps {
   onOpenChange: (open: boolean) => void;
   deals: any[];
   stages: Stage[];
+  /** Mapa email (lowercase) → canal detectado pelo board (A010 = comprador A010). */
   channelMap?: Map<string, 'a010' | 'bio' | 'live'>;
 }
 
@@ -74,8 +75,15 @@ function getDealChannel(
   deal: any,
   channelMap?: Map<string, 'a010' | 'bio' | 'live'>,
 ): ExportChannel {
-  if (channelMap?.get(deal.id) === 'a010') return 'A010';
+  const email = (deal?.crm_contacts?.email || deal?.contact?.email || deal?.email || '')
+    .toString()
+    .toLowerCase()
+    .trim();
+  if (email && channelMap?.get(email) === 'a010') return 'A010';
+
   const tags = normalizeTagsForChannel(deal.tags);
+  // Fallback: tag A010 também identifica como A010 (caso o map ainda não tenha carregado).
+  if (tags.some((t) => t === 'A010' || t.startsWith('A010 ') || t.includes('A010 (MAKE)'))) return 'A010';
   if (tags.some((t) => t === 'ANAMNESE-INCOMPLETA')) return 'ANAMNESE_INCOMPLETA';
   if (tags.some((t) => t === 'ANAMNESE')) return 'ANAMNESE_COMPLETA';
   return 'OUTROS';
