@@ -433,7 +433,17 @@ async function sendWhatsApp(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      // supabase.functions.invoke loses the response body on non-2xx.
+      // Try to extract the real Twilio error (code + message) from error.context.
+      let detailed = error.message;
+      try {
+        const resp = (error as any)?.context?.response ?? (error as any)?.context;
+        if (resp && typeof resp.text === 'function') {
+          const txt = await resp.text();
+          if (txt) detailed = `${error.message} | body=${txt.slice(0, 500)}`;
+        }
+      } catch (_) { /* ignore */ }
+      return { success: false, error: detailed };
     }
 
     return { success: data?.success, externalId: data?.messageSid, error: data?.error };
@@ -463,7 +473,15 @@ async function sendEmail(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      let detailed = error.message;
+      try {
+        const resp = (error as any)?.context?.response ?? (error as any)?.context;
+        if (resp && typeof resp.text === 'function') {
+          const txt = await resp.text();
+          if (txt) detailed = `${error.message} | body=${txt.slice(0, 500)}`;
+        }
+      } catch (_) { /* ignore */ }
+      return { success: false, error: detailed };
     }
 
     return { success: data?.success, externalId: data?.messageId, error: data?.error };

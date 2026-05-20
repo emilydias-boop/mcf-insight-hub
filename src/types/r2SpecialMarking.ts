@@ -20,6 +20,8 @@ export interface R2SpecialMarkingMatchInput {
   channel: 'ANAMNESE' | 'A010' | 'Outro' | null | undefined;
   r1CloserName: string | null | undefined;
   isContractPaid: boolean;
+  /** When set and isContractPaid is true, this closer name is also accepted as a match. */
+  contractPaidCloserName?: string | null;
   /** Reference date used to evaluate valid_from / valid_until (e.g. meeting scheduled_at). */
   referenceDate?: Date | string | null;
 }
