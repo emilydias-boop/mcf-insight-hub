@@ -1,46 +1,19 @@
-# Painel de Status da Automação em tempo real
+# Mover "Últimas atividades" para a aba Logs
 
-Adicionar bloco visual destacado no topo da página **Admin › Automações** (`/admin/automacoes`) com a saúde do pipeline em tempo real.
+Hoje o painel de status (topo de `/admin/automacoes`) mostra 3 cards + uma lista das 8 últimas tentativas. O usuário quer essa lista **apenas** dentro da aba **Logs**.
 
-## O que aparece
+## Mudança
 
-3 cards grandes + ticker de atividade:
+- `src/components/automations/AutomationStatusPanel.tsx`
+  - Remover o `<Card>` "Últimas atividades" e o hook `useRecentActivity`.
+  - Manter os 3 cards (Pendentes / Concluídos / Com erro) e o indicador "live".
+  - Remover imports não usados (`Badge`, ícones de canal/status e `formatDistanceToNow`).
 
-```text
-┌──────────────┬──────────────┬──────────────┐
-│ PENDENTES    │ CONCLUÍDOS   │ COM ERRO     │
-│   42         │   1.287      │   3          │
-│ na fila      │ hoje         │ últimas 24h  │
-│ ● live       │              │ ⚠ atenção    │
-└──────────────┴──────────────┴──────────────┘
-┌─────────────────────────────────────────────┐
-│ Últimas atividades (auto-atualiza)          │
-│ ✓ 09:42 WhatsApp → ANTONIO MATHEUS (sent)   │
-│ ⏳ 09:41 Email → ... (pending)              │
-│ ✗ 09:40 WhatsApp → ... (failed: timeout)    │
-└─────────────────────────────────────────────┘
-```
-
-- **Pendentes**: `automation_queue.status = 'pending'` + `automation_logs.status = 'pending'`.
-- **Concluídos (hoje)**: `automation_logs.status IN (sent, delivered, read)` no dia atual.
-- **Com erro (24h)**: `automation_logs.status = 'failed'` nas últimas 24h, com tooltip do último `error_message`.
-- **Ticker**: últimos 8 registros de `automation_logs` (ícone por status, canal, destinatário, hora relativa).
-
-## Tempo real
-
-- Inscrição em `automation_logs` e `automation_queue` via `supabase.channel(...).on('postgres_changes', ...)`.
-- A cada evento → `queryClient.invalidateQueries` das chaves do painel.
-- Indicador "● live" pulsa verde quando o canal está conectado, cinza quando offline.
-- Fallback de polling a cada 15s caso o realtime caia.
-
-## Arquivos
-
-- **Novo**: `src/components/automations/AutomationStatusPanel.tsx` — painel + hook interno de subscription.
-- **Novo**: `src/hooks/useAutomationRealtime.ts` — gerencia canal Supabase + invalidações.
-- **Editar**: `src/pages/admin/Automacoes.tsx` — renderiza `<AutomationStatusPanel />` acima de `<AutomationMetrics />` (mantém os existentes).
-- Reaproveita tokens semânticos (`bg-card`, `text-destructive`, `text-success`/`text-green-600` já em uso no projeto).
+- `src/components/automations/AutomationLogs.tsx`
+  - Acrescentar no topo um bloco compacto **"Últimas atividades (auto-atualiza)"** com as 8 entradas mais recentes (mesma UI removida do painel), antes da tabela/filtros existentes.
+  - Reaproveitar a query realtime via `useAutomationRealtime` para refrescar a lista.
 
 ## Sem mudanças
 
-- Nada de migration nova (tabelas e políticas já existem; admin já lê `automation_logs` e `automation_queue`).
-- Nenhuma edge function alterada.
+- Nenhuma migration, nenhuma edge function.
+- Cards de Pendentes/Concluídos/Com erro continuam no painel.
