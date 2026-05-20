@@ -74,7 +74,7 @@ serve(async (req) => {
         meeting_slot_attendees!inner(
           id, status, deal_id,
           crm_deals!inner(
-            id, name, owner_id, contact_id, bu_origem,
+            id, name, owner_id, contact_id, origin_id,
             crm_contacts(id, name, email, phone)
           )
         )
@@ -89,6 +89,26 @@ serve(async (req) => {
         JSON.stringify({ ...summary, message: 'No upcoming meetings' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Build origin_id -> bu map (deriva BU a partir de bu_origin_mapping)
+    const originIds = Array.from(new Set(
+      slots.flatMap((s: any) =>
+        (s.meeting_slot_attendees || [])
+          .map((a: any) => a?.crm_deals?.origin_id)
+          .filter(Boolean)
+      )
+    ));
+    const originBuMap: Record<string, string> = {};
+    if (originIds.length > 0) {
+      const { data: mappings } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_id, bu')
+        .eq('entity_type', 'origin')
+        .in('entity_id', originIds);
+      for (const m of (mappings || [])) {
+        if (m.entity_id && m.bu) originBuMap[m.entity_id] = m.bu;
+      }
     }
 
     const now = Date.now();
@@ -107,11 +127,13 @@ serve(async (req) => {
         if (!['invited', 'scheduled'].includes(attendee.status)) continue;
         const deal = attendee.crm_deals;
         if (!deal) continue;
-        // BU filter: if applies_to_bus is set, skip deals whose bu_origem is not in the list
+        // Deriva BU via bu_origin_mapping (origin_id → bu)
+        const dealBu = (deal.origin_id ? originBuMap[deal.origin_id] : '') || '';
+        // BU filter: if applies_to_bus is set, skip deals whose bu is not in the list
         if (Array.isArray(settings.applies_to_bus) && settings.applies_to_bus.length > 0) {
-          const dealBu = (deal.bu_origem || '').toString().toLowerCase();
+          const dealBuLower = dealBu.toString().toLowerCase();
           const allowed = settings.applies_to_bus.map((b: string) => (b || '').toLowerCase());
-          if (!dealBu || !allowed.includes(dealBu)) continue;
+          if (!dealBuLower || !allowed.includes(dealBuLower)) continue;
         }
         const contact = deal.crm_contacts;
 
@@ -251,7 +273,7 @@ serve(async (req) => {
                   closer_name: closerName,
                   sdr_name: sdrName,
                   whatsapp_owner: whatsappOwner,
-                  bu_name: deal.bu_origem || '',
+                  bu_name: dealBu,
                 },
               },
             });
