@@ -107,6 +107,12 @@ serve(async (req) => {
         if (!['invited', 'scheduled'].includes(attendee.status)) continue;
         const deal = attendee.crm_deals;
         if (!deal) continue;
+        // BU filter: if applies_to_bus is set, skip deals whose bu_origem is not in the list
+        if (Array.isArray(settings.applies_to_bus) && settings.applies_to_bus.length > 0) {
+          const dealBu = (deal.bu_origem || '').toString().toLowerCase();
+          const allowed = settings.applies_to_bus.map((b: string) => (b || '').toLowerCase());
+          if (!dealBu || !allowed.includes(dealBu)) continue;
+        }
         const contact = deal.crm_contacts;
 
         // Reschedule cleanup: if slot updated after any prior log, drop logs older than (scheduled_at - 26h)
