@@ -1055,6 +1055,7 @@ const Negocios = () => {
           stage_name: s.stage_name,
           stage_order: s.stage_order,
         }))}
+        channelMap={channelMap}
       />
       
       {/* Drawer para deals cross-pipeline */}
