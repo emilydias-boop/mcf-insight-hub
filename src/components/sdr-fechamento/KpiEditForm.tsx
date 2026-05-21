@@ -29,6 +29,11 @@ interface KpiEditFormProps {
   metaContratosPercentual?: number; // Novo: % das Realizadas para meta de contratos
   cargoNivel?: number | null; // Nível do cargo (1=N1, 2=N2, 3=N3) para fallback de meta_percentual
   closerAgendaMetrics?: { r1_alocadas: number; r1_realizadas: number; contratos_pagos: number; no_shows: number; vendas_parceria: number; r2_agendadas: number };
+  // Overrides persistidos em sdr_month_payout (METAS PERSONALIZADAS)
+  metaAgendadasOverride?: number | null;
+  metaRealizadasOverride?: number | null;
+  metaTentativasOverride?: number | null;
+  diasUteisMetaOverride?: number | null; // dias_uteis_trabalhados (dias que contam para meta)
 }
 
 export const KpiEditForm = ({
@@ -48,12 +53,24 @@ export const KpiEditForm = ({
   metaContratosPercentual,
   cargoNivel,
   closerAgendaMetrics,
+  metaAgendadasOverride,
+  metaRealizadasOverride,
+  metaTentativasOverride,
+  diasUteisMetaOverride,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
-  // Calcular metas baseadas na meta diária do SDR
-  const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
-  // Meta fixa de tentativas: 84 por dia × dias úteis
-  const metaTentativasCalculada = 84 * diasUteisMes;
+  // Dias úteis efetivos para meta: override > dias úteis do mês
+  const diasUteisParaMeta = (diasUteisMetaOverride != null && diasUteisMetaOverride > 0)
+    ? diasUteisMetaOverride
+    : diasUteisMes;
+  // Calcular metas baseadas na meta diária do SDR (ou override custom)
+  const metaAgendadasCalculada = (metaAgendadasOverride != null && metaAgendadasOverride > 0)
+    ? metaAgendadasOverride
+    : sdrMetaDiaria * diasUteisParaMeta;
+  // Meta fixa de tentativas: 84/dia × dias úteis (ou override custom)
+  const metaTentativasCalculada = (metaTentativasOverride != null && metaTentativasOverride > 0)
+    ? metaTentativasOverride
+    : 84 * diasUteisParaMeta;
   // Meta fixa de organização: 100%
   const metaOrganizacaoFixa = 100;
   
