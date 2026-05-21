@@ -116,24 +116,11 @@ serve(async (req) => {
 
     console.log('[TWILIO-WHATSAPP] Message sent:', result.sid);
 
-    // Auto-move deal para "Em contato" (qualquer envio de WhatsApp conta como contato)
-    if (dealId) {
-      try {
-        const { createClient } = await import('npm:@supabase/supabase-js@2');
-        const sb = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-        await sb.rpc('auto_move_deal_to_em_contato', {
-          p_deal_id: dealId,
-          p_source: 'whatsapp',
-          p_description: 'Movido automaticamente para "Em contato" — WhatsApp enviado',
-          p_metadata: { message_sid: result.sid, to: normalizedTo },
-        });
-      } catch (mvErr) {
-        console.error('[Em contato] WhatsApp auto-move erro:', mvErr);
-      }
-    }
+    // NOTA: auto-move para "Em contato" foi removido daqui.
+    // Esta função é invocada tanto por SDRs (manual) quanto por automações.
+    // Movimentação automática só deve ocorrer por ação manual do SDR
+    // (registrada via deal_activities tipo 'call'/'note'/'qualification_note',
+    // que já dispara trg_auto_move_em_contato_from_activity).
 
     return new Response(
       JSON.stringify({ 
