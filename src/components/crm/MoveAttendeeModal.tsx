@@ -73,8 +73,10 @@ export function MoveAttendeeModal({
   const [moveReason, setMoveReason] = useState('');
   const queryClient = useQueryClient();
   
-  const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  const { role, allRoles } = useAuth();
+  // Coordenador para cima (coordenador, manager, admin) podem mover reuniões em datas passadas
+  const canMovePast = (allRoles || []).some(r => r === 'admin' || r === 'manager' || r === 'coordenador') || role === 'admin';
+  const isAdmin = canMovePast;
   
   const { data: closers } = useClosers();
   const dayOfWeek = selectedDate ? selectedDate.getDay() : 0;
