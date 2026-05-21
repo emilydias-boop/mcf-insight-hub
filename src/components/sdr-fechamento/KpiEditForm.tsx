@@ -437,7 +437,9 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Meta: {metaAgendadasCalculada} ({sdrMetaDiaria}/dia × {diasUteisMes} dias)
+                    Meta: {metaAgendadasCalculada} {(metaAgendadasOverride != null && metaAgendadasOverride > 0)
+                      ? '(personalizada)'
+                      : `(${sdrMetaDiaria}/dia × ${diasUteisParaMeta} dias)`}
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.agendamentos}</span>
                     )}
@@ -463,7 +465,11 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)
+                    {(metaRealizadasOverride != null && metaRealizadasOverride > 0) ? (
+                      <>Meta: {metaRealizadasOverride} (personalizada)</>
+                    ) : (
+                      <>Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)</>
+                    )}
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_realizada}</span>
                     )}
@@ -515,7 +521,9 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Meta: {metaTentativasCalculada} (84/dia × {diasUteisMes} dias)
+                    Meta: {metaTentativasCalculada} {(metaTentativasOverride != null && metaTentativasOverride > 0)
+                      ? '(personalizada)'
+                      : `(84/dia × ${diasUteisParaMeta} dias)`}
                     {callMetrics.data && (
                       <span className="ml-1 text-purple-500">• Twilio: {callMetrics.data.totalCalls}</span>
                     )}
