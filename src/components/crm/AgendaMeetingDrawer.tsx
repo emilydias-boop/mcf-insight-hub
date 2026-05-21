@@ -59,6 +59,7 @@ import {
   useUpdateAttendeePhone,
 } from '@/hooks/useAgendaData';
 import { MoveAttendeeModal } from './MoveAttendeeModal';
+import { MoveEntireMeetingModal } from './MoveEntireMeetingModal';
 import { AttendeeNotesSection } from './AttendeeNotesSection';
 import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
@@ -147,6 +148,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editedPhone, setEditedPhone] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showMoveEntireModal, setShowMoveEntireModal] = useState(false);
   const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
   const [showLinkContractDialog, setShowLinkContractDialog] = useState(false);
   const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
@@ -1361,6 +1363,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               <Calendar className="h-4 w-4 mr-2" />
               Reagendar Reunião Inteira
             </Button>
+
+            {/* Move Entire Meeting (Coordenador+) */}
+            {canTransfer && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                onClick={() => setShowMoveEntireModal(true)}
+              >
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                Mover Reunião Inteira
+              </Button>
+            )}
 
             {/* View Deal Button */}
             {meeting.deal_id && (
