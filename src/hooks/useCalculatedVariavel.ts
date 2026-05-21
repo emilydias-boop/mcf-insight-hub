@@ -48,6 +48,8 @@ function calcularMeta(
   }
 
   if (nome === 'realizadas') {
+    const override = (payout as any)?.meta_realizadas_ajustada;
+    if (override != null && override > 0) return override;
     const agendadasReais = kpi?.reunioes_agendadas || 0;
     return Math.round(agendadasReais * 0.7);
   }

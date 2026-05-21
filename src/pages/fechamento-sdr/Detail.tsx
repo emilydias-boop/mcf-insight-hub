@@ -628,6 +628,10 @@ const FechamentoSDRDetail = () => {
               metaContratosPercentual={metaContratosPercentual}
               cargoNivel={employeeEarly?.cargo_catalogo?.nivel}
               closerAgendaMetrics={isCloser ? closerMetrics.data ?? undefined : undefined}
+              metaAgendadasOverride={(payout as any)?.config_overrides?.meta_agendadas_ajustada ?? null}
+              metaRealizadasOverride={(payout as any)?.config_overrides?.meta_realizadas_ajustada ?? null}
+              metaTentativasOverride={(payout as any)?.config_overrides?.meta_tentativas_ajustada ?? null}
+              diasUteisMetaOverride={(payout as any)?.dias_uteis_trabalhados ?? null}
             />
           )}
 

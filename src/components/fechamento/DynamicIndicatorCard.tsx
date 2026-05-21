@@ -85,10 +85,16 @@ export const DynamicIndicatorCard = ({
     metaDiaria = sdrMetaDiaria;
     metaAjustada = (payout as any)?.meta_agendadas_ajustada || (sdrMetaDiaria * diasUteisMes);
   } else if (nome === 'realizadas') {
+    const overrideReal = (payout as any)?.meta_realizadas_ajustada;
     const agendadasReais = kpi?.reunioes_agendadas || 0;
     metaDiaria = agendadasReais;
-    metaAjustada = Math.round(agendadasReais * 0.7);
-    metaSubtitle = `70% de ${agendadasReais} agend. = ${metaAjustada}`;
+    if (overrideReal != null && overrideReal > 0) {
+      metaAjustada = overrideReal;
+      metaSubtitle = `Meta personalizada = ${metaAjustada}`;
+    } else {
+      metaAjustada = Math.round(agendadasReais * 0.7);
+      metaSubtitle = `70% de ${agendadasReais} agend. = ${metaAjustada}`;
+    }
   } else if (nome === 'tentativas') {
     metaDiaria = 84;
     metaAjustada = (payout as any)?.meta_tentativas_ajustada ?? (84 * diasUteisMes);
