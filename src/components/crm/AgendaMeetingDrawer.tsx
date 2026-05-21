@@ -1402,6 +1402,12 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           open={showMoveModal}
           onOpenChange={setShowMoveModal}
         />
+
+        <MoveEntireMeetingModal
+          meeting={activeMeeting as any}
+          open={showMoveEntireModal}
+          onOpenChange={setShowMoveEntireModal}
+        />
       </SheetContent>
 
       {/* R2 Scheduling Prompt Dialog */}
