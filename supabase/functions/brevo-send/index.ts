@@ -91,24 +91,10 @@ serve(async (req) => {
 
     console.log('[BREVO-SEND] Email sent successfully:', data);
 
-    // Auto-move deal para "Em contato" (qualquer envio de e-mail conta como contato)
-    if (dealId) {
-      try {
-        const { createClient } = await import('npm:@supabase/supabase-js@2');
-        const sb = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-        await sb.rpc('auto_move_deal_to_em_contato', {
-          p_deal_id: dealId,
-          p_source: 'email',
-          p_description: `Movido automaticamente para "Em contato" — e-mail enviado (${subject})`,
-          p_metadata: { to, subject, message_id: data.messageId },
-        });
-      } catch (mvErr) {
-        console.error('[Em contato] Email auto-move erro:', mvErr);
-      }
-    }
+    // NOTA: auto-move para "Em contato" foi removido daqui.
+    // brevo-send é invocado por automações e por fluxos sistêmicos (NFSe, relatórios),
+    // então não devemos mover o lead automaticamente. Movimentação só deve ocorrer
+    // por ação manual do SDR (deal_activities tipo 'call'/'note'/'qualification_note').
 
     return new Response(
       JSON.stringify({ success: true, messageId: data.messageId }),

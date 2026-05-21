@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS trg_auto_move_em_contato_from_automation_log ON public.automation_logs;
+DROP FUNCTION IF EXISTS public.auto_move_em_contato_from_automation_log();
