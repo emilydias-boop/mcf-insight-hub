@@ -2529,6 +2529,87 @@ export type Database = {
           },
         ]
       }
+      consorcio_assembleia_contemplados: {
+        Row: {
+          assembleia_id: string
+          card_id: string | null
+          cota: string
+          created_at: string
+          id: string
+          motivo: string
+          percentual_lance: number | null
+        }
+        Insert: {
+          assembleia_id: string
+          card_id?: string | null
+          cota: string
+          created_at?: string
+          id?: string
+          motivo: string
+          percentual_lance?: number | null
+        }
+        Update: {
+          assembleia_id?: string
+          card_id?: string | null
+          cota?: string
+          created_at?: string
+          id?: string
+          motivo?: string
+          percentual_lance?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_assembleia_contemplados_assembleia_id_fkey"
+            columns: ["assembleia_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_assembleias_historico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_assembleia_contemplados_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consorcio_assembleias_historico: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_assembleia: string
+          grupo: string
+          id: string
+          numero_loteria_aplicado: string | null
+          observacao: string | null
+          qtd_contemplados: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_assembleia: string
+          grupo: string
+          id?: string
+          numero_loteria_aplicado?: string | null
+          observacao?: string | null
+          qtd_contemplados?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_assembleia?: string
+          grupo?: string
+          id?: string
+          numero_loteria_aplicado?: string | null
+          observacao?: string | null
+          qtd_contemplados?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       consorcio_boletos: {
         Row: {
           card_id: string | null
@@ -2883,6 +2964,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      consorcio_faixas_recomendacao: {
+        Row: {
+          created_at: string
+          distancia_max: number | null
+          distancia_min: number
+          id: string
+          ordem: number
+          percentual_lance: number | null
+          tipo_produto: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distancia_max?: number | null
+          distancia_min?: number
+          id?: string
+          ordem?: number
+          percentual_lance?: number | null
+          tipo_produto: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distancia_max?: number | null
+          distancia_min?: number
+          id?: string
+          ordem?: number
+          percentual_lance?: number | null
+          tipo_produto?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      consorcio_grupos_config: {
+        Row: {
+          created_at: string
+          grupo: string
+          observacao: string | null
+          updated_at: string
+          vagas_padrao: number
+        }
+        Insert: {
+          created_at?: string
+          grupo: string
+          observacao?: string | null
+          updated_at?: string
+          vagas_padrao?: number
+        }
+        Update: {
+          created_at?: string
+          grupo?: string
+          observacao?: string | null
+          updated_at?: string
+          vagas_padrao?: number
+        }
+        Relationships: []
       }
       consorcio_lance_history: {
         Row: {

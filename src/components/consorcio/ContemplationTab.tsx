@@ -8,19 +8,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import { Search, Eye, Target, Dices, Calculator, AlertTriangle, Info } from 'lucide-react';
+import { Eye, Target, Dices, Calculator, AlertTriangle, Info, Settings } from 'lucide-react';
 import { useContemplationCards, useGruposDisponiveis, useRegistrarConsultaLoteria } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
 import {
   calcularNumeroAplicado,
-  recomendarLancesGrupo,
-  getCorChanceLabel,
-  type RecomendacaoCota,
+  calcularRecomendacoesPorFaixa,
+  getCorChanceFaixa,
+  type RecomendacaoFaixa,
   type ResultadoFallback,
 } from '@/lib/contemplacao';
+import {
+  useFaixasRecomendacao,
+  useHistoricoAssembleiasGrupo,
+  calcularVagasEstimadas,
+  type CategoriaBem,
+} from '@/hooks/useContemplacaoEngine';
 import { VerificarSorteioModal } from './VerificarSorteioModal';
 import { LanceModal } from './LanceModal';
 import { ContemplationDetailsDrawer } from './ContemplationDetailsDrawer';
+import { FaixasConfigDialog } from './FaixasConfigDialog';
+import { HistoricoAssembleiaPanel } from './HistoricoAssembleiaPanel';
 
 function getContemplationBadge(card: ConsorcioCard) {
   if (!card.motivo_contemplacao) {
@@ -40,10 +48,11 @@ export function ContemplationTab() {
   const [consultaGrupo, setConsultaGrupo] = useState('');
   const [consultaPeriodo, setConsultaPeriodo] = useState('');
   const [consultaNumero, setConsultaNumero] = useState('');
-  const [resultados, setResultados] = useState<RecomendacaoCota[] | null>(null);
+  const [categoria, setCategoria] = useState<CategoriaBem>('imovel');
+  const [resultados, setResultados] = useState<RecomendacaoFaixa[] | null>(null);
   const [fallbackInfo, setFallbackInfo] = useState<ResultadoFallback | null>(null);
   const [consultaAtiva, setConsultaAtiva] = useState(false);
-  const [vagas, setVagas] = useState(2);
+  const [faixasOpen, setFaixasOpen] = useState(false);
 
   // Modal state
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
@@ -56,6 +65,12 @@ export function ContemplationTab() {
     grupo: consultaGrupo || undefined,
   });
   const registrarConsulta = useRegistrarConsultaLoteria();
+  const { data: faixas = [] } = useFaixasRecomendacao();
+  const { data: historico = [] } = useHistoricoAssembleiasGrupo(consultaGrupo || null);
+  const { vagas, media, baseAssembleias } = useMemo(
+    () => calcularVagasEstimadas(historico, 2),
+    [historico],
+  );
 
   const handleCalcular = () => {
     if (!consultaGrupo || !consultaPeriodo || !consultaNumero || !cards) return;
@@ -69,7 +84,7 @@ export function ContemplationTab() {
     if (maxCota === 0) maxCota = 9999;
 
     const fallback = calcularNumeroAplicado(consultaNumero, maxCota);
-    const recs = recomendarLancesGrupo(cards, fallback.numeroAplicado, vagas);
+    const recs = calcularRecomendacoesPorFaixa(cards, fallback.numeroAplicado, categoria, faixas, vagas);
     setResultados(recs);
     setFallbackInfo(fallback);
     setConsultaAtiva(true);
@@ -113,11 +128,14 @@ export function ContemplationTab() {
     <div className="space-y-4">
       {/* Consultation section */}
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-4 flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Calculator className="h-5 w-5" />
             Consulta por Sorteio da Loteria Federal
           </CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setFaixasOpen(true)}>
+            <Settings className="h-4 w-4 mr-2" /> Faixas
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
@@ -131,6 +149,19 @@ export function ContemplationTab() {
                   {grupos.map(g => (
                     <SelectItem key={g} value={g}>{g}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Categoria do bem *</Label>
+              <Select value={categoria} onValueChange={(v) => setCategoria(v as CategoriaBem)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="imovel">Imóvel</SelectItem>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="moto">Moto</SelectItem>
+                  <SelectItem value="servicos">Serviços</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -155,17 +186,6 @@ export function ContemplationTab() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Vagas por assembleia</Label>
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                value={vagas}
-                onChange={(e) => setVagas(Math.max(1, Number(e.target.value) || 1))}
-              />
-            </div>
-
             <div className="flex gap-2">
               <Button
                 onClick={handleCalcular}
@@ -185,12 +205,19 @@ export function ContemplationTab() {
         </CardContent>
       </Card>
 
+      {/* Histórico do grupo */}
+      {consultaGrupo && (
+        <HistoricoAssembleiaPanel grupo={consultaGrupo} vagasFallback={2} />
+      )}
+
       {/* Legal disclaimer */}
       {consultaAtiva && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Estimativa matemática baseada em distância do número sorteado + simulação de ranking com {vagas} vaga(s) por assembleia. Não substitui a apuração oficial da Embracon.
+            Estimativa baseada em: faixas do tipo "{categoria}" + {baseAssembleias > 0
+              ? `média histórica de ${media.toFixed(2)} contemplados (${baseAssembleias} assembleias) → ${vagas} vaga(s) estimadas`
+              : `${vagas} vaga(s) por padrão (sem histórico)`}. Não substitui a apuração oficial da Embracon.
           </AlertDescription>
         </Alert>
       )}
@@ -208,16 +235,19 @@ export function ContemplationTab() {
           )}
           <div className="flex items-center gap-3 flex-wrap">
             <Badge className="bg-emerald-600 text-white">
-              Sorteio direto: {resultados.filter((r) => r.chanceLabel === 'Sorteio').length}
+              Sorteio: {resultados.filter((r) => r.chanceLabel === 'Sorteio').length}
             </Badge>
             <Badge className="bg-blue-600 text-white">
-              Lance 25% recomendado: {resultados.filter((r) => r.percentualRecomendado === 25).length}
+              Chance alta: {resultados.filter((r) => r.chanceLabel === 'Alta').length}
+            </Badge>
+            <Badge className="bg-yellow-500 text-white">
+              Chance média: {resultados.filter((r) => r.chanceLabel === 'Média').length}
             </Badge>
             <Badge className="bg-orange-500 text-white">
-              Lance 50% recomendado: {resultados.filter((r) => r.percentualRecomendado === 50).length}
+              Chance baixa: {resultados.filter((r) => r.chanceLabel === 'Baixa').length}
             </Badge>
             <Badge variant="outline">
-              Não compensa: {resultados.filter((r) => r.percentualRecomendado === null).length}
+              Fora das faixas: {resultados.filter((r) => r.chanceLabel === 'Fora').length}
             </Badge>
             <span className="text-sm font-medium ml-auto">
               Número aplicado: <strong>{fallbackInfo.numeroAplicado}</strong>
@@ -242,7 +272,9 @@ export function ContemplationTab() {
                 <TableHead>Contemplação</TableHead>
                 {consultaAtiva && (
                   <>
-                    <TableHead className="text-center">Posição estimada</TableHead>
+                    <TableHead className="text-center">Distância</TableHead>
+                    <TableHead>Faixa aplicada</TableHead>
+                    <TableHead className="text-center">Posição</TableHead>
                     <TableHead>Chance</TableHead>
                     <TableHead>Lance recomendado</TableHead>
                     <TableHead className="text-right">Valor do lance</TableHead>
@@ -255,14 +287,13 @@ export function ContemplationTab() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={consultaAtiva ? 13 : 9}><Skeleton className="h-10 w-full" /></TableCell>
+                    <TableCell colSpan={consultaAtiva ? 15 : 9}><Skeleton className="h-10 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : consultaAtiva && displayCards ? (
                 displayCards.length > 0 ? (
                   displayCards.map((rec) => {
-                    const { card, distancia, chanceLabel, chancePercent, percentualRecomendado, valorLanceRecomendado, justificativa } = rec;
-                    const posicaoFinal = percentualRecomendado === 50 ? rec.posicaoCom50 : percentualRecomendado === 25 ? rec.posicaoCom25 : rec.posicaoSemLance;
+                    const { card, distancia, chanceLabel, chancePercent, percentualSugerido, valorLance, justificativa, faixaAplicada, posicao } = rec;
                     const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                     const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
                     return (
@@ -281,28 +312,29 @@ export function ContemplationTab() {
                           <Badge variant="outline" className="capitalize text-xs">{card.status}</Badge>
                         </TableCell>
                         <TableCell>{getContemplationBadge(card)}</TableCell>
+                        <TableCell className="text-center text-sm font-semibold">{distancia}</TableCell>
+                        <TableCell className="text-xs font-mono">{faixaAplicada}</TableCell>
                         <TableCell className="text-center text-sm">
-                          <span className="font-semibold">{posicaoFinal}º</span>
-                          <span className="text-muted-foreground"> / {rec.vagas} vagas</span>
-                          <div className="text-xs text-muted-foreground">dist. {distancia}</div>
+                          <span className="font-semibold">{posicao}º</span>
+                          <span className="text-muted-foreground"> / {rec.vagas}</span>
                         </TableCell>
                         <TableCell>
-                          <Badge className={`${getCorChanceLabel(chanceLabel)} text-xs`}>
+                          <Badge className={`${getCorChanceFaixa(chanceLabel)} text-xs`}>
                             {chanceLabel} {chancePercent}%
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm" title={justificativa}>
-                          {percentualRecomendado === null ? (
+                          {percentualSugerido === null ? (
                             <span className="text-muted-foreground">Não compensa</span>
-                          ) : percentualRecomendado === 0 ? (
+                          ) : percentualSugerido === 0 ? (
                             <span className="text-emerald-600 font-medium">Sem lance</span>
                           ) : (
-                            <span className="font-semibold">{percentualRecomendado}%</span>
+                            <span className="font-semibold">{percentualSugerido}%</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right text-sm">
-                          {valorLanceRecomendado > 0
-                            ? `R$ ${valorLanceRecomendado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
+                          {valorLance > 0
+                            ? `R$ ${valorLance.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
                             : '—'}
                         </TableCell>
                         <TableCell>
@@ -323,7 +355,7 @@ export function ContemplationTab() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={13} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={15} className="text-center py-10 text-muted-foreground">
                       Nenhuma cota encontrada nas zonas de chance para este número
                     </TableCell>
                   </TableRow>
@@ -380,6 +412,7 @@ export function ContemplationTab() {
       <VerificarSorteioModal open={sorteioOpen} onOpenChange={setSorteioOpen} card={selectedCard} />
       <LanceModal open={lanceOpen} onOpenChange={setLanceOpen} card={selectedCard} />
       <ContemplationDetailsDrawer open={detailsOpen} onOpenChange={setDetailsOpen} card={selectedCard} />
+      <FaixasConfigDialog open={faixasOpen} onOpenChange={setFaixasOpen} />
     </div>
   );
 }
