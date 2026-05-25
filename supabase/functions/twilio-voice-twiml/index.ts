@@ -19,11 +19,17 @@ const candidatePublicUrls = (req: Request): string[] => {
   const u = new URL(req.url);
   const urls = new Set<string>();
   const base = Deno.env.get('SUPABASE_URL');
-  if (base) urls.add(`${base.replace(/\/$/, '')}${u.pathname}${u.search}`);
+  const path = u.pathname;
+  const withFnPrefix = path.startsWith('/functions/v1/') ? path : `/functions/v1${path}`;
+  const variants = new Set<string>([path, withFnPrefix]);
+  const cleanBase = base ? base.replace(/\/$/, '') : null;
   const proto = req.headers.get('x-forwarded-proto') || 'https';
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-  if (host) urls.add(`${proto}://${host}${u.pathname}${u.search}`);
-  urls.add(`${u.protocol}//${u.host}${u.pathname}${u.search}`);
+  for (const p of variants) {
+    if (cleanBase) urls.add(`${cleanBase}${p}${u.search}`);
+    if (host) urls.add(`${proto}://${host}${p}${u.search}`);
+    urls.add(`${u.protocol}//${u.host}${p}${u.search}`);
+  }
   return Array.from(urls);
 };
 
