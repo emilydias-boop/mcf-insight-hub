@@ -208,7 +208,29 @@ export function formatDateForDB(date: Date): string {
  * @param dateString - String no formato "YYYY-MM-DD"
  * @returns Date object no horário local
  */
-export function parseDateWithoutTimezone(dateString: string): Date {
-  const [year, month, day] = dateString.split('-').map(Number);
+export function parseDateWithoutTimezone(dateString: string | null | undefined): Date {
+  if (!dateString || typeof dateString !== 'string') return new Date(NaN);
+  const parts = dateString.split('-').map(Number);
+  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return new Date(NaN);
+  const [year, month, day] = parts;
   return new Date(year, month - 1, day);
+}
+
+import { format as _dfFormat } from 'date-fns';
+
+/**
+ * Formata uma data ISO (YYYY-MM-DD) sem quebrar quando o valor é nulo/invalido.
+ */
+export function safeFormatDate(
+  dateString: string | null | undefined,
+  pattern: string = 'dd/MM/yyyy',
+  fallback: string = '—',
+): string {
+  const d = parseDateWithoutTimezone(dateString);
+  if (Number.isNaN(d.getTime())) return fallback;
+  try {
+    return _dfFormat(d, pattern);
+  } catch {
+    return fallback;
+  }
 }
