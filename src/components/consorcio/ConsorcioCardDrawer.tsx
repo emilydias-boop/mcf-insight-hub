@@ -42,6 +42,7 @@ import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
 import { recalcularDatasAPartirDe } from "@/lib/businessDays";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment, ConsorcioStatus, MotivoContemplacao } from "@/types/consorcio";
 import { calcularResumoComissoes } from "@/lib/commissionCalculator";
 import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
