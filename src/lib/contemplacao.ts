@@ -268,3 +268,172 @@ export function getCorZona(zona: ZonaChance): string {
       return 'bg-muted text-muted-foreground';
   }
 }
+
+// --- Simulação de posição no ranking e recomendação de lance ---
+
+export type LanceRecomendado = 0 | 25 | 50;
+
+export interface RecomendacaoCota {
+  card: import('@/types/consorcio').ConsorcioCard;
+  distancia: number;
+  posicaoSemLance: number;
+  posicaoCom25: number;
+  posicaoCom50: number;
+  vagas: number;
+  totalCotas: number;
+  percentualRecomendado: LanceRecomendado | null; // null = não compensa
+  valorLanceRecomendado: number;
+  chancePercent: number; // 0-100
+  chanceLabel: 'Sorteio' | 'Muito alta' | 'Alta' | 'Média' | 'Baixa' | 'Nenhuma';
+  justificativa: string;
+}
+
+/**
+ * Simula posição da cota no ranking de contemplação considerando lance.
+ * Lógica: cotas com lance maior sobem; entre cotas com mesmo lance (ou sem lance),
+ * ordena pela distância do número aplicado (Embracon usa proximidade como critério).
+ */
+function calcularPosicao(
+  cotaAlvo: import('@/types/consorcio').ConsorcioCard,
+  todasCotas: import('@/types/consorcio').ConsorcioCard[],
+  numeroAplicado: number,
+  percentualLanceAlvo: number,
+): number {
+  const cotaAlvoNum = parseInt(cotaAlvo.cota.replace(/\D/g, ''), 10);
+  const distanciaAlvo = Math.abs(cotaAlvoNum - numeroAplicado);
+  let melhoresQueElaSemLance = 0;
+
+  for (const outra of todasCotas) {
+    if (outra.id === cotaAlvo.id) continue;
+    if (outra.motivo_contemplacao) continue; // já contemplada
+    const outraNum = parseInt(outra.cota.replace(/\D/g, ''), 10);
+    if (isNaN(outraNum)) continue;
+    const distOutra = Math.abs(outraNum - numeroAplicado);
+    // Outra está à frente se: distância menor (sem considerar lance dela, modelo conservador)
+    if (distOutra < distanciaAlvo) melhoresQueElaSemLance += 1;
+  }
+
+  // Cotas com lance > alvo ocupariam slot antes (assumimos 0% para outros = modelo otimista)
+  // Modelo simples: posição = (cotas mais próximas) + 1, lance só ajuda a "garantir slot" se for >= 25%
+  // Quanto maior o lance, mais "neutraliza" as cotas próximas (cada 25% reduz competidores próximos pela metade)
+  const fatorReducao = percentualLanceAlvo >= 50 ? 0.25 : percentualLanceAlvo >= 25 ? 0.5 : 1;
+  return Math.max(1, Math.round(melhoresQueElaSemLance * fatorReducao) + 1);
+}
+
+function classificarChance(posicao: number, vagas: number): RecomendacaoCota['chanceLabel'] {
+  if (posicao <= vagas) return posicao === 1 ? 'Muito alta' : 'Alta';
+  if (posicao <= vagas * 2) return 'Média';
+  if (posicao <= vagas * 4) return 'Baixa';
+  return 'Nenhuma';
+}
+
+function chanceParaPercent(posicao: number, vagas: number): number {
+  if (posicao <= vagas) return Math.round(100 - (posicao - 1) * (15 / Math.max(1, vagas)));
+  const excedente = posicao - vagas;
+  return Math.max(2, Math.round(70 / (1 + excedente * 0.6)));
+}
+
+/**
+ * Para uma cota, recomenda o menor lance (0 → 25 → 50) que coloca dentro das vagas.
+ * Se nem 50% resolve, retorna null em percentualRecomendado.
+ */
+export function recomendarLanceParaCota(
+  cota: import('@/types/consorcio').ConsorcioCard,
+  todasCotas: import('@/types/consorcio').ConsorcioCard[],
+  numeroAplicado: number,
+  vagas: number,
+): RecomendacaoCota {
+  const cotaNum = parseInt(cota.cota.replace(/\D/g, ''), 10);
+  const distancia = isNaN(cotaNum) ? 99999 : Math.abs(cotaNum - numeroAplicado);
+
+  const posicaoSemLance = calcularPosicao(cota, todasCotas, numeroAplicado, 0);
+  const posicaoCom25 = calcularPosicao(cota, todasCotas, numeroAplicado, 25);
+  const posicaoCom50 = calcularPosicao(cota, todasCotas, numeroAplicado, 50);
+
+  let percentualRecomendado: LanceRecomendado | null;
+  let posicaoFinal: number;
+  let justificativa: string;
+
+  if (distancia === 0) {
+    percentualRecomendado = 0;
+    posicaoFinal = 1;
+    justificativa = 'Match com sorteio — contemplação direta, sem necessidade de lance.';
+  } else if (posicaoSemLance <= vagas) {
+    percentualRecomendado = 0;
+    posicaoFinal = posicaoSemLance;
+    justificativa = `Já está entre as ${vagas} primeiras pela proximidade. Pode esperar sorteio.`;
+  } else if (posicaoCom25 <= vagas) {
+    percentualRecomendado = 25;
+    posicaoFinal = posicaoCom25;
+    justificativa = 'Lance de 25% garante entrada nas vagas — não vale dar 50%.';
+  } else if (posicaoCom50 <= vagas) {
+    percentualRecomendado = 50;
+    posicaoFinal = posicaoCom50;
+    justificativa = '25% não basta; com 50% entra nas vagas.';
+  } else {
+    percentualRecomendado = null;
+    posicaoFinal = posicaoCom50;
+    justificativa = `Mesmo com 50% fica em ${posicaoCom50}º. Lance não compensa — esperar próxima assembleia.`;
+  }
+
+  const valorCredito = Number(cota.valor_credito) || 0;
+  const valorLanceRecomendado =
+    percentualRecomendado && percentualRecomendado > 0
+      ? (valorCredito * percentualRecomendado) / 100
+      : 0;
+
+  return {
+    card: cota,
+    distancia,
+    posicaoSemLance,
+    posicaoCom25,
+    posicaoCom50,
+    vagas,
+    totalCotas: todasCotas.length,
+    percentualRecomendado,
+    valorLanceRecomendado,
+    chancePercent: distancia === 0 ? 100 : chanceParaPercent(posicaoFinal, vagas),
+    chanceLabel: distancia === 0 ? 'Sorteio' : classificarChance(posicaoFinal, vagas),
+    justificativa,
+  };
+}
+
+/**
+ * Aplica recomendação em todas as cotas do grupo, ordenando por chance.
+ */
+export function recomendarLancesGrupo(
+  cards: import('@/types/consorcio').ConsorcioCard[],
+  numeroAplicado: number,
+  vagas: number = 2,
+): RecomendacaoCota[] {
+  const ativas = cards.filter((c) => !c.motivo_contemplacao);
+  const recs = ativas.map((c) => recomendarLanceParaCota(c, ativas, numeroAplicado, vagas));
+  const ordemChance: Record<RecomendacaoCota['chanceLabel'], number> = {
+    Sorteio: 0,
+    'Muito alta': 1,
+    Alta: 2,
+    'Média': 3,
+    Baixa: 4,
+    Nenhuma: 5,
+  };
+  return recs.sort(
+    (a, b) => ordemChance[a.chanceLabel] - ordemChance[b.chanceLabel] || a.distancia - b.distancia,
+  );
+}
+
+export function getCorChanceLabel(label: RecomendacaoCota['chanceLabel']): string {
+  switch (label) {
+    case 'Sorteio':
+      return 'bg-emerald-600 text-white';
+    case 'Muito alta':
+      return 'bg-emerald-500 text-white';
+    case 'Alta':
+      return 'bg-blue-600 text-white';
+    case 'Média':
+      return 'bg-yellow-500 text-white';
+    case 'Baixa':
+      return 'bg-orange-500 text-white';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+}
