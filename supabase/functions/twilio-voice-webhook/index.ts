@@ -6,6 +6,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function validateTwilioSignature(req: Request, url: string, params: Record<string, string>): Promise<boolean> {
+  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+  if (!authToken) return false;
+  const signature = req.headers.get('x-twilio-signature') || req.headers.get('X-Twilio-Signature');
+  if (!signature) return false;
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const k of sortedKeys) data += k + params[k];
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(authToken), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  return expected === signature;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -20,7 +35,16 @@ serve(async (req) => {
 
     // Parse form data from Twilio webhook
     const formData = await req.formData();
-    
+
+    // Build params dict for signature validation
+    const params: Record<string, string> = {};
+    for (const [k, v] of formData.entries()) params[k] = v.toString();
+    const valid = await validateTwilioSignature(req, req.url, params);
+    if (!valid) {
+      console.error('[twilio-voice-webhook] Invalid Twilio signature');
+      return new Response('Forbidden', { status: 403, headers: corsHeaders });
+    }
+
     const callSid = formData.get('CallSid')?.toString();
     // Twilio sends DialCallStatus/DialCallDuration when using <Dial> action callback
     const callStatus = formData.get('DialCallStatus')?.toString() || formData.get('CallStatus')?.toString();
