@@ -497,14 +497,20 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
             {mode === 'pipeline' && (
               <div className="space-y-2">
                 {/* SDR: lista origens permitidas. Se só houver 1, ela é fixada
-                    automaticamente e o seletor é omitido. */}
+                    automaticamente, mas o seletor segue visível (desabilitado)
+                    para o SDR saber qual pipeline está ativa. */}
                 {restrictToSdrOrigins ? (
-                  sdrPipelineOptions.length > 1 && (
-                    <div>
-                      <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                    {sdrPipelineOptions.length === 0 ? (
+                      <div className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2 leading-snug">
+                        Nenhuma pipeline liberada para você. Peça ao gestor para configurar suas origens permitidas em <strong>Configurações → SDR</strong>.
+                      </div>
+                    ) : (
                       <Select
                         value={pipelineId || ''}
                         onValueChange={(v) => handleSelectPipeline(v || null)}
+                        disabled={sdrPipelineOptions.length === 1}
                       >
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="Selecione uma pipeline" />
@@ -517,8 +523,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                  )
+                    )}
+                  </div>
                 ) : (
                   <div>
                     <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
