@@ -266,10 +266,10 @@ export function EditInstallmentDialog({
             <div className="space-y-1">
               <label htmlFor="recalcularDemais" className="text-sm font-medium cursor-pointer flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Recalcular datas das parcelas seguintes a partir desta
+                Aplicar alterações às parcelas seguintes (data, valor e comissão)
               </label>
               <p className="text-xs text-muted-foreground">
-                Ao ativar, todas as parcelas após a #{installment.numero_parcela} terão suas datas recalculadas a partir desta data de vencimento.
+                Ao ativar, todas as parcelas pendentes após a #{installment.numero_parcela} terão data de vencimento, valor da parcela e comissão atualizados com base nesta. Parcelas já pagas não são alteradas.
               </p>
             </div>
           </div>
