@@ -41,9 +41,13 @@ serve(async (req) => {
       payload[key] = value.toString();
     }
 
-    const valid = await validateTwilioSignature(req, req.url, payload);
+    const u = new URL(req.url);
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || u.host;
+    const publicUrl = `${proto}://${host}${u.pathname}${u.search}`;
+    const valid = await validateTwilioSignature(req, publicUrl, payload);
     if (!valid) {
-      console.error('[TWILIO-WEBHOOK] Invalid Twilio signature');
+      console.error('[TWILIO-WEBHOOK] Invalid Twilio signature for url:', publicUrl);
       return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 
