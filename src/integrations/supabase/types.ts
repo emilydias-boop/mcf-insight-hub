@@ -2574,6 +2574,62 @@ export type Database = {
           },
         ]
       }
+      consorcio_assembleia_resultados: {
+        Row: {
+          assembleia_historico_id: string | null
+          bem: string | null
+          cota: string
+          created_at: string
+          data_assembleia: string | null
+          dt_contemplacao: string | null
+          filial: string | null
+          grupo: string
+          id: string
+          modalidade: string | null
+          numero_assembleia: number | null
+          parcela: string | null
+          percentual_lance: number | null
+        }
+        Insert: {
+          assembleia_historico_id?: string | null
+          bem?: string | null
+          cota: string
+          created_at?: string
+          data_assembleia?: string | null
+          dt_contemplacao?: string | null
+          filial?: string | null
+          grupo: string
+          id?: string
+          modalidade?: string | null
+          numero_assembleia?: number | null
+          parcela?: string | null
+          percentual_lance?: number | null
+        }
+        Update: {
+          assembleia_historico_id?: string | null
+          bem?: string | null
+          cota?: string
+          created_at?: string
+          data_assembleia?: string | null
+          dt_contemplacao?: string | null
+          filial?: string | null
+          grupo?: string
+          id?: string
+          modalidade?: string | null
+          numero_assembleia?: number | null
+          parcela?: string | null
+          percentual_lance?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_assembleia_resultados_assembleia_historico_id_fkey"
+            columns: ["assembleia_historico_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_assembleias_historico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_assembleias_historico: {
         Row: {
           created_at: string
@@ -2684,6 +2740,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      consorcio_calendario_assembleia: {
+        Row: {
+          created_at: string
+          data_assembleia: string
+          dia_semana: string | null
+          grupo: string
+          horario: string | null
+          id: string
+          local: string | null
+          numero: number
+          sorteio: string | null
+          vencimento: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_assembleia: string
+          dia_semana?: string | null
+          grupo: string
+          horario?: string | null
+          id?: string
+          local?: string | null
+          numero: number
+          sorteio?: string | null
+          vencimento?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_assembleia?: string
+          dia_semana?: string | null
+          grupo?: string
+          horario?: string | null
+          id?: string
+          local?: string | null
+          numero?: number
+          sorteio?: string | null
+          vencimento?: string | null
+        }
+        Relationships: []
       }
       consorcio_categoria_options: {
         Row: {
@@ -2995,6 +3090,72 @@ export type Database = {
           percentual_lance?: number | null
           tipo_produto?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      consorcio_grupo_saude: {
+        Row: {
+          aplic_financeiras: number | null
+          ativos: number | null
+          atualizado_em: string
+          bens_distribuidos: number | null
+          bens_entregues: number | null
+          bens_nao_distribuidos: number | null
+          contemplados: number | null
+          created_at: string
+          desistentes_excluidos: number | null
+          disponibilidades_total: number | null
+          fonte: string | null
+          grupo: string
+          nao_contemplados: number | null
+          observacao: string | null
+          proxima_parcela_valor: number | null
+          proxima_parcela_vencimento: string | null
+          quitados: number | null
+          referencia_mes: string | null
+          valor_bens_a_entregar: number | null
+        }
+        Insert: {
+          aplic_financeiras?: number | null
+          ativos?: number | null
+          atualizado_em?: string
+          bens_distribuidos?: number | null
+          bens_entregues?: number | null
+          bens_nao_distribuidos?: number | null
+          contemplados?: number | null
+          created_at?: string
+          desistentes_excluidos?: number | null
+          disponibilidades_total?: number | null
+          fonte?: string | null
+          grupo: string
+          nao_contemplados?: number | null
+          observacao?: string | null
+          proxima_parcela_valor?: number | null
+          proxima_parcela_vencimento?: string | null
+          quitados?: number | null
+          referencia_mes?: string | null
+          valor_bens_a_entregar?: number | null
+        }
+        Update: {
+          aplic_financeiras?: number | null
+          ativos?: number | null
+          atualizado_em?: string
+          bens_distribuidos?: number | null
+          bens_entregues?: number | null
+          bens_nao_distribuidos?: number | null
+          contemplados?: number | null
+          created_at?: string
+          desistentes_excluidos?: number | null
+          disponibilidades_total?: number | null
+          fonte?: string | null
+          grupo?: string
+          nao_contemplados?: number | null
+          observacao?: string | null
+          proxima_parcela_valor?: number | null
+          proxima_parcela_vencimento?: string | null
+          quitados?: number | null
+          referencia_mes?: string | null
+          valor_bens_a_entregar?: number | null
         }
         Relationships: []
       }
