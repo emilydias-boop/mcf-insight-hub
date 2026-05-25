@@ -11,7 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Search, Eye, Target, Dices, Calculator, AlertTriangle, Info } from 'lucide-react';
 import { useContemplationCards, useGruposDisponiveis, useRegistrarConsultaLoteria } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
-import { classificarCotasPorLoteria, extrairNumeroBase, getCorZona, type CotaClassificada, type ResultadoFallback } from '@/lib/contemplacao';
+import {
+  calcularNumeroAplicado,
+  recomendarLancesGrupo,
+  getCorChanceLabel,
+  type RecomendacaoCota,
+  type ResultadoFallback,
+} from '@/lib/contemplacao';
 import { VerificarSorteioModal } from './VerificarSorteioModal';
 import { LanceModal } from './LanceModal';
 import { ContemplationDetailsDrawer } from './ContemplationDetailsDrawer';
@@ -34,9 +40,10 @@ export function ContemplationTab() {
   const [consultaGrupo, setConsultaGrupo] = useState('');
   const [consultaPeriodo, setConsultaPeriodo] = useState('');
   const [consultaNumero, setConsultaNumero] = useState('');
-  const [resultados, setResultados] = useState<CotaClassificada[] | null>(null);
+  const [resultados, setResultados] = useState<RecomendacaoCota[] | null>(null);
   const [fallbackInfo, setFallbackInfo] = useState<ResultadoFallback | null>(null);
   const [consultaAtiva, setConsultaAtiva] = useState(false);
+  const [vagas, setVagas] = useState(2);
 
   // Modal state
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
@@ -53,14 +60,23 @@ export function ContemplationTab() {
   const handleCalcular = () => {
     if (!consultaGrupo || !consultaPeriodo || !consultaNumero || !cards) return;
 
-    const { classificados, fallback } = classificarCotasPorLoteria(consultaNumero, cards);
-    setResultados(classificados);
+    // Calcular maior número de cota para fallback
+    let maxCota = 0;
+    for (const c of cards) {
+      const n = parseInt(c.cota.replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > maxCota) maxCota = n;
+    }
+    if (maxCota === 0) maxCota = 9999;
+
+    const fallback = calcularNumeroAplicado(consultaNumero, maxCota);
+    const recs = recomendarLancesGrupo(cards, fallback.numeroAplicado, vagas);
+    setResultados(recs);
     setFallbackInfo(fallback);
     setConsultaAtiva(true);
 
-    const cotasMatch = classificados.filter(c => c.zona === 'match_sorteio').length;
-    const cotasZona50 = classificados.filter(c => c.zona === 'zona_50').length;
-    const cotasZona100 = classificados.filter(c => c.zona === 'zona_100').length;
+    const cotasMatch = recs.filter((r) => r.distancia === 0).length;
+    const cotasZona50 = recs.filter((r) => r.distancia > 0 && r.distancia <= 50).length;
+    const cotasZona100 = recs.filter((r) => r.distancia > 50 && r.distancia <= 100).length;
 
     registrarConsulta.mutate({
       grupo: consultaGrupo,
@@ -91,7 +107,7 @@ export function ContemplationTab() {
   const openLance = (card: ConsorcioCard) => { setSelectedCard(card); setLanceOpen(true); };
   const openDetails = (card: ConsorcioCard) => { setSelectedCard(card); setDetailsOpen(true); };
 
-  const canCalculate = consultaGrupo && consultaPeriodo && consultaNumero.length >= 5;
+  const canCalculate = !!(consultaGrupo && consultaPeriodo && consultaNumero.length >= 1);
 
   return (
     <div className="space-y-4">
@@ -104,7 +120,7 @@ export function ContemplationTab() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div className="space-y-2">
               <Label>Grupo *</Label>
               <Select value={consultaGrupo} onValueChange={setConsultaGrupo}>
@@ -132,10 +148,21 @@ export function ContemplationTab() {
             <div className="space-y-2">
               <Label>Número da Loteria Federal *</Label>
               <Input
-                placeholder="012345"
+                placeholder="01600"
                 value={consultaNumero}
                 onChange={(e) => setConsultaNumero(e.target.value.replace(/\D/g, ''))}
-                maxLength={10}
+                maxLength={5}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vagas por assembleia</Label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={vagas}
+                onChange={(e) => setVagas(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
 
@@ -163,7 +190,7 @@ export function ContemplationTab() {
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Esta é uma previsão baseada no número da Loteria Federal e proximidade das cotas. A contemplação real depende da assembleia da Embracon e dos lances realizados.
+            Estimativa matemática baseada em distância do número sorteado + simulação de ranking com {vagas} vaga(s) por assembleia. Não substitui a apuração oficial da Embracon.
           </AlertDescription>
         </Alert>
       )}
@@ -175,25 +202,25 @@ export function ContemplationTab() {
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                O número base <strong>{fallbackInfo.numeroBase}</strong> está fora do range do grupo. {fallbackInfo.motivoFallback}.
+                Número digitado <strong>{consultaNumero}</strong> fora do range do grupo. Aplicado <strong>{fallbackInfo.numeroAplicado}</strong> por redução de dígitos. {fallbackInfo.motivoFallback}.
               </AlertDescription>
             </Alert>
           )}
           <div className="flex items-center gap-3 flex-wrap">
             <Badge className="bg-emerald-600 text-white">
-              Match Sorteio: {resultados.filter(r => r.zona === 'match_sorteio').length}
+              Sorteio direto: {resultados.filter((r) => r.chanceLabel === 'Sorteio').length}
             </Badge>
             <Badge className="bg-blue-600 text-white">
-              Zona ±50: {resultados.filter(r => r.zona === 'zona_50').length}
+              Lance 25% recomendado: {resultados.filter((r) => r.percentualRecomendado === 25).length}
             </Badge>
-            <Badge className="bg-yellow-500 text-white">
-              Zona ±100: {resultados.filter(r => r.zona === 'zona_100').length}
+            <Badge className="bg-orange-500 text-white">
+              Lance 50% recomendado: {resultados.filter((r) => r.percentualRecomendado === 50).length}
             </Badge>
-            <span className="text-sm text-muted-foreground">
-              Número base (5 dígitos): {fallbackInfo.numeroBase}
-            </span>
-            <span className="text-sm font-medium">
-              Número aplicado: {fallbackInfo.numeroAplicado}
+            <Badge variant="outline">
+              Não compensa: {resultados.filter((r) => r.percentualRecomendado === null).length}
+            </Badge>
+            <span className="text-sm font-medium ml-auto">
+              Número aplicado: <strong>{fallbackInfo.numeroAplicado}</strong>
             </span>
           </div>
         </>
@@ -215,8 +242,10 @@ export function ContemplationTab() {
                 <TableHead>Contemplação</TableHead>
                 {consultaAtiva && (
                   <>
-                    <TableHead>Categoria de Chance</TableHead>
-                    <TableHead>Recomendação de Lance</TableHead>
+                    <TableHead className="text-center">Posição estimada</TableHead>
+                    <TableHead>Chance</TableHead>
+                    <TableHead>Lance recomendado</TableHead>
+                    <TableHead className="text-right">Valor do lance</TableHead>
                   </>
                 )}
                 <TableHead className="w-32">Ações</TableHead>
@@ -226,12 +255,14 @@ export function ContemplationTab() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={consultaAtiva ? 11 : 9}><Skeleton className="h-10 w-full" /></TableCell>
+                    <TableCell colSpan={consultaAtiva ? 13 : 9}><Skeleton className="h-10 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : consultaAtiva && displayCards ? (
                 displayCards.length > 0 ? (
-                  displayCards.map(({ card, zona, distancia, categoriaLabel, recomendacaoLance }) => {
+                  displayCards.map((rec) => {
+                    const { card, distancia, chanceLabel, chancePercent, percentualRecomendado, valorLanceRecomendado, justificativa } = rec;
+                    const posicaoFinal = percentualRecomendado === 50 ? rec.posicaoCom50 : percentualRecomendado === 25 ? rec.posicaoCom25 : rec.posicaoSemLance;
                     const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                     const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
                     return (
@@ -250,12 +281,30 @@ export function ContemplationTab() {
                           <Badge variant="outline" className="capitalize text-xs">{card.status}</Badge>
                         </TableCell>
                         <TableCell>{getContemplationBadge(card)}</TableCell>
+                        <TableCell className="text-center text-sm">
+                          <span className="font-semibold">{posicaoFinal}º</span>
+                          <span className="text-muted-foreground"> / {rec.vagas} vagas</span>
+                          <div className="text-xs text-muted-foreground">dist. {distancia}</div>
+                        </TableCell>
                         <TableCell>
-                          <Badge className={`${getCorZona(zona)} text-xs`}>
-                            {categoriaLabel} ({distancia})
+                          <Badge className={`${getCorChanceLabel(chanceLabel)} text-xs`}>
+                            {chanceLabel} {chancePercent}%
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm font-medium">{recomendacaoLance}</TableCell>
+                        <TableCell className="text-sm" title={justificativa}>
+                          {percentualRecomendado === null ? (
+                            <span className="text-muted-foreground">Não compensa</span>
+                          ) : percentualRecomendado === 0 ? (
+                            <span className="text-emerald-600 font-medium">Sem lance</span>
+                          ) : (
+                            <span className="font-semibold">{percentualRecomendado}%</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {valorLanceRecomendado > 0
+                            ? `R$ ${valorLanceRecomendado.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
+                            : '—'}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Button variant="ghost" size="icon" title="Ver detalhes" onClick={() => openDetails(card)}>
@@ -274,7 +323,7 @@ export function ContemplationTab() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={13} className="text-center py-10 text-muted-foreground">
                       Nenhuma cota encontrada nas zonas de chance para este número
                     </TableCell>
                   </TableRow>
