@@ -189,6 +189,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
       await queryClient.invalidateQueries({ queryKey: ['consortium-installments'] });
+      await queryClient.invalidateQueries({ queryKey: ['consortium-card-history'] });
       toast.success(`Datas de ${novasDatas.length} parcelas recalculadas!`);
     }
     
