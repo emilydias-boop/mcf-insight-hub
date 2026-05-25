@@ -43,7 +43,7 @@ export function useResultadosGrupo(grupo: string | null) {
         .from('consorcio_assembleia_resultados' as any)
         .select('*')
         .eq('grupo', grupo!)
-        .order('data_assembleia', { ascending: false })
+        .order('data_assembleia', { ascending: false, nullsFirst: false })
         .order('cota', { ascending: true });
       if (error) throw error;
       return (data || []) as any[];
