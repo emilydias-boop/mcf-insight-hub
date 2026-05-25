@@ -216,6 +216,8 @@ export function parseDateWithoutTimezone(dateString: string | null | undefined):
   return new Date(year, month - 1, day);
 }
 
+import { format as _dfFormat } from 'date-fns';
+
 /**
  * Formata uma data ISO (YYYY-MM-DD) sem quebrar quando o valor é nulo/invalido.
  */
@@ -227,10 +229,7 @@ export function safeFormatDate(
   const d = parseDateWithoutTimezone(dateString);
   if (Number.isNaN(d.getTime())) return fallback;
   try {
-    // import dinâmico evita ciclo; usa format direto
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { format } = require('date-fns');
-    return format(d, pattern);
+    return _dfFormat(d, pattern);
   } catch {
     return fallback;
   }
