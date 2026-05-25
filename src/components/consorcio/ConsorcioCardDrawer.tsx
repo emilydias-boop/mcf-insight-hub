@@ -324,13 +324,11 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                   {/* Detalhes do Grupo */}
                   <GroupDetailsCard grupo={card.grupo} dataContratacao={card.data_contratacao} />
 
-                  {/* Pós-contemplação (somente para cotas contempladas) */}
-                  {card.motivo_contemplacao && (
-                    <PosContemplacaoPanel
-                      cardId={card.id}
-                      decisao={(card as any).pos_contemplacao_decisao ?? null}
-                    />
-                  )}
+                  {/* Pós-contemplação / Venda — sempre disponível: a venda pode ocorrer a qualquer momento */}
+                  <PosContemplacaoPanel
+                    cardId={card.id}
+                    decisao={(card as any).pos_contemplacao_decisao ?? null}
+                  />
 
                   <Tabs defaultValue="parcelas">
                     <TabsList className="w-full">
