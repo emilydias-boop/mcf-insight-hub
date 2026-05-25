@@ -104,6 +104,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const deleteCard = useDeleteConsorcioCard();
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
+  const queryClient = useQueryClient();
 
   // Check inadimplência (apenas alerta visual — auto-cancelamento removido para evitar
   // cancelamentos indevidos de cotas cadastradas retroativamente).
@@ -201,6 +202,8 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
       }
       
       // Refresh data
+      await queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
+      await queryClient.invalidateQueries({ queryKey: ['consortium-installments'] });
       toast.success(`Datas de ${novasDatas.length} parcelas recalculadas!`);
     }
     
