@@ -1,41 +1,77 @@
-# Plano para corrigir a chamada com locução em inglês
+## Objetivo
 
-## Diagnóstico
-Os logs mostram que o problema continua no `twilio-voice-twiml`:
-- a função está retornando **403 Forbidden**
-- a validação de assinatura do Twilio está sendo feita contra URLs como `https://rehcfgqvigfcekiipqkc.supabase.co/twilio-voice-twiml`
-- a URL pública correta do endpoint é `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-twiml`
+Permitir registrar e visualizar a **Saúde do Grupo** na aba Grupos da Contemplação, alimentando com os 3 tipos de dado que aparecem nos prints/PDFs Embracon:
 
-Quando o Twilio recebe esse 403, ele toca a mensagem automática em inglês — que é a “mulher falando” que você ouve.
+1. **Demonstrativo do Grupo** (saude_do_grupo.pdf) — disponibilidades, participantes, bens entregues, próxima parcela.
+2. **Calendário de Assembleias** (print) — próximas assembleias (atual + futuras).
+3. **Resultado de Assembleias** (ASSEMBLEIA_7270.pdf) — contemplações já confirmadas por assembleia (cota, modalidade, lance %, bem).
 
-## O que vou implementar
-1. **Corrigir a reconstrução da URL assinada do Twilio**
-   - Ajustar `twilio-voice-twiml` para testar também a URL pública real com `/functions/v1/...`.
-   - Aplicar o mesmo ajuste em `twilio-voice-webhook`, `twilio-status-webhook` e `twilio-whatsapp-webhook` para manter o comportamento consistente.
+A entrada será **manual/colada** (mesmo padrão do `RegistrarAssembleiaModal` atual), sem alterar nenhuma outra tela ou função.
 
-2. **Melhorar a validação e os logs**
-   - Registrar claramente qual URL externa foi aceita ou rejeitada.
-   - Diferenciar erro de assinatura de erro de TwiML, para ficar óbvio nos logs se a chamada falhou antes ou depois de gerar o XML.
+## O que NÃO muda
 
-3. **Validar o fluxo de voz ponta a ponta**
-   - Confirmar que `twilio-voice-twiml` passa a responder 200.
-   - Verificar se o `twilio-voice-webhook` começa a receber os callbacks de status da chamada.
-   - Confirmar que a chamada deixa de cair na locução automática em inglês.
+- Nenhuma alteração em telas/funções fora de `src/components/consorcio/grupos/*` e no engine de recomendação atual.
+- Faixas, motor de recomendação, `useGruposSaude`, `GruposTab` e `GrupoCard` continuam como estão.
+- Apenas adições novas dentro do `GrupoDetailDrawer`.
 
-4. **Checar o reflexo no discador**
-   - Validar se, após a correção do fluxo Twilio, o clique em ligar e o discador voltam a abrir a chamada normalmente.
-   - Confirmar se os registros de chamada passam a sair de `initiated/failed` incorretamente e avançam para os status reais.
+## Estrutura de dados (novas tabelas)
 
-## Detalhes técnicos
-- Arquivos alvo:
-  - `supabase/functions/twilio-voice-twiml/index.ts`
-  - `supabase/functions/twilio-voice-webhook/index.ts`
-  - `supabase/functions/twilio-status-webhook/index.ts`
-  - `supabase/functions/twilio-whatsapp-webhook/index.ts`
-- Ajuste principal:
-  - incluir candidatos de URL no formato `SUPABASE_URL + /functions/v1 + pathname`
-  - manter fallbacks com `host`, `x-forwarded-host` e URL interna do runtime
-- Critério de sucesso:
-  - sumir o erro `Invalid Twilio signature`
-  - `twilio-voice-twiml` responder com TwiML válido
-  - a chamada completar sem a mensagem automática em inglês
+```text
+consorcio_grupo_saude  (1 linha por grupo, snapshot mais recente)
+  grupo (PK), referencia_mes,
+  ativos, desistentes_excluidos, quitados, contemplados, nao_contemplados,
+  bens_entregues, bens_distribuidos, bens_nao_distribuidos,
+  disponibilidades_total, aplic_financeiras, valor_bens_a_entregar,
+  proxima_parcela_vencimento, proxima_parcela_valor,
+  fonte, atualizado_em
+
+consorcio_calendario_assembleia
+  id, grupo, numero, data_assembleia, dia_semana,
+  vencimento, sorteio, horario, local
+  UNIQUE(grupo, numero)
+
+consorcio_assembleia_resultados   (granularidade por cota contemplada)
+  id, assembleia_historico_id (FK), cota, modalidade,
+  bem, filial, percentual_lance, parcela, dt_contemplacao
+```
+
+`consorcio_assembleias_historico` continua sendo a "âncora" da assembleia (já existe e é lida pelo motor). As novas tabelas só **enriquecem** a visão.
+
+## UI — somente dentro do GrupoDetailDrawer
+
+Adicionar 3 sub-seções colapsáveis abaixo do que já existe:
+
+1. **Saúde Financeira & Participantes** — cards lendo `consorcio_grupo_saude` (Ativos, Quitados, Contemplados, Não Contemp., Bens Entregues/Distribuídos, Disponibilidades). Botão "Atualizar dados" abre modal com campos para colar do demonstrativo.
+2. **Calendário de Assembleias** — tabela das próximas N assembleias de `consorcio_calendario_assembleia`. Botão "Importar calendário" abre modal com textarea para colar o bloco do print Embracon (parser simples linha-a-linha).
+3. **Resultado da última assembleia** — lista das contemplações vindas de `consorcio_assembleia_resultados` ligadas à última `consorcio_assembleias_historico` do grupo. Botão "Registrar resultado" abre modal de importação (parser do PDF/texto colado).
+
+Cada modal grava na tabela correspondente via Supabase client direto (mesmo padrão atual).
+
+## Indicador de saúde (opcional, mantém compatibilidade)
+
+`useGruposSaude` ganha um JOIN leve com `consorcio_grupo_saude` para mostrar no `GrupoCard` um badge extra "Não Contemp.: X" — só se houver dado. Classificação verde/amarelo/cinza atual fica inalterada.
+
+## Arquivos
+
+- Migration nova: criar as 3 tabelas + RLS (select all auth, insert/update admin/coordenador).
+- `src/hooks/useGrupoSaudeDetalhe.ts` — fetch das 3 tabelas para um grupo.
+- `src/components/consorcio/grupos/SaudeGrupoSection.tsx`
+- `src/components/consorcio/grupos/CalendarioAssembleiasSection.tsx`
+- `src/components/consorcio/grupos/ResultadoAssembleiaSection.tsx`
+- 3 modais correspondentes em `src/components/consorcio/grupos/modals/`
+- Editar **somente** `GrupoDetailDrawer.tsx` para renderizar as 3 seções.
+
+## Parsers
+
+Funções puras em `src/lib/parsers/embraconSaude.ts`:
+- `parseDemonstrativo(text)` → extrai Ativos/Desis/Quitados/Contemplados/Não Contemp., Bens, Disponibilidades.
+- `parseCalendario(text)` → linhas `grupo nº data diaSemana vencimento sorteio hora`.
+- `parseResultadoAssembleia(text)` → linhas de contemplações.
+
+Todos com testes mínimos colocando exemplos dos PDFs anexados como fixture.
+
+## Critérios de aceite
+
+- Abrir um grupo na aba "Grupos" mostra as 3 novas seções; quando vazias exibem CTA "Adicionar".
+- Colar texto do demonstrativo / calendário / resultado preenche e salva.
+- Nenhuma outra tela (Contemplação, Faixas, Histórico de Assembleias atual, GrupoCard original) muda de comportamento.
