@@ -174,14 +174,20 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
       
       // Recalculate dates starting from the next installment
       const novasDatas = recalcularDatasAPartirDe(novaDataBase, diaVencimento, totalParcelas, parcelaInicial);
-      
-      // Batch update all subsequent installments
+
+      // Batch update all subsequent installments (date + value + commission)
+      const novoValorParcela = data.valor_parcela;
+      const novoValorComissao = data.valor_comissao;
       for (const { numeroParcela, dataVencimento } of novasDatas) {
         const inst = card.installments.find(i => i.numero_parcela === numeroParcela);
-        if (inst) {
+        if (inst && inst.status !== 'pago') {
           await supabase
             .from('consortium_installments')
-            .update({ data_vencimento: format(dataVencimento, 'yyyy-MM-dd') })
+            .update({
+              data_vencimento: format(dataVencimento, 'yyyy-MM-dd'),
+              valor_parcela: novoValorParcela,
+              valor_comissao: novoValorComissao,
+            })
             .eq('id', inst.id);
         }
       }
