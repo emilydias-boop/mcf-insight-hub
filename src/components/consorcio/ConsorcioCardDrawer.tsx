@@ -153,22 +153,6 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     }
   };
 
-  const handleContemplar = async (data: {
-    numeroContemplacao: string;
-    dataContemplacao: string;
-    motivoContemplacao: MotivoContemplacao;
-    valorLance?: number;
-    percentualLance?: number;
-  }) => {
-    if (cardId) {
-      await updateCardStatus.mutateAsync({
-        cardId,
-        status: 'contemplado',
-        ...data,
-      });
-    }
-  };
-
   const handleEditInstallment = (installment: ConsorcioInstallment) => {
     setSelectedInstallment(installment);
     setEditInstallmentOpen(true);
