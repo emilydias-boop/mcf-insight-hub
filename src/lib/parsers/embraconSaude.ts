@@ -194,6 +194,9 @@ export function parseResultadoAssembleia(text: string): ResultadoLinha[] {
     const datas = parts.filter((p) => /^\d{2}\/\d{2}\/\d{4}$/.test(p));
     const pct = parts.find((p, idx) => idx >= parts.length - 2 && /^\d+[.,]\d+$/.test(p));
     const parcela = parts.find((p) => /^\d{3}$/.test(p)) || null;
+
+    if (!modalidade || !bem || datas.length === 0) continue;
+
     out.push({
       cota: mCota[1],
       modalidade,
