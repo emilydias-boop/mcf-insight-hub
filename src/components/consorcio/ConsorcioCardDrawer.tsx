@@ -48,6 +48,7 @@ import { calcularResumoComissoes } from "@/lib/commissionCalculator";
 import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
 import { ConsorcioCardForm } from "./ConsorcioCardForm";
 import { InstallmentsPaginated } from "./InstallmentsPaginated";
+import { CardActivityHistoryTab } from "./CardActivityHistoryTab";
 import { GroupDetailsCard } from "./GroupDetailsCard";
 import { InadimplenciaAlert } from "./InadimplenciaAlert";
 
@@ -325,6 +326,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       </TabsTrigger>
                       <TabsTrigger value="documentos" className="flex-1">
                         Documentos
+                      </TabsTrigger>
+                      <TabsTrigger value="historico" className="flex-1">
+                        Histórico
                       </TabsTrigger>
                     </TabsList>
 
