@@ -18,6 +18,10 @@ function formatCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
+function isCardContemplada(card: { numero_contemplacao?: string | null; data_contemplacao?: string | null; status?: string | null }) {
+  return !!card.numero_contemplacao || !!card.data_contemplacao || String(card.status || '').toLowerCase() === 'contemplado';
+}
+
 interface Props {
   item: GrupoSaudeItem | null;
   open: boolean;
@@ -35,7 +39,8 @@ export function GrupoDetailDrawer({ item, open, onOpenChange }: Props) {
         .from('consortium_cards')
         .select('id, cota, nome_completo, razao_social, valor_credito, status, numero_contemplacao, data_contemplacao')
         .eq('grupo', grupo!)
-        .order('cota', { ascending: true });
+        .order('cota', { ascending: true })
+        .range(0, 4999);
       if (error) throw error;
       return data || [];
     },
@@ -158,9 +163,9 @@ export function GrupoDetailDrawer({ item, open, onOpenChange }: Props) {
                           <Badge variant="outline" className="text-xs">{c.status}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {c.numero_contemplacao ? (
+                          {isCardContemplada(c) ? (
                             <span className="text-green-600 font-medium">
-                              #{c.numero_contemplacao}
+                              {c.numero_contemplacao ? `#${c.numero_contemplacao}` : 'Sim'}
                               {c.data_contemplacao
                                 ? ` · ${format(parseDateWithoutTimezone(c.data_contemplacao), 'dd/MM/yyyy')}`
                                 : ''}
