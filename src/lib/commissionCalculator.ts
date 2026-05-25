@@ -51,6 +51,14 @@ function getPercentualFromContext(
   tipoProduto: TipoProduto,
   numeroParcela: number
 ): { percentual: number; usouCustom: boolean } {
+  // Cap defensivo: comissão só existe até a 8ª (SELECT) ou 12ª (PARCELINHA),
+  // independente do que o produto cadastrado tiver em comissao_schedule.
+  if (tipoProduto === 'select' && numeroParcela > 8) {
+    return { percentual: 0, usouCustom: false };
+  }
+  if (tipoProduto === 'parcelinha' && numeroParcela > 12) {
+    return { percentual: 0, usouCustom: false };
+  }
   if (ctx?.schedule && ctx.schedule.length > 0) {
     const item = ctx.schedule.find((s) => s.parcela === numeroParcela);
     return { percentual: item?.percentual ?? 0, usouCustom: true };
