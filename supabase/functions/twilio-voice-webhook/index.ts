@@ -39,9 +39,12 @@ serve(async (req) => {
     // Build params dict for signature validation
     const params: Record<string, string> = {};
     for (const [k, v] of formData.entries()) params[k] = v.toString();
-    const valid = await validateTwilioSignature(req, req.url, params);
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || url.host;
+    const publicUrl = `${proto}://${host}${url.pathname}${url.search}`;
+    const valid = await validateTwilioSignature(req, publicUrl, params);
     if (!valid) {
-      console.error('[twilio-voice-webhook] Invalid Twilio signature');
+      console.error('[twilio-voice-webhook] Invalid Twilio signature for url:', publicUrl);
       return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 

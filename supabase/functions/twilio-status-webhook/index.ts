@@ -38,9 +38,13 @@ Deno.serve(async (req) => {
       try { params = Object.fromEntries(new URLSearchParams(text)); } catch (_) {}
     }
 
-    const valid = await validateTwilioSignature(req, req.url, params);
+    const u = new URL(req.url);
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || u.host;
+    const publicUrl = `${proto}://${host}${u.pathname}${u.search}`;
+    const valid = await validateTwilioSignature(req, publicUrl, params);
     if (!valid) {
-      console.error('[twilio-status-webhook] Invalid Twilio signature');
+      console.error('[twilio-status-webhook] Invalid Twilio signature for url:', publicUrl);
       return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 
