@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ConsorcioInstallment } from '@/types/consorcio';
+import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 
 interface InstallmentsPaginatedProps {
   installments: ConsorcioInstallment[];
