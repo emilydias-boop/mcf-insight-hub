@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, Upload } from 'lucide-react';
-import { format } from 'date-fns';
-import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
+import { safeFormatDate } from '@/lib/dateHelpers';
 import { useResultadosGrupo, useInsertResultados } from '@/hooks/useGrupoSaudeDetalhe';
 import { parseResultadoAssembleia } from '@/lib/parsers/embraconSaude';
 
@@ -57,7 +56,7 @@ export function ResultadoAssembleiaSection({ grupo }: { grupo: string }) {
             <Trophy className="h-4 w-4" /> Resultado da última assembleia
             {ultima && (
               <Badge variant="outline" className="text-xs">
-                {format(parseDateWithoutTimezone(ultima.dt), 'dd/MM/yyyy')} · {ultima.rows.length} contempl.
+                {safeFormatDate(ultima.dt)} · {ultima.rows.length} contempl.
               </Badge>
             )}
           </h3>
