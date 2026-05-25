@@ -16,6 +16,10 @@ export interface GrupoSaudeItem {
   status: GrupoSaudeStatus;
 }
 
+function isCardContemplada(card: { numero_contemplacao?: string | null; data_contemplacao?: string | null; status?: string | null }) {
+  return !!card.numero_contemplacao || !!card.data_contemplacao || String(card.status || '').toLowerCase() === 'contemplado';
+}
+
 function classificar(ultima: string | null): GrupoSaudeStatus {
   if (!ultima) return 'cinza';
   const diff = (Date.now() - new Date(ultima).getTime()) / (1000 * 60 * 60 * 24);
@@ -30,8 +34,9 @@ export function useGruposSaude() {
     queryFn: async (): Promise<GrupoSaudeItem[]> => {
       const { data: cards, error: e1 } = await supabase
         .from('consortium_cards')
-        .select('grupo, valor_credito, numero_contemplacao')
-        .not('grupo', 'is', null);
+        .select('grupo, valor_credito, numero_contemplacao, data_contemplacao, status')
+        .not('grupo', 'is', null)
+        .range(0, 4999);
       if (e1) throw e1;
 
       const { data: assembleias, error: e2 } = await supabase
@@ -57,7 +62,7 @@ export function useGruposSaude() {
         };
         item.qtd_cotas += 1;
         item.valor_credito_total += Number((c as any).valor_credito || 0);
-        if ((c as any).numero_contemplacao) item.qtd_contempladas += 1;
+        if (isCardContemplada(c as any)) item.qtd_contempladas += 1;
         byGroup.set(g, item);
       }
 
