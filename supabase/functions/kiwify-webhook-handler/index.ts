@@ -119,13 +119,19 @@ serve(async (req) => {
     console.log(`[Kiwify Webhook] Received event: ${eventType}`);
     console.log(`[Kiwify Webhook] Body:`, JSON.stringify(body, null, 2));
 
-    // Validar token (header ou body)
+    // Validar token (header ou body) — deny by default
+    if (!kiwifyToken) {
+      console.error('[Kiwify Webhook] KIWIFY_WEBHOOK_TOKEN not configured');
+      return new Response(
+        JSON.stringify({ error: 'Webhook not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const headerToken = req.headers.get('x-kiwify-token') || req.headers.get('X-Kiwify-Token');
     const bodyToken = body.signature || body.token;
     const receivedToken = headerToken || bodyToken;
-    
-    if (kiwifyToken && receivedToken && receivedToken !== kiwifyToken) {
-      console.error('[Kiwify Webhook] Invalid token');
+    if (!receivedToken || receivedToken !== kiwifyToken) {
+      console.error('[Kiwify Webhook] Invalid or missing token');
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

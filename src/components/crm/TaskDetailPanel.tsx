@@ -72,25 +72,34 @@ export function TaskDetailPanel({
     }
   };
 
+  // Render **bold** markers via JSX (no HTML injection) to prevent stored XSS.
+  const renderBold = (text: string, keyPrefix: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, idx) => {
+      const m = part.match(/^\*\*([^*]+)\*\*$/);
+      if (m) return <strong key={`${keyPrefix}-${idx}`}>{m[1]}</strong>;
+      return <span key={`${keyPrefix}-${idx}`}>{part}</span>;
+    });
+  };
+
   const renderMarkdown = (text: string) => {
     return text.split('\n').map((line, i) => {
-      line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       if (line.startsWith('- ') || line.startsWith('• ')) {
         return (
-          <li key={i} className="ml-4 list-disc" dangerouslySetInnerHTML={{ __html: line.slice(2) }} />
+          <li key={i} className="ml-4 list-disc">{renderBold(line.slice(2), `b${i}`)}</li>
         );
       }
       const numberedMatch = line.match(/^(\d+)\.\s/);
       if (numberedMatch) {
         return (
-          <li key={i} className="ml-4 list-decimal" dangerouslySetInnerHTML={{ __html: line.slice(numberedMatch[0].length) }} />
+          <li key={i} className="ml-4 list-decimal">{renderBold(line.slice(numberedMatch[0].length), `n${i}`)}</li>
         );
       }
       if (line.trim() === '') {
         return <br key={i} />;
       }
       return (
-        <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: line }} />
+        <p key={i} className="mb-1">{renderBold(line, `p${i}`)}</p>
       );
     });
   };

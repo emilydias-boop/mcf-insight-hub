@@ -7,6 +7,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function validateTwilioSignature(req: Request, url: string, params: Record<string, string>): Promise<boolean> {
+  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+  if (!authToken) return false;
+  const signature = req.headers.get('x-twilio-signature') || req.headers.get('X-Twilio-Signature');
+  if (!signature) return false;
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const k of sortedKeys) data += k + params[k];
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(authToken), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  return expected === signature;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -24,6 +39,12 @@ serve(async (req) => {
     
     for (const [key, value] of formData.entries()) {
       payload[key] = value.toString();
+    }
+
+    const valid = await validateTwilioSignature(req, req.url, payload);
+    if (!valid) {
+      console.error('[TWILIO-WEBHOOK] Invalid Twilio signature');
+      return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 
     console.log('[TWILIO-WEBHOOK] Received:', JSON.stringify(payload));
