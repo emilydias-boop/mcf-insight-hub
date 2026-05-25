@@ -77,11 +77,11 @@ export function parseDemonstrativo(text: string): DemonstrativoParsed {
   }
 
   const dispMatches = [...flat.matchAll(/DISPONIBILIDADES\s*\([^)]*\)\s+([\d.,]+)/gi)];
-  const lastDisp = dispMatches.at(-1);
+  const lastDisp = dispMatches[dispMatches.length - 1];
   if (lastDisp) res.disponibilidades_total = toNum(lastDisp[1]);
 
   const aplicMatches = [...flat.matchAll(/APLIC(?:\.|ACOES)?\s+FIN(?:ANC)?\.?\s+VINC\.?\s+CONTEMP(?:L)?\.?\s+([\d.,]+)/gi)];
-  const lastAplic = aplicMatches.at(-1);
+  const lastAplic = aplicMatches[aplicMatches.length - 1];
   if (lastAplic) res.aplic_financeiras = toNum(lastAplic[1]);
 
   const mBens = flat.match(/VALOR\s+DOS?\s+BENS?\s+A\s+ENTREGAR\s+([\d.,]+)/i);
