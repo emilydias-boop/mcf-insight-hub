@@ -50,7 +50,7 @@ import { ConsorcioCardForm } from "./ConsorcioCardForm";
 import { InstallmentsPaginated } from "./InstallmentsPaginated";
 import { GroupDetailsCard } from "./GroupDetailsCard";
 import { InadimplenciaAlert } from "./InadimplenciaAlert";
-import { ContemplationCard } from "./ContemplationCard";
+
 import { StatusEditDropdown } from "./StatusEditDropdown";
 import { EditInstallmentDialog, UpdateInstallmentData } from "./EditInstallmentDialog";
 
@@ -330,17 +330,6 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                   {/* Detalhes do Grupo */}
                   <GroupDetailsCard grupo={card.grupo} dataContratacao={card.data_contratacao} />
-
-                  {/* Card de Contemplação */}
-                  <ContemplationCard
-                    cota={card.cota}
-                    valorCredito={Number(card.valor_credito)}
-                    status={card.status}
-                    numeroContemplacao={card.numero_contemplacao}
-                    dataContemplacao={card.data_contemplacao}
-                    motivoContemplacao={card.motivo_contemplacao}
-                    onContemplar={handleContemplar}
-                  />
 
                   <Tabs defaultValue="parcelas">
                     <TabsList className="w-full">
