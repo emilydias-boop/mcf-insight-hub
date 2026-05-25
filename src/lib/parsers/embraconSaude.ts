@@ -19,6 +19,16 @@ function isoDate(br: string | undefined | null): string | null {
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
+function normalizeForSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+}
+
 export interface DemonstrativoParsed {
   ativos: number | null;
   desistentes_excluidos: number | null;
@@ -36,7 +46,6 @@ export interface DemonstrativoParsed {
 }
 
 export function parseDemonstrativo(text: string): DemonstrativoParsed {
-  const lines = text.split(/\r?\n/);
   const res: DemonstrativoParsed = {
     ativos: null, desistentes_excluidos: null, quitados: null, contemplados: null, nao_contemplados: null,
     bens_entregues: null, bens_distribuidos: null, bens_nao_distribuidos: null,
@@ -44,49 +53,46 @@ export function parseDemonstrativo(text: string): DemonstrativoParsed {
     proxima_parcela_vencimento: null, proxima_parcela_valor: null,
   };
 
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i];
-    // Participantes: linha de números após "Ativos     Desis./Excl.  Quitados  Contemplados   Não Contemp."
-    if (/Ativos\s+Desis/i.test(l)) {
-      const next = lines[i + 1] || '';
-      const nums = next.trim().split(/\s+/).map(toInt);
-      if (nums.length >= 5) {
-        [res.ativos, res.desistentes_excluidos, res.quitados, res.contemplados, res.nao_contemplados] = nums.slice(0, 5);
-      }
-    }
-    // Bens
-    if (/Bens Entregues\s+Distribu/i.test(l)) {
-      const next = lines[i + 1] || '';
-      const nums = next.trim().split(/\s+/).map(toInt);
-      if (nums.length >= 3) {
-        [res.bens_entregues, res.bens_distribuidos, res.bens_nao_distribuidos] = nums.slice(0, 3);
-      }
-    }
-    // Disponibilidades — pega SEMPRE a última ocorrência (saldo de fechamento).
-    // Aceita "DISPONIBILIDADES(...)" ou "DISPONIBILIDADES (dd/mm/aaaa)".
-    const mDisp = l.match(/DISPONIBILIDADES\s*\([^)]*\)\s+([\d.,]+)/i);
-    if (mDisp) {
-      res.disponibilidades_total = toNum(mDisp[1]);
-    }
-    // APLIC. FINANC. VINC. CONTEMPL. (também aceita "CONTEMP." sem L) — última ocorrência.
-    const mApl = l.match(/APLIC(?:\.|AÇÕES)?\s+FIN(?:ANC)?\.?\s+VINC\.?\s+CONTEMP(?:L)?\.?\s+([\d.,]+)/i);
-    if (mApl) res.aplic_financeiras = toNum(mApl[1]);
-    const mBens = l.match(/VALOR\s+DOS?\s+BENS?\s+A\s+ENTREGAR\s+([\d.,]+)/i);
-    if (mBens) res.valor_bens_a_entregar = toNum(mBens[1]);
+  const normalized = normalizeForSearch(text);
+  const flat = normalized.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // Próxima Parcela: cabeçalho seguido por "Parcela  Vencimento  Amortização  A amortizar"
-    if (/Próxima Parcela/i.test(l)) {
-      // procura próxima linha com data dd/mm/aaaa
-      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-        const m = lines[j].match(/(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)?/);
-        if (m) {
-          res.proxima_parcela_vencimento = isoDate(m[1]);
-          res.proxima_parcela_valor = toNum(m[2]);
-          break;
-        }
-      }
-    }
+  const participantes = flat.match(
+    /Ativos\s+.*?Desis.*?Quitados\s+Contemplados\s+Nao\s+Contemp\.?\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/i,
+  );
+  if (participantes) {
+    res.ativos = toInt(participantes[1]);
+    res.desistentes_excluidos = toInt(participantes[2]);
+    res.quitados = toInt(participantes[3]);
+    res.contemplados = toInt(participantes[4]);
+    res.nao_contemplados = toInt(participantes[5]);
   }
+
+  const bens = flat.match(
+    /Bens\s+Entregues\s+Distribu(?:idos)?\s+Nao\s+Distribu(?:idos)?\s+(\d+)\s+(\d+)\s+(\d+)/i,
+  );
+  if (bens) {
+    res.bens_entregues = toInt(bens[1]);
+    res.bens_distribuidos = toInt(bens[2]);
+    res.bens_nao_distribuidos = toInt(bens[3]);
+  }
+
+  const dispMatches = [...flat.matchAll(/DISPONIBILIDADES\s*\([^)]*\)\s+([\d.,]+)/gi)];
+  const lastDisp = dispMatches.at(-1);
+  if (lastDisp) res.disponibilidades_total = toNum(lastDisp[1]);
+
+  const aplicMatches = [...flat.matchAll(/APLIC(?:\.|ACOES)?\s+FIN(?:ANC)?\.?\s+VINC\.?\s+CONTEMP(?:L)?\.?\s+([\d.,]+)/gi)];
+  const lastAplic = aplicMatches.at(-1);
+  if (lastAplic) res.aplic_financeiras = toNum(lastAplic[1]);
+
+  const mBens = flat.match(/VALOR\s+DOS?\s+BENS?\s+A\s+ENTREGAR\s+([\d.,]+)/i);
+  if (mBens) res.valor_bens_a_entregar = toNum(mBens[1]);
+
+  const proxima = flat.match(/Proxima\s+Parcela.*?(\d{2}\/\d{2}\/\d{4})\s+([\d.,]+)/i);
+  if (proxima) {
+    res.proxima_parcela_vencimento = isoDate(proxima[1]);
+    res.proxima_parcela_valor = toNum(proxima[2]);
+  }
+
   return res;
 }
 
