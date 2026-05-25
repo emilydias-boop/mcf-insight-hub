@@ -3533,6 +3533,68 @@ export type Database = {
         }
         Relationships: []
       }
+      consortium_card_activity_log: {
+        Row: {
+          actor_id: string | null
+          actor_name: string | null
+          after_value: Json | null
+          before_value: Json | null
+          boleto_id: string | null
+          card_id: string
+          created_at: string
+          description: string
+          document_id: string | null
+          event_category: Database["public"]["Enums"]["card_activity_category"]
+          event_type: Database["public"]["Enums"]["card_activity_event"]
+          id: string
+          installment_id: string | null
+          metadata: Json
+          subscription_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name?: string | null
+          after_value?: Json | null
+          before_value?: Json | null
+          boleto_id?: string | null
+          card_id: string
+          created_at?: string
+          description: string
+          document_id?: string | null
+          event_category: Database["public"]["Enums"]["card_activity_category"]
+          event_type: Database["public"]["Enums"]["card_activity_event"]
+          id?: string
+          installment_id?: string | null
+          metadata?: Json
+          subscription_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string | null
+          after_value?: Json | null
+          before_value?: Json | null
+          boleto_id?: string | null
+          card_id?: string
+          created_at?: string
+          description?: string
+          document_id?: string | null
+          event_category?: Database["public"]["Enums"]["card_activity_category"]
+          event_type?: Database["public"]["Enums"]["card_activity_event"]
+          id?: string
+          installment_id?: string | null
+          metadata?: Json
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_card_activity_log_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consortium_cards: {
         Row: {
           categoria: string
@@ -11812,6 +11874,8 @@ export type Database = {
       }
     }
     Functions: {
+      _actor_name: { Args: { _uid: string }; Returns: string }
+      _card_id_for_subscription: { Args: { _sub: string }; Returns: string }
       apply_no_show_approval_effects: {
         Args: { p_validation_id: string }
         Returns: undefined
@@ -12478,6 +12542,22 @@ export type Database = {
         Args: { _ano_mes: string; _reason: string }
         Returns: undefined
       }
+      log_card_event: {
+        Args: {
+          _after?: Json
+          _before?: Json
+          _boleto_id?: string
+          _card_id: string
+          _category: Database["public"]["Enums"]["card_activity_category"]
+          _description: string
+          _document_id?: string
+          _event: Database["public"]["Enums"]["card_activity_event"]
+          _installment_id?: string
+          _metadata?: Json
+          _subscription_id?: string
+        }
+        Returns: string
+      }
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
@@ -12617,6 +12697,31 @@ export type Database = {
         | "cancelada"
         | "finalizada"
         | "quitada"
+      card_activity_category:
+        | "parcela"
+        | "boleto"
+        | "documento"
+        | "carta"
+        | "sistema"
+      card_activity_event:
+        | "installment_paid"
+        | "installment_reverted"
+        | "installment_value_changed"
+        | "installment_due_changed"
+        | "installment_form_changed"
+        | "installment_created"
+        | "installment_deleted"
+        | "installment_recalculated"
+        | "boleto_uploaded"
+        | "boleto_replaced"
+        | "boleto_deleted"
+        | "boleto_sent"
+        | "document_uploaded"
+        | "document_deleted"
+        | "card_created"
+        | "card_field_changed"
+        | "card_status_changed"
+        | "card_deleted"
       cobranca_acao_tipo:
         | "boleto_enviado"
         | "lead_respondeu"
@@ -12925,6 +13030,33 @@ export const Constants = {
         "cancelada",
         "finalizada",
         "quitada",
+      ],
+      card_activity_category: [
+        "parcela",
+        "boleto",
+        "documento",
+        "carta",
+        "sistema",
+      ],
+      card_activity_event: [
+        "installment_paid",
+        "installment_reverted",
+        "installment_value_changed",
+        "installment_due_changed",
+        "installment_form_changed",
+        "installment_created",
+        "installment_deleted",
+        "installment_recalculated",
+        "boleto_uploaded",
+        "boleto_replaced",
+        "boleto_deleted",
+        "boleto_sent",
+        "document_uploaded",
+        "document_deleted",
+        "card_created",
+        "card_field_changed",
+        "card_status_changed",
+        "card_deleted",
       ],
       cobranca_acao_tipo: [
         "boleto_enviado",

@@ -48,6 +48,7 @@ import { calcularResumoComissoes } from "@/lib/commissionCalculator";
 import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
 import { ConsorcioCardForm } from "./ConsorcioCardForm";
 import { InstallmentsPaginated } from "./InstallmentsPaginated";
+import { CardActivityHistoryTab } from "./CardActivityHistoryTab";
 import { GroupDetailsCard } from "./GroupDetailsCard";
 import { InadimplenciaAlert } from "./InadimplenciaAlert";
 
@@ -188,6 +189,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
       await queryClient.invalidateQueries({ queryKey: ['consortium-installments'] });
+      await queryClient.invalidateQueries({ queryKey: ['consortium-card-history'] });
       toast.success(`Datas de ${novasDatas.length} parcelas recalculadas!`);
     }
     
@@ -325,6 +327,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       </TabsTrigger>
                       <TabsTrigger value="documentos" className="flex-1">
                         Documentos
+                      </TabsTrigger>
+                      <TabsTrigger value="historico" className="flex-1">
+                        Histórico
                       </TabsTrigger>
                     </TabsList>
 
@@ -656,6 +661,11 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                           )}
                         </CardContent>
                       </Card>
+                    </TabsContent>
+
+                    {/* Tab: Histórico */}
+                    <TabsContent value="historico" className="mt-4">
+                      <CardActivityHistoryTab cardId={card.id} />
                     </TabsContent>
                   </Tabs>
 
