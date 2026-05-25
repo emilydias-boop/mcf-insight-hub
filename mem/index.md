@@ -11,3 +11,4 @@
 - [SDR Meu Histórico](mem://features/sdr-meu-historico) — Aba CRM com Ligações/R1/No-Show/Perdidas + follow_up nas calls; gestores filtram por SDR.
 - [Automation Queue Owner Status](mem://business-logic/automation-queue-owner-status) — Enum 'cancelled' (não 'skipped'); processor cancela itens de owner desligado; cron diário limpa pendentes >24h.
 - [Consórcio Transferência de Cota](mem://features/consorcio-transferencia-cota) — Pós-contemplação (manter/à venda/transferir) + processo em fases; financeiro como evento separado, comissão sempre manual.
+- [Contemplação Engine](mem://business-logic/consorcio-contemplacao-recomendacao-engine) — Motor 3 camadas (faixas + histórico + ranking) na aba Contemplação.
