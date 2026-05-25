@@ -5,8 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, Upload } from 'lucide-react';
-import { format } from 'date-fns';
-import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
+import { safeFormatDate } from '@/lib/dateHelpers';
 import { useCalendarioGrupo, useUpsertCalendario } from '@/hooks/useGrupoSaudeDetalhe';
 import { parseCalendario } from '@/lib/parsers/embraconSaude';
 
@@ -64,13 +63,13 @@ export function CalendarioAssembleiasSection({ grupo }: { grupo: string }) {
               {futuras.slice(0, 12).map((a) => (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">{String(a.numero).padStart(3, '0')}</TableCell>
-                  <TableCell>{format(parseDateWithoutTimezone(a.data_assembleia), 'dd/MM/yyyy')}</TableCell>
+                  <TableCell>{safeFormatDate(a.data_assembleia)}</TableCell>
                   <TableCell className="text-sm">{a.dia_semana || '—'}</TableCell>
                   <TableCell className="text-sm">
-                    {a.vencimento ? format(parseDateWithoutTimezone(a.vencimento), 'dd/MM/yyyy') : '—'}
+                    {safeFormatDate(a.vencimento)}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {a.sorteio ? format(parseDateWithoutTimezone(a.sorteio), 'dd/MM/yyyy') : '—'}
+                    {safeFormatDate(a.sorteio)}
                   </TableCell>
                   <TableCell className="text-right text-sm">{a.horario || '—'}</TableCell>
                 </TableRow>
