@@ -437,3 +437,143 @@ export function getCorChanceLabel(label: RecomendacaoCota['chanceLabel']): strin
       return 'bg-muted text-muted-foreground';
   }
 }
+
+// --- Motor baseado em faixas configuráveis + histórico ---
+
+export interface FaixaInput {
+  tipo_produto: string;
+  distancia_min: number;
+  distancia_max: number | null;
+  percentual_lance: number | null;
+}
+
+export interface RecomendacaoFaixa {
+  card: import('@/types/consorcio').ConsorcioCard;
+  distancia: number;
+  faixaAplicada: string; // ex: "0-50", "51-100", ">100"
+  percentualSugerido: number | null; // null = não compensa
+  posicao: number;
+  vagas: number;
+  chanceLabel: 'Sorteio' | 'Alta' | 'Média' | 'Baixa' | 'Fora';
+  chancePercent: number;
+  valorLance: number;
+  justificativa: string;
+}
+
+/**
+ * Encontra a faixa correspondente para uma dada distância e categoria de bem.
+ */
+export function buscarFaixa(faixas: FaixaInput[], categoria: string, distancia: number): FaixaInput | null {
+  const dasCategoria = faixas.filter((f) => f.tipo_produto === categoria);
+  for (const f of dasCategoria) {
+    const max = f.distancia_max ?? Infinity;
+    if (distancia >= f.distancia_min && distancia <= max) return f;
+  }
+  return null;
+}
+
+function rotuloFaixa(f: FaixaInput): string {
+  if (f.distancia_max === null) return `>${f.distancia_min - 1}`;
+  if (f.distancia_min === 0) return `0–${f.distancia_max}`;
+  return `${f.distancia_min}–${f.distancia_max}`;
+}
+
+/**
+ * Aplica o motor de 3 camadas para cada cota do grupo.
+ */
+export function calcularRecomendacoesPorFaixa(
+  cards: import('@/types/consorcio').ConsorcioCard[],
+  numeroAplicado: number,
+  categoria: string,
+  faixas: FaixaInput[],
+  vagas: number,
+): RecomendacaoFaixa[] {
+  const ativas = cards.filter((c) => !c.motivo_contemplacao);
+
+  // Calcula distância de todas
+  const comDistancia = ativas.map((c) => {
+    const num = parseInt(c.cota.replace(/\D/g, ''), 10);
+    const distancia = isNaN(num) ? 99999 : Math.abs(num - numeroAplicado);
+    return { card: c, distancia };
+  });
+
+  // Ordena por distância para definir ranking (posição)
+  const ordenadas = [...comDistancia].sort((a, b) => a.distancia - b.distancia);
+
+  return comDistancia
+    .map(({ card, distancia }) => {
+      const faixa = buscarFaixa(faixas, categoria, distancia);
+      const posicao = ordenadas.findIndex((x) => x.card.id === card.id) + 1;
+
+      let percentualSugerido: number | null;
+      let chanceLabel: RecomendacaoFaixa['chanceLabel'];
+      let chancePercent: number;
+      let justificativa: string;
+      let faixaAplicada: string;
+
+      if (!faixa) {
+        percentualSugerido = null;
+        chanceLabel = 'Fora';
+        chancePercent = 0;
+        faixaAplicada = '—';
+        justificativa = `Nenhuma faixa configurada para "${categoria}" cobre distância ${distancia}.`;
+      } else {
+        faixaAplicada = rotuloFaixa(faixa);
+        percentualSugerido = faixa.percentual_lance;
+
+        if (distancia === 0) {
+          chanceLabel = 'Sorteio';
+          chancePercent = 100;
+          percentualSugerido = 0;
+          justificativa = 'Match exato com sorteio — contemplação direta, sem lance.';
+        } else if (faixa.percentual_lance === null) {
+          chanceLabel = 'Fora';
+          chancePercent = 2;
+          justificativa = `Faixa ${faixaAplicada} marcada como "não compensa" para ${categoria}.`;
+        } else if (posicao <= vagas) {
+          chanceLabel = 'Alta';
+          chancePercent = Math.round(85 - (posicao - 1) * 10);
+          justificativa = `Está em ${posicao}º de ${vagas} vagas estimadas. Faixa ${faixaAplicada} → lance de ${faixa.percentual_lance}%.`;
+        } else if (posicao <= vagas * 2) {
+          chanceLabel = 'Média';
+          chancePercent = Math.round(50 - (posicao - vagas) * 5);
+          justificativa = `Disputado: ${posicao}º para ${vagas} vagas. Lance ${faixa.percentual_lance}% é tentativa válida.`;
+        } else {
+          chanceLabel = 'Baixa';
+          chancePercent = Math.max(5, Math.round(25 - (posicao - vagas * 2) * 2));
+          justificativa = `Arriscado: ${posicao}º para ${vagas} vagas. Lance ${faixa.percentual_lance}% pode não ser suficiente.`;
+        }
+      }
+
+      const valorLance = percentualSugerido && percentualSugerido > 0
+        ? (Number(card.valor_credito) * percentualSugerido) / 100
+        : 0;
+
+      return {
+        card,
+        distancia,
+        faixaAplicada,
+        percentualSugerido,
+        posicao,
+        vagas,
+        chanceLabel,
+        chancePercent,
+        valorLance,
+        justificativa,
+      };
+    })
+    .sort((a, b) => {
+      const ordem: Record<RecomendacaoFaixa['chanceLabel'], number> = { Sorteio: 0, Alta: 1, 'Média': 2, Baixa: 3, Fora: 4 };
+      return ordem[a.chanceLabel] - ordem[b.chanceLabel] || a.distancia - b.distancia;
+    });
+}
+
+export function getCorChanceFaixa(label: RecomendacaoFaixa['chanceLabel']): string {
+  switch (label) {
+    case 'Sorteio': return 'bg-emerald-600 text-white';
+    case 'Alta': return 'bg-blue-600 text-white';
+    case 'Média': return 'bg-yellow-500 text-white';
+    case 'Baixa': return 'bg-orange-500 text-white';
+    default: return 'bg-muted text-muted-foreground';
+  }
+}
