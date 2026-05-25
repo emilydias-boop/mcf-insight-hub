@@ -191,7 +191,7 @@ export function InstallmentsPaginated({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {format(new Date(installment.data_vencimento), 'dd/MM/yyyy')}
+                    {format(parseDateWithoutTimezone(installment.data_vencimento), 'dd/MM/yyyy')}
                   </TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(Number(installment.valor_parcela))}
