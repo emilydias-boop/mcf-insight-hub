@@ -62,13 +62,15 @@ export function parseDemonstrativo(text: string): DemonstrativoParsed {
         [res.bens_entregues, res.bens_distribuidos, res.bens_nao_distribuidos] = nums.slice(0, 3);
       }
     }
-    // Disponibilidades (linha "DISPONIBILIDADES(...)   22.769.207,12  ...")
-    const mDisp = l.match(/DISPONIBILIDADES\([^)]*\)\s+([\d.,]+)/i);
-    if (mDisp && res.disponibilidades_total == null) {
+    // Disponibilidades — pega SEMPRE a última ocorrência (saldo de fechamento).
+    // Aceita "DISPONIBILIDADES(...)" ou "DISPONIBILIDADES (dd/mm/aaaa)".
+    const mDisp = l.match(/DISPONIBILIDADES\s*\([^)]*\)\s+([\d.,]+)/i);
+    if (mDisp) {
       res.disponibilidades_total = toNum(mDisp[1]);
     }
-    const mApl = l.match(/APLIC(?:\.|AÇÕES)?\s+FIN(?:ANC)?\.?\s+VINC\.?\s+CONTEMPL?\.?\s+([\d.,]+)/i);
-    if (mApl && res.aplic_financeiras == null) res.aplic_financeiras = toNum(mApl[1]);
+    // APLIC. FINANC. VINC. CONTEMPL. (também aceita "CONTEMP." sem L) — última ocorrência.
+    const mApl = l.match(/APLIC(?:\.|AÇÕES)?\s+FIN(?:ANC)?\.?\s+VINC\.?\s+CONTEMP(?:L)?\.?\s+([\d.,]+)/i);
+    if (mApl) res.aplic_financeiras = toNum(mApl[1]);
     const mBens = l.match(/VALOR\s+DOS?\s+BENS?\s+A\s+ENTREGAR\s+([\d.,]+)/i);
     if (mBens) res.valor_bens_a_entregar = toNum(mBens[1]);
 
