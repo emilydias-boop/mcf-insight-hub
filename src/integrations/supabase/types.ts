@@ -3606,6 +3606,7 @@ export type Database = {
           created_at: string
           data_contemplacao: string | null
           data_contratacao: string | null
+          data_decisao_pos_contemplacao: string | null
           data_fundacao: string | null
           data_nascimento: string | null
           data_reserva: string | null
@@ -3648,6 +3649,9 @@ export type Database = {
           patrimonio: number | null
           percentual_lance: number | null
           pix: string | null
+          pos_contemplacao_decisao:
+            | Database["public"]["Enums"]["pos_contemplacao_decisao"]
+            | null
           prazo_meses: number
           produto_embracon: string | null
           profissao: string | null
@@ -3680,6 +3684,7 @@ export type Database = {
           created_at?: string
           data_contemplacao?: string | null
           data_contratacao?: string | null
+          data_decisao_pos_contemplacao?: string | null
           data_fundacao?: string | null
           data_nascimento?: string | null
           data_reserva?: string | null
@@ -3722,6 +3727,9 @@ export type Database = {
           patrimonio?: number | null
           percentual_lance?: number | null
           pix?: string | null
+          pos_contemplacao_decisao?:
+            | Database["public"]["Enums"]["pos_contemplacao_decisao"]
+            | null
           prazo_meses: number
           produto_embracon?: string | null
           profissao?: string | null
@@ -3754,6 +3762,7 @@ export type Database = {
           created_at?: string
           data_contemplacao?: string | null
           data_contratacao?: string | null
+          data_decisao_pos_contemplacao?: string | null
           data_fundacao?: string | null
           data_nascimento?: string | null
           data_reserva?: string | null
@@ -3796,6 +3805,9 @@ export type Database = {
           patrimonio?: number | null
           percentual_lance?: number | null
           pix?: string | null
+          pos_contemplacao_decisao?:
+            | Database["public"]["Enums"]["pos_contemplacao_decisao"]
+            | null
           prazo_meses?: number
           produto_embracon?: string | null
           profissao?: string | null
@@ -4010,6 +4022,299 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "consortium_pj_partners_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_transfer_buyers: {
+        Row: {
+          cnpj: string | null
+          cpf: string | null
+          created_at: string
+          data_fundacao: string | null
+          data_nascimento: string | null
+          email: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_complemento: string | null
+          endereco_estado: string | null
+          endereco_numero: string | null
+          endereco_rua: string | null
+          estado_civil: string | null
+          faturamento_mensal: number | null
+          id: string
+          inscricao_estadual: string | null
+          natureza_juridica: string | null
+          nome_completo: string | null
+          observacoes: string | null
+          profissao: string | null
+          razao_social: string | null
+          renda: number | null
+          rg: string | null
+          telefone: string | null
+          tipo_pessoa: string
+          transfer_id: string
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          email?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          estado_civil?: string | null
+          faturamento_mensal?: number | null
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          observacoes?: string | null
+          profissao?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          telefone?: string | null
+          tipo_pessoa?: string
+          transfer_id: string
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          email?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_complemento?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          estado_civil?: string | null
+          faturamento_mensal?: number | null
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          observacoes?: string | null
+          profissao?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          telefone?: string | null
+          tipo_pessoa?: string
+          transfer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_transfer_buyers_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: true
+            referencedRelation: "consortium_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_transfer_documents: {
+        Row: {
+          id: string
+          nome_arquivo: string
+          storage_path: string | null
+          storage_url: string | null
+          tipo: string
+          transfer_id: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          id?: string
+          nome_arquivo: string
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo: string
+          transfer_id: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          id?: string
+          nome_arquivo?: string
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo?: string
+          transfer_id?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_transfer_documents_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_transfer_financials: {
+        Row: {
+          created_at: string
+          data_prevista: string | null
+          data_realizada: string | null
+          id: string
+          observacao: string | null
+          status: Database["public"]["Enums"]["transfer_financial_status"]
+          tipo: Database["public"]["Enums"]["transfer_financial_tipo"]
+          transfer_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_prevista?: string | null
+          data_realizada?: string | null
+          id?: string
+          observacao?: string | null
+          status?: Database["public"]["Enums"]["transfer_financial_status"]
+          tipo: Database["public"]["Enums"]["transfer_financial_tipo"]
+          transfer_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          data_prevista?: string | null
+          data_realizada?: string | null
+          id?: string
+          observacao?: string | null
+          status?: Database["public"]["Enums"]["transfer_financial_status"]
+          tipo?: Database["public"]["Enums"]["transfer_financial_tipo"]
+          transfer_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_transfer_financials_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_transfers: {
+        Row: {
+          analise_data: string | null
+          analise_observacao: string | null
+          analise_status: Database["public"]["Enums"]["transfer_analise_status"]
+          cancelado_em: string | null
+          card_id: string
+          concluido_em: string | null
+          created_at: string
+          created_by: string | null
+          data_assembleia: string | null
+          data_efetivacao: string | null
+          data_envio_admin: string | null
+          id: string
+          iniciado_em: string
+          motivo_cancelamento: string | null
+          nova_cota: string | null
+          observacoes_precificacao: string | null
+          protocolo_admin: string | null
+          status_fase: Database["public"]["Enums"]["transfer_status_fase"]
+          tipo_contemplacao:
+            | Database["public"]["Enums"]["transfer_tipo_contemplacao"]
+            | null
+          updated_at: string
+          usou_capital_proprio: boolean
+          valor_capital_proprio: number | null
+          valor_comissao_empresa: number | null
+          valor_credito_disponivel: number | null
+          valor_lance: number | null
+          valor_repasse_consorciado: number | null
+          valor_total_comprador: number | null
+        }
+        Insert: {
+          analise_data?: string | null
+          analise_observacao?: string | null
+          analise_status?: Database["public"]["Enums"]["transfer_analise_status"]
+          cancelado_em?: string | null
+          card_id: string
+          concluido_em?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_assembleia?: string | null
+          data_efetivacao?: string | null
+          data_envio_admin?: string | null
+          id?: string
+          iniciado_em?: string
+          motivo_cancelamento?: string | null
+          nova_cota?: string | null
+          observacoes_precificacao?: string | null
+          protocolo_admin?: string | null
+          status_fase?: Database["public"]["Enums"]["transfer_status_fase"]
+          tipo_contemplacao?:
+            | Database["public"]["Enums"]["transfer_tipo_contemplacao"]
+            | null
+          updated_at?: string
+          usou_capital_proprio?: boolean
+          valor_capital_proprio?: number | null
+          valor_comissao_empresa?: number | null
+          valor_credito_disponivel?: number | null
+          valor_lance?: number | null
+          valor_repasse_consorciado?: number | null
+          valor_total_comprador?: number | null
+        }
+        Update: {
+          analise_data?: string | null
+          analise_observacao?: string | null
+          analise_status?: Database["public"]["Enums"]["transfer_analise_status"]
+          cancelado_em?: string | null
+          card_id?: string
+          concluido_em?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_assembleia?: string | null
+          data_efetivacao?: string | null
+          data_envio_admin?: string | null
+          id?: string
+          iniciado_em?: string
+          motivo_cancelamento?: string | null
+          nova_cota?: string | null
+          observacoes_precificacao?: string | null
+          protocolo_admin?: string | null
+          status_fase?: Database["public"]["Enums"]["transfer_status_fase"]
+          tipo_contemplacao?:
+            | Database["public"]["Enums"]["transfer_tipo_contemplacao"]
+            | null
+          updated_at?: string
+          usou_capital_proprio?: boolean
+          valor_capital_proprio?: number | null
+          valor_comissao_empresa?: number | null
+          valor_credito_disponivel?: number | null
+          valor_lance?: number | null
+          valor_repasse_consorciado?: number | null
+          valor_total_comprador?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_transfers_card_id_fkey"
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "consortium_cards"
@@ -12703,6 +13008,7 @@ export type Database = {
         | "documento"
         | "carta"
         | "sistema"
+        | "transferencia"
       card_activity_event:
         | "installment_paid"
         | "installment_reverted"
@@ -12722,6 +13028,16 @@ export type Database = {
         | "card_field_changed"
         | "card_status_changed"
         | "card_deleted"
+        | "transfer_started"
+        | "transfer_phase_changed"
+        | "transfer_pricing_updated"
+        | "transfer_buyer_updated"
+        | "transfer_credit_updated"
+        | "transfer_official_updated"
+        | "transfer_financial_changed"
+        | "transfer_completed"
+        | "transfer_cancelled"
+        | "pos_contemplacao_decision"
       cobranca_acao_tipo:
         | "boleto_enviado"
         | "lead_respondeu"
@@ -12764,6 +13080,11 @@ export type Database = {
         | "manager"
         | "viewer"
       playbook_tipo_conteudo: "arquivo" | "link" | "texto"
+      pos_contemplacao_decisao:
+        | "manter"
+        | "a_venda"
+        | "em_transferencia"
+        | "transferida"
       project_status: "a_fazer" | "em_andamento" | "concluido" | "cancelado"
       resource_type:
         | "dashboard"
@@ -12792,6 +13113,32 @@ export type Database = {
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
       transaction_type: "receita" | "custo"
+      transfer_analise_status:
+        | "pendente"
+        | "em_analise"
+        | "aprovado"
+        | "reprovado"
+      transfer_financial_status: "previsto" | "recebido" | "pago" | "cancelado"
+      transfer_financial_tipo:
+        | "entrada_comprador"
+        | "repasse_consorciado"
+        | "comissao_empresa"
+        | "taxa_administradora"
+      transfer_status_fase:
+        | "precificacao"
+        | "comprador"
+        | "analise_credito"
+        | "documentacao"
+        | "transferencia_oficial"
+        | "financeiro"
+        | "concluida"
+        | "cancelada"
+      transfer_tipo_contemplacao:
+        | "sorteio_50"
+        | "sorteio_25"
+        | "lance_50"
+        | "lance_25"
+        | "lance_fixo"
       user_file_type:
         | "contrato_trabalho"
         | "politica_comissao"
@@ -13037,6 +13384,7 @@ export const Constants = {
         "documento",
         "carta",
         "sistema",
+        "transferencia",
       ],
       card_activity_event: [
         "installment_paid",
@@ -13057,6 +13405,16 @@ export const Constants = {
         "card_field_changed",
         "card_status_changed",
         "card_deleted",
+        "transfer_started",
+        "transfer_phase_changed",
+        "transfer_pricing_updated",
+        "transfer_buyer_updated",
+        "transfer_credit_updated",
+        "transfer_official_updated",
+        "transfer_financial_changed",
+        "transfer_completed",
+        "transfer_cancelled",
+        "pos_contemplacao_decision",
       ],
       cobranca_acao_tipo: [
         "boleto_enviado",
@@ -13105,6 +13463,12 @@ export const Constants = {
         "viewer",
       ],
       playbook_tipo_conteudo: ["arquivo", "link", "texto"],
+      pos_contemplacao_decisao: [
+        "manter",
+        "a_venda",
+        "em_transferencia",
+        "transferida",
+      ],
       project_status: ["a_fazer", "em_andamento", "concluido", "cancelado"],
       resource_type: [
         "dashboard",
@@ -13134,6 +13498,36 @@ export const Constants = {
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
       transaction_status: ["pago", "pendente", "cancelado"],
       transaction_type: ["receita", "custo"],
+      transfer_analise_status: [
+        "pendente",
+        "em_analise",
+        "aprovado",
+        "reprovado",
+      ],
+      transfer_financial_status: ["previsto", "recebido", "pago", "cancelado"],
+      transfer_financial_tipo: [
+        "entrada_comprador",
+        "repasse_consorciado",
+        "comissao_empresa",
+        "taxa_administradora",
+      ],
+      transfer_status_fase: [
+        "precificacao",
+        "comprador",
+        "analise_credito",
+        "documentacao",
+        "transferencia_oficial",
+        "financeiro",
+        "concluida",
+        "cancelada",
+      ],
+      transfer_tipo_contemplacao: [
+        "sorteio_50",
+        "sorteio_25",
+        "lance_50",
+        "lance_25",
+        "lance_fixo",
+      ],
       user_file_type: [
         "contrato_trabalho",
         "politica_comissao",

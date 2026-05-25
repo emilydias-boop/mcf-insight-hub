@@ -51,6 +51,7 @@ import { InstallmentsPaginated } from "./InstallmentsPaginated";
 import { CardActivityHistoryTab } from "./CardActivityHistoryTab";
 import { GroupDetailsCard } from "./GroupDetailsCard";
 import { InadimplenciaAlert } from "./InadimplenciaAlert";
+import { PosContemplacaoPanel } from "./PosContemplacaoPanel";
 
 import { StatusEditDropdown } from "./StatusEditDropdown";
 import { EditInstallmentDialog, UpdateInstallmentData } from "./EditInstallmentDialog";
@@ -322,6 +323,14 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                   {/* Detalhes do Grupo */}
                   <GroupDetailsCard grupo={card.grupo} dataContratacao={card.data_contratacao} />
+
+                  {/* Pós-contemplação (somente para cotas contempladas) */}
+                  {card.motivo_contemplacao && (
+                    <PosContemplacaoPanel
+                      cardId={card.id}
+                      decisao={(card as any).pos_contemplacao_decisao ?? null}
+                    />
+                  )}
 
                   <Tabs defaultValue="parcelas">
                     <TabsList className="w-full">
