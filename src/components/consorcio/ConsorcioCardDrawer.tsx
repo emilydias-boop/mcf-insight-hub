@@ -661,6 +661,11 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                         </CardContent>
                       </Card>
                     </TabsContent>
+
+                    {/* Tab: Histórico */}
+                    <TabsContent value="historico" className="mt-4">
+                      <CardActivityHistoryTab cardId={card.id} />
+                    </TabsContent>
                   </Tabs>
 
                   {/* Info da Cota */}
