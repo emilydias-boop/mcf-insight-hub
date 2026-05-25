@@ -112,20 +112,31 @@ export function parseCalendario(text: string): CalendarioLinha[] {
   for (const raw of text.split(/\r?\n/)) {
     const l = raw.trim();
     if (!l) continue;
-    const parts = l.split(/\s+/);
-    // precisa pelo menos: grupo nº data dia venc sorteio hora (7)
-    if (parts.length < 4) continue;
-    if (!/^\d{4,7}$/.test(parts[0])) continue;
-    if (!/^\d{1,3}$/.test(parts[1])) continue;
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(parts[2])) continue;
-    const grupo = parts[0].padStart(6, '0');
-    const numero = parseInt(parts[1], 10);
-    const data = isoDate(parts[2])!;
-    const dia = parts[3] && /^[A-Za-zÀ-ú]{3,}$/.test(parts[3]) ? parts[3] : null;
-    // localizar próximas duas datas e hora
-    const rest = parts.slice(dia ? 4 : 3);
+
+    if (/^grupo\b/i.test(l)) continue;
+
+    const pipeParts = l.includes('|')
+      ? l.split('|').map((part) => part.trim()).filter(Boolean)
+      : null;
+
+    const parts = pipeParts ?? l.split(/\s+/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 3) continue;
+
+    const hasLeadingGrupo = /^\d{4,7}$/.test(parts[0]);
+    const numberIndex = hasLeadingGrupo ? 1 : 0;
+    const dateIndex = hasLeadingGrupo ? 2 : 1;
+
+    if (!/^\d{1,3}$/.test(parts[numberIndex] || '')) continue;
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(parts[dateIndex] || '')) continue;
+
+    const grupo = hasLeadingGrupo ? parts[0].padStart(6, '0') : '';
+    const numero = parseInt(parts[numberIndex], 10);
+    const data = isoDate(parts[dateIndex])!;
+    const rest = parts.slice(dateIndex + 1);
+    const dia = rest.find((p) => !/^\d{2}\/\d{2}\/\d{4}$/.test(p) && !/^\d{1,2}:\d{2}$/.test(p)) || null;
     const datas = rest.filter((p) => /^\d{2}\/\d{2}\/\d{4}$/.test(p));
     const hora = rest.find((p) => /^\d{1,2}:\d{2}$/.test(p)) || null;
+
     out.push({
       grupo,
       numero,
