@@ -102,6 +102,7 @@ const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/Fecham
 const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEquipe"));
 const ConsorcioVendas = lazy(() => import("./pages/bu-consorcio/Vendas"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
+const ConsorcioCotasAVenda = lazy(() => import("./pages/bu-consorcio/CotasAVenda"));
 const Chairman = lazy(() => import("./pages/Chairman"));
 const Home = lazy(() => import("./pages/Home"));
 const DocumentosEstrategicos = lazy(() => import("./pages/bu-common/DocumentosEstrategicos"));
@@ -186,6 +187,7 @@ const App = () => (
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
               <Route path="consorcio/vendas" element={<ResourceGuard resource="crm"><ConsorcioVendas /></ResourceGuard>} />
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
+              <Route path="consorcio/cotas-a-venda" element={<ResourceGuard resource="crm"><ConsorcioCotasAVenda /></ResourceGuard>} />
               <Route path="consorcio/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="consorcio" /></ResourceGuard>} />
               
               <Route path="consorcio/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></ResourceGuard>}>
