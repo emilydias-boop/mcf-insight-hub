@@ -208,10 +208,10 @@ export function formatDateForDB(date: Date): string {
  * @param dateString - String no formato "YYYY-MM-DD"
  * @returns Date object no horário local
  */
-export function parseDateWithoutTimezone(dateString: string | null | undefined): Date | null {
-  if (!dateString || typeof dateString !== 'string') return null;
+export function parseDateWithoutTimezone(dateString: string | null | undefined): Date {
+  if (!dateString || typeof dateString !== 'string') return new Date(NaN);
   const parts = dateString.split('-').map(Number);
-  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return null;
+  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return new Date(NaN);
   const [year, month, day] = parts;
   return new Date(year, month - 1, day);
 }
