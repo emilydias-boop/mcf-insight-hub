@@ -174,6 +174,7 @@ const menuItems: MenuItem[] = [
       { title: "Vendas", url: "/consorcio/vendas", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Pagamentos", url: "/consorcio/pagamentos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Cotas à Venda", url: "/consorcio/cotas-a-venda", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Documentos Estratégicos", url: "/consorcio/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
     ],
   },
