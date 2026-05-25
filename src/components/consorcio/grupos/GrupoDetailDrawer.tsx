@@ -10,6 +10,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import { GrupoSaudeItem } from '@/hooks/useGruposSaude';
 import { HistoricoAssembleiaPanel } from '../HistoricoAssembleiaPanel';
+import { SaudeGrupoSection } from './SaudeGrupoSection';
+import { CalendarioAssembleiasSection } from './CalendarioAssembleiasSection';
+import { ResultadoAssembleiaSection } from './ResultadoAssembleiaSection';
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -176,6 +179,15 @@ export function GrupoDetailDrawer({ item, open, onOpenChange }: Props) {
 
           {/* Histórico de assembleias (reaproveitado) */}
           {grupo && <HistoricoAssembleiaPanel grupo={grupo} vagasFallback={2} />}
+
+          {/* Saúde do grupo */}
+          {grupo && <SaudeGrupoSection grupo={grupo} />}
+
+          {/* Calendário de próximas assembleias */}
+          {grupo && <CalendarioAssembleiasSection grupo={grupo} />}
+
+          {/* Resultado da última assembleia */}
+          {grupo && <ResultadoAssembleiaSection grupo={grupo} />}
 
           {/* Contemplações registradas da empresa */}
           <Card>
