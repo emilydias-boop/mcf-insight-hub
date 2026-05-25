@@ -15,6 +15,26 @@ async function validateTwilioSignature(req: Request, url: string, params: Record
   return expected === signature;
 }
 
+const candidatePublicUrls = (req: Request): string[] => {
+  const u = new URL(req.url);
+  const urls = new Set<string>();
+  const base = Deno.env.get('SUPABASE_URL');
+  if (base) urls.add(`${base.replace(/\/$/, '')}${u.pathname}${u.search}`);
+  const proto = req.headers.get('x-forwarded-proto') || 'https';
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  if (host) urls.add(`${proto}://${host}${u.pathname}${u.search}`);
+  urls.add(`${u.protocol}//${u.host}${u.pathname}${u.search}`);
+  return Array.from(urls);
+};
+
+const validateWithAnyUrl = async (req: Request, params: Record<string, string>): Promise<{ ok: boolean; tried: string[] }> => {
+  const tried = candidatePublicUrls(req);
+  for (const u of tried) {
+    if (await validateTwilioSignature(req, u, params)) return { ok: true, tried };
+  }
+  return { ok: false, tried };
+};
+
 const escapeXml = (value: string | null | undefined) =>
   (value || '')
     .replace(/&/g, '&amp;')
@@ -54,22 +74,14 @@ const parseTwilioParams = async (req: Request): Promise<{ get: (k: string) => st
   return { get: (k) => params.get(k), all };
 };
 
-const getPublicUrl = (req: Request): string => {
-  const u = new URL(req.url);
-  const proto = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || u.host;
-  return `${proto}://${host}${u.pathname}${u.search}`;
-};
-
 serve(async (req) => {
   try {
     // Parse form data from Twilio
     const formData = await parseTwilioParams(req);
 
-    const publicUrl = getPublicUrl(req);
-    const valid = await validateTwilioSignature(req, publicUrl, formData.all);
+    const { ok: valid, tried } = await validateWithAnyUrl(req, formData.all);
     if (!valid) {
-      console.error('[twilio-voice-twiml] Invalid Twilio signature for url:', publicUrl);
+      console.error('[twilio-voice-twiml] Invalid Twilio signature. Tried URLs:', tried);
       return new Response('Forbidden', { status: 403 });
     }
 

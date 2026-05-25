@@ -22,6 +22,26 @@ async function validateTwilioSignature(req: Request, url: string, params: Record
   return expected === signature;
 }
 
+const candidatePublicUrls = (req: Request): string[] => {
+  const u = new URL(req.url);
+  const urls = new Set<string>();
+  const base = Deno.env.get('SUPABASE_URL');
+  if (base) urls.add(`${base.replace(/\/$/, '')}${u.pathname}${u.search}`);
+  const proto = req.headers.get('x-forwarded-proto') || 'https';
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  if (host) urls.add(`${proto}://${host}${u.pathname}${u.search}`);
+  urls.add(`${u.protocol}//${u.host}${u.pathname}${u.search}`);
+  return Array.from(urls);
+};
+
+const validateWithAnyUrl = async (req: Request, params: Record<string, string>): Promise<{ ok: boolean; tried: string[] }> => {
+  const tried = candidatePublicUrls(req);
+  for (const u of tried) {
+    if (await validateTwilioSignature(req, u, params)) return { ok: true, tried };
+  }
+  return { ok: false, tried };
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,13 +61,9 @@ serve(async (req) => {
       payload[key] = value.toString();
     }
 
-    const u = new URL(req.url);
-    const proto = req.headers.get('x-forwarded-proto') || 'https';
-    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || u.host;
-    const publicUrl = `${proto}://${host}${u.pathname}${u.search}`;
-    const valid = await validateTwilioSignature(req, publicUrl, payload);
+    const { ok: valid, tried } = await validateWithAnyUrl(req, payload);
     if (!valid) {
-      console.error('[TWILIO-WEBHOOK] Invalid Twilio signature for url:', publicUrl);
+      console.error('[TWILIO-WEBHOOK] Invalid Twilio signature. Tried URLs:', tried);
       return new Response('Forbidden', { status: 403, headers: corsHeaders });
     }
 
