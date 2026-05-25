@@ -54,14 +54,22 @@ const parseTwilioParams = async (req: Request): Promise<{ get: (k: string) => st
   return { get: (k) => params.get(k), all };
 };
 
+const getPublicUrl = (req: Request): string => {
+  const u = new URL(req.url);
+  const proto = req.headers.get('x-forwarded-proto') || 'https';
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || u.host;
+  return `${proto}://${host}${u.pathname}${u.search}`;
+};
+
 serve(async (req) => {
   try {
     // Parse form data from Twilio
     const formData = await parseTwilioParams(req);
 
-    const valid = await validateTwilioSignature(req, req.url, formData.all);
+    const publicUrl = getPublicUrl(req);
+    const valid = await validateTwilioSignature(req, publicUrl, formData.all);
     if (!valid) {
-      console.error('[twilio-voice-twiml] Invalid Twilio signature');
+      console.error('[twilio-voice-twiml] Invalid Twilio signature for url:', publicUrl);
       return new Response('Forbidden', { status: 403 });
     }
 
