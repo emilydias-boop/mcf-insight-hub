@@ -1,47 +1,53 @@
 
-## Diagnóstico
+## Nova aba "Grupos" em /consorcio
 
-A tabela de parcelas mostra apenas `consortium_installments.valor_comissao` já persistido. A causa é a função `calcularComissao` em `src/lib/commissionCalculator.ts`:
+Adicionar uma 4ª aba em `src/pages/bu-consorcio/Index.tsx` chamada **Grupos**, com fluxo lista → detalhe (opção 1 que você escolheu).
 
-- **Fallback hardcoded** já respeita o cap: 0% depois da parcela 8 (SELECT) ou 12 (PARCELINHA). OK.
-- **Com `comissao_schedule` do produto cadastrado**: usa `schedule.find(parcela === i)` sem cap. Se o cadastro do produto tem entradas para parcelas > 8/12 (ou um valor flat), a comissão é aplicada nas 240 parcelas. Foi o que aconteceu — R$ 550 = 0,11% × R$ 500.000 em toda a vida do contrato.
+### Comportamento
 
-A regra do negócio (sua planilha) é clara:
-- **SELECT** → comissão somente nas parcelas **1 a 8**, total ≈ **5,5%** do crédito
-- **PARCELINHA** → comissão somente nas parcelas **1 a 12**, total ≈ **4,46%** do crédito
+**Lista (estado inicial):**
+- Um card por grupo distinto encontrado em `consortium_cards.grupo` (descartando vazios).
+- Cada card mostra:
+  - Número do grupo
+  - Nº de cotas da empresa naquele grupo
+  - Valor total de crédito
+  - **Saúde do grupo** (badge colorido):
+    - Vagas estimadas (média das últimas 5 assembleias registradas, mesmo cálculo do `calcularVagasEstimadas` já existente)
+    - Data da última assembleia registrada (ou "Sem histórico")
+    - Total de contemplações da empresa no grupo
+  - Status do badge: verde se ≥ 1 assembleia nos últimos 30 dias, amarelo se entre 30–90 dias, cinza se sem histórico ou >90 dias.
 
-## Correção
+**Filtros no topo:** busca por número de grupo + ordenação (mais cotas / mais saudável / última assembleia).
 
-Aplicar o cap de parcelas no `commissionCalculator.ts` independentemente do `schedule` configurado, e propagar o conserto para as parcelas já geradas.
+**Detalhe (ao clicar no card):**
+Drawer lateral (`Sheet`) com:
+1. **Cabeçalho:** Grupo + KPIs (cotas, crédito total, vagas estimadas, qtd contemplados da empresa).
+2. **Cotas da empresa neste grupo** — tabela compacta (cota, consorciado, valor, status, contemplado?).
+3. **Histórico de assembleias** — reaproveita `HistoricoAssembleiaPanel` (já existe). Inclui botão "Registrar Assembleia".
+4. **Contemplações registradas** — lista cronológica de todas as contemplações da empresa no grupo (cota + data + motivo + % lance), agregando `consorcio_assembleia_contemplados` cruzado com `consortium_cards.cota`.
 
-### 1. `src/lib/commissionCalculator.ts`
-- Em `getPercentualFromContext`, adicionar guard antes do `find`:
-  - `if (tipoProduto === 'select' && numeroParcela > 8) return { percentual: 0, usouCustom: false }`
-  - `if (tipoProduto === 'parcelinha' && numeroParcela > 12) return { percentual: 0, usouCustom: false }`
-- Isso torna o cap a **fonte da verdade**, mesmo que o cadastro do produto tenha entries extras (defensivo).
+### Arquivos
 
-### 2. Backfill das cartas existentes
-Migration única (apenas UPDATE):
+**Novos:**
+- `src/components/consorcio/grupos/GruposTab.tsx` — container da aba (lista + estado de drawer aberto).
+- `src/components/consorcio/grupos/GrupoCard.tsx` — card de um grupo.
+- `src/components/consorcio/grupos/GrupoDetailDrawer.tsx` — Sheet com as 4 seções acima.
+- `src/hooks/useGruposSaude.ts` — hook que retorna a lista agregada (`grupo`, `qtd_cotas`, `valor_credito_total`, `ultima_assembleia`, `vagas_estimadas`, `qtd_contemplados_empresa`, `status_saude`).
 
-```sql
-UPDATE consortium_installments ci
-SET valor_comissao = 0
-FROM consortium_cards cc
-WHERE ci.card_id = cc.id
-  AND (
-    (cc.tipo_produto = 'select'     AND ci.numero_parcela > 8)
-    OR
-    (cc.tipo_produto = 'parcelinha' AND ci.numero_parcela > 12)
-  )
-  AND ci.valor_comissao <> 0;
-```
+**Editar:**
+- `src/pages/bu-consorcio/Index.tsx` — adicionar `<TabsTrigger value="grupos">Grupos</TabsTrigger>` e o `<TabsContent>` renderizando `<GruposTab />`.
 
-Após o UPDATE, o `valor_comissao_total` (somatório no `useConsorcio.ts`) também volta ao correto sem código adicional.
+### Dados / queries
 
-### 3. Sanitizar o cadastro de produto (opcional, recomendado)
-No `Configuracoes`/cadastro de `consorcio_produtos`, validar que `comissao_schedule` não aceita `parcela > 8` para SELECT nem `parcela > 12` para PARCELINHA — evita o problema reaparecer via cadastro errado. (Posso fazer numa segunda etapa se você quiser.)
+Sem migrations — todas as tabelas necessárias já existem:
+- `consortium_cards` (grupo, cota, valor_credito, e_contemplada)
+- `consorcio_assembleias_historico` (grupo, data_assembleia, qtd_contemplados)
+- `consorcio_assembleia_contemplados` (cota, motivo, percentual_lance)
+- `consorcio_grupos_config` (vagas_padrao, observacao) — opcional, usado como fallback.
 
-## Não está no escopo
+A lista é montada client-side a partir de uma única consulta em `consortium_cards` + uma em `consorcio_assembleias_historico` agrupada por grupo (ordenada por `data_assembleia desc`), e juntada em memória pelo hook.
 
-- A coluna "Valor" da parcela (R$ 1.478,50) não muda — esse cálculo está em `consorcioCalculos.ts` e segue a tabela oficial.
-- O `% taxa antecipada` (diferença entre 4,46% e 4,50%) é outro tópico (composição da parcela, não comissão).
+### Fora de escopo
+
+- Não vou criar gráficos ou predição automática de contemplação por grupo. A "saúde" é baseada apenas no histórico manual.
+- Não vou mexer na aba Contemplação — o `HistoricoAssembleiaPanel` continua aparecendo lá também.
