@@ -610,6 +610,45 @@ export function AcceptProposalModal({
                   <p className="text-sm text-destructive">{form.formState.errors.root.message}</p>
                 )}
 
+                <Separator />
+                <h3 className="font-semibold text-sm">Parcelas que a empresa pagará</h3>
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="space-y-2">
+                    <Label>Empresa paga parcelas?</Label>
+                    <Select value={empresaPaga} onValueChange={(v: 'sim' | 'nao') => setEmpresaPaga(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nao">Não</SelectItem>
+                        <SelectItem value="sim">Sim</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {empresaPaga === 'sim' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Tipo de Contrato</Label>
+                        <Select value={tipoContrato} onValueChange={(v: any) => setTipoContrato(v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal (1ª, 2ª…)</SelectItem>
+                            <SelectItem value="intercalado">Intercalado par</SelectItem>
+                            <SelectItem value="intercalado_impar">Intercalado ímpar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Qtd parcelas</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={qtdParcelasEmpresa}
+                          onChange={(e) => setQtdParcelasEmpresa(Number(e.target.value || 0))}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancelar
