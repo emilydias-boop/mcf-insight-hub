@@ -237,7 +237,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       deal_id: dealId,
       tipo_produto: tipoProduto,
       vendedor_id: closerId || undefined,
-      vendedor_name_cota: closer ? (closer as any).nome : undefined,
+      vendedor_name_cota: closer ? ((closer as any).name ?? (closer as any).nome) : undefined,
     };
     await create.mutateAsync(input);
     reset();
@@ -281,7 +281,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
                 <SelectTrigger><SelectValue placeholder="Selecionar closer..." /></SelectTrigger>
                 <SelectContent>
                   {vendedorOptions.map((v: any) => (
-                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                    <SelectItem key={v.id} value={v.id}>{v.name ?? v.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
