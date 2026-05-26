@@ -644,12 +644,14 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancelar
+                        {readOnly ? 'Fechar' : 'Cancelar'}
                       </Button>
-                      <Button type="submit" disabled={openCota.isPending}>
-                        {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Confirmar Abertura da Cota
-                      </Button>
+                      {!readOnly && (
+                        <Button type="submit" disabled={openCota.isPending}>
+                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Confirmar Abertura da Cota
+                        </Button>
+                      )}
                     </div>
                   </div>
               </CardContent>
@@ -657,14 +659,17 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancelar
+                        {readOnly ? 'Fechar' : 'Cancelar'}
                       </Button>
-                      <Button type="submit" disabled={openCota.isPending}>
-                        {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Confirmar Abertura da Cota
-                      </Button>
+                      {!readOnly && (
+                        <Button type="submit" disabled={openCota.isPending}>
+                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Confirmar Abertura da Cota
+                        </Button>
+                      )}
                     </div>
             </form>
+            </fieldset>
           </Form>
         </ScrollArea>
       </DialogContent>
