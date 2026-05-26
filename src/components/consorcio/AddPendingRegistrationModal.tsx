@@ -237,7 +237,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       deal_id: dealId,
       tipo_produto: tipoProduto,
       vendedor_id: closerId || undefined,
-      vendedor_name_cota: closer ? (closer as any).nome : undefined,
+      vendedor_name_cota: closer ? ((closer as any).name ?? (closer as any).nome) : undefined,
     };
     await create.mutateAsync(input);
     reset();
