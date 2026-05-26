@@ -33,6 +33,12 @@ import { OpenCotaModal } from './OpenCotaModal';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
 import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
+import {
+  PendingRegistrationsFilters,
+  applyPendingFilters,
+  defaultPendingFilters,
+  type PendingFiltersState,
+} from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 
@@ -43,7 +49,13 @@ export function PendingRegistrationsList() {
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
   const deleteMut = useDeletePendingRegistration();
+
+  const filtered = useMemo(
+    () => applyPendingFilters(registrations, filters),
+    [registrations, filters],
+  );
 
   if (isLoading) {
     return (
@@ -56,21 +68,29 @@ export function PendingRegistrationsList() {
   return (
     <TooltipProvider delayDuration={150}>
     <>
-    <PendingRegistrationsKPIs registrations={registrations} />
+    <PendingRegistrationsFilters
+      filters={filters}
+      onChange={setFilters}
+      registrations={registrations}
+    />
+    <PendingRegistrationsKPIs registrations={filtered} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          Cadastros Pendentes ({registrations.length})
+          Cadastros Pendentes ({filtered.length}
+          {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Adicionar Pendente
         </Button>
       </CardHeader>
       <CardContent>
-        {registrations.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
-            Nenhum cadastro pendente de abertura.
+            {registrations.length === 0
+              ? 'Nenhum cadastro pendente de abertura.'
+              : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -91,7 +111,7 @@ export function PendingRegistrationsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {registrations.map((reg) => (
+                {filtered.map((reg) => (
                   <RegistrationRow
                     key={reg.id}
                     reg={reg}
