@@ -8,8 +8,12 @@ import { ptBR } from 'date-fns/locale';
 export function formatOrigemLabel(
   originName?: string | null,
   aceiteDate?: string | null,
+  manualOrigem?: string | null,
 ): string {
-  const origem = (originName || '').trim() || 'Sem origem';
+  const origem =
+    (originName || '').trim() ||
+    (manualOrigem || '').trim() ||
+    'Sem origem';
   if (!aceiteDate) return origem;
   try {
     // aceite_date é DATE (YYYY-MM-DD) — evita timezone shift

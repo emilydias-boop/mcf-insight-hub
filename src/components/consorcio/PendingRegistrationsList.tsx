@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,8 @@ import {
 } from '@/hooks/useConsorcioPendingRegistrations';
 import { OpenCotaModal } from './OpenCotaModal';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
+import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
+import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 
@@ -40,6 +42,7 @@ export function PendingRegistrationsList() {
   const [viewId, setViewId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const deleteMut = useDeletePendingRegistration();
 
   if (isLoading) {
@@ -52,12 +55,17 @@ export function PendingRegistrationsList() {
 
   return (
     <TooltipProvider delayDuration={150}>
+    <>
+    <PendingRegistrationsKPIs registrations={registrations} />
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
           Cadastros Pendentes ({registrations.length})
         </CardTitle>
+        <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar Pendente
+        </Button>
       </CardHeader>
       <CardContent>
         {registrations.length === 0 ? (
@@ -147,6 +155,8 @@ export function PendingRegistrationsList() {
         </AlertDialog>
       </CardContent>
     </Card>
+    <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    </>
     </TooltipProvider>
   );
 }
