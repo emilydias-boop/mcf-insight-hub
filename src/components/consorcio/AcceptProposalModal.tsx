@@ -35,6 +35,9 @@ import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { buscarCep } from '@/lib/cepUtils';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
 import { TipoDocumento } from '@/types/consorcio';
+import { Switch } from '@/components/ui/switch';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 // Formatting functions
 function formatCpf(value: string): string {
@@ -134,6 +137,25 @@ export function AcceptProposalModal({
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
   const [pjDocCartaoCnpj, setPjDocCartaoCnpj] = useState<File | null>(null);
+
+  // Parcelas que a empresa pagará (capturado já aqui no aceite)
+  const [empresaPaga, setEmpresaPaga] = useState<'sim' | 'nao'>('nao');
+  const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
+  const [qtdParcelasEmpresa, setQtdParcelasEmpresa] = useState<number>(0);
+
+  // Carrega proposta para pegar valor_credito/prazo
+  const { data: proposal } = useQuery({
+    queryKey: ['consorcio-proposal-snapshot', proposalId],
+    enabled: open && !!proposalId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('consorcio_proposals')
+        .select('valor_credito, prazo_meses')
+        .eq('id', proposalId)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   const createRegistration = useCreatePendingRegistration();
 
@@ -260,6 +282,11 @@ export function AcceptProposalModal({
       tipo_pessoa: tipoPessoa,
       vendedor_name: vendedorName,
       documents,
+      empresa_paga_parcelas: empresaPaga,
+      tipo_contrato: tipoContrato,
+      parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
+      valor_credito: proposal?.valor_credito ? Number(proposal.valor_credito) : undefined,
+      prazo_meses: proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined,
       ...cleanData,
     });
 
