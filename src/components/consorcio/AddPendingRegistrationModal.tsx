@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search, ChevronDown } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +42,114 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+// Origens da BU Consórcio (mesma fonte usada em useConsorcioPostMeeting)
+const CONSORCIO_BU = 'consorcio';
+
+function useConsorcioOriginIds() {
+  return useQuery({
+    queryKey: ['consorcio-bu-origin-ids'],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bu_origin_mapping')
+        .select('entity_id')
+        .eq('bu', CONSORCIO_BU)
+        .eq('entity_type', 'origin');
+      if (error) throw error;
+      return (data || []).map((r: any) => r.entity_id as string);
+    },
+  });
+}
+
+interface DealMatch {
+  deal_id: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  origin_label: string | null;
+  stage_name: string | null;
+}
+
+function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boolean) {
+  const term = query.trim();
+  return useQuery({
+    queryKey: ['consorcio-lead-search', term.toLowerCase(), originIds.length],
+    enabled: enabled && term.length >= 2 && originIds.length > 0,
+    staleTime: 15_000,
+    queryFn: async (): Promise<DealMatch[]> => {
+      const like = `%${term}%`;
+      const digits = term.replace(/\D/g, '');
+
+      // Buscar contatos por nome/email/telefone/cpf/cnpj
+      let cq = supabase
+        .from('crm_contacts')
+        .select('id, name, email, phone')
+        .eq('is_archived', false)
+        .limit(30);
+      if (digits.length >= 4) {
+        cq = cq.or(
+          `name.ilike.${like},email.ilike.${like},phone.ilike.%${digits}%`,
+        );
+      } else {
+        cq = cq.or(`name.ilike.${like},email.ilike.${like}`);
+      }
+      const { data: contacts } = await cq;
+      const contactIds = (contacts || []).map((c: any) => c.id);
+      if (!contactIds.length) return [];
+
+      const contactById = new Map<string, any>();
+      (contacts || []).forEach((c: any) => contactById.set(c.id, c));
+
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select('id, contact_id, stage_id, origin_id, created_at')
+        .in('contact_id', contactIds)
+        .in('origin_id', originIds)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (!deals || deals.length === 0) return [];
+
+      const originIdsUsed = Array.from(new Set(deals.map((d: any) => d.origin_id).filter(Boolean)));
+      const stageIdsUsed = Array.from(new Set(deals.map((d: any) => d.stage_id).filter(Boolean)));
+      const [{ data: origins }, { data: stages }] = await Promise.all([
+        originIdsUsed.length
+          ? supabase.from('crm_origins').select('id, display_name, name').in('id', originIdsUsed)
+          : Promise.resolve({ data: [] as any[] }),
+        stageIdsUsed.length
+          ? supabase.from('crm_stages').select('id, name').in('id', stageIdsUsed)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const originById = new Map<string, string>();
+      (origins || []).forEach((o: any) => originById.set(o.id, o.display_name || o.name));
+      const stageById = new Map<string, string>();
+      (stages || []).forEach((s: any) => stageById.set(s.id, s.name));
+
+      // Dedup por contato (manter o deal mais recente)
+      const seen = new Set<string>();
+      const out: DealMatch[] = [];
+      for (const d of deals as any[]) {
+        if (seen.has(d.contact_id)) continue;
+        seen.add(d.contact_id);
+        const c = contactById.get(d.contact_id) || {};
+        out.push({
+          deal_id: d.id,
+          contact_name: c.name || null,
+          contact_email: c.email || null,
+          contact_phone: c.phone || null,
+          cpf: null,
+          cnpj: null,
+          origin_label: originById.get(d.origin_id) || null,
+          stage_name: stageById.get(d.stage_id) || null,
+        });
+      }
+      return out;
+    },
+  });
+}
+
 export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const create = useCreateManualPendingRegistration();
   const [tipoPessoa, setTipoPessoa] = useState<'pf' | 'pj'>('pf');
@@ -46,6 +165,15 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const [qtdParcelas, setQtdParcelas] = useState('');
   const [aceiteDate, setAceiteDate] = useState(new Date().toISOString().split('T')[0]);
   const [obs, setObs] = useState('');
+  const [dealId, setDealId] = useState<string | null>(null);
+  const [leadOpen, setLeadOpen] = useState(false);
+  const [leadSearch, setLeadSearch] = useState('');
+  const { data: originIds = [] } = useConsorcioOriginIds();
+  const { data: leadMatches = [], isFetching: isSearching } = useConsorcioLeadSearch(
+    leadSearch,
+    originIds,
+    leadOpen,
+  );
 
   const reset = () => {
     setTipoPessoa('pf');
@@ -61,6 +189,26 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
     setQtdParcelas('');
     setAceiteDate(new Date().toISOString().split('T')[0]);
     setObs('');
+    setDealId(null);
+    setLeadSearch('');
+  };
+
+  const handleSelectLead = (m: DealMatch) => {
+    const isPJ = !!m.cnpj && !m.cpf;
+    setTipoPessoa(isPJ ? 'pj' : 'pf');
+    setNome(m.contact_name || '');
+    setDoc((isPJ ? m.cnpj : m.cpf) || '');
+    setTelefone(m.contact_phone || '');
+    setEmail(m.contact_email || '');
+    if (m.origin_label) setOrigem(m.origin_label);
+    setDealId(m.deal_id);
+    setLeadOpen(false);
+  };
+
+  const handleUseAsNew = () => {
+    setNome(leadSearch.trim());
+    setDealId(null);
+    setLeadOpen(false);
   };
 
   const handleSubmit = async () => {
@@ -79,6 +227,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       parcelas_pagas_empresa: empresaPaga && qtdParcelas ? Number(qtdParcelas) : undefined,
       aceite_date: aceiteDate || undefined,
       observacoes: obs.trim() || undefined,
+      deal_id: dealId,
     };
     await create.mutateAsync(input);
     reset();
@@ -118,7 +267,79 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>{tipoPessoa === 'pf' ? 'Nome completo *' : 'Razão social *'}</Label>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+              <Popover open={leadOpen} onOpenChange={setLeadOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={nome ? '' : 'text-muted-foreground'}>
+                      {nome || 'Buscar lead Consórcio ou digitar...'}
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[360px]" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por nome, CPF/CNPJ, telefone ou e-mail..."
+                      value={leadSearch}
+                      onValueChange={setLeadSearch}
+                    />
+                    <CommandList>
+                      {leadSearch.trim().length < 2 ? (
+                        <CommandEmpty>Digite ao menos 2 caracteres.</CommandEmpty>
+                      ) : isSearching ? (
+                        <div className="py-6 flex justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : leadMatches.length === 0 ? (
+                        <CommandEmpty>
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">Nenhum lead encontrado.</p>
+                            <Button size="sm" variant="secondary" onClick={handleUseAsNew}>
+                              Usar "{leadSearch.trim()}" como novo cadastro
+                            </Button>
+                          </div>
+                        </CommandEmpty>
+                      ) : (
+                        <CommandGroup heading="Leads no CRM Consórcio">
+                          {leadMatches.map((m) => (
+                            <CommandItem
+                              key={m.deal_id}
+                              value={m.deal_id}
+                              onSelect={() => handleSelectLead(m)}
+                              className="flex-col items-start gap-0.5"
+                            >
+                              <span className="font-medium text-sm">{m.contact_name || '—'}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {(m.cpf || m.cnpj || 'sem doc')} · {m.contact_phone || 's/ tel'} · {m.origin_label || '—'}
+                                {m.stage_name ? ` · ${m.stage_name}` : ''}
+                              </span>
+                            </CommandItem>
+                          ))}
+                          <div className="border-t mt-1 pt-1">
+                            <CommandItem value="__use_as_new__" onSelect={handleUseAsNew}>
+                              <Search className="h-3.5 w-3.5 mr-2" />
+                              Usar "{leadSearch.trim()}" como novo cadastro
+                            </CommandItem>
+                          </div>
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {nome && (
+                <Input
+                  className="mt-2"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Editar nome..."
+                />
+              )}
             </div>
             <div>
               <Label>{tipoPessoa === 'pf' ? 'CPF' : 'CNPJ'}</Label>

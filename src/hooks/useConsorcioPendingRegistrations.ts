@@ -538,6 +538,7 @@ export interface CreateManualPendingInput {
   parcelas_pagas_empresa?: number;
   aceite_date?: string; // YYYY-MM-DD
   observacoes?: string;
+  deal_id?: string | null;
 }
 
 export function useCreateManualPendingRegistration() {

@@ -1,81 +1,30 @@
+## Busca de lead Consórcio no modal "Adicionar Pendente"
 
-## Objetivo
+Substituir o campo de texto "Nome completo / Razão social" por um combobox que busca leads do CRM nos pipelines da BU Consórcio e autopreenche os dados.
 
-Permitir cadastrar manualmente uma cota pendente direto na aba **Cadastros Pendentes** (sem precisar passar pelo closer) e exibir KPIs no topo mostrando o quanto ainda falta cadastrar.
+### UX
+- Campo vira `Popover` + `Command` (mesmo padrão do `LinkExistingCotaModal`).
+- A partir de 2 caracteres, dispara busca debounced em `crm_deals` → `crm_contacts`, restrita às origens da BU Consórcio (via `BUContext.activeBUOrigins`).
+- Cada resultado mostra: nome do contato, CPF/CNPJ (se houver), telefone, origem (`crm_origins.display_name`) e estágio.
+- Ao selecionar:
+  - Preenche `nome` (ou `razao_social` conforme tipo de pessoa, detectando PJ se vier CNPJ).
+  - Preenche `cpf`/`cnpj`, `telefone`, `email`.
+  - Preenche `origem` com `origin.display_name` (editável).
+  - Guarda `deal_id` no estado para enviar na mutação.
+- Mantém opção "Usar '<texto>' como novo nome" quando não houver match, preservando o fluxo atual de cadastro 100% manual.
+- Todos os campos continuam editáveis após o autofill.
 
----
+### Backend / hook
+- `useConsorcioPendingRegistrations.ts`:
+  - Adicionar `deal_id?: string | null` em `CreateManualPendingInput`.
+  - Incluir `deal_id` no `insert` (coluna já existe na tabela `consorcio_pending_registrations`).
+- Nenhuma migration necessária.
 
-## 1. Botão "Adicionar Pendente" + Modal manual
+### Arquivos
+- Editar: `src/components/consorcio/AddPendingRegistrationModal.tsx` — combobox + autofill.
+- Editar: `src/hooks/useConsorcioPendingRegistrations.ts` — aceitar `deal_id`.
+- Reuso: `useActiveBU` / `BUContext` para limitar busca a pipelines Consórcio; padrão de query do `LinkExistingCotaModal` como referência.
 
-**Onde:** header da aba "Cadastros Pendentes" (`PendingRegistrationsList.tsx`), ao lado do título.
-
-**Novo componente:** `src/components/consorcio/AddPendingRegistrationModal.tsx`
-
-Modal enxuto, focado no que é necessário para depois "Abrir cadastro":
-
-- **Origem / Parceiro** (texto livre, ex.: "Parceiro Novembro" / "Indicação João") — vai para `vendedor_name` + um campo de origem manual.
-- **Tipo de pessoa**: PF / PJ
-- **Nome completo / Razão social** + **CPF / CNPJ**
-- **Telefone** e **e-mail** (opcionais)
-- **Valor da cota** (R$)
-- **Prazo (meses)**
-- **Empresa paga parcelas?** Sim/Não
-  - Se Sim: **Tipo de contrato** (Normal / Intercalado par / Intercalado ímpar) + **Quantidade de parcelas pagas**
-- **Data de aceite** (default = hoje)
-- **Observações**
-
-Sem `proposal_id` / `deal_id` (cadastro avulso, sem vínculo de CRM).
-
-**Nova mutation:** `useCreateManualPendingRegistration` em `useConsorcioPendingRegistrations.ts`:
-- Insere direto em `consorcio_pending_registrations` com `status='aguardando_abertura'`, `created_by=user.id`, `deal_id=null`, `proposal_id=null`.
-- Invalida a query da lista.
-
-A enriquecedora `usePendingRegistrations` já tolera `deal=null` (cai em "Sem origem"), então a rotulagem fica `"<vendedor_name manual> · Mai/2026"` — vou ajustar `origem_label` para usar `vendedor_name` quando não houver `deal.origin`.
-
----
-
-## 2. KPIs de déficit no topo
-
-**Novo componente:** `src/components/consorcio/PendingRegistrationsKPIs.tsx`
-
-Quatro cards acima da tabela, calculados em memória a partir de `usePendingRegistrations()` (sem nova query):
-
-| Card | Cálculo |
-|---|---|
-| **Cotas a cadastrar** | `registrations.length` |
-| **Parcelas a cadastrar (empresa)** | soma de `reg.parcelas_empresa.length` |
-| **Crédito total pendente** | soma de `reg.valor_credito` (formatado R$) |
-| **Mês com maior déficit** | agrupar por `format(aceite_date || created_at, 'MMM/yyyy')`, pegar o mês com mais cadastros pendentes — mostra `"Nov/2025 · 7 cotas"` |
-
-Cards seguem o mesmo padrão visual usado em outras abas do Consórcio (`Card` shadcn + ícone + valor grande + label).
-
----
-
-## 3. Ajustes pequenos
-
-- `formatOrigemLabel(originName, aceiteDate)` ganha um terceiro parâmetro fallback `manualOrigem?: string` usado quando `originName` está vazio (para o cadastro manual aparecer corretamente).
-- `PendingRegistrationsList.tsx`:
-  - Adicionar `<PendingRegistrationsKPIs registrations={registrations} />` acima do `<Card>` da tabela.
-  - Adicionar botão **`+ Adicionar Pendente`** no `CardHeader` (à direita do título, `justify-between`).
-  - Estado `addOpen` controla o `AddPendingRegistrationModal`.
-
----
-
-## Fora de escopo
-
-- Não mexe em `AcceptProposalModal` (fluxo via closer continua igual).
-- Não muda schema (status `aguardando_abertura` já existe, todos os campos usados já existem).
-- Não toca CRM/Pipelines/Agenda.
-
----
-
-## Arquivos
-
-**Novos**
-- `src/components/consorcio/AddPendingRegistrationModal.tsx`
-- `src/components/consorcio/PendingRegistrationsKPIs.tsx`
-
-**Editados**
-- `src/hooks/useConsorcioPendingRegistrations.ts` (nova mutation `useCreateManualPendingRegistration` + ajuste no rótulo de origem para manuais)
-- `src/components/consorcio/PendingRegistrationsList.tsx` (botão + KPIs)
-- `src/lib/consorcioOrigemLabel.ts` (fallback de origem manual)
+### Fora de escopo
+- Fluxo do closer no CRM permanece intacto.
+- Não altera a tabela `consorcio_pending_registrations`.
