@@ -92,6 +92,9 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   empresa_paga_parcelas,
   tipo_contrato,
   parcelas_pagas_empresa,
+  tipo_produto,
+  vendedor_name_cota,
+  vendedor_id,
   proposal_id,
   created_at,
   vendedor_name,
@@ -104,43 +107,7 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   )
 `;
 
-const PENDING_REGISTRATION_DETAIL_SELECT = `
-  id,
-  proposal_id,
-  deal_id,
-  tipo_pessoa,
-  nome_completo,
-  rg,
-  cpf,
-  cpf_conjuge,
-  profissao,
-  telefone,
-  email,
-  endereco_completo,
-  endereco_cep,
-  renda,
-  patrimonio,
-  pix,
-  razao_social,
-  cnpj,
-  natureza_juridica,
-  inscricao_estadual,
-  data_fundacao,
-  telefone_comercial,
-  email_comercial,
-  endereco_comercial,
-  endereco_comercial_cep,
-  num_funcionarios,
-  faturamento_mensal,
-  socios,
-  vendedor_name,
-  aceite_date,
-  created_by,
-  created_at,
-  updated_at,
-  status,
-  consortium_card_id
-`;
+const PENDING_REGISTRATION_DETAIL_SELECT = `*`;
 
 export interface EnrichedPendingRegistration {
   id: string;
@@ -163,6 +130,7 @@ export interface EnrichedPendingRegistration {
   empresa_paga_parcelas: string | null;
   tipo_contrato: string | null;
   parcelas_pagas_empresa: number | null;
+  tipo_produto: string | null;
   // Derived
   origem_label: string;
   closer_name: string | null;
@@ -262,7 +230,9 @@ export function usePendingRegistrations() {
           empresa_paga_parcelas: r.empresa_paga_parcelas,
         });
 
-        const closerName = r.deal?.owner_id ? profilesById.get(r.deal.owner_id) || null : null;
+        const closerName = (r.deal?.owner_id ? profilesById.get(r.deal.owner_id) : null)
+          || r.vendedor_name_cota
+          || null;
         const sdrEmail = (r.deal?.original_sdr_email || '').toLowerCase();
         const sdrName = sdrEmail ? profilesByEmail.get(sdrEmail) || sdrEmail : null;
         const originName = r.deal?.origin?.display_name || r.deal?.origin?.name || null;
@@ -288,6 +258,7 @@ export function usePendingRegistrations() {
           empresa_paga_parcelas: r.empresa_paga_parcelas,
           tipo_contrato: r.tipo_contrato,
           parcelas_pagas_empresa: r.parcelas_pagas_empresa,
+          tipo_produto: r.tipo_produto || null,
         origem_label: formatOrigemLabel(
           originName,
           r.aceite_date || r.created_at?.slice(0, 10),
