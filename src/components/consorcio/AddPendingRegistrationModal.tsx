@@ -281,7 +281,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
                 <SelectTrigger><SelectValue placeholder="Selecionar closer..." /></SelectTrigger>
                 <SelectContent>
                   {vendedorOptions.map((v: any) => (
-                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                    <SelectItem key={v.id} value={v.id}>{v.name ?? v.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
