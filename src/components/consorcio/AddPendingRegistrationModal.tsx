@@ -139,8 +139,8 @@ function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boo
           contact_name: c.name || null,
           contact_email: c.email || null,
           contact_phone: c.phone || null,
-          cpf: c.cpf || null,
-          cnpj: c.cnpj || null,
+          cpf: null,
+          cnpj: null,
           origin_label: originById.get(d.origin_id) || null,
           stage_name: stageById.get(d.stage_id) || null,
         });
