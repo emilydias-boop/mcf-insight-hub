@@ -36,6 +36,7 @@ import {
   useCreateManualPendingRegistration,
   type CreateManualPendingInput,
 } from '@/hooks/useConsorcioPendingRegistrations';
+import { useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 
 interface Props {
   open: boolean;
@@ -152,7 +153,10 @@ function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boo
 
 export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const create = useCreateManualPendingRegistration();
+  const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
   const [tipoPessoa, setTipoPessoa] = useState<'pf' | 'pj'>('pf');
+  const [tipoProduto, setTipoProduto] = useState<'select' | 'parcelinha'>('select');
+  const [closerId, setCloserId] = useState<string>('');
   const [origem, setOrigem] = useState('');
   const [nome, setNome] = useState('');
   const [doc, setDoc] = useState('');
@@ -177,6 +181,8 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
 
   const reset = () => {
     setTipoPessoa('pf');
+    setTipoProduto('select');
+    setCloserId('');
     setOrigem('');
     setNome('');
     setDoc('');
@@ -213,6 +219,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
 
   const handleSubmit = async () => {
     if (!origem.trim() || !nome.trim()) return;
+    const closer = vendedorOptions.find((v: any) => v.id === closerId);
     const input: CreateManualPendingInput = {
       tipo_pessoa: tipoPessoa,
       vendedor_name: origem.trim(),
@@ -228,6 +235,9 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       aceite_date: aceiteDate || undefined,
       observacoes: obs.trim() || undefined,
       deal_id: dealId,
+      tipo_produto: tipoProduto,
+      vendedor_id: closerId || undefined,
+      vendedor_name_cota: closer ? (closer as any).nome : undefined,
     };
     await create.mutateAsync(input);
     reset();
