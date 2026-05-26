@@ -85,12 +85,12 @@ function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boo
       // Buscar contatos por nome/email/telefone/cpf/cnpj
       let cq = supabase
         .from('crm_contacts')
-        .select('id, name, email, phone, cpf, cnpj')
+        .select('id, name, email, phone')
         .eq('is_archived', false)
         .limit(30);
       if (digits.length >= 4) {
         cq = cq.or(
-          `name.ilike.${like},email.ilike.${like},phone.ilike.%${digits}%,cpf.ilike.%${digits}%,cnpj.ilike.%${digits}%`,
+          `name.ilike.${like},email.ilike.${like},phone.ilike.%${digits}%`,
         );
       } else {
         cq = cq.or(`name.ilike.${like},email.ilike.${like}`);
