@@ -288,7 +288,11 @@ export function usePendingRegistrations() {
           empresa_paga_parcelas: r.empresa_paga_parcelas,
           tipo_contrato: r.tipo_contrato,
           parcelas_pagas_empresa: r.parcelas_pagas_empresa,
-          origem_label: formatOrigemLabel(originName, r.aceite_date || r.created_at?.slice(0, 10)),
+        origem_label: formatOrigemLabel(
+          originName,
+          r.aceite_date || r.created_at?.slice(0, 10),
+          r.vendedor_name,
+        ),
           closer_name: closerName,
           sdr_name: sdrName,
           parcelas_empresa: parcelas,
