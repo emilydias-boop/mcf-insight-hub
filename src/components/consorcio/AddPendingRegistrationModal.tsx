@@ -164,6 +164,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const [email, setEmail] = useState('');
   const [valorCredito, setValorCredito] = useState('');
   const [prazo, setPrazo] = useState('');
+  const [qtdCotas, setQtdCotas] = useState('1');
   const [empresaPaga, setEmpresaPaga] = useState(false);
   const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
   const [qtdParcelas, setQtdParcelas] = useState('');
@@ -190,6 +191,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
     setEmail('');
     setValorCredito('');
     setPrazo('');
+    setQtdCotas('1');
     setEmpresaPaga(false);
     setTipoContrato('normal');
     setQtdParcelas('');
@@ -220,7 +222,8 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const handleSubmit = async () => {
     if (!origem.trim() || !nome.trim()) return;
     const closer = vendedorOptions.find((v: any) => v.id === closerId);
-    const input: CreateManualPendingInput = {
+    const qtd = Math.max(1, Math.min(50, Number(qtdCotas) || 1));
+    const baseInput: CreateManualPendingInput = {
       tipo_pessoa: tipoPessoa,
       vendedor_name: origem.trim(),
       [tipoPessoa === 'pf' ? 'nome_completo' : 'razao_social']: nome.trim(),
@@ -239,7 +242,12 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       vendedor_id: closerId || undefined,
       vendedor_name_cota: closer ? ((closer as any).name ?? (closer as any).nome) : undefined,
     };
-    await create.mutateAsync(input);
+    for (let i = 0; i < qtd; i++) {
+      const note = qtd > 1
+        ? `${baseInput.observacoes ? baseInput.observacoes + ' · ' : ''}Cota ${i + 1}/${qtd}`
+        : baseInput.observacoes;
+      await create.mutateAsync({ ...baseInput, observacoes: note });
+    }
     reset();
     onOpenChange(false);
   };
@@ -411,6 +419,35 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
               <Label>Data de aceite</Label>
               <Input type="date" value={aceiteDate} onChange={(e) => setAceiteDate(e.target.value)} />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Label>Quantidade de cotas</Label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={qtdCotas}
+                onChange={(e) => setQtdCotas(e.target.value)}
+                placeholder="1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Cria N cadastros pendentes idênticos (ex.: 5× R$ 120.000 = R$ 600.000 total).
+              </p>
+            </div>
+            {Number(qtdCotas) > 1 && valorCredito && (
+              <div className="sm:col-span-2 flex items-end">
+                <p className="text-sm text-muted-foreground">
+                  Total: <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                      .format(Number(valorCredito) * Number(qtdCotas))}
+                  </span>
+                  {' '}({qtdCotas}× {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+                    .format(Number(valorCredito))})
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="border rounded-md p-3 space-y-3">
