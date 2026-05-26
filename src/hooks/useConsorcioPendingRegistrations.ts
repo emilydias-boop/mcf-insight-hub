@@ -6,6 +6,8 @@ import { CreateConsorcioCardInput, TipoDocumento } from '@/types/consorcio';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
+import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 
 export interface PendingRegistration {
   id: string;
@@ -82,9 +84,24 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   cnpj,
   telefone,
   telefone_comercial,
+  email,
+  email_comercial,
+  socios,
+  valor_credito,
+  prazo_meses,
+  empresa_paga_parcelas,
+  tipo_contrato,
+  parcelas_pagas_empresa,
+  proposal_id,
+  created_at,
   vendedor_name,
   aceite_date,
-  deal:crm_deals!deal_id(contact:crm_contacts!contact_id(name, email, phone), owner_id)
+  deal:crm_deals!deal_id(
+    contact:crm_contacts!contact_id(name, email, phone),
+    owner_id,
+    original_sdr_email,
+    origin:crm_origins!origin_id(name, display_name)
+  )
 `;
 
 const PENDING_REGISTRATION_DETAIL_SELECT = `
@@ -125,27 +142,162 @@ const PENDING_REGISTRATION_DETAIL_SELECT = `
   consortium_card_id
 `;
 
+export interface EnrichedPendingRegistration {
+  id: string;
+  tipo_pessoa: 'pf' | 'pj';
+  nome_completo: string | null;
+  razao_social: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  telefone: string | null;
+  telefone_comercial: string | null;
+  email: string | null;
+  email_comercial: string | null;
+  socios: Array<{ cpf: string; renda: number }> | null;
+  vendedor_name: string | null;
+  aceite_date: string | null;
+  created_at: string;
+  status: string;
+  valor_credito: number | null;
+  prazo_meses: number | null;
+  empresa_paga_parcelas: string | null;
+  tipo_contrato: string | null;
+  parcelas_pagas_empresa: number | null;
+  // Derived
+  origem_label: string;
+  closer_name: string | null;
+  sdr_name: string | null;
+  parcelas_empresa: ParcelaEmpresa[];
+  valor_total_empresa: number;
+  cotas_existentes_count: number;
+  parte_atual: number;
+  total_destinado: number;
+}
+
 export function usePendingRegistrations() {
   return useQuery({
     queryKey: ['consorcio-pending-registrations'],
-    queryFn: async () => {
+    queryFn: async (): Promise<EnrichedPendingRegistration[]> => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
         .select(PENDING_REGISTRATION_LIST_SELECT)
-        .eq('status', 'aguardando_abertura')
+        .in('status', ['aguardando_abertura'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      // Fallback: preencher nome/telefone/email do contato quando vazios
-      return (data || []).map((r: any) => ({
-        ...r,
-        nome_completo: r.nome_completo || r.deal?.contact?.name || null,
-        telefone: r.telefone || r.deal?.contact?.phone || null,
-        email: r.email || r.deal?.contact?.email || null,
-        vendedor_name: r.vendedor_name || r.deal?.owner_id || null,
-        deal: undefined,
-      })) as unknown as PendingRegistration[];
+      const rows = (data || []) as any[];
+
+      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → profiles)
+      const ownerIds = Array.from(new Set(rows.map((r) => r.deal?.owner_id).filter(Boolean)));
+      const sdrEmails = Array.from(
+        new Set(rows.map((r) => (r.deal?.original_sdr_email || '').toLowerCase()).filter(Boolean)),
+      );
+
+      const profilesById = new Map<string, string>();
+      const profilesByEmail = new Map<string, string>();
+      if (ownerIds.length || sdrEmails.length) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, name, email')
+          .or(
+            [
+              ownerIds.length ? `id.in.(${ownerIds.join(',')})` : '',
+              sdrEmails.length ? `email.in.(${sdrEmails.map((e) => `"${e}"`).join(',')})` : '',
+            ]
+              .filter(Boolean)
+              .join(','),
+          );
+        (profs || []).forEach((p: any) => {
+          if (p.id) profilesById.set(p.id, p.name || p.email);
+          if (p.email) profilesByEmail.set(String(p.email).toLowerCase(), p.name || p.email);
+        });
+      }
+
+      // Cotas existentes por CPF/CNPJ
+      const cpfs = Array.from(new Set(rows.map((r) => r.cpf).filter(Boolean))) as string[];
+      const cnpjs = Array.from(new Set(rows.map((r) => r.cnpj).filter(Boolean))) as string[];
+      const cotasCountByDoc = new Map<string, number>();
+      if (cpfs.length || cnpjs.length) {
+        const { data: cards } = await supabase
+          .from('consortium_cards')
+          .select('cpf, cnpj')
+          .or(
+            [
+              cpfs.length ? `cpf.in.(${cpfs.map((c) => `"${c}"`).join(',')})` : '',
+              cnpjs.length ? `cnpj.in.(${cnpjs.map((c) => `"${c}"`).join(',')})` : '',
+            ]
+              .filter(Boolean)
+              .join(','),
+          );
+        (cards || []).forEach((c: any) => {
+          const k = c.cpf || c.cnpj;
+          if (k) cotasCountByDoc.set(k, (cotasCountByDoc.get(k) || 0) + 1);
+        });
+      }
+
+      // Agrupar pendentes por documento para 1 de N
+      const byDoc = new Map<string, any[]>();
+      // Ordenar por created_at ASC para que "1 de N" seja o mais antigo
+      [...rows]
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        .forEach((r) => {
+          const k = r.cpf || r.cnpj;
+          if (!k) return;
+          const arr = byDoc.get(k) || [];
+          arr.push(r);
+          byDoc.set(k, arr);
+        });
+
+      return rows.map((r) => {
+        const docKey = r.cpf || r.cnpj;
+        const group = docKey ? byDoc.get(docKey) || [] : [];
+        const parteAtual = docKey ? group.findIndex((g) => g.id === r.id) + 1 : 1;
+        const totalDestinado = group.length || 1;
+
+        const parcelas = getParcelasEmpresa({
+          prazo_meses: r.prazo_meses,
+          parcelas_pagas_empresa: r.parcelas_pagas_empresa,
+          tipo_contrato: r.tipo_contrato,
+          valor_credito: r.valor_credito,
+          empresa_paga_parcelas: r.empresa_paga_parcelas,
+        });
+
+        const closerName = r.deal?.owner_id ? profilesById.get(r.deal.owner_id) || null : null;
+        const sdrEmail = (r.deal?.original_sdr_email || '').toLowerCase();
+        const sdrName = sdrEmail ? profilesByEmail.get(sdrEmail) || sdrEmail : null;
+        const originName = r.deal?.origin?.display_name || r.deal?.origin?.name || null;
+
+        return {
+          id: r.id,
+          tipo_pessoa: r.tipo_pessoa,
+          nome_completo: r.nome_completo || r.deal?.contact?.name || null,
+          razao_social: r.razao_social,
+          cpf: r.cpf,
+          cnpj: r.cnpj,
+          telefone: r.telefone || r.deal?.contact?.phone || null,
+          telefone_comercial: r.telefone_comercial,
+          email: r.email || r.deal?.contact?.email || null,
+          email_comercial: r.email_comercial,
+          socios: r.socios || null,
+          vendedor_name: r.vendedor_name || null,
+          aceite_date: r.aceite_date,
+          created_at: r.created_at,
+          status: r.status,
+          valor_credito: r.valor_credito,
+          prazo_meses: r.prazo_meses,
+          empresa_paga_parcelas: r.empresa_paga_parcelas,
+          tipo_contrato: r.tipo_contrato,
+          parcelas_pagas_empresa: r.parcelas_pagas_empresa,
+          origem_label: formatOrigemLabel(originName, r.aceite_date || r.created_at?.slice(0, 10)),
+          closer_name: closerName,
+          sdr_name: sdrName,
+          parcelas_empresa: parcelas,
+          valor_total_empresa: parcelas.reduce((s, p) => s + p.valor, 0),
+          cotas_existentes_count: docKey ? cotasCountByDoc.get(docKey) || 0 : 0,
+          parte_atual: parteAtual || 1,
+          total_destinado: totalDestinado,
+        };
+      });
     },
   });
 }
@@ -173,6 +325,12 @@ export interface CreatePendingRegistrationInput {
   deal_id: string;
   tipo_pessoa: 'pf' | 'pj';
   vendedor_name: string;
+  // Parcelas que a empresa pagará (capturado já no aceite)
+  empresa_paga_parcelas?: 'sim' | 'nao';
+  tipo_contrato?: 'normal' | 'intercalado' | 'intercalado_impar';
+  parcelas_pagas_empresa?: number;
+  valor_credito?: number;
+  prazo_meses?: number;
   // PF
   nome_completo?: string;
   rg?: string;
@@ -292,6 +450,70 @@ export function useCreatePendingRegistration() {
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro ao criar cadastro: ' + e.message),
+  });
+}
+
+/** Excluir um cadastro pendente (limpa documentos vinculados antes). */
+export function useDeletePendingRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      // 1. Remover docs vinculados ao pending
+      const { data: docs } = await supabase
+        .from('consortium_documents')
+        .select('id, storage_path')
+        .eq('pending_registration_id', registrationId);
+      for (const d of docs || []) {
+        if ((d as any).storage_path) {
+          await supabase.storage.from('consorcio-documents').remove([(d as any).storage_path]);
+        }
+      }
+      await supabase
+        .from('consortium_documents')
+        .delete()
+        .eq('pending_registration_id', registrationId);
+
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .delete()
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro pendente excluído');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
+  });
+}
+
+/** Vincular um cadastro pendente a uma cota já existente (migra documentos). */
+export function useLinkPendingToCard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { registrationId: string; cardId: string }) => {
+      // 1. Migrar documentos do pending para o card
+      await supabase
+        .from('consortium_documents')
+        .update({ card_id: params.cardId } as any)
+        .eq('pending_registration_id', params.registrationId);
+
+      // 2. Marcar pendente como vinculado
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({
+          status: 'vinculada',
+          consortium_card_id: params.cardId,
+        } as any)
+        .eq('id', params.registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro vinculado à cota existente');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
+    },
+    onError: (e: any) => toast.error('Erro ao vincular: ' + e.message),
   });
 }
 

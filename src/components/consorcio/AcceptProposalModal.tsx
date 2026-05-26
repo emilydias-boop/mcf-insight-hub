@@ -35,6 +35,9 @@ import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { buscarCep } from '@/lib/cepUtils';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
 import { TipoDocumento } from '@/types/consorcio';
+import { Switch } from '@/components/ui/switch';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 // Formatting functions
 function formatCpf(value: string): string {
@@ -134,6 +137,25 @@ export function AcceptProposalModal({
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
   const [pjDocCartaoCnpj, setPjDocCartaoCnpj] = useState<File | null>(null);
+
+  // Parcelas que a empresa pagará (capturado já aqui no aceite)
+  const [empresaPaga, setEmpresaPaga] = useState<'sim' | 'nao'>('nao');
+  const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
+  const [qtdParcelasEmpresa, setQtdParcelasEmpresa] = useState<number>(0);
+
+  // Carrega proposta para pegar valor_credito/prazo
+  const { data: proposal } = useQuery({
+    queryKey: ['consorcio-proposal-snapshot', proposalId],
+    enabled: open && !!proposalId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('consorcio_proposals')
+        .select('valor_credito, prazo_meses')
+        .eq('id', proposalId)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   const createRegistration = useCreatePendingRegistration();
 
@@ -260,6 +282,11 @@ export function AcceptProposalModal({
       tipo_pessoa: tipoPessoa,
       vendedor_name: vendedorName,
       documents,
+      empresa_paga_parcelas: empresaPaga,
+      tipo_contrato: tipoContrato,
+      parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
+      valor_credito: proposal?.valor_credito ? Number(proposal.valor_credito) : undefined,
+      prazo_meses: proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined,
       ...cleanData,
     });
 
@@ -582,6 +609,45 @@ export function AcceptProposalModal({
                 {form.formState.errors.root && (
                   <p className="text-sm text-destructive">{form.formState.errors.root.message}</p>
                 )}
+
+                <Separator />
+                <h3 className="font-semibold text-sm">Parcelas que a empresa pagará</h3>
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="space-y-2">
+                    <Label>Empresa paga parcelas?</Label>
+                    <Select value={empresaPaga} onValueChange={(v: 'sim' | 'nao') => setEmpresaPaga(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nao">Não</SelectItem>
+                        <SelectItem value="sim">Sim</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {empresaPaga === 'sim' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Tipo de Contrato</Label>
+                        <Select value={tipoContrato} onValueChange={(v: any) => setTipoContrato(v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="normal">Normal (1ª, 2ª…)</SelectItem>
+                            <SelectItem value="intercalado">Intercalado par</SelectItem>
+                            <SelectItem value="intercalado_impar">Intercalado ímpar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Qtd parcelas</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={qtdParcelasEmpresa}
+                          onChange={(e) => setQtdParcelasEmpresa(Number(e.target.value || 0))}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

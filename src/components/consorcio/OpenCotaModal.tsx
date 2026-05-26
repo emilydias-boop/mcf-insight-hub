@@ -71,9 +71,11 @@ interface OpenCotaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   registrationId: string;
+  mode?: 'open' | 'view';
 }
 
-export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaModalProps) {
+export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open' }: OpenCotaModalProps) {
+  const readOnly = mode === 'view';
   const { data: registration, isLoading: regLoading } = usePendingRegistration(registrationId);
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
@@ -251,11 +253,14 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Abertura de Cota — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}</DialogTitle>
+          <DialogTitle>
+            {readOnly ? 'Detalhes do Cadastro' : 'Abertura de Cota'} — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}
+          </DialogTitle>
         </DialogHeader>
 
         <ScrollArea className="max-h-[75vh] pr-4">
           <Form {...form}>
+            <fieldset disabled={readOnly} className="contents">
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Editable client data */}
             <Card>
@@ -639,12 +644,14 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
 
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancelar
+                        {readOnly ? 'Fechar' : 'Cancelar'}
                       </Button>
-                      <Button type="submit" disabled={openCota.isPending}>
-                        {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Confirmar Abertura da Cota
-                      </Button>
+                      {!readOnly && (
+                        <Button type="submit" disabled={openCota.isPending}>
+                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Confirmar Abertura da Cota
+                        </Button>
+                      )}
                     </div>
                   </div>
               </CardContent>
@@ -652,14 +659,17 @@ export function OpenCotaModal({ open, onOpenChange, registrationId }: OpenCotaMo
 
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancelar
+                        {readOnly ? 'Fechar' : 'Cancelar'}
                       </Button>
-                      <Button type="submit" disabled={openCota.isPending}>
-                        {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Confirmar Abertura da Cota
-                      </Button>
+                      {!readOnly && (
+                        <Button type="submit" disabled={openCota.isPending}>
+                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Confirmar Abertura da Cota
+                        </Button>
+                      )}
                     </div>
             </form>
+            </fieldset>
           </Form>
         </ScrollArea>
       </DialogContent>

@@ -1,0 +1,2 @@
+ALTER TABLE public.consorcio_pending_registrations DROP CONSTRAINT IF EXISTS consorcio_pending_registrations_status_check;
+ALTER TABLE public.consorcio_pending_registrations ADD CONSTRAINT consorcio_pending_registrations_status_check CHECK (status = ANY (ARRAY['aguardando_abertura'::text, 'cota_aberta'::text, 'vinculada'::text]));
