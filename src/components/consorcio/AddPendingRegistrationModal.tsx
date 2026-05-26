@@ -36,6 +36,7 @@ import {
   useCreateManualPendingRegistration,
   type CreateManualPendingInput,
 } from '@/hooks/useConsorcioPendingRegistrations';
+import { useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 
 interface Props {
   open: boolean;
@@ -152,7 +153,10 @@ function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boo
 
 export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
   const create = useCreateManualPendingRegistration();
+  const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
   const [tipoPessoa, setTipoPessoa] = useState<'pf' | 'pj'>('pf');
+  const [tipoProduto, setTipoProduto] = useState<'select' | 'parcelinha'>('select');
+  const [closerId, setCloserId] = useState<string>('');
   const [origem, setOrigem] = useState('');
   const [nome, setNome] = useState('');
   const [doc, setDoc] = useState('');
@@ -177,6 +181,8 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
 
   const reset = () => {
     setTipoPessoa('pf');
+    setTipoProduto('select');
+    setCloserId('');
     setOrigem('');
     setNome('');
     setDoc('');
@@ -213,6 +219,7 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
 
   const handleSubmit = async () => {
     if (!origem.trim() || !nome.trim()) return;
+    const closer = vendedorOptions.find((v: any) => v.id === closerId);
     const input: CreateManualPendingInput = {
       tipo_pessoa: tipoPessoa,
       vendedor_name: origem.trim(),
@@ -228,6 +235,9 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
       aceite_date: aceiteDate || undefined,
       observacoes: obs.trim() || undefined,
       deal_id: dealId,
+      tipo_produto: tipoProduto,
+      vendedor_id: closerId || undefined,
+      vendedor_name_cota: closer ? (closer as any).nome : undefined,
     };
     await create.mutateAsync(input);
     reset();
@@ -253,6 +263,29 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
                 <TabsTrigger value="pj">Pessoa Jurídica</TabsTrigger>
               </TabsList>
             </Tabs>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Tipo de produto *</Label>
+              <Tabs value={tipoProduto} onValueChange={(v) => setTipoProduto(v as 'select' | 'parcelinha')} className="mt-1">
+                <TabsList>
+                  <TabsTrigger value="select">Select</TabsTrigger>
+                  <TabsTrigger value="parcelinha">Parcelinha</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div>
+              <Label>Closer responsável</Label>
+              <Select value={closerId} onValueChange={setCloserId}>
+                <SelectTrigger><SelectValue placeholder="Selecionar closer..." /></SelectTrigger>
+                <SelectContent>
+                  {vendedorOptions.map((v: any) => (
+                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>

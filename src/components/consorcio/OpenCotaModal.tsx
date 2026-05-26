@@ -56,7 +56,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { usePendingRegistration, useOpenCota } from '@/hooks/useConsorcioPendingRegistrations';
+import { usePendingRegistration, useOpenCota, useUpdatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, findProdutoForCredito, formatCurrency } from '@/lib/consorcioCalculos';
@@ -75,13 +75,16 @@ interface OpenCotaModalProps {
 }
 
 export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open' }: OpenCotaModalProps) {
-  const readOnly = mode === 'view';
+  const isViewMode = mode === 'view';
+  const [isEditing, setIsEditing] = useState(false);
+  const readOnly = isViewMode && !isEditing;
   const { data: registration, isLoading: regLoading } = usePendingRegistration(registrationId);
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
   const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
   const openCota = useOpenCota();
+  const updatePending = useUpdatePendingRegistration();
 
   // Fetch documents linked to this pending registration
   const { data: documents = [] } = useQuery({
@@ -159,6 +162,27 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       form.setValue('cliente_renda', registration.renda || 0);
       form.setValue('cliente_patrimonio', registration.patrimonio || 0);
       form.setValue('cliente_pix', registration.pix || '');
+      // Populate cota fields if already saved (so view/edit shows real values)
+      if (registration.valor_credito != null) form.setValue('valor_credito', Number(registration.valor_credito));
+      if (registration.prazo_meses != null) form.setValue('prazo_meses', Number(registration.prazo_meses));
+      if (registration.tipo_produto) form.setValue('tipo_produto', registration.tipo_produto);
+      if (registration.produto_codigo) form.setValue('produto_codigo', registration.produto_codigo);
+      if (registration.condicao_pagamento) form.setValue('condicao_pagamento', registration.condicao_pagamento);
+      if (registration.inclui_seguro != null) form.setValue('inclui_seguro', !!registration.inclui_seguro);
+      if (registration.empresa_paga_parcelas) form.setValue('empresa_paga_parcelas', registration.empresa_paga_parcelas);
+      if (registration.tipo_contrato) form.setValue('tipo_contrato', registration.tipo_contrato);
+      if (registration.parcelas_pagas_empresa != null) form.setValue('parcelas_pagas_empresa', Number(registration.parcelas_pagas_empresa));
+      if (registration.dia_vencimento != null) form.setValue('dia_vencimento', Number(registration.dia_vencimento));
+      if (registration.inicio_segunda_parcela) form.setValue('inicio_segunda_parcela', registration.inicio_segunda_parcela);
+      if (registration.data_contratacao) form.setValue('data_contratacao', registration.data_contratacao);
+      if (registration.categoria) form.setValue('categoria', registration.categoria);
+      if (registration.grupo) form.setValue('grupo', registration.grupo);
+      if (registration.cota) form.setValue('cota', registration.cota);
+      if (registration.origem) form.setValue('origem', registration.origem);
+      if (registration.origem_detalhe) form.setValue('origem_detalhe', registration.origem_detalhe);
+      if (registration.vendedor_id) form.setValue('vendedor_id', registration.vendedor_id);
+      if (registration.vendedor_name_cota) form.setValue('vendedor_name', registration.vendedor_name_cota);
+      if (registration.observacoes) form.setValue('observacoes', registration.observacoes);
     }
   }, [registration, form]);
 
@@ -249,13 +273,69 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   if (!registration) return null;
 
+  const handleSavePendingEdit = async () => {
+    const data = form.getValues();
+    await updatePending.mutateAsync({
+      id: registrationId,
+      patch: {
+        // cliente
+        nome_completo: data.cliente_nome || null,
+        cpf: data.cliente_cpf ? data.cliente_cpf.replace(/\D/g, '') : null,
+        rg: data.cliente_rg || null,
+        cpf_conjuge: data.cliente_cpf_conjuge ? data.cliente_cpf_conjuge.replace(/\D/g, '') : null,
+        profissao: data.cliente_profissao || null,
+        telefone: data.cliente_telefone || null,
+        email: data.cliente_email || null,
+        endereco_completo: data.cliente_endereco || null,
+        endereco_cep: data.cliente_cep || null,
+        renda: data.cliente_renda || null,
+        patrimonio: data.cliente_patrimonio || null,
+        pix: data.cliente_pix || null,
+        // cota
+        valor_credito: data.valor_credito || null,
+        prazo_meses: data.prazo_meses || null,
+        tipo_produto: data.tipo_produto || null,
+        empresa_paga_parcelas: data.empresa_paga_parcelas || null,
+        tipo_contrato: data.tipo_contrato || null,
+        parcelas_pagas_empresa: data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+        origem: data.origem || null,
+        origem_detalhe: data.origem_detalhe || null,
+        vendedor_id: data.vendedor_id || null,
+        vendedor_name_cota: data.vendedor_name || null,
+        observacoes: data.observacoes || null,
+      },
+    });
+    setIsEditing(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>
-            {readOnly ? 'Detalhes do Cadastro' : 'Abertura de Cota'} — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-6">
+            <DialogTitle>
+              {isViewMode ? 'Detalhes do Cadastro' : 'Abertura de Cota'} — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}
+            </DialogTitle>
+            {isViewMode && (
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <Button type="button" size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                    Editar
+                  </Button>
+                ) : (
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={updatePending.isPending}>
+                      Cancelar
+                    </Button>
+                    <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                      {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+                      Salvar
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
         <ScrollArea className="max-h-[75vh] pr-4">
