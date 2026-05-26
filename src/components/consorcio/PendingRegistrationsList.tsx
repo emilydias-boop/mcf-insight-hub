@@ -55,6 +55,7 @@ export function PendingRegistrationsList() {
 
   return (
     <TooltipProvider delayDuration={150}>
+    <>
     <PendingRegistrationsKPIs registrations={registrations} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
@@ -155,6 +156,7 @@ export function PendingRegistrationsList() {
       </CardContent>
     </Card>
     <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    </>
     </TooltipProvider>
   );
 }
