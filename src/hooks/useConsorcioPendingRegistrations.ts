@@ -325,6 +325,12 @@ export interface CreatePendingRegistrationInput {
   deal_id: string;
   tipo_pessoa: 'pf' | 'pj';
   vendedor_name: string;
+  // Parcelas que a empresa pagará (capturado já no aceite)
+  empresa_paga_parcelas?: 'sim' | 'nao';
+  tipo_contrato?: 'normal' | 'intercalado' | 'intercalado_impar';
+  parcelas_pagas_empresa?: number;
+  valor_credito?: number;
+  prazo_meses?: number;
   // PF
   nome_completo?: string;
   rg?: string;
@@ -444,6 +450,70 @@ export function useCreatePendingRegistration() {
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro ao criar cadastro: ' + e.message),
+  });
+}
+
+/** Excluir um cadastro pendente (limpa documentos vinculados antes). */
+export function useDeletePendingRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      // 1. Remover docs vinculados ao pending
+      const { data: docs } = await supabase
+        .from('consortium_documents')
+        .select('id, storage_path')
+        .eq('pending_registration_id', registrationId);
+      for (const d of docs || []) {
+        if ((d as any).storage_path) {
+          await supabase.storage.from('consorcio-documents').remove([(d as any).storage_path]);
+        }
+      }
+      await supabase
+        .from('consortium_documents')
+        .delete()
+        .eq('pending_registration_id', registrationId);
+
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .delete()
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro pendente excluído');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
+  });
+}
+
+/** Vincular um cadastro pendente a uma cota já existente (migra documentos). */
+export function useLinkPendingToCard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { registrationId: string; cardId: string }) => {
+      // 1. Migrar documentos do pending para o card
+      await supabase
+        .from('consortium_documents')
+        .update({ card_id: params.cardId } as any)
+        .eq('pending_registration_id', params.registrationId);
+
+      // 2. Marcar pendente como vinculado
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({
+          status: 'vinculada',
+          consortium_card_id: params.cardId,
+        } as any)
+        .eq('id', params.registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro vinculado à cota existente');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
+    },
+    onError: (e: any) => toast.error('Erro ao vincular: ' + e.message),
   });
 }
 
