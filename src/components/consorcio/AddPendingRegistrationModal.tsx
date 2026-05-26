@@ -265,6 +265,29 @@ export function AddPendingRegistrationModal({ open, onOpenChange }: Props) {
             </Tabs>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Tipo de produto *</Label>
+              <Tabs value={tipoProduto} onValueChange={(v) => setTipoProduto(v as 'select' | 'parcelinha')} className="mt-1">
+                <TabsList>
+                  <TabsTrigger value="select">Select</TabsTrigger>
+                  <TabsTrigger value="parcelinha">Parcelinha</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div>
+              <Label>Closer responsável</Label>
+              <Select value={closerId} onValueChange={setCloserId}>
+                <SelectTrigger><SelectValue placeholder="Selecionar closer..." /></SelectTrigger>
+                <SelectContent>
+                  {vendedorOptions.map((v: any) => (
+                    <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div>
             <Label>Origem / Parceiro *</Label>
             <Input
