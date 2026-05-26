@@ -545,6 +545,60 @@ export function useCreateManualPendingRegistration() {
   });
 }
 
+/** Atualizar campos editáveis de um cadastro pendente. */
+export type UpdatePendingRegistrationPatch = Partial<{
+  // cliente
+  nome_completo: string | null;
+  razao_social: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  rg: string | null;
+  cpf_conjuge: string | null;
+  profissao: string | null;
+  telefone: string | null;
+  email: string | null;
+  endereco_completo: string | null;
+  endereco_cep: string | null;
+  renda: number | null;
+  patrimonio: number | null;
+  pix: string | null;
+  // cota
+  valor_credito: number | null;
+  prazo_meses: number | null;
+  tipo_produto: string | null;
+  empresa_paga_parcelas: string | null;
+  tipo_contrato: string | null;
+  parcelas_pagas_empresa: number | null;
+  origem: string | null;
+  origem_detalhe: string | null;
+  vendedor_id: string | null;
+  vendedor_name_cota: string | null;
+  observacoes: string | null;
+  aceite_date: string | null;
+}>;
+
+export function useUpdatePendingRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { id: string; patch: UpdatePendingRegistrationPatch }) => {
+      const cleaned = Object.fromEntries(
+        Object.entries(params.patch).filter(([, v]) => v !== undefined),
+      );
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update(cleaned as any)
+        .eq('id', params.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success('Cadastro atualizado!');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registration', vars.id] });
+    },
+    onError: (e: any) => toast.error('Erro ao atualizar: ' + e.message),
+  });
+}
+
 export function useOpenCota() {
   const queryClient = useQueryClient();
 
