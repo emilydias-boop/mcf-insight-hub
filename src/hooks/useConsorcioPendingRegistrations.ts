@@ -510,6 +510,9 @@ export interface CreateManualPendingInput {
   aceite_date?: string; // YYYY-MM-DD
   observacoes?: string;
   deal_id?: string | null;
+  tipo_produto?: 'select' | 'parcelinha';
+  vendedor_id?: string;
+  vendedor_name_cota?: string;
 }
 
 export function useCreateManualPendingRegistration() {
