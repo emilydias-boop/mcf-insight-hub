@@ -521,6 +521,55 @@ export function useLinkPendingToCard() {
   });
 }
 
+/** Criar manualmente um cadastro pendente (sem proposta/deal). */
+export interface CreateManualPendingInput {
+  tipo_pessoa: 'pf' | 'pj';
+  nome_completo?: string;
+  razao_social?: string;
+  cpf?: string;
+  cnpj?: string;
+  telefone?: string;
+  email?: string;
+  vendedor_name: string; // usado como rótulo de origem/parceiro
+  valor_credito?: number;
+  prazo_meses?: number;
+  empresa_paga_parcelas?: 'sim' | 'nao';
+  tipo_contrato?: 'normal' | 'intercalado' | 'intercalado_impar';
+  parcelas_pagas_empresa?: number;
+  aceite_date?: string; // YYYY-MM-DD
+  observacoes?: string;
+}
+
+export function useCreateManualPendingRegistration() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: CreateManualPendingInput) => {
+      if (!user?.id) throw new Error('Usuário não autenticado.');
+      const payload: any = {
+        ...Object.fromEntries(
+          Object.entries(input).filter(([_, v]) => v !== undefined && v !== ''),
+        ),
+        aceite_date: input.aceite_date || new Date().toISOString().split('T')[0],
+        status: 'aguardando_abertura',
+        created_by: user.id,
+      };
+      const { data, error } = await supabase
+        .from('consorcio_pending_registrations')
+        .insert(payload)
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro pendente criado!');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro ao criar cadastro: ' + e.message),
+  });
+}
+
 export function useOpenCota() {
   const queryClient = useQueryClient();
 
