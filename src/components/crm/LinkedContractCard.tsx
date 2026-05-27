@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DollarSign, Package, Calendar, User, ExternalLink, Unlink, Loader2, Sparkles, Hand } from 'lucide-react';
+import { DollarSign, Package, Calendar, User, ExternalLink, Unlink, Loader2, Sparkles, Hand, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +15,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useLinkedContracts, useUnlinkContract } from '@/hooks/useLinkedContract';
+import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface LinkedContractCardProps {
   attendeeId: string;
@@ -30,6 +33,33 @@ export function LinkedContractCard({ attendeeId, canUnlink = false }: LinkedCont
   const { data: contracts = [], isLoading } = useLinkedContracts(attendeeId);
   const unlinkMutation = useUnlinkContract();
   const [confirmUnlinkId, setConfirmUnlinkId] = useState<string | null>(null);
+  const [confirmRevert, setConfirmRevert] = useState(false);
+  const queryClient = useQueryClient();
+
+  const revertStatusMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ status: 'completed', contract_paid_at: null })
+        .eq('id', attendeeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['linked-contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['unlinked-contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
+      toast.success('Status revertido para Realizada. Vincule o contrato novamente.');
+      setConfirmRevert(false);
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || 'Erro ao reverter status');
+    },
+  });
 
   if (isLoading) {
     return (
@@ -42,8 +72,45 @@ export function LinkedContractCard({ attendeeId, canUnlink = false }: LinkedCont
 
   if (contracts.length === 0) {
     return (
-      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-        Nenhum contrato vinculado encontrado para este participante.
+      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-2">
+        <p>Nenhum contrato vinculado encontrado para este participante.</p>
+        {canUnlink && (
+          <>
+            <p className="text-[11px]">
+              O status está marcado como "Contrato Pago" mas nenhuma venda da Hubla está vinculada. Reverta o status para "Realizada" para poder vincular o contrato correto novamente.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+              onClick={() => setConfirmRevert(true)}
+              disabled={revertStatusMutation.isPending}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reverter para Realizada
+            </Button>
+
+            <AlertDialog open={confirmRevert} onOpenChange={setConfirmRevert}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reverter status para Realizada?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O participante voltará para "Realizada" e o botão "Vincular Contrato" ficará disponível novamente. Use isso quando precisar trocar o contrato vinculado a esta reunião.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => revertStatusMutation.mutate()}
+                    className="bg-amber-600 text-white hover:bg-amber-600/90"
+                  >
+                    Reverter
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
       </div>
     );
   }
