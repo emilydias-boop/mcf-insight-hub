@@ -64,13 +64,8 @@ async function sendNfseEmails(
       aprovadorNome = aprovador?.full_name || '—';
     }
 
-    // Generate signed URL for PDF (7 days)
-    let pdfUrl: string | undefined;
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from('user-files')
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
-    if (signedError) console.error('[sendNfseEmails] Erro ao gerar signed URL:', signedError);
-    if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
+    // Link permanente via edge function (gera signed URL fresca a cada clique)
+    const pdfUrl = `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/nfse-download?path=${encodeURIComponent(storagePath)}`;
 
     const employeeName = emp.nome_completo || 'Colaborador';
     const { data: { user: authUser } } = await supabase.auth.getUser();

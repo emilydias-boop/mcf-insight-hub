@@ -33,12 +33,8 @@ async function sendNfseEmails(employeeId: string, monthLabel: string, numeroNfse
 
     if (!emp) return;
 
-    // Generate signed URL for PDF (7 days)
-    let pdfUrl: string | undefined;
-    const { data: signedData } = await supabase.storage
-      .from('user-files')
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
-    if (signedData?.signedUrl) pdfUrl = signedData.signedUrl;
+    // Link permanente via edge function (gera signed URL fresca a cada clique)
+    const pdfUrl = `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/nfse-download?path=${encodeURIComponent(storagePath)}`;
 
     const employeeName = emp.nome_completo || 'Colaborador';
     const { data: { user: authUser } } = await supabase.auth.getUser();
