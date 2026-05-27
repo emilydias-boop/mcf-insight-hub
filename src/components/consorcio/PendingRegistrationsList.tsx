@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   usePendingRegistrations,
   useDeletePendingRegistration,
@@ -56,6 +58,17 @@ export function PendingRegistrationsList() {
     () => applyPendingFilters(registrations, filters),
     [registrations, filters],
   );
+
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageRows = useMemo(
+    () => filtered.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [filtered, safePage, pageSize],
+  );
+  // reset page when filters/pageSize change
+  useMemo(() => { setPage(0); }, [filters, pageSize]);
 
   if (isLoading) {
     return (
@@ -111,7 +124,7 @@ export function PendingRegistrationsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((reg) => (
+                {pageRows.map((reg) => (
                   <RegistrationRow
                     key={reg.id}
                     reg={reg}
@@ -123,6 +136,38 @@ export function PendingRegistrationsList() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {filtered.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-3 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Itens por página:</span>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="ml-2">
+                {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, filtered.length)} de {filtered.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {safePage + 1} de {totalPages}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
