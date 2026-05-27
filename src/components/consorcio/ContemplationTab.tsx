@@ -8,7 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import { Eye, Target, Dices, Calculator, AlertTriangle, Info, Settings } from 'lucide-react';
+import { Eye, Target, Dices, Calculator, AlertTriangle, Info, Settings, ChevronsUpDown, X, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { cn } from '@/lib/utils';
 import { useContemplationCards, useGruposDisponiveis, useRegistrarConsultaLoteria } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
 import {
@@ -45,7 +49,8 @@ function getContemplationBadge(card: ConsorcioCard) {
 
 export function ContemplationTab() {
   // Consultation fields
-  const [consultaGrupo, setConsultaGrupo] = useState('');
+  const [consultaGrupos, setConsultaGrupos] = useState<string[]>([]);
+  const [grupoPickerOpen, setGrupoPickerOpen] = useState(false);
   const [consultaPeriodo, setConsultaPeriodo] = useState('');
   const [consultaNumero, setConsultaNumero] = useState('');
   const [categoria, setCategoria] = useState<CategoriaBem>('imovel');
@@ -62,18 +67,19 @@ export function ContemplationTab() {
 
   const { data: grupos = [] } = useGruposDisponiveis();
   const { data: cards, isLoading } = useContemplationCards({
-    grupo: consultaGrupo || undefined,
+    grupos: consultaGrupos.length > 0 ? consultaGrupos : undefined,
   });
   const registrarConsulta = useRegistrarConsultaLoteria();
   const { data: faixas = [] } = useFaixasRecomendacao();
-  const { data: historico = [] } = useHistoricoAssembleiasGrupo(consultaGrupo || null);
+  const primeiroGrupo = consultaGrupos[0] || null;
+  const { data: historico = [] } = useHistoricoAssembleiasGrupo(primeiroGrupo);
   const { vagas, media, baseAssembleias } = useMemo(
     () => calcularVagasEstimadas(historico, 2),
     [historico],
   );
 
   const handleCalcular = () => {
-    if (!consultaGrupo || !consultaPeriodo || !consultaNumero || !cards) return;
+    if (consultaGrupos.length === 0 || !consultaPeriodo || !consultaNumero || !cards) return;
 
     // Calcular maior número de cota para fallback
     let maxCota = 0;
@@ -93,15 +99,19 @@ export function ContemplationTab() {
     const cotasZona50 = recs.filter((r) => r.distancia > 0 && r.distancia <= 50).length;
     const cotasZona100 = recs.filter((r) => r.distancia > 50 && r.distancia <= 100).length;
 
-    registrarConsulta.mutate({
-      grupo: consultaGrupo,
-      periodo: consultaPeriodo,
-      numeroLoteria: consultaNumero,
-      numeroBase: fallback.numeroBase,
-      numeroAplicado: String(fallback.numeroAplicado),
-      cotasMatch,
-      cotasZona50,
-      cotasZona100,
+    // Registrar uma consulta por grupo selecionado (auditoria por grupo)
+    consultaGrupos.forEach((g) => {
+      const recsDoGrupo = recs.filter((r) => r.card.grupo === g);
+      registrarConsulta.mutate({
+        grupo: g,
+        periodo: consultaPeriodo,
+        numeroLoteria: consultaNumero,
+        numeroBase: fallback.numeroBase,
+        numeroAplicado: String(fallback.numeroAplicado),
+        cotasMatch: recsDoGrupo.filter((r) => r.distancia === 0).length,
+        cotasZona50: recsDoGrupo.filter((r) => r.distancia > 0 && r.distancia <= 50).length,
+        cotasZona100: recsDoGrupo.filter((r) => r.distancia > 50 && r.distancia <= 100).length,
+      });
     });
   };
 
@@ -122,7 +132,13 @@ export function ContemplationTab() {
   const openLance = (card: ConsorcioCard) => { setSelectedCard(card); setLanceOpen(true); };
   const openDetails = (card: ConsorcioCard) => { setSelectedCard(card); setDetailsOpen(true); };
 
-  const canCalculate = !!(consultaGrupo && consultaPeriodo && consultaNumero.length >= 1);
+  const canCalculate = consultaGrupos.length > 0 && !!consultaPeriodo && consultaNumero.length >= 1;
+
+  const toggleGrupo = (g: string) => {
+    setConsultaGrupos((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
+  };
+  const selecionarTodos = () => setConsultaGrupos(grupos);
+  const limparGrupos = () => setConsultaGrupos([]);
 
   return (
     <div className="space-y-4">
@@ -141,16 +157,68 @@ export function ContemplationTab() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div className="space-y-2">
               <Label>Grupo *</Label>
-              <Select value={consultaGrupo} onValueChange={setConsultaGrupo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o grupo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {grupos.map(g => (
-                    <SelectItem key={g} value={g}>{g}</SelectItem>
+              <Popover open={grupoPickerOpen} onOpenChange={setGrupoPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={cn('truncate', consultaGrupos.length === 0 && 'text-muted-foreground')}>
+                      {consultaGrupos.length === 0
+                        ? 'Selecione os grupos'
+                        : consultaGrupos.length === 1
+                          ? `Grupo ${consultaGrupos[0]}`
+                          : `${consultaGrupos.length} grupos selecionados`}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar grupo..." />
+                    <div className="flex items-center justify-between px-2 py-1.5 border-b text-xs">
+                      <button type="button" className="text-primary hover:underline" onClick={selecionarTodos}>
+                        Selecionar todos
+                      </button>
+                      <button type="button" className="text-muted-foreground hover:underline" onClick={limparGrupos}>
+                        Limpar
+                      </button>
+                    </div>
+                    <CommandList>
+                      <CommandEmpty>Nenhum grupo encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {grupos.map((g) => {
+                          const checked = consultaGrupos.includes(g);
+                          return (
+                            <CommandItem key={g} value={g} onSelect={() => toggleGrupo(g)}>
+                              <Check className={cn('mr-2 h-4 w-4', checked ? 'opacity-100' : 'opacity-0')} />
+                              {g}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {consultaGrupos.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {consultaGrupos.map((g) => (
+                    <Badge key={g} variant="secondary" className="gap-1 pr-1">
+                      {g}
+                      <button
+                        type="button"
+                        onClick={() => toggleGrupo(g)}
+                        className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5"
+                        aria-label={`Remover grupo ${g}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -206,8 +274,20 @@ export function ContemplationTab() {
       </Card>
 
       {/* Histórico do grupo */}
-      {consultaGrupo && (
-        <HistoricoAssembleiaPanel grupo={consultaGrupo} vagasFallback={2} />
+      {consultaGrupos.length === 1 && (
+        <HistoricoAssembleiaPanel grupo={consultaGrupos[0]} vagasFallback={2} />
+      )}
+      {consultaGrupos.length > 1 && (
+        <Accordion type="multiple" className="w-full">
+          {consultaGrupos.map((g) => (
+            <AccordionItem key={g} value={g}>
+              <AccordionTrigger>Histórico do grupo {g}</AccordionTrigger>
+              <AccordionContent>
+                <HistoricoAssembleiaPanel grupo={g} vagasFallback={2} />
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       )}
 
       {/* Legal disclaimer */}
