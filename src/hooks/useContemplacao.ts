@@ -17,6 +17,7 @@ const CONTEMPLATION_CARD_SELECT = `
 export interface ContemplationFilters {
   search?: string;
   grupo?: string;
+  grupos?: string[];
   status?: string;
   tipoProduto?: string;
   vendedorId?: string;
@@ -32,7 +33,9 @@ export function useContemplationCards(filters: ContemplationFilters) {
         .order('grupo', { ascending: true })
         .order('cota', { ascending: true });
 
-      if (filters.grupo && filters.grupo !== 'todos') {
+      if (filters.grupos && filters.grupos.length > 0) {
+        query = query.in('grupo', filters.grupos);
+      } else if (filters.grupo && filters.grupo !== 'todos') {
         query = query.eq('grupo', filters.grupo);
       }
       if (filters.status && filters.status !== 'todos') {
