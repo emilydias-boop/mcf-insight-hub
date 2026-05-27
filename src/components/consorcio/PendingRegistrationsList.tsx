@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus } from 'lucide-react';
@@ -68,7 +68,7 @@ export function PendingRegistrationsList() {
     [filtered, safePage, pageSize],
   );
   // reset page when filters/pageSize change
-  useMemo(() => { setPage(0); }, [filters, pageSize]);
+  useEffect(() => { setPage(0); }, [filters, pageSize]);
 
   if (isLoading) {
     return (
