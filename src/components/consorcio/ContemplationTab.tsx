@@ -360,46 +360,10 @@ export function ContemplationTab() {
                     </TableCell>
                   </TableRow>
                 )
-              ) : !consultaAtiva && cards && cards.length > 0 ? (
-                cards.map(card => {
-                  const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
-                  const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
-                  return (
-                    <TableRow key={card.id}>
-                      <TableCell className="font-medium">{displayName || '-'}</TableCell>
-                      <TableCell className="text-xs font-mono">{doc || '-'}</TableCell>
-                      <TableCell className="text-center">{card.grupo}</TableCell>
-                      <TableCell className="text-center font-medium">{card.cota}</TableCell>
-                      <TableCell className="text-right">
-                        R$ {Number(card.valor_credito).toLocaleString('pt-BR')}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize text-xs">{card.tipo_produto}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize text-xs">{card.status}</Badge>
-                      </TableCell>
-                      <TableCell>{getContemplationBadge(card)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" title="Ver detalhes" onClick={() => openDetails(card)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" title="Verificar sorteio" onClick={() => openSorteio(card)}>
-                            <Dices className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" title="Simular lance" onClick={() => openLance(card)}>
-                            <Target className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
-                    {consultaGrupo ? 'Nenhuma cota encontrada' : 'Selecione um grupo para visualizar as cotas ou faça uma consulta por número da loteria'}
+                    Preencha grupo, categoria, período e número da loteria e clique em "Calcular possibilidades" para listar as cotas dentro das zonas de chance.
                   </TableCell>
                 </TableRow>
               )}
