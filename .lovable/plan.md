@@ -1,32 +1,31 @@
-## Melhorias em Cadastros Pendentes
+## Objetivo
+Trocar o seletor único de **Grupo** na aba Contemplação por um **multi-select**, para consultar várias cotas de grupos diferentes em uma só rodada (ex.: 9935 + outros que tenham assembleia no mesmo dia).
 
-Três correções principais: (1) escolher Select / Parcelinha no cadastro manual, (2) permitir editar dados em "Ver Detalhes", (3) preencher closer/parcelas/total para pendentes manuais ou sem deal vinculado.
+## Mudanças
 
-### 1. AddPendingRegistrationModal — Select / Parcelinha + Closer
-- Adicionar **Tipo de produto**: tabs `Select` ↔ `Parcelinha` (valor salvo em `tipo_produto`).
-- Adicionar campo **Closer responsável** (Select de profiles ativos da BU Consórcio), salvo em `vendedor_id` + `vendedor_name_cota`.
-- Quando `Empresa paga parcelas? = sim`, manter os campos atuais (tipo_contrato: Normal/Intercalado par/Intercalado ímpar, qtde parcelas) — esses já existem.
-- Passar `tipo_produto`, `vendedor_id`, `vendedor_name_cota` para `useCreateManualPendingRegistration` (estender `CreateManualPendingInput`).
+### 1. `src/components/consorcio/ContemplationTab.tsx`
+- Substituir o state `consultaGrupo: string` por `consultaGrupos: string[]`.
+- Trocar o `<Select>` de Grupo por um componente multi-select baseado em `Popover` + `Command` + `Checkbox` (padrões já usados no projeto via shadcn). Mostra:
+  - Campo com placeholder "Selecione os grupos" e contagem ("3 grupos selecionados") quando há seleção, com chips/badges removíveis abaixo.
+  - Lista rolável com busca por número de grupo e opção "Selecionar todos / Limpar".
+- `canCalculate` passa a exigir `consultaGrupos.length > 0`.
+- `handleCalcular` e `registrarConsulta` passam o array (ou string concatenada `"9935,7249"` para o log, mantendo compatibilidade do registro).
+- Histórico do grupo (`HistoricoAssembleiaPanel`):
+  - Se 1 grupo selecionado → render igual hoje.
+  - Se 2+ → render um painel por grupo em accordion (`Accordion` shadcn) para não poluir.
+- Tabela de resultados ganha header já existente "Grupo" (continua igual, mas agora pode misturar vários).
 
-### 2. Lista — usar closer manual quando não houver deal
-- Em `usePendingRegistrations`, quando `deal.owner_id` for `null`, buscar `vendedor_id` da registration e resolver via `profiles` para preencher `closer_name`.
-- Sem isso, manuais sempre mostrarão "—" na coluna Closer.
+### 2. `src/hooks/useContemplacao.ts`
+- Em `ContemplationFilters`, adicionar `grupos?: string[]` (manter `grupo` por compat, mas Contemplation passará a usar `grupos`).
+- Em `useContemplationCards`, se `filters.grupos?.length` aplicar `query.in('grupo', filters.grupos)`; senão manter lógica atual com `grupo`.
 
-### 3. OpenCotaModal (modo `view`) — Editar dados do pendente
-- Adicionar botão **"Editar"** no header quando `mode='view'`. Toggle de um estado `isEditing` que remove o `disabled` do `<fieldset>` apenas dos campos de **Dados do Cliente** + nova seção **Dados do Pendente** (valor crédito, prazo, tipo_produto, empresa_paga_parcelas, tipo_contrato, parcelas_pagas_empresa, vendedor_id/closer, observações).
-- Botão **"Salvar alterações"** chama nova mutação `useUpdatePendingRegistration({ id, patch })` que faz `update` em `consorcio_pending_registrations` com os campos editáveis e invalida `consorcio-pending-registrations` + `consorcio-pending-registration`.
-- Não altera o fluxo normal de "Abrir Cota" (`mode='open'`).
+### 3. Telemetria
+- `useRegistrarConsultaLoteria`: continua recebendo 1 string em `grupo`. Quando há múltiplos, registrar uma linha por grupo selecionado (loop simples no `handleCalcular`), preservando o agregado de matches por grupo para auditoria correta.
 
-### 4. Backfill visual: KPI Parcelas/Crédito
-- Como `getParcelasEmpresa` já calcula a partir de `parcelas_pagas_empresa`+`prazo_meses`+`valor_credito`+`tipo_contrato`+`empresa_paga_parcelas`, basta editar esses campos via OpenCotaModal e a coluna "Parcelas (empresa)" / "Total a pagar" / KPIs populam automaticamente. Nenhuma mudança no cálculo.
+## Não muda
+- Cálculo de recomendações (`calcularRecomendacoesPorFaixa`), faixas, fallback de número, lances e modais permanecem iguais — eles operam sobre a lista de `cards` retornada, independente de quantos grupos vieram.
+- Layout, design tokens, paginação e demais abas.
 
-### Backend
-- **Sem migration nova**: todas as colunas usadas (`tipo_produto`, `vendedor_id`, `vendedor_name_cota`, `parcelas_pagas_empresa`, `tipo_contrato`, `empresa_paga_parcelas`, `valor_credito`, `prazo_meses`, `observacoes`) já existem em `consorcio_pending_registrations`.
-
-### Arquivos
-- Editar: `src/components/consorcio/AddPendingRegistrationModal.tsx` — tabs Select/Parcelinha + select de closer.
-- Editar: `src/hooks/useConsorcioPendingRegistrations.ts` — estender `CreateManualPendingInput`; novo hook `useUpdatePendingRegistration`; fallback de closer via `vendedor_id` no select da lista.
-- Editar: `src/components/consorcio/OpenCotaModal.tsx` — botão Editar/Salvar no modo view com nova seção "Dados do Pendente".
-
-### Fora de escopo
-- Vincular retroativamente os pendentes antigos a um `deal_id`. Para esses, o closer entra via edição manual.
+## Arquivos afetados
+- `src/components/consorcio/ContemplationTab.tsx` (edit)
+- `src/hooks/useContemplacao.ts` (edit — adiciona `grupos` ao filtro)
