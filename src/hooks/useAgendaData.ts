@@ -1423,72 +1423,26 @@ export function useCreateMeeting() {
           throw new Error(data.message || 'Horário lotado — não é possível adicionar mais leads');
         }
         if (data.error === 'deal_already_paid' || data.error === 'deal_already_won') {
-          // Auto-cria pedido de liberação para admin/manager/coordenador/Jessica.
-          try {
-            const { data: userRes } = await supabase.auth.getUser();
-            const uid = userRes?.user?.id;
-            if (uid) {
-              // Detectar BU do deal (para filtros do aprovador)
-              let dealBu: string | null = null;
-              const { data: dealOrigin } = await supabase
-                .from('crm_deals')
-                .select('origin_id')
-                .eq('id', dealId)
-                .maybeSingle();
-              if (dealOrigin?.origin_id) {
-                const { data: buMaps } = await supabase
-                  .from('bu_origin_mapping')
-                  .select('bu')
-                  .eq('entity_type', 'origin')
-                  .eq('entity_id', dealOrigin.origin_id)
-                  .limit(1);
-                dealBu = (buMaps ?? [])[0]?.bu ?? null;
-              }
-
-              const { data: existing } = await supabase
-                .from('rule_approval_requests' as any)
-                .select('id')
-                .eq('requested_by', uid)
-                .eq('target_deal_id', dealId)
-                .eq('rule_key', 'r1_force_paid_lead')
-                .eq('status', 'pending')
-                .maybeSingle();
-              if (!existing) {
-                await supabase.from('rule_approval_requests' as any).insert({
-                  bu: dealBu,
-                  rule_key: 'r1_force_paid_lead',
-                  requester_role: 'sdr',
-                  requested_by: uid,
-                  target_deal_id: dealId,
-                  status: 'pending',
-                  payload: {
-                    source: 'calendly_create_event_paid_block',
-                    block_reason: data.error,
-                    block_message: data.message,
-                    // Tudo o que o aprovador precisa para recriar a R1
-                    closer_id: closerId,
-                    contact_id: contactId ?? null,
-                    scheduled_at: scheduledAt.toISOString(),
-                    duration_minutes: durationMinutes,
-                    notes: notes ?? null,
-                    lead_type: leadType ?? null,
-                    sdr_email: sdrEmail ?? null,
-                    already_builds: alreadyBuilds ?? null,
-                    parent_attendee_id: parentAttendeeId ?? null,
-                    booked_at: bookedAt?.toISOString() ?? null,
-                  },
-                });
-              }
-              queryClient.invalidateQueries({ queryKey: ['my-approval-requests'] });
-              queryClient.invalidateQueries({ queryKey: ['approval-requests-pending'] });
-              queryClient.invalidateQueries({ queryKey: ['approval-requests-pending-count'] });
-            }
-          } catch (apprErr) {
-            console.warn('[create-meeting] falha ao criar pedido de liberação R1 pós-pago', apprErr);
-          }
-          throw new Error(
-            'Lead já tem contrato pago — pedido de liberação enviado para admin/manager/coordenador/Jessica.',
+          // Não cria pedido automaticamente — a UI abre RequestR1ApprovalDialog
+          // para que o SDR/Closer envie a solicitação explicitamente com motivo.
+          const err: any = new Error(
+            data.message || 'Lead já tem contrato pago — solicite liberação para agendar.',
           );
+          err.code = data.error;
+          err.payload = {
+            closerId,
+            dealId,
+            contactId: contactId ?? null,
+            scheduledAt: scheduledAt.toISOString(),
+            durationMinutes,
+            notes: notes ?? null,
+            leadType: leadType ?? null,
+            sdrEmail: sdrEmail ?? null,
+            alreadyBuilds: alreadyBuilds ?? null,
+            parentAttendeeId: parentAttendeeId ?? null,
+            bookedAt: bookedAt?.toISOString() ?? null,
+          };
+          throw err;
         }
         if (data.error === 'rule_violation_reschedule_threshold') {
           // Auto-cria pedido de aprovação para o gestor (se ainda não existir).
