@@ -13131,6 +13131,7 @@ export type Database = {
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
       is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
+      is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       list_transferable_users: {
         Args: never
