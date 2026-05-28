@@ -172,7 +172,7 @@ export function usePendingRegistrations() {
           .select('id, full_name, email')
           .in('id', ownerIds);
 
-        (profsById || []).forEach((p: any) => {
+        (profsById || []).forEach((p) => {
           if (p.id) profilesById.set(p.id, p.full_name || p.email);
         });
       }
@@ -182,7 +182,7 @@ export function usePendingRegistrations() {
           .select('full_name, email')
           .in('email', sdrEmails);
 
-        (profsByEmail || []).forEach((p: any) => {
+        (profsByEmail || []).forEach((p) => {
           const email = normalizeEmail(p.email);
           if (email) profilesByEmail.set(email, p.full_name || p.email);
         });
@@ -192,7 +192,7 @@ export function usePendingRegistrations() {
           .select('nome_completo, email_pessoal')
           .in('email_pessoal', sdrEmails);
 
-        (employees || []).forEach((e: any) => {
+        (employees || []).forEach((e) => {
           const email = normalizeEmail(e.email_pessoal);
           if (email) employeesByEmail.set(email, e.nome_completo);
         });
