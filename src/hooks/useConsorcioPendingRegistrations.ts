@@ -855,7 +855,9 @@ export function useOpenCota() {
       const { error: pendingUpdateError } = await supabase
         .from('consorcio_pending_registrations')
         .update(pendingUpdate as any)
-        .eq('id', registrationId);
+        .eq('id', registrationId)
+        .select('id')
+        .single();
       if (pendingUpdateError) throw pendingUpdateError;
 
       // 7. Update proposal with card id
