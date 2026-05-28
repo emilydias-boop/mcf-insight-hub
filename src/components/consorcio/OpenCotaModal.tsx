@@ -216,8 +216,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Update vendedor_name when vendedor_id changes
   useEffect(() => {
     if (vendedorId) {
-      const vendedor = vendedorOptions.find((v: any) => v.id === vendedorId);
-      if (vendedor) form.setValue('vendedor_name', (vendedor as any).nome);
+      const vendedor = vendedorOptions.find((v) => v.id === vendedorId);
+      if (vendedor) form.setValue('vendedor_name', vendedor.name || '');
     }
   }, [vendedorId, vendedorOptions, form]);
 
@@ -243,6 +243,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     // Sanitizar: remover strings vazias de campos date antes de enviar
     const rawCotaData = {
       ...data,
+      produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
+      parcela_1a_12a: calculoParcela?.parcela1a12,
+      parcela_demais: calculoParcela?.parcelaDemais,
       parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
     };
     const cleanCotaData = Object.fromEntries(
@@ -687,12 +690,25 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormField control={form.control} name="vendedor_id" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Vendedor Responsável</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
+                          <Select
+                            value={field.value}
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              const vendedor = vendedorOptions.find((v) => v.id === value);
+                              form.setValue('vendedor_name', vendedor?.name || '');
+                            }}
+                          >
                             <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
-                              {vendedorOptions.map((v: any) => (
-                                <SelectItem key={v.id} value={v.id}>{v.nome}</SelectItem>
-                              ))}
+                              {vendedorOptions.length > 0 ? (
+                                vendedorOptions.map((v) => (
+                                  <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                                ))
+                              ) : (
+                                <div className="p-2 text-sm text-muted-foreground">
+                                  Nenhum vendedor cadastrado. Adicione nas configurações.
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
                         </FormItem>
