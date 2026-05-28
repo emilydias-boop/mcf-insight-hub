@@ -1391,5 +1391,24 @@ export function QuickScheduleModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <RequestR1ApprovalDialog
+      open={!!r1ApprovalCtx}
+      onOpenChange={(o) => {
+        if (!o) setR1ApprovalCtx(null);
+      }}
+      payload={r1ApprovalCtx?.payload ?? null}
+      dealName={r1ApprovalCtx?.dealName}
+      contactName={r1ApprovalCtx?.contactName}
+      closerName={r1ApprovalCtx?.closerName}
+      blockReason={r1ApprovalCtx?.blockReason}
+      blockMessage={r1ApprovalCtx?.blockMessage}
+      onSubmitted={() => {
+        setR1ApprovalCtx(null);
+        onOpenChange(false);
+        resetForm();
+      }}
+    />
+    </>
   );
 }
