@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileClock, Layers, Wallet, CalendarRange } from 'lucide-react';
+import { FileClock, Layers, Wallet, CalendarRange, HandCoins } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import type { EnrichedPendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
@@ -19,6 +19,10 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
     );
     const totalCredito = registrations.reduce(
       (s, r) => s + (Number(r.valor_credito) || 0),
+      0,
+    );
+    const totalEntrada = registrations.reduce(
+      (s, r) => s + (Number(r.valor_total_empresa) || 0),
       0,
     );
 
@@ -46,7 +50,7 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
       topMonthSub = `${topMonth.count} cota${topMonth.count > 1 ? 's' : ''}`;
     }
 
-    return { totalCotas, totalParcelas, totalCredito, topMonthLabel, topMonthSub };
+    return { totalCotas, totalParcelas, totalCredito, totalEntrada, topMonthLabel, topMonthSub };
   }, [registrations]);
 
   const items = [
@@ -63,6 +67,12 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
       sub: 'a cadastrar',
     },
     {
+      icon: HandCoins,
+      label: 'Entrada a pagar',
+      value: formatCurrency(stats.totalEntrada),
+      sub: '1ª(s) parcela(s) da empresa',
+    },
+    {
       icon: Wallet,
       label: 'Crédito pendente',
       value: formatCurrency(stats.totalCredito),
@@ -77,7 +87,7 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
       {items.map((it) => (
         <Card key={it.label}>
           <CardContent className="p-4 flex items-start gap-3">
