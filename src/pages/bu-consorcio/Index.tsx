@@ -48,6 +48,7 @@ import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
 import { GruposTab } from '@/components/consorcio/grupos/GruposTab';
+import { PrevisaoComissoesTab } from '@/components/consorcio/PrevisaoComissoesTab';
 
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
