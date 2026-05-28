@@ -109,6 +109,8 @@ const PENDING_REGISTRATION_LIST_SELECT = `
 
 const PENDING_REGISTRATION_DETAIL_SELECT = `*`;
 
+const normalizeEmail = (email: string | null | undefined) => String(email || '').trim().toLowerCase();
+
 export interface EnrichedPendingRegistration {
   id: string;
   tipo_pessoa: 'pf' | 'pj';
@@ -155,29 +157,44 @@ export function usePendingRegistrations() {
       if (error) throw error;
       const rows = (data || []) as any[];
 
-      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → profiles)
+      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
       const ownerIds = Array.from(new Set(rows.map((r) => r.deal?.owner_id).filter(Boolean)));
       const sdrEmails = Array.from(
-        new Set(rows.map((r) => (r.deal?.original_sdr_email || '').toLowerCase()).filter(Boolean)),
+        new Set(rows.map((r) => normalizeEmail(r.deal?.original_sdr_email)).filter(Boolean)),
       );
 
       const profilesById = new Map<string, string>();
       const profilesByEmail = new Map<string, string>();
-      if (ownerIds.length || sdrEmails.length) {
-        const { data: profs } = await supabase
+      const employeesByEmail = new Map<string, string>();
+      if (ownerIds.length) {
+        const { data: profsById } = await supabase
           .from('profiles')
           .select('id, full_name, email')
-          .or(
-            [
-              ownerIds.length ? `id.in.(${ownerIds.join(',')})` : '',
-              sdrEmails.length ? `email.in.(${sdrEmails.map((e) => `"${e}"`).join(',')})` : '',
-            ]
-              .filter(Boolean)
-              .join(','),
-          );
-        (profs || []).forEach((p: any) => {
+          .in('id', ownerIds);
+
+        (profsById || []).forEach((p) => {
           if (p.id) profilesById.set(p.id, p.full_name || p.email);
-          if (p.email) profilesByEmail.set(String(p.email).toLowerCase(), p.full_name || p.email);
+        });
+      }
+      if (sdrEmails.length) {
+        const { data: profsByEmail } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .in('email', sdrEmails);
+
+        (profsByEmail || []).forEach((p) => {
+          const email = normalizeEmail(p.email);
+          if (email) profilesByEmail.set(email, p.full_name || p.email);
+        });
+
+        const { data: employees } = await supabase
+          .from('employees')
+          .select('nome_completo, email_pessoal')
+          .in('email_pessoal', sdrEmails);
+
+        (employees || []).forEach((e) => {
+          const email = normalizeEmail(e.email_pessoal);
+          if (email) employeesByEmail.set(email, e.nome_completo);
         });
       }
 
@@ -233,8 +250,8 @@ export function usePendingRegistrations() {
         const closerName = (r.deal?.owner_id ? profilesById.get(r.deal.owner_id) : null)
           || r.vendedor_name_cota
           || null;
-        const sdrEmail = (r.deal?.original_sdr_email || '').toLowerCase();
-        const sdrName = sdrEmail ? profilesByEmail.get(sdrEmail) || sdrEmail : null;
+        const sdrEmail = normalizeEmail(r.deal?.original_sdr_email);
+        const sdrName = sdrEmail ? employeesByEmail.get(sdrEmail) || profilesByEmail.get(sdrEmail) || sdrEmail : null;
         const originName = r.deal?.origin?.display_name || r.deal?.origin?.name || null;
 
         return {
