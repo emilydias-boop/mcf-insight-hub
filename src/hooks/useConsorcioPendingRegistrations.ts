@@ -166,7 +166,7 @@ export function usePendingRegistrations() {
       if (ownerIds.length || sdrEmails.length) {
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, name, email')
+          .select('id, full_name, email')
           .or(
             [
               ownerIds.length ? `id.in.(${ownerIds.join(',')})` : '',
@@ -176,8 +176,8 @@ export function usePendingRegistrations() {
               .join(','),
           );
         (profs || []).forEach((p: any) => {
-          if (p.id) profilesById.set(p.id, p.name || p.email);
-          if (p.email) profilesByEmail.set(String(p.email).toLowerCase(), p.name || p.email);
+          if (p.id) profilesById.set(p.id, p.full_name || p.email);
+          if (p.email) profilesByEmail.set(String(p.email).toLowerCase(), p.full_name || p.email);
         });
       }
 
