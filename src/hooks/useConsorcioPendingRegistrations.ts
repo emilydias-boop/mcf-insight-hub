@@ -155,7 +155,7 @@ export function usePendingRegistrations() {
       if (error) throw error;
       const rows = (data || []) as any[];
 
-      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → profiles)
+      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
       const ownerIds = Array.from(new Set(rows.map((r) => r.deal?.owner_id).filter(Boolean)));
       const sdrEmails = Array.from(
         new Set(rows.map((r) => (r.deal?.original_sdr_email || '').toLowerCase()).filter(Boolean)),
@@ -163,6 +163,7 @@ export function usePendingRegistrations() {
 
       const profilesById = new Map<string, string>();
       const profilesByEmail = new Map<string, string>();
+      const employeesByEmail = new Map<string, string>();
       if (ownerIds.length || sdrEmails.length) {
         const { data: profs } = await supabase
           .from('profiles')
@@ -178,6 +179,16 @@ export function usePendingRegistrations() {
         (profs || []).forEach((p: any) => {
           if (p.id) profilesById.set(p.id, p.full_name || p.email);
           if (p.email) profilesByEmail.set(String(p.email).toLowerCase(), p.full_name || p.email);
+        });
+      }
+      if (sdrEmails.length) {
+        const { data: employees } = await supabase
+          .from('employees')
+          .select('nome_completo, email_pessoal')
+          .in('email_pessoal', sdrEmails);
+
+        (employees || []).forEach((e: any) => {
+          if (e.email_pessoal) employeesByEmail.set(String(e.email_pessoal).toLowerCase(), e.nome_completo);
         });
       }
 
@@ -234,7 +245,7 @@ export function usePendingRegistrations() {
           || r.vendedor_name_cota
           || null;
         const sdrEmail = (r.deal?.original_sdr_email || '').toLowerCase();
-        const sdrName = sdrEmail ? profilesByEmail.get(sdrEmail) || sdrEmail : null;
+        const sdrName = sdrEmail ? employeesByEmail.get(sdrEmail) || profilesByEmail.get(sdrEmail) || sdrEmail : null;
         const originName = r.deal?.origin?.display_name || r.deal?.origin?.name || null;
 
         return {
