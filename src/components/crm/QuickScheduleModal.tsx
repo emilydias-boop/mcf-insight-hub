@@ -48,6 +48,8 @@ import { toast } from 'sonner';
 import { BlockedLeadCard } from './BlockedLeadCard';
 import { useCreateApprovalRequest, useMyApprovalRequests } from '@/hooks/useApprovalRequests';
 import { ShieldAlert } from 'lucide-react';
+import { RequestR1ApprovalDialog } from './RequestR1ApprovalDialog';
+import type { R1ForcePayload } from '@/hooks/useCreateR1ForceRequest';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -171,6 +173,16 @@ export function QuickScheduleModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState(prefilledNotes || '');
+
+  // Estado do dialog de solicitação de liberação R1 (lead já pago/won)
+  const [r1ApprovalCtx, setR1ApprovalCtx] = useState<{
+    payload: R1ForcePayload;
+    blockReason: string;
+    blockMessage?: string;
+    dealName?: string;
+    contactName?: string;
+    closerName?: string;
+  } | null>(null);
 
   // Sync internal state when preselected values change and modal opens
   useEffect(() => {
@@ -438,7 +450,20 @@ export function QuickScheduleModal({
       },
       onError: (error: any) => {
         console.log('🚨 Create meeting error:', error);
-        // Errors are handled by the hook's onError
+        if (error?.code === 'deal_already_paid' || error?.code === 'deal_already_won') {
+          toast.warning('Lead já tem contrato pago — solicite liberação para agendar.');
+          const closerName = closers.find((c) => c.id === selectedCloser)?.name;
+          setR1ApprovalCtx({
+            payload: error.payload as R1ForcePayload,
+            blockReason: error.code,
+            blockMessage: error.message,
+            dealName: selectedDeal?.name,
+            contactName: selectedDeal?.contact?.name,
+            closerName,
+          });
+          return;
+        }
+        // Outros erros são tratados pelo onError do hook
       },
     });
   };
@@ -562,6 +587,7 @@ export function QuickScheduleModal({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
@@ -1366,5 +1392,24 @@ export function QuickScheduleModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <RequestR1ApprovalDialog
+      open={!!r1ApprovalCtx}
+      onOpenChange={(o) => {
+        if (!o) setR1ApprovalCtx(null);
+      }}
+      payload={r1ApprovalCtx?.payload ?? null}
+      dealName={r1ApprovalCtx?.dealName}
+      contactName={r1ApprovalCtx?.contactName}
+      closerName={r1ApprovalCtx?.closerName}
+      blockReason={r1ApprovalCtx?.blockReason}
+      blockMessage={r1ApprovalCtx?.blockMessage}
+      onSubmitted={() => {
+        setR1ApprovalCtx(null);
+        onOpenChange(false);
+        resetForm();
+      }}
+    />
+    </>
   );
 }

@@ -4,7 +4,8 @@ description: Fluxo de aprovação para SDR/Closer reagendar R1 em lead que já t
 type: feature
 ---
 - SDR/Closer tenta agendar R1 em lead pago → guards `deal_already_paid`/`deal_already_won` em `calendly-create-event` retornam erro.
-- `useCreateMeeting` (src/hooks/useAgendaData.ts) detecta esses erros e cria automaticamente uma linha em `rule_approval_requests` com `rule_key = 'r1_force_paid_lead'` e payload contendo todos os parâmetros para recriar a R1 (closer_id, scheduled_at, duration, lead_type, notes, etc.).
+- `useCreateMeeting` (src/hooks/useAgendaData.ts) propaga o erro com `error.code` (`deal_already_paid`|`deal_already_won`) e `error.payload` (closerId, scheduledAt, durationMinutes, leadType, notes, etc.). Não cria pedido automaticamente.
+- A UI (`QuickScheduleModal`) captura esse erro e abre o `RequestR1ApprovalDialog`, onde o SDR/Closer escreve um **motivo obrigatório (mín. 10 chars)** e envia explicitamente. O hook `useCreateR1ForceRequest` (src/hooks/useCreateR1ForceRequest.ts) detecta a BU, faz dedup por (requested_by, target_deal_id, status='pending') e insere em `rule_approval_requests` com `rule_key = 'r1_force_paid_lead'`.
 - Aprovadores: admin, manager, coordenador OU Jessica Bellini (email allowlist `jessica.bellini@minhacasafinanciada.com`), via função SECURITY DEFINER `public.is_r1_force_approver(uuid)`.
 - UI do aprovador: aba "Aprovações Pendentes" em `/admin/regras-processo` (mesma infra do reschedule_approval_threshold).
 - Ao aprovar, `useReviewApprovalRequest` invoca `calendly-create-event` com `forceFromRequestId=<id>`. A edge function:
