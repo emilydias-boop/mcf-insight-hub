@@ -721,18 +721,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     <FormField control={form.control} name="observacoes" render={({ field }) => (
                       <FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea {...field} rows={3} /></FormControl></FormItem>
                     )} />
-
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        {readOnly ? 'Fechar' : 'Cancelar'}
-                      </Button>
-                      {!readOnly && (
-                        <Button type="submit" disabled={openCota.isPending}>
-                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Confirmar Abertura da Cota
-                        </Button>
-                      )}
-                    </div>
                   </div>
               </CardContent>
             </Card>
