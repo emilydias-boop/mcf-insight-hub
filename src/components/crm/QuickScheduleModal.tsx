@@ -174,6 +174,16 @@ export function QuickScheduleModal({
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState(prefilledNotes || '');
 
+  // Estado do dialog de solicitação de liberação R1 (lead já pago/won)
+  const [r1ApprovalCtx, setR1ApprovalCtx] = useState<{
+    payload: R1ForcePayload;
+    blockReason: string;
+    blockMessage?: string;
+    dealName?: string;
+    contactName?: string;
+    closerName?: string;
+  } | null>(null);
+
   // Sync internal state when preselected values change and modal opens
   useEffect(() => {
     if (open) {
