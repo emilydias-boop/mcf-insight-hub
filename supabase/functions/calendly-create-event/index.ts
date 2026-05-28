@@ -542,9 +542,15 @@ serve(async (req) => {
 
     // R2 não aplica os guards de contrato pago / won / duplicate. R2 pode
     // acontecer pós-venda (acompanhamento) ou ser remarcada livremente.
-    // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio, onde o
-    // mesmo lead pode ter múltiplos contratos/agendamentos ao longo do tempo.
-    if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
+    // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio (múltiplos
+    // contratos/agendamentos), Outside (R1 pós-venda é o caso) e quando
+    // `forceFromRequestId` traz aprovação válida de admin/manager/coordenador/Jessica.
+    if (
+      guardMeetingType === 'r1' &&
+      !isConsorcioDeal &&
+      !isOutsideDeal &&
+      !approvedRequest
+    ) {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
