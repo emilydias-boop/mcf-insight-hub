@@ -398,6 +398,63 @@ export function useReviewApprovalRequest() {
       action: "approved" | "rejected";
       notes?: string;
     }) => {
+      // Caso especial: aprovação de R1 pós-pago precisa criar a reunião.
+      // A edge function `calendly-create-event` recebe `forceFromRequestId`,
+      // valida o aprovador via RPC `is_r1_force_approver`, pula os guards
+      // `deal_already_won`/`deal_already_paid`, cria a R1 (= reagendamento
+      // normal, conta em todas as métricas) e marca o request como approved.
+      if (input.action === "approved") {
+        const { data: reqRow, error: reqErr } = await supabase
+          .from("rule_approval_requests" as any)
+          .select("rule_key, target_deal_id, payload, status")
+          .eq("id", input.id)
+          .maybeSingle();
+        if (reqErr) throw reqErr;
+        if (!reqRow) throw new Error("Pedido não encontrado");
+        const r = reqRow as any;
+        if (r.rule_key === "r1_force_paid_lead") {
+          if (r.status !== "pending") {
+            throw new Error(`Pedido já está ${r.status}`);
+          }
+          const p = r.payload || {};
+          if (!r.target_deal_id || !p.closer_id || !p.scheduled_at) {
+            throw new Error("Payload do pedido incompleto — recrie a solicitação.");
+          }
+          const { data, error } = await supabase.functions.invoke(
+            "calendly-create-event",
+            {
+              body: {
+                forceFromRequestId: input.id,
+                closerId: p.closer_id,
+                dealId: r.target_deal_id,
+                contactId: p.contact_id ?? undefined,
+                scheduledAt: p.scheduled_at,
+                durationMinutes: p.duration_minutes ?? 60,
+                notes: input.notes
+                  ? `${p.notes ? p.notes + "\n\n" : ""}[Aprovado] ${input.notes}`
+                  : (p.notes ?? undefined),
+                leadType: p.lead_type ?? undefined,
+                sdrEmail: p.sdr_email ?? undefined,
+                alreadyBuilds: p.already_builds ?? null,
+                parentAttendeeId: p.parent_attendee_id ?? undefined,
+                bookedAt: p.booked_at ?? undefined,
+                meetingType: "r1",
+              },
+            },
+          );
+          if (error) throw error;
+          if (data && (data.success === false || data.error)) {
+            throw new Error(
+              data.message ||
+                data.error ||
+                "Falha ao criar R1 após aprovação",
+            );
+          }
+          // Edge function já marcou o request como approved.
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from("rule_approval_requests" as any)
         .update({
@@ -413,6 +470,9 @@ export function useReviewApprovalRequest() {
       queryClient.invalidateQueries({ queryKey: ["approval-requests-pending"] });
       queryClient.invalidateQueries({ queryKey: ["approval-requests-pending-count"] });
       queryClient.invalidateQueries({ queryKey: ["approval-requests-history"] });
+      queryClient.invalidateQueries({ queryKey: ["my-approval-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["agenda-meetings"] });
+      queryClient.invalidateQueries({ queryKey: ["upcoming-meetings"] });
     },
   });
 }

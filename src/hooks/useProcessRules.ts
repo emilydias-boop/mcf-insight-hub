@@ -24,6 +24,15 @@ export const RULE_KEYS = {
   APPROVERS: "approval_required_roles",
 } as const;
 
+/**
+ * Rule keys usadas apenas em `rule_approval_requests` (não em `process_rules`).
+ * Representam pedidos pontuais (não regras configuráveis por BU/cargo).
+ */
+export const APPROVAL_REQUEST_KEYS = {
+  /** SDR/Closer pediu para reagendar R1 em lead já pago/won (libera admin/manager/coordenador + Jessica). */
+  R1_FORCE_PAID_LEAD: "r1_force_paid_lead",
+} as const;
+
 /** Busca todas as regras (admin view). */
 export function useAllProcessRules() {
   return useQuery({

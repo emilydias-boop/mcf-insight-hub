@@ -19,6 +19,16 @@ interface CreateEventRequest {
   parentAttendeeId?: string;
   bookedAt?: string; // Data real do agendamento (para retroativos)
   meetingType?: 'r1' | 'r2'; // Tipo da reunião para mover para estágio correto
+  /**
+   * Quando presente, indica que esta chamada é a aprovação de um pedido
+   * `rule_approval_requests` com `rule_key='r1_force_paid_lead'`.
+   * O caller DEVE estar autenticado e ser admin/manager/coordenador
+   * ou Jessica Bellini (validado via RPC `is_r1_force_approver`).
+   * Quando válido: pula guards `deal_already_won` e `deal_already_paid`
+   * (mantém `duplicate_active_booking`) e marca o request como `approved`
+   * ao final, registrando atividade de auditoria no deal.
+   */
+  forceFromRequestId?: string;
 }
 
 // Google Calendar JWT authentication
@@ -329,6 +339,85 @@ serve(async (req) => {
 
     console.log("📅 Proceeding with meeting creation...");
 
+    // ============= R1 FORCE BYPASS (post-paid lead approval) =============
+    // Quando forceFromRequestId é enviado, validamos JWT do aprovador e,
+    // se autorizado, pulamos os guards `deal_already_won`/`deal_already_paid`.
+    // O caminho de criação da reunião é o mesmo de um reagendamento normal —
+    // a R1 criada conta em todas as métricas.
+    let approvedRequest: { id: string; payload: any } | null = null;
+    let approverUserId: string | null = null;
+    if (body.forceFromRequestId) {
+      console.log("🔓 forceFromRequestId presente — validando aprovador...");
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ success: false, error: "missing_auth", message: "Aprovador não autenticado." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const { data: userData, error: userErr } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", ""),
+      );
+      if (userErr || !userData?.user?.id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "invalid_auth", message: "Sessão inválida." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      approverUserId = userData.user.id;
+
+      // Checar permissão via RPC SECURITY DEFINER (roles + Jessica email allowlist)
+      const { data: canApprove, error: rpcErr } = await supabase.rpc(
+        "is_r1_force_approver",
+        { _uid: approverUserId },
+      );
+      if (rpcErr || canApprove !== true) {
+        console.warn("🚫 Usuário não é aprovador R1:", approverUserId, rpcErr);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "unauthorized_approver",
+            message: "Você não tem permissão para aprovar liberação de R1 pós-pago.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Carregar pedido e validar status/rule_key
+      const { data: reqRow, error: reqErr } = await supabase
+        .from("rule_approval_requests")
+        .select("id, status, rule_key, target_deal_id, payload")
+        .eq("id", body.forceFromRequestId)
+        .maybeSingle();
+      if (reqErr || !reqRow) {
+        return new Response(
+          JSON.stringify({ success: false, error: "request_not_found", message: "Pedido não encontrado." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.rule_key !== "r1_force_paid_lead") {
+        return new Response(
+          JSON.stringify({ success: false, error: "wrong_request_type", message: "Tipo de pedido inválido para esta operação." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.status !== "pending") {
+        return new Response(
+          JSON.stringify({ success: false, error: "request_not_pending", message: `Pedido já está ${reqRow.status}.` }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.target_deal_id && reqRow.target_deal_id !== dealId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "deal_mismatch", message: "O lead do pedido não coincide com o lead enviado." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      approvedRequest = { id: reqRow.id, payload: reqRow.payload };
+      console.log("✅ Aprovador validado — guards de paid/won serão ignorados");
+    }
+    // ============= END R1 FORCE BYPASS =============
+
     // Get closer info
     const { data: closer, error: closerError } = await supabase
       .from("closers")
@@ -453,9 +542,13 @@ serve(async (req) => {
 
     // R2 não aplica os guards de contrato pago / won / duplicate. R2 pode
     // acontecer pós-venda (acompanhamento) ou ser remarcada livremente.
-    // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio, onde o
-    // mesmo lead pode ter múltiplos contratos/agendamentos ao longo do tempo.
+    // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio (múltiplos
+    // contratos/agendamentos), Outside (R1 pós-venda é o caso) e quando
+    // `forceFromRequestId` traz aprovação válida de admin/manager/coordenador/Jessica.
+    // OBS: `duplicate_active_booking` (guard 3) permanece ativo mesmo com aprovação.
     if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
+    // Guards 1 e 2 (won/paid) podem ser pulados via aprovação.
+    if (!approvedRequest) {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
@@ -509,6 +602,7 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    } // end if (!approvedRequest) — guards 1 e 2
 
     // 3) Reunião futura ativa do MESMO meeting_type
     const nowIso = new Date().toISOString();
@@ -1002,6 +1096,39 @@ serve(async (req) => {
       .single();
 
     console.log("✅ Meeting created successfully");
+
+    // Se veio de uma aprovação, marca o request como approved e loga auditoria.
+    if (approvedRequest) {
+      try {
+        await supabase
+          .from("rule_approval_requests")
+          .update({
+            status: "approved",
+            reviewed_by: approverUserId,
+            reviewed_at: new Date().toISOString(),
+            review_notes: `R1 criada via approval (attendee=${attendee?.id ?? "n/a"}, slot=${slotId})`,
+          })
+          .eq("id", approvedRequest.id)
+          .eq("status", "pending"); // idempotência: não sobrescreve se já mudou
+
+        await supabase.from("deal_activities").insert({
+          deal_id: dealId,
+          activity_type: "r1_force_approved",
+          description: "R1 reagendada em lead pós-pago após liberação aprovada.",
+          metadata: {
+            approval_request_id: approvedRequest.id,
+            approved_by: approverUserId,
+            attendee_id: attendee?.id ?? null,
+            slot_id: slotId,
+            scheduled_at: scheduledAt,
+            closer_id: closerId,
+          },
+        });
+        console.log("✅ Pedido marcado como approved + atividade registrada");
+      } catch (e) {
+        console.warn("⚠️ Falha ao marcar request approved / registrar atividade (non-fatal)", e);
+      }
+    }
 
     return new Response(
       JSON.stringify({
