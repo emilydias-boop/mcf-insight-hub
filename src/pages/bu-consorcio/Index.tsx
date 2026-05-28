@@ -961,6 +961,10 @@ export default function ConsorcioPage() {
           <GruposTab />
         </TabsContent>
 
+        <TabsContent value="previsao">
+          <PrevisaoComissoesTab />
+        </TabsContent>
+
       </Tabs>
     </div>
   );
