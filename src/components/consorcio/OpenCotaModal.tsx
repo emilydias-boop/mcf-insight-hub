@@ -216,8 +216,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Update vendedor_name when vendedor_id changes
   useEffect(() => {
     if (vendedorId) {
-      const vendedor = vendedorOptions.find((v: any) => v.id === vendedorId);
-      if (vendedor) form.setValue('vendedor_name', (vendedor as any).name || (vendedor as any).nome || '');
+      const vendedor = vendedorOptions.find((v) => v.id === vendedorId);
+      if (vendedor) form.setValue('vendedor_name', vendedor.name || '');
     }
   }, [vendedorId, vendedorOptions, form]);
 
@@ -694,15 +694,15 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                             value={field.value}
                             onValueChange={(value) => {
                               field.onChange(value);
-                              const vendedor = vendedorOptions.find((v: any) => v.id === value);
-                              form.setValue('vendedor_name', (vendedor as any)?.name || (vendedor as any)?.nome || '');
+                              const vendedor = vendedorOptions.find((v) => v.id === value);
+                              form.setValue('vendedor_name', vendedor?.name || '');
                             }}
                           >
                             <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
                               {vendedorOptions.length > 0 ? (
-                                vendedorOptions.map((v: any) => (
-                                  <SelectItem key={v.id} value={v.id}>{v.name || v.nome}</SelectItem>
+                                vendedorOptions.map((v) => (
+                                  <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                                 ))
                               ) : (
                                 <div className="p-2 text-sm text-muted-foreground">
