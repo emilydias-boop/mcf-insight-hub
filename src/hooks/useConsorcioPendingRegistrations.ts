@@ -670,10 +670,11 @@ export function useOpenCota() {
           Object.entries(clienteData).filter(([_, v]) => v !== '' && v !== undefined && v !== 0)
         );
         if (Object.keys(cleanClientData).length > 0) {
-          await supabase
+          const { error: clientUpdateError } = await supabase
             .from('consorcio_pending_registrations')
             .update(cleanClientData as any)
             .eq('id', registrationId);
+          if (clientUpdateError) throw clientUpdateError;
         }
       }
 
@@ -817,27 +818,47 @@ export function useOpenCota() {
       }
 
       // 5. Migrate documents from pending_registration_id to card_id
-      await supabase
+      const { error: documentsUpdateError } = await supabase
         .from('consortium_documents')
         .update({ card_id: card.id } as any)
         .eq('pending_registration_id', registrationId);
+      if (documentsUpdateError) throw documentsUpdateError;
 
       // 6. Update pending registration status
-      // Sanitizar cotaData: converter strings vazias em null para colunas date
-      const dateColumnsForCota = ['data_contratacao', 'data_fundacao', 'aceite_date'];
-      const cleanCotaData = Object.fromEntries(
-        Object.entries(cotaData)
-          .filter(([_, v]) => v !== undefined)
-          .map(([k, v]) => [k, (v === '' || (dateColumnsForCota.includes(k) && !v)) ? null : v])
-      );
-      await supabase
+      const pendingUpdate = {
+        status: 'cota_aberta',
+        consortium_card_id: card.id,
+        categoria: cotaData.categoria,
+        grupo: cotaData.grupo,
+        cota: cotaData.cota,
+        valor_credito: cotaData.valor_credito,
+        prazo_meses: cotaData.prazo_meses,
+        tipo_produto: cotaData.tipo_produto,
+        produto_codigo: cotaData.produto_codigo || null,
+        condicao_pagamento: cotaData.condicao_pagamento || null,
+        inclui_seguro: cotaData.inclui_seguro ?? false,
+        empresa_paga_parcelas: cotaData.empresa_paga_parcelas,
+        tipo_contrato: cotaData.tipo_contrato || 'normal',
+        parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+        dia_vencimento: cotaData.dia_vencimento,
+        inicio_segunda_parcela: cotaData.inicio_segunda_parcela || 'automatico',
+        data_contratacao: cotaData.data_contratacao,
+        origem: cotaData.origem,
+        origem_detalhe: cotaData.origem_detalhe || null,
+        vendedor_id: cotaData.vendedor_id || null,
+        vendedor_name_cota: cotaData.vendedor_name || null,
+        valor_comissao: cotaData.valor_comissao || 0,
+        e_transferencia: cotaData.e_transferencia || false,
+        transferido_de: cotaData.transferido_de || null,
+        observacoes: cotaData.observacoes || null,
+      };
+      const { error: pendingUpdateError } = await supabase
         .from('consorcio_pending_registrations')
-        .update({
-          status: 'cota_aberta',
-          consortium_card_id: card.id,
-          ...cleanCotaData,
-        } as any)
-        .eq('id', registrationId);
+        .update(pendingUpdate as any)
+        .eq('id', registrationId)
+        .select('id')
+        .single();
+      if (pendingUpdateError) throw pendingUpdateError;
 
       // 7. Update proposal with card id
       if (registration.proposal_id) {
