@@ -21,10 +21,12 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
       (s, r) => s + (Number(r.valor_credito) || 0),
       0,
     );
-    const totalEntrada = registrations.reduce(
-      (s, r) => s + (Number(r.valor_total_empresa) || 0),
-      0,
-    );
+    // Entrada = apenas a 1ª parcela da cota (menor número entre as parcelas da empresa)
+    const totalEntrada = registrations.reduce((s, r) => {
+      if (!r.parcelas_empresa?.length) return s;
+      const primeira = [...r.parcelas_empresa].sort((a, b) => a.numero - b.numero)[0];
+      return s + (Number(primeira?.valor) || 0);
+    }, 0);
 
     // Mês com maior déficit (mais cadastros pendentes)
     const byMonth = new Map<string, number>();
@@ -70,7 +72,7 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
       icon: HandCoins,
       label: 'Entrada a pagar',
       value: formatCurrency(stats.totalEntrada),
-      sub: '1ª(s) parcela(s) da empresa',
+      sub: 'soma da 1ª parcela de cada cota',
     },
     {
       icon: Wallet,
