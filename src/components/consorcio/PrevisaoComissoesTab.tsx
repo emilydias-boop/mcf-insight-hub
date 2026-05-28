@@ -27,6 +27,8 @@ import {
   Wallet,
   Layers,
   Search,
+  Inbox,
+  BanknoteArrowUp,
 } from 'lucide-react';
 import {
   useConsorcioPrevisaoComissoes,
@@ -198,8 +200,80 @@ export function PrevisaoComissoesTab() {
   const totalProxima = data.proximaSemana?.totalComissao ?? 0;
   const semanasComParcelas = data.semanas.filter((w) => w.totalParcelas > 0).length;
 
+  // Semana vigente de CAPTURA: hoje dentro do período de apuração (qui→qua)
+  const semanaCaptura = data.semanas.find(
+    (w) => hoje >= w.apuracaoInicio && hoje <= w.apuracaoFim,
+  );
+  // Semana vigente de PAGAMENTO: já é proximaSemana (primeira com pagamento >= hoje)
+  const semanaPagamento = data.proximaSemana;
+
   return (
     <div className="space-y-6">
+      {/* Destaque — Semana vigente */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Inbox className="h-4 w-4 text-amber-500" />
+              Semana de Captura (em andamento)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {semanaCaptura ? (
+              <>
+                <div className="flex items-baseline justify-between gap-4 flex-wrap">
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                    {formatCurrency(semanaCaptura.totalComissao)}
+                  </div>
+                  <Badge variant="outline" className="border-amber-500/50">
+                    Semana #{semanaCaptura.n}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Apuração {fmtDate(semanaCaptura.apuracaoInicio)} → {fmtDate(semanaCaptura.apuracaoFim)} ·{' '}
+                  {semanaCaptura.totalParcelas} parcelas · {semanaCaptura.totalCotas} cotas
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Pagamento previsto em <span className="font-medium">{fmtDateFull(semanaCaptura.dataPagamento)}</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Fora do calendário 2026.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/50 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <BanknoteArrowUp className="h-4 w-4 text-primary" />
+              Semana de Pagamento (a receber)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {semanaPagamento ? (
+              <>
+                <div className="flex items-baseline justify-between gap-4 flex-wrap">
+                  <div className="text-2xl font-bold text-primary">
+                    {formatCurrency(semanaPagamento.totalComissao)}
+                  </div>
+                  <Badge variant="default">Semana #{semanaPagamento.n}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Apuração {fmtDate(semanaPagamento.apuracaoInicio)} → {fmtDate(semanaPagamento.apuracaoFim)} ·{' '}
+                  {semanaPagamento.totalParcelas} parcelas · {semanaPagamento.totalCotas} cotas
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Cai na conta em <span className="font-medium">{fmtDateFull(semanaPagamento.dataPagamento)}</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sem pagamentos futuros previstos.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
