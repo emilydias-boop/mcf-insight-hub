@@ -1097,6 +1097,39 @@ serve(async (req) => {
 
     console.log("✅ Meeting created successfully");
 
+    // Se veio de uma aprovação, marca o request como approved e loga auditoria.
+    if (approvedRequest) {
+      try {
+        await supabase
+          .from("rule_approval_requests")
+          .update({
+            status: "approved",
+            reviewed_by: approverUserId,
+            reviewed_at: new Date().toISOString(),
+            review_notes: `R1 criada via approval (attendee=${attendee?.id ?? "n/a"}, slot=${slotId})`,
+          })
+          .eq("id", approvedRequest.id)
+          .eq("status", "pending"); // idempotência: não sobrescreve se já mudou
+
+        await supabase.from("deal_activities").insert({
+          deal_id: dealId,
+          activity_type: "r1_force_approved",
+          description: "R1 reagendada em lead pós-pago após liberação aprovada.",
+          metadata: {
+            approval_request_id: approvedRequest.id,
+            approved_by: approverUserId,
+            attendee_id: attendee?.id ?? null,
+            slot_id: slotId,
+            scheduled_at: scheduledAt,
+            closer_id: closerId,
+          },
+        });
+        console.log("✅ Pedido marcado como approved + atividade registrada");
+      } catch (e) {
+        console.warn("⚠️ Falha ao marcar request approved / registrar atividade (non-fatal)", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
