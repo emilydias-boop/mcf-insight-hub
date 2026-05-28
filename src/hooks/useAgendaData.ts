@@ -1510,6 +1510,10 @@ export function useCreateMeeting() {
     },
     onError: (error: any) => {
       console.error('Error creating meeting:', error);
+      // Os códigos abaixo são tratados pela UI (RequestR1ApprovalDialog).
+      if (error?.code === 'deal_already_paid' || error?.code === 'deal_already_won') {
+        return;
+      }
       toast.error(error?.message || 'Erro ao agendar reunião');
     },
   });
