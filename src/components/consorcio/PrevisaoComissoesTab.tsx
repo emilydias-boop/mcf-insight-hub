@@ -28,7 +28,7 @@ import {
   Layers,
   Search,
   Inbox,
-  BanknoteArrowUp,
+  Banknote,
 } from 'lucide-react';
 import {
   useConsorcioPrevisaoComissoes,
@@ -246,7 +246,7 @@ export function PrevisaoComissoesTab() {
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <BanknoteArrowUp className="h-4 w-4 text-primary" />
+              <Banknote className="h-4 w-4 text-primary" />
               Semana de Pagamento (a receber)
             </CardTitle>
           </CardHeader>
