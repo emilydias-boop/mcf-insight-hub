@@ -113,8 +113,3 @@ export function useCreateR1ForceRequest() {
     },
   });
 }
-
-/** Lê o pedido mais recente de liberação R1 para um deal (status/motivo). */
-export function useR1ForceRequestForDeal(dealId: string | null | undefined) {
-  return useMutation; // not used; placeholder export for future
-}
