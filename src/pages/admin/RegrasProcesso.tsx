@@ -25,6 +25,7 @@ import {
   useUpsertProcessRule,
   RULE_KEYS,
   ProcessRuleRole,
+  APPROVAL_REQUEST_KEYS,
 } from "@/hooks/useProcessRules";
 import {
   usePendingApprovals,
@@ -127,6 +128,20 @@ function formatPayloadHumano(ruleKey: string, payload: any): {
       resumo: `Solicita registrar mais um no-show neste lead, acima do limite definido.`,
       lead,
       motivo: payload.reason,
+    };
+  }
+
+  if (ruleKey === APPROVAL_REQUEST_KEYS.R1_FORCE_PAID_LEAD) {
+    const when = payload.scheduled_at
+      ? format(new Date(payload.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+      : null;
+    return {
+      resumo:
+        `Solicita liberar agendamento de R1 em lead que já tem contrato pago/won` +
+        (when ? ` (para ${when})` : "") +
+        ". Ao aprovar, a R1 será criada e contará como reagendamento normal.",
+      lead,
+      motivo: payload.reason ?? payload.block_message ?? null,
     };
   }
 
