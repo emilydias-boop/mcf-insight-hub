@@ -339,6 +339,85 @@ serve(async (req) => {
 
     console.log("📅 Proceeding with meeting creation...");
 
+    // ============= R1 FORCE BYPASS (post-paid lead approval) =============
+    // Quando forceFromRequestId é enviado, validamos JWT do aprovador e,
+    // se autorizado, pulamos os guards `deal_already_won`/`deal_already_paid`.
+    // O caminho de criação da reunião é o mesmo de um reagendamento normal —
+    // a R1 criada conta em todas as métricas.
+    let approvedRequest: { id: string; payload: any } | null = null;
+    let approverUserId: string | null = null;
+    if (body.forceFromRequestId) {
+      console.log("🔓 forceFromRequestId presente — validando aprovador...");
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ success: false, error: "missing_auth", message: "Aprovador não autenticado." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const { data: userData, error: userErr } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", ""),
+      );
+      if (userErr || !userData?.user?.id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "invalid_auth", message: "Sessão inválida." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      approverUserId = userData.user.id;
+
+      // Checar permissão via RPC SECURITY DEFINER (roles + Jessica email allowlist)
+      const { data: canApprove, error: rpcErr } = await supabase.rpc(
+        "is_r1_force_approver",
+        { _uid: approverUserId },
+      );
+      if (rpcErr || canApprove !== true) {
+        console.warn("🚫 Usuário não é aprovador R1:", approverUserId, rpcErr);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "unauthorized_approver",
+            message: "Você não tem permissão para aprovar liberação de R1 pós-pago.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      // Carregar pedido e validar status/rule_key
+      const { data: reqRow, error: reqErr } = await supabase
+        .from("rule_approval_requests")
+        .select("id, status, rule_key, target_deal_id, payload")
+        .eq("id", body.forceFromRequestId)
+        .maybeSingle();
+      if (reqErr || !reqRow) {
+        return new Response(
+          JSON.stringify({ success: false, error: "request_not_found", message: "Pedido não encontrado." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.rule_key !== "r1_force_paid_lead") {
+        return new Response(
+          JSON.stringify({ success: false, error: "wrong_request_type", message: "Tipo de pedido inválido para esta operação." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.status !== "pending") {
+        return new Response(
+          JSON.stringify({ success: false, error: "request_not_pending", message: `Pedido já está ${reqRow.status}.` }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (reqRow.target_deal_id && reqRow.target_deal_id !== dealId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "deal_mismatch", message: "O lead do pedido não coincide com o lead enviado." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      approvedRequest = { id: reqRow.id, payload: reqRow.payload };
+      console.log("✅ Aprovador validado — guards de paid/won serão ignorados");
+    }
+    // ============= END R1 FORCE BYPASS =============
+
     // Get closer info
     const { data: closer, error: closerError } = await supabase
       .from("closers")
