@@ -450,7 +450,20 @@ export function QuickScheduleModal({
       },
       onError: (error: any) => {
         console.log('🚨 Create meeting error:', error);
-        // Errors are handled by the hook's onError
+        if (error?.code === 'deal_already_paid' || error?.code === 'deal_already_won') {
+          toast.warning('Lead já tem contrato pago — solicite liberação para agendar.');
+          const closerName = closers.find((c) => c.id === selectedCloser)?.name;
+          setR1ApprovalCtx({
+            payload: error.payload as R1ForcePayload,
+            blockReason: error.code,
+            blockMessage: error.message,
+            dealName: selectedDeal?.name,
+            contactName: selectedDeal?.contact?.name,
+            closerName,
+          });
+          return;
+        }
+        // Outros erros são tratados pelo onError do hook
       },
     });
   };
