@@ -19,6 +19,16 @@ interface CreateEventRequest {
   parentAttendeeId?: string;
   bookedAt?: string; // Data real do agendamento (para retroativos)
   meetingType?: 'r1' | 'r2'; // Tipo da reunião para mover para estágio correto
+  /**
+   * Quando presente, indica que esta chamada é a aprovação de um pedido
+   * `rule_approval_requests` com `rule_key='r1_force_paid_lead'`.
+   * O caller DEVE estar autenticado e ser admin/manager/coordenador
+   * ou Jessica Bellini (validado via RPC `is_r1_force_approver`).
+   * Quando válido: pula guards `deal_already_won` e `deal_already_paid`
+   * (mantém `duplicate_active_booking`) e marca o request como `approved`
+   * ao final, registrando atividade de auditoria no deal.
+   */
+  forceFromRequestId?: string;
 }
 
 // Google Calendar JWT authentication
