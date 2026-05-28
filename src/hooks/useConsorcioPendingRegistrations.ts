@@ -647,6 +647,8 @@ export function useOpenCota() {
         e_transferencia?: boolean;
         transferido_de?: string;
         observacoes?: string;
+        parcela_1a_12a?: number;
+        parcela_demais?: number;
       };
       clienteData?: {
         nome_completo?: string | null;
@@ -703,6 +705,8 @@ export function useOpenCota() {
         produto_embracon: cotaData.produto_codigo,
         condicao_pagamento: cotaData.condicao_pagamento,
         inclui_seguro_vida: cotaData.inclui_seguro,
+        parcela_1a_12a: cotaData.parcela_1a_12a,
+        parcela_demais: cotaData.parcela_demais,
         // Client data from registration
         nome_completo: registration.nome_completo || undefined,
         rg: registration.rg || undefined,
@@ -712,6 +716,7 @@ export function useOpenCota() {
         telefone: registration.telefone || undefined,
         email: registration.email || undefined,
         endereco_cep: registration.endereco_cep || undefined,
+        endereco_rua: registration.endereco_completo || undefined,
         renda: registration.renda || undefined,
         patrimonio: registration.patrimonio || undefined,
         pix: registration.pix || undefined,
@@ -720,6 +725,8 @@ export function useOpenCota() {
         natureza_juridica: registration.natureza_juridica || undefined,
         inscricao_estadual: registration.inscricao_estadual || undefined,
         data_fundacao: registration.data_fundacao || undefined,
+        endereco_comercial_rua: registration.endereco_comercial || undefined,
+        endereco_comercial_cep: registration.endereco_comercial_cep || undefined,
         telefone_comercial: registration.telefone_comercial || undefined,
         email_comercial: registration.email_comercial || undefined,
         faturamento_mensal: registration.faturamento_mensal || undefined,
