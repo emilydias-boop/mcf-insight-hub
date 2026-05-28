@@ -545,12 +545,10 @@ serve(async (req) => {
     // Apenas R1 mantém o bloqueio rígido — exceto para Consórcio (múltiplos
     // contratos/agendamentos), Outside (R1 pós-venda é o caso) e quando
     // `forceFromRequestId` traz aprovação válida de admin/manager/coordenador/Jessica.
-    if (
-      guardMeetingType === 'r1' &&
-      !isConsorcioDeal &&
-      !isOutsideDeal &&
-      !approvedRequest
-    ) {
+    // OBS: `duplicate_active_booking` (guard 3) permanece ativo mesmo com aprovação.
+    if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
+    // Guards 1 e 2 (won/paid) podem ser pulados via aprovação.
+    if (!approvedRequest) {
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
@@ -604,6 +602,7 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    } // end if (!approvedRequest) — guards 1 e 2
 
     // 3) Reunião futura ativa do MESMO meeting_type
     const nowIso = new Date().toISOString();
