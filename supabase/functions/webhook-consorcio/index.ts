@@ -99,10 +99,20 @@ function parseMonetaryValue(value: any): number {
 }
 
 function calcularComissao(valorCredito: number, tipoProduto: TipoProduto, numeroParcela: number): number {
-  // Aproximação: 1.5% select / 1.0% parcelinha distribuído nas 24 primeiras parcelas
-  const pct = tipoProduto === 'parcelinha' ? 0.01 : 0.015;
-  const total = valorCredito * pct;
-  return numeroParcela <= 24 ? total / 24 : 0;
+  // Tabela oficial — espelho de src/lib/commissionCalculator.ts
+  let percentual = 0;
+  if (tipoProduto === 'select') {
+    const tabela: Record<number, number> = {
+      1: 1.20, 2: 1.12, 3: 1.12, 4: 0.62,
+      5: 0.11, 6: 0.11, 7: 0.11, 8: 1.11,
+    };
+    percentual = tabela[numeroParcela] || 0;
+  } else if (tipoProduto === 'parcelinha') {
+    if (numeroParcela === 1) percentual = 0.53;
+    else if (numeroParcela >= 2 && numeroParcela <= 4) percentual = 0.43;
+    else if (numeroParcela >= 5 && numeroParcela <= 12) percentual = 0.33;
+  }
+  return (valorCredito * percentual) / 100;
 }
 
 Deno.serve(async (req) => {

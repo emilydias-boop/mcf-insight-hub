@@ -12480,6 +12480,10 @@ export type Database = {
     Functions: {
       _actor_name: { Args: { _uid: string }; Returns: string }
       _card_id_for_subscription: { Args: { _sub: string }; Returns: string }
+      _percentual_comissao: {
+        Args: { numero_parcela: number; tipo_produto: string }
+        Returns: number
+      }
       apply_no_show_approval_effects: {
         Args: { p_validation_id: string }
         Returns: undefined
