@@ -48,6 +48,8 @@ import { toast } from 'sonner';
 import { BlockedLeadCard } from './BlockedLeadCard';
 import { useCreateApprovalRequest, useMyApprovalRequests } from '@/hooks/useApprovalRequests';
 import { ShieldAlert } from 'lucide-react';
+import { RequestR1ApprovalDialog } from './RequestR1ApprovalDialog';
+import type { R1ForcePayload } from '@/hooks/useCreateR1ForceRequest';
 
 interface QuickScheduleModalProps {
   open: boolean;
