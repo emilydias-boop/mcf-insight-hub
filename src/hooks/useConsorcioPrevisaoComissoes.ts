@@ -67,10 +67,12 @@ export function useConsorcioPrevisaoComissoes() {
             razao_social,
             tipo_pessoa,
             vendedor_id,
-            vendedor_name
+            vendedor_name,
+            status
           )
         `)
         .eq('status', 'pago')
+        .in('consortium_cards.status', ['ativo', 'contemplado'])
         .not('data_pagamento', 'is', null)
         .gte('data_pagamento', CALENDAR_RANGE.start)
         .lte('data_pagamento', CALENDAR_RANGE.end)
@@ -94,6 +96,8 @@ export function useConsorcioPrevisaoComissoes() {
       for (const inst of installments ?? []) {
         const card = (inst as any).consortium_cards;
         if (!card) continue;
+        // Defesa extra: ignora cotas canceladas/inválidas
+        if (card.status && card.status !== 'ativo' && card.status !== 'contemplado') continue;
         const week = findCalendarWeek(inst.data_pagamento as string);
         if (!week) continue;
         const bucket = byWeek.get(week.n);
