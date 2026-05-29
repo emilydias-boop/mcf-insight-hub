@@ -3183,6 +3183,157 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_indicacao_parcelas: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          indicacao_id: string
+          numero_parcela: number
+          observacao: string | null
+          status: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          indicacao_id: string
+          numero_parcela: number
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          indicacao_id?: string
+          numero_parcela?: number
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_indicacao_parcelas_indicacao_id_fkey"
+            columns: ["indicacao_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_indicacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consorcio_indicacoes: {
+        Row: {
+          card_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          indicador_id: string
+          num_parcelas: number
+          observacoes: string | null
+          percentual: number
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          indicador_id: string
+          num_parcelas?: number
+          observacoes?: string | null
+          percentual?: number
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          indicador_id?: string
+          num_parcelas?: number
+          observacoes?: string | null
+          percentual?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_indicacoes_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: true
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_indicacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_indicadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consorcio_indicadores: {
+        Row: {
+          card_id: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          pix: string | null
+          telefone: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          card_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          pix?: string | null
+          telefone?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          pix?: string | null
+          telefone?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_indicadores_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_lance_history: {
         Row: {
           card_id: string
@@ -12557,6 +12708,10 @@ export type Database = {
           p_tags?: string[]
         }
         Returns: string
+      }
+      generate_indicacao_parcelas: {
+        Args: { p_indicacao_id: string }
+        Returns: undefined
       }
       generate_patrimonio_number: {
         Args: { p_tipo: Database["public"]["Enums"]["asset_type"] }
