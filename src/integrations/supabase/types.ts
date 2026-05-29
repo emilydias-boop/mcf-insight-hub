@@ -13355,6 +13355,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_hubla_buyer_to_crm: {
+        Args: { p_attendee_id: string }
+        Returns: undefined
+      }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
