@@ -34,6 +34,8 @@ import {
   useConsorcioPrevisaoComissoes,
   PrevisaoSemana,
 } from '@/hooks/useConsorcioPrevisaoComissoes';
+import { useConsorcioPrevisaoMensal } from '@/hooks/useConsorcioPrevisaoMensal';
+import { calcularComissao } from '@/lib/commissionCalculator';
 import { formatCurrency } from '@/lib/formatters';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -173,12 +175,16 @@ function SemanaRow({
 
 export function PrevisaoComissoesTab() {
   const { data, isLoading } = useConsorcioPrevisaoComissoes();
+  const { data: previsaoMensal, isLoading: loadingMensal } = useConsorcioPrevisaoMensal();
   const [openWeek, setOpenWeek] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'com-parcelas' | 'futuras'>(
     'com-parcelas',
   );
   const [mesFiltro, setMesFiltro] = useState<string | null>(null);
+  // Simulação de novas cotas
+  const [simNovasCotas, setSimNovasCotas] = useState<number>(0);
+  const [simTicket, setSimTicket] = useState<number>(100000);
 
   if (isLoading) {
     return (
@@ -222,6 +228,20 @@ export function PrevisaoComissoesTab() {
       }));
   })();
   const mesAtualYm = hoje.slice(0, 7);
+
+  // Previsão de Recebimento (por vencimento) — combinando realizado + previsto + simulação
+  const comissaoPorNovaCota = calcularComissao(simTicket || 0, 'select', 1);
+  const previsaoRows = (previsaoMensal?.rows ?? []).map((r) => {
+    const isFuturo = r.ym >= mesAtualYm;
+    const simulado = isFuturo ? (simNovasCotas || 0) * comissaoPorNovaCota : 0;
+    return {
+      ...r,
+      simulado,
+      total: r.comissaoPaga + r.comissaoAVencer + r.comissaoAtrasada + simulado,
+      isFuturo,
+    };
+  });
+  const totalPrevisaoGeral = previsaoRows.reduce((s, r) => s + r.total, 0);
 
   const totalProxima = data.proximaSemana?.totalComissao ?? 0;
   const semanasComParcelas = data.semanas.filter((w) => w.totalParcelas > 0).length;
@@ -424,6 +444,129 @@ export function PrevisaoComissoesTab() {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Previsão de Recebimento Mensal — por vencimento das parcelas */}
+      <Card className="border-primary/30">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Previsão de Recebimento Mensal
+                <span className="text-xs font-normal text-muted-foreground">
+                  · por vencimento das parcelas (cotas ativas/contempladas)
+                </span>
+              </CardTitle>
+              <div className="text-right">
+                <div className="text-[10px] text-muted-foreground uppercase">Total previsto 2026</div>
+                <div className="text-lg font-bold text-primary">{formatCurrency(totalPrevisaoGeral)}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-3 text-xs">
+              <div className="flex flex-col gap-1">
+                <label className="text-muted-foreground">Simular novas cotas / mês</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={simNovasCotas || ''}
+                  onChange={(e) => setSimNovasCotas(Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-32 h-8"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-muted-foreground">Ticket médio do crédito (R$)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={simTicket || ''}
+                  onChange={(e) => setSimTicket(Number(e.target.value) || 0)}
+                  placeholder="100000"
+                  className="w-40 h-8"
+                />
+              </div>
+              <div className="text-muted-foreground self-center">
+                Comissão por nova cota (1ª parc. SELECT):{' '}
+                <span className="font-semibold text-foreground">{formatCurrency(comissaoPorNovaCota)}</span>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" /> Pago&nbsp;&nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" /> A vencer&nbsp;&nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" /> Atrasado&nbsp;&nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-primary mr-1" /> Simulado (novas cotas)
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingMensal ? (
+            <Skeleton className="h-40 w-full" />
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mês</TableHead>
+                    <TableHead className="text-right">Pago</TableHead>
+                    <TableHead className="text-right">A vencer</TableHead>
+                    <TableHead className="text-right">Atrasado</TableHead>
+                    <TableHead className="text-right">Simulado</TableHead>
+                    <TableHead className="text-right">Total previsto</TableHead>
+                    <TableHead className="text-right">Parcelas</TableHead>
+                    <TableHead className="text-right">Cotas</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {previsaoRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                        Sem parcelas no período.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    previsaoRows.map((r) => {
+                      const isAtual = r.ym === mesAtualYm;
+                      return (
+                        <TableRow key={r.ym} className={isAtual ? 'bg-amber-500/5' : ''}>
+                          <TableCell className="font-medium capitalize">
+                            {format(parseISO(r.ym + '-01'), "MMM 'de' yyyy", { locale: ptBR })}
+                            {isAtual && (
+                              <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50">
+                                atual
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(r.comissaoPaga)}
+                          </TableCell>
+                          <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                            {formatCurrency(r.comissaoAVencer)}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600 dark:text-red-400">
+                            {formatCurrency(r.comissaoAtrasada)}
+                          </TableCell>
+                          <TableCell className="text-right text-primary">
+                            {r.simulado > 0 ? formatCurrency(r.simulado) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            {formatCurrency(r.total)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {r.parcelasPagas + r.parcelasAVencer + r.parcelasAtrasadas}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {r.cotasSet.size}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
