@@ -1,20 +1,23 @@
 ## Problema
-DELETE em `public.no_show_validations` retorna `permission denied` — falta `GRANT DELETE` para `authenticated` e/ou policy `FOR DELETE`.
 
-## Solução
-Aplicar migração adicionando GRANT + policy de DELETE restrita a admin (decisão do usuário).
+Na aba **Previsão de Comissões** (semana #21, pagamento 28/05/2026), o card mostra **R$ 307.332** mas o valor efetivamente recebido foi ~R$ 287k. A diferença vem de parcelas que pertencem a **cotas canceladas** (`consortium_cards.status = 'cancelado'`) — hoje o hook só filtra `consortium_installments.status = 'pago'`, mas não olha o status da cota.
 
-### SQL
-```sql
-GRANT DELETE ON public.no_show_validations TO authenticated;
+Confirmei na base:
+- Existem 30 cotas com `status='cancelado'`.
+- Na janela 14–20/mai há parcelas "pagas" vinculadas a cotas canceladas sendo somadas no total.
 
-CREATE POLICY "Admins can delete no_show_validations"
-ON public.no_show_validations
-FOR DELETE
-TO authenticated
-USING (public.has_role(auth.uid(), 'admin'));
-```
+Parcelas não pagas já estão fora do cálculo (filtro `eq('status','pago')`), então o ajuste necessário é só excluir cotas canceladas.
 
-## Verificação pós-migração
-1. Confirmar no painel `/crm/revisao-no-shows` (logado como admin) que o botão de excluir evidência funciona sem erro.
-2. Conferir que usuário não-admin recebe bloqueio (RLS) ao tentar excluir.
+## Mudança
+
+Arquivo: `src/hooks/useConsorcioPrevisaoComissoes.ts`
+
+1. No `select` do join `consortium_cards!inner(...)`, incluir `status`.
+2. Adicionar filtro na query: `.in('consortium_cards.status', ['ativo', 'contemplado'])` — ou seja, excluir `cancelado` (e qualquer status futuro que não represente cota válida em pagamento).
+3. Como defesa extra, no loop de agregação, pular `if (card.status === 'cancelado') continue;`.
+
+## Resultado esperado
+
+Os totais de parcelas, cotas distintas, valor de parcela e **comissão** de cada semana passam a refletir apenas cotas ativas/contempladas. O card da semana #21 cai dos R$ 307.332 atuais para o valor real recebido (~R$ 287k), e o comportamento vale para todas as semanas e para o destaque de "Próxima semana".
+
+Sem mudanças em UI/business logic além do filtro.
