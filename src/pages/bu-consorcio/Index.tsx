@@ -49,6 +49,7 @@ import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistra
 import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
 import { GruposTab } from '@/components/consorcio/grupos/GruposTab';
 import { PrevisaoComissoesTab } from '@/components/consorcio/PrevisaoComissoesTab';
+import { IndicacoesTab } from '@/components/consorcio/IndicacoesTab';
 
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
@@ -457,6 +458,7 @@ export default function ConsorcioPage() {
           <TabsTrigger value="contemplacao">Contemplação</TabsTrigger>
           <TabsTrigger value="grupos">Grupos</TabsTrigger>
           <TabsTrigger value="previsao">Previsão</TabsTrigger>
+          <TabsTrigger value="indicacoes">Indicações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cotas" className="space-y-6">
@@ -963,6 +965,10 @@ export default function ConsorcioPage() {
 
         <TabsContent value="previsao">
           <PrevisaoComissoesTab />
+        </TabsContent>
+
+        <TabsContent value="indicacoes">
+          <IndicacoesTab />
         </TabsContent>
 
       </Tabs>
