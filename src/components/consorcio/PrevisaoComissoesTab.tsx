@@ -178,6 +178,7 @@ export function PrevisaoComissoesTab() {
   const [filtro, setFiltro] = useState<'todas' | 'com-parcelas' | 'futuras'>(
     'com-parcelas',
   );
+  const [mesFiltro, setMesFiltro] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -195,7 +196,32 @@ export function PrevisaoComissoesTab() {
     if (filtro === 'com-parcelas') return w.totalParcelas > 0;
     if (filtro === 'futuras') return w.dataPagamento >= hoje;
     return true;
-  });
+  }).filter((w) => (mesFiltro ? w.dataPagamento.slice(0, 7) === mesFiltro : true));
+
+  // Agrupa semanas por mês da DATA DE PAGAMENTO (cai na conta).
+  const resumoMensal = (() => {
+    const map = new Map<string, { ym: string; totalComissao: number; totalParcelas: number; totalCotasSet: Set<string>; semanas: number[] }>();
+    for (const w of data.semanas) {
+      const ym = w.dataPagamento.slice(0, 7);
+      if (!map.has(ym)) map.set(ym, { ym, totalComissao: 0, totalParcelas: 0, totalCotasSet: new Set(), semanas: [] });
+      const b = map.get(ym)!;
+      b.totalComissao += w.totalComissao;
+      b.totalParcelas += w.totalParcelas;
+      for (const p of w.parcelas) b.totalCotasSet.add(p.cardId);
+      b.semanas.push(w.n);
+    }
+    return Array.from(map.values())
+      .sort((a, b) => a.ym.localeCompare(b.ym))
+      .map((b) => ({
+        ym: b.ym,
+        label: format(parseISO(b.ym + '-01'), "MMM/yy", { locale: ptBR }),
+        totalComissao: b.totalComissao,
+        totalParcelas: b.totalParcelas,
+        totalCotas: b.totalCotasSet.size,
+        semanas: b.semanas.length,
+      }));
+  })();
+  const mesAtualYm = hoje.slice(0, 7);
 
   const totalProxima = data.proximaSemana?.totalComissao ?? 0;
   const semanasComParcelas = data.semanas.filter((w) => w.totalParcelas > 0).length;
@@ -349,12 +375,69 @@ export function PrevisaoComissoesTab() {
         </Card>
       </div>
 
+      {/* Resumo Mensal — agrupado pela Data de Pagamento Embracon (cai na conta) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Resumo Mensal — por mês de pagamento (cai na conta)
+            </CardTitle>
+            {mesFiltro && (
+              <Button variant="ghost" size="sm" onClick={() => setMesFiltro(null)}>
+                Limpar filtro de mês
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {resumoMensal.map((m) => {
+              const isAtual = m.ym === mesAtualYm;
+              const isSelected = mesFiltro === m.ym;
+              return (
+                <button
+                  key={m.ym}
+                  type="button"
+                  onClick={() => setMesFiltro(isSelected ? null : m.ym)}
+                  className={`text-left rounded-lg border p-3 transition hover:border-primary/60 hover:bg-muted/40 ${
+                    isSelected ? 'border-primary bg-primary/10' : isAtual ? 'border-amber-500/40 bg-amber-500/5' : 'border-border'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium capitalize text-muted-foreground">
+                      {m.label}
+                    </span>
+                    {isAtual && (
+                      <Badge variant="outline" className="text-[9px] border-amber-500/50 px-1 py-0">
+                        atual
+                      </Badge>
+                    )}
+                  </div>
+                  <div className={`text-base font-bold mt-1 ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                    {formatCurrency(m.totalComissao)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {m.semanas} semanas · {m.totalParcelas} parcelas · {m.totalCotas} cotas
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filtros */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <CardTitle className="text-base">
               Previsão Semanal — Calendário Embracon 2026
+              {mesFiltro && (
+                <span className="ml-2 text-xs text-muted-foreground font-normal">
+                  · filtrado por {format(parseISO(mesFiltro + '-01'), "MMMM 'de' yyyy", { locale: ptBR })}
+                </span>
+              )}
             </CardTitle>
             <div className="flex gap-2 flex-wrap">
               <div className="relative">
