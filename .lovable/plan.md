@@ -1,87 +1,45 @@
-## Causa raiz
 
-O lead "Thiago" foi criado pela origem Hubla com dados incompletos:
-- `crm_contacts.name = "Thiago"` (sem sobrenome)
-- `crm_contacts.email = NULL`
-- `crm_contacts.phone = "12 99104-3714"` (com espaços/traços, quebra o filtro de telefone que normaliza só a query)
-- `crm_deals.name = "Thiago"`
+## Diagnóstico — quais são os 2 "Outside" inflando o KPI
 
-Os dados completos do comprador estão em `hubla_transactions` (id `fbab2806…`):
-- `customer_name = "Thiago Teixeira Clemente"`
-- `customer_email = "tec.consultoria@icloud.com"`
-- `customer_phone = "+5512991043714"`
-- `customer_document = "46679287863"`
+Rodei a consulta de detecção de outside do mês corrente. O KPI mostra 13 (= 11 da agenda + 2 outside), mas os 2 outside detectados NÃO deveriam estar contando:
 
-A busca da R2 (`useSearchDealsForSchedule`) procura por nome do deal, nome/email/telefone do contato — nenhum desses bate com "Thiago Teixeira Clemente" ou "tec.consultoria@icloud.com". Por isso os closers não acham.
+### Caso 1 — Vinicius Barbosa Paiva
+- Hubla: `viniciusbarbosapaiva@gmail.com` (sem `.br`)
+- CRM: `viniciusbarbosapaiva@gmail.com.br` (com `.br`) — **tem R1 em 17/04**
+- O matcher de outside só compara email exato, então não encontra a R1 e classifica como "outside sem reunião".
+- **Causa raiz:** typo no email do contato no CRM.
 
-## Escopo aprovado
+### Caso 2 — Igor Mateus de Morais Pereira (mateusigorlaivi@gmail.com)
+- Tem **R2 agendada para 05/05 19:45**, sem R1.
+- Contrato pago em 05/05 12:40 (antes da R2).
+- A detecção marca como "outside antes da R2" — mas é fluxo legítimo de cliente que pagou antes da R2 (não é outside real).
 
-1. **Corrigir só este lead agora** (sem varredura retroativa).
-2. **Sync automático Hubla → contato CRM** quando o contrato for pago, para não acontecer de novo.
+## Plano de correção
 
-Tudo é backend/DB. Sem mudança de UI.
+### Parte 1 — Fix pontual do email do Vinicius
+- UPDATE em `crm_contacts` para corrigir `viniciusbarbosapaiva@gmail.com.br` → `viniciusbarbosapaiva@gmail.com` (alinha com Hubla).
+- Após a correção, a detecção de outside vai casar com a R1 de 17/04 e parar de contar como outside. O contrato vai parar de aparecer no KPI inflado e (se já estiver linkado ao attendee) entra como contrato normal.
 
----
+### Parte 2 — Ajuste na regra de detecção de Outside
+A regra atual em `src/hooks/useR1CloserMetrics.ts` (linhas 430-467) considera outside quando o contrato foi pago antes da primeira reunião — **incluindo R2**. Isso gera falso-positivo no fluxo legítimo "lead pagou antes da R2 marcada" (caso Igor).
 
-## 1) Migração one-off — corrigir o lead Thiago
+**Mudança proposta:** considerar outside **apenas quando NÃO existe R1** OU quando o contrato foi pago antes da R1 específica. Se o lead tem só R2 (sem R1), tratar como contrato normal atribuído ao closer da R2 — não como outside.
 
-UPDATE direto nas 3 tabelas (mesma migração):
+Concretamente, no bloco `earliestByEmail`:
+- Se existe R1 para o email → outside só se `contractDate < r1.scheduled_at` (já é o comportamento).
+- Se NÃO existe R1, mas existe R2 → **não classificar como outside**; o contrato já será capturado pela contagem normal de `contract_paid` no attendee da R2.
 
-- `crm_contacts` id `00570c09-9f84-47d2-b4e2-bb1131d17604`
-  - `name` → `"Thiago Teixeira Clemente"`
-  - `email` → `"tec.consultoria@icloud.com"`
-  - `phone` → `"+5512991043714"`
-- `crm_deals` id `98be16be-8bd9-416f-95a3-af6599fa3851`
-  - `name` → `"Thiago Teixeira Clemente"`
-- `meeting_slot_attendees` id `167adfae-c5f2-47c1-affb-eea61862448d`
-  - `attendee_name` → `"Thiago Teixeira Clemente"`
-  - `attendee_phone` → `"+5512991043714"`
-- `hubla_transactions` id `fbab2806-ed7a-4dd9-81a5-8f29acc300e5`
-  - `linked_deal_id` → `98be16be-…` (estava `NULL`; já tem o `linked_attendee_id`, mas linkar no deal também ajuda buscas/relatórios)
+## Por que isso resolve
 
-Depois disso, qualquer closer encontra o lead buscando por "Thiago Teixeira Clemente", "Clemente", "tec.consultoria" ou pelo telefone `12991043714`.
+- Vinicius: contagem volta a 11 (era 12 por erro de email).
+- Igor: contagem volta a 11 (era 12 por R2-only ser tratada como outside).
+- KPI = lista = 11. Caso ainda haja outside legítimo (cliente que comprou direto pelo Hubla sem nenhuma reunião), ele continua contado — mas hoje, no mês corrente, não há nenhum desses entre os 11.
 
----
+## Arquivos afetados
 
-## 2) Sync automático Hubla → contato CRM (prevenção)
+- Migração SQL: UPDATE pontual no email do contato Vinicius.
+- `src/hooks/useR1CloserMetrics.ts` — ajustar bloco de detecção outside (R2-only deixa de contar).
 
-Trigger de banco que enriquece o contato/deal/attendee assim que a venda for vinculada e marcada como paga.
+## Fora de escopo
 
-**Função `public.sync_hubla_buyer_to_crm(p_attendee_id uuid)`** (`SECURITY DEFINER`, `search_path = public`):
-
-1. Buscar o último `hubla_transactions` com `linked_attendee_id = p_attendee_id` e `sale_status = 'completed'`.
-2. Se não existir, sair sem erro.
-3. Resolver o `attendee` (que dá `deal_id` e `contact_id`).
-4. **Regra de enriquecimento (só preenche se o valor atual estiver vazio ou for menor / mais curto):**
-   - `crm_contacts.name`: substituir se atual for `NULL`, vazio, ou tiver menos palavras que `customer_name`.
-   - `crm_contacts.email`: substituir só se atual for `NULL`/vazio.
-   - `crm_contacts.phone`: substituir só se atual for `NULL`/vazio, OU se a versão normalizada (`regexp_replace(phone, '\D', '', 'g')`) tiver menos de 10 dígitos. Sempre gravar no formato Hubla (`+55…`).
-   - `crm_deals.name`: substituir se atual for `NULL`, vazio, ou tiver menos palavras que `customer_name`.
-   - `meeting_slot_attendees.attendee_name/attendee_phone`: substituir se vazio/menor.
-   - `hubla_transactions.linked_deal_id`: setar se ainda for `NULL`.
-5. Nunca sobrescreve dado já completo (segurança contra Hubla retornar nome menor em algum payload).
-
-**Trigger 1 — em `meeting_slot_attendees`:**
-`AFTER UPDATE OF status, contract_paid_at` quando `NEW.status = 'contract_paid'` ou `NEW.contract_paid_at IS NOT NULL` e o anterior estava diferente → chama `sync_hubla_buyer_to_crm(NEW.id)`.
-
-**Trigger 2 — em `hubla_transactions`:**
-`AFTER INSERT OR UPDATE OF linked_attendee_id, sale_status` quando `NEW.linked_attendee_id IS NOT NULL` e `NEW.sale_status = 'completed'` → chama `sync_hubla_buyer_to_crm(NEW.linked_attendee_id)`.
-
-Assim, tanto faz quem vier primeiro (vincular contrato OU marcar contrato pago), o contato/deal são enriquecidos automaticamente e a busca de R2 funciona.
-
----
-
-## Detalhes técnicos
-
-- **Tabelas afetadas:** `crm_contacts`, `crm_deals`, `meeting_slot_attendees`, `hubla_transactions` (só `UPDATE` de dados; sem novas colunas, sem mudança de RLS, sem mudança de GRANTs).
-- **Função nova:** `public.sync_hubla_buyer_to_crm(uuid)` — `SECURITY DEFINER`, `search_path = public`.
-- **Triggers novos:** `trg_attendee_sync_hubla_buyer` em `meeting_slot_attendees` e `trg_hubla_sync_buyer` em `hubla_transactions`.
-- **Sem mudanças no frontend** (a busca da R2 já cobre nome/email/telefone — basta os dados existirem).
-- **Sem impacto em métricas:** o sync só completa campos vazios; não altera `stage`, `status`, `owner`, `origin`.
-- **Memória a salvar depois:** novo arquivo `mem://integration/hubla-buyer-to-crm-sync` documentando a regra "Hubla completed + attendee vinculado → enriquece contato/deal/attendee, só quando o campo CRM está vazio ou mais curto".
-
-## Validação após aplicar
-
-1. Confirmar via SQL que `crm_contacts` / `crm_deals` / `meeting_slot_attendees` do Thiago ficaram com nome/email/telefone corretos.
-2. No preview, abrir o modal "Agendar R2", buscar por "Clemente", "tec.consultoria" e "12991043714" — o lead deve aparecer nos três.
-3. Forçar um `UPDATE` de teste em outro attendee `contract_paid` para confirmar que o trigger preenche campos vazios sem sobrescrever os já preenchidos (rollback do teste depois).
+- Não vou mexer na lista do drill-down nem mudar a definição de "outside" exibida em outros relatórios (Closer Performance). Mudança fica isolada ao hook que alimenta o KPI Contratos da Reuniões da Equipe e ao registro do Vinicius.
