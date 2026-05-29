@@ -200,6 +200,15 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       // Load Twilio Voice SDK dynamically
       const { Device } = await import('@twilio/voice-sdk');
       
+      // Garante que existe uma sessão válida antes de chamar a edge function
+      // (a função exige JWT do usuário autenticado; sem sessão retorna 401).
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        console.warn('[Twilio] Sem sessão ativa, abortando init do device.');
+        setDeviceStatus('disconnected');
+        return false;
+      }
+
       // Get access token from our edge function
       const { data, error } = await supabase.functions.invoke('twilio-token', {
         body: { identity: user.email || user.id }
