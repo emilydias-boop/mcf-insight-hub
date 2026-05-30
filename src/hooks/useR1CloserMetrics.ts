@@ -460,6 +460,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           if (countedOutsideEmails.has(email)) return;
           const contractDate = periodContractByEmail.get(email);
           if (!contractDate) return;
+          // Only count as Outside when the email has an R1.
+          // Leads that only have R2 (no R1) belong to the normal contract flow
+          // and are already counted via meeting_slot_attendees.contract_paid_at —
+          // treating them as "outside" here causes double counting in the KPI.
+          if (info.meetingType !== 'r1') return;
           if (contractDate < info.scheduledAt) {
             outsideByCloser.set(info.closerId, (outsideByCloser.get(info.closerId) || 0) + 1);
             countedOutsideEmails.add(email);
