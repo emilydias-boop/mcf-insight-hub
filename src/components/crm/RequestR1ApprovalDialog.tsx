@@ -26,9 +26,13 @@ interface RequestR1ApprovalDialogProps {
   dealName?: string;
   contactName?: string;
   closerName?: string;
-  blockReason?: 'deal_already_paid' | 'deal_already_won' | string;
+  blockReason?: 'deal_already_paid' | 'deal_already_won' | 'deal_r1_cooldown_active' | string;
   blockMessage?: string;
   requesterRole?: 'sdr' | 'closer';
+  /** Tipo de pedido. Default = r1_force_paid_lead. */
+  ruleKey?: 'r1_force_paid_lead' | 'r1_cooldown_bypass';
+  /** Contexto extra (ex: last_r1_at, cooldown_days). */
+  extra?: Record<string, any>;
   onSubmitted?: () => void;
 }
 
@@ -44,6 +48,8 @@ export function RequestR1ApprovalDialog({
   blockReason,
   blockMessage,
   requesterRole = 'sdr',
+  ruleKey = 'r1_force_paid_lead',
+  extra,
   onSubmitted,
 }: RequestR1ApprovalDialogProps) {
   const [reason, setReason] = useState('');
@@ -62,6 +68,17 @@ export function RequestR1ApprovalDialog({
 
   const reasonOk = reason.trim().length >= MIN_REASON;
 
+  const isCooldown = ruleKey === 'r1_cooldown_bypass';
+  const lastR1Label = extra?.last_r1_at
+    ? (() => {
+        try {
+          return format(new Date(extra.last_r1_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+        } catch {
+          return String(extra.last_r1_at);
+        }
+      })()
+    : null;
+
   const handleSubmit = async () => {
     if (!payload) return;
     if (!reasonOk) {
@@ -75,6 +92,8 @@ export function RequestR1ApprovalDialog({
         blockReason,
         blockMessage,
         requesterRole,
+        ruleKey,
+        extra,
       });
       if (res.deduped) {
         toast.info('Já existe uma solicitação pendente para este lead.');
@@ -102,11 +121,22 @@ export function RequestR1ApprovalDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-amber-600" />
-            Solicitar liberação de R1
+            {isCooldown ? 'Solicitar liberação de R1 (cooldown)' : 'Solicitar liberação de R1'}
           </DialogTitle>
           <DialogDescription>
-            Este lead já tem contrato pago. Sua solicitação será enviada para{' '}
-            admin, manager, coordenador ou Jessica liberarem.
+            {isCooldown ? (
+              <>
+                Este lead já teve R1{lastR1Label ? ` em ${lastR1Label}` : ''}
+                {extra?.cooldown_days ? ` (cooldown de ${extra.cooldown_days} dias ativo)` : ''}.
+                Sua solicitação será enviada para admin, manager ou coordenador
+                liberarem o reagendamento.
+              </>
+            ) : (
+              <>
+                Este lead já tem contrato pago. Sua solicitação será enviada para{' '}
+                admin, manager, coordenador ou Jessica liberarem.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -155,7 +185,11 @@ export function RequestR1ApprovalDialog({
             id="r1-approval-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Explique por que essa R1 precisa ser agendada mesmo com contrato pago…"
+            placeholder={
+              isCooldown
+                ? 'Explique por que essa R1 precisa ser reagendada antes do fim do cooldown…'
+                : 'Explique por que essa R1 precisa ser agendada mesmo com contrato pago…'
+            }
             rows={4}
             maxLength={1000}
           />
