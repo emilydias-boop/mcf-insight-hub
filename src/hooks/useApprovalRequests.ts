@@ -412,7 +412,10 @@ export function useReviewApprovalRequest() {
         if (reqErr) throw reqErr;
         if (!reqRow) throw new Error("Pedido não encontrado");
         const r = reqRow as any;
-        if (r.rule_key === "r1_force_paid_lead") {
+        if (
+          r.rule_key === "r1_force_paid_lead" ||
+          r.rule_key === "r1_cooldown_bypass"
+        ) {
           if (r.status !== "pending") {
             throw new Error(`Pedido já está ${r.status}`);
           }
