@@ -1422,11 +1422,18 @@ export function useCreateMeeting() {
         if (data.error === 'slot_full') {
           throw new Error(data.message || 'Horário lotado — não é possível adicionar mais leads');
         }
-        if (data.error === 'deal_already_paid' || data.error === 'deal_already_won') {
+        if (
+          data.error === 'deal_already_paid' ||
+          data.error === 'deal_already_won' ||
+          data.error === 'deal_r1_cooldown_active'
+        ) {
           // Não cria pedido automaticamente — a UI abre RequestR1ApprovalDialog
           // para que o SDR/Closer envie a solicitação explicitamente com motivo.
           const err: any = new Error(
-            data.message || 'Lead já tem contrato pago — solicite liberação para agendar.',
+            data.message ||
+              (data.error === 'deal_r1_cooldown_active'
+                ? 'Lead já teve R1 recentemente — solicite liberação para reagendar.'
+                : 'Lead já tem contrato pago — solicite liberação para agendar.'),
           );
           err.code = data.error;
           err.payload = {
@@ -1442,6 +1449,12 @@ export function useCreateMeeting() {
             parentAttendeeId: parentAttendeeId ?? null,
             bookedAt: bookedAt?.toISOString() ?? null,
           };
+          if (data.error === 'deal_r1_cooldown_active') {
+            err.extra = {
+              last_r1_at: data.last_r1_at ?? null,
+              cooldown_days: data.cooldown_days ?? null,
+            };
+          }
           throw err;
         }
         if (data.error === 'rule_violation_reschedule_threshold') {
@@ -1511,7 +1524,11 @@ export function useCreateMeeting() {
     onError: (error: any) => {
       console.error('Error creating meeting:', error);
       // Os códigos abaixo são tratados pela UI (RequestR1ApprovalDialog).
-      if (error?.code === 'deal_already_paid' || error?.code === 'deal_already_won') {
+      if (
+        error?.code === 'deal_already_paid' ||
+        error?.code === 'deal_already_won' ||
+        error?.code === 'deal_r1_cooldown_active'
+      ) {
         return;
       }
       toast.error(error?.message || 'Erro ao agendar reunião');
