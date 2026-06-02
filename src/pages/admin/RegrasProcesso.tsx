@@ -59,12 +59,19 @@ const RULE_LABELS: Record<string, { title: string; description: string; type: "n
     description: "Quais cargos podem aprovar pedidos pendentes (admin, coordenador, manager).",
     type: "approvers",
   },
+  [RULE_KEYS.R1_COOLDOWN_DAYS]: {
+    title: "Cooldown de R1 (dias)",
+    description:
+      "Janela em dias após uma R1 em que SDR/Closer não pode reagendar nova R1 no mesmo lead sem aprovação do gestor. Vazio/0 = desativado.",
+    type: "number",
+  },
 };
 
 const RULE_ORDER = [
   RULE_KEYS.MAX_MEETINGS,
   RULE_KEYS.MAX_NOSHOWS,
   RULE_KEYS.RESCHEDULE_APPROVAL,
+  RULE_KEYS.R1_COOLDOWN_DAYS,
   RULE_KEYS.APPROVERS,
 ];
 
@@ -140,6 +147,26 @@ function formatPayloadHumano(ruleKey: string, payload: any): {
         `Solicita liberar agendamento de R1 em lead que já tem contrato pago/won` +
         (when ? ` (para ${when})` : "") +
         ". Ao aprovar, a R1 será criada e contará como reagendamento normal.",
+      lead,
+      motivo: payload.reason ?? payload.block_message ?? null,
+    };
+  }
+
+  if (ruleKey === APPROVAL_REQUEST_KEYS.R1_COOLDOWN_BYPASS) {
+    const when = payload.scheduled_at
+      ? format(new Date(payload.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+      : null;
+    const last = payload.last_r1_at
+      ? format(new Date(payload.last_r1_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+      : null;
+    const cooldown = payload.cooldown_days;
+    return {
+      resumo:
+        `Solicita liberar reagendamento de R1 dentro do cooldown` +
+        (cooldown ? ` de ${cooldown} dias` : "") +
+        (last ? ` (última R1 em ${last})` : "") +
+        (when ? `, para ${when}` : "") +
+        ". Ao aprovar, a R1 será criada e contará nas métricas normalmente.",
       lead,
       motivo: payload.reason ?? payload.block_message ?? null,
     };

@@ -182,6 +182,8 @@ export function QuickScheduleModal({
     dealName?: string;
     contactName?: string;
     closerName?: string;
+    ruleKey?: 'r1_force_paid_lead' | 'r1_cooldown_bypass';
+    extra?: Record<string, any>;
   } | null>(null);
 
   // Sync internal state when preselected values change and modal opens
@@ -450,8 +452,17 @@ export function QuickScheduleModal({
       },
       onError: (error: any) => {
         console.log('🚨 Create meeting error:', error);
-        if (error?.code === 'deal_already_paid' || error?.code === 'deal_already_won') {
-          toast.warning('Lead já tem contrato pago — solicite liberação para agendar.');
+        if (
+          error?.code === 'deal_already_paid' ||
+          error?.code === 'deal_already_won' ||
+          error?.code === 'deal_r1_cooldown_active'
+        ) {
+          const isCooldown = error.code === 'deal_r1_cooldown_active';
+          toast.warning(
+            isCooldown
+              ? 'Lead já teve R1 recentemente — solicite liberação para reagendar.'
+              : 'Lead já tem contrato pago — solicite liberação para agendar.',
+          );
           const closerName = closers.find((c) => c.id === selectedCloser)?.name;
           setR1ApprovalCtx({
             payload: error.payload as R1ForcePayload,
@@ -460,6 +471,8 @@ export function QuickScheduleModal({
             dealName: selectedDeal?.name,
             contactName: selectedDeal?.contact?.name,
             closerName,
+            ruleKey: isCooldown ? 'r1_cooldown_bypass' : 'r1_force_paid_lead',
+            extra: isCooldown ? error.extra : undefined,
           });
           return;
         }
@@ -1404,6 +1417,8 @@ export function QuickScheduleModal({
       closerName={r1ApprovalCtx?.closerName}
       blockReason={r1ApprovalCtx?.blockReason}
       blockMessage={r1ApprovalCtx?.blockMessage}
+      ruleKey={r1ApprovalCtx?.ruleKey}
+      extra={r1ApprovalCtx?.extra}
       onSubmitted={() => {
         setR1ApprovalCtx(null);
         onOpenChange(false);

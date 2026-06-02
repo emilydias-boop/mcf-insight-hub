@@ -21,6 +21,13 @@ export interface CreateR1ForceRequestInput {
   blockReason?: string;
   blockMessage?: string;
   requesterRole?: 'sdr' | 'closer';
+  /**
+   * Tipo de pedido — `r1_force_paid_lead` (default) para leads pagos/won,
+   * `r1_cooldown_bypass` para liberar reagendamento dentro da janela de cooldown.
+   */
+  ruleKey?: 'r1_force_paid_lead' | 'r1_cooldown_bypass';
+  /** Contexto extra do cooldown (last_r1_at, cooldown_days). */
+  extra?: Record<string, any>;
 }
 
 /**
@@ -32,7 +39,15 @@ export function useCreateR1ForceRequest() {
 
   return useMutation({
     mutationFn: async (input: CreateR1ForceRequestInput) => {
-      const { payload, reason, blockReason, blockMessage, requesterRole = 'sdr' } = input;
+      const {
+        payload,
+        reason,
+        blockReason,
+        blockMessage,
+        requesterRole = 'sdr',
+        ruleKey = 'r1_force_paid_lead',
+        extra,
+      } = input;
 
       if (!reason || reason.trim().length < 10) {
         throw new Error('Informe o motivo da solicitação (mínimo 10 caracteres).');
@@ -65,7 +80,7 @@ export function useCreateR1ForceRequest() {
         .select('id')
         .eq('requested_by', uid)
         .eq('target_deal_id', payload.dealId)
-        .eq('rule_key', 'r1_force_paid_lead')
+        .eq('rule_key', ruleKey)
         .eq('status', 'pending')
         .maybeSingle();
 
@@ -77,7 +92,7 @@ export function useCreateR1ForceRequest() {
         .from('rule_approval_requests' as any)
         .insert({
           bu: dealBu,
-          rule_key: 'r1_force_paid_lead',
+          rule_key: ruleKey,
           requester_role: requesterRole,
           requested_by: uid,
           target_deal_id: payload.dealId,
@@ -97,6 +112,7 @@ export function useCreateR1ForceRequest() {
             already_builds: payload.alreadyBuilds,
             parent_attendee_id: payload.parentAttendeeId,
             booked_at: payload.bookedAt,
+            ...(extra ?? {}),
           },
         })
         .select('id')

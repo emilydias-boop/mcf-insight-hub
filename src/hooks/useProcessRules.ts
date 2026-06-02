@@ -22,6 +22,7 @@ export const RULE_KEYS = {
   MAX_NOSHOWS: "max_noshows_counted",
   RESCHEDULE_APPROVAL: "reschedule_approval_threshold",
   APPROVERS: "approval_required_roles",
+  R1_COOLDOWN_DAYS: "r1_cooldown_days",
 } as const;
 
 /**
@@ -31,6 +32,8 @@ export const RULE_KEYS = {
 export const APPROVAL_REQUEST_KEYS = {
   /** SDR/Closer pediu para reagendar R1 em lead já pago/won (libera admin/manager/coordenador + Jessica). */
   R1_FORCE_PAID_LEAD: "r1_force_paid_lead",
+  /** SDR/Closer pediu liberação para reagendar R1 dentro da janela de cooldown (ex: 30 dias da R1 anterior). */
+  R1_COOLDOWN_BYPASS: "r1_cooldown_bypass",
 } as const;
 
 /** Busca todas as regras (admin view). */

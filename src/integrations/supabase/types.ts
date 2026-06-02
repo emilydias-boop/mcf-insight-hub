@@ -13280,6 +13280,10 @@ export type Database = {
         Args: { _deal_id: string }
         Returns: boolean
       }
+      has_recent_r1: {
+        Args: { _days: number; _deal_id: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
