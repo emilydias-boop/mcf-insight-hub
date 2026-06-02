@@ -646,6 +646,120 @@ serve(async (req) => {
     // que o operacional resolva casos legítimos sem inflar métricas.
     // ============= END GUARD =============
 
+    // ============= R1 COOLDOWN GUARD =============
+    // Bloqueia reagendar uma R1 num lead que já teve R1 recente (janela
+    // configurável em process_rules.r1_cooldown_days, default 30 dias).
+    // SDR/Closer recebe `deal_r1_cooldown_active` e a UI abre o pedido de
+    // aprovação (rule_key=r1_cooldown_bypass). Admin/manager/coordenador
+    // passam direto. Bypass via `forceFromRequestId` aprovado.
+    if (
+      guardMeetingType === "r1" &&
+      !isConsorcioDeal &&
+      !isOutsideDeal &&
+      !approvedRequest
+    ) {
+      try {
+        // Detecta BU para resolver regra
+        let dealBuCd: string | null = null;
+        const { data: dealOriginRowCd } = await supabase
+          .from("crm_deals")
+          .select("origin_id")
+          .eq("id", dealId)
+          .maybeSingle();
+        if (dealOriginRowCd?.origin_id) {
+          const { data: buMapsCd } = await supabase
+            .from("bu_origin_mapping")
+            .select("bu")
+            .eq("entity_type", "origin")
+            .eq("entity_id", dealOriginRowCd.origin_id)
+            .limit(1);
+          dealBuCd = (buMapsCd ?? [])[0]?.bu ?? null;
+        }
+
+        // Identifica role do solicitante; privilegiados passam direto
+        let isPrivilegedCd = false;
+        const authHeaderCd = req.headers.get("Authorization");
+        let requesterRoleCd: "sdr" | "closer" = "sdr";
+        if (authHeaderCd) {
+          const { data: userDataCd } = await supabase.auth.getUser(
+            authHeaderCd.replace("Bearer ", ""),
+          );
+          if (userDataCd?.user?.id) {
+            const { data: rolesCd } = await supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", userDataCd.user.id);
+            const roleSetCd = new Set((rolesCd ?? []).map((r: any) => r.role));
+            isPrivilegedCd =
+              roleSetCd.has("admin") ||
+              roleSetCd.has("manager") ||
+              roleSetCd.has("coordenador");
+            if (roleSetCd.has("closer") || roleSetCd.has("closer_sombra")) {
+              requesterRoleCd = "closer";
+            }
+          }
+        }
+
+        if (!isPrivilegedCd) {
+          const { data: ruleVal } = await supabase.rpc("get_process_rule", {
+            _bu: dealBuCd,
+            _role: requesterRoleCd,
+            _rule_key: "r1_cooldown_days",
+          });
+          const cooldownDays = Number((ruleVal as any)?.value);
+          if (Number.isFinite(cooldownDays) && cooldownDays > 0) {
+            const { data: lastR1At } = await supabase.rpc("has_recent_r1", {
+              _deal_id: dealId,
+              _days: cooldownDays,
+            });
+            if (lastR1At) {
+              // Exclui se a R1 encontrada é o próprio attendee que está
+              // sendo movido (mesmo parent) — reagendamento do mesmo slot
+              // não dispara cooldown.
+              let isSameAttendeeMove = false;
+              if (body.parentAttendeeId) {
+                const { data: parentRow } = await supabase
+                  .from("meeting_slot_attendees")
+                  .select("id, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)")
+                  .eq("id", body.parentAttendeeId)
+                  .maybeSingle();
+                const parentMs: any = (parentRow as any)?.meeting_slot;
+                if (
+                  parentMs?.meeting_type === "r1" &&
+                  parentMs?.scheduled_at === lastR1At
+                ) {
+                  isSameAttendeeMove = true;
+                }
+              }
+              if (!isSameAttendeeMove) {
+                console.warn(
+                  `🚫 R1 cooldown ativo — deal ${dealId} última R1 em ${lastR1At} (cooldown ${cooldownDays}d)`,
+                );
+                return new Response(
+                  JSON.stringify({
+                    success: false,
+                    error: "deal_r1_cooldown_active",
+                    message:
+                      `Este lead já teve R1 nos últimos ${cooldownDays} dias. ` +
+                      `Solicite liberação para reagendar.`,
+                    last_r1_at: lastR1At,
+                    cooldown_days: cooldownDays,
+                  }),
+                  {
+                    status: 200,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                  },
+                );
+              }
+            }
+          }
+        }
+      } catch (cdErr) {
+        console.error("⚠️ Falha ao avaliar cooldown R1 — seguindo sem bloquear", cdErr);
+      }
+    }
+    // ============= END R1 COOLDOWN GUARD =============
+
     // ============= PROCESS RULE GUARD (server-side) =============
     // Valida no servidor a regra de reschedule_approval_threshold para SDRs.
     // Esta é a fonte da verdade — bloqueia tentativas via DevTools/Postman
