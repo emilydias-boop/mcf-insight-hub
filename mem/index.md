@@ -13,3 +13,4 @@
 - [Consórcio Transferência de Cota](mem://features/consorcio-transferencia-cota) — Pós-contemplação (manter/à venda/transferir) + processo em fases; financeiro como evento separado, comissão sempre manual.
 - [Contemplação Engine](mem://business-logic/consorcio-contemplacao-recomendacao-engine) — Motor 3 camadas (faixas + histórico + ranking) na aba Contemplação.
 - [R1 Force Paid Lead Approval](mem://business-logic/r1-force-paid-lead-approval-flow) — SDR/Closer pede liberação; admin/manager/coordenador + Jessica (email allowlist) aprovam via /admin/regras-processo; R1 aprovada = reagendamento normal, conta em todas as métricas.
+- [R1 Cooldown Approval Flow](mem://business-logic/r1-cooldown-approval-flow) — Cooldown 30d (configurável) bloqueia R1 repetida no mesmo lead; SDR/Closer pede aprovação a admin/manager/coordenador; reagendar o MESMO slot não dispara.
