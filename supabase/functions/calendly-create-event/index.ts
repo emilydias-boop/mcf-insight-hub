@@ -395,7 +395,10 @@ serve(async (req) => {
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
-      if (reqRow.rule_key !== "r1_force_paid_lead") {
+      if (
+        reqRow.rule_key !== "r1_force_paid_lead" &&
+        reqRow.rule_key !== "r1_cooldown_bypass"
+      ) {
         return new Response(
           JSON.stringify({ success: false, error: "wrong_request_type", message: "Tipo de pedido inválido para esta operação." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
