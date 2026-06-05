@@ -511,9 +511,50 @@ export function useUpdateConsorcioPayoutKpi() {
       // Buscar pesos dinâmicos das métricas ativas
       const pesos = await buscarPesosMetricas(payout.ano_mes);
       
+      // Auto-sync OTE/Fixo/Variável a partir do cargo atual do employee
+      // (caso o closer tenha mudado de nível N1 -> N2 após o payout ter sido criado)
+      let ote_total = payout.ote_total;
+      let fixo_valor = payout.fixo_valor;
+      let variavel_total = payout.variavel_total;
+      try {
+        const { data: closerRow } = await supabase
+          .from('closers')
+          .select('email')
+          .eq('id', payout.closer_id)
+          .maybeSingle();
+        const emailLower = closerRow?.email?.toLowerCase();
+        if (emailLower) {
+          const { data: emp } = await supabase
+            .from('employees')
+            .select('cargo_catalogo_id')
+            .eq('email_pessoal', emailLower)
+            .maybeSingle();
+          if (emp?.cargo_catalogo_id) {
+            const { data: cat } = await supabase
+              .from('cargos_catalogo')
+              .select('ote_total, fixo_valor, variavel_valor')
+              .eq('id', emp.cargo_catalogo_id)
+              .maybeSingle();
+            if (cat) {
+              const novoFixo = cat.fixo_valor || 0;
+              const novoVar = cat.variavel_valor || 0;
+              const novoOte = cat.ote_total || (novoFixo + novoVar);
+              if (novoFixo !== fixo_valor || novoVar !== variavel_total || novoOte !== ote_total) {
+                ote_total = novoOte;
+                fixo_valor = novoFixo;
+                variavel_total = novoVar;
+                console.log(`[Auto-sync KPI] payout ${payoutId}: OTE ${novoOte} / Fixo ${novoFixo} / Var ${novoVar}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Auto-sync KPI] falhou, mantendo valores existentes', e);
+      }
+      
       // Recalcular com novos KPIs e pesos dinâmicos
       const calc = calcularPayoutConsorcio(
-        payout.variavel_total,
+        variavel_total,
         data.comissao_consorcio,
         data.comissao_holding,
         data.score_organizacao,
@@ -523,11 +564,14 @@ export function useUpdateConsorcioPayoutKpi() {
         pesos
       );
       
-      const total_conta = payout.fixo_valor + calc.valor_variavel_final + (payout.bonus_extra || 0);
+      const total_conta = fixo_valor + calc.valor_variavel_final + (payout.bonus_extra || 0);
       
       const { error } = await supabase
         .from('consorcio_closer_payout')
         .update({
+          ote_total,
+          fixo_valor,
+          variavel_total,
           comissao_consorcio: data.comissao_consorcio,
           comissao_holding: data.comissao_holding,
           score_organizacao: data.score_organizacao,
