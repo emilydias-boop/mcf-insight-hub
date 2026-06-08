@@ -160,6 +160,7 @@ interface DynamicKpiFieldsGridProps {
   } | null;
   sdrMetaDiaria?: number;
   diasUteisMes?: number;
+  compPlan?: any;
 }
 
 export const DynamicKpiFieldsGrid = ({
@@ -171,14 +172,22 @@ export const DynamicKpiFieldsGrid = ({
   callMetrics,
   sdrMetaDiaria = 10,
   diasUteisMes = 19,
+  compPlan,
 }: DynamicKpiFieldsGridProps) => {
+  const realizadasPct = (() => {
+    const r = Number(compPlan?.meta_reunioes_realizadas ?? 0);
+    const a = Number(compPlan?.meta_reunioes_agendadas ?? 0);
+    if (r > 0 && a > 0 && r / a > 0 && r / a <= 1) return r / a;
+    return 0.7;
+  })();
+  const realizadasPctLabel = Math.round(realizadasPct * 100);
   const getMetaDescription = (nomeMetrica: string): string | undefined => {
     switch (nomeMetrica) {
       case 'agendamentos':
         return `Meta: ${sdrMetaDiaria * diasUteisMes} (${sdrMetaDiaria}/dia × ${diasUteisMes} dias)`;
       case 'realizadas':
         const agendadas = formData.reunioes_agendadas || 0;
-        return `Meta: ${Math.round(agendadas * 0.7)} (70% de ${agendadas} agendadas)`;
+        return `Meta: ${Math.round(agendadas * realizadasPct)} (${realizadasPctLabel}% de ${agendadas} agendadas)`;
       case 'tentativas':
         return `Meta: ${84 * diasUteisMes} (84/dia × ${diasUteisMes} dias)`;
       case 'contratos':
