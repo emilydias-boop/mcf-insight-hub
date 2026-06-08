@@ -11,6 +11,7 @@ import { useSdrAgendaMetricsBySdrId } from '@/hooks/useSdrAgendaMetricsBySdrId';
 import { useSdrCallMetricsBySdrId } from '@/hooks/useSdrCallMetrics';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getRealizadasPct, getNoShowMaxPct } from '@/lib/sdrMetaPercentuais';
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -59,6 +60,10 @@ export const KpiEditForm = ({
   diasUteisMetaOverride,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
+  // Percentuais derivados do comp plan (fallback 70% / 30%)
+  const realizadasPct = getRealizadasPct(compPlan);
+  const noShowMaxPct = getNoShowMaxPct(compPlan);
+  const realizadasPctLabel = Math.round(realizadasPct * 100);
   // Dias úteis efetivos para meta: override > dias úteis do mês
   const diasUteisParaMeta = (diasUteisMetaOverride != null && diasUteisMetaOverride > 0)
     ? diasUteisMetaOverride
@@ -336,7 +341,7 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Taxa: {taxaNoShow}% / Max: 30%
+                    Taxa: {taxaNoShow}% / Max: {noShowMaxPct}%
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.no_shows}</span>
                     )}
@@ -468,7 +473,7 @@ export const KpiEditForm = ({
                     {(metaRealizadasOverride != null && metaRealizadasOverride > 0) ? (
                       <>Meta: {metaRealizadasOverride} (personalizada)</>
                     ) : (
-                      <>Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)</>
+                      <>Meta: {Math.round(formData.reunioes_agendadas * realizadasPct)} ({realizadasPctLabel}% de {formData.reunioes_agendadas} agendadas)</>
                     )}
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_realizada}</span>
@@ -495,7 +500,7 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Taxa: {taxaNoShow}% / Max: 30%
+                    Taxa: {taxaNoShow}% / Max: {noShowMaxPct}%
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.no_shows}</span>
                     )}

@@ -51,6 +51,7 @@ const DynamicIndicatorsSection = ({
   sdrMetaDiaria,
   isCloser,
   variavelTotal,
+  compPlan,
 }: {
   sdrId: string;
   anoMes: string;
@@ -60,6 +61,7 @@ const DynamicIndicatorsSection = ({
   sdrMetaDiaria: number;
   isCloser: boolean;
   variavelTotal: number;
+  compPlan?: any;
 }) => {
   const { metricas, isLoading, fonte } = useActiveMetricsForSdr(sdrId, anoMes);
 
@@ -92,6 +94,7 @@ const DynamicIndicatorsSection = ({
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}
+          compPlan={compPlan}
         />
       )}
     </div>
@@ -645,6 +648,7 @@ const FechamentoSDRDetail = () => {
             sdrMetaDiaria={sdrMetaDiaria}
             isCloser={isCloser}
             variavelTotal={effectiveVariavel}
+            compPlan={compPlan}
           />
         </>
       )}

@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { SdrIndicatorCard } from '@/components/sdr-fechamento/SdrIndicatorCard';
 import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
 import { ActiveMetric, METRIC_CONFIG } from '@/hooks/useActiveMetricsForSdr';
-import { SdrMonthKpi, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
+import { SdrMonthKpi, SdrMonthPayout, SdrCompPlan, getMultiplier } from '@/types/sdr-fechamento';
+import { getRealizadasPct } from '@/lib/sdrMetaPercentuais';
 import { 
   Calendar, 
   Users, 
@@ -23,6 +24,7 @@ interface DynamicIndicatorCardProps {
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal?: number;
+  compPlan?: SdrCompPlan | null;
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -45,6 +47,7 @@ export const DynamicIndicatorCard = ({
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal = 0,
+  compPlan,
 }: DynamicIndicatorCardProps) => {
   const config = METRIC_CONFIG[metrica.nome_metrica];
   
@@ -65,6 +68,7 @@ export const DynamicIndicatorCard = ({
       <NoShowIndicator
         agendadas={kpi?.reunioes_agendadas || 0}
         noShows={kpi?.no_shows || 0}
+        compPlan={compPlan}
       />
     );
   }
@@ -92,8 +96,10 @@ export const DynamicIndicatorCard = ({
       metaAjustada = overrideReal;
       metaSubtitle = `Meta personalizada = ${metaAjustada}`;
     } else {
-      metaAjustada = Math.round(agendadasReais * 0.7);
-      metaSubtitle = `70% de ${agendadasReais} agend. = ${metaAjustada}`;
+      const realizadasPct = getRealizadasPct(compPlan);
+      const pctLabel = Math.round(realizadasPct * 100);
+      metaAjustada = Math.round(agendadasReais * realizadasPct);
+      metaSubtitle = `${pctLabel}% de ${agendadasReais} agend. = ${metaAjustada}`;
     }
   } else if (nome === 'tentativas') {
     metaDiaria = 84;
@@ -152,6 +158,7 @@ interface DynamicIndicatorsGridProps {
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal?: number;
+  compPlan?: SdrCompPlan | null;
 }
 
 export const DynamicIndicatorsGrid = ({
@@ -161,6 +168,7 @@ export const DynamicIndicatorsGrid = ({
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
+  compPlan,
 }: DynamicIndicatorsGridProps) => {
   if (!metricas || metricas.length === 0) {
     return (
@@ -181,6 +189,7 @@ export const DynamicIndicatorsGrid = ({
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}
+          compPlan={compPlan}
         />
       ))}
     </div>

@@ -183,19 +183,24 @@ export const getMultiplierRange = (pct: number): string => {
 };
 
 // Cálculo inverso do No-Show
-// Se taxa_no_show <= 30% → performance = 100% + bônus proporcional até 150%
-// Se taxa_no_show > 30% → performance decresce
-export const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
+// Se taxa_no_show <= maxPct → performance = 100% + bônus proporcional até 150%
+// Se taxa_no_show > maxPct → performance decresce
+export const calculateNoShowPerformance = (
+  noShows: number,
+  agendadas: number,
+  maxPct: number = 30,
+): number => {
   if (agendadas <= 0) return 100;
-  
+
   const taxaNoShow = (noShows / agendadas) * 100;
-  
-  if (taxaNoShow <= 30) {
+  const teto = maxPct > 0 ? maxPct : 30;
+
+  if (taxaNoShow <= teto) {
     // Quanto menor a taxa, melhor (bônus até 150%)
-    return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
+    return Math.min(150, 100 + ((teto - taxaNoShow) / teto) * 50);
   } else {
-    // Acima de 30%, penalidade
-    return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
+    // Acima do teto, penalidade
+    return Math.max(0, 100 - ((taxaNoShow - teto) / teto) * 100);
   }
 };
 

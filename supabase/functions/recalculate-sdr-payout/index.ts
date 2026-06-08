@@ -43,15 +43,17 @@ const getFixedGrossPrice = (productName: string | null, originalPrice: number): 
 };
 
 // Cálculo inverso do No-Show
-const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
+// Aceita teto configurável (default 30%). Quando o comp plan define meta_no_show_pct (>0), usa esse valor.
+const calculateNoShowPerformance = (noShows: number, agendadas: number, maxPct: number = 30): number => {
   if (agendadas <= 0) return 100;
-  
+
   const taxaNoShow = (noShows / agendadas) * 100;
-  
-  if (taxaNoShow <= 30) {
-    return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
+  const teto = maxPct > 0 ? maxPct : 30;
+
+  if (taxaNoShow <= teto) {
+    return Math.min(150, 100 + ((teto - taxaNoShow) / teto) * 50);
   } else {
-    return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
+    return Math.max(0, 100 - ((taxaNoShow - teto) / teto) * 100);
   }
 };
 
@@ -69,6 +71,7 @@ interface CompPlan {
   ifood_ultrameta: number;
   dias_uteis: number;
   variavel_total: number;
+  meta_no_show_pct?: number;
 }
 
 interface Kpi {
@@ -154,8 +157,14 @@ const calculatePayoutValues = (
     metaAgendadasAjustada = Math.round(metaAgendadasAjustada * overrideProRataRatio);
   }
   
-  // Meta de Realizadas = 70% das agendadas REAIS (sincronizado com frontend)
-  const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada ?? Math.round((kpi.reunioes_agendadas || 0) * 0.7);
+  // Meta de Realizadas: usa override > percentual do comp plan (meta_reunioes_realizadas / meta_reunioes_agendadas) > 70%
+  const planMetaR = Number(compPlan.meta_reunioes_realizadas || 0);
+  const planMetaA = Number(compPlan.meta_reunioes_agendadas || 0);
+  const realizadasPctFromPlan = planMetaR > 0 && planMetaA > 0 && planMetaR / planMetaA <= 1
+    ? planMetaR / planMetaA
+    : 0.7;
+  const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada
+    ?? Math.round((kpi.reunioes_agendadas || 0) * realizadasPctFromPlan);
   
   // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
   const hasMetaTentativasOverride = configOverrides?.meta_tentativas_ajustada != null;
@@ -183,7 +192,10 @@ const calculatePayoutValues = (
   // Organização = meta fixa de 100% - para Closers, considerar 100% automaticamente
   const pct_organizacao = isCloser ? 100 : (kpi.score_organizacao / META_ORGANIZACAO) * 100;
 
-  const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
+  const noShowMaxPct = Number(compPlan.meta_no_show_pct || 0) > 0
+    ? Number(compPlan.meta_no_show_pct)
+    : 30;
+  const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0, noShowMaxPct);
 
   const cappedPctAgendadas = Math.min(pct_reunioes_agendadas, 120);
   const cappedPctRealizadas = Math.min(pct_reunioes_realizadas, 120);
