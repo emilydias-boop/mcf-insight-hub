@@ -157,8 +157,14 @@ const calculatePayoutValues = (
     metaAgendadasAjustada = Math.round(metaAgendadasAjustada * overrideProRataRatio);
   }
   
-  // Meta de Realizadas = 70% das agendadas REAIS (sincronizado com frontend)
-  const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada ?? Math.round((kpi.reunioes_agendadas || 0) * 0.7);
+  // Meta de Realizadas: usa override > percentual do comp plan (meta_reunioes_realizadas / meta_reunioes_agendadas) > 70%
+  const planMetaR = Number(compPlan.meta_reunioes_realizadas || 0);
+  const planMetaA = Number(compPlan.meta_reunioes_agendadas || 0);
+  const realizadasPctFromPlan = planMetaR > 0 && planMetaA > 0 && planMetaR / planMetaA <= 1
+    ? planMetaR / planMetaA
+    : 0.7;
+  const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada
+    ?? Math.round((kpi.reunioes_agendadas || 0) * realizadasPctFromPlan);
   
   // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
   const hasMetaTentativasOverride = configOverrides?.meta_tentativas_ajustada != null;
@@ -186,7 +192,10 @@ const calculatePayoutValues = (
   // Organização = meta fixa de 100% - para Closers, considerar 100% automaticamente
   const pct_organizacao = isCloser ? 100 : (kpi.score_organizacao / META_ORGANIZACAO) * 100;
 
-  const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
+  const noShowMaxPct = Number(compPlan.meta_no_show_pct || 0) > 0
+    ? Number(compPlan.meta_no_show_pct)
+    : 30;
+  const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0, noShowMaxPct);
 
   const cappedPctAgendadas = Math.min(pct_reunioes_agendadas, 120);
   const cappedPctRealizadas = Math.min(pct_reunioes_realizadas, 120);
