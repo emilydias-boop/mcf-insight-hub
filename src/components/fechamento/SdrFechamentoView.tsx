@@ -105,6 +105,7 @@ export function SdrFechamentoView({ payout, sdrId, anoMes, kpi, compPlan }: SdrF
         diasUteisMes={diasUteisMes}
         sdrMetaDiaria={sdrMetaDiaria}
         variavelTotal={variavelTotal}
+        compPlan={compPlan}
       />
     </>
   );
