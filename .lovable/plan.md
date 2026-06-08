@@ -1,52 +1,78 @@
+
 ## Objetivo
 
-Quando a Hubla enviar `lead.abandoned_checkout` para o produto **A010**, criar (ou atualizar) o lead na PIPELINE INSIDE SALES na stage **"A010 Em Aberto"** com a tag `A010 Em Aberto`. Quando depois chegar a confirmação de compra (`invoice.payment_succeeded` do mesmo cliente), o lead já existente deve ser **movido para "Novo Lead"**, ter a tag `A010 Em Aberto` removida e ganhar a tag `A010`.
+Permitir que você mude o cargo/nível de qualquer colaborador **com data retroativa**, sem precisar pedir migration toda vez. Isso atualiza o histórico (`employee_cargo_history`), o cargo atual em `employees` e os planos de comissão (`sdr_comp_plan`) afetados pelo período — disparando o recálculo automático do payout.
 
-## Contexto descoberto
+Como primeiro uso, já aplico: **Julio Caetano → Closer Inside N2 a partir de 01/05/2026** e **Mayara Souza → SDR Inside N3 a partir de 01/05/2026**.
 
-- A stage **"A010 Em Aberto"** já existe na origem `PIPELINE INSIDE SALES` (id `698ad6b1-...`, ordem 4).
-- A stage **"Novo Lead"** já existe na mesma pipeline (id `cf4a369c-...`, ordem 5).
-- Hoje, em `supabase/functions/hubla-webhook-handler/index.ts`, o evento `lead.abandoned_checkout` apenas faz um `console.log` (linha ~2503) — não cria nada.
-- A função `processA010Lead` (linhas ~270–700) já implementa toda a lógica de dedupe por email/telefone, criação/atualização de contato + deal, herança de owner, tags e estágio "Novo Lead". Vou reaproveitá-la, parametrizando a stage e as tags.
+---
 
-## Mudanças
+## Parte 1 — Tela self-service "Alterar cargo (retroativo)"
 
-### 1. `supabase/functions/hubla-webhook-handler/index.ts`
+**Onde:** botão novo na aba **Geral** do perfil do colaborador (`/rh/colaboradores/:id`), ao lado do "Editar". Label: **"Alterar cargo"**.
 
-**a) Generalizar `processA010Lead`**
-- Aceitar dois novos parâmetros opcionais: `targetStageName` (default `"Novo Lead"`) e `extraTags` (default `["A010", "Hubla"]`).
-- Na busca do estágio, usar `targetStageName` no `.ilike()` antes do fallback atual.
-- Quando atualizar um deal existente: se o `targetStageName` for `"Novo Lead"`, **mover** o deal para "Novo Lead" e **remover** a tag `A010 Em Aberto` (substituindo por `A010`). Isso garante a promoção automática quando a compra cair depois do abandono.
+**Dialog "Alterar cargo":**
+- Cargo novo (CargoSelect — só cargos ativos)
+- **A partir de** (date picker, default = hoje; aceita data passada)
+- Motivo (texto curto, opcional)
+- Checkbox **"Atualizar planos de comissão a partir desta data"** (marcado por padrão)
+- Aviso quando a data é retroativa: lista os meses afetados (ex. "maio/2026, junho/2026") e quais payouts serão recalculados.
 
-**b) Detecção do produto A010 no `lead.abandoned_checkout`**
-- Hubla manda os itens/oferta no payload do abandoned_checkout. Vou extrair `customer_email`, `customer_phone`, `customer_name` e os produtos do payload (`event.products` / `event.items` / `event.offer`) e checar se algum `product.name` casa com o mapeamento `A010` já existente no topo do arquivo.
-- Se for A010, chamar `processA010Lead` com:
-  - `targetStageName = "A010 Em Aberto"`
-  - `extraTags = ["A010 Em Aberto", "Hubla"]`
-  - `originName = 'A010 Hubla'` (mantém o redirecionamento automático para `PIPELINE INSIDE SALES`)
-- Se não for A010, manter o log atual e não fazer nada.
+**O que a tela faz ao salvar** (edge function `change-employee-cargo`):
+1. Fecha o segmento aberto em `employee_cargo_history` com `valid_to = data_escolhida - 1 dia`.
+2. Insere novo segmento `(employee_id, cargo_novo, valid_from = data_escolhida, valid_to = NULL, motivo, created_by)`.
+3. Se a data ≤ hoje, atualiza `employees.cargo_catalogo_id` para o cargo novo (cargo "vigente hoje").
+4. Se o checkbox estiver marcado:
+   - Encerra `sdr_comp_plan` ativos com `vigencia_fim = data_escolhida - 1 dia` (apenas os do `sdr` vinculado a esse colaborador).
+   - Cria um novo `sdr_comp_plan` por mês afetado (data_escolhida → mês corrente, open-ended no último), copiando OTE/fixo/variável/metas do **cargo novo** em `cargos_catalogo`, com `status = PENDING` (mantém suas regras atuais de aprovação).
+5. Atualiza `sdr.nivel` (para refletir nível atual do role).
+6. Dispara `recalculate-sdr-payout` para cada mês afetado (Julio + Mayara já têm o `employee_cargo_history` + segmentos lidos pelo recalc — então o pró-rata por cargo já funciona; só precisamos chamá-lo).
 
-**c) Fluxo de compra (já existente, ajuste mínimo)**
-- O caminho `invoice.payment_succeeded` para A010 (linhas ~2163 e ~2336) já chama `processA010Lead` que, com a mudança em (a), vai encontrar o deal de "A010 Em Aberto" pelo email/telefone, mover para "Novo Lead", trocar as tags e atualizar valor/custom_fields. Nenhum deal duplicado será criado.
+**Permissão:** só Admin/Gerente de RH. Usa as roles existentes (`has_role`).
 
-### 2. Dedupe / segurança
+**Trigger:** desativo temporariamente (na própria função, via transação) o trigger atual que cria `employee_cargo_history` automaticamente na mudança de `employees.cargo_catalogo_id`, para não duplicar o segmento — já que a função gerencia o histórico manualmente.
 
-- Mantém o dedupe atual por `lower(email)` + sufixo de 9 dígitos do telefone (memória do projeto).
-- Mantém a regra de A010 ficar **estritamente** em PIPELINE INSIDE SALES.
-- Mantém a regra de bloqueio de parceiros (A001–A009/R001) — não se aplica aqui pois é A010.
+---
 
-### 3. Logs
+## Parte 2 — Aplicar as 2 trocas retroativas (maio/2026)
 
-- Adicionar logs claros: `🛒 [A010 ABANDONO]` na criação e `✅ [A010 PROMOVIDO] abandono → novo lead` quando um deal de "A010 Em Aberto" for movido para "Novo Lead".
+Executo via a mesma edge function, simulando o uso da tela:
 
-## Não escopo
+**Julio Caetano** (`74d4da35-...`)
+- Histórico: fecha `Closer Inside N1` em 2026-04-30; insere `Closer Inside N2` (`fd8d5a86-...`) a partir de 2026-05-01, sem fim.
+- `employees.cargo_catalogo_id` → N2.
+- `sdr_comp_plan` (sdr_id `21393c7b-...`): o plano aberto desde 01/04/2026 com N1 será fechado em 2026-04-30; cria plano de maio em diante com N2 (OTE 8000 / Fixo 5600 / Variável 2400), `status = PENDING`. O parâmetro de **35% sobre R2 Realizada → contrato** continua sendo o do plano de closer (não está em `sdr_comp_plan` — o cálculo do Closer Inside lê os pesos pré-definidos no recalculate). Confirmação: hoje o Julio não tem plano de maio com nível diferente, então só a troca de cargo já faz o payout de maio rodar como N2.
+- Recalcula payouts de maio e junho/2026.
 
-- Não criar novas stages (já existem).
-- Não mexer em UI do CRM — o card vai aparecer naturalmente na coluna "A010 Em Aberto".
-- Não criar a010_sales no abandono (só na compra confirmada, como hoje).
+**Mayara Souza** (`40f66bf5-...`)
+- Histórico: fecha `SDR Inside N1` em 2026-04-30; insere `SDR Inside N3` (`816b5f53-...`) a partir de 2026-05-01.
+- `employees.cargo_catalogo_id` → N3, `sdr.nivel = 3`.
+- `sdr_comp_plan` (sdr_id `9028b01c-...`): plano de maio atual (`c19cfcc7-...`) é **atualizado** para `cargo_catalogo_id = N3`, OTE 5000 / Fixo 3500 / Variável 1500 (mantém metas já configuradas: 228 agendadas / 160 realizadas), `status = PENDING` para reaprovação.
+- Recalcula payout de maio e junho/2026.
 
-## Como validar
+---
 
-1. Disparar manualmente um `lead.abandoned_checkout` de teste da Hubla (ou via `curl_edge_functions`) com produto A010 → confere que aparece um card na coluna **A010 Em Aberto** com tag `A010 Em Aberto`.
-2. Disparar em seguida `invoice.payment_succeeded` para o mesmo email → confere que o mesmo card foi movido para **Novo Lead**, tag virou `A010`, e nada foi duplicado.
-3. Conferir logs em `hubla_webhook_logs` e nos logs da edge function.
+## Sobre o "35% sobre R2 Realizada → contratos" do Julio
+
+Verifiquei: esse parâmetro **não fica em `sdr_comp_plan`** (essa tabela tem `valor_meta_rpg`, `valor_docs_reuniao`, etc., para SDR — não tem o split de R2 do closer). Para closer, o `recalculate-sdr-payout` usa os pesos padrão por cargo. Trocando o cargo do Julio para `Closer Inside N2`, o recálculo já aplica a régua de N2 automaticamente.
+
+**Se** o "35% sobre R2 realizada" for um valor que precisa entrar **explicitamente em algum lugar** (ex. uma config nova por nível), me confirme onde ele é editado hoje — neste caso eu acrescento o campo. Caso contrário, basta o cargo virar N2.
+
+---
+
+## Detalhes técnicos
+
+- Nova edge function: `change-employee-cargo` (POST `{ employee_id, cargo_catalogo_id, valid_from, motivo, update_comp_plans }`)
+- Novo componente: `src/components/hr/ChangeCargoDialog.tsx`
+- Hook: `useChangeEmployeeCargo` (mutation + invalidate de queries de RH e fechamento)
+- Migration: trigger de `employee_cargo_history` ganha um `WHEN (pg_trigger_depth() = 0 AND current_setting('app.skip_cargo_history_trigger', true) IS DISTINCT FROM 'on')` para a edge function poder suprimir.
+- Edge function chama `recalculate-sdr-payout` por mês afetado.
+- Logs de auditoria em `audit_logs` (`action = 'cargo_change_retroativo'`).
+
+---
+
+## O que NÃO vou mexer
+
+- Não altero a tela de **Editar colaborador** existente (continua editando "cargo vigente hoje" como sempre).
+- Não mexo na régua de comissão de Consórcio nem nos planos de outros colaboradores.
+- Não toco em payouts já `LOCKED` — se algum mês afetado estiver travado, a função aborta e mostra erro claro.
