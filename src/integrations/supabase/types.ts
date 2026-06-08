@@ -12639,6 +12639,16 @@ export type Database = {
         Args: { p_validation_id: string }
         Returns: undefined
       }
+      apply_retroactive_cargo_change: {
+        Args: {
+          p_cargo_catalogo_id: string
+          p_employee_id: string
+          p_motivo?: string
+          p_update_comp_plans?: boolean
+          p_valid_from: string
+        }
+        Returns: Json
+      }
       assign_partner_to_gr: {
         Args: {
           p_bu?: string
