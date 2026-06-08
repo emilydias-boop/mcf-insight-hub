@@ -4,6 +4,7 @@ import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
 import { SdrMonthKpi, SdrCompPlan, SdrMonthPayout } from '@/types/sdr-fechamento';
 import { Card, CardContent } from '@/components/ui/card';
 import { TrendingUp, FileCheck, Percent, Calendar } from 'lucide-react';
+import { getRealizadasPct } from '@/lib/sdrMetaPercentuais';
 
 interface CloserIndicatorsProps {
   kpi: SdrMonthKpi | null;
@@ -29,8 +30,9 @@ export const CloserIndicators = ({
   // R1 Realizadas = reuniões com status completed ou contract_paid
   const r1Realizadas = kpi?.reunioes_realizadas || 0;
   
-  // Meta de realizadas = 70% do que foi alocado
-  const metaRealizadasCalculada = Math.round(alocadasRealizado * 0.7);
+  // Meta de realizadas = % do que foi alocado (do comp plan, default 70%)
+  const realizadasPct = getRealizadasPct(compPlan);
+  const metaRealizadasCalculada = Math.round(alocadasRealizado * realizadasPct);
   
   // Contratos Pagos (obtido da contagem de intermediações ou campo específico)
   const contratosPagos = kpi?.intermediacoes_contrato || 0;
@@ -75,6 +77,7 @@ export const CloserIndicators = ({
       <NoShowIndicator
         agendadas={alocadasRealizado}
         noShows={noShows}
+        compPlan={compPlan}
       />
 
       {/* Contratos Pagos */}
