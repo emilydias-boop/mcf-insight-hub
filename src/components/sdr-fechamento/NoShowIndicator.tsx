@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { calculateNoShowPerformance, getMultiplier } from '@/types/sdr-fechamento';
+import { calculateNoShowPerformance, getMultiplier, SdrCompPlan } from '@/types/sdr-fechamento';
+import { getNoShowMaxPct } from '@/lib/sdrMetaPercentuais';
 import { formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +11,7 @@ interface NoShowIndicatorProps {
   noShows: number;
   valorBase?: number;
   valorFinal?: number;
+  compPlan?: Partial<SdrCompPlan> | null;
 }
 
 export const NoShowIndicator = ({
@@ -17,19 +19,21 @@ export const NoShowIndicator = ({
   noShows,
   valorBase = 0,
   valorFinal = 0,
+  compPlan,
 }: NoShowIndicatorProps) => {
+  const maxPct = getNoShowMaxPct(compPlan);
   const taxaNoShow = agendadas > 0 ? (noShows / agendadas) * 100 : 0;
-  const performance = calculateNoShowPerformance(noShows, agendadas);
+  const performance = calculateNoShowPerformance(noShows, agendadas, maxPct);
   const multiplicador = getMultiplier(performance);
 
   // Determina o status
-  const isGood = taxaNoShow <= 30;
-  const isCritical = taxaNoShow > 50;
+  const isGood = taxaNoShow <= maxPct;
+  const isCritical = taxaNoShow > maxPct + 20;
 
   const getStatusIcon = () => {
-    if (taxaNoShow <= 20) return <CheckCircle className="h-4 w-4 text-green-500" />;
-    if (taxaNoShow <= 30) return <CheckCircle className="h-4 w-4 text-yellow-500" />;
-    if (taxaNoShow <= 50) return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+    if (taxaNoShow <= maxPct * 0.67) return <CheckCircle className="h-4 w-4 text-green-500" />;
+    if (taxaNoShow <= maxPct) return <CheckCircle className="h-4 w-4 text-yellow-500" />;
+    if (taxaNoShow <= maxPct + 20) return <AlertTriangle className="h-4 w-4 text-orange-500" />;
     return <XCircle className="h-4 w-4 text-red-500" />;
   };
 
@@ -40,9 +44,9 @@ export const NoShowIndicator = ({
   };
 
   const getProgressColor = () => {
-    if (taxaNoShow <= 20) return 'bg-green-500';
-    if (taxaNoShow <= 30) return 'bg-yellow-500';
-    if (taxaNoShow <= 50) return 'bg-orange-500';
+    if (taxaNoShow <= maxPct * 0.67) return 'bg-green-500';
+    if (taxaNoShow <= maxPct) return 'bg-yellow-500';
+    if (taxaNoShow <= maxPct + 20) return 'bg-orange-500';
     return 'bg-red-500';
   };
 
@@ -71,15 +75,15 @@ export const NoShowIndicator = ({
               className={cn('h-full transition-all', getProgressColor())}
               style={{ width: `${Math.min(taxaNoShow, 100)}%` }}
             />
-            {/* Linha de referência em 30% */}
+            {/* Linha de referência no teto */}
             <div 
               className="absolute top-0 bottom-0 w-0.5 bg-foreground/50"
-              style={{ left: '30%' }}
+              style={{ left: `${Math.min(maxPct, 100)}%` }}
             />
           </div>
           <div className="flex items-center justify-between text-[9px] text-muted-foreground/60">
             <span>0%</span>
-            <span>Meta: ≤30%</span>
+            <span>Meta: ≤{maxPct}%</span>
             <span>100%</span>
           </div>
         </div>
@@ -117,7 +121,7 @@ export const NoShowIndicator = ({
         {/* Explicação */}
         <div className="text-[10px] text-muted-foreground/70 bg-muted/50 p-1.5 rounded">
           <strong>Cálculo inverso:</strong> Quanto menor a taxa de no-show, maior a performance.
-          Taxa ≤30% = 100-150%, acima de 30% a performance decresce.
+          Taxa ≤{maxPct}% = 100-150%, acima de {maxPct}% a performance decresce.
         </div>
       </CardContent>
     </Card>
