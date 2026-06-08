@@ -11,11 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
+import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin, History } from 'lucide-react';
 import ProfileLinkSection from '../ProfileLinkSection';
 import CargoSelect from '../CargoSelect';
 import ChangeCargoRetroativoDialog from '../ChangeCargoRetroativoDialog';
-import { History } from 'lucide-react';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
