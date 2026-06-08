@@ -648,6 +648,7 @@ const FechamentoSDRDetail = () => {
             sdrMetaDiaria={sdrMetaDiaria}
             isCloser={isCloser}
             variavelTotal={effectiveVariavel}
+            compPlan={compPlan}
           />
         </>
       )}
