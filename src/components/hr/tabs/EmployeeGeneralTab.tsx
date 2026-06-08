@@ -14,6 +14,8 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
 import ProfileLinkSection from '../ProfileLinkSection';
 import CargoSelect from '../CargoSelect';
+import ChangeCargoRetroativoDialog from '../ChangeCargoRetroativoDialog';
+import { History } from 'lucide-react';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
@@ -23,6 +25,7 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState(employee);
   const [addressOpen, setAddressOpen] = useState(false);
+  const [openCargoRetro, setOpenCargoRetro] = useState(false);
   const { updateEmployee } = useEmployeeMutations();
   const { data: employees } = useEmployees();
   const { data: departamentosDB } = useDepartamentos();
@@ -300,11 +303,22 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => setOpenCargoRetro(true)}>
+          <History className="h-4 w-4 mr-1" /> Alterar cargo (retroativo)
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
           <Pencil className="h-4 w-4 mr-1" /> Editar
         </Button>
       </div>
+
+      <ChangeCargoRetroativoDialog
+        open={openCargoRetro}
+        onOpenChange={setOpenCargoRetro}
+        employeeId={employee.id}
+        employeeName={employee.nome_completo}
+        currentCargoId={employee.cargo_catalogo_id || null}
+      />
 
       {/* Seção de Vinculação com Usuário do Sistema */}
       <ProfileLinkSection employee={employee} editing={false} />
