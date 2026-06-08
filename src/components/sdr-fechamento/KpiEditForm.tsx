@@ -473,7 +473,7 @@ export const KpiEditForm = ({
                     {(metaRealizadasOverride != null && metaRealizadasOverride > 0) ? (
                       <>Meta: {metaRealizadasOverride} (personalizada)</>
                     ) : (
-                      <>Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)</>
+                      <>Meta: {Math.round(formData.reunioes_agendadas * realizadasPct)} ({realizadasPctLabel}% de {formData.reunioes_agendadas} agendadas)</>
                     )}
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_realizada}</span>
@@ -500,7 +500,7 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Taxa: {taxaNoShow}% / Max: 30%
+                    Taxa: {taxaNoShow}% / Max: {noShowMaxPct}%
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.no_shows}</span>
                     )}
