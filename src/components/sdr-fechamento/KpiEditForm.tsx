@@ -341,7 +341,7 @@ export const KpiEditForm = ({
                     </Badge>
                   </Label>
                   <span className="text-[10px] text-muted-foreground/70 block">
-                    Taxa: {taxaNoShow}% / Max: 30%
+                    Taxa: {taxaNoShow}% / Max: {noShowMaxPct}%
                     {agendaMetrics.data && (
                       <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.no_shows}</span>
                     )}
