@@ -11,6 +11,7 @@ import { useSdrAgendaMetricsBySdrId } from '@/hooks/useSdrAgendaMetricsBySdrId';
 import { useSdrCallMetricsBySdrId } from '@/hooks/useSdrCallMetrics';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getRealizadasPct, getNoShowMaxPct } from '@/lib/sdrMetaPercentuais';
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -59,6 +60,10 @@ export const KpiEditForm = ({
   diasUteisMetaOverride,
 }: KpiEditFormProps) => {
   const isCloser = roleType === 'closer';
+  // Percentuais derivados do comp plan (fallback 70% / 30%)
+  const realizadasPct = getRealizadasPct(compPlan);
+  const noShowMaxPct = getNoShowMaxPct(compPlan);
+  const realizadasPctLabel = Math.round(realizadasPct * 100);
   // Dias úteis efetivos para meta: override > dias úteis do mês
   const diasUteisParaMeta = (diasUteisMetaOverride != null && diasUteisMetaOverride > 0)
     ? diasUteisMetaOverride
