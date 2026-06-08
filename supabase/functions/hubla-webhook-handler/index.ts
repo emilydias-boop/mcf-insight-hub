@@ -2551,6 +2551,73 @@ serve(async (req) => {
       // lead.abandoned_checkout
       if (eventType === 'lead.abandoned_checkout') {
         console.log('🚪 Carrinho abandonado registrado');
+        try {
+          const ev = body.event || body;
+          // Tenta extrair produto de várias formas (groupName, products[], offer, items[])
+          const candidateNames: string[] = [];
+          if (ev?.groupName) candidateNames.push(String(ev.groupName));
+          if (Array.isArray(ev?.products)) {
+            for (const p of ev.products) {
+              if (p?.name) candidateNames.push(String(p.name));
+              if (Array.isArray(p?.offers)) p.offers.forEach((o: any) => o?.name && candidateNames.push(String(o.name)));
+            }
+          }
+          if (Array.isArray(ev?.items)) {
+            for (const it of ev.items) {
+              if (it?.product?.name) candidateNames.push(String(it.product.name));
+              if (it?.offer?.name) candidateNames.push(String(it.offer.name));
+              if (it?.name) candidateNames.push(String(it.name));
+            }
+          }
+          if (ev?.offer?.name) candidateNames.push(String(ev.offer.name));
+          if (ev?.product?.name) candidateNames.push(String(ev.product.name));
+
+          const isA010 = candidateNames.some(n => {
+            const u = (n || '').toUpperCase();
+            return u.includes('A010');
+          });
+
+          if (!isA010) {
+            console.log('🚪 [ABANDONO] Produto não é A010, ignorando criação de lead');
+          } else {
+            const productName = candidateNames.find(n => /A010/i.test(n)) || 'A010';
+            const customerName =
+              ev?.userName || ev?.customer?.name || ev?.customerName ||
+              ev?.lead?.name || ev?.user?.name || null;
+            const customerEmail =
+              ev?.userEmail || ev?.customer?.email || ev?.customerEmail ||
+              ev?.lead?.email || ev?.user?.email || null;
+            const customerPhone =
+              ev?.userPhone || ev?.customer?.phone || ev?.customerPhone ||
+              ev?.lead?.phone || ev?.user?.phone || null;
+
+            const valueRaw =
+              ev?.totalAmount || ev?.amount ||
+              ev?.invoice?.amount?.totalCents || ev?.invoice?.amount?.total ||
+              0;
+            const value = typeof valueRaw === 'number'
+              ? (valueRaw > 10000 ? valueRaw / 100 : valueRaw)
+              : parseFloat(String(valueRaw)) || 0;
+
+            if (!customerEmail && !customerPhone) {
+              console.log('🚪 [ABANDONO A010] Sem email/telefone — não é possível criar lead');
+            } else {
+              console.log(`🛒 [A010 ABANDONO] Criando/atualizando lead em "A010 Em Aberto": ${customerName} <${customerEmail}>`);
+              await createOrUpdateCRMContact(supabase, {
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+                originName: 'A010 Hubla',
+                productName,
+                value,
+                targetStageName: 'A010 Em Aberto',
+                extraTags: ['A010 Em Aberto', 'Hubla'],
+              });
+            }
+          }
+        } catch (abErr) {
+          console.error('🚪 [ABANDONO] Erro ao processar abandono A010:', abErr);
+        }
       }
 
       // Atualizar log de sucesso
