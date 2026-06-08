@@ -158,6 +158,7 @@ interface DynamicIndicatorsGridProps {
   diasUteisMes: number;
   sdrMetaDiaria: number;
   variavelTotal?: number;
+  compPlan?: SdrCompPlan | null;
 }
 
 export const DynamicIndicatorsGrid = ({
@@ -167,6 +168,7 @@ export const DynamicIndicatorsGrid = ({
   diasUteisMes,
   sdrMetaDiaria,
   variavelTotal,
+  compPlan,
 }: DynamicIndicatorsGridProps) => {
   if (!metricas || metricas.length === 0) {
     return (
@@ -187,6 +189,7 @@ export const DynamicIndicatorsGrid = ({
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
           variavelTotal={variavelTotal}
+          compPlan={compPlan}
         />
       ))}
     </div>
