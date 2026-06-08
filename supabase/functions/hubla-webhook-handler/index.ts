@@ -269,6 +269,9 @@ interface CRMContactData {
   originName: string;
   productName: string;
   value: number;
+  // Opcionais: permitem reutilizar o fluxo para "A010 Em Aberto" (carrinho abandonado)
+  targetStageName?: string;       // default "Novo Lead"
+  extraTags?: string[];           // default ['A010', 'Hubla']
 }
 
 // CONSTANTE: Origin canônico para todos os leads A010
