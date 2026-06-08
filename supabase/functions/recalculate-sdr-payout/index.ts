@@ -71,6 +71,7 @@ interface CompPlan {
   ifood_ultrameta: number;
   dias_uteis: number;
   variavel_total: number;
+  meta_no_show_pct?: number;
 }
 
 interface Kpi {
