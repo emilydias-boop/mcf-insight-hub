@@ -117,6 +117,7 @@ export function CloserFechamentoView({ payout, closerMetrics, sdrId, anoMes, kpi
         diasUteisMes={diasUteisMes}
         sdrMetaDiaria={sdrMetaDiaria}
         variavelTotal={variavelTotal}
+        compPlan={compPlan}
       />
 
       {/* Secondary metrics row - Closer-specific stats */}
