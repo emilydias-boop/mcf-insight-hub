@@ -269,6 +269,9 @@ interface CRMContactData {
   originName: string;
   productName: string;
   value: number;
+  // Opcionais: permitem reutilizar o fluxo para "A010 Em Aberto" (carrinho abandonado)
+  targetStageName?: string;       // default "Novo Lead"
+  extraTags?: string[];           // default ['A010', 'Hubla']
 }
 
 // CONSTANTE: Origin canônico para todos os leads A010
@@ -349,6 +352,11 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
   // Normalizar telefone
   const normalizedPhone = normalizePhone(data.phone);
   console.log(`[CRM] Telefone normalizado: ${data.phone} -> ${normalizedPhone}`);
+
+  // Parametrizáveis: stage e tags-alvo (default = compra A010 confirmada → "Novo Lead")
+  const targetStageName = data.targetStageName || 'Novo Lead';
+  const targetTags = data.extraTags && data.extraTags.length > 0 ? data.extraTags : ['A010', 'Hubla'];
+  const isAbandoned = targetTags.some(t => /a010 em aberto/i.test(t));
   
   // CORREÇÃO: Sempre usar PIPELINE INSIDE SALES para A010 (evitar criar origens duplicadas)
   const targetOriginName = data.originName === 'A010 Hubla' ? PIPELINE_INSIDE_SALES_ORIGIN : data.originName;
@@ -462,7 +470,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
           email: data.email,
           phone: normalizedPhone,
           origin_id: originId,
-          tags: ['A010', 'Hubla'],
+          tags: targetTags,
           custom_fields: { source: 'hubla', product: data.productName }
         })
         .select('id')
@@ -479,7 +487,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     if (contactId && originId) {
       const { data: dealByContactOrigin } = await supabase
         .from('crm_deals')
-        .select('id, tags, value, custom_fields')
+        .select('id, tags, value, custom_fields, stage_id')
         .eq('contact_id', contactId)
         .eq('origin_id', originId)
         .order('created_at', { ascending: false })
@@ -494,54 +502,94 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     
     // Se deal existe, ATUALIZAR tags + valor (não criar novo)
     if (existingDeal) {
-      const currentTags = existingDeal.tags || [];
-      const newTags = currentTags.includes('A010') ? currentTags : [...currentTags, 'A010'];
-      
+      const currentTags: string[] = existingDeal.tags || [];
+      // Quando é compra confirmada (target = Novo Lead), remover "A010 Em Aberto" e garantir "A010"
+      // Quando é abandono, apenas garantir "A010 Em Aberto"
+      let newTags: string[];
+      if (isAbandoned) {
+        newTags = currentTags.includes('A010 Em Aberto')
+          ? currentTags
+          : [...currentTags, 'A010 Em Aberto'];
+      } else {
+        newTags = currentTags.filter(t => !/^a010 em aberto$/i.test(t));
+        if (!newTags.includes('A010')) newTags.push('A010');
+        if (!newTags.includes('Hubla')) newTags.push('Hubla');
+      }
+
       // Merge custom_fields preservando dados existentes
       const currentCustomFields = existingDeal.custom_fields || {};
       const updatedCustomFields = {
         ...currentCustomFields,
-        a010_compra: true,
+        a010_compra: isAbandoned ? (currentCustomFields.a010_compra || false) : true,
+        ...(isAbandoned ? { a010_abandono: true, a010_abandono_data: new Date().toISOString() } : {}),
         a010_produto: data.productName,
         a010_data: new Date().toISOString(),
       };
-      
+
       // Atualizar valor se o novo for maior (upsell)
       const newValue = Math.max(existingDeal.value || 0, data.value || 0);
-      
+
+      // Se é compra confirmada e o deal está em "A010 Em Aberto", PROMOVER para "Novo Lead"
+      let promotedStageId: string | null = null;
+      if (!isAbandoned && existingDeal.stage_id) {
+        const { data: currentStage } = await supabase
+          .from('crm_stages')
+          .select('stage_name')
+          .eq('id', existingDeal.stage_id)
+          .maybeSingle();
+        if (currentStage && /a010 em aberto/i.test(currentStage.stage_name || '')) {
+          const { data: novoLead } = await supabase
+            .from('crm_stages')
+            .select('id')
+            .eq('origin_id', originId)
+            .ilike('stage_name', '%Novo Lead%')
+            .limit(1)
+            .maybeSingle();
+          if (novoLead) {
+            promotedStageId = novoLead.id;
+            console.log(`✅ [A010 PROMOVIDO] abandono → novo lead (deal ${existingDeal.id})`);
+          }
+        }
+      }
+
+      const updatePayload: any = {
+        tags: newTags,
+        value: newValue,
+        custom_fields: updatedCustomFields,
+        updated_at: new Date().toISOString(),
+      };
+      if (promotedStageId) {
+        updatePayload.stage_id = promotedStageId;
+        updatePayload.stage_moved_at = new Date().toISOString();
+      }
+
       await supabase
         .from('crm_deals')
-        .update({
-          tags: newTags,
-          value: newValue,
-          custom_fields: updatedCustomFields,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', existingDeal.id);
-      
-      console.log(`[CRM] Deal atualizado com tag A010: ${existingDeal.id} - Valor: R$ ${newValue}`);
+
+      console.log(`[CRM] Deal atualizado: ${existingDeal.id} - tags=${JSON.stringify(newTags)} - Valor: R$ ${newValue}${promotedStageId ? ' (movido para Novo Lead)' : ''}`);
       return; // Não criar novo deal
     }
     
     // === CONTINUAR COM CRIAÇÃO DE DEAL SE NÃO EXISTIR ===
     
-    // 6. Buscar estágio "Novo Lead" para a origem (por nome, não por ordem)
+    // 6. Buscar estágio alvo (default "Novo Lead") para a origem
     let stageId: string | null = null;
     if (originId) {
-      // Primeiro: buscar stage "Novo Lead" por nome
-      const { data: novoLeadStage } = await supabase
+      const { data: targetStage } = await supabase
         .from('crm_stages')
         .select('id')
         .eq('origin_id', originId)
-        .ilike('stage_name', '%Novo Lead%')
+        .ilike('stage_name', `%${targetStageName}%`)
         .limit(1)
         .maybeSingle();
       
-      if (novoLeadStage) {
-        stageId = novoLeadStage.id;
-        console.log(`[CRM] Stage "Novo Lead" encontrado por nome: ${stageId}`);
+      if (targetStage) {
+        stageId = targetStage.id;
+        console.log(`[CRM] Stage "${targetStageName}" encontrado por nome: ${stageId}`);
       } else {
-        // Fallback: primeira stage por ordem (caso não exista "Novo Lead")
+        // Fallback: primeira stage por ordem
         const { data: fallbackStage } = await supabase
           .from('crm_stages')
           .select('id')
@@ -649,11 +697,12 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         owner_id: finalOwnerId,
         owner_profile_id: finalOwnerProfileId,
         product_name: data.productName,
-        tags: ['A010', 'Hubla'],
+        tags: targetTags,
         custom_fields: { 
           source: 'hubla', 
           product: data.productName,
-          a010_compra: true,
+          a010_compra: !isAbandoned,
+          ...(isAbandoned ? { a010_abandono: true, a010_abandono_data: new Date().toISOString() } : {}),
           a010_data: new Date().toISOString(),
           ...(wasDistributed ? { distributed: true, owner_original: inheritedOwnerId || null } : {})
         },
@@ -2502,6 +2551,73 @@ serve(async (req) => {
       // lead.abandoned_checkout
       if (eventType === 'lead.abandoned_checkout') {
         console.log('🚪 Carrinho abandonado registrado');
+        try {
+          const ev = body.event || body;
+          // Tenta extrair produto de várias formas (groupName, products[], offer, items[])
+          const candidateNames: string[] = [];
+          if (ev?.groupName) candidateNames.push(String(ev.groupName));
+          if (Array.isArray(ev?.products)) {
+            for (const p of ev.products) {
+              if (p?.name) candidateNames.push(String(p.name));
+              if (Array.isArray(p?.offers)) p.offers.forEach((o: any) => o?.name && candidateNames.push(String(o.name)));
+            }
+          }
+          if (Array.isArray(ev?.items)) {
+            for (const it of ev.items) {
+              if (it?.product?.name) candidateNames.push(String(it.product.name));
+              if (it?.offer?.name) candidateNames.push(String(it.offer.name));
+              if (it?.name) candidateNames.push(String(it.name));
+            }
+          }
+          if (ev?.offer?.name) candidateNames.push(String(ev.offer.name));
+          if (ev?.product?.name) candidateNames.push(String(ev.product.name));
+
+          const isA010 = candidateNames.some(n => {
+            const u = (n || '').toUpperCase();
+            return u.includes('A010');
+          });
+
+          if (!isA010) {
+            console.log('🚪 [ABANDONO] Produto não é A010, ignorando criação de lead');
+          } else {
+            const productName = candidateNames.find(n => /A010/i.test(n)) || 'A010';
+            const customerName =
+              ev?.userName || ev?.customer?.name || ev?.customerName ||
+              ev?.lead?.name || ev?.user?.name || null;
+            const customerEmail =
+              ev?.userEmail || ev?.customer?.email || ev?.customerEmail ||
+              ev?.lead?.email || ev?.user?.email || null;
+            const customerPhone =
+              ev?.userPhone || ev?.customer?.phone || ev?.customerPhone ||
+              ev?.lead?.phone || ev?.user?.phone || null;
+
+            const valueRaw =
+              ev?.totalAmount || ev?.amount ||
+              ev?.invoice?.amount?.totalCents || ev?.invoice?.amount?.total ||
+              0;
+            const value = typeof valueRaw === 'number'
+              ? (valueRaw > 10000 ? valueRaw / 100 : valueRaw)
+              : parseFloat(String(valueRaw)) || 0;
+
+            if (!customerEmail && !customerPhone) {
+              console.log('🚪 [ABANDONO A010] Sem email/telefone — não é possível criar lead');
+            } else {
+              console.log(`🛒 [A010 ABANDONO] Criando/atualizando lead em "A010 Em Aberto": ${customerName} <${customerEmail}>`);
+              await createOrUpdateCRMContact(supabase, {
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+                originName: 'A010 Hubla',
+                productName,
+                value,
+                targetStageName: 'A010 Em Aberto',
+                extraTags: ['A010 Em Aberto', 'Hubla'],
+              });
+            }
+          }
+        } catch (abErr) {
+          console.error('🚪 [ABANDONO] Erro ao processar abandono A010:', abErr);
+        }
       }
 
       // Atualizar log de sucesso
