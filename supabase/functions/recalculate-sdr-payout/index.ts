@@ -43,15 +43,17 @@ const getFixedGrossPrice = (productName: string | null, originalPrice: number): 
 };
 
 // Cálculo inverso do No-Show
-const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
+// Aceita teto configurável (default 30%). Quando o comp plan define meta_no_show_pct (>0), usa esse valor.
+const calculateNoShowPerformance = (noShows: number, agendadas: number, maxPct: number = 30): number => {
   if (agendadas <= 0) return 100;
-  
+
   const taxaNoShow = (noShows / agendadas) * 100;
-  
-  if (taxaNoShow <= 30) {
-    return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
+  const teto = maxPct > 0 ? maxPct : 30;
+
+  if (taxaNoShow <= teto) {
+    return Math.min(150, 100 + ((teto - taxaNoShow) / teto) * 50);
   } else {
-    return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
+    return Math.max(0, 100 - ((taxaNoShow - teto) / teto) * 100);
   }
 };
 
