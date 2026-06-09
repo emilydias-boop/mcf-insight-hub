@@ -182,6 +182,7 @@ export function PrevisaoComissoesTab() {
     'com-parcelas',
   );
   const [mesFiltro, setMesFiltro] = useState<string | null>(null);
+  const [showHistorico, setShowHistorico] = useState(false);
   // Simulação de novas cotas
   const [simNovasCotas, setSimNovasCotas] = useState<number>(0);
   const [simTicket, setSimTicket] = useState<number>(100000);
