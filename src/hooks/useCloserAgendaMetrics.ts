@@ -21,41 +21,52 @@ export interface CloserAgendaMetrics {
   r2_agendadas: number;       // R2 meetings attributed to this closer (via R1 deal_id)
 }
 
-export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string | undefined) => {
+export const useCloserAgendaMetrics = (
+  sdrId: string | undefined,
+  anoMes: string | undefined,
+  options?: { closerIdOverride?: string | null }
+) => {
+  const closerIdOverride = options?.closerIdOverride ?? null;
   return useQuery({
-    queryKey: ['closer-agenda-metrics', sdrId, anoMes],
+    queryKey: ['closer-agenda-metrics', sdrId, anoMes, closerIdOverride],
     queryFn: async (): Promise<CloserAgendaMetrics> => {
       const empty: CloserAgendaMetrics = { closerId: null, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0, r2_agendadas: 0 };
 
-      if (!sdrId || !anoMes) return empty;
+      if (!anoMes) return empty;
 
-      // 1. Buscar email do SDR
-      const { data: sdr, error: sdrError } = await supabase
-        .from('sdr')
-        .select('email')
-        .eq('id', sdrId)
-        .single();
+      let closerId: string | null = closerIdOverride;
 
-      if (sdrError || !sdr?.email) {
-        console.error('[useCloserAgendaMetrics] Error fetching SDR:', sdrError);
-        return empty;
+      if (!closerId) {
+        if (!sdrId) return empty;
+
+        // 1. Buscar email do SDR
+        const { data: sdr, error: sdrError } = await supabase
+          .from('sdr')
+          .select('email')
+          .eq('id', sdrId)
+          .single();
+
+        if (sdrError || !sdr?.email) {
+          console.error('[useCloserAgendaMetrics] Error fetching SDR:', sdrError);
+          return empty;
+        }
+
+        // 2. Buscar closer_id pelo email
+        const { data: closer, error: closerError } = await supabase
+          .from('closers')
+          .select('id')
+          .ilike('email', sdr.email)
+          .order('is_active', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (closerError || !closer?.id) {
+          console.warn('[useCloserAgendaMetrics] Closer not found for email:', sdr.email);
+          return empty;
+        }
+
+        closerId = closer.id;
       }
-
-      // 2. Buscar closer_id pelo email
-      const { data: closer, error: closerError } = await supabase
-        .from('closers')
-        .select('id')
-        .ilike('email', sdr.email)
-        .order('is_active', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (closerError || !closer?.id) {
-        console.warn('[useCloserAgendaMetrics] Closer not found for email:', sdr.email);
-        return empty;
-      }
-
-      const closerId = closer.id;
 
       // 3. Calcular período do mês
       // BRT (UTC-3): convertemos os limites BRT para UTC adicionando 3h ao
@@ -340,7 +351,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         r2_agendadas,
       };
     },
-    enabled: !!sdrId && !!anoMes,
+    enabled: !!anoMes && (!!sdrId || !!closerIdOverride),
     staleTime: 30000,
   });
 };
