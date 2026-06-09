@@ -640,13 +640,14 @@ export function PrevisaoComissoesTab() {
                   <TableHead className="text-right">Parcelas</TableHead>
                   <TableHead className="text-right">Valor Parcelas</TableHead>
                   <TableHead className="text-right">Comissão</TableHead>
+                  <TableHead className="text-right">Média 4s</TableHead>
                   <TableHead>OBS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {semanasFiltradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       Nenhuma semana corresponde aos filtros.
                     </TableCell>
                   </TableRow>
