@@ -23,6 +23,8 @@ export interface PrevisaoParcela {
   cliente: string;
   vendedorNome: string;
   vendedorId: string | null;
+  /** true = parcela ainda não paga, projetada pelo vencimento (não inadimplente). */
+  previsto: boolean;
 }
 
 export interface PrevisaoSemana extends CalendarWeek {
@@ -39,6 +41,14 @@ export interface PrevisaoSemana extends CalendarWeek {
   outliersValor: number;
   /** Média móvel das últimas 4 semanas (incluindo essa), em cima de totalComissaoSaneada */
   mediaMovel4s: number;
+  /** Total realizado: apenas parcelas pagas. */
+  totalComissaoRealizada: number;
+  /** Total projetado: apenas parcelas a vencer (pendentes, não inadimplentes). */
+  totalComissaoProjetada: number;
+  /** Qtd parcelas realizadas (pagas). */
+  parcelasRealizadas: number;
+  /** Qtd parcelas projetadas (a vencer). */
+  parcelasProjetadas: number;
 }
 
 export interface PrevisaoResult {
