@@ -108,6 +108,15 @@ function SemanaRow({
         </TableCell>
         <TableCell className="text-right font-semibold text-primary">
           {formatCurrency(semana.totalComissao)}
+          {semana.outliersCount > 0 && (
+            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+              saneado: {formatCurrency(semana.totalComissaoSaneada)}
+              {' '}(−{semana.outliersCount} outlier{semana.outliersCount > 1 ? 's' : ''})
+            </div>
+          )}
+        </TableCell>
+        <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-medium">
+          {semana.mediaMovel4s > 0 ? formatCurrency(semana.mediaMovel4s) : '-'}
         </TableCell>
         <TableCell className="text-xs text-muted-foreground">
           {semana.obs || '-'}
@@ -115,7 +124,7 @@ function SemanaRow({
       </TableRow>
       {isOpen && (
         <TableRow>
-          <TableCell colSpan={9} className="bg-muted/20 p-0">
+          <TableCell colSpan={10} className="bg-muted/20 p-0">
             {parcelasFiltradas.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground text-center">
                 Nenhuma parcela paga nessa semana.
