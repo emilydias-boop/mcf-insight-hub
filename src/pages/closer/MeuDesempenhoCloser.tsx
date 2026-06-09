@@ -349,7 +349,7 @@ export default function MeuDesempenhoCloser() {
             />
           ) : (
             <CloserDetailKPICards
-              metrics={closerMetrics}
+              metrics={effectiveCloserMetrics}
               teamAverages={teamAverages}
               isLoading={isLoading}
             />
@@ -371,7 +371,7 @@ export default function MeuDesempenhoCloser() {
               />
             ) : (
               <CloserRankingBlock
-                closerMetrics={closerMetrics}
+                closerMetrics={effectiveCloserMetrics}
                 ranking={ranking}
                 teamAverages={teamAverages}
                 isLoading={isLoading}
@@ -423,21 +423,21 @@ export default function MeuDesempenhoCloser() {
                   <>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Total Leads Realizados</span>
-                      <span className="font-semibold">{closerMetrics?.r1_realizada || 0}</span>
+                      <span className="font-semibold">{effectiveCloserMetrics?.r1_realizada || 0}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Contratos Fechados</span>
                       <span className="font-semibold text-primary">
-                        {closerMetrics?.contrato_pago || 0}
+                        {effectiveCloserMetrics?.contrato_pago || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Taxa de Conversão</span>
                       <span className="font-semibold">
-                        {closerMetrics?.r1_realizada
+                        {effectiveCloserMetrics?.r1_realizada
                           ? (
-                              ((closerMetrics.contrato_pago + closerMetrics.outside) /
-                                closerMetrics.r1_realizada) *
+                              ((effectiveCloserMetrics.contrato_pago + effectiveCloserMetrics.outside) /
+                                effectiveCloserMetrics.r1_realizada) *
                               100
                             ).toFixed(1)
                           : 0}
@@ -446,7 +446,7 @@ export default function MeuDesempenhoCloser() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">R2 Agendadas</span>
-                      <span className="font-semibold">{closerMetrics?.r2_agendada || 0}</span>
+                      <span className="font-semibold">{effectiveCloserMetrics?.r2_agendada || 0}</span>
                     </div>
 
                     {/* R2 Carrinho Section */}
