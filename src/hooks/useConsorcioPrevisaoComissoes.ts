@@ -31,6 +31,14 @@ export interface PrevisaoSemana extends CalendarWeek {
   totalParcelas: number;
   totalCotas: number;
   totalValorParcela: number;
+  /** Total da semana já com saneamento anti-outlier (parcelas > 5× a mediana são limitadas) */
+  totalComissaoSaneada: number;
+  /** Quantidade de parcelas que tiveram a comissão limitada pelo anti-outlier */
+  outliersCount: number;
+  /** Valor total "removido" pelo anti-outlier nessa semana */
+  outliersValor: number;
+  /** Média móvel das últimas 4 semanas (incluindo essa), em cima de totalComissaoSaneada */
+  mediaMovel4s: number;
 }
 
 export interface PrevisaoResult {
@@ -80,6 +88,38 @@ export function useConsorcioPrevisaoComissoes() {
 
       if (error) throw error;
 
+      // ============================================================
+      // Coleta TODAS as comissões previstas para calcular a mediana
+      // por tipoProduto (usada como base do anti-outlier).
+      // ============================================================
+      const todasComissoes: Record<string, number[]> = {};
+      for (const inst of installments ?? []) {
+        const card = (inst as any).consortium_cards;
+        if (!card) continue;
+        const tipo = (card.tipo_produto || 'select') as string;
+        const c = calcularComissao(
+          Number(card.valor_credito) || 0,
+          tipo as TipoProduto,
+          (inst as any).numero_parcela,
+        );
+        if (c > 0) {
+          if (!todasComissoes[tipo]) todasComissoes[tipo] = [];
+          todasComissoes[tipo].push(c);
+        }
+      }
+      function mediana(arr: number[]): number {
+        if (!arr.length) return 0;
+        const s = [...arr].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      }
+      const medianaPorTipo: Record<string, number> = {};
+      for (const k of Object.keys(todasComissoes)) {
+        medianaPorTipo[k] = mediana(todasComissoes[k]);
+      }
+      // Fator de corte: parcelas acima de 5× a mediana do seu tipo são limitadas a 5× a mediana.
+      const OUTLIER_FACTOR = 5;
+
       // Inicializa estrutura por semana
       const byWeek = new Map<number, PrevisaoSemana>();
       for (const w of EMBRACON_CALENDAR_2026) {
@@ -90,6 +130,10 @@ export function useConsorcioPrevisaoComissoes() {
           totalParcelas: 0,
           totalCotas: 0,
           totalValorParcela: 0,
+          totalComissaoSaneada: 0,
+          outliersCount: 0,
+          outliersValor: 0,
+          mediaMovel4s: 0,
         });
       }
 
@@ -107,6 +151,15 @@ export function useConsorcioPrevisaoComissoes() {
         const tipoProduto = (card.tipo_produto || 'select') as TipoProduto;
         // Calcula comissão usando a tabela oficial (SELECT/PARCELINHA) sem override do produto.
         const valorComissao = calcularComissao(valorCredito, tipoProduto, inst.numero_parcela);
+
+        // Anti-outlier: limita comissão acima de 5× a mediana do tipoProduto.
+        const med = medianaPorTipo[tipoProduto] || 0;
+        const tetoSaneamento = med > 0 ? med * OUTLIER_FACTOR : Infinity;
+        const valorComissaoSaneada = Math.min(valorComissao, tetoSaneamento);
+        if (valorComissaoSaneada < valorComissao) {
+          bucket.outliersCount += 1;
+          bucket.outliersValor += valorComissao - valorComissaoSaneada;
+        }
 
         const cliente =
           card.tipo_pessoa === 'pj' ? card.razao_social : card.nome_completo;
@@ -127,6 +180,7 @@ export function useConsorcioPrevisaoComissoes() {
           vendedorId: card.vendedor_id || null,
         });
         bucket.totalComissao += valorComissao;
+        bucket.totalComissaoSaneada += valorComissaoSaneada;
         bucket.totalValorParcela += Number(inst.valor_parcela) || 0;
         bucket.totalParcelas += 1;
       }
@@ -137,6 +191,25 @@ export function useConsorcioPrevisaoComissoes() {
       }
 
       const semanas = Array.from(byWeek.values());
+
+      // ============================================================
+      // Média móvel 4 semanas (sobre totalComissaoSaneada).
+      // Suaviza o efeito de "deslize" da Embracon: parcela paga numa
+      // semana mas comissionada em outra. Para cada semana N, faz a
+      // média das semanas [N-3..N], considerando só semanas com algum
+      // pagamento previsto (totalParcelas > 0).
+      // ============================================================
+      for (let i = 0; i < semanas.length; i++) {
+        const janela: number[] = [];
+        for (let j = Math.max(0, i - 3); j <= i; j++) {
+          if (semanas[j].totalParcelas > 0) {
+            janela.push(semanas[j].totalComissaoSaneada);
+          }
+        }
+        semanas[i].mediaMovel4s =
+          janela.length > 0 ? janela.reduce((a, b) => a + b, 0) / janela.length : 0;
+      }
+
       const totalGeralComissao = semanas.reduce((s, w) => s + w.totalComissao, 0);
       const totalGeralParcelas = semanas.reduce((s, w) => s + w.totalParcelas, 0);
 

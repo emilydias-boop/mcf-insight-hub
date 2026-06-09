@@ -108,6 +108,15 @@ function SemanaRow({
         </TableCell>
         <TableCell className="text-right font-semibold text-primary">
           {formatCurrency(semana.totalComissao)}
+          {semana.outliersCount > 0 && (
+            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+              saneado: {formatCurrency(semana.totalComissaoSaneada)}
+              {' '}(−{semana.outliersCount} outlier{semana.outliersCount > 1 ? 's' : ''})
+            </div>
+          )}
+        </TableCell>
+        <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-medium">
+          {semana.mediaMovel4s > 0 ? formatCurrency(semana.mediaMovel4s) : '-'}
         </TableCell>
         <TableCell className="text-xs text-muted-foreground">
           {semana.obs || '-'}
@@ -115,7 +124,7 @@ function SemanaRow({
       </TableRow>
       {isOpen && (
         <TableRow>
-          <TableCell colSpan={9} className="bg-muted/20 p-0">
+          <TableCell colSpan={10} className="bg-muted/20 p-0">
             {parcelasFiltradas.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground text-center">
                 Nenhuma parcela paga nessa semana.
@@ -301,7 +310,7 @@ export function PrevisaoComissoesTab() {
               <>
                 <div className="flex items-baseline justify-between gap-4 flex-wrap">
                   <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(semanaPagamento.totalComissao)}
+                    {formatCurrency(semanaPagamento.totalComissaoSaneada)}
                   </div>
                   <Badge variant="default">Semana #{semanaPagamento.n}</Badge>
                 </div>
@@ -311,6 +320,16 @@ export function PrevisaoComissoesTab() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Cai na conta em <span className="font-medium">{fmtDateFull(semanaPagamento.dataPagamento)}</span>
+                </p>
+                <p className="text-xs mt-1">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                    Estimativa suavizada (média 4 semanas): {formatCurrency(semanaPagamento.mediaMovel4s)}
+                  </span>
+                  {semanaPagamento.outliersCount > 0 && (
+                    <span className="block text-amber-600 dark:text-amber-400">
+                      ⚠️ {semanaPagamento.outliersCount} parcela(s) outlier removida(s): −{formatCurrency(semanaPagamento.outliersValor)}
+                    </span>
+                  )}
                 </p>
               </>
             ) : (
@@ -631,13 +650,14 @@ export function PrevisaoComissoesTab() {
                   <TableHead className="text-right">Parcelas</TableHead>
                   <TableHead className="text-right">Valor Parcelas</TableHead>
                   <TableHead className="text-right">Comissão</TableHead>
+                  <TableHead className="text-right">Média 4s</TableHead>
                   <TableHead>OBS</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {semanasFiltradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       Nenhuma semana corresponde aos filtros.
                     </TableCell>
                   </TableRow>
