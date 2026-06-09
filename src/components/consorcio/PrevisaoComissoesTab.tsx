@@ -643,20 +643,80 @@ export function PrevisaoComissoesTab() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  semanasFiltradas.map((s) => (
-                    <SemanaRow
-                      key={s.n}
-                      semana={s}
-                      isOpen={openWeek === -1 || openWeek === s.n}
-                      onToggle={() =>
-                        setOpenWeek((cur) =>
-                          cur === s.n || cur === -1 ? null : s.n,
-                        )
-                      }
-                      isNext={data.proximaSemana?.n === s.n}
-                      search={search}
-                    />
-                  ))
+                  (() => {
+                    // Âncora: semana de pagamento atual (primeira com pagamento >= hoje).
+                    // "Atuais" = da semana anterior à âncora em diante.
+                    // "Histórico" = tudo antes da semana anterior à âncora.
+                    const anchorN = data.proximaSemana?.n ?? Infinity;
+                    const cutoffN = anchorN - 1;
+                    const historico = semanasFiltradas.filter((s) => s.n < cutoffN);
+                    const atuais = semanasFiltradas.filter((s) => s.n >= cutoffN);
+                    const totalHistComissao = historico.reduce((s, w) => s + w.totalComissao, 0);
+                    const totalHistParcelas = historico.reduce((s, w) => s + w.totalParcelas, 0);
+
+                    return (
+                      <>
+                        {historico.length > 0 && (
+                          <>
+                            <TableRow
+                              className="cursor-pointer bg-muted/30 hover:bg-muted/50"
+                              onClick={() => setShowHistorico((v) => !v)}
+                            >
+                              <TableCell className="w-8">
+                                {showHistorico ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </TableCell>
+                              <TableCell colSpan={5} className="text-sm">
+                                <span className="font-medium">Histórico</span>
+                                <span className="text-muted-foreground ml-2">
+                                  · {historico.length} semanas anteriores · {totalHistParcelas} parcelas
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">—</TableCell>
+                              <TableCell className="text-right font-semibold text-muted-foreground">
+                                {formatCurrency(totalHistComissao)}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {showHistorico ? 'clique para recolher' : 'clique para expandir'}
+                              </TableCell>
+                            </TableRow>
+                            {showHistorico &&
+                              historico.map((s) => (
+                                <SemanaRow
+                                  key={s.n}
+                                  semana={s}
+                                  isOpen={openWeek === -1 || openWeek === s.n}
+                                  onToggle={() =>
+                                    setOpenWeek((cur) =>
+                                      cur === s.n || cur === -1 ? null : s.n,
+                                    )
+                                  }
+                                  isNext={data.proximaSemana?.n === s.n}
+                                  search={search}
+                                />
+                              ))}
+                          </>
+                        )}
+                        {atuais.map((s) => (
+                          <SemanaRow
+                            key={s.n}
+                            semana={s}
+                            isOpen={openWeek === -1 || openWeek === s.n}
+                            onToggle={() =>
+                              setOpenWeek((cur) =>
+                                cur === s.n || cur === -1 ? null : s.n,
+                              )
+                            }
+                            isNext={data.proximaSemana?.n === s.n}
+                            search={search}
+                          />
+                        ))}
+                      </>
+                    );
+                  })()
                 )}
               </TableBody>
             </Table>
