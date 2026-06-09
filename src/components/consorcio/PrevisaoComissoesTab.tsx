@@ -183,6 +183,7 @@ export function PrevisaoComissoesTab() {
   );
   const [mesFiltro, setMesFiltro] = useState<string | null>(null);
   const [showHistorico, setShowHistorico] = useState(false);
+  const [showHistoricoMensal, setShowHistoricoMensal] = useState(false);
   // Simulação de novas cotas
   const [simNovasCotas, setSimNovasCotas] = useState<number>(0);
   const [simTicket, setSimTicket] = useState<number>(100000);
@@ -243,6 +244,11 @@ export function PrevisaoComissoesTab() {
     };
   });
   const totalPrevisaoGeral = previsaoRows.reduce((s, r) => s + r.total, 0);
+
+  // Mês âncora para separar histórico vs atuais (mês anterior em diante)
+  const [aAno, aMes] = mesAtualYm.split('-').map(Number);
+  const mesAnteriorYm =
+    aMes === 1 ? `${aAno - 1}-12` : `${aAno}-${String(aMes - 1).padStart(2, '0')}`;
 
   const totalProxima = data.proximaSemana?.totalComissao ?? 0;
   const semanasComParcelas = data.semanas.filter((w) => w.totalParcelas > 0).length;
@@ -527,42 +533,125 @@ export function PrevisaoComissoesTab() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    previsaoRows.map((r) => {
-                      const isAtual = r.ym === mesAtualYm;
-                      return (
-                        <TableRow key={r.ym} className={isAtual ? 'bg-amber-500/5' : ''}>
-                          <TableCell className="font-medium capitalize">
-                            {format(parseISO(r.ym + '-01'), "MMM 'de' yyyy", { locale: ptBR })}
-                            {isAtual && (
-                              <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50">
-                                atual
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-emerald-600 dark:text-emerald-400">
-                            {formatCurrency(r.comissaoPaga)}
-                          </TableCell>
-                          <TableCell className="text-right text-amber-600 dark:text-amber-400">
-                            {formatCurrency(r.comissaoAVencer)}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600 dark:text-red-400">
-                            {formatCurrency(r.comissaoAtrasada)}
-                          </TableCell>
-                          <TableCell className="text-right text-primary">
-                            {r.simulado > 0 ? formatCurrency(r.simulado) : '-'}
-                          </TableCell>
-                          <TableCell className="text-right font-bold">
-                            {formatCurrency(r.total)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {r.parcelasPagas + r.parcelasAVencer + r.parcelasAtrasadas}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {r.cotasSet.size}
-                          </TableCell>
-                        </TableRow>
+                    (() => {
+                      const historico = previsaoRows.filter((r) => r.ym < mesAnteriorYm);
+                      const atuais = previsaoRows.filter((r) => r.ym >= mesAnteriorYm);
+                      const totalHistComissao = historico.reduce((s, r) => s + r.total, 0);
+                      const totalHistParcelas = historico.reduce(
+                        (s, r) => s + r.parcelasPagas + r.parcelasAVencer + r.parcelasAtrasadas,
+                        0,
                       );
-                    })
+                      const totalHistCotas = new Set(historico.flatMap((r) => Array.from(r.cotasSet))).size;
+
+                      return (
+                        <>
+                          {historico.length > 0 && (
+                            <>
+                              <TableRow
+                                className="cursor-pointer bg-muted/30 hover:bg-muted/50"
+                                onClick={() => setShowHistoricoMensal((v) => !v)}
+                              >
+                                <TableCell className="w-8">
+                                  {showHistoricoMensal ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </TableCell>
+                                <TableCell colSpan={4} className="text-sm">
+                                  <span className="font-medium">Histórico</span>
+                                  <span className="text-muted-foreground ml-2">
+                                    · {historico.length} meses anteriores · {totalHistParcelas} parcelas · {totalHistCotas} cotas
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold text-muted-foreground">
+                                  {formatCurrency(totalHistComissao)}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {totalHistParcelas}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {totalHistCotas}
+                                </TableCell>
+                              </TableRow>
+                              {showHistoricoMensal &&
+                                historico.map((r) => {
+                                  const isAtual = r.ym === mesAtualYm;
+                                  return (
+                                    <TableRow key={r.ym} className={isAtual ? 'bg-amber-500/5' : ''}>
+                                      <TableCell className="font-medium capitalize">
+                                        {format(parseISO(r.ym + '-01'), "MMM 'de' yyyy", { locale: ptBR })}
+                                        {isAtual && (
+                                          <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50">
+                                            atual
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-right text-emerald-600 dark:text-emerald-400">
+                                        {formatCurrency(r.comissaoPaga)}
+                                      </TableCell>
+                                      <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                                        {formatCurrency(r.comissaoAVencer)}
+                                      </TableCell>
+                                      <TableCell className="text-right text-red-600 dark:text-red-400">
+                                        {formatCurrency(r.comissaoAtrasada)}
+                                      </TableCell>
+                                      <TableCell className="text-right text-primary">
+                                        {r.simulado > 0 ? formatCurrency(r.simulado) : '-'}
+                                      </TableCell>
+                                      <TableCell className="text-right font-bold">
+                                        {formatCurrency(r.total)}
+                                      </TableCell>
+                                      <TableCell className="text-right text-xs text-muted-foreground">
+                                        {r.parcelasPagas + r.parcelasAVencer + r.parcelasAtrasadas}
+                                      </TableCell>
+                                      <TableCell className="text-right text-xs text-muted-foreground">
+                                        {r.cotasSet.size}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </>
+                          )}
+                          {atuais.map((r) => {
+                            const isAtual = r.ym === mesAtualYm;
+                            return (
+                              <TableRow key={r.ym} className={isAtual ? 'bg-amber-500/5' : ''}>
+                                <TableCell className="font-medium capitalize">
+                                  {format(parseISO(r.ym + '-01'), "MMM 'de' yyyy", { locale: ptBR })}
+                                  {isAtual && (
+                                    <Badge variant="outline" className="ml-2 text-[9px] border-amber-500/50">
+                                      atual
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-emerald-600 dark:text-emerald-400">
+                                  {formatCurrency(r.comissaoPaga)}
+                                </TableCell>
+                                <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                                  {formatCurrency(r.comissaoAVencer)}
+                                </TableCell>
+                                <TableCell className="text-right text-red-600 dark:text-red-400">
+                                  {formatCurrency(r.comissaoAtrasada)}
+                                </TableCell>
+                                <TableCell className="text-right text-primary">
+                                  {r.simulado > 0 ? formatCurrency(r.simulado) : '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-bold">
+                                  {formatCurrency(r.total)}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {r.parcelasPagas + r.parcelasAVencer + r.parcelasAtrasadas}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {r.cotasSet.size}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </>
+                      );
+                    })()
                   )}
                 </TableBody>
               </Table>
