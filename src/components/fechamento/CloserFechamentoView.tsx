@@ -4,6 +4,7 @@ import { SdrPayoutWithDetails, SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fech
 import { CloserMetrics } from '@/hooks/useOwnFechamento';
 import { DynamicIndicatorsGrid } from '@/components/fechamento/DynamicIndicatorCard';
 import { useActiveMetricsForSdr } from '@/hooks/useActiveMetricsForSdr';
+import { useCloserAgendaMetrics } from '@/hooks/useCloserAgendaMetrics';
 import {
   DollarSign,
   Target,
@@ -27,6 +28,19 @@ interface CloserFechamentoViewProps {
 
 export function CloserFechamentoView({ payout, closerMetrics, sdrId, anoMes, kpi, compPlan }: CloserFechamentoViewProps) {
   const { metricas } = useActiveMetricsForSdr(sdrId, anoMes);
+  // Alinha a visão do Closer com a do supervisor: contratos/realizadas/no-shows
+  // são lidos AO VIVO da Agenda (contract_paid + refunded), e não do snapshot
+  // congelado em sdr_month_kpi. Evita divergência tipo 73 (KPI) vs 70 (Agenda).
+  const liveCloserMetrics = useCloserAgendaMetrics(sdrId, anoMes);
+  const effectiveKpi: SdrMonthKpi | null = kpi && liveCloserMetrics.data
+    ? ({
+        ...kpi,
+        reunioes_realizadas: liveCloserMetrics.data.r1_realizadas,
+        no_shows: liveCloserMetrics.data.no_shows,
+        intermediacoes_contrato: liveCloserMetrics.data.contratos_pagos,
+        r2_agendadas: liveCloserMetrics.data.r2_agendadas,
+      } as SdrMonthKpi & { r2_agendadas: number })
+    : kpi;
 
   const diasUteisMesOriginal = (payout as any).dias_uteis_mes || (payout as any).dias_uteis || 22;
   const diasTrabalhados = (payout as any).dias_uteis_trabalhados;
@@ -112,7 +126,7 @@ export function CloserFechamentoView({ payout, closerMetrics, sdrId, anoMes, kpi
       {/* Dynamic Indicators - same as admin view */}
       <DynamicIndicatorsGrid
         metricas={metricas}
-        kpi={kpi}
+        kpi={effectiveKpi}
         payout={payout}
         diasUteisMes={diasUteisMes}
         sdrMetaDiaria={sdrMetaDiaria}
