@@ -102,6 +102,10 @@ export function EditInstallmentDialog({
 
   const handleSave = async () => {
     if (!installment || !dataVencimento) return;
+    // Regra: status 'pago' SEMPRE exige data_pagamento informada.
+    if (status === 'pago' && !dataPagamento) {
+      return;
+    }
 
     await onSave({
       id: installment.id,
@@ -117,6 +121,8 @@ export function EditInstallmentDialog({
   };
 
   if (!installment) return null;
+
+  const dataPagamentoFaltando = status === 'pago' && !dataPagamento;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,7 +242,8 @@ export function EditInstallmentDialog({
                     variant="outline"
                     className={cn(
                       'w-full justify-start text-left font-normal',
-                      !dataPagamento && 'text-muted-foreground'
+                      !dataPagamento && 'text-muted-foreground',
+                      dataPagamentoFaltando && 'border-destructive'
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -249,10 +256,17 @@ export function EditInstallmentDialog({
                     selected={dataPagamento}
                     onSelect={setDataPagamento}
                     locale={ptBR}
+                    disabled={(d) => d > new Date()}
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
+              {dataPagamentoFaltando && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Informe a data real do pagamento ao marcar como Pago.
+                </p>
+              )}
             </div>
           </div>
 
@@ -291,7 +305,7 @@ export function EditInstallmentDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={isSaving || !dataVencimento}>
+          <Button onClick={handleSave} disabled={isSaving || !dataVencimento || dataPagamentoFaltando}>
             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
           </Button>
         </DialogFooter>

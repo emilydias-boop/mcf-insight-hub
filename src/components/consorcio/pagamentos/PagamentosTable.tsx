@@ -13,6 +13,8 @@ import { useBoletosByInstallments } from '@/hooks/useConsorcioBoletos';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useState } from 'react';
+import { ConfirmPaymentDateDialog } from '../ConfirmPaymentDateDialog';
 
 const statusBadgeConfig: Record<StatusParcela, { label: string; className: string }> = {
   paga: { label: 'Paga', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
@@ -48,6 +50,7 @@ interface Props {
 
 export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
+  const [confirmPayRow, setConfirmPayRow] = useState<PagamentoRow | null>(null);
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
   const isEmpresa = tipoFilter === 'empresa';
@@ -89,10 +92,17 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
 
   const handleMarkAsPaid = (e: React.MouseEvent, row: PagamentoRow) => {
     e.stopPropagation();
-    payInstallment.mutate({
-      installmentId: row.id,
-      dataPagamento: format(new Date(), 'yyyy-MM-dd'),
+    // Sempre pedir a data real do pagamento — não assumir hoje.
+    setConfirmPayRow(row);
+  };
+
+  const handleConfirmPayDate = async (dataPagamento: string) => {
+    if (!confirmPayRow) return;
+    await payInstallment.mutateAsync({
+      installmentId: confirmPayRow.id,
+      dataPagamento,
     });
+    setConfirmPayRow(null);
   };
 
   const handleOpenBoleto = async (e: React.MouseEvent, storagePath: string | null) => {
@@ -308,6 +318,19 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
           </div>
         </div>
       </div>
+
+      {/* Confirmação obrigatória da data real do pagamento */}
+      <ConfirmPaymentDateDialog
+        open={!!confirmPayRow}
+        onOpenChange={(open) => {
+          if (!open) setConfirmPayRow(null);
+        }}
+        numeroParcela={confirmPayRow?.numero_parcela}
+        dataVencimento={confirmPayRow?.data_vencimento ?? null}
+        cliente={confirmPayRow?.cliente_nome ?? null}
+        isSaving={payInstallment.isPending}
+        onConfirm={handleConfirmPayDate}
+      />
     </div>
   );
 }

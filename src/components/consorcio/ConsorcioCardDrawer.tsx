@@ -55,6 +55,7 @@ import { PosContemplacaoPanel } from "./PosContemplacaoPanel";
 
 import { StatusEditDropdown } from "./StatusEditDropdown";
 import { EditInstallmentDialog, UpdateInstallmentData } from "./EditInstallmentDialog";
+import { ConfirmPaymentDateDialog } from "./ConfirmPaymentDateDialog";
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -100,6 +101,8 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const [editFormOpen, setEditFormOpen] = useState(false);
   const [editInstallmentOpen, setEditInstallmentOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<ConsorcioInstallment | null>(null);
+  const [confirmPayOpen, setConfirmPayOpen] = useState(false);
+  const [pendingPayInstallment, setPendingPayInstallment] = useState<ConsorcioInstallment | null>(null);
   const { data: card, isLoading } = useConsorcioCardDetails(cardId);
   const payInstallment = usePayInstallment();
   const updateInstallment = useUpdateInstallment();
@@ -129,11 +132,20 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   // Check inadimplência
   const inadimplenciaInfo = card?.installments ? verificarRiscoCancelamento(card.installments) : null;
 
-  const handlePayInstallment = async (installment: ConsorcioInstallment) => {
+  const handlePayInstallment = (installment: ConsorcioInstallment) => {
+    // Sempre pedir confirmação da data real do pagamento — nunca assumir hoje.
+    setPendingPayInstallment(installment);
+    setConfirmPayOpen(true);
+  };
+
+  const handleConfirmPayDate = async (dataPagamento: string) => {
+    if (!pendingPayInstallment) return;
     await payInstallment.mutateAsync({
-      installmentId: installment.id,
-      dataPagamento: new Date().toISOString().split("T")[0],
+      installmentId: pendingPayInstallment.id,
+      dataPagamento,
     });
+    setConfirmPayOpen(false);
+    setPendingPayInstallment(null);
   };
 
   const handleDelete = async () => {
@@ -794,6 +806,20 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
           }}
           onSave={handleSaveInstallment}
           isSaving={updateInstallment.isPending}
+        />
+
+        {/* Confirmação obrigatória da data real do pagamento */}
+        <ConfirmPaymentDateDialog
+          open={confirmPayOpen}
+          onOpenChange={(open) => {
+            setConfirmPayOpen(open);
+            if (!open) setPendingPayInstallment(null);
+          }}
+          numeroParcela={pendingPayInstallment?.numero_parcela}
+          dataVencimento={pendingPayInstallment?.data_vencimento}
+          cliente={card?.tipo_pessoa === 'pf' ? card?.nome_completo : card?.razao_social}
+          isSaving={payInstallment.isPending}
+          onConfirm={handleConfirmPayDate}
         />
       </SheetContent>
 
