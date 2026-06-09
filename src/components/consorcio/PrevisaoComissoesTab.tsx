@@ -245,6 +245,11 @@ export function PrevisaoComissoesTab() {
   });
   const totalPrevisaoGeral = previsaoRows.reduce((s, r) => s + r.total, 0);
 
+  // Mês âncora para separar histórico vs atuais (mês anterior em diante)
+  const [aAno, aMes] = mesAtualYm.split('-').map(Number);
+  const mesAnteriorYm =
+    aMes === 1 ? `${aAno - 1}-12` : `${aAno}-${String(aMes - 1).padStart(2, '0')}`;
+
   const totalProxima = data.proximaSemana?.totalComissao ?? 0;
   const semanasComParcelas = data.semanas.filter((w) => w.totalParcelas > 0).length;
 
