@@ -23,6 +23,8 @@ export interface PrevisaoParcela {
   cliente: string;
   vendedorNome: string;
   vendedorId: string | null;
+  /** true = parcela ainda não paga, projetada pelo vencimento (não inadimplente). */
+  previsto: boolean;
 }
 
 export interface PrevisaoSemana extends CalendarWeek {
@@ -39,6 +41,14 @@ export interface PrevisaoSemana extends CalendarWeek {
   outliersValor: number;
   /** Média móvel das últimas 4 semanas (incluindo essa), em cima de totalComissaoSaneada */
   mediaMovel4s: number;
+  /** Total realizado: apenas parcelas pagas. */
+  totalComissaoRealizada: number;
+  /** Total projetado: apenas parcelas a vencer (pendentes, não inadimplentes). */
+  totalComissaoProjetada: number;
+  /** Qtd parcelas realizadas (pagas). */
+  parcelasRealizadas: number;
+  /** Qtd parcelas projetadas (a vencer). */
+  parcelasProjetadas: number;
 }
 
 export interface PrevisaoResult {
@@ -64,6 +74,7 @@ export function useConsorcioPrevisaoComissoes() {
           card_id,
           numero_parcela,
           data_pagamento,
+          data_vencimento,
           valor_parcela,
           status,
           consortium_cards!inner (
@@ -79,21 +90,37 @@ export function useConsorcioPrevisaoComissoes() {
             status
           )
         `)
-        .eq('status', 'pago')
         .in('consortium_cards.status', ['ativo', 'contemplado'])
-        .not('data_pagamento', 'is', null)
-        .gte('data_pagamento', CALENDAR_RANGE.start)
-        .lte('data_pagamento', CALENDAR_RANGE.end)
-        .limit(10000);
+        .in('status', ['pago', 'pendente'])
+        .limit(50000);
 
       if (error) throw error;
+
+      const hojeStr = new Date().toISOString().slice(0, 10);
+
+      // Filtra parcelas relevantes:
+      // - pagas com data_pagamento dentro do calendário
+      // - pendentes com data_vencimento >= hoje (descarta inadimplentes)
+      const relevantes = (installments ?? []).filter((inst: any) => {
+        if (inst.status === 'pago') {
+          const dp = inst.data_pagamento as string | null;
+          return !!dp && dp >= CALENDAR_RANGE.start && dp <= CALENDAR_RANGE.end;
+        }
+        if (inst.status === 'pendente') {
+          const dv = inst.data_vencimento as string | null;
+          if (!dv) return false;
+          if (dv < hojeStr) return false; // inadimplente — fora
+          return dv >= CALENDAR_RANGE.start && dv <= CALENDAR_RANGE.end;
+        }
+        return false;
+      });
 
       // ============================================================
       // Coleta TODAS as comissões previstas para calcular a mediana
       // por tipoProduto (usada como base do anti-outlier).
       // ============================================================
       const todasComissoes: Record<string, number[]> = {};
-      for (const inst of installments ?? []) {
+      for (const inst of relevantes) {
         const card = (inst as any).consortium_cards;
         if (!card) continue;
         const tipo = (card.tipo_produto || 'select') as string;
@@ -134,15 +161,21 @@ export function useConsorcioPrevisaoComissoes() {
           outliersCount: 0,
           outliersValor: 0,
           mediaMovel4s: 0,
+          totalComissaoRealizada: 0,
+          totalComissaoProjetada: 0,
+          parcelasRealizadas: 0,
+          parcelasProjetadas: 0,
         });
       }
 
-      for (const inst of installments ?? []) {
+      for (const inst of relevantes) {
         const card = (inst as any).consortium_cards;
         if (!card) continue;
         // Defesa extra: ignora cotas canceladas/inválidas
         if (card.status && card.status !== 'ativo' && card.status !== 'contemplado') continue;
-        const week = findCalendarWeek(inst.data_pagamento as string);
+        const isPago = inst.status === 'pago';
+        const dataRef = (isPago ? inst.data_pagamento : inst.data_vencimento) as string;
+        const week = findCalendarWeek(dataRef);
         if (!week) continue;
         const bucket = byWeek.get(week.n);
         if (!bucket) continue;
@@ -168,7 +201,7 @@ export function useConsorcioPrevisaoComissoes() {
           installmentId: inst.id,
           cardId: inst.card_id,
           numeroParcela: inst.numero_parcela,
-          dataPagamento: inst.data_pagamento as string,
+          dataPagamento: dataRef,
           valorParcela: Number(inst.valor_parcela) || 0,
           valorComissao,
           tipoProduto,
@@ -178,11 +211,19 @@ export function useConsorcioPrevisaoComissoes() {
           cliente: cliente || '-',
           vendedorNome: card.vendedor_name || '-',
           vendedorId: card.vendedor_id || null,
+          previsto: !isPago,
         });
         bucket.totalComissao += valorComissao;
         bucket.totalComissaoSaneada += valorComissaoSaneada;
         bucket.totalValorParcela += Number(inst.valor_parcela) || 0;
         bucket.totalParcelas += 1;
+        if (isPago) {
+          bucket.totalComissaoRealizada += valorComissao;
+          bucket.parcelasRealizadas += 1;
+        } else {
+          bucket.totalComissaoProjetada += valorComissao;
+          bucket.parcelasProjetadas += 1;
+        }
       }
 
       // Conta cotas distintas por semana
