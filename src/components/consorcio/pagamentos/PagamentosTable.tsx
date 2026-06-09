@@ -318,6 +318,19 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
           </div>
         </div>
       </div>
+
+      {/* Confirmação obrigatória da data real do pagamento */}
+      <ConfirmPaymentDateDialog
+        open={!!confirmPayRow}
+        onOpenChange={(open) => {
+          if (!open) setConfirmPayRow(null);
+        }}
+        numeroParcela={confirmPayRow?.numero_parcela}
+        dataVencimento={confirmPayRow?.data_vencimento ?? null}
+        cliente={confirmPayRow?.cliente_nome ?? null}
+        isSaving={payInstallment.isPending}
+        onConfirm={handleConfirmPayDate}
+      />
     </div>
   );
 }
