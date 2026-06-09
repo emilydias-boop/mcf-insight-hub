@@ -12,6 +12,7 @@ import { useMyCloser } from "@/hooks/useMyCloser";
 import { useCloserDetailData } from "@/hooks/useCloserDetailData";
 import { useCloserR2Metrics } from "@/hooks/useCloserR2Metrics";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
 import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
 import { useConsorcioProdutosFechadosByCloser } from "@/hooks/useConsorcioProdutosFechadosByCloser";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
@@ -78,6 +79,34 @@ export default function MeuDesempenhoCloser() {
     startDate,
     endDate
   );
+
+  // Quando o usuário está no preset "Mês" e é Incorporador, alinhamos os
+  // KPIs com a mesma fonte usada no Fechamento (useCloserAgendaMetrics).
+  // Isso elimina divergências como R1 Realizada 201 vs 202, Contratos 72 vs 70
+  // e No-Show 148 vs 173 que apareciam entre Meu Desempenho e o Fechamento.
+  const monthAnoMes = useMemo(
+    () => (datePreset === "month" ? format(selectedMonth, "yyyy-MM") : undefined),
+    [datePreset, selectedMonth]
+  );
+  const { data: liveAgendaMetrics } = useCloserAgendaMetrics(
+    undefined,
+    !isConsorcio ? monthAnoMes : undefined,
+    { closerIdOverride: !isConsorcio ? myCloser?.id || null : null }
+  );
+
+  // Sobrescreve os campos do closerMetrics com a fonte ao vivo da Agenda
+  // (mesma usada pelo supervisor no Fechamento) quando disponível.
+  const effectiveCloserMetrics = useMemo(() => {
+    if (!closerMetrics) return closerMetrics;
+    if (datePreset !== "month" || isConsorcio || !liveAgendaMetrics) return closerMetrics;
+    return {
+      ...closerMetrics,
+      r1_realizada: liveAgendaMetrics.r1_realizadas,
+      noshow: liveAgendaMetrics.no_shows,
+      contrato_pago: liveAgendaMetrics.contratos_pagos,
+      r2_agendada: liveAgendaMetrics.r2_agendadas,
+    };
+  }, [closerMetrics, liveAgendaMetrics, datePreset, isConsorcio]);
 
   // ========== Consórcio ==========
   const { data: r1ConsorcioMetrics, isLoading: isLoadingR1Cons } = useR1CloserMetrics(
@@ -320,7 +349,7 @@ export default function MeuDesempenhoCloser() {
             />
           ) : (
             <CloserDetailKPICards
-              metrics={closerMetrics}
+              metrics={effectiveCloserMetrics}
               teamAverages={teamAverages}
               isLoading={isLoading}
             />
@@ -342,7 +371,7 @@ export default function MeuDesempenhoCloser() {
               />
             ) : (
               <CloserRankingBlock
-                closerMetrics={closerMetrics}
+                closerMetrics={effectiveCloserMetrics}
                 ranking={ranking}
                 teamAverages={teamAverages}
                 isLoading={isLoading}
@@ -394,21 +423,21 @@ export default function MeuDesempenhoCloser() {
                   <>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Total Leads Realizados</span>
-                      <span className="font-semibold">{closerMetrics?.r1_realizada || 0}</span>
+                      <span className="font-semibold">{effectiveCloserMetrics?.r1_realizada || 0}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Contratos Fechados</span>
                       <span className="font-semibold text-primary">
-                        {closerMetrics?.contrato_pago || 0}
+                        {effectiveCloserMetrics?.contrato_pago || 0}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Taxa de Conversão</span>
                       <span className="font-semibold">
-                        {closerMetrics?.r1_realizada
+                        {effectiveCloserMetrics?.r1_realizada
                           ? (
-                              ((closerMetrics.contrato_pago + closerMetrics.outside) /
-                                closerMetrics.r1_realizada) *
+                              ((effectiveCloserMetrics.contrato_pago + effectiveCloserMetrics.outside) /
+                                effectiveCloserMetrics.r1_realizada) *
                               100
                             ).toFixed(1)
                           : 0}
@@ -417,7 +446,7 @@ export default function MeuDesempenhoCloser() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">R2 Agendadas</span>
-                      <span className="font-semibold">{closerMetrics?.r2_agendada || 0}</span>
+                      <span className="font-semibold">{effectiveCloserMetrics?.r2_agendada || 0}</span>
                     </div>
 
                     {/* R2 Carrinho Section */}
