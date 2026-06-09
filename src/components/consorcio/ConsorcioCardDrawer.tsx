@@ -55,6 +55,7 @@ import { PosContemplacaoPanel } from "./PosContemplacaoPanel";
 
 import { StatusEditDropdown } from "./StatusEditDropdown";
 import { EditInstallmentDialog, UpdateInstallmentData } from "./EditInstallmentDialog";
+import { ConfirmPaymentDateDialog } from "./ConfirmPaymentDateDialog";
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -805,6 +806,20 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
           }}
           onSave={handleSaveInstallment}
           isSaving={updateInstallment.isPending}
+        />
+
+        {/* Confirmação obrigatória da data real do pagamento */}
+        <ConfirmPaymentDateDialog
+          open={confirmPayOpen}
+          onOpenChange={(open) => {
+            setConfirmPayOpen(open);
+            if (!open) setPendingPayInstallment(null);
+          }}
+          numeroParcela={pendingPayInstallment?.numero_parcela}
+          dataVencimento={pendingPayInstallment?.data_vencimento}
+          cliente={card?.tipo_pessoa === 'pf' ? card?.nome_completo : card?.razao_social}
+          isSaving={payInstallment.isPending}
+          onConfirm={handleConfirmPayDate}
         />
       </SheetContent>
 
