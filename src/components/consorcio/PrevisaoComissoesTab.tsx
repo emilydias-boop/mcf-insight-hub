@@ -310,7 +310,7 @@ export function PrevisaoComissoesTab() {
               <>
                 <div className="flex items-baseline justify-between gap-4 flex-wrap">
                   <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(semanaPagamento.totalComissao)}
+                    {formatCurrency(semanaPagamento.totalComissaoSaneada)}
                   </div>
                   <Badge variant="default">Semana #{semanaPagamento.n}</Badge>
                 </div>
@@ -320,6 +320,16 @@ export function PrevisaoComissoesTab() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Cai na conta em <span className="font-medium">{fmtDateFull(semanaPagamento.dataPagamento)}</span>
+                </p>
+                <p className="text-xs mt-1">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                    Estimativa suavizada (média 4 semanas): {formatCurrency(semanaPagamento.mediaMovel4s)}
+                  </span>
+                  {semanaPagamento.outliersCount > 0 && (
+                    <span className="block text-amber-600 dark:text-amber-400">
+                      ⚠️ {semanaPagamento.outliersCount} parcela(s) outlier removida(s): −{formatCurrency(semanaPagamento.outliersValor)}
+                    </span>
+                  )}
                 </p>
               </>
             ) : (
