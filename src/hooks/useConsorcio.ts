@@ -175,6 +175,12 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       let comissaoRecebida = 0;
       let comissaoPendente = 0;
 
+      // Conjuntos de cartas por estado de cobrança
+      const cartasNovas = new Set<string>(); // sem nenhuma parcela paga
+      const cartasSubidas = new Set<string>(); // com pelo menos 1 parcela paga
+      let comissaoPrevistaNovas = 0;
+      let comissaoRealizadaSubidas = 0;
+
       if (cardIds.length > 0) {
         // Fetch sum of commissions per card to avoid row limit
         for (const cardId of cardIds) {
@@ -182,6 +188,10 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
             .from('consortium_installments')
             .select('valor_comissao, status')
             .eq('card_id', cardId);
+
+          const hasPaid = (installments || []).some(i => i.status === 'pago');
+          if (hasPaid) cartasSubidas.add(cardId);
+          else cartasNovas.add(cardId);
 
           installments?.forEach(inst => {
             const valor = Number(inst.valor_comissao);
@@ -191,9 +201,21 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
             } else {
               comissaoPendente += valor;
             }
+            if (hasPaid) {
+              if (inst.status === 'pago') comissaoRealizadaSubidas += valor;
+            } else {
+              comissaoPrevistaNovas += valor;
+            }
           });
         }
       }
+
+      const valorCartasNovas = (cards || [])
+        .filter(c => cartasNovas.has(c.id))
+        .reduce((acc, c) => acc + Number(c.valor_credito), 0);
+      const valorCartasSubidas = (cards || [])
+        .filter(c => cartasSubidas.has(c.id))
+        .reduce((acc, c) => acc + Number(c.valor_credito), 0);
 
       const summary: ConsorcioSummary = {
         totalCartas: cards?.length || 0,
@@ -203,6 +225,10 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
         comissaoPendente,
         cartasSelect: cards?.filter(c => c.tipo_produto === 'select').length || 0,
         cartasParcelinha: cards?.filter(c => c.tipo_produto === 'parcelinha').length || 0,
+        valorCartasNovas,
+        valorCartasSubidas,
+        comissaoPrevistaNovas,
+        comissaoRealizadaSubidas,
       };
 
       return summary;
