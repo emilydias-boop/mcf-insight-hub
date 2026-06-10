@@ -24,13 +24,33 @@ export function useUpdateCobrancaStatus() {
         .eq('id', installmentId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'] });
-      toast.success('Situação de cobrança atualizada');
+    onMutate: async ({ installmentId, status }) => {
+      await qc.cancelQueries({ queryKey: ['consorcio-pagamentos-all'] });
+      const snapshots: Array<[readonly unknown[], unknown]> = [];
+      const nowIso = new Date().toISOString();
+      qc.getQueriesData({ queryKey: ['consorcio-pagamentos-all'] }).forEach(([key, value]) => {
+        snapshots.push([key, value]);
+        if (!Array.isArray(value)) return;
+        const next = (value as any[]).map((r: any) =>
+          r.id === installmentId
+            ? { ...r, cobranca_status: status, cobranca_status_updated_at: status ? nowIso : null }
+            : r,
+        );
+        qc.setQueryData(key, next);
+      });
+      return { snapshots };
     },
-    onError: (e: any) => {
+    onError: (e: any, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, value]) => qc.setQueryData(key, value));
       console.error(e);
       toast.error('Erro ao atualizar situação');
+    },
+    onSuccess: () => {
+      toast.success('Situação atualizada', { duration: 1500 });
+    },
+    onSettled: () => {
+      // Refresh silently in background — não exibe skeleton porque temos placeholderData/keepPreviousData
+      qc.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'], refetchType: 'active' });
     },
   });
 }
