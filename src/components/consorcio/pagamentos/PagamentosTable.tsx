@@ -77,8 +77,8 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     : filtroBoleto === 'com_boleto' ? data.filter(r => boletoMap.has(r.id))
     : data.filter(r => !boletoMap.has(r.id));
 
-  // Rows eligible for bulk WhatsApp (has boleto)
-  const selectableIds = filteredData.filter(r => boletoMap.has(r.id)).map(r => r.id);
+  // All visible rows are selectable (bulk cobrança status). WhatsApp action filters by boleto internally.
+  const selectableIds = filteredData.map(r => r.id);
   const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
 
   const handleSelectAll = (checked: boolean) => {
@@ -197,15 +197,11 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                 >
                   {bulkMode && (
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {isSelectable ? (
-                        <Checkbox
-                          checked={selectedIds.has(row.id)}
-                          onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
-                          aria-label={`Selecionar ${row.cliente_nome}`}
-                        />
-                      ) : (
-                        <span className="block w-4" />
-                      )}
+                      <Checkbox
+                        checked={selectedIds.has(row.id)}
+                        onCheckedChange={(checked) => handleSelectRow(row.id, !!checked)}
+                        aria-label={`Selecionar ${row.cliente_nome}`}
+                      />
                     </TableCell>
                   )}
                   <TableCell className="font-medium max-w-[160px] truncate">{row.cliente_nome}</TableCell>

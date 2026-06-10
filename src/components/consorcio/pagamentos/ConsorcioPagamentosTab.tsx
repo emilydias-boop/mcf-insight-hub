@@ -7,7 +7,10 @@ import { PagamentosTable } from './PagamentosTable';
 import { PagamentoDetailDrawer } from './PagamentoDetailDrawer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, MessageCircle, X, Loader2, Send } from 'lucide-react';
+import { Download, MessageCircle, X, Loader2, Send, PhoneCall, Clock, PhoneOff, Ban, Eraser, Tag } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
+import type { CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,6 +30,7 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
   const [bulkMode, setBulkMode] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0, skipped: 0 });
+  const updateCobranca = useUpdateCobrancaStatus();
 
   const { data, allData, isLoading, kpis, alertData, totalItems, totalPages, filterOptions } = useConsorcioPagamentos(filters, page, pageSize, selectedMonth, tipoFilter);
 
@@ -122,6 +126,15 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
 
   const handleClearSelection = () => setSelectedIds(new Set());
 
+  const handleBulkCobranca = async (status: CobrancaStatus | null) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      await updateCobranca.mutateAsync({ installmentId: id, status });
+    }
+    setSelectedIds(new Set());
+  };
+
   return (
     <div className="space-y-4">
       <PagamentosKPIs data={kpis} isLoading={isLoading} />
@@ -133,6 +146,34 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
           <Badge variant="secondary" className="text-sm">
             {selectedIds.size} selecionado(s)
           </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={updateCobranca.isPending}>
+                <Tag className="h-4 w-4" />
+                Definir situação
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Aplicar a {selectedIds.size} parcela(s)</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleBulkCobranca('cobrada')}>
+                <PhoneCall className="h-4 w-4 mr-2 text-blue-600" /> Cobrada
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleBulkCobranca('aguardando_retorno')}>
+                <Clock className="h-4 w-4 mr-2 text-yellow-600" /> Aguardando retorno
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleBulkCobranca('sem_resposta')}>
+                <PhoneOff className="h-4 w-4 mr-2 text-orange-600" /> Sem resposta
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleBulkCobranca('cancelada')}>
+                <Ban className="h-4 w-4 mr-2 text-gray-600" /> Cancelada
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleBulkCobranca(null)}>
+                <Eraser className="h-4 w-4 mr-2" /> Limpar situação
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             size="sm"
             onClick={handleBulkWhatsApp}
