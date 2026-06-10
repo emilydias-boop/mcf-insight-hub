@@ -175,12 +175,6 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       let comissaoRecebida = 0;
       let comissaoPendente = 0;
 
-      // Conjuntos de cartas por estado de cobrança
-      const cartasNovas = new Set<string>(); // sem nenhuma parcela paga
-      const cartasSubidas = new Set<string>(); // com pelo menos 1 parcela paga
-      let comissaoPrevistaNovas = 0;
-      let comissaoRealizadaSubidas = 0;
-
       if (cardIds.length > 0) {
         // Fetch sum of commissions per card to avoid row limit
         for (const cardId of cardIds) {
@@ -188,10 +182,6 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
             .from('consortium_installments')
             .select('valor_comissao, status')
             .eq('card_id', cardId);
-
-          const hasPaid = (installments || []).some(i => i.status === 'pago');
-          if (hasPaid) cartasSubidas.add(cardId);
-          else cartasNovas.add(cardId);
 
           installments?.forEach(inst => {
             const valor = Number(inst.valor_comissao);
@@ -201,21 +191,65 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
             } else {
               comissaoPendente += valor;
             }
-            if (hasPaid) {
-              if (inst.status === 'pago') comissaoRealizadaSubidas += valor;
-            } else {
-              comissaoPrevistaNovas += valor;
-            }
           });
         }
       }
 
-      const valorCartasNovas = (cards || [])
-        .filter(c => cartasNovas.has(c.id))
-        .reduce((acc, c) => acc + Number(c.valor_credito), 0);
-      const valorCartasSubidas = (cards || [])
-        .filter(c => cartasSubidas.has(c.id))
-        .reduce((acc, c) => acc + Number(c.valor_credito), 0);
+      // === Cartas Novas: cotas pendentes de cadastro ===
+      // (registros em consorcio_pending_registrations ainda não vinculados a uma carta)
+      let pendingQuery = supabase
+        .from('consorcio_pending_registrations')
+        .select('id, valor_credito, tipo_produto, created_at')
+        .neq('status', 'vinculada');
+      if (filters.startDate) {
+        pendingQuery = pendingQuery.gte('created_at', filters.startDate.toISOString());
+      }
+      if (filters.endDate) {
+        pendingQuery = pendingQuery.lte('created_at', filters.endDate.toISOString());
+      }
+      const { data: pendingRegs } = await pendingQuery;
+
+      let valorCartasNovas = 0;
+      let comissaoPrevistaNovas = 0;
+      for (const p of pendingRegs || []) {
+        const vc = Number(p.valor_credito || 0);
+        const tp = (p.tipo_produto as TipoProduto) || 'select';
+        valorCartasNovas += vc;
+        try {
+          const ctx = await getProdutoComissaoContext(vc, tp);
+          comissaoPrevistaNovas += calcularComissaoTotal(vc, tp, ctx);
+        } catch {
+          comissaoPrevistaNovas += calcularComissaoTotal(vc, tp);
+        }
+      }
+
+      // === Cartas Subidas: 1ª parcela paga (status=pago) dentro do período ===
+      let subidasQuery = supabase
+        .from('consortium_installments')
+        .select('card_id, valor_comissao, data_pagamento, consortium_cards!inner(valor_credito, categoria)')
+        .eq('numero_parcela', 1)
+        .eq('status', 'pago');
+      if (filters.startDate) {
+        subidasQuery = subidasQuery.gte('data_pagamento', filters.startDate.toISOString().split('T')[0]);
+      }
+      if (filters.endDate) {
+        subidasQuery = subidasQuery.lte('data_pagamento', filters.endDate.toISOString().split('T')[0]);
+      }
+      if (filters.categoria) {
+        subidasQuery = subidasQuery.eq('consortium_cards.categoria', filters.categoria);
+      }
+      const { data: subidasRows } = await subidasQuery;
+
+      const subidasCards = new Set<string>();
+      let valorCartasSubidas = 0;
+      let comissaoRealizadaSubidas = 0;
+      for (const r of (subidasRows || []) as any[]) {
+        if (!subidasCards.has(r.card_id)) {
+          subidasCards.add(r.card_id);
+          valorCartasSubidas += Number(r.consortium_cards?.valor_credito || 0);
+        }
+        comissaoRealizadaSubidas += Number(r.valor_comissao || 0);
+      }
 
       const summary: ConsorcioSummary = {
         totalCartas: cards?.length || 0,
