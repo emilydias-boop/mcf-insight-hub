@@ -588,15 +588,33 @@ export function usePayInstallment() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
-      queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'] });
-      toast.success('Parcela marcada como paga!');
+    onMutate: async ({ installmentId, dataPagamento }) => {
+      await queryClient.cancelQueries({ queryKey: ['consorcio-pagamentos-all'] });
+      const snapshots: Array<[readonly unknown[], unknown]> = [];
+      queryClient.getQueriesData({ queryKey: ['consorcio-pagamentos-all'] }).forEach(([key, value]) => {
+        snapshots.push([key, value]);
+        if (!Array.isArray(value)) return;
+        const next = (value as any[]).map((r: any) =>
+          r.id === installmentId
+            ? { ...r, status: 'pago', data_pagamento: dataPagamento }
+            : r,
+        );
+        queryClient.setQueryData(key, next);
+      });
+      return { snapshots };
     },
-    onError: (error) => {
+    onError: (error, _vars, ctx: any) => {
+      ctx?.snapshots?.forEach(([key, value]: [readonly unknown[], unknown]) => queryClient.setQueryData(key, value));
       console.error('Erro ao marcar parcela como paga:', error);
       toast.error('Erro ao atualizar parcela');
+    },
+    onSuccess: () => {
+      toast.success('Parcela marcada como paga!', { duration: 1500 });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['consortium-card-details'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['consortium-summary'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'], refetchType: 'active' });
     },
   });
 }

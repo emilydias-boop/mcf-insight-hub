@@ -135,7 +135,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     toast.success('Linha digitável copiada!');
   };
 
-  if (isLoading) {
+  if (isLoading && data.length === 0) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
