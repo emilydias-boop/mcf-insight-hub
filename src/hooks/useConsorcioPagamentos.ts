@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type StatusParcela = 'paga' | 'vencendo' | 'atrasada' | 'pendente' | 'previsto';
 export type SituacaoCota = 'quitada' | 'pendente' | 'em_atraso' | 'cancelada';
+export type CobrancaStatus = 'cobrada' | 'aguardando_retorno' | 'sem_resposta' | 'cancelada';
 
 export interface PagamentoRow {
   id: string;
@@ -16,6 +17,8 @@ export interface PagamentoRow {
   data_pagamento: string | null;
   status: string;
   observacao: string | null;
+  cobranca_status: CobrancaStatus | null;
+  cobranca_status_updated_at: string | null;
   // Card fields
   nome_completo: string | null;
   razao_social: string | null;
@@ -53,6 +56,7 @@ export interface PagamentosFiltersState {
   diaVencimento: string;
   apenasVencendoSemana: boolean;
   filtroBoleto: string;
+  cobrancaStatus: string;
 }
 
 export const defaultFilters: PagamentosFiltersState = {
@@ -62,6 +66,7 @@ export const defaultFilters: PagamentosFiltersState = {
   diaVencimento: 'todos',
   apenasVencendoSemana: false,
   filtroBoleto: 'todos',
+  cobrancaStatus: 'todos',
 };
 
 function calcStatusParcela(inst: { status: string; data_pagamento: string | null; data_vencimento: string }): StatusParcela {
@@ -112,6 +117,7 @@ export function useConsorcioPagamentos(
           .select(`
             id, card_id, numero_parcela, tipo, valor_parcela, valor_comissao,
             data_vencimento, data_pagamento, status, observacao,
+            cobranca_status, cobranca_status_updated_at,
             consortium_cards!inner (
               nome_completo, razao_social, tipo_pessoa, grupo, cota, 
               status, vendedor_name, origem, tipo_produto
@@ -209,6 +215,8 @@ export function useConsorcioPagamentos(
         status_calculado,
         cliente_nome: card?.tipo_pessoa === 'pj' ? (card?.razao_social || 'Sem nome') : (card?.nome_completo || 'Sem nome'),
         situacao_cota: '' as SituacaoCota,
+        cobranca_status: (inst.cobranca_status ?? null) as CobrancaStatus | null,
+        cobranca_status_updated_at: inst.cobranca_status_updated_at ?? null,
       } as PagamentoRow;
     });
 
@@ -256,6 +264,13 @@ export function useConsorcioPagamentos(
     }
     if (filters.apenasVencendoSemana) {
       result = result.filter(r => r.status_calculado === 'vencendo');
+    }
+    if (filters.cobrancaStatus && filters.cobrancaStatus !== 'todos') {
+      if (filters.cobrancaStatus === 'sem_acao') {
+        result = result.filter(r => !r.cobranca_status);
+      } else {
+        result = result.filter(r => r.cobranca_status === filters.cobrancaStatus);
+      }
     }
 
     return result;
