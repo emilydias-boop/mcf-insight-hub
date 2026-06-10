@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export type StatusParcela = 'paga' | 'vencendo' | 'atrasada' | 'pendente' | 'previsto';
@@ -148,6 +148,7 @@ export function useConsorcioPagamentos(
       return allInstallments;
     },
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   // Get unique card_ids from current month data
@@ -190,6 +191,7 @@ export function useConsorcioPagamentos(
     },
     enabled: cardIds.length > 0,
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   const isLoading = isLoadingMain || isLoadingStats;
