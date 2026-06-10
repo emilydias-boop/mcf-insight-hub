@@ -223,7 +223,9 @@ export function useConsorcioPagamentos(
 
   // Apply tipoFilter before KPIs/alerts
   const tipoFilteredData = useMemo(() => {
-    return tipoFilter ? processedData.filter(r => r.tipo === tipoFilter) : processedData;
+    // Exclui cotas canceladas — não devem aparecer na grade de pagamentos
+    const base = processedData.filter(r => r.situacao_cota !== 'cancelada' && r.cota_status !== 'cancelado');
+    return tipoFilter ? base.filter(r => r.tipo === tipoFilter) : base;
   }, [processedData, tipoFilter]);
 
   // Apply filters
