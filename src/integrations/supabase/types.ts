@@ -4344,6 +4344,9 @@ export type Database = {
       consortium_installments: {
         Row: {
           card_id: string
+          cobranca_status: string | null
+          cobranca_status_updated_at: string | null
+          cobranca_status_updated_by: string | null
           created_at: string
           data_pagamento: string | null
           data_vencimento: string
@@ -4358,6 +4361,9 @@ export type Database = {
         }
         Insert: {
           card_id: string
+          cobranca_status?: string | null
+          cobranca_status_updated_at?: string | null
+          cobranca_status_updated_by?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento: string
@@ -4372,6 +4378,9 @@ export type Database = {
         }
         Update: {
           card_id?: string
+          cobranca_status?: string | null
+          cobranca_status_updated_at?: string | null
+          cobranca_status_updated_by?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string

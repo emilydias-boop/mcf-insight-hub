@@ -2,13 +2,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ChevronLeft, ChevronRight, CheckCircle, FileText, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, FileText, Copy, MoreVertical, PhoneCall, Clock, PhoneOff, Ban, Eraser } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/formatters';
-import { PagamentoRow, StatusParcela, SituacaoCota } from '@/hooks/useConsorcioPagamentos';
+import { PagamentoRow, StatusParcela, SituacaoCota, CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
 import { usePayInstallment } from '@/hooks/useConsorcio';
+import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
 import { useBoletosByInstallments } from '@/hooks/useConsorcioBoletos';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -31,6 +33,13 @@ const situacaoBadgeConfig: Record<SituacaoCota, { label: string; className: stri
   cancelada: { label: 'Cancelada', className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
 };
 
+const cobrancaBadgeConfig: Record<CobrancaStatus, { label: string; className: string }> = {
+  cobrada: { label: 'Cobrada', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
+  aguardando_retorno: { label: 'Aguardando retorno', className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  sem_resposta: { label: 'Sem resposta', className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
+  cancelada: { label: 'Cancelada', className: 'bg-gray-200 text-gray-800 dark:bg-gray-700/40 dark:text-gray-300' },
+};
+
 interface Props {
   data: PagamentoRow[];
   isLoading: boolean;
@@ -50,6 +59,7 @@ interface Props {
 
 export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
+  const updateCobranca = useUpdateCobrancaStatus();
   const [confirmPayRow, setConfirmPayRow] = useState<PagamentoRow | null>(null);
   const installmentIds = data.map(r => r.id);
   const { data: boletos } = useBoletosByInstallments(installmentIds);
@@ -157,6 +167,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
             <TableHead>Pagamento</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Situação Cota</TableHead>
+            <TableHead>Cobrança</TableHead>
             {!isEmpresa && <TableHead>Responsável</TableHead>}
             {isEmpresa && <TableHead>Cód. Barras</TableHead>}
             <TableHead className="text-center">Boleto</TableHead>
@@ -166,7 +177,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
         <TableBody>
           {filteredData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isEmpresa ? 12 : (bulkMode ? 14 : 13)} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={isEmpresa ? 13 : (bulkMode ? 15 : 14)} className="text-center text-muted-foreground py-8">
                 Nenhuma parcela encontrada
               </TableCell>
             </TableRow>
@@ -174,6 +185,7 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
             filteredData.map(row => {
               const statusCfg = statusBadgeConfig[row.status_calculado];
               const situacaoCfg = situacaoBadgeConfig[row.situacao_cota];
+              const cobrancaCfg = row.cobranca_status ? cobrancaBadgeConfig[row.cobranca_status] : null;
               const isPaid = row.status_calculado === 'paga';
               const boleto = boletoMap.get(row.id);
               const isSelectable = !!boleto;
@@ -209,6 +221,13 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={situacaoCfg.className}>{situacaoCfg.label}</Badge>
+                  </TableCell>
+                  <TableCell onClick={e => e.stopPropagation()}>
+                    {cobrancaCfg ? (
+                      <Badge variant="outline" className={cobrancaCfg.className}>{cobrancaCfg.label}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
                   </TableCell>
                   {!isEmpresa && <TableCell className="max-w-[120px] truncate">{row.vendedor_name || '-'}</TableCell>}
                   {isEmpresa && (
@@ -261,24 +280,57 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    {!isPaid && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                              onClick={(e) => handleMarkAsPaid(e, row)}
-                              disabled={payInstallment.isPending}
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Marcar como paga</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
+                    <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
+                      {!isPaid && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={(e) => handleMarkAsPaid(e, row)}
+                                disabled={payInstallment.isPending}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Marcar como paga</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updateCobranca.isPending}>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel>Situação de cobrança</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => updateCobranca.mutate({ installmentId: row.id, status: 'cobrada' })}>
+                            <PhoneCall className="h-4 w-4 mr-2 text-blue-600" /> Cobrada
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateCobranca.mutate({ installmentId: row.id, status: 'aguardando_retorno' })}>
+                            <Clock className="h-4 w-4 mr-2 text-yellow-600" /> Aguardando retorno
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateCobranca.mutate({ installmentId: row.id, status: 'sem_resposta' })}>
+                            <PhoneOff className="h-4 w-4 mr-2 text-orange-600" /> Sem resposta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateCobranca.mutate({ installmentId: row.id, status: 'cancelada' })}>
+                            <Ban className="h-4 w-4 mr-2 text-gray-600" /> Cancelada
+                          </DropdownMenuItem>
+                          {row.cobranca_status && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => updateCobranca.mutate({ installmentId: row.id, status: null })}>
+                                <Eraser className="h-4 w-4 mr-2" /> Limpar situação
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
