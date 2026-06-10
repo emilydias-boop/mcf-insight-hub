@@ -463,105 +463,165 @@ export default function ConsorcioPage() {
 
         <TabsContent value="cotas" className="space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-6 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Total em Cartas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <p className="text-2xl font-bold">{formatCurrency(summary?.totalCredito || 0)}</p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        {/* Bloco 1 — Globais (valor das cotas + comissões geradas) */}
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Globais</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Cartas Novas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-blue-500">{formatCurrency(summary?.valorCartasNovas || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Comissão Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <p className="text-2xl font-bold">{formatCurrency(summary?.comissaoTotal || 0)}</p>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Cartas Subidas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(summary?.valorCartasSubidas || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Comissão Recebida
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(summary?.comissaoRecebida || 0)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Comissão Prevista (Cartas Novas)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-blue-500">{formatCurrency(summary?.comissaoPrevistaNovas || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Comissão Pendente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <p className="text-2xl font-bold text-orange-600">
-                {formatCurrency(summary?.comissaoPendente || 0)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Comissão Realizada (Cartas Subidas)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(summary?.comissaoRealizadaSubidas || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Cartas Feitas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-12" />
-            ) : (
-              <p className="text-2xl font-bold">{summary?.totalCartas || 0}</p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Bloco 2 — Líquidos do mês */}
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Líquidos do Mês</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Comissão Total
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold">{formatCurrency(summary?.comissaoTotal || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Select / Parcelinha
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summaryLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <p className="text-2xl font-bold">
-                {summary?.cartasSelect || 0} / {summary?.cartasParcelinha || 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Comissão Recebida
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(summary?.comissaoRecebida || 0)}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Comissão Prevista
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(summary?.comissaoPendente || 0)}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Cartas Feitas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-12" />
+                ) : (
+                  <p className="text-2xl font-bold">{summary?.totalCartas || 0}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Select / Parcelinha
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <p className="text-2xl font-bold">
+                    {summary?.cartasSelect || 0} / {summary?.cartasParcelinha || 0}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
