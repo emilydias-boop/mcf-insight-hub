@@ -340,6 +340,8 @@ const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
   return '/crm';
 };
 
+const hasBU = (userBUs: BusinessUnit[], bu: BusinessUnit) => userBUs.includes(bu);
+
 export function AppSidebar() {
   const { user, role, allRoles, signOut, loading: authLoading } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
@@ -361,25 +363,58 @@ export function AppSidebar() {
   // === ITENS DINÂMICOS PARA SDR/CLOSER ===
   // Estes itens precisam de URLs dinâmicas baseadas na BU do usuário
   const crmBasePath = getCRMBasePath(myBUs);
+  const isSdrAndCloser = (allRoles as string[]).includes('sdr') && (allRoles as string[]).includes('closer');
+  const shouldSplitInsideAndConsorcio = isSdrAndCloser && hasBU(myBUs, 'incorporador') && hasBU(myBUs, 'consorcio');
   
-  const dynamicSDRCloserItems: MenuItem[] = [
-    // Agenda (SDR, Closer e Closer Sombra) - URL dinâmica por BU
-    {
-      title: "Agenda",
-      url: `${crmBasePath}/agenda`,
-      icon: Calendar,
-      resource: "crm",
-      requiredRoles: ["sdr", "closer", "closer_sombra"],
-    },
-    // Negócios (SDR, Closer) - URL dinâmica por BU  
-    {
-      title: "Negócios",
-      url: `${crmBasePath}/negocios`,
-      icon: Briefcase,
-      resource: "crm",
-      requiredRoles: ["sdr", "closer"],
-    },
-  ];
+  const dynamicSDRCloserItems: MenuItem[] = shouldSplitInsideAndConsorcio
+    ? [
+        {
+          title: "Agenda Inside",
+          url: "/crm/agenda",
+          icon: Calendar,
+          resource: "crm",
+          requiredRoles: ["sdr"],
+        },
+        {
+          title: "Negócios Inside",
+          url: "/crm/negocios",
+          icon: Briefcase,
+          resource: "crm",
+          requiredRoles: ["sdr"],
+        },
+        {
+          title: "Agenda Consórcio",
+          url: "/consorcio/crm/agenda",
+          icon: Calendar,
+          resource: "crm",
+          requiredRoles: ["closer", "closer_sombra"],
+        },
+        {
+          title: "Negócios Consórcio",
+          url: "/consorcio/crm/negocios",
+          icon: Briefcase,
+          resource: "crm",
+          requiredRoles: ["closer", "closer_sombra"],
+        },
+      ]
+    : [
+        // Agenda (SDR, Closer e Closer Sombra) - URL dinâmica por BU
+        {
+          title: "Agenda",
+          url: `${crmBasePath}/agenda`,
+          icon: Calendar,
+          resource: "crm",
+          requiredRoles: ["sdr", "closer", "closer_sombra"],
+        },
+        // Negócios (SDR, Closer) - URL dinâmica por BU  
+        {
+          title: "Negócios",
+          url: `${crmBasePath}/negocios`,
+          icon: Briefcase,
+          resource: "crm",
+          requiredRoles: ["sdr", "closer"],
+        },
+      ];
 
   const getRoleBadgeVariant = (userRole: AppRole | null, isLoading: boolean) => {
     if (isLoading) return "outline";
