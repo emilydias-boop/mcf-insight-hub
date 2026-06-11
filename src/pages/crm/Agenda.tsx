@@ -44,9 +44,9 @@ export default function Agenda() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { role, allRoles, user } = useAuth();
-  const sdrOwnerEmail = role === 'sdr' ? user?.email || undefined : undefined;
   const { data: myCloser } = useMyCloser();
   const activeBU = useActiveBU();
+  const sdrOwnerEmail = allRoles.includes('sdr') && activeBU === 'incorporador' ? user?.email || undefined : undefined;
 
   // Modo "Apoio R1": closer R2 com pelo menos 1 dia liberado se comporta como SDR
   // (vê grade completa, busca leads, agenda) — válido para todo o horizonte com apoio ativo.
