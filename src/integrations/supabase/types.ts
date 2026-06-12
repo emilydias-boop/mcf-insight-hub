@@ -13352,6 +13352,26 @@ export type Database = {
       }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
+      orfaos_a010_2026: {
+        Args: never
+        Returns: {
+          email: string
+          nome: string
+          oferta: string
+          primeira_compra: string
+          telefone: string
+        }[]
+      }
+      orfaos_outside_2026: {
+        Args: never
+        Returns: {
+          email: string
+          nome: string
+          ofertas: string
+          primeira_compra: string
+          telefone: string
+        }[]
+      }
       recalc_automation_queue_for_deal: {
         Args: {
           p_anchor_kind: string
