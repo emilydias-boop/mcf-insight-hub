@@ -18,3 +18,4 @@
 - [Meu Desempenho Alignment](mem://business-logic/meu-desempenho-fechamento-alignment) — KPIs do Meu Desempenho Closer (preset Mês) usam a mesma fonte do Fechamento.
 - [Consórcio Payment Date Confirmation](mem://business-logic/consorcio-payment-date-confirmation) — Toda marcação de parcela como 'pago' exige confirmação explícita da data real via ConfirmPaymentDateDialog; nunca usar new Date().
 - [Webhook Receiver Hubla Norm](mem://integration/webhook-lead-receiver-hubla-normalization) — webhook-lead-receiver normaliza payload Hubla (event.user.*) para root antes da validação.
+- [Outside & A010 Late Installment Flow](mem://business-logic/outside-and-a010-late-installment-flow) — A010 cria deal em qualquer parcela; Outside sem deal cria+distribui via Hubla.
