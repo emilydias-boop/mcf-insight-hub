@@ -135,6 +135,41 @@ serve(async (req) => {
       wlLogId = log?.id ?? null;
     } catch (_) { /* nunca quebra fluxo */ }
 
+    // 3.5 Hubla payload normalization (nested → root)
+    // Hubla sends { type, event: { user: { email, firstName, lastName, phone, document }, product: {...} } }
+    // The receiver expects flat fields. Detect Hubla via header or payload shape and merge into root
+    // without overwriting any value already present.
+    const isHubla =
+      !!req.headers.get('x-hubla-token') ||
+      (payload && typeof payload === 'object' && payload.event && payload.event.user);
+    if (isHubla) {
+      const hUser = payload.event?.user ?? {};
+      const firstName = (hUser.firstName ?? '').toString().trim();
+      const lastName = (hUser.lastName ?? '').toString().trim();
+      const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || firstName || null;
+
+      const mergeIfMissing = (key: string, value: any) => {
+        if (value === undefined || value === null || value === '') return;
+        if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
+          payload[key] = value;
+        }
+      };
+
+      mergeIfMissing('email', hUser.email);
+      mergeIfMissing('name', fullName);
+      mergeIfMissing('phone', hUser.phone);
+      mergeIfMissing('document', hUser.document);
+      mergeIfMissing('product_name', payload.event?.product?.name);
+      mergeIfMissing('hubla_event_type', payload.type);
+
+      console.log('[WEBHOOK-RECEIVER] Hubla payload normalizado:', {
+        email: payload.email,
+        name: payload.name,
+        phone: payload.phone,
+        hubla_event_type: payload.hubla_event_type,
+      });
+    }
+
     // 4. Apply reverse field mapping before validation
     if (endpoint.field_mapping) {
       for (const [sourceField, targetField] of Object.entries(endpoint.field_mapping)) {
