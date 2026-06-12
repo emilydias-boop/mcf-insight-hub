@@ -29,7 +29,8 @@ serve(async (req) => {
     const { data: origins } = await supabase
       .from('crm_origins')
       .select('id, name')
-      .ilike('name', '%PIPELINE INSIDE SALES%')
+      .ilike('name', 'PIPELINE INSIDE SALES')
+      .order('created_at', { ascending: true })
       .limit(1);
 
     const originId = origins?.[0]?.id || DEFAULT_ORIGIN_ID;
