@@ -19,7 +19,7 @@ import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
-import { BusinessUnit } from '@/hooks/useMyBU';
+import { BusinessUnit, BU_OPTIONS } from '@/hooks/useMyBU';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
@@ -161,8 +161,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
 
-  // SDRs do Consórcio for distribution
-  const { data: consorcioSdrs } = useSdrsFromSquad('consorcio');
+  // SDRs da BU ativa para distribuição (fallback: consorcio)
+  const distributionSquad: BusinessUnit = (activeBU as BusinessUnit) || 'consorcio';
+  const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
+  const buLabel = (BU_OPTIONS.find(o => o.value === distributionSquad)?.label || distributionSquad)
+    .replace(/^BU\s*-\s*/, '');
 
   // Query BU-filtered pipeline origins (for destination selector)
   const { data: buFilteredOrigins } = useQuery({
@@ -370,7 +373,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
     if (assignMode === 'distribute') {
       if (!consorcioSdrs?.length) {
-        toast.error('Nenhum SDR do Consórcio encontrado');
+        toast.error(`Nenhum SDR de ${buLabel} encontrado`);
         return;
       }
       // Resolve real profile IDs from profiles table (sdr.id ≠ profiles.id)
@@ -948,7 +951,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                 ) : (
                   <div className="text-xs text-muted-foreground">
                     {consorcioSdrs?.length
-                      ? `${consorcioSdrs.length} SDRs do Consórcio: ${consorcioSdrs.map(s => s.name.split(' ')[0]).join(', ')}`
+                      ? `${consorcioSdrs.length} SDRs de ${buLabel}: ${consorcioSdrs.map(s => s.name.split(' ')[0]).join(', ')}`
                       : 'Carregando SDRs...'}
                   </div>
                 )}
