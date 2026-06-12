@@ -2374,20 +2374,24 @@ serve(async (req) => {
             });
           }
 
-          // Se for A010, não for offer, e for primeira parcela, inserir na tabela a010_sales e criar contato/deal
-          if (productCategory === 'a010' && !isOffer && installment === 1) {
-            await supabase
-              .from('a010_sales')
-              .upsert({
-                customer_name: transactionData.customer_name || 'Cliente Desconhecido',
-                customer_email: transactionData.customer_email,
-                customer_phone: transactionData.customer_phone,
-                net_value: itemNetValue,
-                sale_date: saleDate,
-                status: 'completed',
-              }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
-            
-            // Criar contato e deal no CRM para leads A010
+          // Se for A010 e não for offer, garantir contato/deal em Inside Sales em QUALQUER parcela
+          if (productCategory === 'a010' && !isOffer) {
+            if (installment === 1) {
+              await supabase
+                .from('a010_sales')
+                .upsert({
+                  customer_name: transactionData.customer_name || 'Cliente Desconhecido',
+                  customer_email: transactionData.customer_email,
+                  customer_phone: transactionData.customer_phone,
+                  net_value: itemNetValue,
+                  sale_date: saleDate,
+                  status: 'completed',
+                }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            } else {
+              console.log(`🔁 [A010 LATE INSTALLMENT][item] Parcela ${installment}/${installments} de ${transactionData.customer_email} — garantindo deal em Inside Sales`);
+            }
+
+            // Criar contato e deal no CRM para leads A010 (dedupe interno por contato+origin)
             await createOrUpdateCRMContact(supabase, {
               email: transactionData.customer_email,
               phone: transactionData.customer_phone,
