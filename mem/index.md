@@ -17,3 +17,4 @@
 - [SDR Meta Percentuais por Plano](mem://business-logic/sdr-meta-percentuais-por-plano) — % Realizadas e teto No-Show vêm do sdr_comp_plan; maio/2026 incorporador SDR = 60%/40%.
 - [Meu Desempenho Alignment](mem://business-logic/meu-desempenho-fechamento-alignment) — KPIs do Meu Desempenho Closer (preset Mês) usam a mesma fonte do Fechamento.
 - [Consórcio Payment Date Confirmation](mem://business-logic/consorcio-payment-date-confirmation) — Toda marcação de parcela como 'pago' exige confirmação explícita da data real via ConfirmPaymentDateDialog; nunca usar new Date().
+- [Webhook Receiver Hubla Norm](mem://integration/webhook-lead-receiver-hubla-normalization) — webhook-lead-receiver normaliza payload Hubla (event.user.*) para root antes da validação.
