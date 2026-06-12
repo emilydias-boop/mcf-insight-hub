@@ -161,12 +161,6 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   const createNotFoundMutation = useCreateNotFoundDeals();
   const bulkTransfer = useBulkTransfer();
 
-  // SDRs da BU ativa para distribuição (fallback: consorcio)
-  const distributionSquad: BusinessUnit = (activeBU as BusinessUnit) || 'consorcio';
-  const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
-  const buLabel = (BU_OPTIONS.find(o => o.value === distributionSquad)?.label || distributionSquad)
-    .replace(/^BU\s*-\s*/, '');
-
   // Query BU-filtered pipeline origins (for destination selector)
   const { data: buFilteredOrigins } = useQuery({
     queryKey: ['bu-filtered-origins', activeBU],
@@ -192,6 +186,31 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
   // The effective destination origin: user-selected > prop > nothing
   const activeOriginId = selectedDestinationOriginId || originId;
+
+  // Resolve BU dinamicamente a partir do origin de destino (corrige bug
+  // onde os SDRs vinham da BU ativa do contexto, não da pipeline alvo).
+  const { data: destinationBU } = useQuery({
+    queryKey: ['origin-bu', activeOriginId],
+    queryFn: async () => {
+      if (!activeOriginId) return null;
+      const { data } = await supabase
+        .from('bu_origin_mapping')
+        .select('bu')
+        .eq('entity_type', 'origin')
+        .eq('entity_id', activeOriginId)
+        .limit(1)
+        .maybeSingle();
+      return (data?.bu as BusinessUnit) || null;
+    },
+    enabled: !!activeOriginId && open,
+  });
+
+  // SDRs do squad da pipeline de destino (fallback: activeBU > consorcio)
+  const distributionSquad: BusinessUnit =
+    (destinationBU || (activeBU as BusinessUnit) || 'consorcio') as BusinessUnit;
+  const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
+  const buLabel = (BU_OPTIONS.find(o => o.value === distributionSquad)?.label || distributionSquad)
+    .replace(/^BU\s*-\s*/, '');
 
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
