@@ -2209,20 +2209,25 @@ serve(async (req) => {
             payment_method: transactionData.payment_method,
           });
 
-          // Se for A010 e for primeira parcela, inserir na tabela a010_sales e criar contato/deal no CRM
-          if (productCategory === 'a010' && installment === 1) {
-            await supabase
-              .from('a010_sales')
-              .upsert({
-                customer_name: transactionData.customer_name || 'Cliente Desconhecido',
-                customer_email: transactionData.customer_email,
-                customer_phone: transactionData.customer_phone,
-                net_value: netValue,
-                sale_date: saleDate,
-                status: 'completed',
-              }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
-            
-            // Criar contato e deal no CRM para leads A010
+          // Se for A010, registrar venda (1ª parcela) e SEMPRE garantir contato/deal no CRM
+          // (mesmo parcela > 1, pois precisamos do lead em Inside Sales para distribuição/atribuição)
+          if (productCategory === 'a010') {
+            if (installment === 1) {
+              await supabase
+                .from('a010_sales')
+                .upsert({
+                  customer_name: transactionData.customer_name || 'Cliente Desconhecido',
+                  customer_email: transactionData.customer_email,
+                  customer_phone: transactionData.customer_phone,
+                  net_value: netValue,
+                  sale_date: saleDate,
+                  status: 'completed',
+                }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            } else {
+              console.log(`🔁 [A010 LATE INSTALLMENT] Parcela ${installment}/${installments} de ${transactionData.customer_email} — garantindo deal em Inside Sales`);
+            }
+
+            // Criar contato e deal no CRM para leads A010 (dedupe interno por contato+origin)
             await createOrUpdateCRMContact(supabase, {
               email: transactionData.customer_email,
               phone: transactionData.customer_phone,
