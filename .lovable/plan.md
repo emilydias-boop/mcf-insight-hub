@@ -1,55 +1,51 @@
-## Objetivo
+## Diagnóstico
 
-Aplicar, **somente em maio/2026** e **somente para SDRs da BU Incorporador**, as novas metas:
-- Reuniões Realizadas: **60%** das agendadas (era 70%)
-- No-Show: **máx. 40%** (era 30%) — usado também no cálculo inverso do payout
+O endpoint **A017 - Construir Para Alugar** (slug `a017-construir-para-alugar`) recebe payload da **Hubla** no `webhook-lead-receiver`. A Hubla envia estrutura aninhada:
 
-Mantém o padrão 70%/30% para os demais meses e demais BUs.
-
-## Estratégia
-
-Em vez de espalhar exceções "maio + incorporador" pelo código, vou usar os campos que já existem em `sdr_comp_plan`:
-- `meta_reunioes_realizadas` (já é gravado por SDR/mês)
-- `meta_no_show_pct` (já existe, hoje fixo em 30)
-
-Hoje a UI e a edge function ignoram esses campos e usam 0.7 / 30 hardcoded. A mudança torna esses campos a fonte da verdade (com fallback nos valores atuais para meses/SDRs antigos).
-
-## Passos
-
-### 1. Migration de dados (maio/2026, BU Incorporador)
-Para cada SDR cujo `sdr.squad = 'incorporador'` com `sdr_comp_plan.vigencia_inicio = '2026-05-01'`:
-- `meta_no_show_pct = 40`
-- `meta_reunioes_realizadas = ROUND(meta_reunioes_agendadas * 0.6)`
-
-Não altera planos APPROVED já travados de outros meses.
-
-### 2. Edge function `recalculate-sdr-payout`
-- `calculateNoShowPerformance(noShows, agendadas, maxPct)` passa a receber o teto (default 30); usa `compPlan.meta_no_show_pct` quando > 0.
-- `metaRealizadasAjustada`: se `compPlan.meta_reunioes_realizadas > 0`, usa um percentual derivado (`meta_realizadas / meta_agendadas`) aplicado às agendadas REAIS do mês; senão mantém o 0.7 atual. Mantém também o override `configOverrides.meta_realizadas_ajustada` (prioritário).
-
-### 3. UI — `KpiEditForm.tsx`
-- Substitui `0.7` por `compPlan.meta_reunioes_realizadas / compPlan.meta_reunioes_agendadas` (fallback 0.7).
-- Substitui "Max: 30%" por `compPlan.meta_no_show_pct` (fallback 30).
-- Atualiza o texto "70% de X agendadas" para refletir o percentual real (ex.: "60% de 221 agendadas").
-
-### 4. UI — `DynamicKpiField.tsx`, `DynamicIndicatorCard.tsx`, `CloserIndicators.tsx`, `PlansOteTab.tsx`
-Mesma troca: percentuais derivados do comp plan, fallback nos valores atuais. Em PlansOteTab a meta de realizadas continua sendo recalculada ao salvar (vai usar o mesmo helper).
-
-### 5. Helper compartilhado
-Criar `src/lib/sdrMetaPercentuais.ts` com:
-```ts
-getRealizadasPct(compPlan) // default 0.7
-getNoShowMaxPct(compPlan)  // default 30
 ```
-Usado pelos componentes em (3) e (4) para evitar repetição.
+{ type, event: { user: { email, firstName, lastName, phone, document }, invoice: {...} } }
+```
 
-## Detalhes técnicos
+O `webhook-lead-receiver` só faz mapeamento **flat** (`payload[source] → payload[target]`) e exige `name` e `email` no root. Como o endpoint A017 tem `field_mapping: {}` e a Hubla nunca manda esses campos no root, **toda chamada falha com 400** "Campos obrigatórios: name, email".
 
-- A regra **não** depende de hardcode "maio + incorporador" no código — fica só nos dados (comp plans). Se amanhã o reajuste virar permanente ou se outra BU mudar, basta atualizar o comp plan do mês.
-- Planos APPROVED/LOCKED não são alterados; apenas os PENDING de maio/2026 incorporador (confirmei: hoje os incorporador desse mês estão em PENDING).
-- Closers da BU Incorporador também usam o mesmo comp plan? Sim, mas para Closer os campos `meta_reunioes_realizadas` e `meta_no_show_pct` afetariam o cálculo do Closer também. Como você disse "todos da BU Incorporador", vou aplicar a todos os SDRs do squad incorporador (não Closers). **Confirme** se Closers Incorporador também devem ir para 60%/40%.
+Confirmado: **70 chamadas Hubla em 30 dias, 0 leads criados**.
 
-## Fora de escopo
+Como A017 é **infoproduto novo** (não é parceria/renovação A001-A009), o lead deve ser criado normalmente na **PIPELINE INSIDE SALES** — exatamente o que o endpoint já está configurado para fazer (`origin_id` Inside Sales, `stage_id` Novo Lead, `auto_tags: [A017]`).
 
-- Não muda o cap de no-show por lead (1 ou 2) — isso é outro KPI (`get_sdr_metrics_from_agenda`).
-- Não muda metas de junho em diante.
+## Solução
+
+Adicionar **detecção e normalização automática de payload Hubla** no `webhook-lead-receiver`, ativada apenas quando o request vier da Hubla.
+
+### Mudança única
+
+**Arquivo:** `supabase/functions/webhook-lead-receiver/index.ts`
+
+Inserir, logo antes do bloco "4. Apply reverse field mapping" (~linha 138), uma normalização:
+
+1. Detecta Hubla via `req.headers.get('x-hubla-token')` **ou** `payload.event?.user`.
+2. Mescla no root **sem sobrescrever** valores já existentes:
+   - `email` ← `payload.event.user.email`
+   - `name` ← `${firstName} ${lastName}` (trim, fallback firstName)
+   - `phone` ← `payload.event.user.phone`
+   - `document` ← `payload.event.user.document` (útil para dedupe por CPF)
+   - `product_name` ← `payload.event.product?.name` (se existir)
+   - `hubla_event_type` ← `payload.type`
+3. Loga `[WEBHOOK-RECEIVER] Hubla payload normalizado: { email, name, phone }`.
+
+O resto do fluxo continua igual — validação de `required_fields`, partner check, criação de contact/deal, distribuição, auto-tags.
+
+### Por que essa abordagem
+
+- **Cirúrgica**: só ativa quando detecta Hubla. Não toca Make, Manychat, Alfredo, Anamnese.
+- **Não-destrutiva**: se a fonte algum dia mandar `name`/`email` no root, esses valores prevalecem.
+- **Cobre futuros endpoints Hubla**: qualquer novo infoproduto Hubla apontado para `/webhook-lead-receiver/<slug>` funciona sem configurar `field_mapping` manualmente.
+
+### Memória a salvar após implementação
+
+Nova memória em `mem://integration/webhook-lead-receiver-hubla-normalization` — descrever que `webhook-lead-receiver` normaliza automaticamente payloads Hubla (`event.user.*` → root), para que futuros endpoints Hubla (infoprodutos novos) não precisem de field_mapping manual.
+
+### Validação pós-deploy
+
+1. Logs da próxima chamada Hubla A017: aparecer `Hubla payload normalizado` e responder 200.
+2. `webhook_endpoints.leads_received` do A017 incrementando.
+3. Lead aparecendo na PIPELINE INSIDE SALES, stage Novo Lead, com tag `A017`.
