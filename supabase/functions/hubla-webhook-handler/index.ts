@@ -1026,10 +1026,12 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             .maybeSingle();
 
           // Resolver origin Inside Sales primeiro (precisamos para criar contato/deal se faltar)
+          // EXACT match para evitar pegar "PIPELINE INSIDE SALES - LEAD GRATUITO"
           const { data: outsideOrigin } = await supabase
             .from('crm_origins')
             .select('id')
-            .ilike('name', '%PIPELINE INSIDE SALES%')
+            .ilike('name', 'PIPELINE INSIDE SALES')
+            .order('created_at', { ascending: true })
             .limit(1)
             .maybeSingle();
 
