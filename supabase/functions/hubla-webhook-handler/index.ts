@@ -2442,7 +2442,8 @@ serve(async (req) => {
         }
 
         // Pós-loop: Se algum item A010 ficou como offer (idx > 0) e não criou lead, criar agora
-        if (installment === 1) {
+        // (qualquer parcela — dedupe interno por contato+origin garante 1 deal só)
+        {
           const a010OfferIndex = items.findIndex((item: any, idx: number) => {
             const name = item.product?.name || item.offer?.name || item.name || '';
             const code = item.product?.code || item.product_code || null;
@@ -2460,17 +2461,19 @@ serve(async (req) => {
             const customerName = `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null;
             const saleDate = new Date(invoice.saleDate || invoice.created_at || invoice.createdAt || Date.now()).toISOString();
 
-            console.log(`🔄 [A010 como offer] Detectado no slot ${a010OfferIndex}, criando lead e a010_sales...`);
+            console.log(`🔄 [A010 como offer] Detectado no slot ${a010OfferIndex} (parcela ${installment}/${installments}), garantindo lead e a010_sales...`);
 
-            // a010_sales
-            await supabase.from('a010_sales').upsert({
-              customer_name: customerName || 'Cliente Desconhecido',
-              customer_email: customerEmail,
-              customer_phone: customerPhone,
-              net_value: a010Price,
-              sale_date: saleDate,
-              status: 'completed',
-            }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            // a010_sales apenas para a 1ª parcela
+            if (installment === 1) {
+              await supabase.from('a010_sales').upsert({
+                customer_name: customerName || 'Cliente Desconhecido',
+                customer_email: customerEmail,
+                customer_phone: customerPhone,
+                net_value: a010Price,
+                sale_date: saleDate,
+                status: 'completed',
+              }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            }
 
             // CRM contact + deal
             await createOrUpdateCRMContact(supabase, {
