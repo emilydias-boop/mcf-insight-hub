@@ -1018,23 +1018,62 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
           console.log(`🔄 [AUTO-PAGO][OUTSIDE] Oferta Outside detectada ("${data.offerName}"). Buscando deal para email: ${emailLower}`);
 
           // Buscar contact pelo email
-          const { data: outsideContact } = await supabase
+          let { data: outsideContact } = await supabase
             .from('crm_contacts')
-            .select('id')
+            .select('id, name, phone')
             .ilike('email', emailLower)
             .limit(1)
             .maybeSingle();
 
-          if (outsideContact?.id) {
-            // Buscar deal no PIPELINE INSIDE SALES (com OU sem owner)
-            const { data: outsideOrigin } = await supabase
-              .from('crm_origins')
-              .select('id')
-              .ilike('name', '%PIPELINE INSIDE SALES%')
-              .limit(1)
-              .maybeSingle();
+          // Resolver origin Inside Sales primeiro (precisamos para criar contato/deal se faltar)
+          const { data: outsideOrigin } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .ilike('name', '%PIPELINE INSIDE SALES%')
+            .limit(1)
+            .maybeSingle();
 
-            if (outsideOrigin?.id) {
+          if (!outsideOrigin?.id) {
+            console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Origin PIPELINE INSIDE SALES não encontrada — abortando`);
+          } else {
+            // Se não existe contato, criar um básico (com dedupe por telefone)
+            if (!outsideContact?.id) {
+              const phoneDigitsLocal = (data.customerPhone || '').replace(/\D/g, '');
+              if (phoneDigitsLocal.length >= 10) {
+                const phoneSuffixLocal = phoneDigitsLocal.slice(-9);
+                const { data: byPhoneContact } = await supabase
+                  .from('crm_contacts')
+                  .select('id, name, phone')
+                  .ilike('phone', `%${phoneSuffixLocal}`)
+                  .eq('is_archived', false)
+                  .limit(1)
+                  .maybeSingle();
+                if (byPhoneContact?.id) outsideContact = byPhoneContact;
+              }
+            }
+            if (!outsideContact?.id) {
+              const { data: createdContact } = await supabase
+                .from('crm_contacts')
+                .insert({
+                  clint_id: `hubla-outside-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                  name: data.customerName || 'Cliente Outside',
+                  email: emailLower,
+                  phone: data.customerPhone || null,
+                  origin_id: outsideOrigin.id,
+                  tags: ['Outside', 'Hubla'],
+                  custom_fields: { source: 'hubla_outside', offer_name: data.offerName },
+                })
+                .select('id, name, phone')
+                .maybeSingle();
+              if (createdContact?.id) {
+                outsideContact = createdContact;
+                console.log(`🆕 [AUTO-PAGO][OUTSIDE] Contato criado: ${outsideContact.id}`);
+              }
+            }
+
+            if (!outsideContact?.id) {
+              console.log(`❌ [AUTO-PAGO][OUTSIDE] Não foi possível obter/criar contato para ${emailLower}`);
+            } else {
               const { data: outsideDeal } = await supabase
                 .from('crm_deals')
                 .select('id, owner_id, owner_profile_id, origin_id, tags, stage_id')
@@ -1043,7 +1082,136 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                 .limit(1)
                 .maybeSingle();
 
-              if (outsideDeal) {
+              // Buscar stage "Contrato Pago" (fallback Novo Lead)
+              const { data: contractPaidStage } = await supabase
+                .from('crm_stages')
+                .select('id')
+                .eq('origin_id', outsideOrigin.id)
+                .ilike('stage_name', '%Contrato Pago%')
+                .maybeSingle();
+              let fallbackStageId: string | null = contractPaidStage?.id || null;
+              if (!fallbackStageId) {
+                const { data: novoLeadStage } = await supabase
+                  .from('crm_stages')
+                  .select('id')
+                  .eq('origin_id', outsideOrigin.id)
+                  .ilike('stage_name', '%Novo Lead%')
+                  .maybeSingle();
+                fallbackStageId = novoLeadStage?.id || null;
+              }
+
+              // Helper: pegar próximo SDR via distribuição
+              const getNextOwner = async (): Promise<{ email: string | null; profileId: string | null }> => {
+                const { data: distConfigLocal } = await supabase
+                  .from('lead_distribution_config')
+                  .select('id')
+                  .eq('origin_id', outsideOrigin.id)
+                  .eq('is_active', true)
+                  .limit(1);
+                if (!distConfigLocal || distConfigLocal.length === 0) {
+                  console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Sem configuração de distribuição ativa`);
+                  return { email: null, profileId: null };
+                }
+                const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
+                  p_origin_id: outsideOrigin.id,
+                });
+                if (!nextOwnerEmail) {
+                  console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Fila de distribuição vazia`);
+                  return { email: null, profileId: null };
+                }
+                const { data: ownerProfile } = await supabase
+                  .from('profiles')
+                  .select('id')
+                  .ilike('email', nextOwnerEmail)
+                  .maybeSingle();
+                return { email: nextOwnerEmail, profileId: ownerProfile?.id || null };
+              };
+
+              // ===== CASO C: Deal não existe → criar + distribuir =====
+              if (!outsideDeal) {
+                console.log(`🆕 [AUTO-PAGO][OUTSIDE] Nenhum deal em Inside Sales — criando deal Outside e distribuindo`);
+                const { email: newOwnerEmail, profileId: newOwnerProfileId } = await getNextOwner();
+
+                const { data: newDeal, error: newDealErr } = await supabase
+                  .from('crm_deals')
+                  .insert({
+                    clint_id: `hubla-outside-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                    name: `${outsideContact.name || data.customerName || 'Cliente'} - Outside`,
+                    contact_id: outsideContact.id,
+                    origin_id: outsideOrigin.id,
+                    stage_id: fallbackStageId,
+                    owner_id: newOwnerEmail,
+                    owner_profile_id: newOwnerProfileId,
+                    value: 0,
+                    tags: ['Outside', 'Hubla'],
+                    custom_fields: {
+                      source: 'hubla_outside',
+                      offer_name: data.offerName,
+                      created_via: 'outside_no_deal_flow',
+                      a010_compra: true,
+                    },
+                    data_source: 'webhook',
+                    stage_moved_at: new Date().toISOString(),
+                  })
+                  .select('id')
+                  .maybeSingle();
+
+                if (newDealErr) {
+                  console.error(`❌ [AUTO-PAGO][OUTSIDE] Erro ao criar deal Outside:`, newDealErr.message);
+                } else if (newDeal?.id) {
+                  console.log(`✅ [AUTO-PAGO][OUTSIDE] Deal Outside criado ${newDeal.id} owner=${newOwnerEmail}`);
+
+                  await supabase.from('deal_activities').insert({
+                    deal_id: newDeal.id,
+                    activity_type: 'owner_change',
+                    description: newOwnerEmail
+                      ? `Deal Outside criado e distribuído para ${newOwnerEmail} via webhook Hubla (sem R1 prévia)`
+                      : `Deal Outside criado sem owner (fila vazia) via webhook Hubla`,
+                    metadata: {
+                      new_owner: newOwnerEmail,
+                      new_owner_profile_id: newOwnerProfileId,
+                      distributed_at: new Date().toISOString(),
+                      distribution_type: 'outside_webhook_create',
+                      contact_email: emailLower,
+                      offer_name: data.offerName,
+                      trigger: 'contract_paid_outside_no_deal',
+                    },
+                  });
+
+                  if (data.transactionHublaId) {
+                    await supabase
+                      .from('hubla_transactions')
+                      .update({ linked_deal_id: newDeal.id })
+                      .eq('hubla_id', data.transactionHublaId);
+                  }
+
+                  if (newOwnerEmail) {
+                    const { data: sdrProfile } = await supabase
+                      .from('profiles')
+                      .select('id')
+                      .ilike('email', newOwnerEmail)
+                      .maybeSingle();
+                    if (sdrProfile?.id) {
+                      await supabase.from('user_notifications').insert({
+                        user_id: sdrProfile.id,
+                        type: 'contract_paid',
+                        title: '💰 Contrato Outside (novo lead) - Verifique',
+                        message: `${data.customerName || 'Cliente'} pagou contrato Outside (${data.offerName}). Lead foi criado e atribuído a você.`,
+                        metadata: {
+                          deal_id: newDeal.id,
+                          customer_name: data.customerName,
+                          customer_email: emailLower,
+                          sale_date: data.saleDate,
+                          offer_name: data.offerName,
+                          trigger: 'outside_no_deal_created',
+                        },
+                        read: false,
+                      });
+                    }
+                  }
+                }
+              } else {
+                // ===== CASO A/B: Deal existe =====
                 // Buscar stage "Contrato Pago" no pipeline
                 const { data: contractPaidStage } = await supabase
                   .from('crm_stages')
@@ -1168,12 +1336,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                     console.log(`🔔 [AUTO-PAGO][OUTSIDE] Notificação criada para SDR ${assignedOwnerEmail}`);
                   }
                 }
-              } else {
-                console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Nenhum deal encontrado no Pipeline Inside Sales para esse contato`);
               }
             }
-          } else {
-            console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Contato não encontrado para email: ${emailLower}`);
           }
         } catch (outsideErr: any) {
           console.error(`❌ [AUTO-PAGO][OUTSIDE] Erro ao distribuir Outside:`, outsideErr.message);
