@@ -248,9 +248,20 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   }, [headers, columnMapping]);
 
   const processFileData = useCallback((hdrs: string[], data: any[]) => {
-    setHeaders(hdrs);
+    // Sanitize headers: trim, drop empties, and de-dup to avoid Radix Select crashes
+    // (a SelectItem with value="" throws "must have a value prop that is not an empty string")
+    const seen = new Map<string, number>();
+    const cleanHdrs = hdrs
+      .map(h => String(h ?? '').trim())
+      .filter(Boolean)
+      .map(h => {
+        const count = (seen.get(h) || 0) + 1;
+        seen.set(h, count);
+        return count > 1 ? `${h}_${count}` : h;
+      });
+    setHeaders(cleanHdrs);
     setRawData(data);
-    setColumnMapping(autoMapColumns(hdrs));
+    setColumnMapping(autoMapColumns(cleanHdrs));
     setStep('mapping');
   }, []);
 
@@ -750,7 +761,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">— Não mapear —</SelectItem>
-                      {headers.map(h => (
+                      {headers.filter(h => h && h.trim()).map(h => (
                         <SelectItem key={h} value={h}>{h}</SelectItem>
                       ))}
                     </SelectContent>
@@ -954,7 +965,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                           <Loader2 className="h-4 w-4 animate-spin" />
                         </div>
                       ) : (
-                        availableUsers?.map((user: any) => (
+                        availableUsers?.filter((u: any) => u?.email && String(u.email).trim()).map((user: any) => (
                           <SelectItem key={user.id} value={user.email}>
                             <span className="flex items-center gap-2">
                               {user.full_name || user.email}
