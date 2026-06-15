@@ -21,27 +21,60 @@ export function ConnectivityCheck({ onReconnect, showAlways = false }: Connectiv
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  const checkConnection = async () => {
-    setIsChecking(true);
-    setStatus('checking');
-    setMessage('Verificando conexão...');
-    
+  const checkConnection = async (
+    { retries = 2, silent = false }: { retries?: number; silent?: boolean } = {}
+  ) => {
+    // Shortcut: explicit offline
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setStatus('network_error');
+      setMessage('Você está offline. Verifique sua conexão.');
+      setHasError(true);
+      return;
+    }
+
+    if (!silent) {
+      setIsChecking(true);
+      setStatus('checking');
+      setMessage('Verificando conexão...');
+    }
+
+    let lastResult: Awaited<ReturnType<typeof checkSupabaseConnectivity>> | null = null;
     try {
-      const result = await checkSupabaseConnectivity();
-      setStatus(result.status);
-      setMessage(result.message);
-      setHasError(result.status !== 'ok');
-      
-      // Log diagnostics on error
-      if (result.status !== 'ok') {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const result = await checkSupabaseConnectivity();
+          lastResult = result;
+          if (result.status === 'ok') break;
+        } catch (err) {
+          lastResult = { status: 'network_error', message: 'Erro ao verificar conexão' } as any;
+        }
+        if (attempt < retries) {
+          const delay = 1500 * (attempt + 1);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+
+      if (!lastResult) {
+        if (!silent) {
+          setStatus('network_error');
+          setMessage('Erro ao verificar conexão');
+          setHasError(true);
+        }
+        return;
+      }
+
+      if (lastResult.status === 'ok') {
+        setStatus('ok');
+        setMessage(lastResult.message);
+        setHasError(false);
+      } else if (!silent) {
+        setStatus(lastResult.status);
+        setMessage(lastResult.message);
+        setHasError(true);
         console.log('[ConnectivityCheck] Diagnostics:', getSupabaseDiagnostics());
       }
-    } catch (err) {
-      setStatus('network_error');
-      setMessage('Erro ao verificar conexão');
-      setHasError(true);
     } finally {
-      setIsChecking(false);
+      if (!silent) setIsChecking(false);
     }
   };
 
@@ -64,6 +97,31 @@ export function ConnectivityCheck({ onReconnect, showAlways = false }: Connectiv
 
   useEffect(() => {
     checkConnection();
+  }, []);
+
+  // Auto re-check silently every 15s while in error state
+  useEffect(() => {
+    if (!hasError) return;
+    const id = setInterval(() => {
+      checkConnection({ retries: 0, silent: true });
+    }, 15000);
+    return () => clearInterval(id);
+  }, [hasError]);
+
+  // React to browser online/offline events
+  useEffect(() => {
+    const handleOnline = () => checkConnection({ retries: 1, silent: true });
+    const handleOffline = () => {
+      setStatus('network_error');
+      setMessage('Você está offline. Verifique sua conexão.');
+      setHasError(true);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Don't show if OK and not showAlways
@@ -150,7 +208,7 @@ export function ConnectivityCheck({ onReconnect, showAlways = false }: Connectiv
             <Button
               variant="ghost"
               size="sm"
-              onClick={checkConnection}
+              onClick={() => checkConnection()}
               disabled={isChecking}
             >
               Testar novamente
