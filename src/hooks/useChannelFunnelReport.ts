@@ -24,6 +24,7 @@ import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const CHANNEL_LABELS: Record<string, string> = {
   A010: 'A010',
+  A017: 'A017',
   ANAMNESE: 'ANAMNESE',
   ANAMNESE_INCOMPLETA: 'ANAMNESE INCOMPLETA',
   OUTROS: 'OUTROS',
@@ -94,6 +95,10 @@ const phoneSuffix = (phone: string | null | undefined): string => {
 
 const A010_FRESH_WINDOW_DAYS = 30;
 
+// Offers Hubla que identificam compra do produto A017 ("Construir Para Alugar").
+// Mantido em sync com supabase/functions/hubla-webhook-handler/index.ts
+const A017_OFFER_IDS = ['sSUhrvi36mbjRN8gOwhs', 'BtqivJFqdCN52oUoYYzc'];
+
 /**
  * Classificação de canal — alinhada com a Agenda R1 (`classifySimple` em
  * src/components/crm/MeetingsList.tsx). Regras:
@@ -111,8 +116,10 @@ function classifyChannelWith30dRule(opts: {
   /** sale_date MAIS RECENTE do A010 do lead (null se não for buyer) */
   mostRecentA010Purchase: Date | null;
   referenceDate: Date;
+  /** lead é comprador A017 (VSL ou Manychat) */
+  isA017Buyer?: boolean;
 }): string {
-  const { tags, mostRecentA010Purchase, referenceDate } = opts;
+  const { tags, mostRecentA010Purchase, referenceDate, isA017Buyer } = opts;
   const norm = tags.map((t) => (t || '').trim().toUpperCase());
   // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
   const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
@@ -125,6 +132,8 @@ function classifyChannelWith30dRule(opts: {
 
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isBuyer && !isStale) return 'A010';
+  // Buyer A017 (sem A010 recente) → A017, antes de cair em ANAMNESE/OUTROS
+  if (isA017Buyer) return 'A017';
   // Buyer esfriado (>30d) COM tag ANAMNESE (entrou no fluxo) → ANAMNESE
   if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
   // Buyer esfriado SEM tag → continua A010
@@ -528,6 +537,24 @@ export function useChannelFunnelReport(
         });
       }
 
+      // Lookup A017 buyers (VSL + Manychat)
+      const a017BuyerEmails = new Set<string>();
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a017Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('event_type', 'NewSale')
+          .eq('sale_status', 'completed')
+          .in('offer_id', A017_OFFER_IDS)
+          .in('customer_email', chunk);
+        (a017Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (e) a017BuyerEmails.add(e);
+        });
+      }
+
       for (const d of deals) {
         const email = (d.crm_contacts?.email || '').toLowerCase().trim() || null;
         const tags = parseTags(d.tags);
@@ -535,6 +562,7 @@ export function useChannelFunnelReport(
           tags,
           mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
+          isA017Buyer: email ? a017BuyerEmails.has(email) : false,
         });
         m.set(d.id, {
           id: d.id,
@@ -754,6 +782,24 @@ export function useChannelFunnelReport(
         });
       }
 
+      // Lookup A017 buyers (VSL + Manychat)
+      const a017BuyerEmails = new Set<string>();
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a017Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('event_type', 'NewSale')
+          .eq('sale_status', 'completed')
+          .in('offer_id', A017_OFFER_IDS)
+          .in('customer_email', chunk);
+        (a017Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (e) a017BuyerEmails.add(e);
+        });
+      }
+
       // Para cada email, pegar o deal mais recente e classificar
       const byEmail = new Map<string, any>();
       for (const d of deals) {
@@ -769,6 +815,7 @@ export function useChannelFunnelReport(
           tags: parseTags(d.tags),
           mostRecentA010Purchase: mostRecentA010ByEmail.get(e) || null,
           referenceDate: new Date(d.created_at),
+          isA017Buyer: a017BuyerEmails.has(e),
         });
         m.set(e, ch);
       });
@@ -782,7 +829,7 @@ export function useChannelFunnelReport(
   // 6. AGREGAÇÃO POR CANAL (3 buckets fixos)
   // ================================================================
   const { rows, totals, details } = useMemo(() => {
-    const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
+    const FUNNEL_CHANNELS = ['A010', 'A017', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
 
     // ---------- Filtros locais ----------
     const fSearch = (filters?.search || '').trim().toLowerCase();
@@ -854,7 +901,7 @@ export function useChannelFunnelReport(
       vendaFinal: [], faturamentoBruto: [], faturamentoLiquido: [],
     });
     const det: FunnelDetails = {
-      A010: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
+      A010: blankDetails(), A017: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
     };
     const pushDet = (channel: string, metric: FunnelMetricKey, item: FunnelDetailItem) => {
       if (!det[channel]) det[channel] = blankDetails();
