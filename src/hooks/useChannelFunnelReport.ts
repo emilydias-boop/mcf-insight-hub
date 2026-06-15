@@ -24,6 +24,7 @@ import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const CHANNEL_LABELS: Record<string, string> = {
   A010: 'A010',
+  A017: 'A017',
   ANAMNESE: 'ANAMNESE',
   ANAMNESE_INCOMPLETA: 'ANAMNESE INCOMPLETA',
   OUTROS: 'OUTROS',
@@ -94,6 +95,10 @@ const phoneSuffix = (phone: string | null | undefined): string => {
 
 const A010_FRESH_WINDOW_DAYS = 30;
 
+// Offers Hubla que identificam compra do produto A017 ("Construir Para Alugar").
+// Mantido em sync com supabase/functions/hubla-webhook-handler/index.ts
+const A017_OFFER_IDS = ['sSUhrvi36mbjRN8gOwhs', 'BtqivJFqdCN52oUoYYzc'];
+
 /**
  * Classificação de canal — alinhada com a Agenda R1 (`classifySimple` em
  * src/components/crm/MeetingsList.tsx). Regras:
@@ -111,8 +116,10 @@ function classifyChannelWith30dRule(opts: {
   /** sale_date MAIS RECENTE do A010 do lead (null se não for buyer) */
   mostRecentA010Purchase: Date | null;
   referenceDate: Date;
+  /** lead é comprador A017 (VSL ou Manychat) */
+  isA017Buyer?: boolean;
 }): string {
-  const { tags, mostRecentA010Purchase, referenceDate } = opts;
+  const { tags, mostRecentA010Purchase, referenceDate, isA017Buyer } = opts;
   const norm = tags.map((t) => (t || '').trim().toUpperCase());
   // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
   const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
@@ -125,6 +132,8 @@ function classifyChannelWith30dRule(opts: {
 
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isBuyer && !isStale) return 'A010';
+  // Buyer A017 (sem A010 recente) → A017, antes de cair em ANAMNESE/OUTROS
+  if (isA017Buyer) return 'A017';
   // Buyer esfriado (>30d) COM tag ANAMNESE (entrou no fluxo) → ANAMNESE
   if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
   // Buyer esfriado SEM tag → continua A010
