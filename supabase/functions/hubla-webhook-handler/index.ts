@@ -288,6 +288,7 @@ const A017_STAGE_ID = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda';                   
 // Viver de Aluguel — então diferenciamos pelo offer.id (ou pela UTM, abaixo).
 const A017_OFFER_IDS = new Set<string>([
   'sSUhrvi36mbjRN8gOwhs', // "Construir Para Alugar - VSL"
+  'BtqivJFqdCN52oUoYYzc', // "Construir Para Alugar - Manychat"
 ]);
 
 function detectA017FromInvoice(body: any): boolean {
