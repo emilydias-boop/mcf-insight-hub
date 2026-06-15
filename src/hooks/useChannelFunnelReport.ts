@@ -853,7 +853,7 @@ export function useChannelFunnelReport(
   // 6. AGREGAÇÃO POR CANAL (3 buckets fixos)
   // ================================================================
   const { rows, totals, details } = useMemo(() => {
-    const FUNNEL_CHANNELS = ['A010', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
+    const FUNNEL_CHANNELS = ['A010', 'A017', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
 
     // ---------- Filtros locais ----------
     const fSearch = (filters?.search || '').trim().toLowerCase();
@@ -925,7 +925,7 @@ export function useChannelFunnelReport(
       vendaFinal: [], faturamentoBruto: [], faturamentoLiquido: [],
     });
     const det: FunnelDetails = {
-      A010: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
+      A010: blankDetails(), A017: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
     };
     const pushDet = (channel: string, metric: FunnelMetricKey, item: FunnelDetailItem) => {
       if (!det[channel]) det[channel] = blankDetails();
