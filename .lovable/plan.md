@@ -1,43 +1,24 @@
-## Problema
+## Causa
 
-Em `src/components/crm/SpreadsheetCompareDialog.tsx` (linha 165-166), a lista de SDRs para o round-robin é derivada da **BU ativa do usuário** (`activeBU` do contexto), e não da pipeline (origin) para onde os leads estão sendo efetivamente importados. Resultado: o usuário vê os SDRs do Consórcio (Cleiton, Ithaline, Ygor) mesmo quando o destino selecionado é uma pipeline de outra BU.
+O diálogo de importação de planilha (`SpreadsheetCompareDialog.tsx`, usado nas BUs para subir planilha) gera um `<SelectItem>` para cada cabeçalho de coluna detectado no arquivo. Quando a planilha tem **uma coluna sem cabeçalho** (cabeçalho vazio, em branco ou só espaços), o item vira `value=""`, o que viola a invariante do Radix Select e derruba a página com o erro mostrado.
 
-```ts
-const distributionSquad: BusinessUnit = (activeBU as BusinessUnit) || 'consorcio';
-const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
-```
+## Correção (1 arquivo)
 
-## Solução
+`src/components/crm/SpreadsheetCompareDialog.tsx`
 
-Resolver a BU dinamicamente a partir do `activeOriginId` (a pipeline de destino realmente selecionada), via `bu_origin_mapping`, e usar essa BU para alimentar `useSdrsFromSquad`. Mantém `activeBU` apenas como fallback enquanto o origin de destino ainda não foi resolvido.
+1. **Sanitizar `headers` na origem** — logo após detectar/extrair headers da planilha, filtrar entradas vazias/whitespace e remover duplicatas:
+   - `headers = rawHeaders.map(h => String(h ?? '').trim()).filter(Boolean)`
+   - Se sobrar duplicata, sufixar com índice para garantir `key` único.
+2. **Blindar o `.map` do Select de mapeamento (linha 753)** como defesa em profundidade: `headers.filter(h => h && h.trim()).map(...)`.
+3. **Blindar o Select de usuário (linha 958)**: filtrar `users.filter(u => u.email && u.email.trim())` antes do `.map`, evitando o mesmo crash se algum usuário vier sem email.
 
-### Passos
+## Validação
 
-1. **Adicionar query** em `SpreadsheetCompareDialog.tsx` que busca a BU do origin de destino:
-   - `SELECT bu FROM bu_origin_mapping WHERE entity_type='origin' AND entity_id = activeOriginId LIMIT 1`
-   - Habilitada apenas quando `activeOriginId` existe.
-   - Cache via React Query (`['origin-bu', activeOriginId]`).
+- Subir a planilha que está causando o erro hoje → o diálogo deve passar para a etapa "Mapeamento" sem cair.
+- A coluna sem cabeçalho simplesmente não aparece como opção de mapeamento (comportamento esperado — não dá pra mapear uma coluna sem nome).
+- Conferir no console que não há mais warning do Radix Select.
 
-2. **Derivar `distributionSquad`** assim:
-   ```ts
-   const destinationBU = originBuQuery.data ?? null;
-   const distributionSquad: BusinessUnit = (destinationBU || activeBU || 'consorcio') as BusinessUnit;
-   ```
+## Fora de escopo
 
-3. **Atualizar o label** "X SDRs do {BU}" para refletir o squad resolvido (já funciona via `BU_OPTIONS.find(...)`).
-
-4. **Reagir à troca de destino**: como `useSdrsFromSquad` já é um hook reativo (key inclui squad), apenas garantir que o `queryKey` use `distributionSquad` e que a lista re-renderize quando o usuário troca a pipeline de destino no seletor (`selectedDestinationOriginId`).
-
-5. **Edge cases**:
-   - Se o origin não tiver mapeamento em `bu_origin_mapping`, cair no `activeBU`.
-   - Se nem `activeBU` nem mapeamento existirem, manter o fallback atual `'consorcio'` (preserva comportamento legado).
-   - Não alterar a lógica de `bu-filtered-origins` nem nada fora da resolução de SDRs.
-
-### Arquivos tocados
-
-- `src/components/crm/SpreadsheetCompareDialog.tsx` (única alteração — frontend puro)
-
-### Fora de escopo
-
-- Não mexer em `LeadDistributionConfig`, `BulkDistributeSdrsDialog`, `useSdrsFromSquad`, nem em hooks de BU.
-- Sem migrações de banco.
+- Não mexer no parser de planilha em si.
+- Não alterar layout/UX do diálogo, só a sanitização defensiva dos dados que alimentam os Selects.
