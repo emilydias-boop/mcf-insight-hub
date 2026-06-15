@@ -995,6 +995,56 @@ async function createA017Deal(supabase: any, data: A017DealData): Promise<void> 
       return;
     }
 
+    // 4b. PROMOÇÃO: existe um deal A010 do mesmo contato em Inside Sales?
+    // Quando o cliente entra pelo checkout A017 mas a Hubla também emite
+    // uma sub-invoice A010 (orderbump "PRINCIPAL"), o caminho A010 pode ter
+    // criado o deal antes. Nesse caso PROMOVEMOS o deal para A017 em vez de
+    // criar duplicata: troca produto, nome, move de stage e reordena tags
+    // (A017 vira principal, A010 fica como secundária).
+    const { data: existingA010Deals } = await supabase
+      .from('crm_deals')
+      .select('id, name, tags, value, custom_fields, stage_id, product_name')
+      .eq('contact_id', contactId)
+      .eq('origin_id', originId)
+      .contains('tags', ['A010'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const existingA010Deal = existingA010Deals?.[0];
+    if (existingA010Deal) {
+      const currentTags: string[] = existingA010Deal.tags || [];
+      const filtered = currentTags.filter(
+        t => t !== 'A017' && t !== 'Hubla' && t !== 'A010'
+      );
+      const promotedTags = ['A017', 'Hubla', 'A010', ...filtered];
+
+      const promotedName = (existingA010Deal.name || `${data.name || 'Cliente'} - A017`)
+        .replace(/\s-\sA010$/i, ' - A017');
+
+      await supabase
+        .from('crm_deals')
+        .update({
+          name: promotedName,
+          product_name: data.productName,
+          stage_id: A017_STAGE_ID,
+          stage_moved_at: new Date().toISOString(),
+          tags: promotedTags,
+          value: Math.max(existingA010Deal.value || 0, data.value || 0),
+          custom_fields: {
+            ...(existingA010Deal.custom_fields || {}),
+            a017_compra: true,
+            a017_produto: data.productName,
+            a017_data: new Date().toISOString(),
+            a017_promoted_from_a010: true,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingA010Deal.id);
+
+      console.log(`[A017] ⬆️ Deal A010 promovido para A017: ${existingA010Deal.id}`);
+      return;
+    }
+
     // 5. Criar novo deal A017
     // 5a. Distribuição
     let finalOwnerId: string | null = null;
