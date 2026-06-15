@@ -277,6 +277,48 @@ interface CRMContactData {
 // CONSTANTE: Origin canônico para todos os leads A010
 const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
 
+// ============= A017: constantes e detecção =============
+// Stages fixas em PIPELINE INSIDE SALES (origin e3c04f21-ba2c-4c66-84f8-b4341c826b1c)
+const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+const INSIDE_SALES_NOVO_LEAD_STAGE_ID = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b'; // stage_order 5
+const A017_STAGE_ID = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda';                    // stage_order 3
+
+// Whitelist de offer.id da Hubla que identificam UMA venda do produto A017.
+// O produto Hubla "Construir Para Alugar" é compartilhado com o orderbump
+// Viver de Aluguel — então diferenciamos pelo offer.id (ou pela UTM, abaixo).
+const A017_OFFER_IDS = new Set<string>([
+  'sSUhrvi36mbjRN8gOwhs', // "Construir Para Alugar - VSL"
+]);
+
+function detectA017FromInvoice(body: any): boolean {
+  const event = body?.event || body || {};
+  const invoice = event?.invoice || {};
+
+  // 1) Coletar todos os offer.id presentes no payload (products + items)
+  const offerIds: string[] = [];
+  const products = event?.products || invoice?.products || [];
+  for (const p of products) {
+    for (const o of (p?.offers || [])) {
+      if (o?.id) offerIds.push(String(o.id));
+    }
+  }
+  const items = invoice?.items || event?.items || [];
+  for (const it of items) {
+    if (it?.offer?.id) offerIds.push(String(it.offer.id));
+    for (const o of (it?.product?.offers || [])) {
+      if (o?.id) offerIds.push(String(o.id));
+    }
+  }
+  if (offerIds.some(id => A017_OFFER_IDS.has(id))) return true;
+
+  // 2) Fallback: UTM / URL contém "A017"
+  const utm = invoice?.paymentSession?.utm || {};
+  const url = invoice?.paymentSession?.url || '';
+  const haystack = [utm.campaign, utm.content, utm.source, utm.medium, utm.term, url]
+    .filter(Boolean).join(' ');
+  return /A017/i.test(haystack);
+}
+
 // ============= HELPER: Verificar se é parceiro existente =============
 async function checkIfPartner(supabase: any, email: string | null): Promise<{isPartner: boolean, product: string | null}> {
   if (!email) return { isPartner: false, product: null };
@@ -542,7 +584,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
             .from('crm_stages')
             .select('id')
             .eq('origin_id', originId)
-            .ilike('stage_name', '%Novo Lead%')
+            .eq('stage_name', 'Novo Lead')
             .limit(1)
             .maybeSingle();
           if (novoLead) {
@@ -581,7 +623,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         .from('crm_stages')
         .select('id')
         .eq('origin_id', originId)
-        .ilike('stage_name', `%${targetStageName}%`)
+        .eq('stage_name', targetStageName)
         .limit(1)
         .maybeSingle();
       
@@ -607,7 +649,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       const { data: genericStage } = await supabase
         .from('crm_stages')
         .select('id')
-        .ilike('stage_name', '%novo lead%')
+        .eq('stage_name', 'Novo Lead')
         .limit(1)
         .maybeSingle();
       
@@ -798,7 +840,7 @@ async function generateTasksForDeal(supabase: any, params: {
       description: template.description,
       type: template.type,
       status: 'pending',
-      due_date: template.sla_offset_minutes 
+      due_date: template.sla_offset_minutes
         ? new Date(now.getTime() + template.sla_offset_minutes * 60000).toISOString()
         : template.default_due_days
           ? new Date(now.getTime() + template.default_due_days * 24 * 60 * 60000).toISOString()
@@ -820,6 +862,214 @@ async function generateTasksForDeal(supabase: any, params: {
   }
 }
 
+// ============= HELPER: Criar/Atualizar Deal A017 =============
+interface A017DealData {
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  productName: string;
+  value: number;
+}
+
+async function createA017Deal(supabase: any, data: A017DealData): Promise<void> {
+  if (!data.email && !data.phone) {
+    console.log('[A017] Sem email/telefone, pulando');
+    return;
+  }
+
+  // Parceiros não entram em Inside Sales
+  const partnerCheck = await checkIfPartner(supabase, data.email);
+  if (partnerCheck.isPartner) {
+    console.log(`[A017] 🚫 PARCEIRO DETECTADO (${data.email}, produto: ${partnerCheck.product}). Bloqueando A017.`);
+    return;
+  }
+
+  const normalizedPhone = normalizePhone(data.phone);
+  const originId = INSIDE_SALES_ORIGIN_ID;
+
+  try {
+    // 1. Buscar contato por email
+    let contactId: string | null = null;
+    if (data.email) {
+      const { data: byEmail } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.email)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (byEmail) contactId = byEmail.id;
+    }
+
+    // 2. Por telefone normalizado
+    if (!contactId && normalizedPhone) {
+      const phoneDigits = normalizedPhone.replace(/\D/g, '');
+      const { data: byPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .or(`phone.eq.${normalizedPhone},phone.eq.+${phoneDigits},phone.eq.${phoneDigits}`)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (byPhone) contactId = byPhone.id;
+    }
+
+    // 3. Criar contato se não existir
+    if (!contactId) {
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: `hubla-a017-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          name: data.name || 'Cliente A017',
+          email: data.email,
+          phone: normalizedPhone,
+          origin_id: originId,
+          tags: ['A017', 'Hubla'],
+          custom_fields: { source: 'hubla', product: data.productName },
+        })
+        .select('id')
+        .single();
+      if (contactError) {
+        console.error('[A017] Erro ao criar contato:', contactError);
+        return;
+      }
+      contactId = newContact?.id || null;
+    }
+
+    if (!contactId) {
+      console.log('[A017] Não foi possível obter contato');
+      return;
+    }
+
+    // 4. Buscar deal A017 já existente (mesmo contato, mesmo origin, com tag A017)
+    const { data: existingA017Deals } = await supabase
+      .from('crm_deals')
+      .select('id, tags, value, custom_fields')
+      .eq('contact_id', contactId)
+      .eq('origin_id', originId)
+      .contains('tags', ['A017'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const existingA017Deal = existingA017Deals?.[0];
+
+    if (existingA017Deal) {
+      const currentTags: string[] = existingA017Deal.tags || [];
+      const newTags = [...currentTags];
+      if (!newTags.includes('A017')) newTags.push('A017');
+      if (!newTags.includes('Hubla')) newTags.push('Hubla');
+
+      await supabase
+        .from('crm_deals')
+        .update({
+          tags: newTags,
+          value: Math.max(existingA017Deal.value || 0, data.value || 0),
+          custom_fields: {
+            ...(existingA017Deal.custom_fields || {}),
+            a017_compra: true,
+            a017_produto: data.productName,
+            a017_data: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingA017Deal.id);
+
+      console.log(`[A017] Deal A017 existente atualizado: ${existingA017Deal.id}`);
+      return;
+    }
+
+    // 5. Criar novo deal A017
+    // 5a. Distribuição
+    let finalOwnerId: string | null = null;
+    let finalOwnerProfileId: string | null = null;
+    let wasDistributed = false;
+    try {
+      const { data: distConfig } = await supabase
+        .from('lead_distribution_config')
+        .select('id')
+        .eq('origin_id', originId)
+        .eq('is_active', true)
+        .limit(1);
+      if (distConfig && distConfig.length > 0) {
+        const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+        if (nextOwnerEmail) {
+          finalOwnerId = nextOwnerEmail;
+          wasDistributed = true;
+          const { data: ownerProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .ilike('email', nextOwnerEmail)
+            .maybeSingle();
+          if (ownerProfile) finalOwnerProfileId = ownerProfile.id;
+        }
+      }
+    } catch (e) {
+      console.error('[A017] Erro na distribuição:', e);
+    }
+
+    // 5b. Fallback: herdar owner de outro deal do mesmo contato
+    if (!finalOwnerId) {
+      const { data: dealWithOwner } = await supabase
+        .from('crm_deals')
+        .select('owner_id, owner_profile_id')
+        .eq('contact_id', contactId)
+        .not('owner_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (dealWithOwner?.owner_id) {
+        finalOwnerId = dealWithOwner.owner_id;
+        finalOwnerProfileId = dealWithOwner.owner_profile_id;
+      }
+    }
+
+    const { data: newDeal, error: dealError } = await supabase
+      .from('crm_deals')
+      .insert({
+        clint_id: `hubla-a017-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        name: `${data.name || 'Cliente'} - A017`,
+        value: data.value || 0,
+        contact_id: contactId,
+        origin_id: originId,
+        stage_id: A017_STAGE_ID,
+        owner_id: finalOwnerId,
+        owner_profile_id: finalOwnerProfileId,
+        product_name: data.productName,
+        tags: ['A017', 'Hubla'],
+        custom_fields: {
+          source: 'hubla',
+          product: data.productName,
+          a017_compra: true,
+          a017_data: new Date().toISOString(),
+          ...(wasDistributed ? { distributed: true } : {}),
+        },
+        data_source: 'webhook',
+        stage_moved_at: new Date().toISOString(),
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (dealError) {
+      console.error('[A017] Erro ao criar deal:', dealError);
+      return;
+    }
+
+    if (newDeal?.id) {
+      console.log(`[A017] ✅ Deal A017 criado: ${newDeal.id} (${data.name})`);
+      await generateTasksForDeal(supabase, {
+        dealId: newDeal.id,
+        contactId,
+        ownerId: finalOwnerId,
+        originId,
+        stageId: A017_STAGE_ID,
+      });
+    }
+  } catch (err) {
+    console.error('[A017] Erro:', err);
+  }
+}
+
+// ============= HELPER (impl original): Gerar tarefas automáticas =============
 // ============= HELPER: Auto-marcar Contrato Pago para Incorporador =============
 interface AutoMarkData {
   customerEmail: string | null;
@@ -2293,6 +2543,28 @@ serve(async (req) => {
         
         console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id} (parcela ${installment}/${installments}) - Bruto: R$ ${grossValue} | Líquido: R$ ${netValue}`);
 
+        // 🎯 [A017] Detectar se esta invoice é uma venda de A017 (independe da estrutura items vs no items)
+        const isA017Sale = detectA017FromInvoice(body);
+        if (isA017Sale && installment === 1) {
+          const payer = invoice?.payer || {};
+          const user = body.event?.user || {};
+          const customerEmail = payer.email || user.email || null;
+          const customerPhone = payer.phone || user.phone || null;
+          const customerName = `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null;
+          const a017ProductName = body.event?.product?.name
+            || body.event?.products?.[0]?.offers?.[0]?.name
+            || body.event?.products?.[0]?.name
+            || 'A017';
+          console.log(`🎯 [A017 DETECTADO] invoice ${invoice?.id} — criando deal A017 para ${customerEmail || customerPhone}`);
+          await createA017Deal(supabase, {
+            email: customerEmail,
+            phone: customerPhone,
+            name: customerName,
+            productName: a017ProductName,
+            value: grossValue || 0,
+          });
+        }
+
         // Se não tem items, criar transação do produto principal
         if (items.length === 0) {
           const product = body.event?.product || {};
@@ -2425,7 +2697,12 @@ serve(async (req) => {
           }
           
           // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
-          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && installment === 1) {
+          // 🎯 [A017] pula o caminho Viver de Aluguel quando a venda é A017 real (mesma oferta Hubla "Construir Para Alugar")
+          if (
+            CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) &&
+            installment === 1 &&
+            !(isA017Sale && productCategory === 'ob_construir_alugar')
+          ) {
             console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (sem items): ${productName} (${productCategory})`);
             await createDealForConsorcioProduct(supabase, {
               email: transactionData.customer_email,
@@ -2436,6 +2713,12 @@ serve(async (req) => {
               value: netValue,
               saleDate: saleDate,
             });
+          } else if (
+            isA017Sale &&
+            productCategory === 'ob_construir_alugar' &&
+            installment === 1
+          ) {
+            console.log(`🎯 [A017] Pulei criação de deal Viver de Aluguel para invoice ${invoice?.id} (venda real é A017)`);
           }
         }
 
@@ -2593,7 +2876,12 @@ serve(async (req) => {
           }
           
           // 🏦 CONSÓRCIO: Se for produto de consórcio, não for offer, e primeira parcela, criar deal
-          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && !isOffer && installment === 1) {
+          if (
+            CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) &&
+            !isOffer &&
+            installment === 1 &&
+            !(isA017Sale && productCategory === 'ob_construir_alugar')
+          ) {
             console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (item): ${productName} (${productCategory})`);
             await createDealForConsorcioProduct(supabase, {
               email: transactionData.customer_email,
@@ -2604,6 +2892,13 @@ serve(async (req) => {
               value: itemNetValue,
               saleDate: saleDate,
             });
+          } else if (
+            isA017Sale &&
+            productCategory === 'ob_construir_alugar' &&
+            !isOffer &&
+            installment === 1
+          ) {
+            console.log(`🎯 [A017] Pulei item ob_construir_alugar para invoice ${invoice?.id} (venda real é A017)`);
           }
         }
 
