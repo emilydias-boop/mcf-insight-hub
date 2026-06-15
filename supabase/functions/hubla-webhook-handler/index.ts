@@ -2697,7 +2697,12 @@ serve(async (req) => {
           }
           
           // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
-          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && installment === 1) {
+          // 🎯 [A017] pula o caminho Viver de Aluguel quando a venda é A017 real (mesma oferta Hubla "Construir Para Alugar")
+          if (
+            CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) &&
+            installment === 1 &&
+            !(isA017Sale && productCategory === 'ob_construir_alugar')
+          ) {
             console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (sem items): ${productName} (${productCategory})`);
             await createDealForConsorcioProduct(supabase, {
               email: transactionData.customer_email,
@@ -2708,6 +2713,12 @@ serve(async (req) => {
               value: netValue,
               saleDate: saleDate,
             });
+          } else if (
+            isA017Sale &&
+            productCategory === 'ob_construir_alugar' &&
+            installment === 1
+          ) {
+            console.log(`🎯 [A017] Pulei criação de deal Viver de Aluguel para invoice ${invoice?.id} (venda real é A017)`);
           }
         }
 
@@ -2865,7 +2876,12 @@ serve(async (req) => {
           }
           
           // 🏦 CONSÓRCIO: Se for produto de consórcio, não for offer, e primeira parcela, criar deal
-          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && !isOffer && installment === 1) {
+          if (
+            CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) &&
+            !isOffer &&
+            installment === 1 &&
+            !(isA017Sale && productCategory === 'ob_construir_alugar')
+          ) {
             console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (item): ${productName} (${productCategory})`);
             await createDealForConsorcioProduct(supabase, {
               email: transactionData.customer_email,
@@ -2876,6 +2892,13 @@ serve(async (req) => {
               value: itemNetValue,
               saleDate: saleDate,
             });
+          } else if (
+            isA017Sale &&
+            productCategory === 'ob_construir_alugar' &&
+            !isOffer &&
+            installment === 1
+          ) {
+            console.log(`🎯 [A017] Pulei item ob_construir_alugar para invoice ${invoice?.id} (venda real é A017)`);
           }
         }
 
