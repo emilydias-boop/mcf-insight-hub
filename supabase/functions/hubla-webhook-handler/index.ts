@@ -291,33 +291,48 @@ const A017_OFFER_IDS = new Set<string>([
   'BtqivJFqdCN52oUoYYzc', // "Construir Para Alugar - Manychat"
 ]);
 
+// Offer IDs do checkout principal A010 (usados para sanity check)
+const A010_CHECKOUT_OFFER_IDS = new Set<string>([
+  'Rj0oC8BRxMCTJ1UZRpJ3', // "A010 - PRINCIPAL"
+]);
+
+/**
+ * Extrai o offer.id do CHECKOUT que o cliente acessou (a "compra primária" da Hubla).
+ * Vem do segmento após `pay.hub.la/` em `event.invoice.paymentSession.url`.
+ * Esse offer determina o produto/stage/tag principal do deal — sub-invoices
+ * (`-offer-N`) com outros produtos são apenas orderbumps (tags secundárias).
+ */
+function getCheckoutOfferIdFromInvoice(body: any): string | null {
+  const url: string = body?.event?.invoice?.paymentSession?.url
+    || body?.invoice?.paymentSession?.url
+    || '';
+  if (!url) return null;
+  const m = String(url).match(/pay\.hub\.la\/([^?\/#]+)/i);
+  return m?.[1] || null;
+}
+
 function detectA017FromInvoice(body: any): boolean {
   const event = body?.event || body || {};
   const invoice = event?.invoice || {};
 
-  // 1) Coletar todos os offer.id presentes no payload (products + items)
-  const offerIds: string[] = [];
-  const products = event?.products || invoice?.products || [];
-  for (const p of products) {
-    for (const o of (p?.offers || [])) {
-      if (o?.id) offerIds.push(String(o.id));
-    }
-  }
-  const items = invoice?.items || event?.items || [];
-  for (const it of items) {
-    if (it?.offer?.id) offerIds.push(String(it.offer.id));
-    for (const o of (it?.product?.offers || [])) {
-      if (o?.id) offerIds.push(String(o.id));
-    }
-  }
-  if (offerIds.some(id => A017_OFFER_IDS.has(id))) return true;
+  // REGRA: a compra primária é determinada pelo offer do CHECKOUT
+  // (paymentSession.url). Apenas quando o cliente entrou via checkout A017
+  // tratamos a venda como A017 — sub-invoices com offer A017 vindas de um
+  // checkout A010 são orderbumps (não promovem o deal).
+  const checkoutOfferId = getCheckoutOfferIdFromInvoice(body);
+  if (checkoutOfferId && A017_OFFER_IDS.has(checkoutOfferId)) return true;
+  if (checkoutOfferId && A010_CHECKOUT_OFFER_IDS.has(checkoutOfferId)) return false;
 
-  // 2) Fallback: UTM / URL contém "A017"
-  const utm = invoice?.paymentSession?.utm || {};
-  const url = invoice?.paymentSession?.url || '';
-  const haystack = [utm.campaign, utm.content, utm.source, utm.medium, utm.term, url]
-    .filter(Boolean).join(' ');
-  return /A017/i.test(haystack);
+  // Fallback (payloads antigos sem paymentSession.url): UTM contendo "A017"
+  if (!checkoutOfferId) {
+    const utm = invoice?.paymentSession?.utm || {};
+    const url = invoice?.paymentSession?.url || '';
+    const haystack = [utm.campaign, utm.content, utm.source, utm.medium, utm.term, url]
+      .filter(Boolean).join(' ');
+    if (/A017/i.test(haystack)) return true;
+  }
+
+  return false;
 }
 
 // ============= HELPER: Verificar se é parceiro existente =============
