@@ -805,8 +805,61 @@ async function generateTasksForDeal(supabase: any, params: {
   originId: string | null;
   stageId: string;
 }): Promise<void> {
-  // (implementação abaixo)
-  return _generateTasksForDealImpl(supabase, params);
+  try {
+    // Buscar templates ativos para este estágio
+    let query = supabase
+      .from('activity_templates')
+      .select('*')
+      .eq('is_active', true)
+      .eq('stage_id', params.stageId)
+      .order('order_index', { ascending: true });
+
+    if (params.originId) {
+      query = query.or(`origin_id.eq.${params.originId},origin_id.is.null`);
+    }
+
+    const { data: templates, error: fetchError } = await query;
+    if (fetchError) {
+      console.error('[Tasks] Erro ao buscar templates:', fetchError);
+      return;
+    }
+
+    if (!templates || templates.length === 0) {
+      console.log('[Tasks] Nenhum template encontrado para o estágio');
+      return;
+    }
+
+    // Criar tarefas baseadas nos templates
+    const now = new Date();
+    const tasks = templates.map((template: any) => ({
+      deal_id: params.dealId,
+      contact_id: params.contactId,
+      template_id: template.id,
+      owner_id: params.ownerId,
+      title: template.name,
+      description: template.description,
+      type: template.type,
+      status: 'pending',
+      due_date: template.sla_offset_minutes
+        ? new Date(now.getTime() + template.sla_offset_minutes * 60000).toISOString()
+        : template.default_due_days
+          ? new Date(now.getTime() + template.default_due_days * 24 * 60 * 60000).toISOString()
+          : new Date(now.getTime() + 24 * 60 * 60000).toISOString(), // fallback: 1 day
+      created_by: null,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('deal_tasks')
+      .insert(tasks);
+
+    if (insertError) {
+      console.error('[Tasks] Erro ao criar tarefas:', insertError);
+    } else {
+      console.log(`[Tasks] ${tasks.length} tarefa(s) criada(s) para deal ${params.dealId}`);
+    }
+  } catch (err) {
+    console.error('[Tasks] Erro ao gerar tarefas:', err);
+  }
 }
 
 // ============= HELPER: Criar/Atualizar Deal A017 =============
