@@ -786,6 +786,8 @@ export function useChannelFunnelReport(
       // Lookup A010 — alinhado com a Agenda R1 (product_category='a010', sale_date mais recente)
       const emails = Array.from(new Set(deals.map(d => d.email).filter(Boolean)));
       const mostRecentA010ByEmail = new Map<string, Date>();
+      const earliestA010ByEmail = new Map<string, Date>();
+      const earliestA017ByEmail = new Map<string, Date>();
       for (let i = 0; i < emails.length; i += 200) {
         const chunk = emails.slice(i, i + 200);
         if (chunk.length === 0) continue;
@@ -801,6 +803,21 @@ export function useChannelFunnelReport(
           const d = new Date(r.sale_date);
           const prev = mostRecentA010ByEmail.get(e);
           if (!prev || d > prev) mostRecentA010ByEmail.set(e, d);
+          const prevEarliest = earliestA010ByEmail.get(e);
+          if (!prevEarliest || d < prevEarliest) earliestA010ByEmail.set(e, d);
+        });
+        const { data: a017Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date, offer_id, product_category, product_name')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+          .or(`offer_id.in.(${Array.from(A017_OFFER_IDS).join(',')}),and(product_category.eq.ob_construir_alugar,product_name.ilike.%construir%alugar%)`);
+        (a017Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (!e || !r.sale_date) return;
+          const d = new Date(r.sale_date);
+          const prev = earliestA017ByEmail.get(e);
+          if (!prev || d < prev) earliestA017ByEmail.set(e, d);
         });
       }
 
@@ -815,9 +832,13 @@ export function useChannelFunnelReport(
         }
       }
       byEmail.forEach((d, e) => {
+        const tags = parseTags(d.tags);
         const ch = classifyChannelWith30dRule({
-          tags: parseTags(d.tags),
+          tags,
           mostRecentA010Purchase: mostRecentA010ByEmail.get(e) || null,
+          earliestA010Purchase: earliestA010ByEmail.get(e) || null,
+          earliestA017Purchase: earliestA017ByEmail.get(e) || null,
+          hasA017Tag: tags.some(t => t === 'A017'),
           referenceDate: new Date(d.created_at),
         });
         m.set(e, ch);
