@@ -1,47 +1,35 @@
-## Plano: Migração corretiva A017/A010 — Opção 1 (Listar → Revisar → Mover)
+## Migração: 26 deals A010 presos no estágio "A017 - Novo Lead"
 
-### Etapa 1 — Gerar CSV de auditoria (sem alterar nada)
+### Objetivo
+Mover 26 deals que compraram A010 (Viver de Aluguel) mas estão travados no estágio "A017 - Novo Lead" de volta para "Novo Lead" do pipeline A010, onde os SDRs conseguem trabalhá-los.
 
-Consultar `crm_deals` filtrando por `stage_id = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda'` (A017 - Novo Lead) e exportar para `/mnt/documents/a017_migracao_auditoria.csv` com as colunas:
+### Escopo
+- **Mover (26 deals):** todos os deals atualmente em `stage_id = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda'` (A017 - Novo Lead) cujas tags contêm `A010`.
+- **Manter (15 deals):** deals com apenas tag `A017` permanecem no estágio atual (já estão corretos).
 
-- `deal_id`
-- `nome_cliente` (via join em `crm_contacts`)
-- `email`, `telefone`
-- `valor`
-- `created_at`
-- `tags` (para identificar A010 vs A017)
-- `origem_id` / `pipeline`
-- `stage_atual`
-- `stage_sugerido` (A010 → "Novo Lead" do pipeline A010 `cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`; A017 → permanece)
-- `acao_sugerida` (MOVER / MANTER)
+### Execução (SQL)
+Um único UPDATE em `crm_deals`:
 
-Entrega: artifact CSV para você revisar.
+```sql
+UPDATE crm_deals
+SET 
+  stage_id = (SELECT id FROM crm_stages 
+              WHERE pipeline_id = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b' 
+              AND name = 'Novo Lead'),
+  pipeline_id = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b',
+  updated_at = now()
+WHERE id IN (<26 IDs da auditoria>);
+```
 
-### Etapa 2 — Sua revisão
+Os 26 IDs vêm exatamente do CSV `a017_migracao_auditoria.csv` (linhas com `acao_sugerida = MOVER_A010`).
 
-Você responde com uma das opções:
-- "Pode mover todos" → seguimos para etapa 3 com a lista completa de MOVER
-- "Exclui esses IDs: X, Y, Z" → removemos da migração
-- "Cancela" → nenhuma alteração é feita
+### Segurança / não-impacto
+- Não altera dados do contato, valor, tags, histórico ou owner.
+- Não dispara webhook de ingestão (é UPDATE direto, não INSERT).
+- Não toca nos 15 deals A017 puros.
+- Não toca em deals fora do estágio A017 - Novo Lead.
+- Reversível: caso necessário, basta voltar `stage_id`/`pipeline_id` para os valores anteriores (registrados no CSV de auditoria).
 
-### Etapa 3 — Executar migração (somente após sua aprovação explícita)
-
-UPDATE em `crm_deals` apenas nos IDs aprovados, alterando `stage_id` para o destino correto. Tudo dentro de uma transação para garantir rollback em caso de erro.
-
-### Etapa 4 — CSV de confirmação "depois"
-
-Novo export mostrando os deals movidos com `stage_id` atualizado, para você arquivar como prova da migração.
-
-### Riscos mitigados
-
-- Nenhuma escrita na etapa 1 — risco zero
-- Sua aprovação explícita antes da etapa 3
-- Transação atômica no UPDATE
-- Trilha de auditoria (CSV antes + CSV depois)
-- Sem efeito em automações: mudança de `stage_id` apenas dispara o fluxo normal de pipeline; não afeta Hubla, fechamento, ou pagamentos
-
-### O que NÃO faz parte deste plano
-
-- Não altera o código do webhook (já corrigido na entrega anterior)
-- Não mexe em deals fora do stage `8a0b84d0-...`
-- Não exclui nenhum deal — apenas reposiciona
+### Pós-execução
+- Validar contagem: `SELECT count(*) FROM crm_deals WHERE stage_id = '8a0b84d0-...' AND tags ILIKE '%A010%'` → deve retornar 0.
+- Confirmar com o usuário no preview que os 26 deals aparecem em "Novo Lead" do pipeline A010.
