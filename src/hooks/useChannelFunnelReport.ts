@@ -24,6 +24,7 @@ import { ALLOWED_BILLING_PRODUCTS } from '@/constants/billingProducts';
 
 const CHANNEL_LABELS: Record<string, string> = {
   A010: 'A010',
+  A017: 'A017',
   ANAMNESE: 'ANAMNESE',
   ANAMNESE_INCOMPLETA: 'ANAMNESE INCOMPLETA',
   OUTROS: 'OUTROS',
@@ -94,6 +95,10 @@ const phoneSuffix = (phone: string | null | undefined): string => {
 
 const A010_FRESH_WINDOW_DAYS = 30;
 
+// Hubla offer IDs que identificam uma venda do produto A017 ("Construir Para
+// Alugar - VSL"). Espelha A017_OFFER_IDS em hubla-webhook-handler/index.ts.
+const A017_OFFER_IDS = new Set<string>(['sSUhrvi36mbjRN8gOwhs']);
+
 /**
  * Classificação de canal — alinhada com a Agenda R1 (`classifySimple` em
  * src/components/crm/MeetingsList.tsx). Regras:
@@ -105,30 +110,53 @@ const A010_FRESH_WINDOW_DAYS = 30;
  * - Tag de ANAMNESE conta APENAS se for exatamente "ANAMNESE",
  *   "ANAMNESE-INSTA" ou "ANAMNESE INSTA" (não vale LIVE / LANÇ).
  * - A010 esfriado (>30d) SEM tag ANAMNESE continua A010.
+ * - A017: detecção principal pela tag 'A017' no deal. Quando o lead tem
+ *   tanto compra A010 quanto compra A017 na Hubla, vence a PRIMEIRA venda
+ *   (menor sale_date). Tag A017 sem compra A017 detectável também conta.
  */
 function classifyChannelWith30dRule(opts: {
   tags: string[];
   /** sale_date MAIS RECENTE do A010 do lead (null se não for buyer) */
   mostRecentA010Purchase: Date | null;
+  /** sale_date MAIS ANTIGA do A010 do lead (para desempate vs A017) */
+  earliestA010Purchase: Date | null;
+  /** sale_date MAIS ANTIGA do A017 do lead (null se não for buyer A017) */
+  earliestA017Purchase: Date | null;
+  /** Deal possui tag 'A017' */
+  hasA017Tag: boolean;
   referenceDate: Date;
 }): string {
-  const { tags, mostRecentA010Purchase, referenceDate } = opts;
+  const { tags, mostRecentA010Purchase, earliestA010Purchase, earliestA017Purchase, hasA017Tag, referenceDate } = opts;
   const norm = tags.map((t) => (t || '').trim().toUpperCase());
   // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
   const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
   const hasAnamneseIncompletaTag = norm.some((t) => t === 'ANAMNESE-INCOMPLETA');
-  const isBuyer = mostRecentA010Purchase !== null;
-  const ageDays = isBuyer
+  const isBuyerA010 = mostRecentA010Purchase !== null;
+  const isBuyerA017 = earliestA017Purchase !== null;
+  const ageDays = isBuyerA010
     ? (referenceDate.getTime() - mostRecentA010Purchase!.getTime()) / 86_400_000
     : null;
   const isStale = ageDays !== null && ageDays > A010_FRESH_WINDOW_DAYS;
 
+  // ===== A017 — prioridade sobre A010 conforme regra "primeira venda Hubla vence" =====
+  // 1. Tem ambas compras A010 e A017 → menor sale_date vence.
+  if (isBuyerA010 && isBuyerA017) {
+    if (!earliestA010Purchase || earliestA017Purchase! <= earliestA010Purchase) return 'A017';
+    // A010 veio primeiro → cai nas regras normais de A010 abaixo.
+  }
+  // 2. Só compra A017 (não é buyer A010) → A017.
+  if (isBuyerA017 && !isBuyerA010) return 'A017';
+  // 3. Tag A017 sem compra A010 → A017.
+  if (hasA017Tag && !isBuyerA010) return 'A017';
+  // 4. Tag A017 + compra A010 mas SEM compra A017 detectável → tag indica venda A017.
+  if (hasA017Tag && isBuyerA010 && !isBuyerA017) return 'A017';
+
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
-  if (isBuyer && !isStale) return 'A010';
+  if (isBuyerA010 && !isStale) return 'A010';
   // Buyer esfriado (>30d) COM tag ANAMNESE (entrou no fluxo) → ANAMNESE
-  if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
+  if (isBuyerA010 && isStale && hasAnamneseTag) return 'ANAMNESE';
   // Buyer esfriado SEM tag → continua A010
-  if (isBuyer && isStale) return 'A010';
+  if (isBuyerA010 && isStale) return 'A010';
   // Não-buyer com tag ANAMNESE → ANAMNESE
   if (hasAnamneseTag) return 'ANAMNESE';
   // Não-buyer com tag ANAMNESE-INCOMPLETA → ANAMNESE INCOMPLETA
