@@ -1,42 +1,35 @@
-## Objetivo
+## Migração: 26 deals A010 presos no estágio "A017 - Novo Lead"
 
-Adicionar **A017** como uma nova linha no card "Funil por Canal — Fotografia da janela" (rota `/bu-incorporador/relatorios`), com a mesma estrutura de colunas e drill-down do A010.
+### Objetivo
+Mover 26 deals que compraram A010 (Viver de Aluguel) mas estão travados no estágio "A017 - Novo Lead" de volta para "Novo Lead" do pipeline A010, onde os SDRs conseguem trabalhá-los.
 
-## Como o A017 será detectado
+### Escopo
+- **Mover (26 deals):** todos os deals atualmente em `stage_id = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda'` (A017 - Novo Lead) cujas tags contêm `A010`.
+- **Manter (15 deals):** deals com apenas tag `A017` permanecem no estágio atual (já estão corretos).
 
-Combinando suas duas respostas:
+### Execução (SQL)
+Um único UPDATE em `crm_deals`:
 
-1. **Identificação do canal A017 no deal** → tag `A017` no `crm_deals.tags` (a tag já é gravada pelo `hubla-webhook-handler` quando uma venda A017 é processada).
-2. **Desempate quando o lead tem A010 + A017** → vence o **que foi comprado primeiro pela Hubla** (menor `sale_date` em `hubla_transactions`).
-   - Compra A010 = `product_category = 'a010'`
-   - Compra A017 = `offer_id = 'sSUhrvi36mbjRN8gOwhs'` **OU** (`product_category = 'ob_construir_alugar'` AND `product_name ILIKE '%construir%alugar%'`) — mesma whitelist usada pelo webhook (`A017_OFFER_IDS`) + fallback pelo produto Hubla compartilhado.
+```sql
+UPDATE crm_deals
+SET 
+  stage_id = (SELECT id FROM crm_stages 
+              WHERE pipeline_id = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b' 
+              AND name = 'Novo Lead'),
+  pipeline_id = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b',
+  updated_at = now()
+WHERE id IN (<26 IDs da auditoria>);
+```
 
-Se o lead tem só tag `A017` (sem compra A010) → A017.
-Se tem compra A010 e nenhuma marca A017 → continua A010 (regra atual, inalterada).
-Se tem ambas → o canal é determinado pela primeira `sale_date` Hubla.
+Os 26 IDs vêm exatamente do CSV `a017_migracao_auditoria.csv` (linhas com `acao_sugerida = MOVER_A010`).
 
-## Mudanças (apenas frontend/lógica de relatório)
+### Segurança / não-impacto
+- Não altera dados do contato, valor, tags, histórico ou owner.
+- Não dispara webhook de ingestão (é UPDATE direto, não INSERT).
+- Não toca nos 15 deals A017 puros.
+- Não toca em deals fora do estágio A017 - Novo Lead.
+- Reversível: caso necessário, basta voltar `stage_id`/`pipeline_id` para os valores anteriores (registrados no CSV de auditoria).
 
-**Arquivo único:** `src/hooks/useChannelFunnelReport.ts`
-
-1. Adicionar `A017: 'A017'` em `CHANNEL_LABELS` e em todas as listas/inicializações de canais (`FUNNEL_CHANNELS`, `blankDetails`, totais).
-2. Estender o lookup que hoje busca a venda A010 mais recente (`product_category='a010'`) para também buscar a **venda A017 mais antiga** (offer_id whitelist + fallback de produto) e guardar em um `Map<email, Date>`.
-3. Criar `classifyChannelWith30dRuleV2` (substitui o atual) com a regra:
-   - Se deal tem tag `A017` **sem** compra A010 → `A017`.
-   - Se deal tem compra A010 **e** compra A017 → comparar datas; menor `sale_date` vence (`A010` ou `A017`).
-   - Se deal tem compra A010 e tag `A017` mas sem `hubla_transaction` A017 detectável → assume `A017` (a tag indica venda).
-   - Caso contrário, mantém o comportamento atual (A010 / ANAMNESE / ANAMNESE_INCOMPLETA / OUTROS).
-4. Atualizar os 3 pontos do hook que classificam canal (carrinho R2, vendas Hubla extras e meta de deal) para passar também `mostRecentA017Purchase` / `hasA017Tag`.
-
-## O que NÃO muda
-
-- Nenhuma alteração em schema/migrations.
-- Nenhuma alteração no webhook Hubla — ele já grava a tag `A017` corretamente.
-- Outros relatórios (`SalesReportPanel`, `useAcquisitionReport`, `useCarrinhoAnalysisReport`) ficam como estão; este plano cobre apenas o card "Funil por Canal".
-- Layout da tabela: A017 aparece como uma nova linha entre A010 e OUTROS. As 5 colunas (Entradas, R1 Agend., R1 Realiz., No-Show, Contrato Pago) e os 5 cards de conversão funcionam automaticamente para o novo canal.
-
-## Validação após implementar
-
-- Conferir no preview que a linha A017 aparece com números > 0 (existem deals com tag A017 hoje).
-- Checar que `A010 + OUTROS + A017 + ANAMNESE + ANAMNESE INCOMPLETA = Total` continua batendo.
-- Abrir o drill-down de uma célula A017 e validar que os leads listados têm tag `A017`.
+### Pós-execução
+- Validar contagem: `SELECT count(*) FROM crm_deals WHERE stage_id = '8a0b84d0-...' AND tags ILIKE '%A010%'` → deve retornar 0.
+- Confirmar com o usuário no preview que os 26 deals aparecem em "Novo Lead" do pipeline A010.
