@@ -782,6 +782,24 @@ export function useChannelFunnelReport(
         });
       }
 
+      // Lookup A017 buyers (VSL + Manychat)
+      const a017BuyerEmails = new Set<string>();
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a017Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('event_type', 'NewSale')
+          .eq('sale_status', 'completed')
+          .in('offer_id', A017_OFFER_IDS)
+          .in('customer_email', chunk);
+        (a017Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (e) a017BuyerEmails.add(e);
+        });
+      }
+
       // Para cada email, pegar o deal mais recente e classificar
       const byEmail = new Map<string, any>();
       for (const d of deals) {
@@ -797,6 +815,7 @@ export function useChannelFunnelReport(
           tags: parseTags(d.tags),
           mostRecentA010Purchase: mostRecentA010ByEmail.get(e) || null,
           referenceDate: new Date(d.created_at),
+          isA017Buyer: a017BuyerEmails.has(e),
         });
         m.set(e, ch);
       });
