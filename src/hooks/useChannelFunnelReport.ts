@@ -537,6 +537,24 @@ export function useChannelFunnelReport(
         });
       }
 
+      // Lookup A017 buyers (VSL + Manychat)
+      const a017BuyerEmails = new Set<string>();
+      for (let i = 0; i < emails.length; i += 200) {
+        const chunk = emails.slice(i, i + 200);
+        if (chunk.length === 0) continue;
+        const { data: a017Tx } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('event_type', 'NewSale')
+          .eq('sale_status', 'completed')
+          .in('offer_id', A017_OFFER_IDS)
+          .in('customer_email', chunk);
+        (a017Tx || []).forEach((r: any) => {
+          const e = (r.customer_email || '').toLowerCase().trim();
+          if (e) a017BuyerEmails.add(e);
+        });
+      }
+
       for (const d of deals) {
         const email = (d.crm_contacts?.email || '').toLowerCase().trim() || null;
         const tags = parseTags(d.tags);
