@@ -584,7 +584,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
             .from('crm_stages')
             .select('id')
             .eq('origin_id', originId)
-            .ilike('stage_name', '%Novo Lead%')
+            .eq('stage_name', 'Novo Lead')
             .limit(1)
             .maybeSingle();
           if (novoLead) {
@@ -623,7 +623,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         .from('crm_stages')
         .select('id')
         .eq('origin_id', originId)
-        .ilike('stage_name', `%${targetStageName}%`)
+        .eq('stage_name', targetStageName)
         .limit(1)
         .maybeSingle();
       
@@ -649,7 +649,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       const { data: genericStage } = await supabase
         .from('crm_stages')
         .select('id')
-        .ilike('stage_name', '%novo lead%')
+        .eq('stage_name', 'Novo Lead')
         .limit(1)
         .maybeSingle();
       
