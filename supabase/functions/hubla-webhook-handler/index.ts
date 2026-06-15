@@ -2543,6 +2543,28 @@ serve(async (req) => {
         
         console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id} (parcela ${installment}/${installments}) - Bruto: R$ ${grossValue} | Líquido: R$ ${netValue}`);
 
+        // 🎯 [A017] Detectar se esta invoice é uma venda de A017 (independe da estrutura items vs no items)
+        const isA017Sale = detectA017FromInvoice(body);
+        if (isA017Sale && installment === 1) {
+          const payer = invoice?.payer || {};
+          const user = body.event?.user || {};
+          const customerEmail = payer.email || user.email || null;
+          const customerPhone = payer.phone || user.phone || null;
+          const customerName = `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null;
+          const a017ProductName = body.event?.product?.name
+            || body.event?.products?.[0]?.offers?.[0]?.name
+            || body.event?.products?.[0]?.name
+            || 'A017';
+          console.log(`🎯 [A017 DETECTADO] invoice ${invoice?.id} — criando deal A017 para ${customerEmail || customerPhone}`);
+          await createA017Deal(supabase, {
+            email: customerEmail,
+            phone: customerPhone,
+            name: customerName,
+            productName: a017ProductName,
+            value: grossValue || 0,
+          });
+        }
+
         // Se não tem items, criar transação do produto principal
         if (items.length === 0) {
           const product = body.event?.product || {};
