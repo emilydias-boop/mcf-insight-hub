@@ -544,6 +544,7 @@ export function useChannelFunnelReport(
           tags,
           mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
+          isA017Buyer: email ? a017BuyerEmails.has(email) : false,
         });
         m.set(d.id, {
           id: d.id,
