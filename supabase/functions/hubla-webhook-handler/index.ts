@@ -277,6 +277,48 @@ interface CRMContactData {
 // CONSTANTE: Origin canônico para todos os leads A010
 const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
 
+// ============= A017: constantes e detecção =============
+// Stages fixas em PIPELINE INSIDE SALES (origin e3c04f21-ba2c-4c66-84f8-b4341c826b1c)
+const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+const INSIDE_SALES_NOVO_LEAD_STAGE_ID = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b'; // stage_order 5
+const A017_STAGE_ID = '8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda';                    // stage_order 3
+
+// Whitelist de offer.id da Hubla que identificam UMA venda do produto A017.
+// O produto Hubla "Construir Para Alugar" é compartilhado com o orderbump
+// Viver de Aluguel — então diferenciamos pelo offer.id (ou pela UTM, abaixo).
+const A017_OFFER_IDS = new Set<string>([
+  'sSUhrvi36mbjRN8gOwhs', // "Construir Para Alugar - VSL"
+]);
+
+function detectA017FromInvoice(body: any): boolean {
+  const event = body?.event || body || {};
+  const invoice = event?.invoice || {};
+
+  // 1) Coletar todos os offer.id presentes no payload (products + items)
+  const offerIds: string[] = [];
+  const products = event?.products || invoice?.products || [];
+  for (const p of products) {
+    for (const o of (p?.offers || [])) {
+      if (o?.id) offerIds.push(String(o.id));
+    }
+  }
+  const items = invoice?.items || event?.items || [];
+  for (const it of items) {
+    if (it?.offer?.id) offerIds.push(String(it.offer.id));
+    for (const o of (it?.product?.offers || [])) {
+      if (o?.id) offerIds.push(String(o.id));
+    }
+  }
+  if (offerIds.some(id => A017_OFFER_IDS.has(id))) return true;
+
+  // 2) Fallback: UTM / URL contém "A017"
+  const utm = invoice?.paymentSession?.utm || {};
+  const url = invoice?.paymentSession?.url || '';
+  const haystack = [utm.campaign, utm.content, utm.source, utm.medium, utm.term, url]
+    .filter(Boolean).join(' ');
+  return /A017/i.test(haystack);
+}
+
 // ============= HELPER: Verificar se é parceiro existente =============
 async function checkIfPartner(supabase: any, email: string | null): Promise<{isPartner: boolean, product: string | null}> {
   if (!email) return { isPartner: false, product: null };
