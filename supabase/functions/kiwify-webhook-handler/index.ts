@@ -720,6 +720,20 @@ serve(async (req) => {
           if (a010Error) {
             console.error('[Kiwify Webhook] Error inserting a010_sales:', a010Error);
           }
+
+          // Criar/atualizar deal no CRM (PIPELINE INSIDE SALES → Novo Lead)
+          try {
+            await createOrUpdateKiwifyCRMContact(supabase, {
+              email: customerEmail || null,
+              phone: customerPhone || null,
+              name: customerName,
+              productName,
+              value: grossValue,
+              extraTags: ['A010', 'A010 Kiwify'],
+            });
+          } catch (crmErr) {
+            console.error('[Kiwify Webhook] Erro ao criar deal no CRM (não-fatal):', crmErr);
+          }
         }
       }
     } else if (eventType === 'refund' || eventType === 'compra_reembolsada' || eventType === 'order_refunded') {
