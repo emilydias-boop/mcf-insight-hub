@@ -31,6 +31,397 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// ============= HELPERS portados do hubla-webhook-handler =============
+const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
+
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  let clean = phone.replace(/\D/g, '');
+  if (clean.startsWith('0')) clean = clean.substring(1);
+  if (!clean.startsWith('55') && clean.length <= 11) clean = '55' + clean;
+  return '+' + clean;
+}
+
+async function checkIfPartner(
+  supabase: any,
+  email: string | null
+): Promise<{ isPartner: boolean; product: string | null }> {
+  if (!email) return { isPartner: false, product: null };
+  const PARTNER_PRODUCTS = ['A001', 'A002', 'A003', 'A004', 'A009'];
+  const { data: transactions } = await supabase
+    .from('hubla_transactions')
+    .select('product_name')
+    .ilike('customer_email', email)
+    .eq('sale_status', 'completed')
+    .limit(50);
+  if (!transactions?.length) return { isPartner: false, product: null };
+  for (const tx of transactions) {
+    const name = (tx.product_name || '').toUpperCase();
+    for (const code of PARTNER_PRODUCTS) {
+      if (name.includes(code)) return { isPartner: true, product: code };
+    }
+    if (name.includes('INCORPORADOR') && !name.includes('CONTRATO') && !name.includes('A010')) {
+      return { isPartner: true, product: 'MCF Incorporador' };
+    }
+    if (name.includes('ANTICRISE') && !name.includes('CONTRATO')) {
+      return { isPartner: true, product: 'Anticrise' };
+    }
+  }
+  return { isPartner: false, product: null };
+}
+
+interface KiwifyCRMContactData {
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  productName: string;
+  value: number;
+  extraTags?: string[];
+}
+
+/**
+ * Cria ou atualiza contato + deal A010 no CRM (PIPELINE INSIDE SALES → Novo Lead),
+ * com tags ['A010', 'A010 Kiwify'] (substitui o 'Hubla' do fluxo original).
+ * Espelha o comportamento de createOrUpdateCRMContact do hubla-webhook-handler.
+ */
+async function createOrUpdateKiwifyCRMContact(
+  supabase: any,
+  data: KiwifyCRMContactData
+): Promise<void> {
+  if (!data.email && !data.phone) {
+    console.log('[CRM][Kiwify] Sem email ou telefone, pulando criação de contato');
+    return;
+  }
+
+  // Bloqueio de parceiros: registra em partner_returns e não cria deal
+  const partnerCheck = await checkIfPartner(supabase, data.email);
+  if (partnerCheck.isPartner) {
+    console.log(`[CRM][Kiwify] 🚫 PARCEIRO DETECTADO: ${data.email} - ${partnerCheck.product}. Bloqueando.`);
+    let contactId: string | null = null;
+    if (data.email) {
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.email)
+        .limit(1)
+        .maybeSingle();
+      contactId = contact?.id || null;
+    }
+    await supabase.from('partner_returns').insert({
+      contact_id: contactId,
+      contact_email: data.email,
+      contact_name: data.name,
+      partner_product: partnerCheck.product,
+      return_source: 'kiwify_a010',
+      return_product: data.productName,
+      return_value: data.value || 0,
+      blocked: true,
+    });
+    return;
+  }
+
+  const normalizedPhone = normalizePhone(data.phone);
+  const targetStageName = 'Novo Lead';
+  const targetTags =
+    data.extraTags && data.extraTags.length > 0 ? data.extraTags : ['A010', 'A010 Kiwify'];
+  const targetOriginName = PIPELINE_INSIDE_SALES_ORIGIN;
+
+  // 1. Buscar/criar origem
+  let originId: string | null = null;
+  const { data: existingOrigins } = await supabase
+    .from('crm_origins')
+    .select('id')
+    .ilike('name', targetOriginName)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  if (existingOrigins && existingOrigins.length > 0) {
+    originId = existingOrigins[0].id;
+  } else {
+    const { data: newOrigin } = await supabase
+      .from('crm_origins')
+      .insert({
+        clint_id: `kiwify-origin-${Date.now()}`,
+        name: targetOriginName,
+        description: 'Criada automaticamente via webhook Kiwify',
+      })
+      .select('id')
+      .single();
+    originId = newOrigin?.id || null;
+  }
+
+  // 2. Buscar contato por email (prioridade) — preferindo o que já tem deal nessa origem
+  let contactId: string | null = null;
+  let existingContact: any = null;
+
+  if (data.email) {
+    const { data: allByEmail } = await supabase
+      .from('crm_contacts')
+      .select('id, phone')
+      .ilike('email', data.email)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: true })
+      .limit(20);
+
+    if (allByEmail && allByEmail.length > 0) {
+      for (const c of allByEmail) {
+        const { data: dealForContact } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', c.id)
+          .eq('origin_id', originId)
+          .limit(1)
+          .maybeSingle();
+        if (dealForContact) {
+          contactId = c.id;
+          existingContact = c;
+          break;
+        }
+      }
+      if (!contactId) {
+        contactId = allByEmail[0].id;
+        existingContact = allByEmail[0];
+      }
+    }
+  }
+
+  // 3. Fallback por telefone normalizado
+  if (!contactId && normalizedPhone) {
+    const phoneDigits = normalizedPhone.replace(/\D/g, '');
+    const { data: byPhone } = await supabase
+      .from('crm_contacts')
+      .select('id, email, phone')
+      .or(`phone.eq.${normalizedPhone},phone.eq.+${phoneDigits},phone.eq.${phoneDigits}`)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (byPhone) {
+      existingContact = byPhone;
+      contactId = byPhone.id;
+    }
+  }
+
+  // 4. Normalizar telefone do contato existente
+  if (existingContact && normalizedPhone && existingContact.phone !== normalizedPhone) {
+    await supabase
+      .from('crm_contacts')
+      .update({ phone: normalizedPhone, updated_at: new Date().toISOString() })
+      .eq('id', existingContact.id);
+  }
+
+  // 5. Criar contato novo se necessário
+  if (!contactId) {
+    const { data: newContact } = await supabase
+      .from('crm_contacts')
+      .insert({
+        clint_id: `kiwify-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        name: data.name || 'Cliente A010',
+        email: data.email,
+        phone: normalizedPhone,
+        origin_id: originId,
+        tags: targetTags,
+        custom_fields: { source: 'kiwify', product: data.productName },
+      })
+      .select('id')
+      .single();
+    contactId = newContact?.id || null;
+  }
+
+  // 6. Se já existe deal nesta origem → atualizar tags/valor (não criar duplicado)
+  let existingDeal: any = null;
+  if (contactId && originId) {
+    const { data: dealByContactOrigin } = await supabase
+      .from('crm_deals')
+      .select('id, tags, value, custom_fields, stage_id')
+      .eq('contact_id', contactId)
+      .eq('origin_id', originId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dealByContactOrigin) existingDeal = dealByContactOrigin;
+  }
+
+  if (existingDeal) {
+    const currentTags: string[] = existingDeal.tags || [];
+    const newTags: string[] = currentTags.filter(t => !/^a010 em aberto$/i.test(t));
+    if (!newTags.includes('A010')) newTags.push('A010');
+    if (!newTags.includes('A010 Kiwify')) newTags.push('A010 Kiwify');
+
+    const currentCustomFields = existingDeal.custom_fields || {};
+    const updatedCustomFields = {
+      ...currentCustomFields,
+      a010_compra: true,
+      a010_produto: data.productName,
+      a010_data: new Date().toISOString(),
+      source: 'kiwify',
+    };
+
+    const newValue = Math.max(existingDeal.value || 0, data.value || 0);
+
+    // Promover stage "A010 Em Aberto" → "Novo Lead" se aplicável
+    let promotedStageId: string | null = null;
+    if (existingDeal.stage_id) {
+      const { data: currentStage } = await supabase
+        .from('crm_stages')
+        .select('stage_name')
+        .eq('id', existingDeal.stage_id)
+        .maybeSingle();
+      if (currentStage && /a010 em aberto/i.test(currentStage.stage_name || '')) {
+        const { data: novoLead } = await supabase
+          .from('crm_stages')
+          .select('id')
+          .eq('origin_id', originId)
+          .eq('stage_name', 'Novo Lead')
+          .limit(1)
+          .maybeSingle();
+        if (novoLead) promotedStageId = novoLead.id;
+      }
+    }
+
+    const updatePayload: any = {
+      tags: newTags,
+      value: newValue,
+      custom_fields: updatedCustomFields,
+      updated_at: new Date().toISOString(),
+    };
+    if (promotedStageId) {
+      updatePayload.stage_id = promotedStageId;
+      updatePayload.stage_moved_at = new Date().toISOString();
+    }
+
+    await supabase.from('crm_deals').update(updatePayload).eq('id', existingDeal.id);
+    console.log(
+      `[CRM][Kiwify] Deal atualizado: ${existingDeal.id} - tags=${JSON.stringify(newTags)}${promotedStageId ? ' (promovido → Novo Lead)' : ''}`
+    );
+    return;
+  }
+
+  // 7. Buscar stage "Novo Lead"
+  let stageId: string | null = null;
+  if (originId) {
+    const { data: targetStage } = await supabase
+      .from('crm_stages')
+      .select('id')
+      .eq('origin_id', originId)
+      .eq('stage_name', targetStageName)
+      .limit(1)
+      .maybeSingle();
+    if (targetStage) {
+      stageId = targetStage.id;
+    } else {
+      const { data: fallbackStage } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .eq('origin_id', originId)
+        .order('stage_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      stageId = fallbackStage?.id || null;
+    }
+  }
+
+  // 8. Criar deal — distribuição ativa OU herança de owner
+  if (!contactId || !originId) {
+    console.log('[CRM][Kiwify] Faltou contactId/originId, pulando criação de deal');
+    return;
+  }
+
+  let distributedOwnerId: string | null = null;
+  let distributedOwnerProfileId: string | null = null;
+  let wasDistributed = false;
+
+  try {
+    const { data: distConfig } = await supabase
+      .from('lead_distribution_config')
+      .select('id')
+      .eq('origin_id', originId)
+      .eq('is_active', true)
+      .limit(1);
+    if (distConfig && distConfig.length > 0) {
+      const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
+      if (nextOwnerEmail) {
+        distributedOwnerId = nextOwnerEmail;
+        wasDistributed = true;
+        const { data: ownerProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('email', distributedOwnerId)
+          .maybeSingle();
+        if (ownerProfile) distributedOwnerProfileId = ownerProfile.id;
+      }
+    }
+  } catch (distError) {
+    console.error('[CRM][Kiwify] Erro ao verificar distribuição:', distError);
+  }
+
+  let inheritedOwnerId: string | null = null;
+  let inheritedOwnerProfileId: string | null = null;
+  if (!wasDistributed) {
+    const { data: dealWithOwner } = await supabase
+      .from('crm_deals')
+      .select('owner_id, owner_profile_id')
+      .eq('contact_id', contactId)
+      .not('owner_id', 'is', null)
+      .limit(1)
+      .maybeSingle();
+    if (dealWithOwner?.owner_id) {
+      inheritedOwnerId = dealWithOwner.owner_id;
+      inheritedOwnerProfileId = dealWithOwner.owner_profile_id;
+      if (!inheritedOwnerProfileId && inheritedOwnerId) {
+        const { data: ownerProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', inheritedOwnerId)
+          .maybeSingle();
+        if (ownerProfile) inheritedOwnerProfileId = ownerProfile.id;
+      }
+    }
+  }
+
+  const finalOwnerId = wasDistributed ? distributedOwnerId : inheritedOwnerId;
+  const finalOwnerProfileId = wasDistributed ? distributedOwnerProfileId : inheritedOwnerProfileId;
+
+  const dealData = {
+    clint_id: `kiwify-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+    name: `${data.name || 'Cliente'} - A010`,
+    value: data.value || 0,
+    contact_id: contactId,
+    origin_id: originId,
+    stage_id: stageId,
+    owner_id: finalOwnerId,
+    owner_profile_id: finalOwnerProfileId,
+    product_name: data.productName,
+    tags: targetTags,
+    custom_fields: {
+      source: 'kiwify',
+      product: data.productName,
+      a010_compra: true,
+      a010_data: new Date().toISOString(),
+      ...(wasDistributed ? { distributed: true, owner_original: inheritedOwnerId || null } : {}),
+    },
+    data_source: 'webhook',
+    stage_moved_at: new Date().toISOString(),
+  };
+
+  const { data: newDeal, error: dealError } = await supabase
+    .from('crm_deals')
+    .insert(dealData)
+    .select('id')
+    .maybeSingle();
+
+  if (dealError) {
+    if (dealError.code === '23505' || dealError.message?.includes('duplicate')) {
+      console.log(`[CRM][Kiwify] Deal duplicado ignorado para contact_id=${contactId}, origin_id=${originId}`);
+    } else {
+      console.error('[CRM][Kiwify] Erro ao criar deal:', dealError);
+    }
+  } else if (newDeal) {
+    console.log(
+      `[CRM][Kiwify] Deal criado: ${data.name} - A010 (${newDeal.id}) owner=${finalOwnerId || 'nenhum'} tags=${JSON.stringify(targetTags)}`
+    );
+  }
+}
+
 // Mapeamento de produtos Kiwify para categorias (mesmo padrão do Hubla)
 const PRODUCT_MAPPING: Record<string, string> = {
   // A010 - Curso
@@ -328,6 +719,20 @@ serve(async (req) => {
 
           if (a010Error) {
             console.error('[Kiwify Webhook] Error inserting a010_sales:', a010Error);
+          }
+
+          // Criar/atualizar deal no CRM (PIPELINE INSIDE SALES → Novo Lead)
+          try {
+            await createOrUpdateKiwifyCRMContact(supabase, {
+              email: customerEmail || null,
+              phone: customerPhone || null,
+              name: customerName,
+              productName,
+              value: grossValue,
+              extraTags: ['A010', 'A010 Kiwify'],
+            });
+          } catch (crmErr) {
+            console.error('[Kiwify Webhook] Erro ao criar deal no CRM (não-fatal):', crmErr);
           }
         }
       }
