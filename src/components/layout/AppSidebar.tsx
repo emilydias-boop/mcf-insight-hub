@@ -300,6 +300,7 @@ const menuItems: MenuItem[] = [
       { title: "Alterações Tardias", url: "/admin/alteracoes-tardias", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "Regras de Processo", url: "/admin/regras-processo", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "Faixas de Ligações", url: "/admin/faixas-ligacoes", requiredRoles: ["admin", "manager"] },
+      { title: "Documentação QA", url: "/admin/documentacao-qa", requiredRoles: ["admin", "manager"] },
       { title: "Revisão de No-Shows", url: "/crm/revisao-no-shows", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
