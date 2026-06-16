@@ -407,6 +407,53 @@ export function useChannelFunnelReport(
   });
 
   // ================================================================
+  // 1c-bis. A017 ENTRADAS — compradores A017 (VSL/Manychat) cuja
+  //   `sale_date` da Hubla cai na janela. Dedup por email OU phone9.
+  //   Esta coluna é ancorada na compra Hubla (e não no created_at do
+  //   deal), porque A017 é canal de aquisição direta via checkout.
+  // ================================================================
+  const { data: a017InWindow = { count: 0, items: [] as FunnelDetailItem[] } } = useQuery<{ count: number; items: FunnelDetailItem[] }>({
+    queryKey: ['funnel-a017-window-v2', startDate, endDate],
+    queryFn: async () => {
+      if (!startDate || !endDate) return { count: 0, items: [] as FunnelDetailItem[] };
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, customer_name, customer_phone, sale_date')
+        .eq('sale_status', 'completed')
+        .in('offer_id', A017_OFFER_IDS)
+        .gte('sale_date', windowStartIso!)
+        .lte('sale_date', windowEndIso!)
+        .order('sale_date', { ascending: true });
+      if (error) { console.error('[funnel] a017InWindow error', error); return { count: 0, items: [] }; }
+      const seen = new Set<string>();
+      const items: FunnelDetailItem[] = [];
+      (data || []).forEach((r: any) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        const phone9 = phoneSuffix(r.customer_phone);
+        const key = email || (phone9.length === 9 ? `p:${phone9}` : '');
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        items.push({
+          id: key,
+          dealId: null,
+          name: r.customer_name || null,
+          email: email || null,
+          phone: r.customer_phone || null,
+          date: r.sale_date,
+          channel: 'A017',
+          status: 'completed',
+          product: 'Construir Para Alugar',
+          bruto: null,
+          liquido: null,
+        });
+      });
+      return { count: items.length, items };
+    },
+    enabled: !!startDate && !!endDate,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 1d. CONTRATO PAGO — alinhado ao KPI "CONTRATOS" do header.
   //     Conta attendees R1 com contract_paid_at na janela, filtrados
   //     pelos SDRs ativos do squad (allowedSdrEmails) e is_partner=false.
