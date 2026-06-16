@@ -128,10 +128,16 @@ serve(async (req) => {
       );
     }
     const headerToken = req.headers.get('x-kiwify-token') || req.headers.get('X-Kiwify-Token');
-    const bodyToken = body.signature || body.token;
-    const receivedToken = headerToken || bodyToken;
+    const bodyToken = body.signature || body.token || body?.order?.signature || body?.order?.token;
+    const url = new URL(req.url);
+    const queryToken = url.searchParams.get('token') || url.searchParams.get('signature');
+    const receivedToken = headerToken || queryToken || bodyToken;
     if (!receivedToken || receivedToken !== kiwifyToken) {
-      console.error('[Kiwify Webhook] Invalid or missing token');
+      console.error('[Kiwify Webhook] Invalid or missing token', {
+        hasHeader: !!headerToken,
+        hasQuery: !!queryToken,
+        hasBody: !!bodyToken,
+      });
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
