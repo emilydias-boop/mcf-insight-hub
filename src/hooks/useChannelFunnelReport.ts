@@ -544,7 +544,7 @@ export function useChannelFunnelReport(
   }, [cohort, carrinhoRows, entradasDeals, contratoPagoAligned]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
-    queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
+    queryKey: ['funnel-deal-meta-v3', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
     queryFn: async () => {
       const m = new Map<string, DealMeta>();
       if (allInvolvedDealIds.length === 0) return m;
