@@ -1,55 +1,50 @@
-## Objetivo
-Fazer com que **todo comprador A017 (Construir Para Alugar — VSL e Manychat) tenha a tag `A017`** no seu deal de `PIPELINE INSIDE SALES`, para que o filtro de tag da Pipeline reflita o total real de vendas A017 da Hubla.
+# A010 — fechar Hubla 290 vs CRM 243
 
-Hoje, em junho/2026:
-- 67 compradores A017 únicos na Hubla
-- Apenas 46 com deal tagueado A017 no CRM
-- Gap de 21 (17 com deal sem a tag + 4 sem deal nenhum)
+## Diagnóstico atualizado
 
-## Causas confirmadas
+A diferença não fecha só adicionando tag em deals existentes.
 
-Analisando os 17 deals "órfãos":
+Na Hubla, considerando apenas vendas **completed** de A010 em 01/06–15/06:
 
-1. **Detecção A017 estreita demais**: `detectA017FromInvoice` só marca como A017 quando o `paymentSession.url` (checkout) bate com os offer IDs A017. Quando a venda chega só como sub-invoice / orderbump (`ob-construir-alugar`) sem o checkout-offer, o handler nunca entra no fluxo A017 — só cria/atualiza deal com tag `ob-construir-alugar` (ou `A010`).
-2. **Promoção restrita a A010**: o bloco 4b só promove deal pré-existente para A017 se ele tiver a tag `A010`. Deals com `[ob-construir-alugar, Hubla, Consórcio]`, `[Lead-Lançamento, base clint]`, etc., ficam sem A017.
-3. **Sem retroação**: nenhuma rotina hoje reconcilia deals antigos contra compras A017 já existentes na Hubla.
+| Situação no CRM | Qtde |
+|---|---:|
+| Já visíveis no Pipeline com A010 no período | **252** |
+| Têm deal no PIPELINE INSIDE SALES, mas fora do filtro/sem atualização correta | **6** |
+| Têm contato/deal em outro pipeline, mas não em Inside Sales | **18** |
+| Sem deal/contato correspondente suficiente no CRM | **17** |
 
-## Mudanças
+O número da tela aparece **243** porque o filtro atual depende de `created_at` ou `updated_at` do deal no período; parte dos compradores já existia antes, e parte nunca entrou no PIPELINE INSIDE SALES.
 
-### 1. Edge function `hubla-webhook-handler/index.ts`
+## Plano de correção
 
-**(a) Ampliar `detectA017FromInvoice`**
+### 1. Webhook A010 daqui pra frente
+No `hubla-webhook-handler/index.ts`, reforçar a regra de A010:
 
-Além do `checkoutOfferId`, classificar como A017 quando o `offer_name` (ou `product_name` consolidado) for exatamente:
-- `Construir Para Alugar - VSL`
-- `Construir Para Alugar - Manychat kittet`
+- A010 é restrito ao `PIPELINE INSIDE SALES`.
+- Quando chegar venda A010 completed:
+  - localizar/criar contato por e-mail ou telefone;
+  - procurar deal do contato no PIPELINE INSIDE SALES;
+  - se existir, garantir tag `A010`, tag `Hubla`, `custom_fields.a010_compra = true`, `a010_data = sale_date`, e atualizar `updated_at`;
+  - se não existir deal em PIS, criar um novo deal no PIPELINE INSIDE SALES com tags `A010`, `Hubla`, `Jun/26`, preservando dados básicos da compra;
+  - não mover automaticamente deals de outros pipelines; criar o deal PIS separado para respeitar a regra “A010 buyers are restricted strictly to PIPELINE INSIDE SALES”.
 
-Manter o filtro por `installment === 1` e a UTM como fallback. Não afeta orderbumps de outros checkouts: a checagem é por nome exato da oferta, não pelo `productCategory` `ob_construir_alugar` (esse continua sendo orderbump puro).
+### 2. Backfill para Junho
+Executar uma migration/backfill idempotente para os 290 compradores A010 completed:
 
-**(b) Generalizar a promoção em `processA017Sale`**
+- Para os **6** com deal em PIS: atualizar tag/data/custom_fields para aparecer no filtro.
+- Para os **18** que só estão em outro pipeline: criar deal novo em PIS com tag A010/Hubla/Jun/26, sem apagar nem mover o deal antigo.
+- Para os **17** sem deal/contato: criar contato quando necessário e criar deal novo em PIS.
+- Evitar duplicidade usando match por `lower(email)` e últimos 9 dígitos do telefone.
 
-Ordem revista da busca de deal existente em Inside Sales para o mesmo contato/origin:
-1. Deal com tag `A017` → atualiza (sem mudanças).
-2. Deal com tag `A010` → promove para A017 (já existe).
-3. **Novo:** qualquer outro deal do contato em Inside Sales (mais recente, não arquivado) → **adiciona a tag `A017`** (mantém as demais tags, atualiza `custom_fields.a017_compra`, NÃO move de stage e NÃO troca produto/owner, para não atropelar trabalho já feito no deal).
-4. Só então cria novo deal A017.
+### 3. Verificação
+Depois do backfill:
 
-### 2. Migration: backfill único
-
-Script SQL idempotente que, para cada `hubla_transactions` com `offer_name in (...A017...)`:
-- Localiza o contato por `lower(email)` ou telefone (últimos 9 dígitos).
-- Para deals em `PIPELINE INSIDE SALES` (`origin_id = e3c04f21-...`), não arquivados, que ainda não têm `A017` em `tags`, faz `tags = array_append(tags, 'A017')` e atualiza `custom_fields ||= {a017_backfill: true, a017_data: sale_date}`.
-- Não cria deal novo (os ~4 sem deal ficam de fora — exigem investigação individual; lista será exportada para CSV via consulta auxiliar).
-
-### 3. Verificação pós-execução
-
-Reexecutar a consulta de diagnóstico esperando:
-- `com_tag_a017 = 63` (mesmo total dos que têm deal hoje).
-- Pipeline em junho filtrando por A017 passar de 49 para ~63 oportunidades.
-
-Os 4 compradores sem deal nenhum serão listados para o usuário decidir (provavelmente A010 bloqueado por regra de Inside Sales, email divergente, etc.) — não serão criados automaticamente neste passo.
+- Recontar compradores A010 completed na Hubla: esperado **290**.
+- Recontar deals visíveis em `/crm/negocios` com tag A010 + período 01/06–15/06: esperado ficar próximo de **290**.
+- Listar qualquer exceção restante com motivo: reembolso, e-mail duplicado, telefone divergente, duplicidade já existente ou ausência de stage padrão.
 
 ## Fora de escopo
-- Não mexer no filtro de tags da Pipeline (frontend) — passa a ficar correto naturalmente.
-- Não mexer no Funil por Canal (já corrigido em iteração anterior).
-- Não criar deals para os 4 compradores sem deal — apenas reportar.
+
+- Alterar regra visual do filtro de data da tela.
+- Mover/deletar deals antigos de outros pipelines.
+- Incluir vendas refunded/canceladas no número de A010.
