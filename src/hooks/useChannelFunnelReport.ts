@@ -982,10 +982,23 @@ export function useChannelFunnelReport(
     entradasDeals.forEach((dealId) => {
       if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
+      // A017 é ancorado em sale_date da Hubla (não em created_at do deal).
+      // Pulamos aqui para não contar duas vezes — A017.entradas é setado
+      // logo abaixo a partir de `a017InWindow.count`.
+      if (ch === 'A017') return;
       get(ch).entradas++;
       const meta = dealMeta.get(dealId);
       pushDet(ch, 'entradas', buildItem(dealId, meta?.created_at || '', null));
     });
+
+    // ===== A017 ENTRADAS: compradores únicos com sale_date na janela =====
+    // Ignora filtros locais (search/closer/source/origin) porque A017 vem
+    // direto da Hubla, não dos deals do CRM. O filtro de canal continua
+    // valendo via FUNNEL_CHANNELS abaixo.
+    if (!fChannel || fChannel === 'A017') {
+      get('A017').entradas = a017InWindow.count;
+      a017InWindow.items.forEach((it) => pushDet('A017', 'entradas', it));
+    }
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
     // Espelha o RPC `get_sdr_metrics_from_agenda` (KPI "R1 AGENDADA" do header):
