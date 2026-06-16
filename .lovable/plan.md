@@ -1,79 +1,86 @@
-# Tag/stage por offer do checkout Hubla (A010 vs A017)
+## Objetivo
 
-## Diagnóstico
+A partir de **hoje (15/06/2026)**, todas as vendas vêm exclusivamente do **webhook nativo da Hubla**. Os 7 webhooks do Make passam a responder **410 Gone**. Nenhum registro histórico é alterado.
 
-A "compra primária" da Hubla é o produto vinculado ao **checkout que o cliente acessou primeiro**. Esse offer ID aparece em `event.invoice.paymentSession.url` (`https://pay.hub.la/<offerId>?...`). Confirmado nos 7 deals atuais: todos têm checkout URL começando com `sSUhrvi36mbjRN8gOwhs` (Construir Para Alugar VSL) → A017 é primária para todos.
+## Diagnóstico (dados reais de `hubla_transactions`)
 
-Hoje o webhook cria/promove o deal usando o nome da oferta da sub-invoice ("PRINCIPAL - A010"), por isso esses deals ficaram com `product_name`/tag A010 mesmo entrando pelo funil A017.
+| product_category | MAKE (n) | HUBLA (n) | Observação |
+|---|---|---|---|
+| a010 | 2.076 | 17.118 | mesma categoria — Hubla já cobre |
+| contrato | 1.462 | 4.464 | mesma categoria — Hubla já cobre |
+| parceria | 905 | 1.161 | mesma categoria — Hubla já cobre |
+| ob_evento | 115 | 20 | mesma categoria — Hubla já cobre (volume baixo, validar) |
+| ob_vitalicio | 917 | 2.614 | mesma categoria — Hubla já cobre |
+| ob_construir (Make) / ob_construir_alugar (Hubla) | 910 | 3.286 | **categorias diferentes** — exige ajuste no código |
+| viver_aluguel | 115 | 0 | **só existe no Make** — precisa identificar o equivalente Hubla |
 
 ## Mudanças
 
-### 1. Migração retroativa (insert tool — UPDATE)
+### 1. Bloquear os 7 webhooks do Make a partir de hoje
 
-Promover os 7 deals para A017 (mantendo na stage atual `A017 - Novo Lead`):
+Em cada um dos arquivos abaixo, adicionar guard no topo do handler: se `Date.now() >= Date.UTC(2026, 5, 15, 3, 0, 0)` (15/06/2026 00:00 BRT), responder **410 Gone** com log `[BLOCKED] Make webhook desativado — usar Hubla nativo`.
 
-```text
-UPDATE crm_deals
-SET product_name='A017 - Construir Para Alugar',
-    name=replace(name,' - A010',' - A017'),
-    tags=ARRAY['A017','Hubla','A010'] || ARRAY(SELECT unnest(tags) EXCEPT SELECT unnest(ARRAY['A017','Hubla','A010'])),
-    updated_at=now()
-WHERE id IN (
-  '93c95108-13a4-470a-a5bf-46ef930802f7',  -- Helenilse
-  '676c40ea-b656-481e-b0a3-6fb616794ea3',  -- Clesio
-  '7d6b9f5a-f7e2-4202-91c5-a42f84cfa677',  -- Silvio
-  '4c980fbe-7eb5-49a8-8a07-2f96b5bf0518',  -- Roberto Filho
-  '6c1bf192-2459-4f77-911a-b2747c7ec243',  -- José Ilson
-  '1030ffea-b24d-40ca-9c79-40e32d8f33d9',  -- Marcos Lopes
-  'a7dc07f5-3124-4ad2-9fd9-bba06f4f6260'   -- Alexssandro
-);
-```
+- `supabase/functions/webhook-make-a010/index.ts`
+- `supabase/functions/webhook-make-contrato/index.ts`
+- `supabase/functions/webhook-make-ob-construir/index.ts`
+- `supabase/functions/webhook-make-ob-evento/index.ts`
+- `supabase/functions/webhook-make-ob-vitalicio/index.ts`
+- `supabase/functions/webhook-make-parceria/index.ts`
+- `supabase/functions/webhook-make-viver-aluguel/index.ts`
 
-A tag `A010` fica como secundária (registra o bundle); A017 vira primária; produto e nome refletem A017; stage permanece em `8a0b84d0-...` (A017 – Novo Lead).
+Lógica do handler antigo permanece intacta (não estamos editando passado, e a função fica pronta para reabertura emergencial bastando reverter o guard).
 
-### 2. Webhook (`supabase/functions/hubla-webhook-handler/index.ts`)
+### 2. Ajuste de leitura para `ob_construir`
 
-Novo helper `getCheckoutOfferIdFromInvoice(body)`:
-- Lê `event.invoice.paymentSession.url`, extrai o segmento entre `pay.hub.la/` e `?` (ou fim) → offer do checkout.
-- Fallback: se `paymentSession.url` ausente, usa `event.invoice.id` removendo o sufixo `-offer-N` para achar o pai e procurar a sub-invoice cujo `offer_id` está na URL armazenada.
+Como Make grava em `ob_construir` e Hubla nativo grava em `ob_construir_alugar`, alterar os relatórios para considerar **as duas categorias somadas** em todos os lugares que hoje filtram por `'ob_construir'`:
 
-Novo helper `getPrimaryProductFromCheckout(body)`:
-- Se offer do checkout = `sSUhrvi36mbjRN8gOwhs` → `'A017'`
-- Se offer do checkout = `Rj0oC8BRxMCTJ1UZRpJ3` → `'A010'`
-- caso contrário → `'OTHER'`
+- `src/lib/transactionHelpers.ts`
+- `src/components/dashboard/ResumoFinanceiro.tsx`
+- `supabase/functions/import-weekly-metrics/index.ts`
+- `supabase/functions/calculate-weekly-metrics/index.ts`
+- Demais ocorrências encontradas em busca global por `'ob_construir'`
 
-Aplicar em `createA017Deal` e no caminho A010:
+Por que somar é seguro: histórico (até 14/06) tem só `ob_construir`; futuro (a partir de 15/06) tem só `ob_construir_alugar`. Sem dupla contagem em nenhuma janela.
 
-a) Offer A017 chega e primário = A017:
-   - Se já existe deal do contato em Inside Sales com `product_name ILIKE 'A010 -%'`, **promover**: troca product_name → `'A017 - Construir Para Alugar'`, renomeia `... - A010` → `... - A017`, reordena tags com A017 primária, move stage para `A017_STAGE_ID`.
-   - Senão, cria deal A017 novo (comportamento atual).
+### 3. Validação `viver_aluguel` (antes de bloquear)
 
-b) Offer A010 chega e primário = A017:
-   - Não cria deal A010 separado. Adiciona apenas a tag secundária `A010` no deal A017 (promovido ou existente).
+`viver_aluguel` só existe em registros Make (115 linhas, última em 27/02/2026). Antes de bloquear esse webhook específico, **eu pergunto na hora da execução**:
 
-c) Offer A017 chega e primário = A010:
-   - Não cria/promove deal A017. Adiciona apenas a tag secundária `A017` no deal A010 existente; não muda stage nem produto.
+- O produto "Viver de Aluguel" ainda é vendido hoje?
+- Se sim, qual `product_category` o Hubla nativo grava? Há mapeamento na função `hubla-webhook-handler`?
 
-d) Offer A010 chega e primário = A010: comportamento atual (deal A010 em `A010 Em Aberto`).
+Se não houver cobertura nativa, esse webhook fica **fora do bloqueio** até existir caminho equivalente. Os outros 6 seguem bloqueados normalmente.
 
-e) Vendas single (sem o outro produto): comportamento atual de cada caminho.
+### 4. Demais categorias (a010, contrato, parceria, ob_evento, ob_vitalicio)
 
-### 3. Memória do projeto
+Nada a alterar nos relatórios — Hubla nativo já grava na mesma `product_category` do Make. Basta bloquear Make e a fonte fica única automaticamente.
 
-Salvar em `mem://business-logic/hubla-checkout-offer-primary-rule.md`:
+### 5. Não tocar no passado
 
-> A "compra primária" em checkouts Hubla com múltiplas ofertas é determinada pelo offer ID extraído de `event.invoice.paymentSession.url` (segmento após `pay.hub.la/`). Esse offer define `product_name`, `name`, tag primária e stage do deal. Sub-invoices (`-offer-N`) com outros produtos viram apenas tags secundárias; nunca movem stage nem sobrescrevem produto principal. Mapeamento: `sSUhrvi36mbjRN8gOwhs` → A017 (Construir Para Alugar); `Rj0oC8BRxMCTJ1UZRpJ3` → A010.
+- Nenhum DELETE / UPDATE em `hubla_transactions`.
+- `weekly_metrics` de semanas anteriores fica congelado.
+- Apenas a semana corrente (sábado 13/06 em diante) é recalculada via `recalculate-weekly-metrics` com `start_date = 2026-06-13`, para refletir vendas de hoje sem Make.
 
-## Resultado esperado
+## O que NÃO muda
 
-- Os 7 deals exibem badge **A017**, nome `<Cliente> - A017`, `product_name` `A017 - Construir Para Alugar`, tag secundária `A010` preservada.
-- Vendas futuras: quem entra pela VSL A017 fica com tag/stage A017 mesmo que a Hubla emita uma sub-invoice A010; quem entra pelo checkout A010 fica com tag/stage A010 mesmo que pegue A017 como orderbump.
-- Funil/relatórios não mudam (`useChannelFunnelReport` segue `isA017Buyer` por hubla_transactions).
+- Webhook nativo `hubla-webhook-handler`.
+- Schema da tabela `hubla_transactions`.
+- Lógica de funil Consórcio, A017, partner block, A010 routing.
+- Timeline de leads antigos (continua mostrando duplicatas históricas como hoje).
 
-## Detalhes técnicos
+## Ação manual do usuário (depois do deploy)
 
-- Offer ID A017 VSL (checkout): `sSUhrvi36mbjRN8gOwhs`
-- Offer ID A010 PRINCIPAL (checkout): `Rj0oC8BRxMCTJ1UZRpJ3`
-- Stage A017 Novo Lead: `8a0b84d0-7b7a-479a-8c8e-e1067f1a3fda`
-- Stage A010 Em Aberto: `698ad6b1-6ea2-4beb-8f88-7b21eeee4cc4`
-- Origin Inside Sales: `e3c04f21-89a4-461b-a4c4-9ec24a59b478`
+Desligar os 7 cenários no Make. Após hoje eles só vão receber 410. Não é urgente, mas elimina ruído nos logs.
+
+## Resumo
+
+| Arquivo / ação | Tipo |
+|---|---|
+| 7 × `supabase/functions/webhook-make-*/index.ts` | Guard de data → 410 Gone |
+| `src/lib/transactionHelpers.ts` | Incluir `ob_construir_alugar` |
+| `src/components/dashboard/ResumoFinanceiro.tsx` | Incluir `ob_construir_alugar` |
+| `supabase/functions/import-weekly-metrics/index.ts` | Incluir `ob_construir_alugar` |
+| `supabase/functions/calculate-weekly-metrics/index.ts` | Incluir `ob_construir_alugar` |
+| Busca global por `'ob_construir'` | Ajustar quaisquer outras ocorrências |
+| `recalculate-weekly-metrics` semana 13/06–19/06 | Recalcular só a semana atual |
+| `viver_aluguel` | Confirmar com você antes de bloquear |
