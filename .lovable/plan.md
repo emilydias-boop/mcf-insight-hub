@@ -1,86 +1,55 @@
-## Objetivo
+## Diagnóstico
 
-A partir de **hoje (15/06/2026)**, todas as vendas vêm exclusivamente do **webhook nativo da Hubla**. Os 7 webhooks do Make passam a responder **410 Gone**. Nenhum registro histórico é alterado.
+Filtrando junho/2026 no relatório:
 
-## Diagnóstico (dados reais de `hubla_transactions`)
+- **66** emails únicos compraram A017 (VSL + Manychat) na Hubla.
+- **56** desses têm deal criado em junho na BU Incorporador.
+- Hoje o funil mostra apenas **30** em A017 — os outros **26** estão caindo em A010 porque o lead também tem compra A010 ≤30 dias.
 
-| product_category | MAKE (n) | HUBLA (n) | Observação |
-|---|---|---|---|
-| a010 | 2.076 | 17.118 | mesma categoria — Hubla já cobre |
-| contrato | 1.462 | 4.464 | mesma categoria — Hubla já cobre |
-| parceria | 905 | 1.161 | mesma categoria — Hubla já cobre |
-| ob_evento | 115 | 20 | mesma categoria — Hubla já cobre (volume baixo, validar) |
-| ob_vitalicio | 917 | 2.614 | mesma categoria — Hubla já cobre |
-| ob_construir (Make) / ob_construir_alugar (Hubla) | 910 | 3.286 | **categorias diferentes** — exige ajuste no código |
-| viver_aluguel | 115 | 0 | **só existe no Make** — precisa identificar o equivalente Hubla |
+A regra atual em `classifyChannelWith30dRule` prioriza A010 fresco antes de A017:
 
-## Mudanças
+```text
+1. buyer A010 ≤30d                → A010   ← rouba 26 A017
+2. buyer A017 (VSL/Manychat)      → A017
+3. A010 esfriado + tag ANAMNESE   → ANAMNESE
+4. A010 esfriado                  → A010
+5. tag ANAMNESE                   → ANAMNESE
+6. tag ANAMNESE-INCOMPLETA        → ANAMNESE INCOMPLETA
+7. fallback                       → OUTROS
+```
 
-### 1. Bloquear os 7 webhooks do Make a partir de hoje
+Mas a regra de negócio definida (mensagens 23:09 e 23:01 de 15/06, e memória `hubla-checkout-offer-primary-rule`) é: **prevalece a compra principal — e A017 só é marcado quando o checkout foi VSL ou Manychat (já é a compra principal)**. Logo A017 deve vencer A010 fresco.
 
-Em cada um dos arquivos abaixo, adicionar guard no topo do handler: se `Date.now() >= Date.UTC(2026, 5, 15, 3, 0, 0)` (15/06/2026 00:00 BRT), responder **410 Gone** com log `[BLOCKED] Make webhook desativado — usar Hubla nativo`.
+## Mudança
 
-- `supabase/functions/webhook-make-a010/index.ts`
-- `supabase/functions/webhook-make-contrato/index.ts`
-- `supabase/functions/webhook-make-ob-construir/index.ts`
-- `supabase/functions/webhook-make-ob-evento/index.ts`
-- `supabase/functions/webhook-make-ob-vitalicio/index.ts`
-- `supabase/functions/webhook-make-parceria/index.ts`
-- `supabase/functions/webhook-make-viver-aluguel/index.ts`
+`src/hooks/useChannelFunnelReport.ts` — função `classifyChannelWith30dRule`: inverter a ordem das duas primeiras regras.
 
-Lógica do handler antigo permanece intacta (não estamos editando passado, e a função fica pronta para reabertura emergencial bastando reverter o guard).
+```text
+1. buyer A017 (VSL/Manychat)  → A017      ← passa para o topo
+2. buyer A010 ≤30d            → A010
+3. A010 esfriado + ANAMNESE   → ANAMNESE
+4. A010 esfriado              → A010
+5. tag ANAMNESE               → ANAMNESE
+6. tag ANAMNESE-INCOMPLETA    → ANAMNESE INCOMPLETA
+7. fallback                   → OUTROS
+```
 
-### 2. Ajuste de leitura para `ob_construir`
+## Efeito esperado no relatório (junho)
 
-Como Make grava em `ob_construir` e Hubla nativo grava em `ob_construir_alugar`, alterar os relatórios para considerar **as duas categorias somadas** em todos os lugares que hoje filtram por `'ob_construir'`:
+| Canal   | Antes | Depois |
+|---------|------:|-------:|
+| A010    | 299   | ~273   |
+| A017    | 30    | ~56    |
+| Demais  | iguais |       |
 
-- `src/lib/transactionHelpers.ts`
-- `src/components/dashboard/ResumoFinanceiro.tsx`
-- `supabase/functions/import-weekly-metrics/index.ts`
-- `supabase/functions/calculate-weekly-metrics/index.ts`
-- Demais ocorrências encontradas em busca global por `'ob_construir'`
+Os 26 leads que migram de A010 para A017 trazem junto suas R1 agendadas, realizadas, no-shows e contratos pagos — então as linhas A010 e A017 do funil refletem corretamente o canal primário de aquisição. Os outros 10 emails A017 que não aparecem é porque não têm deal em junho na BU (compraram fora da janela ou não geraram deal de Inside Sales — esses não devem entrar mesmo).
 
-Por que somar é seguro: histórico (até 14/06) tem só `ob_construir`; futuro (a partir de 15/06) tem só `ob_construir_alugar`. Sem dupla contagem em nenhuma janela.
+## Sobre o "Agenda R1"
 
-### 3. Validação `viver_aluguel` (antes de bloquear)
+A mesma função vive replicada em `src/components/crm/MeetingsList.tsx` (`classifySimple`). Se quiser que a Agenda R1 também reflita A017 sobre A010, replico a inversão lá também. Senão, mantenho só no relatório. Me diz qual prefere.
 
-`viver_aluguel` só existe em registros Make (115 linhas, última em 27/02/2026). Antes de bloquear esse webhook específico, **eu pergunto na hora da execução**:
+## Sem mudanças em
 
-- O produto "Viver de Aluguel" ainda é vendido hoje?
-- Se sim, qual `product_category` o Hubla nativo grava? Há mapeamento na função `hubla-webhook-handler`?
-
-Se não houver cobertura nativa, esse webhook fica **fora do bloqueio** até existir caminho equivalente. Os outros 6 seguem bloqueados normalmente.
-
-### 4. Demais categorias (a010, contrato, parceria, ob_evento, ob_vitalicio)
-
-Nada a alterar nos relatórios — Hubla nativo já grava na mesma `product_category` do Make. Basta bloquear Make e a fonte fica única automaticamente.
-
-### 5. Não tocar no passado
-
-- Nenhum DELETE / UPDATE em `hubla_transactions`.
-- `weekly_metrics` de semanas anteriores fica congelado.
-- Apenas a semana corrente (sábado 13/06 em diante) é recalculada via `recalculate-weekly-metrics` com `start_date = 2026-06-13`, para refletir vendas de hoje sem Make.
-
-## O que NÃO muda
-
-- Webhook nativo `hubla-webhook-handler`.
-- Schema da tabela `hubla_transactions`.
-- Lógica de funil Consórcio, A017, partner block, A010 routing.
-- Timeline de leads antigos (continua mostrando duplicatas históricas como hoje).
-
-## Ação manual do usuário (depois do deploy)
-
-Desligar os 7 cenários no Make. Após hoje eles só vão receber 410. Não é urgente, mas elimina ruído nos logs.
-
-## Resumo
-
-| Arquivo / ação | Tipo |
-|---|---|
-| 7 × `supabase/functions/webhook-make-*/index.ts` | Guard de data → 410 Gone |
-| `src/lib/transactionHelpers.ts` | Incluir `ob_construir_alugar` |
-| `src/components/dashboard/ResumoFinanceiro.tsx` | Incluir `ob_construir_alugar` |
-| `supabase/functions/import-weekly-metrics/index.ts` | Incluir `ob_construir_alugar` |
-| `supabase/functions/calculate-weekly-metrics/index.ts` | Incluir `ob_construir_alugar` |
-| Busca global por `'ob_construir'` | Ajustar quaisquer outras ocorrências |
-| `recalculate-weekly-metrics` semana 13/06–19/06 | Recalcular só a semana atual |
-| `viver_aluguel` | Confirmar com você antes de bloquear |
+- Webhooks (já corretos).
+- Dados históricos (deals e transações ficam como estão).
+- Demais relatórios (faturamento por canal usa outro caminho).
