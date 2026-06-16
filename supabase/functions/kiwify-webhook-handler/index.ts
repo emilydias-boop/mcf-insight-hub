@@ -113,11 +113,13 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const body = await req.json();
-    const eventType = body.webhook_event_type || body.event || 'unknown';
+    const rawBody = await req.json();
+    // Kiwify pode enviar payload "flat" (campos na raiz) ou "embrulhado" ({ url, signature, order: {...} })
+    const body = rawBody?.order && typeof rawBody.order === 'object' ? rawBody.order : rawBody;
+    const eventType = body.webhook_event_type || body.event || rawBody.webhook_event_type || 'unknown';
     
     console.log(`[Kiwify Webhook] Received event: ${eventType}`);
-    console.log(`[Kiwify Webhook] Body:`, JSON.stringify(body, null, 2));
+    console.log(`[Kiwify Webhook] Body:`, JSON.stringify(rawBody, null, 2));
 
     // Validar token (header ou body) — deny by default
     if (!kiwifyToken) {
@@ -128,10 +130,16 @@ serve(async (req) => {
       );
     }
     const headerToken = req.headers.get('x-kiwify-token') || req.headers.get('X-Kiwify-Token');
-    const bodyToken = body.signature || body.token;
-    const receivedToken = headerToken || bodyToken;
+    const bodyToken = rawBody.signature || rawBody.token || body.signature || body.token;
+    const url = new URL(req.url);
+    const queryToken = url.searchParams.get('token') || url.searchParams.get('signature');
+    const receivedToken = headerToken || queryToken || bodyToken;
     if (!receivedToken || receivedToken !== kiwifyToken) {
-      console.error('[Kiwify Webhook] Invalid or missing token');
+      console.error('[Kiwify Webhook] Invalid or missing token', {
+        hasHeader: !!headerToken,
+        hasQuery: !!queryToken,
+        hasBody: !!bodyToken,
+      });
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
