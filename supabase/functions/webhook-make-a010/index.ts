@@ -34,6 +34,18 @@ Deno.serve(async (req) => {
   const startTime = Date.now();
 
   try {
+  // ============= BLOQUEIO MAKE A PARTIR DE 15/06/2026 =============
+  // Source of truth migrada para webhook nativo da Hubla (hubla-webhook-handler).
+  // Cenários antigos no Make devem ser desligados manualmente.
+  const MAKE_CUTOFF_MS = Date.UTC(2026, 5, 15, 3, 0, 0); // 15/06/2026 00:00 BRT
+  if (Date.now() >= MAKE_CUTOFF_MS) {
+    console.warn('[BLOCKED] Make webhook desativado \u2014 usar Hubla nativo');
+    return new Response(
+      JSON.stringify({ error: 'Gone', message: 'Este webhook foi desativado em 15/06/2026. Use o webhook nativo da Hubla.' }),
+      { status: 410, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({ error: "Method not allowed" }),
