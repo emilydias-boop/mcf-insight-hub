@@ -54,7 +54,7 @@ export function useUnlinkedContracts(options: UseUnlinkedContractsOptions = {}) 
       const { data, error } = await supabase
         .from('hubla_transactions')
         .select('id, hubla_id, customer_name, customer_email, customer_phone, customer_document, sale_date, net_value, product_price')
-        .eq('product_category', 'contrato')
+        .in('product_category', ['contrato', 'incorporador'])
         .is('linked_attendee_id', null)
         .gte('sale_date', twoWeeksAgo.toISOString())
         .order('sale_date', { ascending: false });
