@@ -1,41 +1,48 @@
-## Corrigir validação Kiwify (HMAC-SHA1) e consolidar webhook
+## Problema
 
-### Diagnóstico
-A Kiwify autentica webhooks via:
-- Query string `?signature=<hex>` na URL
-- `signature = HMAC-SHA1(rawBody, KIWIFY_WEBHOOK_TOKEN)` em hex lowercase
+O `kiwify-webhook-handler` recebe a compra aprovada e grava em `hubla_transactions` / `a010_sales`, mas **nunca cria o deal no CRM**. Por isso a Inês Cordeiro (e qualquer compra A010 vinda do Kiwify) não aparece em "Novo Lead" da PIPELINE INSIDE SALES.
 
-Nosso handler hoje compara o token de forma literal — por isso rejeita 100% dos eventos. Os 36 deals A010 de ontem vieram só pela Hubla; **nenhum** veio da Kiwify.
+Toda a lógica de criar/atualizar contato + deal A010 (origem canônica `PIPELINE INSIDE SALES`, stage `Novo Lead`, tags, custom fields `a010_compra/a010_produto/a010_data`, bloqueio de parceiros via `partner_returns`, herança de owner, promoção de "A010 Em Aberto" → "Novo Lead", dedupe por email/telefone) vive apenas no `hubla-webhook-handler` e usa por padrão `tags: ['A010', 'Hubla']`.
 
-### Passos
+## Mudanças
 
-1. **Garantir secret `KIWIFY_WEBHOOK_TOKEN = ebbcys9gj7d`** (via `update_secret`, formulário seguro).
+### 1. `supabase/functions/kiwify-webhook-handler/index.ts`
+Portar para dentro do handler do Kiwify as funções necessárias do Hubla, mantendo o mesmo comportamento, mas com tag de origem trocada:
 
-2. **Reescrever validação em `supabase/functions/kiwify-webhook-handler/index.ts`:**
-   - Ler `rawBody` como texto (antes de `JSON.parse`).
-   - Ler `signature` da query string (`?signature=...`), com fallback para header `x-kiwify-signature`.
-   - Computar `HMAC-SHA1(rawBody, KIWIFY_WEBHOOK_TOKEN)` em hex.
-   - Comparar via `timingSafeEqual` (constante).
-   - Se bater → processar; se não → 401.
-   - Manter normalização do body (aceitar `rawBody.order` wrapped OU flat).
+- `normalizePhone`
+- `checkIfPartner` (bloqueio de parceiros A001/A002/A003/A004/A009/Incorporador/Anticrise — registra em `partner_returns` com `return_source: 'kiwify_a010'`)
+- `createOrUpdateCRMContact` — versão Kiwify:
+  - `originName` fixo = `PIPELINE INSIDE SALES`
+  - `targetStageName` = `'Novo Lead'`
+  - `extraTags` default = `['A010', 'A010 Kiwify']` (substitui o `'Hubla'` por `'A010 Kiwify'` conforme pedido)
+  - Mesma lógica de dedupe (email lower + sufixo 9 dígitos do telefone), atualização de tags sem duplicar, promoção de stage "A010 Em Aberto" → "Novo Lead", custom_fields `a010_compra=true`, `a010_produto`, `a010_data`, herança de owner do deal mais recente do contato.
 
-3. **Deploy do edge function** e testar:
-   - Enviar via `curl_edge_functions` o payload `order_approved` real com `?signature=` computado localmente para validar fluxo verde.
-   - Enviar com signature errado para validar 401.
+### 2. Disparo dentro do bloco `order_approved` (após inserir a transação)
+Quando `productCategory === 'a010'` e `installmentNumber === 1`, chamar `createOrUpdateCRMContact` com:
+```ts
+{
+  email: customerEmail,
+  phone: customerPhone,
+  name: customerName,
+  originName: 'PIPELINE INSIDE SALES',
+  productName,
+  value: grossValue,
+  extraTags: ['A010', 'A010 Kiwify'],
+}
+```
+Erros no CRM são logados mas **não derrubam** a resposta 200 (o webhook ainda confirma para a Kiwify).
 
-4. **Validar nos logs** do `kiwify-webhook-handler`:
-   - "Signature OK"
-   - "Received event: order_approved"
-   - Deal criado/atualizado no CRM com tag A010
+### 3. Refund (`order_refunded`)
+Sem mudança no CRM por enquanto — apenas marca `hubla_transactions.sale_status='refunded'` (idêntico ao comportamento atual da Hubla para A010).
 
-5. **Após confirmação:** você desativa o endpoint `webhook-lead-receiver/a010-kiwify` no painel da Kiwify (manual) para eliminar duplicação.
+## Validação
 
-### Não vou fazer
-- Não vou tocar no `webhook-lead-receiver` nem em outros handlers.
-- Não vou fazer backfill dos pedidos perdidos nesta etapa (proponho depois se quiser).
-- Não vou alterar lógica de criação de deal A010 (já está correta).
+1. Após deploy, reenviar pelo painel da Kiwify o evento `order_approved` do pedido `6d33f782` (Inês Cordeiro).
+2. Conferir nos logs: `[CRM] Deal criado: Inês Cordeiro - A010 (...)`.
+3. Conferir em `crm_deals` que existe deal com `origin_id` = PIPELINE INSIDE SALES, `stage_name='Novo Lead'`, `tags @> ['A010','A010 Kiwify']`.
+4. Confirmar com você antes de desativar o endpoint duplicado `webhook-lead-receiver/a010-kiwify` na Kiwify.
 
-### Resultado esperado
-Webhook Kiwify aceita assinatura HMAC-SHA1 corretamente, deals A010 entram automaticamente em INSIDE SALES, fim da divergência.
+## Fora do escopo
 
-Confirma para eu executar?
+- Refatorar `createOrUpdateCRMContact` para módulo compartilhado entre Hubla/Kiwify (duplicação aceita agora para não tocar no Hubla, que está estável).
+- Mudar a tag dos leads Hubla existentes.
