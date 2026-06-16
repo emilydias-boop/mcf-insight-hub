@@ -1073,6 +1073,48 @@ async function createA017Deal(supabase: any, data: A017DealData): Promise<void> 
       return;
     }
 
+    // 4c. FALLBACK: existe QUALQUER outro deal desse contato em Inside Sales?
+    // Ex.: deals criados via orderbump `ob-construir-alugar`, leads vindos do
+    // Lançamento, base Clint, etc. Em vez de criar um deal A017 duplicado,
+    // adicionamos a tag `A017` ao deal mais recente do contato — sem mexer
+    // no stage atual, no owner ou no product_name (não atropelar trabalho
+    // operacional já feito no deal).
+    const { data: anyDeals } = await supabase
+      .from('crm_deals')
+      .select('id, tags, value, custom_fields')
+      .eq('contact_id', contactId)
+      .eq('origin_id', originId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const anyDeal = anyDeals?.[0];
+    if (anyDeal) {
+      const currentTags: string[] = Array.isArray(anyDeal.tags) ? anyDeal.tags : [];
+      const newTags = [...currentTags];
+      if (!newTags.includes('A017')) newTags.unshift('A017');
+      if (!newTags.includes('Hubla')) newTags.push('Hubla');
+
+      await supabase
+        .from('crm_deals')
+        .update({
+          tags: newTags,
+          value: Math.max(anyDeal.value || 0, data.value || 0),
+          custom_fields: {
+            ...(anyDeal.custom_fields || {}),
+            a017_compra: true,
+            a017_produto: data.productName,
+            a017_data: new Date().toISOString(),
+            a017_tagged_on_existing_deal: true,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', anyDeal.id);
+
+      console.log(`[A017] 🏷️ Tag A017 adicionada a deal existente: ${anyDeal.id}`);
+      return;
+    }
+
     // 5. Criar novo deal A017
     // 5a. Distribuição
     let finalOwnerId: string | null = null;
