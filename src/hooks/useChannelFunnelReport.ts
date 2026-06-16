@@ -539,31 +539,35 @@ export function useChannelFunnelReport(
       }
 
       // Lookup A017 buyers (VSL + Manychat)
+      // Match A017 buyers por email OU telefone (últimos 9 dígitos).
+      // Buscamos TODAS as vendas A017 (volume baixo) e cruzamos localmente.
       const a017BuyerEmails = new Set<string>();
-      for (let i = 0; i < emails.length; i += 200) {
-        const chunk = emails.slice(i, i + 200);
-        if (chunk.length === 0) continue;
+      const a017BuyerPhone9 = new Set<string>();
+      {
         const { data: a017Tx } = await supabase
           .from('hubla_transactions')
-          .select('customer_email')
-          .eq('event_type', 'NewSale')
+          .select('customer_email, customer_phone')
           .eq('sale_status', 'completed')
-          .in('offer_id', A017_OFFER_IDS)
-          .in('customer_email', chunk);
+          .in('offer_id', A017_OFFER_IDS);
         (a017Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
           if (e) a017BuyerEmails.add(e);
+          const p9 = phoneSuffix(r.customer_phone);
+          if (p9.length === 9) a017BuyerPhone9.add(p9);
         });
       }
 
       for (const d of deals) {
         const email = (d.crm_contacts?.email || '').toLowerCase().trim() || null;
+        const dealPhone9 = phoneSuffix(d.crm_contacts?.phone);
         const tags = parseTags(d.tags);
+        const isA017 = (email ? a017BuyerEmails.has(email) : false)
+          || (dealPhone9.length === 9 ? a017BuyerPhone9.has(dealPhone9) : false);
         const channel = classifyChannelWith30dRule({
           tags,
           mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
-          isA017Buyer: email ? a017BuyerEmails.has(email) : false,
+          isA017Buyer: isA017,
         });
         m.set(d.id, {
           id: d.id,
