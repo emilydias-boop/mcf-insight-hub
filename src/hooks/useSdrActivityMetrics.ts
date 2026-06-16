@@ -9,6 +9,13 @@ export interface SdrActivityMetrics {
   // Atividades do período
   totalCalls: number;
   answeredCalls: number;
+  notAnsweredCalls: number;
+  ringDropCalls: number;
+  voicemailCalls: number;
+  effectiveCalls: number;
+  qualifiedCalls: number;
+  connectionRate: number; // (atendidas) / total
+  qualificationRate: number; // qualified / total
   notesAdded: number;
   stageChanges: number;
   whatsappSent: number;
@@ -18,6 +25,47 @@ export interface SdrActivityMetrics {
   
   // Calculado
   avgCallsPerLead: number;
+}
+
+export type CallCategory = 'not_answered' | 'ring_drop' | 'voicemail' | 'effective' | 'qualified';
+
+// Faixas heurísticas (segundos)
+export const CALL_THRESHOLDS = {
+  ringDropMax: 10,
+  voicemailMax: 30,
+  effectiveMax: 60,
+} as const;
+
+/**
+ * Classifica uma ligação outbound em uma categoria.
+ * Prioriza answered_by (AMD do Twilio) quando presente; caso contrário usa duração.
+ */
+export function classifyCall(
+  status: string | null | undefined,
+  durationSeconds: number | null | undefined,
+  answeredBy: string | null | undefined
+): CallCategory {
+  const duration = durationSeconds ?? 0;
+  const notAnsweredStatuses = ['no-answer', 'failed', 'busy', 'initiated', 'canceled'];
+  if (!status || notAnsweredStatuses.includes(status) || duration === 0) {
+    return 'not_answered';
+  }
+
+  // AMD do Twilio (se ligado no futuro)
+  if (answeredBy) {
+    if (answeredBy === 'machine_start' || answeredBy === 'fax' || answeredBy.startsWith('machine')) {
+      return 'voicemail';
+    }
+    if (answeredBy === 'human') {
+      return duration > CALL_THRESHOLDS.effectiveMax ? 'qualified' : 'effective';
+    }
+  }
+
+  // Heurística por duração
+  if (duration <= CALL_THRESHOLDS.ringDropMax) return 'ring_drop';
+  if (duration <= CALL_THRESHOLDS.voicemailMax) return 'voicemail';
+  if (duration <= CALL_THRESHOLDS.effectiveMax) return 'effective';
+  return 'qualified';
 }
 
 export function useSdrActivityMetrics(
@@ -47,7 +95,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('calls')
-          .select('user_id, status, outcome, deal_id')
+          .select('user_id, status, outcome, deal_id, duration_seconds, answered_by')
           .eq('direction', 'outbound')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
@@ -96,6 +144,13 @@ export function useSdrActivityMetrics(
           sdrName: sdr.name,
           totalCalls: 0,
           answeredCalls: 0,
+          notAnsweredCalls: 0,
+          ringDropCalls: 0,
+          voicemailCalls: 0,
+          effectiveCalls: 0,
+          qualifiedCalls: 0,
+          connectionRate: 0,
+          qualificationRate: 0,
           notesAdded: 0,
           stageChanges: 0,
           whatsappSent: 0,
@@ -124,12 +179,16 @@ export function useSdrActivityMetrics(
         if (!metrics) return;
         
         metrics.totalCalls++;
-        
-        const isAnswered = 
-          ['completed', 'in-progress'].includes(call.status || '') ||
-          ['interessado', 'agendou_r1', 'agendou_r2', 'agendou', 'atendeu'].includes(call.outcome || '');
-        
-        if (isAnswered) {
+
+        const category = classifyCall(call.status, call.duration_seconds, call.answered_by);
+        switch (category) {
+          case 'not_answered': metrics.notAnsweredCalls++; break;
+          case 'ring_drop': metrics.ringDropCalls++; break;
+          case 'voicemail': metrics.voicemailCalls++; break;
+          case 'effective': metrics.effectiveCalls++; break;
+          case 'qualified': metrics.qualifiedCalls++; break;
+        }
+        if (category !== 'not_answered') {
           metrics.answeredCalls++;
         }
         
@@ -175,6 +234,12 @@ export function useSdrActivityMetrics(
         metrics.uniqueLeadsWorked = leadsSet?.size || 0;
         metrics.avgCallsPerLead = metrics.uniqueLeadsWorked > 0 
           ? Math.round((metrics.totalCalls / metrics.uniqueLeadsWorked) * 10) / 10
+          : 0;
+        metrics.connectionRate = metrics.totalCalls > 0
+          ? Math.round((metrics.answeredCalls / metrics.totalCalls) * 1000) / 10
+          : 0;
+        metrics.qualificationRate = metrics.totalCalls > 0
+          ? Math.round((metrics.qualifiedCalls / metrics.totalCalls) * 1000) / 10
           : 0;
         
         // Incluir apenas SDRs com alguma atividade
