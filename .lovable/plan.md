@@ -1,48 +1,49 @@
-## Problema
 
-O `kiwify-webhook-handler` recebe a compra aprovada e grava em `hubla_transactions` / `a010_sales`, mas **nunca cria o deal no CRM**. Por isso a Inês Cordeiro (e qualquer compra A010 vinda do Kiwify) não aparece em "Novo Lead" da PIPELINE INSIDE SALES.
+## Objetivo
 
-Toda a lógica de criar/atualizar contato + deal A010 (origem canônica `PIPELINE INSIDE SALES`, stage `Novo Lead`, tags, custom fields `a010_compra/a010_produto/a010_data`, bloqueio de parceiros via `partner_returns`, herança de owner, promoção de "A010 Em Aberto" → "Novo Lead", dedupe por email/telefone) vive apenas no `hubla-webhook-handler` e usa por padrão `tags: ['A010', 'Hubla']`.
+Criar/atualizar no CRM os deals das **51 compras `paid`** do CSV Kiwify (todas A010 - Construa para Vender sem Dinheiro), aplicando exatamente as mesmas regras do webhook `kiwify-webhook-handler` que já está em produção. Ignorar status `waiting_payment`, `refused` e `refunded`.
 
-## Mudanças
+## Diagnóstico do CSV vs CRM atual
 
-### 1. `supabase/functions/kiwify-webhook-handler/index.ts`
-Portar para dentro do handler do Kiwify as funções necessárias do Hubla, mantendo o mesmo comportamento, mas com tag de origem trocada:
+- 67 linhas totais → **51 `paid`**, 8 `waiting_payment`, 4 `refused`, 4 `refunded`.
+- Cruzando os 51 emails `paid` com `crm_deals` em PIPELINE INSIDE SALES:
+  - **~7 já possuem deal com tag `A010 Kiwify`** (já criados pelo webhook, p.ex. Edilson, Djmar, Fabiano, Francine, Mikaell, Michel, Vera Lúcia) → não fazer nada.
+  - **~7 deals existem mas em estágio avançado / outras tags** (Dioney, Claudia, Eliel, Ivam, José Erlei, Leonardo, Rodrigo) → adicionar tags `A010` + `A010 Kiwify` se faltarem; **não** mover de estágio (preserva trabalho do SDR).
+  - **~37 emails não têm deal nenhum** → criar deal em PIPELINE INSIDE SALES, estágio `Novo Lead`, tags `['A010','A010 Kiwify']`.
 
-- `normalizePhone`
-- `checkIfPartner` (bloqueio de parceiros A001/A002/A003/A004/A009/Incorporador/Anticrise — registra em `partner_returns` com `return_source: 'kiwify_a010'`)
-- `createOrUpdateCRMContact` — versão Kiwify:
-  - `originName` fixo = `PIPELINE INSIDE SALES`
-  - `targetStageName` = `'Novo Lead'`
-  - `extraTags` default = `['A010', 'A010 Kiwify']` (substitui o `'Hubla'` por `'A010 Kiwify'` conforme pedido)
-  - Mesma lógica de dedupe (email lower + sufixo 9 dígitos do telefone), atualização de tags sem duplicar, promoção de stage "A010 Em Aberto" → "Novo Lead", custom_fields `a010_compra=true`, `a010_produto`, `a010_data`, herança de owner do deal mais recente do contato.
+## Escopo
 
-### 2. Disparo dentro do bloco `order_approved` (após inserir a transação)
-Quando `productCategory === 'a010'` e `installmentNumber === 1`, chamar `createOrUpdateCRMContact` com:
-```ts
-{
-  email: customerEmail,
-  phone: customerPhone,
-  name: customerName,
-  originName: 'PIPELINE INSIDE SALES',
-  productName,
-  value: grossValue,
-  extraTags: ['A010', 'A010 Kiwify'],
-}
-```
-Erros no CRM são logados mas **não derrubam** a resposta 200 (o webhook ainda confirma para a Kiwify).
+- Backfill cobre apenas as **51 compras `paid`** listadas no CSV.
+- Reaproveita 100% das regras do `kiwify-webhook-handler` (dedup por email + sufixo telefone, hard-block parceiros, custom fields `a010_compra` / `a010_produto` / `a010_data`, origem PIPELINE INSIDE SALES, estágio Novo Lead).
+- Refunds / waiting_payment / refused: ignorados (sem alteração no CRM).
 
-### 3. Refund (`order_refunded`)
-Sem mudança no CRM por enquanto — apenas marca `hubla_transactions.sale_status='refunded'` (idêntico ao comportamento atual da Hubla para A010).
+## Plano técnico
 
-## Validação
+1. **Nova edge function one-shot**: `supabase/functions/kiwify-backfill-a010-csv/index.ts`
+   - Recebe `POST` com `{ rows: KiwifyCsvRow[] }` (array com nome, email, telefone, data, id_kiwify do CSV).
+   - Filtra apenas `status === 'paid'`.
+   - Para cada linha:
+     1. Normaliza telefone (sufixo de 9 dígitos) e email (lowercase).
+     2. Verifica via RPC `check_duplicate_deal_by_identity(email, phone_suffix, origin_id_inside_sales)`:
+        - **Existe deal**: faz `update` apenas adicionando tags `A010` + `A010 Kiwify` (se faltarem) e merge dos custom fields A010. Não mexe em `stage_id` nem em `owner_id`.
+        - **Não existe**: cria contato (se necessário) + deal em PIPELINE INSIDE SALES, estágio `Novo Lead`, tags `['A010','A010 Kiwify']`, custom fields preenchidos.
+     3. Hard-block parceiro: se contato/deal cair em pipeline GERENTES / PARCEIROS, **não** criar deal em Inside Sales (mesma regra já existente).
+   - Retorna `{ processed, created, updated, skipped_partners, skipped_existing, errors[] }`.
 
-1. Após deploy, reenviar pelo painel da Kiwify o evento `order_approved` do pedido `6d33f782` (Inês Cordeiro).
-2. Conferir nos logs: `[CRM] Deal criado: Inês Cordeiro - A010 (...)`.
-3. Conferir em `crm_deals` que existe deal com `origin_id` = PIPELINE INSIDE SALES, `stage_name='Novo Lead'`, `tags @> ['A010','A010 Kiwify']`.
-4. Confirmar com você antes de desativar o endpoint duplicado `webhook-lead-receiver/a010-kiwify` na Kiwify.
+2. **Script utilitário local** (apenas para chamar a função): parsea o CSV anexado e faz `POST` para a função com o array de linhas `paid`. Não vai pro repo do app — execução via `supabase--curl_edge_functions` com o JSON inline.
 
-## Fora do escopo
+3. **Execução**:
+   - Deploy da função.
+   - Chamada via `supabase--curl_edge_functions` passando as 51 linhas.
+   - Validação: query final em `crm_deals` confirmando que os 51 emails têm tag `A010 Kiwify`.
 
-- Refatorar `createOrUpdateCRMContact` para módulo compartilhado entre Hubla/Kiwify (duplicação aceita agora para não tocar no Hubla, que está estável).
-- Mudar a tag dos leads Hubla existentes.
+## Fora de escopo
+
+- Não altera o `kiwify-webhook-handler` (já corrigido em iteração anterior).
+- Não cria deals para `waiting_payment` / `refused` / `refunded`.
+- Não move deals existentes de estágio.
+- Não trata outras categorias Kiwify (incorporador, contrato, outros).
+
+## Pós-execução
+
+- Posso opcionalmente apagar a function `kiwify-backfill-a010-csv` após rodar (one-shot), ou manter desabilitada para reuso futuro. Confirmo com você ao final.
