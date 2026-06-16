@@ -20,3 +20,4 @@
 - [Webhook Receiver Hubla Norm](mem://integration/webhook-lead-receiver-hubla-normalization) — webhook-lead-receiver normaliza payload Hubla (event.user.*) para root antes da validação.
 - [Hubla Checkout Offer Primary](mem://business-logic/hubla-checkout-offer-primary-rule) — Produto primário do deal Hubla vem do offer.id do paymentSession.url (não event.product nem UTM); sub-invoices viram tags secundárias.
 - [Outside & A010 Late Installment Flow](mem://business-logic/outside-and-a010-late-installment-flow) — A010 cria deal em qualquer parcela; Outside sem deal cria+distribui via Hubla.
+- [QA Docs Thobson](mem://preferences/qa-documentation-thobson) — Thobson solicita feature → gerar docs/qa/<data>-<slug>.md com roadmap de testes.
