@@ -1,49 +1,53 @@
+## Problema identificado
 
-## Objetivo
+89 deals com tag `A010 Em Aberto` no CRM:
+- 64 sem nome
+- 19 sem telefone
+- 84 sem valor
 
-Criar/atualizar no CRM os deals das **51 compras `paid`** do CSV Kiwify (todas A010 - Construa para Vender sem Dinheiro), aplicando exatamente as mesmas regras do webhook `kiwify-webhook-handler` que já está em produção. Ignorar status `waiting_payment`, `refused` e `refunded`.
+**Causa raiz**: o handler `lead.abandoned_checkout` em `hubla-webhook-handler/index.ts` (linhas 3193-3209) procura o nome em `ev.userName`, `ev.customer.name`, `ev.lead.name` — mas a Hubla envia em **`event.lead.fullName`**. O valor também é lido errado (vem em `event.lead.amount.totalCents`).
 
-## Diagnóstico do CSV vs CRM atual
+**Regra de negócio nova (você definiu agora):** telefone é obrigatório. Sem telefone, descartar — a equipe não consegue trabalhar o lead.
 
-- 67 linhas totais → **51 `paid`**, 8 `waiting_payment`, 4 `refused`, 4 `refunded`.
-- Cruzando os 51 emails `paid` com `crm_deals` em PIPELINE INSIDE SALES:
-  - **~7 já possuem deal com tag `A010 Kiwify`** (já criados pelo webhook, p.ex. Edilson, Djmar, Fabiano, Francine, Mikaell, Michel, Vera Lúcia) → não fazer nada.
-  - **~7 deals existem mas em estágio avançado / outras tags** (Dioney, Claudia, Eliel, Ivam, José Erlei, Leonardo, Rodrigo) → adicionar tags `A010` + `A010 Kiwify` se faltarem; **não** mover de estágio (preserva trabalho do SDR).
-  - **~37 emails não têm deal nenhum** → criar deal em PIPELINE INSIDE SALES, estágio `Novo Lead`, tags `['A010','A010 Kiwify']`.
+## Boa notícia: não precisamos da API Hubla
 
-## Escopo
+O payload completo de cada `lead.abandoned_checkout` já está salvo em `hubla_webhook_logs.event_data`. Reconstruímos nome/telefone/email/valor direto de lá.
 
-- Backfill cobre apenas as **51 compras `paid`** listadas no CSV.
-- Reaproveita 100% das regras do `kiwify-webhook-handler` (dedup por email + sufixo telefone, hard-block parceiros, custom fields `a010_compra` / `a010_produto` / `a010_data`, origem PIPELINE INSIDE SALES, estágio Novo Lead).
-- Refunds / waiting_payment / refused: ignorados (sem alteração no CRM).
+## Plano (3 partes)
 
-## Plano técnico
+### Parte 1 — Corrigir o handler (futuros leads)
 
-1. **Nova edge function one-shot**: `supabase/functions/kiwify-backfill-a010-csv/index.ts`
-   - Recebe `POST` com `{ rows: KiwifyCsvRow[] }` (array com nome, email, telefone, data, id_kiwify do CSV).
-   - Filtra apenas `status === 'paid'`.
-   - Para cada linha:
-     1. Normaliza telefone (sufixo de 9 dígitos) e email (lowercase).
-     2. Verifica via RPC `check_duplicate_deal_by_identity(email, phone_suffix, origin_id_inside_sales)`:
-        - **Existe deal**: faz `update` apenas adicionando tags `A010` + `A010 Kiwify` (se faltarem) e merge dos custom fields A010. Não mexe em `stage_id` nem em `owner_id`.
-        - **Não existe**: cria contato (se necessário) + deal em PIPELINE INSIDE SALES, estágio `Novo Lead`, tags `['A010','A010 Kiwify']`, custom fields preenchidos.
-     3. Hard-block parceiro: se contato/deal cair em pipeline GERENTES / PARCEIROS, **não** criar deal em Inside Sales (mesma regra já existente).
-   - Retorna `{ processed, created, updated, skipped_partners, skipped_existing, errors[] }`.
+Em `supabase/functions/hubla-webhook-handler/index.ts`, bloco `lead.abandoned_checkout`:
 
-2. **Script utilitário local** (apenas para chamar a função): parsea o CSV anexado e faz `POST` para a função com o array de linhas `paid`. Não vai pro repo do app — execução via `supabase--curl_edge_functions` com o JSON inline.
+- Adicionar `ev?.lead?.fullName` no início dos fallbacks de `customerName`.
+- Adicionar `ev?.lead?.amount?.totalCents` aos fallbacks de `valueRaw` (dividir por 100).
+- **Regra de descarte**: se `customerPhone` for nulo/vazio após todos os fallbacks → **não criar lead**, logar `🚪 [ABANDONO A010] Sem telefone — descartado` e retornar.
+- Manter as chaves antigas para compatibilidade.
 
-3. **Execução**:
-   - Deploy da função.
-   - Chamada via `supabase--curl_edge_functions` passando as 51 linhas.
-   - Validação: query final em `crm_deals` confirmando que os 51 emails têm tag `A010 Kiwify`.
+### Parte 2 — Backfill dos 89 deals "A010 Em Aberto"
+
+Edge function one-shot `backfill-a010-em-aberto-from-logs`:
+
+1. Ler `hubla_webhook_logs` onde `event_type = 'lead.abandoned_checkout'`.
+2. Para cada log, extrair `lead.fullName`, `lead.email`, `lead.phone`, `lead.amount.totalCents/100`, `products[0].name`.
+3. Localizar o deal: por email do contato; fallback pelos últimos 9 dígitos do telefone.
+4. **`UPDATE` no `crm_contacts`**: preencher `name`, `email`, `phone` **somente se nulos** (não sobrescreve dados já corretos).
+5. **`UPDATE` no `crm_deals`**: preencher `name` (`"<fullName> - A010"`), `value`, `custom_fields.a010_produto` quando vazios. Adicionar `backfill_em_aberto: true`.
+6. Retornar resumo: processados, atualizados, sem-match.
+
+### Parte 3 — Limpar os "A010 Em Aberto" sem telefone
+
+Após o backfill, rodar query que **arquiva** (soft-delete via `is_archived=true` + `archived_at=now()`) todos os deals com tag `A010 Em Aberto` onde o contato continua sem telefone (`crm_contacts.phone IS NULL OR phone = ''`). Esses são os casos em que a Hubla nunca enviou o telefone — irrecuperáveis.
+
+Você verá o número exato antes de eu arquivar (relatório dry-run primeiro).
+
+### Validação
+
+- Recontar deals "A010 Em Aberto": deve cair para apenas os com telefone, todos com nome + valor.
+- Confirmar via SQL que nenhum "A010 Em Aberto" ativo está sem telefone.
 
 ## Fora de escopo
 
-- Não altera o `kiwify-webhook-handler` (já corrigido em iteração anterior).
-- Não cria deals para `waiting_payment` / `refused` / `refunded`.
-- Não move deals existentes de estágio.
-- Não trata outras categorias Kiwify (incorporador, contrato, outros).
-
-## Pós-execução
-
-- Posso opcionalmente apagar a function `kiwify-backfill-a010-csv` após rodar (one-shot), ou manter desabilitada para reuso futuro. Confirmo com você ao final.
+- A010 fechados (já estão completos).
+- Outros eventos do webhook handler.
+- Chamadas à API Hubla.
