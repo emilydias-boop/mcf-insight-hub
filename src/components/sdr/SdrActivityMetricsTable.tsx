@@ -3,7 +3,8 @@
  import { Skeleton } from "@/components/ui/skeleton";
 import { Phone, PhoneOff, PhoneMissed, Voicemail, PhoneCall, CheckCircle2, FileText, ArrowRightLeft, MessageCircle, Users } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSdrActivityMetrics, CALL_THRESHOLDS } from "@/hooks/useSdrActivityMetrics";
+import { useSdrActivityMetrics } from "@/hooks/useSdrActivityMetrics";
+import { useCallClassificationThresholds, DEFAULT_THRESHOLDS } from "@/hooks/useCallClassificationThresholds";
  
 interface SdrActivityMetricsTableProps {
   startDate: Date;
@@ -30,6 +31,7 @@ function HeaderWithTooltip({ icon, label, tooltip }: { icon: React.ReactNode; la
 
 export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }: SdrActivityMetricsTableProps) {
   const { data: metrics, isLoading, error } = useSdrActivityMetrics(startDate, endDate, originId, squad);
+  const { data: thresholds } = useCallClassificationThresholds(squad || 'default');
  
    if (error) {
      return (
@@ -41,7 +43,8 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
      );
    }
  
-  const T = CALL_THRESHOLDS;
+  const t = thresholds || DEFAULT_THRESHOLDS;
+  const T = { ringDropMax: t.ring_drop_max, voicemailMax: t.voicemail_max, effectiveMax: t.effective_max };
 
    return (
    <TooltipProvider delayDuration={150}>

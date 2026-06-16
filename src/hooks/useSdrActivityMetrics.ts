@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
+import { useCallClassificationThresholds, CallThresholds, DEFAULT_THRESHOLDS } from './useCallClassificationThresholds';
 
 export interface SdrActivityMetrics {
   sdrEmail: string;
@@ -29,7 +30,7 @@ export interface SdrActivityMetrics {
 
 export type CallCategory = 'not_answered' | 'ring_drop' | 'voicemail' | 'effective' | 'qualified';
 
-// Faixas heurísticas (segundos)
+// Faixas heurísticas padrão (segundos) — fallback quando não há config no banco.
 export const CALL_THRESHOLDS = {
   ringDropMax: 10,
   voicemailMax: 30,
@@ -43,7 +44,8 @@ export const CALL_THRESHOLDS = {
 export function classifyCall(
   status: string | null | undefined,
   durationSeconds: number | null | undefined,
-  answeredBy: string | null | undefined
+  answeredBy: string | null | undefined,
+  thresholds: { ringDropMax: number; voicemailMax: number; effectiveMax: number } = CALL_THRESHOLDS
 ): CallCategory {
   const duration = durationSeconds ?? 0;
   const notAnsweredStatuses = ['no-answer', 'failed', 'busy', 'initiated', 'canceled'];
@@ -57,14 +59,14 @@ export function classifyCall(
       return 'voicemail';
     }
     if (answeredBy === 'human') {
-      return duration > CALL_THRESHOLDS.effectiveMax ? 'qualified' : 'effective';
+      return duration > thresholds.effectiveMax ? 'qualified' : 'effective';
     }
   }
 
   // Heurística por duração
-  if (duration <= CALL_THRESHOLDS.ringDropMax) return 'ring_drop';
-  if (duration <= CALL_THRESHOLDS.voicemailMax) return 'voicemail';
-  if (duration <= CALL_THRESHOLDS.effectiveMax) return 'effective';
+  if (duration <= thresholds.ringDropMax) return 'ring_drop';
+  if (duration <= thresholds.voicemailMax) return 'voicemail';
+  if (duration <= thresholds.effectiveMax) return 'effective';
   return 'qualified';
 }
 
@@ -75,10 +77,26 @@ export function useSdrActivityMetrics(
   squad: string = 'incorporador'
 ) {
   const sdrsQuery = useSdrsFromSquad(squad);
+  const thresholdsQuery = useCallClassificationThresholds(squad);
   
   return useQuery({
-    queryKey: ['sdr-activity-metrics', startDate.toISOString(), endDate.toISOString(), originId, squad],
+    queryKey: [
+      'sdr-activity-metrics',
+      startDate.toISOString(),
+      endDate.toISOString(),
+      originId,
+      squad,
+      thresholdsQuery.data?.ring_drop_max,
+      thresholdsQuery.data?.voicemail_max,
+      thresholdsQuery.data?.effective_max,
+    ],
     queryFn: async (): Promise<SdrActivityMetrics[]> => {
+      const t: CallThresholds = thresholdsQuery.data || DEFAULT_THRESHOLDS;
+      const thresholds = {
+        ringDropMax: t.ring_drop_max,
+        voicemailMax: t.voicemail_max,
+        effectiveMax: t.effective_max,
+      };
       const sdrs = sdrsQuery.data || [];
       const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
       const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
@@ -180,7 +198,7 @@ export function useSdrActivityMetrics(
         
         metrics.totalCalls++;
 
-        const category = classifyCall(call.status, call.duration_seconds, call.answered_by);
+        const category = classifyCall(call.status, call.duration_seconds, call.answered_by, thresholds);
         switch (category) {
           case 'not_answered': metrics.notAnsweredCalls++; break;
           case 'ring_drop': metrics.ringDropCalls++; break;
@@ -251,7 +269,7 @@ export function useSdrActivityMetrics(
       // Ordenar por total de ligações (desc)
       return results.sort((a, b) => b.totalCalls - a.totalCalls);
     },
-    enabled: !!startDate && !!endDate && sdrsQuery.isSuccess,
+    enabled: !!startDate && !!endDate && sdrsQuery.isSuccess && thresholdsQuery.isSuccess,
     staleTime: 5 * 60 * 1000, // 5 minutos
   });
 }

@@ -1892,6 +1892,39 @@ export type Database = {
         }
         Relationships: []
       }
+      call_classification_thresholds: {
+        Row: {
+          created_at: string
+          effective_max: number
+          id: string
+          ring_drop_max: number
+          squad: string
+          updated_at: string
+          updated_by: string | null
+          voicemail_max: number
+        }
+        Insert: {
+          created_at?: string
+          effective_max?: number
+          id?: string
+          ring_drop_max?: number
+          squad: string
+          updated_at?: string
+          updated_by?: string | null
+          voicemail_max?: number
+        }
+        Update: {
+          created_at?: string
+          effective_max?: number
+          id?: string
+          ring_drop_max?: number
+          squad?: string
+          updated_at?: string
+          updated_by?: string | null
+          voicemail_max?: number
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           answered_by: string | null
