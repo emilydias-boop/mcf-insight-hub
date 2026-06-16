@@ -1151,7 +1151,7 @@ export function useChannelFunnelReport(
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, a017InWindow, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
 
   return {
     rows,
