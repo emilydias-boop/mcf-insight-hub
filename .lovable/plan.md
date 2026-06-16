@@ -1,44 +1,54 @@
-## Diagnóstico
+# Classificação avançada de ligações no painel "Atividades por SDR"
 
-Não é problema de webhook do Make. As duas vendas chegaram normalmente no sistema (Hubla → tabela `hubla_transactions`, status `completed`, com email/telefone):
+## Objetivo
 
-- `eng.alexbvaz@gmail.com` — A000 - Contrato — pago em 16/06/2026 19:04
-- `andreaseabrademello@gmail.com` — A000 - Contrato + A018 Know How — pago em 16/06/2026 17:49
+Hoje o painel mostra apenas **Total** e **Atendidas**. Vamos quebrar isso em categorias acionáveis para identificar prospecção saudável vs. discagem improdutiva.
 
-Ambas estão com `linked_attendee_id = null` (não vinculadas a nenhum atendimento). Os dois leads têm reunião com status `Realizada` no CRM, então deveriam aparecer na tela do closer para vincular.
+## Faixas de classificação (heurística por duração)
 
-**Causa real:** a lista "Contratos pendentes de vínculo" (`useUnlinkedContracts`) filtra por `product_category = 'contrato'`. O classificador do webhook (`mapProductCategory`) hoje mapeia `A000 - Contrato` como `incorporador` (e não mais como `contrato`, como acontecia em vendas antigas). Resultado: a venda existe no banco, mas é invisível na lista default do closer.
+Aplicadas **apenas** a chamadas `direction='outbound'`:
 
-Comparação:
-- Venda antiga (nov/2025) de Alex → `product_category = 'contrato'` → aparecia.
-- Vendas novas (jun/2026) → `product_category = 'incorporador'` → não aparecem.
+| Categoria | Critério | Significado |
+|---|---|---|
+| **Não atendida** | `status` em `no-answer`, `failed`, `busy`, `initiated` (ou `duration_seconds = 0`) | Não tocou ou tocou e ninguém atendeu |
+| **Ring drop** | `status='completed'` e `1 ≤ duration ≤ 10s` | Atendeu e desligou rápido (rejeitou) |
+| **Provável caixa postal** | `status='completed'` e `11 ≤ duration ≤ 30s` | Provavelmente bateu o áudio da caixa postal |
+| **Efetiva** | `status='completed'` e `31 ≤ duration ≤ 60s` | Falou, mas conversa curta |
+| **Qualificada** | `status='completed'` e `duration > 60s` | Conversa de prospecção real |
 
-Outras telas já tratam os dois juntos. Ex.: `distribute-outside-leads` filtra `product_category IN ('contrato','incorporador')`.
+> Limitação assumida: como o AMD do Twilio está desligado (`answered_by` sempre NULL), a separação caixa postal × ring drop × efetiva é **heurística**. O código fica preparado para usar `answered_by` se um dia o AMD for ligado.
 
-## Plano
+## Mudanças
 
-### 1. Corrigir o filtro da lista de vínculo
-Arquivo: `src/hooks/useUnlinkedContracts.ts`
+### 1. `src/hooks/useSdrActivityMetrics.ts`
+- Adicionar ao `SELECT` de `calls` os campos `duration_seconds` e `answered_by`.
+- Adicionar à interface `SdrActivityMetrics` os campos:
+  `notAnsweredCalls`, `ringDropCalls`, `voicemailCalls`, `effectiveCalls`, `qualifiedCalls`, `connectionRate` (= (ringDrop+voicemail+effective+qualified)/total), `qualificationRate` (= qualified/total).
+- Função pura `classifyCall(status, duration, answeredBy)` que retorna uma das 5 categorias, priorizando `answered_by` quando presente (`machine_start`/`fax` → voicemail, `human` → effective/qualified pela duração).
+- Manter `answeredCalls` por compatibilidade = ringDrop + voicemail + effective + qualified.
 
-- Trocar `.eq('product_category', 'contrato')` por `.in('product_category', ['contrato', 'incorporador'])` no modo default (últimos 14 dias).
-- O modo `searchAll` (busca manual por nome/email/telefone) já não filtra por categoria — fica como está.
+### 2. `src/components/sdr/SdrActivityMetricsTable.tsx`
+- Substituir as colunas atuais `Total | Atendidas | Notas | Stage | WhatsApp | Leads | Média` por:
+  `SDR | Total | Não atend. | Ring drop | Caixa postal | Efetivas | Qualificadas | Taxa conexão | Taxa qualificação | Notas | Stage | WA | Leads | Média`.
+- Codificação visual: ring drop e caixa postal em cinza/âmbar; efetivas em azul; qualificadas em verde destacado.
+- Linha de Totais somando todas as colunas numéricas.
+- Tooltip no header de cada categoria explicando a faixa (ex.: "Ring drop: atendida e encerrada em até 10s").
+- Card de legenda no topo da tabela com as 5 faixas.
 
-### 2. Validar que as duas vendas passam a aparecer
-Após o deploy, conferir via consulta que `eng.alexbvaz@gmail.com` e `andreaseabrademello@gmail.com` retornam pela query do hook e ficam visíveis para o closer vincular ao attendee `Realizada` correspondente.
+### 3. Escopo cross-BU
+O hook `useSdrActivityMetrics` já recebe `squad` como parâmetro e o componente já é genérico. Vou:
+- Buscar todos os call sites com `rg "SdrActivityMetricsTable|useSdrActivityMetrics"` para garantir que cada BU (Incorporador, Consórcio, etc.) consome o mesmo componente — se algum BU tiver versão duplicada, unificar para usar este componente único.
 
-### 3. Não mexer em vínculo automático nem em webhook
-- Não há nada errado no recebimento Hubla → as transações estão lá com status `completed`.
-- O vínculo automático com o attendee é opcional e não impede o closer de vincular manualmente; fora do escopo deste fix.
-- Sem alterações em edge functions, schema ou regras de classificação.
+### 4. Sem mudanças de schema
+Não precisa migration: `duration_seconds`, `status` e `answered_by` já existem em `public.calls`. Nada novo no banco.
 
-## Detalhes técnicos
+## Validação
 
-```ts
-// Antes
-.eq('product_category', 'contrato')
+- Rodar query de sanidade após deploy comparando: `totalCalls = notAnswered + ringDrop + voicemail + effective + qualified` por SDR.
+- Verificar visualmente em `/bu-incorporador/relatorios` (Painel Comercial) que as somas batem com o total atual.
+- Spot-check: pegar 3 SDRs e cruzar com a aba de gravações no CRM para confirmar que ligações classificadas como "Qualificada" realmente têm conversa.
 
-// Depois
-.in('product_category', ['contrato', 'incorporador'])
-```
+## Riscos / observações
 
-Mudança isolada, 1 linha, sem impacto em métricas (que continuam usando seus próprios filtros).
+- As faixas (10s/30s/60s) são um chute inicial razoável baseado no que vi nos dados (média atual de `completed` = 14s, ou seja **a maior parte do que hoje contamos como "atendida" provavelmente é ring drop ou caixa postal**). Após a primeira semana de uso, podemos calibrar.
+- Se quiser precisão real de caixa postal, o próximo passo é ativar AMD no Twilio (+~US$0.0075/chamada) — o código já vai estar preparado.
