@@ -3,8 +3,33 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-kiwify-token',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-kiwify-token, x-kiwify-signature',
 };
+
+/**
+ * Computa HMAC-SHA1 hex de `message` usando `secret` (formato Kiwify).
+ */
+async function hmacSha1Hex(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function timingSafeEqualHex(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 // Mapeamento de produtos Kiwify para categorias (mesmo padrão do Hubla)
 const PRODUCT_MAPPING: Record<string, string> = {
@@ -113,7 +138,17 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const rawBody = await req.json();
+    const rawText = await req.text();
+    let rawBody: any = {};
+    try {
+      rawBody = rawText ? JSON.parse(rawText) : {};
+    } catch (e) {
+      console.error('[Kiwify Webhook] Invalid JSON body');
+      return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     // Kiwify pode enviar payload "flat" (campos na raiz) ou "embrulhado" ({ url, signature, order: {...} })
     const body = rawBody?.order && typeof rawBody.order === 'object' ? rawBody.order : rawBody;
     const eventType = body.webhook_event_type || body.event || rawBody.webhook_event_type || 'unknown';
@@ -121,7 +156,9 @@ serve(async (req) => {
     console.log(`[Kiwify Webhook] Received event: ${eventType}`);
     console.log(`[Kiwify Webhook] Body:`, JSON.stringify(rawBody, null, 2));
 
-    // Validar token (header ou body) — deny by default
+    // ===== Validar assinatura HMAC-SHA1 (formato Kiwify) =====
+    // Kiwify envia: ?signature=<hex> e signature = HMAC-SHA1(rawBody, KIWIFY_WEBHOOK_TOKEN)
+    // Fallback aceito: token estático em header/query (`x-kiwify-token`, `?token=`) para testes manuais.
     if (!kiwifyToken) {
       console.error('[Kiwify Webhook] KIWIFY_WEBHOOK_TOKEN not configured');
       return new Response(
@@ -129,22 +166,49 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    const headerToken = req.headers.get('x-kiwify-token') || req.headers.get('X-Kiwify-Token');
-    const bodyToken = rawBody.signature || rawBody.token || body.signature || body.token;
     const url = new URL(req.url);
-    const queryToken = url.searchParams.get('token') || url.searchParams.get('signature');
-    const receivedToken = headerToken || queryToken || bodyToken;
-    if (!receivedToken || receivedToken !== kiwifyToken) {
-      console.error('[Kiwify Webhook] Invalid or missing token', {
-        hasHeader: !!headerToken,
-        hasQuery: !!queryToken,
-        hasBody: !!bodyToken,
+    const querySignature = (url.searchParams.get('signature') || '').toLowerCase().trim();
+    const headerSignature = (req.headers.get('x-kiwify-signature') || '').toLowerCase().trim();
+    const incomingSignature = querySignature || headerSignature;
+
+    const headerToken = req.headers.get('x-kiwify-token') || req.headers.get('X-Kiwify-Token');
+    const queryToken = url.searchParams.get('token');
+    const staticToken = headerToken || queryToken;
+
+    let authOk = false;
+    let authMethod = 'none';
+
+    if (incomingSignature) {
+      const expectedSig = await hmacSha1Hex(kiwifyToken, rawText);
+      if (timingSafeEqualHex(incomingSignature, expectedSig)) {
+        authOk = true;
+        authMethod = 'hmac';
+      } else {
+        console.error('[Kiwify Webhook] HMAC mismatch', {
+          received: incomingSignature.slice(0, 8) + '…',
+          expected: expectedSig.slice(0, 8) + '…',
+        });
+      }
+    }
+
+    if (!authOk && staticToken && staticToken === kiwifyToken) {
+      authOk = true;
+      authMethod = 'static-token';
+    }
+
+    if (!authOk) {
+      console.error('[Kiwify Webhook] Invalid or missing signature/token', {
+        hasQuerySignature: !!querySignature,
+        hasHeaderSignature: !!headerSignature,
+        hasStaticToken: !!staticToken,
       });
       return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
+        JSON.stringify({ error: 'Invalid signature' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`[Kiwify Webhook] Signature OK (method=${authMethod})`);
 
     // Log do webhook recebido
     const { data: logEntry, error: logError } = await supabase
