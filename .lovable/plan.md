@@ -1,53 +1,44 @@
-## Problema identificado
+## Diagnóstico
 
-89 deals com tag `A010 Em Aberto` no CRM:
-- 64 sem nome
-- 19 sem telefone
-- 84 sem valor
+Não é problema de webhook do Make. As duas vendas chegaram normalmente no sistema (Hubla → tabela `hubla_transactions`, status `completed`, com email/telefone):
 
-**Causa raiz**: o handler `lead.abandoned_checkout` em `hubla-webhook-handler/index.ts` (linhas 3193-3209) procura o nome em `ev.userName`, `ev.customer.name`, `ev.lead.name` — mas a Hubla envia em **`event.lead.fullName`**. O valor também é lido errado (vem em `event.lead.amount.totalCents`).
+- `eng.alexbvaz@gmail.com` — A000 - Contrato — pago em 16/06/2026 19:04
+- `andreaseabrademello@gmail.com` — A000 - Contrato + A018 Know How — pago em 16/06/2026 17:49
 
-**Regra de negócio nova (você definiu agora):** telefone é obrigatório. Sem telefone, descartar — a equipe não consegue trabalhar o lead.
+Ambas estão com `linked_attendee_id = null` (não vinculadas a nenhum atendimento). Os dois leads têm reunião com status `Realizada` no CRM, então deveriam aparecer na tela do closer para vincular.
 
-## Boa notícia: não precisamos da API Hubla
+**Causa real:** a lista "Contratos pendentes de vínculo" (`useUnlinkedContracts`) filtra por `product_category = 'contrato'`. O classificador do webhook (`mapProductCategory`) hoje mapeia `A000 - Contrato` como `incorporador` (e não mais como `contrato`, como acontecia em vendas antigas). Resultado: a venda existe no banco, mas é invisível na lista default do closer.
 
-O payload completo de cada `lead.abandoned_checkout` já está salvo em `hubla_webhook_logs.event_data`. Reconstruímos nome/telefone/email/valor direto de lá.
+Comparação:
+- Venda antiga (nov/2025) de Alex → `product_category = 'contrato'` → aparecia.
+- Vendas novas (jun/2026) → `product_category = 'incorporador'` → não aparecem.
 
-## Plano (3 partes)
+Outras telas já tratam os dois juntos. Ex.: `distribute-outside-leads` filtra `product_category IN ('contrato','incorporador')`.
 
-### Parte 1 — Corrigir o handler (futuros leads)
+## Plano
 
-Em `supabase/functions/hubla-webhook-handler/index.ts`, bloco `lead.abandoned_checkout`:
+### 1. Corrigir o filtro da lista de vínculo
+Arquivo: `src/hooks/useUnlinkedContracts.ts`
 
-- Adicionar `ev?.lead?.fullName` no início dos fallbacks de `customerName`.
-- Adicionar `ev?.lead?.amount?.totalCents` aos fallbacks de `valueRaw` (dividir por 100).
-- **Regra de descarte**: se `customerPhone` for nulo/vazio após todos os fallbacks → **não criar lead**, logar `🚪 [ABANDONO A010] Sem telefone — descartado` e retornar.
-- Manter as chaves antigas para compatibilidade.
+- Trocar `.eq('product_category', 'contrato')` por `.in('product_category', ['contrato', 'incorporador'])` no modo default (últimos 14 dias).
+- O modo `searchAll` (busca manual por nome/email/telefone) já não filtra por categoria — fica como está.
 
-### Parte 2 — Backfill dos 89 deals "A010 Em Aberto"
+### 2. Validar que as duas vendas passam a aparecer
+Após o deploy, conferir via consulta que `eng.alexbvaz@gmail.com` e `andreaseabrademello@gmail.com` retornam pela query do hook e ficam visíveis para o closer vincular ao attendee `Realizada` correspondente.
 
-Edge function one-shot `backfill-a010-em-aberto-from-logs`:
+### 3. Não mexer em vínculo automático nem em webhook
+- Não há nada errado no recebimento Hubla → as transações estão lá com status `completed`.
+- O vínculo automático com o attendee é opcional e não impede o closer de vincular manualmente; fora do escopo deste fix.
+- Sem alterações em edge functions, schema ou regras de classificação.
 
-1. Ler `hubla_webhook_logs` onde `event_type = 'lead.abandoned_checkout'`.
-2. Para cada log, extrair `lead.fullName`, `lead.email`, `lead.phone`, `lead.amount.totalCents/100`, `products[0].name`.
-3. Localizar o deal: por email do contato; fallback pelos últimos 9 dígitos do telefone.
-4. **`UPDATE` no `crm_contacts`**: preencher `name`, `email`, `phone` **somente se nulos** (não sobrescreve dados já corretos).
-5. **`UPDATE` no `crm_deals`**: preencher `name` (`"<fullName> - A010"`), `value`, `custom_fields.a010_produto` quando vazios. Adicionar `backfill_em_aberto: true`.
-6. Retornar resumo: processados, atualizados, sem-match.
+## Detalhes técnicos
 
-### Parte 3 — Limpar os "A010 Em Aberto" sem telefone
+```ts
+// Antes
+.eq('product_category', 'contrato')
 
-Após o backfill, rodar query que **arquiva** (soft-delete via `is_archived=true` + `archived_at=now()`) todos os deals com tag `A010 Em Aberto` onde o contato continua sem telefone (`crm_contacts.phone IS NULL OR phone = ''`). Esses são os casos em que a Hubla nunca enviou o telefone — irrecuperáveis.
+// Depois
+.in('product_category', ['contrato', 'incorporador'])
+```
 
-Você verá o número exato antes de eu arquivar (relatório dry-run primeiro).
-
-### Validação
-
-- Recontar deals "A010 Em Aberto": deve cair para apenas os com telefone, todos com nome + valor.
-- Confirmar via SQL que nenhum "A010 Em Aberto" ativo está sem telefone.
-
-## Fora de escopo
-
-- A010 fechados (já estão completos).
-- Outros eventos do webhook handler.
-- Chamadas à API Hubla.
+Mudança isolada, 1 linha, sem impacto em métricas (que continuam usando seus próprios filtros).
