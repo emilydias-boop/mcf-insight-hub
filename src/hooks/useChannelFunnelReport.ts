@@ -130,10 +130,11 @@ function classifyChannelWith30dRule(opts: {
     : null;
   const isStale = ageDays !== null && ageDays > A010_FRESH_WINDOW_DAYS;
 
+  // Buyer A017 (VSL/Manychat) → A017 SEMPRE — A017 checkout é compra principal,
+  // prevalece sobre A010 mesmo recente (ver hubla-checkout-offer-primary-rule).
+  if (isA017Buyer) return 'A017';
   // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
   if (isBuyer && !isStale) return 'A010';
-  // Buyer A017 (sem A010 recente) → A017, antes de cair em ANAMNESE/OUTROS
-  if (isA017Buyer) return 'A017';
   // Buyer esfriado (>30d) COM tag ANAMNESE (entrou no fluxo) → ANAMNESE
   if (isBuyer && isStale && hasAnamneseTag) return 'ANAMNESE';
   // Buyer esfriado SEM tag → continua A010
