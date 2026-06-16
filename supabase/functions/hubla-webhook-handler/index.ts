@@ -296,6 +296,27 @@ const A010_CHECKOUT_OFFER_IDS = new Set<string>([
   'Rj0oC8BRxMCTJ1UZRpJ3', // "A010 - PRINCIPAL"
 ]);
 
+// Nomes de oferta que identificam UMA venda primária A017, mesmo quando o
+// payload não traz `paymentSession.url` (ex.: payloads antigos, sub-invoices
+// reentregues, importações). Mantemos isso ESTRITO: só os dois checkouts
+// principais de "Construir Para Alugar". Orderbumps `ob-construir-alugar`
+// continuam sendo tratados como secundários e NÃO entram aqui.
+const A017_OFFER_NAMES = new Set<string>([
+  'construir para alugar - vsl',
+  'construir para alugar - manychat kittet',
+]);
+
+function getOfferNameFromInvoice(body: any): string | null {
+  const event = body?.event || body || {};
+  const invoice = event?.invoice || body?.invoice || {};
+  return (
+    event?.products?.[0]?.offers?.[0]?.name ||
+    invoice?.products?.[0]?.offers?.[0]?.name ||
+    event?.product?.name ||
+    null
+  );
+}
+
 /**
  * Extrai o offer.id do CHECKOUT que o cliente acessou (a "compra primária" da Hubla).
  * Vem do segmento após `pay.hub.la/` em `event.invoice.paymentSession.url`.
@@ -322,6 +343,13 @@ function detectA017FromInvoice(body: any): boolean {
   const checkoutOfferId = getCheckoutOfferIdFromInvoice(body);
   if (checkoutOfferId && A017_OFFER_IDS.has(checkoutOfferId)) return true;
   if (checkoutOfferId && A010_CHECKOUT_OFFER_IDS.has(checkoutOfferId)) return false;
+
+  // Fallback por NOME DA OFERTA: quando não temos checkout offer id (ou ele
+  // não bate com nenhum dos conhecidos), aceitar quando a oferta declarada
+  // for exatamente um dos checkouts primários A017. Cobre payloads sem
+  // `paymentSession.url` e reentregas de sub-invoices.
+  const offerName = (getOfferNameFromInvoice(body) || '').toLowerCase().trim();
+  if (offerName && A017_OFFER_NAMES.has(offerName)) return true;
 
   // Fallback (payloads antigos sem paymentSession.url): UTM contendo "A017"
   if (!checkoutOfferId) {
@@ -1042,6 +1070,48 @@ async function createA017Deal(supabase: any, data: A017DealData): Promise<void> 
         .eq('id', existingA010Deal.id);
 
       console.log(`[A017] ⬆️ Deal A010 promovido para A017: ${existingA010Deal.id}`);
+      return;
+    }
+
+    // 4c. FALLBACK: existe QUALQUER outro deal desse contato em Inside Sales?
+    // Ex.: deals criados via orderbump `ob-construir-alugar`, leads vindos do
+    // Lançamento, base Clint, etc. Em vez de criar um deal A017 duplicado,
+    // adicionamos a tag `A017` ao deal mais recente do contato — sem mexer
+    // no stage atual, no owner ou no product_name (não atropelar trabalho
+    // operacional já feito no deal).
+    const { data: anyDeals } = await supabase
+      .from('crm_deals')
+      .select('id, tags, value, custom_fields')
+      .eq('contact_id', contactId)
+      .eq('origin_id', originId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const anyDeal = anyDeals?.[0];
+    if (anyDeal) {
+      const currentTags: string[] = Array.isArray(anyDeal.tags) ? anyDeal.tags : [];
+      const newTags = [...currentTags];
+      if (!newTags.includes('A017')) newTags.unshift('A017');
+      if (!newTags.includes('Hubla')) newTags.push('Hubla');
+
+      await supabase
+        .from('crm_deals')
+        .update({
+          tags: newTags,
+          value: Math.max(anyDeal.value || 0, data.value || 0),
+          custom_fields: {
+            ...(anyDeal.custom_fields || {}),
+            a017_compra: true,
+            a017_produto: data.productName,
+            a017_data: new Date().toISOString(),
+            a017_tagged_on_existing_deal: true,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', anyDeal.id);
+
+      console.log(`[A017] 🏷️ Tag A017 adicionada a deal existente: ${anyDeal.id}`);
       return;
     }
 
