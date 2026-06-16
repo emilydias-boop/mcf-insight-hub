@@ -1,10 +1,13 @@
- import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
  import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
  import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, PhoneOff, PhoneMissed, Voicemail, PhoneCall, CheckCircle2, FileText, ArrowRightLeft, MessageCircle, Users } from "lucide-react";
+import { Phone, PhoneOff, PhoneMissed, Voicemail, PhoneCall, CheckCircle2, FileText, ArrowRightLeft, MessageCircle, Users, ListTree } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSdrActivityMetrics } from "@/hooks/useSdrActivityMetrics";
 import { useCallClassificationThresholds, DEFAULT_THRESHOLDS } from "@/hooks/useCallClassificationThresholds";
+import { SdrLeadCallsDialog } from "./SdrLeadCallsDialog";
  
 interface SdrActivityMetricsTableProps {
   startDate: Date;
@@ -32,6 +35,7 @@ function HeaderWithTooltip({ icon, label, tooltip }: { icon: React.ReactNode; la
 export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }: SdrActivityMetricsTableProps) {
   const { data: metrics, isLoading, error } = useSdrActivityMetrics(startDate, endDate, originId, squad);
   const { data: thresholds } = useCallClassificationThresholds(squad || 'default');
+  const [selected, setSelected] = useState<{ userId: string | null; name: string } | null>(null);
  
    if (error) {
      return (
@@ -120,6 +124,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                      </div>
                    </TableHead>
                    <TableHead className="text-center whitespace-nowrap">Lig/Lead</TableHead>
+                    <TableHead className="text-center whitespace-nowrap">Detalhes</TableHead>
                  </TableRow>
                </TableHeader>
                <TableBody>
@@ -139,6 +144,21 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                      <TableCell className="text-center">{sdr.whatsappSent}</TableCell>
                      <TableCell className="text-center font-medium">{sdr.uniqueLeadsWorked}</TableCell>
                      <TableCell className="text-center text-muted-foreground">{sdr.avgCallsPerLead}</TableCell>
+                      <TableCell className="text-center">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={!sdr.sdrUserId || sdr.totalCalls === 0}
+                              onClick={() => setSelected({ userId: sdr.sdrUserId, name: sdr.sdrName })}
+                            >
+                              <ListTree className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Ver ligações agrupadas por lead e exportar CSV</TooltipContent>
+                        </Tooltip>
+                      </TableCell>
                    </TableRow>
                  ))}
                  
@@ -163,6 +183,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                       <TableCell className="text-center">{metrics.reduce((s, m) => s + m.whatsappSent, 0)}</TableCell>
                       <TableCell className="text-center">{metrics.reduce((s, m) => s + m.uniqueLeadsWorked, 0)}</TableCell>
                       <TableCell className="text-center text-muted-foreground">-</TableCell>
+                       <TableCell />
                     </TableRow>
                   );
                 })()}
@@ -176,6 +197,15 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
          )}
        </CardContent>
      </Card>
+      <SdrLeadCallsDialog
+        open={!!selected}
+        onOpenChange={(o) => !o && setSelected(null)}
+        sdrUserId={selected?.userId ?? null}
+        sdrName={selected?.name ?? ''}
+        startDate={startDate}
+        endDate={endDate}
+        squad={squad}
+      />
    </TooltipProvider>
    );
  }

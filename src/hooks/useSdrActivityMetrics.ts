@@ -6,6 +6,7 @@ import { useCallClassificationThresholds, CallThresholds, DEFAULT_THRESHOLDS } f
 export interface SdrActivityMetrics {
   sdrEmail: string;
   sdrName: string;
+  sdrUserId: string | null;
   
   // Atividades do período
   totalCalls: number;
@@ -148,9 +149,11 @@ export function useSdrActivityMetrics(
         .select('id, email, full_name');
       
       const profileMap = new Map<string, { email: string; name: string }>();
+      const emailToUserId = new Map<string, string>();
       profiles?.forEach(p => {
         if (p.email) {
           profileMap.set(p.id, { email: p.email.toLowerCase(), name: p.full_name || p.email });
+          emailToUserId.set(p.email.toLowerCase(), p.id);
         }
       });
       
@@ -160,6 +163,7 @@ export function useSdrActivityMetrics(
         metricsMap.set(sdr.email.toLowerCase(), {
           sdrEmail: sdr.email,
           sdrName: sdr.name,
+          sdrUserId: emailToUserId.get(sdr.email.toLowerCase()) || null,
           totalCalls: 0,
           answeredCalls: 0,
           notAnsweredCalls: 0,
