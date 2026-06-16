@@ -3191,6 +3191,10 @@ serve(async (req) => {
           } else {
             const productName = candidateNames.find(n => /A010/i.test(n)) || 'A010';
             const customerName =
+              ev?.lead?.fullName ||
+              ((ev?.lead?.firstName || ev?.lead?.lastName)
+                ? `${ev?.lead?.firstName || ''} ${ev?.lead?.lastName || ''}`.trim()
+                : null) ||
               ev?.userName || ev?.customer?.name || ev?.customerName ||
               ev?.lead?.name || ev?.user?.name || null;
             const customerEmail =
@@ -3202,14 +3206,15 @@ serve(async (req) => {
 
             const valueRaw =
               ev?.totalAmount || ev?.amount ||
+              ev?.lead?.amount?.totalCents ||
               ev?.invoice?.amount?.totalCents || ev?.invoice?.amount?.total ||
               0;
             const value = typeof valueRaw === 'number'
               ? (valueRaw > 10000 ? valueRaw / 100 : valueRaw)
               : parseFloat(String(valueRaw)) || 0;
 
-            if (!customerEmail && !customerPhone) {
-              console.log('🚪 [ABANDONO A010] Sem email/telefone — não é possível criar lead');
+            if (!customerPhone || String(customerPhone).trim() === '') {
+              console.log(`🚪 [ABANDONO A010] Sem telefone — descartado (name=${customerName}, email=${customerEmail})`);
             } else {
               console.log(`🛒 [A010 ABANDONO] Criando/atualizando lead em "A010 Em Aberto": ${customerName} <${customerEmail}>`);
               await createOrUpdateCRMContact(supabase, {
