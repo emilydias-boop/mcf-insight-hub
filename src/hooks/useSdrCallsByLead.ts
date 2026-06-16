@@ -77,10 +77,10 @@ export function useSdrCallsByLead(
           const slice = dealIds.slice(i, i + CHUNK);
           const { data } = await supabase
             .from('crm_deals')
-            .select('id, lead_name, phone')
+            .select('id, name')
             .in('id', slice);
           data?.forEach((d: any) => {
-            if (d.lead_name) dealMap.set(d.id, d.lead_name);
+            if (d.name) dealMap.set(d.id, d.name);
           });
         }
       }
