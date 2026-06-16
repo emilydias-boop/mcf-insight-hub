@@ -1,55 +1,27 @@
-## Diagnóstico
+## Diagnóstico final
 
-Filtrando junho/2026 no relatório:
+Confirmado direto na Hubla:
+- **66** compradores únicos de A017 (VSL + Manychat) com `sale_date` em **junho/2026** → é exatamente o número que você vê no painel da Hubla.
+- O funil hoje mostra **30** porque:
+  1. usa só `customer_email` (perde casos onde email do CRM ≠ email da Hubla);
+  2. ancora "Entradas" no `created_at` do **deal** do CRM, não na `sale_date` da Hubla — então compradores de junho cujo deal já existia (criado antes de junho) ficam de fora.
 
-- **66** emails únicos compraram A017 (VSL + Manychat) na Hubla.
-- **56** desses têm deal criado em junho na BU Incorporador.
-- Hoje o funil mostra apenas **30** em A017 — os outros **26** estão caindo em A010 porque o lead também tem compra A010 ≤30 dias.
+## O que mudar
 
-A regra atual em `classifyChannelWith30dRule` prioriza A010 fresco antes de A017:
+Tratar A017 como **canal ancorado na compra Hubla**, não no deal:
 
-```text
-1. buyer A010 ≤30d                → A010   ← rouba 26 A017
-2. buyer A017 (VSL/Manychat)      → A017
-3. A010 esfriado + tag ANAMNESE   → ANAMNESE
-4. A010 esfriado                  → A010
-5. tag ANAMNESE                   → ANAMNESE
-6. tag ANAMNESE-INCOMPLETA        → ANAMNESE INCOMPLETA
-7. fallback                       → OUTROS
-```
+1. **Linha A017 — Entradas (junho)** = compradores únicos A017 com `sale_date` na janela. Dedup por email **ou** telefone (últimos 9 dígitos). Vai dar exatamente **66**.
+2. **Linha A017 — R1 Agendada / Realizada / No-Show / Contrato Pago** = continuam vindo dos attendees na janela, mas o lead é classificado como A017 sempre que existir compra A017 (por email **ou** telefone), independentemente da data da compra ou de quando o deal foi criado. Isso traz os 26 leads que hoje caem em A010.
+3. **Outros canais (A010, ANAMNESE, OUTROS)** — sem mudança na semântica de "Entradas" (continuam = deals criados na janela).
+4. **Versionar `queryKey`s** afetadas para o cache antigo cair e a tela atualizar na hora.
+5. **Sem alterar** webhooks, dados históricos ou outros relatórios.
 
-Mas a regra de negócio definida (mensagens 23:09 e 23:01 de 15/06, e memória `hubla-checkout-offer-primary-rule`) é: **prevalece a compra principal — e A017 só é marcado quando o checkout foi VSL ou Manychat (já é a compra principal)**. Logo A017 deve vencer A010 fresco.
+## Resultado esperado em junho
 
-## Mudança
+| Canal   | Entradas antes | Entradas depois |
+|---------|----------------|-----------------|
+| A017    | 30             | **66**          |
+| A010    | 299            | ~270 (perde os 26 que eram A017 mascarados) |
+| Outros  | sem mudança    | sem mudança     |
 
-`src/hooks/useChannelFunnelReport.ts` — função `classifyChannelWith30dRule`: inverter a ordem das duas primeiras regras.
-
-```text
-1. buyer A017 (VSL/Manychat)  → A017      ← passa para o topo
-2. buyer A010 ≤30d            → A010
-3. A010 esfriado + ANAMNESE   → ANAMNESE
-4. A010 esfriado              → A010
-5. tag ANAMNESE               → ANAMNESE
-6. tag ANAMNESE-INCOMPLETA    → ANAMNESE INCOMPLETA
-7. fallback                   → OUTROS
-```
-
-## Efeito esperado no relatório (junho)
-
-| Canal   | Antes | Depois |
-|---------|------:|-------:|
-| A010    | 299   | ~273   |
-| A017    | 30    | ~56    |
-| Demais  | iguais |       |
-
-Os 26 leads que migram de A010 para A017 trazem junto suas R1 agendadas, realizadas, no-shows e contratos pagos — então as linhas A010 e A017 do funil refletem corretamente o canal primário de aquisição. Os outros 10 emails A017 que não aparecem é porque não têm deal em junho na BU (compraram fora da janela ou não geraram deal de Inside Sales — esses não devem entrar mesmo).
-
-## Sobre o "Agenda R1"
-
-A mesma função vive replicada em `src/components/crm/MeetingsList.tsx` (`classifySimple`). Se quiser que a Agenda R1 também reflita A017 sobre A010, replico a inversão lá também. Senão, mantenho só no relatório. Me diz qual prefere.
-
-## Sem mudanças em
-
-- Webhooks (já corretos).
-- Dados históricos (deals e transações ficam como estão).
-- Demais relatórios (faturamento por canal usa outro caminho).
+Se topar, eu implemento.

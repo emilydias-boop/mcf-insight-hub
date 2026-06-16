@@ -407,6 +407,53 @@ export function useChannelFunnelReport(
   });
 
   // ================================================================
+  // 1c-bis. A017 ENTRADAS — compradores A017 (VSL/Manychat) cuja
+  //   `sale_date` da Hubla cai na janela. Dedup por email OU phone9.
+  //   Esta coluna é ancorada na compra Hubla (e não no created_at do
+  //   deal), porque A017 é canal de aquisição direta via checkout.
+  // ================================================================
+  const { data: a017InWindow = { count: 0, items: [] as FunnelDetailItem[] } } = useQuery<{ count: number; items: FunnelDetailItem[] }>({
+    queryKey: ['funnel-a017-window-v2', startDate, endDate],
+    queryFn: async () => {
+      if (!startDate || !endDate) return { count: 0, items: [] as FunnelDetailItem[] };
+      const { data, error } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, customer_name, customer_phone, sale_date')
+        .eq('sale_status', 'completed')
+        .in('offer_id', A017_OFFER_IDS)
+        .gte('sale_date', windowStartIso!)
+        .lte('sale_date', windowEndIso!)
+        .order('sale_date', { ascending: true });
+      if (error) { console.error('[funnel] a017InWindow error', error); return { count: 0, items: [] }; }
+      const seen = new Set<string>();
+      const items: FunnelDetailItem[] = [];
+      (data || []).forEach((r: any) => {
+        const email = (r.customer_email || '').toLowerCase().trim();
+        const phone9 = phoneSuffix(r.customer_phone);
+        const key = email || (phone9.length === 9 ? `p:${phone9}` : '');
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        items.push({
+          id: key,
+          dealId: null,
+          name: r.customer_name || null,
+          email: email || null,
+          phone: r.customer_phone || null,
+          date: r.sale_date,
+          channel: 'A017',
+          status: 'completed',
+          product: 'Construir Para Alugar',
+          bruto: null,
+          liquido: null,
+        });
+      });
+      return { count: items.length, items };
+    },
+    enabled: !!startDate && !!endDate,
+    staleTime: 60_000,
+  });
+
+  // ================================================================
   // 1d. CONTRATO PAGO — alinhado ao KPI "CONTRATOS" do header.
   //     Conta attendees R1 com contract_paid_at na janela, filtrados
   //     pelos SDRs ativos do squad (allowedSdrEmails) e is_partner=false.
@@ -497,7 +544,7 @@ export function useChannelFunnelReport(
   }, [cohort, carrinhoRows, entradasDeals, contratoPagoAligned]);
 
   const { data: dealMeta = new Map<string, DealMeta>(), isLoading: loadingMeta } = useQuery<Map<string, DealMeta>>({
-    queryKey: ['funnel-deal-meta', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
+    queryKey: ['funnel-deal-meta-v3', allInvolvedDealIds.join(',').slice(0, 200), allInvolvedDealIds.length],
     queryFn: async () => {
       const m = new Map<string, DealMeta>();
       if (allInvolvedDealIds.length === 0) return m;
@@ -539,31 +586,35 @@ export function useChannelFunnelReport(
       }
 
       // Lookup A017 buyers (VSL + Manychat)
+      // Match A017 buyers por email OU telefone (últimos 9 dígitos).
+      // Buscamos TODAS as vendas A017 (volume baixo) e cruzamos localmente.
       const a017BuyerEmails = new Set<string>();
-      for (let i = 0; i < emails.length; i += 200) {
-        const chunk = emails.slice(i, i + 200);
-        if (chunk.length === 0) continue;
+      const a017BuyerPhone9 = new Set<string>();
+      {
         const { data: a017Tx } = await supabase
           .from('hubla_transactions')
-          .select('customer_email')
-          .eq('event_type', 'NewSale')
+          .select('customer_email, customer_phone')
           .eq('sale_status', 'completed')
-          .in('offer_id', A017_OFFER_IDS)
-          .in('customer_email', chunk);
+          .in('offer_id', A017_OFFER_IDS);
         (a017Tx || []).forEach((r: any) => {
           const e = (r.customer_email || '').toLowerCase().trim();
           if (e) a017BuyerEmails.add(e);
+          const p9 = phoneSuffix(r.customer_phone);
+          if (p9.length === 9) a017BuyerPhone9.add(p9);
         });
       }
 
       for (const d of deals) {
         const email = (d.crm_contacts?.email || '').toLowerCase().trim() || null;
+        const dealPhone9 = phoneSuffix(d.crm_contacts?.phone);
         const tags = parseTags(d.tags);
+        const isA017 = (email ? a017BuyerEmails.has(email) : false)
+          || (dealPhone9.length === 9 ? a017BuyerPhone9.has(dealPhone9) : false);
         const channel = classifyChannelWith30dRule({
           tags,
           mostRecentA010Purchase: email ? (mostRecentA010ByEmail.get(email) || null) : null,
           referenceDate: new Date(d.created_at),
-          isA017Buyer: email ? a017BuyerEmails.has(email) : false,
+          isA017Buyer: isA017,
         });
         m.set(d.id, {
           id: d.id,
@@ -931,10 +982,23 @@ export function useChannelFunnelReport(
     entradasDeals.forEach((dealId) => {
       if (!dealPassesFilter(dealId)) return;
       const ch = channelOf(dealId);
+      // A017 é ancorado em sale_date da Hubla (não em created_at do deal).
+      // Pulamos aqui para não contar duas vezes — A017.entradas é setado
+      // logo abaixo a partir de `a017InWindow.count`.
+      if (ch === 'A017') return;
       get(ch).entradas++;
       const meta = dealMeta.get(dealId);
       pushDet(ch, 'entradas', buildItem(dealId, meta?.created_at || '', null));
     });
+
+    // ===== A017 ENTRADAS: compradores únicos com sale_date na janela =====
+    // Ignora filtros locais (search/closer/source/origin) porque A017 vem
+    // direto da Hubla, não dos deals do CRM. O filtro de canal continua
+    // valendo via FUNNEL_CHANNELS abaixo.
+    if (!fChannel || fChannel === 'A017') {
+      get('A017').entradas = a017InWindow.count;
+      a017InWindow.items.forEach((it) => pushDet('A017', 'entradas', it));
+    }
 
     // ===== R1 Agendada / Realizada / No-Show — eventos com scheduled_at na janela =====
     // Espelha o RPC `get_sdr_metrics_from_agenda` (KPI "R1 AGENDADA" do header):
@@ -1087,7 +1151,7 @@ export function useChannelFunnelReport(
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, a017InWindow, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
 
   return {
     rows,
