@@ -29,7 +29,7 @@ function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[
           const product = String(r[find(/prod/i) || ''] || '').trim();
           const value = Number(String(r[find(/valor|price|amount/i) || ''] || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
           return { source, name, email, phone: phone || null, product: product || null, value };
-        }).filter((r) => r.email || r.phone);
+        }).filter((r) => r.email || r.phone); // aceita linhas sem nome (fallback "Sem nome (A010)")
         resolve(rows);
       } catch (err) { reject(err); }
     };
@@ -94,7 +94,10 @@ function ItemsTable({ items }: { items: InspectItem[] }) {
               <TableRow key={i}>
                 <TableCell><Badge variant="outline">{item.planilha.source}</Badge></TableCell>
                 <TableCell className="text-xs">
-                  <div className="font-medium">{item.planilha.name || '—'}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {item.planilha.name || <span className="italic text-muted-foreground">Sem nome</span>}
+                    {item.missing_name && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">sem nome</Badge>}
+                  </div>
                   <div className="text-muted-foreground">{item.planilha.email || '—'}</div>
                   <div className="text-muted-foreground">{item.planilha.phone || '—'}</div>
                 </TableCell>
