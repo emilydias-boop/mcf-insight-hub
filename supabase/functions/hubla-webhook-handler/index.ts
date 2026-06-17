@@ -891,6 +891,20 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     }
   } catch (err) {
     console.error('[CRM] Erro ao criar/atualizar contato:', err);
+    const isA010 = (data.extraTags || []).some(t => /a010/i.test(t)) || /a010/i.test(data.productName || '');
+    if (isA010) {
+      await logIngestFailure(supabase, {
+        source: 'hubla',
+        hubla_id: data.hublaId || null,
+        email: data.email,
+        phone: data.phone,
+        name: data.name,
+        product_name: data.productName,
+        reason: 'create_contact_threw',
+        payload: { ...data },
+        error: (err as Error)?.message || String(err),
+      });
+    }
   }
 }
 
