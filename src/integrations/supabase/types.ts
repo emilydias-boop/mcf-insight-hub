@@ -12111,6 +12111,63 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_ingest_failures: {
+        Row: {
+          attempts: number
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          failure_reason: string
+          hubla_id: string | null
+          id: string
+          last_error: string | null
+          product_name: string | null
+          raw_payload: Json
+          resolved_at: string | null
+          resolved_deal_id: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          failure_reason: string
+          hubla_id?: string | null
+          id?: string
+          last_error?: string | null
+          product_name?: string | null
+          raw_payload: Json
+          resolved_at?: string | null
+          resolved_deal_id?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          failure_reason?: string
+          hubla_id?: string | null
+          id?: string
+          last_error?: string | null
+          product_name?: string | null
+          raw_payload?: Json
+          resolved_at?: string | null
+          resolved_deal_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       weekly_metrics: {
         Row: {
           a010_revenue: number | null
@@ -12678,6 +12735,16 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"] | null
           status: Database["public"]["Enums"]["user_status"] | null
           user_id: string | null
+        }
+        Relationships: []
+      }
+      v_a010_reconciliation: {
+        Row: {
+          day: string | null
+          source: string | null
+          transactions: number | null
+          transactions_orphan: number | null
+          transactions_with_deal: number | null
         }
         Relationships: []
       }
