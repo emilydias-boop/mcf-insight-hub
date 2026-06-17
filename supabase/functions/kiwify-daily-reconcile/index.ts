@@ -432,7 +432,7 @@ async function fetchKiwifySales(
       end_date: endDate,
       status: "paid",
       page_size: String(pageSize),
-      page: String(page),
+      page_number: String(page),
     });
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
