@@ -553,7 +553,7 @@ function mapProductCategory(productName: string, productCode?: string): string {
   return 'outros';
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
   
   // Handle CORS preflight requests
