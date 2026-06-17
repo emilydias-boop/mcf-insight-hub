@@ -27,6 +27,7 @@ export interface InspectItem {
     tags: string[];
   } | null;
   risco: 'baixo' | 'medio' | 'alto';
+  missing_name?: boolean;
 }
 
 export interface InspectResponse {
