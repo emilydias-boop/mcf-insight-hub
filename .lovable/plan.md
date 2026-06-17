@@ -1,47 +1,42 @@
-## Diagnóstico final (16/06/2026, A010)
+## Reconciliação diária Kiwify (A010)
 
-Comparação direta da planilha Kiwify (28 emails) com `hubla_transactions`:
+Agora que o token da API Kiwify foi criado, posso implementar a reconciliação automática que recupera vendas A010 que não chegaram pelo webhook em tempo real.
 
-| Situação | Qtd | Impacto no funil |
-|---|---|---|
-| Kiwify gravada com `sale_date = 16/06` | 14 | Já contam no canal A010 |
-| Kiwify gravada com `sale_date = 17/06` (timezone deslocou +1 dia) | 3 | **Não contam em 16/06** |
-| Email já existia como compra Hubla antiga (2026-05-19), venda Kiwify de hoje não foi inserida | 1 | Não conta como compra do dia |
-| **Ausentes no banco** (webhook nunca registrou) | **10** | **Não contam** |
+### O que será criado
 
-Planilha Hubla (13) + Kiwify (28) = 41. Funil mostra 29 porque o banco tem 30 compradores distintos no dia 16, dos quais 29 têm deal em INSIDE SALES + PILOTO ANAMNESE. **A classificação está correta — a falha é ingestão Kiwify.**
+**1. Secrets (vou pedir após aprovação)**
+- `KIWIFY_CLIENT_ID`
+- `KIWIFY_CLIENT_SECRET`
+- `KIWIFY_ACCOUNT_ID` (se necessário pela API)
 
-## Plano de correção
+**2. Edge function `kiwify-daily-reconcile`**
+- Autentica via OAuth2 `client_credentials` na Kiwify
+- Busca vendas dos **últimos 3 dias** em `GET /v1/sales` (janela de tolerância para atrasos)
+- Para cada venda **paga/aprovada** que ainda não existe em `hubla_transactions` (chave: `order_id`):
+  - Insere a transação usando a **mesma normalização** do webhook em tempo real (telefone, email lowercase, mapeamento de offer→produto)
+  - Cria/atualiza `crm_deals` em PIPELINE INSIDE SALES com `created_at = sale_date` (não `now()`) para preservar a data real da venda
+  - Respeita `prevent_duplicate_crm_contact` (email + telefone 9 dígitos)
+  - Bloqueia produtos parceiros/renovação (A001-A009, R001, etc.)
+- Loga cada execução em `hubla_webhook_logs` com `event_type='kiwify:reconcile'` e contagem de recovered/skipped/errors
 
-### 1. Backfill imediato dos 10 ausentes (16/06)
-Rodar a edge function `kiwify-backfill-a010-csv` (ou `kiwify-recover-orphan-transactions`) com a planilha do usuário. Inserir as 10 linhas faltantes em `hubla_transactions` com:
-- `source = 'kiwify'`
-- `product_category = 'a010'`
-- `sale_status = 'completed'` (planilha marca `paid`)
-- `sale_date = 2026-06-16` (data da planilha, sem aplicar timezone)
+**3. Refatoração compartilhada**
+- Extrair a lógica de insert + normalização para `supabase/functions/_shared/kiwify-ingest.ts`
+- Webhook em tempo real e reconciliador passam a usar a mesma função → garante paridade
 
-Entregável: relatório "X de 10 inseridas" + lista de erros se algum CPF/email duplicar.
+**4. Cron job (`pg_cron` + `pg_net`)**
+- Agenda: `0 6 * * *` (03:00 BRT = 06:00 UTC)
+- Chama a edge function via `net.http_post`
 
-### 2. Corrigir as 3 vendas com data deslocada
-UPDATE em `hubla_transactions` movendo `sale_date` de 17/06 para 16/06 para os 3 emails identificados (`andersonscb@yahoo.com.br`, `gduartedealencar@icloud.com`, `mjosedanielmoreira@gmail.com`). Migração one-off, idempotente, com WHERE estrito por email + product_category + source + dia.
+**5. Dashboard `/diagnostico/kiwify-reconcile`**
+- Última execução (timestamp + status)
+- Contadores 24h / 7d (recovered, skipped, errors)
+- Tabela das 20 recuperações mais recentes (order_id, email, produto, sale_date, deal criado)
+- Botão "Executar agora" (admin only)
 
-### 3. Tratar o caso `dri.dibiase@gmail.com`
-Inserir nova linha Kiwify de 16/06 mesmo havendo compra Hubla antiga (não é deduplicação por contato, é registro de transação). Inclusão no mesmo backfill da etapa 1.
+### Fora de escopo (fica para depois)
+- Alerta Brevo quando >N recuperações em 24h (sinal de webhook quebrado)
+- Investigação da causa raiz do webhook Kiwify não chegar
+- Reconciliação equivalente para Hubla
 
-### 4. Investigar a causa-raiz do webhook Kiwify
-Olhar logs da função `kiwify-webhook-handler` nas últimas 48h e cruzar com os 10 ausentes. Hipóteses prováveis:
-- Eventos `order.approved` chegando sem campos esperados (rejeitados na validação)
-- Timezone aplicado em cima de `created_at` UTC desloca a data
-- Pagamentos `pix` confirmados via job que não está rodando
-
-Entregável: lista das tentativas dos 10 emails (encontradas ou não) e proposta de fix do handler (planejada em mensagem separada, não nesta tarefa).
-
-### 5. Validar
-Re-executar a query de auditoria de A010 do dia 16/06 e confirmar:
-- 30 + 10 + 1 (dri.dibiase) = ~41 compradores distintos
-- Funil de canais sobe A010 de 29 → ~40 (deve ficar ≈41 menos compradores sem deal em IS/Anamnese)
-
-## Confirmações necessárias
-
-- OK rodar o backfill agora (etapas 1, 2, 3)? São inserts/updates em `hubla_transactions`, não mexem em `crm_deals` nem em métricas calculadas.
-- A etapa 4 (investigação do handler) entra como tarefa separada ou junto?
+### Pré-requisito
+Confirmar que o token criado tem escopo **Vendas** (e Reembolsar vendas, se quiser cobrir estornos no mesmo job — opcional).
