@@ -438,6 +438,20 @@ async function checkIfPartner(supabase: any, email: string | null): Promise<{isP
 async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
   if (!data.email && !data.phone) {
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
+    // SAFETY NET: compra paga sem email+phone → fica visível para revisão
+    const isA010 = (data.extraTags || []).some(t => /a010/i.test(t)) || /a010/i.test(data.productName || '');
+    if (isA010) {
+      await logIngestFailure(supabase, {
+        source: 'hubla',
+        hubla_id: data.hublaId || null,
+        email: data.email,
+        phone: data.phone,
+        name: data.name,
+        product_name: data.productName,
+        reason: 'missing_email_and_phone',
+        payload: { ...data },
+      });
+    }
     return;
   }
   
