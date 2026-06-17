@@ -1,103 +1,59 @@
-## Objetivo
 
-Transcrever automaticamente todas as ligações Twilio com duração superior a 60s (faixas "efetiva" + "qualificada"), gerar um resumo inteligente em PT-BR e gravar:
-1. No card do Negócio (campo Notas) — na stage atual e visível em todas as etapas seguintes
-2. No agendamento da Agenda R1 vinculado àquele lead (campo de notas do attendee)
+## Contexto do problema
+Em 16/06/26 você observou três números diferentes para A010:
+- CRM: **32 leads**
+- Hubla + Kiwify (somados): **41 transações**
+- Relatório → Aquisição e Origem: **29**
 
-## Como vai funcionar
+## O que já consultei na base (snapshot)
 
-```text
-[Twilio Voice]
-    │
-    │  recordingStatusCallback (recording_completed)
-    ▼
-[Edge Function: twilio-voice-intelligence-webhook]
-    │
-    │  1. Valida assinatura Twilio
-    │  2. Lê duration da chamada (calls.duration_seconds)
-    │  3. Se < 60s → ignora (log only)
-    │  4. Se ≥ 60s → cria Transcript no Voice Intelligence Service
-    ▼
-[Twilio Voice Intelligence]
-    │
-    │  transcript.completed callback
-    ▼
-[Edge Function: twilio-transcript-callback]
-    │
-    │  1. Busca sentences + operator results
-    │  2. Chama Lovable AI (google/gemini-3-flash-preview)
-    │     - System prompt: SDR coach PT-BR
-    │     - Output structured: 3-5 bullets + respostas script de descoberta
-    │  3. UPDATE calls SET notes, transcript_url, ai_summary, ...
-    │  4. UPDATE crm_deals.custom_fields.callSummary (acumula histórico)
-    │  5. UPDATE meeting_slot_attendees.notes (R1 atual + futuros)
-    │  6. INSERT deal_activities (timeline)
-```
+**1. Tabela `hubla_transactions` (raw) em 16/06 (timezone BR):**
+- Hubla: 34 transações, 16 e-mails distintos, 33 `completed` + 1 `refunded`
+- Kiwify: 17 transações, 17 e-mails distintos, todas `completed`
+- **Total raw: 51 transações / 33 e-mails únicos**
 
-## Mudanças no banco
+Diferença raw vs "41" provavelmente é porque você está olhando só linhas pagas em cada plataforma (talvez excluindo parcelas/duplicadas), ou olhando dois dashboards distintos.
 
-**Tabela `calls`** — novos campos:
-- `transcript_sid` (text) — SID do Voice Intelligence Transcript
-- `transcript_status` (text) — `pending` | `processing` | `completed` | `failed` | `skipped_short`
-- `ai_summary` (jsonb) — `{ bullets: string[], discovery: {...}, raw_transcript_url }`
-- `ai_processed_at` (timestamptz)
+**2. RPC `get_all_hubla_transactions` (fonte do Relatório, BU Incorporador):**
+- 35 transações A010 / 33 e-mails distintos (filtro: `sale_status IN ('completed','refunded')`, `source IN (hubla, manual, make, mcfpay, kiwify)`, exclui parceria duplicada e `newsale-%`).
 
-**Tabela `crm_deals.custom_fields`** (jsonb existente) — nova chave:
-- `callSummaries: [{ call_id, processed_at, bullets, discovery }]` — histórico acumulado, sempre visível em todas as stages
+**3. `crm_deals` criados em 16/06 com tag A010 (origem Hubla):**
+- 68 deals criados (mais que o esperado — pode estar contando leads que entraram em mais de uma pipeline via replicação, ou tags adicionadas em deals antigos).
 
-**Tabela `meeting_slot_attendees.notes`** (já existe) — atualizada via trigger / função
+Ou seja: os 3 números vêm de **fontes/filtragens diferentes** e nenhum dos pipelines hoje produz exatamente "32" sem mais filtros.
 
-Nenhuma tabela nova. Nenhum dado destrutivo.
+## Plano de diagnóstico (sem alterar código ainda)
 
-## Edge Functions
+### Passo 1 — Confirmar a origem exata de cada número
+Pedir confirmação de:
+- **CRM "32"**: qual tela exatamente? (Pipeline INSIDE SALES filtrado por data de criação? Aba específica? Origem Hubla?). Saber a tela permite reproduzir o filtro idêntico no SQL.
+- **"41" Hubla+Kiwify**: é planilha/painel próprio das plataformas, ou nosso dashboard? Soma de "compradores únicos" ou linhas?
+- **"29" no Relatório**: tela `/bu-incorporador/relatorios` → painel **Aquisição e Origem** → linha A010 do bloco "Por Origem" ou "Por Canal"? Ou linha A010 do funil de canais?
 
-### `twilio-voice-intelligence-webhook` (novo)
-- Recebe `recording_completed` da Twilio
-- Cria Transcript via `POST /v2/Transcripts` com `ServiceSid` + `MediaUrl` + `LanguageCode=pt-BR`
-- Marca `calls.transcript_status = 'processing'`
+### Passo 2 — Reconciliar via SQL controlado
+Para cada origem confirmada no passo 1, rodar uma query única no banco com o mesmo filtro do código, gerar planilha CSV com:
+- `hubla_id`, `source`, `customer_email`, `customer_phone`, `sale_status`, `sale_date`, `product_name`, `linked_attendee_id`, `deal_id` correspondente em `crm_deals`.
+- Comparar lista por lista (CRM vs Relatório vs Hubla/Kiwify) e marcar quais e-mails sumiram em qual etapa.
 
-### `twilio-transcript-callback` (novo)
-- Recebe webhook `transcript.completed` do Voice Intelligence
-- Busca sentences via Twilio API
-- Chama Lovable AI Gateway com schema estruturado:
-  ```
-  {
-    bullets: string[] (3-5),
-    discovery: {
-      tempo_conhece_mcf, profissao, renda,
-      ja_constroi, possui_imovel, possui_terreno, tem_socio
-    }
-  }
-  ```
-- Persiste em `calls`, `crm_deals`, `meeting_slot_attendees`, `deal_activities`
+### Passo 3 — Identificar a causa raiz provável (hipóteses)
+Com base no que vi:
+- **Relatório < CRM (29 < 32):** o RPC `get_all_hubla_transactions` filtra `source IN (hubla, kiwify, manual, make, mcfpay)` **e** exige `INNER JOIN product_configurations` com `target_bu='incorporador'`. Qualquer compra A010 com `product_name` que não esteja cadastrado em `product_configurations` (ou com target_bu diferente) cai fora do relatório, mas continua no CRM.
+- **CRM < Hubla+Kiwify (32 < 41):** a regra atual de deduplicação (`check_duplicate_deal_by_identity` por email + sufixo de 9 dígitos do telefone) une compras do mesmo cliente em um único deal, então 41 compras viram 32 leads únicos. Pode ainda haver leads bloqueados por `automation_blacklist` ou por regra de partner/renewal.
+- **Hubla+Kiwify "41":** pode ser a soma de "vendas pagas" exibidas nas próprias plataformas, que conta cada compra/parcela; nosso banco já tem `completed`+`refunded` separados.
 
-## Frontend
+### Passo 4 — Entregáveis ao final do diagnóstico
+- Planilha `discrepancia-a010-2026-06-16.csv` em `/mnt/documents/` com os 3 conjuntos lado a lado.
+- Um doc curto em `docs/qa/2026-06-17-discrepancia-a010-16-06.md` com causa raiz e recomendação (ex.: cadastrar produto faltante em `product_configurations`, ou ajustar filtro do RPC, ou excluir refunded da contagem do relatório).
 
-**`InlineCallControls.tsx`** — adiciona badge "Resumo IA" quando `ai_summary` existir, abre dialog com bullets + respostas discovery.
+### Passo 5 — Correções (só após validar causa)
+Dependendo do achado:
+- Cadastrar produto faltante em `product_configurations` (sem migração de schema).
+- Ajustar `get_all_hubla_transactions` para refletir a regra correta de contagem.
+- Adicionar coluna "Origem" no painel mostrando explicitamente quantos foram excluídos e por qual motivo (transparência).
 
-**`SdrLeadCallsDialog.tsx`** — coluna nova "Resumo IA" mostrando ícone de status (pendente / pronto / pulada por curta).
+## Perguntas que preciso de você antes de prosseguir
+1. Confirma a tela exata onde leu **32** no CRM? (pipeline + filtro de data)
+2. O **41** veio dos painéis nativos da Hubla e Kiwify, ou de algum relatório nosso?
+3. O **29** é da seção "Por Origem", "Por Canal" ou do funil de canais dentro de `/bu-incorporador/relatorios → Aquisição e Origem`?
 
-**Card do Negócio (CRM)** — seção "Resumos de Ligações IA" lista o histórico `callSummaries` em ordem cronológica reversa, visível em qualquer stage.
-
-**Agenda R1 (`AttendeeNotes`)** — note_type novo `'call_summary'` para diferenciar das anotações manuais; renderizado com badge "🤖 Resumo de Ligação".
-
-## Configuração Twilio (manual pelo usuário)
-
-Necessário antes de ativar:
-1. Ativar **Voice Intelligence** no console Twilio (https://console.twilio.com/us1/develop/voice-intelligence)
-2. Criar um **Service** com idioma PT-BR
-3. Copiar o `VOICE_INTELLIGENCE_SERVICE_SID` → guardar em secret
-4. Configurar `recordingStatusCallback` no TwiML App apontando para a nova edge function
-
-Eu vou pedir o `TWILIO_VOICE_INTELLIGENCE_SERVICE_SID` como secret depois que você aprovar este plano. Os outros secrets Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`) já existem.
-
-## QA Doc
-
-Conforme preferência do Thobson, vou criar `docs/qa/2026-06-17-twilio-transcricao-resumo-ia.md` com roteiro de testes funcionais + regressão.
-
-## Pontos de atenção
-
-- **Custo**: Voice Intelligence cobra por minuto transcrito (~$0.05/min). O filtro >60s + apenas chamadas atendidas reduz spend.
-- **LGPD**: as gravações já são feitas hoje; o transcript fica armazenado na Twilio + apenas o resumo no nosso banco. Transcript completo só via link.
-- **Idempotência**: usar `transcript_sid` como chave única para evitar reprocessamento duplicado.
-- **Vinculação à Agenda R1**: usa `meeting_slot_attendees` onde `deal_id = calls.deal_id` AND `status IN ('confirmed','pre_scheduled','rescheduled')`. Notas se mantêm no attendee mesmo após mudança de stage do deal.
+Com essas respostas eu rodo o passo 2 e te entrego a planilha de reconciliação + diagnóstico.
