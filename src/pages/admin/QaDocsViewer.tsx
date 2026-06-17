@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, Download } from "lucide-react";
 
 const modules = import.meta.glob("/docs/qa/*.md", {
   query: "?raw",
@@ -36,6 +36,40 @@ export default function QaDocsViewer() {
 
   const [selected, setSelected] = useState<string | null>(docs[0]?.slug ?? null);
   const current = docs.find((d) => d.slug === selected) ?? null;
+  const articleRef = useRef<HTMLElement>(null);
+
+  const handleExportPdf = () => {
+    if (!current || !articleRef.current) return;
+    const html = articleRef.current.innerHTML;
+    const win = window.open("", "_blank", "width=900,height=1000");
+    if (!win) return;
+    const safeTitle = current.title.replace(/[<>]/g, "");
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+      <style>
+        @page { size: A4; margin: 18mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111; font-size: 12pt; line-height: 1.5; }
+        h1 { font-size: 22pt; margin: 0 0 12pt; }
+        h2 { font-size: 16pt; margin: 18pt 0 8pt; border-bottom: 1px solid #ddd; padding-bottom: 4pt; }
+        h3 { font-size: 13pt; margin: 14pt 0 6pt; }
+        p, li { font-size: 11pt; }
+        ul, ol { padding-left: 22pt; }
+        code { background: #f4f4f5; padding: 1pt 4pt; border-radius: 3pt; font-size: 10pt; }
+        pre { background: #f4f4f5; padding: 8pt; border-radius: 4pt; overflow-x: auto; font-size: 10pt; }
+        pre code { background: transparent; padding: 0; }
+        table { width: 100%; border-collapse: collapse; margin: 10pt 0; }
+        th, td { border: 1px solid #ccc; padding: 6pt; text-align: left; font-size: 10pt; }
+        th { background: #f4f4f5; }
+        blockquote { border-left: 3pt solid #ccc; padding-left: 8pt; color: #555; font-style: italic; }
+        a { color: #2563eb; text-decoration: underline; }
+        hr { border: none; border-top: 1px solid #ddd; margin: 12pt 0; }
+        .meta { color: #666; font-size: 10pt; margin-bottom: 16pt; }
+      </style></head><body>
+      <div class="meta">${current.date} — Documentação QA</div>
+      ${html}
+      <script>window.onload = () => { setTimeout(() => { window.focus(); window.print(); }, 250); };</script>
+      </body></html>`);
+    win.document.close();
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-4">
@@ -83,8 +117,19 @@ export default function QaDocsViewer() {
           <Card>
             <CardContent className="p-6">
               {current ? (
-                <ScrollArea className="h-[70vh] pr-4">
-                  <article className="qa-doc max-w-none text-sm leading-relaxed space-y-3
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{current.date}</div>
+                      <div className="font-semibold truncate">{current.title}</div>
+                    </div>
+                    <Button size="sm" onClick={handleExportPdf}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Exportar PDF
+                    </Button>
+                  </div>
+                  <ScrollArea className="h-[65vh] pr-4">
+                    <article ref={articleRef} className="qa-doc max-w-none text-sm leading-relaxed space-y-3
                     [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-2 [&_h1]:mb-3
                     [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mt-6 [&_h2]:mb-2
                     [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1
@@ -101,11 +146,12 @@ export default function QaDocsViewer() {
                     [&_td]:border [&_td]:border-border [&_td]:p-2
                     [&_blockquote]:border-l-4 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
                     [&_hr]:my-4 [&_hr]:border-border">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {current.content}
-                    </ReactMarkdown>
-                  </article>
-                </ScrollArea>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {current.content}
+                      </ReactMarkdown>
+                    </article>
+                  </ScrollArea>
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">Selecione um documento.</p>
               )}
