@@ -272,6 +272,45 @@ interface CRMContactData {
   // Opcionais: permitem reutilizar o fluxo para "A010 Em Aberto" (carrinho abandonado)
   targetStageName?: string;       // default "Novo Lead"
   extraTags?: string[];           // default ['A010', 'Hubla']
+  // Opcional: hubla_id da transação (usado para logIngestFailure)
+  hublaId?: string | null;
+}
+
+/**
+ * Registra falha de ingestão (compra paga que não virou deal completo).
+ * Nunca lança — é safety net, não pode quebrar o fluxo.
+ */
+async function logIngestFailure(
+  supabase: any,
+  args: {
+    source: 'hubla';
+    hubla_id: string | null;
+    email: string | null;
+    phone: string | null;
+    name: string | null;
+    product_name: string | null;
+    reason: string;
+    payload: any;
+    error?: string;
+  }
+): Promise<void> {
+  try {
+    await supabase.from('webhook_ingest_failures').insert({
+      source: args.source,
+      hubla_id: args.hubla_id,
+      customer_email: args.email,
+      customer_phone: args.phone,
+      customer_name: args.name,
+      product_name: args.product_name,
+      raw_payload: args.payload || {},
+      failure_reason: args.reason,
+      last_error: args.error || null,
+      status: 'pending',
+    });
+    console.warn(`[INGEST_FAILURE][hubla] ${args.reason}`, { hubla_id: args.hubla_id, email: args.email });
+  } catch (e) {
+    console.error('[INGEST_FAILURE] Falha ao registrar falha:', e);
+  }
 }
 
 // CONSTANTE: Origin canônico para todos os leads A010
