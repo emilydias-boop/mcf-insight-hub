@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -202,6 +201,7 @@ async function processRow(supabase: any, row: Row) {
       }
     }
     await supabase.from('crm_deals').update(update).eq('id', existingDeal.id);
+    await upsertHublaTransactionMirror(supabase, row, existingDeal.id, compraDate, email, phone);
     return { status: 'updated', email, deal_id: existingDeal.id };
   }
 
@@ -287,10 +287,77 @@ async function processRow(supabase: any, row: Row) {
     .maybeSingle();
 
   if (dealErr) return { status: 'error', email, reason: dealErr.message };
+  await upsertHublaTransactionMirror(supabase, row, newDeal?.id, compraDate, email, phone);
   return { status: 'created', email, deal_id: newDeal?.id };
 }
 
-serve(async (req) => {
+/**
+ * Espelha a venda em hubla_transactions com linked_deal_id, garantindo que
+ * o RPC get_all_hubla_transactions (relatório de Aquisição/Origem) consiga
+ * contar essas vendas de backfill.
+ * - hubla_id segue convenção do kiwify-webhook-handler: "kiwify_<order_id>"
+ * - product_name é canonicalizado para casar com product_configurations
+ */
+async function upsertHublaTransactionMirror(
+  supabase: any,
+  row: Row,
+  dealId: string | undefined,
+  saleDate: string,
+  email: string | null,
+  phone: string | null,
+): Promise<void> {
+  if (!row.kiwify_id) return;
+  const hublaId = `kiwify_${row.kiwify_id}`;
+
+  // Canonicaliza nome de produto A010 para o nome do product_configurations
+  const isA010 = /a010/i.test(row.product || '');
+  const productName = isA010 ? 'A010 - Construa para Vender sem Dinheiro' : row.product;
+
+  try {
+    const { data: existing } = await supabase
+      .from('hubla_transactions')
+      .select('id, linked_deal_id')
+      .eq('hubla_id', hublaId)
+      .maybeSingle();
+
+    if (existing) {
+      // Só atualiza linked_deal_id se ainda não tem
+      if (!existing.linked_deal_id && dealId) {
+        await supabase
+          .from('hubla_transactions')
+          .update({ linked_deal_id: dealId, linked_at: new Date().toISOString(), linked_method: 'manual' })
+          .eq('id', existing.id);
+      }
+      return;
+    }
+
+    await supabase.from('hubla_transactions').insert({
+      hubla_id: hublaId,
+      event_type: 'kiwify.backfill_csv',
+      product_name: productName,
+      product_code: isA010 ? '1475bb20-12e7-11ef-9e36-f58d9f9c7ab9' : (row.product || ''),
+      product_category: isA010 ? 'a010' : null,
+      product_price: row.value || 0,
+      net_value: row.value || 0,
+      customer_name: row.name || null,
+      customer_email: email,
+      customer_phone: phone,
+      sale_date: saleDate,
+      sale_status: 'completed',
+      installment_number: 1,
+      total_installments: 1,
+      source: 'kiwify',
+      raw_data: { backfill: true, csv_row: row },
+      linked_deal_id: dealId || null,
+      linked_at: dealId ? new Date().toISOString() : null,
+      linked_method: dealId ? 'manual' : null,
+    });
+  } catch (e) {
+    console.error('[backfill] Erro ao espelhar em hubla_transactions:', e);
+  }
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const supabase = createClient(

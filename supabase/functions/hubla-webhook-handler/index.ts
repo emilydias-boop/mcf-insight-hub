@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -272,6 +271,45 @@ interface CRMContactData {
   // Opcionais: permitem reutilizar o fluxo para "A010 Em Aberto" (carrinho abandonado)
   targetStageName?: string;       // default "Novo Lead"
   extraTags?: string[];           // default ['A010', 'Hubla']
+  // Opcional: hubla_id da transação (usado para logIngestFailure)
+  hublaId?: string | null;
+}
+
+/**
+ * Registra falha de ingestão (compra paga que não virou deal completo).
+ * Nunca lança — é safety net, não pode quebrar o fluxo.
+ */
+async function logIngestFailure(
+  supabase: any,
+  args: {
+    source: 'hubla';
+    hubla_id: string | null;
+    email: string | null;
+    phone: string | null;
+    name: string | null;
+    product_name: string | null;
+    reason: string;
+    payload: any;
+    error?: string;
+  }
+): Promise<void> {
+  try {
+    await supabase.from('webhook_ingest_failures').insert({
+      source: args.source,
+      hubla_id: args.hubla_id,
+      customer_email: args.email,
+      customer_phone: args.phone,
+      customer_name: args.name,
+      product_name: args.product_name,
+      raw_payload: args.payload || {},
+      failure_reason: args.reason,
+      last_error: args.error || null,
+      status: 'pending',
+    });
+    console.warn(`[INGEST_FAILURE][hubla] ${args.reason}`, { hubla_id: args.hubla_id, email: args.email });
+  } catch (e) {
+    console.error('[INGEST_FAILURE] Falha ao registrar falha:', e);
+  }
 }
 
 // CONSTANTE: Origin canônico para todos os leads A010
@@ -399,6 +437,20 @@ async function checkIfPartner(supabase: any, email: string | null): Promise<{isP
 async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
   if (!data.email && !data.phone) {
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
+    // SAFETY NET: compra paga sem email+phone → fica visível para revisão
+    const isA010 = (data.extraTags || []).some(t => /a010/i.test(t)) || /a010/i.test(data.productName || '');
+    if (isA010) {
+      await logIngestFailure(supabase, {
+        source: 'hubla',
+        hubla_id: data.hublaId || null,
+        email: data.email,
+        phone: data.phone,
+        name: data.name,
+        product_name: data.productName,
+        reason: 'missing_email_and_phone',
+        payload: { ...data },
+      });
+    }
     return;
   }
   
@@ -838,6 +890,20 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     }
   } catch (err) {
     console.error('[CRM] Erro ao criar/atualizar contato:', err);
+    const isA010 = (data.extraTags || []).some(t => /a010/i.test(t)) || /a010/i.test(data.productName || '');
+    if (isA010) {
+      await logIngestFailure(supabase, {
+        source: 'hubla',
+        hubla_id: data.hublaId || null,
+        email: data.email,
+        phone: data.phone,
+        name: data.name,
+        product_name: data.productName,
+        reason: 'create_contact_threw',
+        payload: { ...data },
+        error: (err as Error)?.message || String(err),
+      });
+    }
   }
 }
 
@@ -2490,7 +2556,7 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -2808,7 +2874,8 @@ serve(async (req) => {
               name: transactionData.customer_name,
               originName: 'A010 Hubla',
               productName: productName,
-              value: netValue
+              value: netValue,
+              hublaId,
             });
           }
           
@@ -2983,7 +3050,8 @@ serve(async (req) => {
               name: transactionData.customer_name,
               originName: 'A010 Hubla',
               productName: productName,
-              value: itemNetValue
+              value: itemNetValue,
+              hublaId,
             });
           }
 
@@ -3080,6 +3148,7 @@ serve(async (req) => {
               originName: 'A010 Hubla',
               productName: a010Name,
               value: a010Price,
+              hublaId,
             });
           }
         }
