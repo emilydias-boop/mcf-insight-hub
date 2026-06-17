@@ -32,7 +32,7 @@ import {
 } from '@/components/auth/NegociosAccessGuard';
 import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
-import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
+import { useBulkA010CheckRecent, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useActiveBU } from '@/hooks/useActiveBU';
@@ -338,8 +338,9 @@ const Negocios = () => {
     [dealsData]
   );
   
-  // Verificar A010 em batch
-  const { data: a010StatusMap } = useBulkA010Check(dealEmails);
+  // Verificar A010 em batch — janela de 30 dias (mesma regra do R1/R2),
+  // para não rotular como A010 leads que compraram há muito tempo.
+  const { data: a010StatusMap } = useBulkA010CheckRecent(dealEmails);
   
   // Criar mapa de canais (email -> SalesChannel) para passar ao board
   const channelMap = useMemo(() => {
