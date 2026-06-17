@@ -1,54 +1,103 @@
-# Classificação avançada de ligações no painel "Atividades por SDR"
-
 ## Objetivo
 
-Hoje o painel mostra apenas **Total** e **Atendidas**. Vamos quebrar isso em categorias acionáveis para identificar prospecção saudável vs. discagem improdutiva.
+Transcrever automaticamente todas as ligações Twilio com duração superior a 60s (faixas "efetiva" + "qualificada"), gerar um resumo inteligente em PT-BR e gravar:
+1. No card do Negócio (campo Notas) — na stage atual e visível em todas as etapas seguintes
+2. No agendamento da Agenda R1 vinculado àquele lead (campo de notas do attendee)
 
-## Faixas de classificação (heurística por duração)
+## Como vai funcionar
 
-Aplicadas **apenas** a chamadas `direction='outbound'`:
+```text
+[Twilio Voice]
+    │
+    │  recordingStatusCallback (recording_completed)
+    ▼
+[Edge Function: twilio-voice-intelligence-webhook]
+    │
+    │  1. Valida assinatura Twilio
+    │  2. Lê duration da chamada (calls.duration_seconds)
+    │  3. Se < 60s → ignora (log only)
+    │  4. Se ≥ 60s → cria Transcript no Voice Intelligence Service
+    ▼
+[Twilio Voice Intelligence]
+    │
+    │  transcript.completed callback
+    ▼
+[Edge Function: twilio-transcript-callback]
+    │
+    │  1. Busca sentences + operator results
+    │  2. Chama Lovable AI (google/gemini-3-flash-preview)
+    │     - System prompt: SDR coach PT-BR
+    │     - Output structured: 3-5 bullets + respostas script de descoberta
+    │  3. UPDATE calls SET notes, transcript_url, ai_summary, ...
+    │  4. UPDATE crm_deals.custom_fields.callSummary (acumula histórico)
+    │  5. UPDATE meeting_slot_attendees.notes (R1 atual + futuros)
+    │  6. INSERT deal_activities (timeline)
+```
 
-| Categoria | Critério | Significado |
-|---|---|---|
-| **Não atendida** | `status` em `no-answer`, `failed`, `busy`, `initiated` (ou `duration_seconds = 0`) | Não tocou ou tocou e ninguém atendeu |
-| **Ring drop** | `status='completed'` e `1 ≤ duration ≤ 10s` | Atendeu e desligou rápido (rejeitou) |
-| **Provável caixa postal** | `status='completed'` e `11 ≤ duration ≤ 30s` | Provavelmente bateu o áudio da caixa postal |
-| **Efetiva** | `status='completed'` e `31 ≤ duration ≤ 60s` | Falou, mas conversa curta |
-| **Qualificada** | `status='completed'` e `duration > 60s` | Conversa de prospecção real |
+## Mudanças no banco
 
-> Limitação assumida: como o AMD do Twilio está desligado (`answered_by` sempre NULL), a separação caixa postal × ring drop × efetiva é **heurística**. O código fica preparado para usar `answered_by` se um dia o AMD for ligado.
+**Tabela `calls`** — novos campos:
+- `transcript_sid` (text) — SID do Voice Intelligence Transcript
+- `transcript_status` (text) — `pending` | `processing` | `completed` | `failed` | `skipped_short`
+- `ai_summary` (jsonb) — `{ bullets: string[], discovery: {...}, raw_transcript_url }`
+- `ai_processed_at` (timestamptz)
 
-## Mudanças
+**Tabela `crm_deals.custom_fields`** (jsonb existente) — nova chave:
+- `callSummaries: [{ call_id, processed_at, bullets, discovery }]` — histórico acumulado, sempre visível em todas as stages
 
-### 1. `src/hooks/useSdrActivityMetrics.ts`
-- Adicionar ao `SELECT` de `calls` os campos `duration_seconds` e `answered_by`.
-- Adicionar à interface `SdrActivityMetrics` os campos:
-  `notAnsweredCalls`, `ringDropCalls`, `voicemailCalls`, `effectiveCalls`, `qualifiedCalls`, `connectionRate` (= (ringDrop+voicemail+effective+qualified)/total), `qualificationRate` (= qualified/total).
-- Função pura `classifyCall(status, duration, answeredBy)` que retorna uma das 5 categorias, priorizando `answered_by` quando presente (`machine_start`/`fax` → voicemail, `human` → effective/qualified pela duração).
-- Manter `answeredCalls` por compatibilidade = ringDrop + voicemail + effective + qualified.
+**Tabela `meeting_slot_attendees.notes`** (já existe) — atualizada via trigger / função
 
-### 2. `src/components/sdr/SdrActivityMetricsTable.tsx`
-- Substituir as colunas atuais `Total | Atendidas | Notas | Stage | WhatsApp | Leads | Média` por:
-  `SDR | Total | Não atend. | Ring drop | Caixa postal | Efetivas | Qualificadas | Taxa conexão | Taxa qualificação | Notas | Stage | WA | Leads | Média`.
-- Codificação visual: ring drop e caixa postal em cinza/âmbar; efetivas em azul; qualificadas em verde destacado.
-- Linha de Totais somando todas as colunas numéricas.
-- Tooltip no header de cada categoria explicando a faixa (ex.: "Ring drop: atendida e encerrada em até 10s").
-- Card de legenda no topo da tabela com as 5 faixas.
+Nenhuma tabela nova. Nenhum dado destrutivo.
 
-### 3. Escopo cross-BU
-O hook `useSdrActivityMetrics` já recebe `squad` como parâmetro e o componente já é genérico. Vou:
-- Buscar todos os call sites com `rg "SdrActivityMetricsTable|useSdrActivityMetrics"` para garantir que cada BU (Incorporador, Consórcio, etc.) consome o mesmo componente — se algum BU tiver versão duplicada, unificar para usar este componente único.
+## Edge Functions
 
-### 4. Sem mudanças de schema
-Não precisa migration: `duration_seconds`, `status` e `answered_by` já existem em `public.calls`. Nada novo no banco.
+### `twilio-voice-intelligence-webhook` (novo)
+- Recebe `recording_completed` da Twilio
+- Cria Transcript via `POST /v2/Transcripts` com `ServiceSid` + `MediaUrl` + `LanguageCode=pt-BR`
+- Marca `calls.transcript_status = 'processing'`
 
-## Validação
+### `twilio-transcript-callback` (novo)
+- Recebe webhook `transcript.completed` do Voice Intelligence
+- Busca sentences via Twilio API
+- Chama Lovable AI Gateway com schema estruturado:
+  ```
+  {
+    bullets: string[] (3-5),
+    discovery: {
+      tempo_conhece_mcf, profissao, renda,
+      ja_constroi, possui_imovel, possui_terreno, tem_socio
+    }
+  }
+  ```
+- Persiste em `calls`, `crm_deals`, `meeting_slot_attendees`, `deal_activities`
 
-- Rodar query de sanidade após deploy comparando: `totalCalls = notAnswered + ringDrop + voicemail + effective + qualified` por SDR.
-- Verificar visualmente em `/bu-incorporador/relatorios` (Painel Comercial) que as somas batem com o total atual.
-- Spot-check: pegar 3 SDRs e cruzar com a aba de gravações no CRM para confirmar que ligações classificadas como "Qualificada" realmente têm conversa.
+## Frontend
 
-## Riscos / observações
+**`InlineCallControls.tsx`** — adiciona badge "Resumo IA" quando `ai_summary` existir, abre dialog com bullets + respostas discovery.
 
-- As faixas (10s/30s/60s) são um chute inicial razoável baseado no que vi nos dados (média atual de `completed` = 14s, ou seja **a maior parte do que hoje contamos como "atendida" provavelmente é ring drop ou caixa postal**). Após a primeira semana de uso, podemos calibrar.
-- Se quiser precisão real de caixa postal, o próximo passo é ativar AMD no Twilio (+~US$0.0075/chamada) — o código já vai estar preparado.
+**`SdrLeadCallsDialog.tsx`** — coluna nova "Resumo IA" mostrando ícone de status (pendente / pronto / pulada por curta).
+
+**Card do Negócio (CRM)** — seção "Resumos de Ligações IA" lista o histórico `callSummaries` em ordem cronológica reversa, visível em qualquer stage.
+
+**Agenda R1 (`AttendeeNotes`)** — note_type novo `'call_summary'` para diferenciar das anotações manuais; renderizado com badge "🤖 Resumo de Ligação".
+
+## Configuração Twilio (manual pelo usuário)
+
+Necessário antes de ativar:
+1. Ativar **Voice Intelligence** no console Twilio (https://console.twilio.com/us1/develop/voice-intelligence)
+2. Criar um **Service** com idioma PT-BR
+3. Copiar o `VOICE_INTELLIGENCE_SERVICE_SID` → guardar em secret
+4. Configurar `recordingStatusCallback` no TwiML App apontando para a nova edge function
+
+Eu vou pedir o `TWILIO_VOICE_INTELLIGENCE_SERVICE_SID` como secret depois que você aprovar este plano. Os outros secrets Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`) já existem.
+
+## QA Doc
+
+Conforme preferência do Thobson, vou criar `docs/qa/2026-06-17-twilio-transcricao-resumo-ia.md` com roteiro de testes funcionais + regressão.
+
+## Pontos de atenção
+
+- **Custo**: Voice Intelligence cobra por minuto transcrito (~$0.05/min). O filtro >60s + apenas chamadas atendidas reduz spend.
+- **LGPD**: as gravações já são feitas hoje; o transcript fica armazenado na Twilio + apenas o resumo no nosso banco. Transcript completo só via link.
+- **Idempotência**: usar `transcript_sid` como chave única para evitar reprocessamento duplicado.
+- **Vinculação à Agenda R1**: usa `meeting_slot_attendees` onde `deal_id = calls.deal_id` AND `status IN ('confirmed','pre_scheduled','rescheduled')`. Notas se mantêm no attendee mesmo após mudança de stage do deal.
