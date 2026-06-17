@@ -785,9 +785,40 @@ serve(async (req) => {
               } else {
                 console.log(`[Kiwify Webhook] linked_deal_id=${crmResult.dealId} vinculado à transação ${transactionId}`);
               }
+            } else if (!crmResult?.dealId) {
+              // SAFETY NET: venda paga A010 não virou deal — registra para retry automático.
+              await logIngestFailure(supabase, {
+                source: 'kiwify',
+                hubla_id: kiwifyId,
+                email: customerEmail || null,
+                phone: customerPhone || null,
+                name: customerName,
+                product_name: productName,
+                reason: 'deal_not_created',
+                payload: {
+                  customerName,
+                  customerEmail,
+                  customerPhone,
+                  productName,
+                  grossValue,
+                  kiwifyId,
+                  transactionId,
+                },
+              });
             }
           } catch (crmErr) {
             console.error('[Kiwify Webhook] Erro ao criar deal no CRM (não-fatal):', crmErr);
+            await logIngestFailure(supabase, {
+              source: 'kiwify',
+              hubla_id: kiwifyId,
+              email: customerEmail || null,
+              phone: customerPhone || null,
+              name: customerName,
+              product_name: productName,
+              reason: 'deal_creation_threw',
+              payload: { customerName, customerEmail, customerPhone, productName, grossValue, kiwifyId, transactionId },
+              error: (crmErr as Error)?.message || String(crmErr),
+            });
           }
         }
       }
