@@ -1,59 +1,78 @@
+## Causa-raiz confirmada
 
-## Contexto do problema
-Em 16/06/26 você observou três números diferentes para A010:
-- CRM: **32 leads**
-- Hubla + Kiwify (somados): **41 transações**
-- Relatório → Aquisição e Origem: **29**
+O `kiwify-webhook-handler` cria a transação em `hubla_transactions` e cria o deal em `crm_deals`, mas **nunca grava `linked_deal_id` de volta** na transação. O `hubla-webhook-handler` faz isso em 4 lugares — o Kiwify não faz em nenhum.
 
-## O que já consultei na base (snapshot)
+Como o RPC `get_all_hubla_transactions` (fonte do relatório Aquisição e Origem) só conta transações com deal vinculado, **todas as 17 vendas Kiwify ingeridas em 16/06 caem fora do relatório**, gerando o gap 32 → 29.
 
-**1. Tabela `hubla_transactions` (raw) em 16/06 (timezone BR):**
-- Hubla: 34 transações, 16 e-mails distintos, 33 `completed` + 1 `refunded`
-- Kiwify: 17 transações, 17 e-mails distintos, todas `completed`
-- **Total raw: 51 transações / 33 e-mails únicos**
+Os outros 11 casos (9 deals sem ingestão + 2 órfãos) ficam para um plano separado depois.
 
-Diferença raw vs "41" provavelmente é porque você está olhando só linhas pagas em cada plataforma (talvez excluindo parcelas/duplicadas), ou olhando dois dashboards distintos.
+## Escopo deste plano
 
-**2. RPC `get_all_hubla_transactions` (fonte do Relatório, BU Incorporador):**
-- 35 transações A010 / 33 e-mails distintos (filtro: `sale_status IN ('completed','refunded')`, `source IN (hubla, manual, make, mcfpay, kiwify)`, exclui parceria duplicada e `newsale-%`).
+Corrigir o `kiwify-webhook-handler` para preencher `linked_deal_id` igual ao `hubla-webhook-handler`, e fazer backfill dos casos do passado que ficaram sem link.
 
-**3. `crm_deals` criados em 16/06 com tag A010 (origem Hubla):**
-- 68 deals criados (mais que o esperado — pode estar contando leads que entraram em mais de uma pipeline via replicação, ou tags adicionadas em deals antigos).
+## Passos
 
-Ou seja: os 3 números vêm de **fontes/filtragens diferentes** e nenhum dos pipelines hoje produz exatamente "32" sem mais filtros.
+### 1. Auditoria precisa do handler (read)
+Mapear no `kiwify-webhook-handler/index.ts` os pontos onde:
+- Linha ~408: `.insert(dealData)` cria o deal novo (capturar `newDeal.id`)
+- Linha ~292: `.update(...)` em deal existente (capturar `existingDeal.id`)
+- Linhas ~677/749/778: pontos de insert/update em `hubla_transactions` (capturar `transaction.id`)
 
-## Plano de diagnóstico (sem alterar código ainda)
+Confirmar a ordem dos awaits para garantir que conseguimos o `deal.id` antes do retorno.
 
-### Passo 1 — Confirmar a origem exata de cada número
-Pedir confirmação de:
-- **CRM "32"**: qual tela exatamente? (Pipeline INSIDE SALES filtrado por data de criação? Aba específica? Origem Hubla?). Saber a tela permite reproduzir o filtro idêntico no SQL.
-- **"41" Hubla+Kiwify**: é planilha/painel próprio das plataformas, ou nosso dashboard? Soma de "compradores únicos" ou linhas?
-- **"29" no Relatório**: tela `/bu-incorporador/relatorios` → painel **Aquisição e Origem** → linha A010 do bloco "Por Origem" ou "Por Canal"? Ou linha A010 do funil de canais?
+### 2. Patch no `kiwify-webhook-handler`
+Após cada criação/atualização de deal, adicionar:
+```ts
+await supabase
+  .from('hubla_transactions')
+  .update({ linked_deal_id: deal.id })
+  .eq('id', transaction.id);
+```
+Seguir exatamente o padrão do `hubla-webhook-handler` (linhas 1572, 1694, 2399, 2435), incluindo tratamento de erro (log mas não aborta o webhook).
 
-### Passo 2 — Reconciliar via SQL controlado
-Para cada origem confirmada no passo 1, rodar uma query única no banco com o mesmo filtro do código, gerar planilha CSV com:
-- `hubla_id`, `source`, `customer_email`, `customer_phone`, `sale_status`, `sale_date`, `product_name`, `linked_attendee_id`, `deal_id` correspondente em `crm_deals`.
-- Comparar lista por lista (CRM vs Relatório vs Hubla/Kiwify) e marcar quais e-mails sumiram em qual etapa.
+Cobrir os 3 caminhos do Kiwify:
+- Novo deal Inside Sales
+- Deal existente atualizado (re-compra)
+- Outside (sem R1) — checar se existe esse branch no Kiwify
 
-### Passo 3 — Identificar a causa raiz provável (hipóteses)
-Com base no que vi:
-- **Relatório < CRM (29 < 32):** o RPC `get_all_hubla_transactions` filtra `source IN (hubla, kiwify, manual, make, mcfpay)` **e** exige `INNER JOIN product_configurations` com `target_bu='incorporador'`. Qualquer compra A010 com `product_name` que não esteja cadastrado em `product_configurations` (ou com target_bu diferente) cai fora do relatório, mas continua no CRM.
-- **CRM < Hubla+Kiwify (32 < 41):** a regra atual de deduplicação (`check_duplicate_deal_by_identity` por email + sufixo de 9 dígitos do telefone) une compras do mesmo cliente em um único deal, então 41 compras viram 32 leads únicos. Pode ainda haver leads bloqueados por `automation_blacklist` ou por regra de partner/renewal.
-- **Hubla+Kiwify "41":** pode ser a soma de "vendas pagas" exibidas nas próprias plataformas, que conta cada compra/parcela; nosso banco já tem `completed`+`refunded` separados.
+### 3. Backfill retroativo (one-shot)
+Edge function nova `kiwify-backfill-linked-deal-id` (ou reaproveitar `kiwify-backfill-a010-csv`), com `dry_run` default true:
 
-### Passo 4 — Entregáveis ao final do diagnóstico
-- Planilha `discrepancia-a010-2026-06-16.csv` em `/mnt/documents/` com os 3 conjuntos lado a lado.
-- Um doc curto em `docs/qa/2026-06-17-discrepancia-a010-16-06.md` com causa raiz e recomendação (ex.: cadastrar produto faltante em `product_configurations`, ou ajustar filtro do RPC, ou excluir refunded da contagem do relatório).
+```sql
+UPDATE hubla_transactions ht
+SET linked_deal_id = d.id
+FROM crm_contacts c
+JOIN crm_deals d ON d.contact_id = c.id
+WHERE ht.source = 'kiwify'
+  AND ht.linked_deal_id IS NULL
+  AND lower(ht.customer_email) = lower(c.email)
+  AND d.created_at BETWEEN ht.created_at - interval '7 days'
+                       AND ht.created_at + interval '7 days'
+  AND ht.created_at >= '2026-01-01'
+```
 
-### Passo 5 — Correções (só após validar causa)
-Dependendo do achado:
-- Cadastrar produto faltante em `product_configurations` (sem migração de schema).
-- Ajustar `get_all_hubla_transactions` para refletir a regra correta de contagem.
-- Adicionar coluna "Origem" no painel mostrando explicitamente quantos foram excluídos e por qual motivo (transparência).
+Critério de match: email + janela de ±7 dias entre transação e deal. Se houver múltiplos deals no range, escolher o mais próximo no tempo. Retornar JSON com `updated_count`, `multiple_match_count`, `no_match_count`.
 
-## Perguntas que preciso de você antes de prosseguir
-1. Confirma a tela exata onde leu **32** no CRM? (pipeline + filtro de data)
-2. O **41** veio dos painéis nativos da Hubla e Kiwify, ou de algum relatório nosso?
-3. O **29** é da seção "Por Origem", "Por Canal" ou do funil de canais dentro de `/bu-incorporador/relatorios → Aquisição e Origem`?
+Rodar primeiro em `dry_run=true`, mostrar prévia, depois rodar de verdade após sua aprovação.
 
-Com essas respostas eu rodo o passo 2 e te entrego a planilha de reconciliação + diagnóstico.
+### 4. Verificação
+Após o backfill rodar real:
+- Re-query: `SELECT COUNT(*) FROM hubla_transactions WHERE source='kiwify' AND linked_deal_id IS NULL AND created_at >= '2026-06-16' AND created_at < '2026-06-17'` → esperado 0 ou bem perto
+- Re-query do RPC `get_all_hubla_transactions` para 16/06 → esperado subir de 29 para ~32
+- Comparar a contagem nova com a aba CRM (Pipeline Inside Sales filtro A010 16/06)
+
+### 5. Documentação QA
+`docs/qa/2026-06-17-fix-kiwify-linked-deal-id.md` com:
+- Diagnóstico (handler Hubla faz, Kiwify não fazia)
+- Patch aplicado (links de linha)
+- Resultado do backfill (números antes/depois)
+- Os 11 casos restantes (9 deals sem ingestão + 2 órfãos puros) listados como follow-up
+
+## Fora de escopo (planos separados depois)
+- Recuperar `mjosedanielmoreira@gmail.com` e `leilaiarat@gmail.com` (2 órfãos)
+- Investigar os 9 deals criados sem ingestão de webhook Kiwify (provável falha silenciosa do webhook ou criação manual)
+- Alerta automático "venda paga sem deal" / "transação sem linked_deal_id"
+
+## Risco / rollback
+- Patch só adiciona um `UPDATE`; se falhar, log mas não quebra o webhook (mesma postura do Hubla handler)
+- Backfill em `dry_run` primeiro; em produção é só `UPDATE` no campo `linked_deal_id` (idempotente, reversível por SQL com `SET linked_deal_id = NULL` filtrado pela mesma condição)

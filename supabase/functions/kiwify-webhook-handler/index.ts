@@ -87,10 +87,10 @@ interface KiwifyCRMContactData {
 async function createOrUpdateKiwifyCRMContact(
   supabase: any,
   data: KiwifyCRMContactData
-): Promise<void> {
+): Promise<{ dealId: string | null }> {
   if (!data.email && !data.phone) {
     console.log('[CRM][Kiwify] Sem email ou telefone, pulando criação de contato');
-    return;
+    return { dealId: null };
   }
 
   // Bloqueio de parceiros: registra em partner_returns e não cria deal
@@ -117,7 +117,7 @@ async function createOrUpdateKiwifyCRMContact(
       return_value: data.value || 0,
       blocked: true,
     });
-    return;
+    return { dealId: null };
   }
 
   const normalizedPhone = normalizePhone(data.phone);
@@ -293,7 +293,7 @@ async function createOrUpdateKiwifyCRMContact(
     console.log(
       `[CRM][Kiwify] Deal atualizado: ${existingDeal.id} - tags=${JSON.stringify(newTags)}${promotedStageId ? ' (promovido → Novo Lead)' : ''}`
     );
-    return;
+    return { dealId: existingDeal.id };
   }
 
   // 7. Buscar stage "Novo Lead"
@@ -323,7 +323,7 @@ async function createOrUpdateKiwifyCRMContact(
   // 8. Criar deal — distribuição ativa OU herança de owner
   if (!contactId || !originId) {
     console.log('[CRM][Kiwify] Faltou contactId/originId, pulando criação de deal');
-    return;
+    return { dealId: null };
   }
 
   let distributedOwnerId: string | null = null;
@@ -415,11 +415,14 @@ async function createOrUpdateKiwifyCRMContact(
     } else {
       console.error('[CRM][Kiwify] Erro ao criar deal:', dealError);
     }
+    return { dealId: null };
   } else if (newDeal) {
     console.log(
       `[CRM][Kiwify] Deal criado: ${data.name} - A010 (${newDeal.id}) owner=${finalOwnerId || 'nenhum'} tags=${JSON.stringify(targetTags)}`
     );
+    return { dealId: newDeal.id };
   }
+  return { dealId: null };
 }
 
 // Mapeamento de produtos Kiwify para categorias (mesmo padrão do Hubla)
@@ -723,7 +726,7 @@ serve(async (req) => {
 
           // Criar/atualizar deal no CRM (PIPELINE INSIDE SALES → Novo Lead)
           try {
-            await createOrUpdateKiwifyCRMContact(supabase, {
+            const crmResult = await createOrUpdateKiwifyCRMContact(supabase, {
               email: customerEmail || null,
               phone: customerPhone || null,
               name: customerName,
@@ -731,6 +734,21 @@ serve(async (req) => {
               value: grossValue,
               extraTags: ['A010', 'A010 Kiwify'],
             });
+
+            // Vincular a transação ao deal (espelha o hubla-webhook-handler)
+            // Sem este link, o RPC get_all_hubla_transactions exclui a venda do
+            // relatório Aquisição e Origem (INNER JOIN por linked_deal_id).
+            if (crmResult?.dealId && transactionId) {
+              const { error: linkError } = await supabase
+                .from('hubla_transactions')
+                .update({ linked_deal_id: crmResult.dealId })
+                .eq('id', transactionId);
+              if (linkError) {
+                console.error('[Kiwify Webhook] Falha ao gravar linked_deal_id:', linkError);
+              } else {
+                console.log(`[Kiwify Webhook] linked_deal_id=${crmResult.dealId} vinculado à transação ${transactionId}`);
+              }
+            }
           } catch (crmErr) {
             console.error('[Kiwify Webhook] Erro ao criar deal no CRM (não-fatal):', crmErr);
           }
