@@ -60,6 +60,7 @@ const MeuHistorico = lazy(() => import("./pages/crm/MeuHistorico"));
 const Agenda = lazy(() => import("./pages/crm/Agenda"));
 const LeadsLimbo = lazy(() => import("./pages/crm/LeadsLimbo"));
 const RetornosParceiros = lazy(() => import("./pages/crm/RetornosParceiros"));
+const RecuperacaoA010 = lazy(() => import("./pages/crm/RecuperacaoA010"));
 const AgendaMetricas = lazy(() => import("./pages/crm/AgendaMetricas"));
 const AgendaR2 = lazy(() => import("./pages/crm/AgendaR2"));
 const R2Carrinho = lazy(() => import("./pages/crm/R2Carrinho"));
@@ -275,6 +276,7 @@ const App = () => (
                 <Route path="importar-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarHistorico /></RoleGuard>} />
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="retornos-parceiros" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><RetornosParceiros /></RoleGuard>} />
+                <Route path="recuperacao-a010" element={<RoleGuard allowedRoles={['admin', 'coordenador']}><RecuperacaoA010 /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AuditoriaAgendamentos /></RoleGuard>} />
                 <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
