@@ -1,78 +1,98 @@
-## Causa-raiz confirmada
 
-O `kiwify-webhook-handler` cria a transação em `hubla_transactions` e cria o deal em `crm_deals`, mas **nunca grava `linked_deal_id` de volta** na transação. O `hubla-webhook-handler` faz isso em 4 lugares — o Kiwify não faz em nenhum.
+# Recuperação de Órfãos Kiwify + Investigação de Deals Sem Ingestão
 
-Como o RPC `get_all_hubla_transactions` (fonte do relatório Aquisição e Origem) só conta transações com deal vinculado, **todas as 17 vendas Kiwify ingeridas em 16/06 caem fora do relatório**, gerando o gap 32 → 29.
+Objetivo: fechar o gap restante do dia 16-17/06 — criar deals para os 2 órfãos (`mjosedanielmoreira@gmail.com`, `weltonoliveira421@gmail.com`) e diagnosticar por que 9 deals A010 foram criados em 16/06 sem aparecer em `hubla_transactions`.
 
-Os outros 11 casos (9 deals sem ingestão + 2 órfãos) ficam para um plano separado depois.
+---
 
-## Escopo deste plano
+## Parte 1 — Recuperar 2 órfãos
 
-Corrigir o `kiwify-webhook-handler` para preencher `linked_deal_id` igual ao `hubla-webhook-handler`, e fazer backfill dos casos do passado que ficaram sem link.
+Estado atual (confirmado em `hubla_transactions`):
 
-## Passos
+| email | hubla_id | sale_date | linked_deal_id | Tem contact? | Tem deal? |
+|---|---|---|---|---|---|
+| mjosedanielmoreira@gmail.com | kiwify_ce5621a7… | 17/06 02:38 | null | não | não |
+| weltonoliveira421@gmail.com | kiwify_fc5c0583… | 17/06 17:27 | null | não (só txn Hubla 2025-10) | não |
 
-### 1. Auditoria precisa do handler (read)
-Mapear no `kiwify-webhook-handler/index.ts` os pontos onde:
-- Linha ~408: `.insert(dealData)` cria o deal novo (capturar `newDeal.id`)
-- Linha ~292: `.update(...)` em deal existente (capturar `existingDeal.id`)
-- Linhas ~677/749/778: pontos de insert/update em `hubla_transactions` (capturar `transaction.id`)
+Ambos foram ingeridos como `source='kiwify'`, `sale_status='completed'`, `product_code=1475bb20-12e7-11ef-9e36-f58d9f9c7ab9` (A010), mas o `kiwify-webhook-handler` não criou contact/deal — provavelmente porque caiu no branch de "dados ausentes" (sem `customer_phone` válido) ou falha silenciosa.
 
-Confirmar a ordem dos awaits para garantir que conseguimos o `deal.id` antes do retorno.
+### Ação 1.1 — Reuso do edge function `backfill-orphan-a010-deals`
 
-### 2. Patch no `kiwify-webhook-handler`
-Após cada criação/atualização de deal, adicionar:
-```ts
-await supabase
-  .from('hubla_transactions')
-  .update({ linked_deal_id: deal.id })
-  .eq('id', transaction.id);
-```
-Seguir exatamente o padrão do `hubla-webhook-handler` (linhas 1572, 1694, 2399, 2435), incluindo tratamento de erro (log mas não aborta o webhook).
+Já existe a função `supabase/functions/backfill-orphan-a010-deals/index.ts` que faz exatamente isso via RPC `get_a010_orphan_emails`. Investigar se ela cobre o caso (provavelmente não, pois ela depende de existir um `crm_contact` órfão; aqui não há nem contato).
 
-Cobrir os 3 caminhos do Kiwify:
-- Novo deal Inside Sales
-- Deal existente atualizado (re-compra)
-- Outside (sem R1) — checar se existe esse branch no Kiwify
+### Ação 1.2 — Nova edge function `kiwify-recover-orphan-transactions`
 
-### 3. Backfill retroativo (one-shot)
-Edge function nova `kiwify-backfill-linked-deal-id` (ou reaproveitar `kiwify-backfill-a010-csv`), com `dry_run` default true:
+Criar função enxuta que, para uma lista de `hubla_id` (ou range de datas + `source='kiwify'` + `linked_deal_id IS NULL` + `sale_status='completed'`):
 
-```sql
-UPDATE hubla_transactions ht
-SET linked_deal_id = d.id
-FROM crm_contacts c
-JOIN crm_deals d ON d.contact_id = c.id
-WHERE ht.source = 'kiwify'
-  AND ht.linked_deal_id IS NULL
-  AND lower(ht.customer_email) = lower(c.email)
-  AND d.created_at BETWEEN ht.created_at - interval '7 days'
-                       AND ht.created_at + interval '7 days'
-  AND ht.created_at >= '2026-01-01'
-```
+1. Lê a linha de `hubla_transactions`.
+2. Procura/cria `crm_contact` por `lower(customer_email)` (e fallback por phone normalizado se houver) — respeitando a memória **CRM Manual Entry Deduplication**.
+3. Verifica `PARTNER_PATTERNS` no histórico — pula se for parceiro (memória **Partner Status Exclusion**).
+4. Chama RPC `get_next_lead_owner` para distribuir.
+5. Insere `crm_deals` no pipeline INSIDE SALES com `tags = ['A010','A010 Kiwify']`, `origin_id` correto, `contract_paid_at = sale_date` se aplicável.
+6. Insere `deal_activities` (owner-change + "criado via recovery").
+7. Atualiza `hubla_transactions.linked_deal_id = deal.id`, `linked_method = 'recovery'`, `linked_at = now()`.
+8. Suporta `dry_run`, `hubla_ids` (lista) ou `since/until`.
 
-Critério de match: email + janela de ±7 dias entre transação e deal. Se houver múltiplos deals no range, escolher o mais próximo no tempo. Retornar JSON com `updated_count`, `multiple_match_count`, `no_match_count`.
+### Ação 1.3 — Execução
 
-Rodar primeiro em `dry_run=true`, mostrar prévia, depois rodar de verdade após sua aprovação.
+1. `dry_run=true` apenas para os 2 hubla_ids específicos → conferir saída.
+2. `dry_run=false` mesmos 2 ids → cria os 2 deals.
+3. Query de verificação: confirmar que ambos aparecem em `crm_deals` com tag A010, e `linked_deal_id` preenchido em `hubla_transactions`.
 
-### 4. Verificação
-Após o backfill rodar real:
-- Re-query: `SELECT COUNT(*) FROM hubla_transactions WHERE source='kiwify' AND linked_deal_id IS NULL AND created_at >= '2026-06-16' AND created_at < '2026-06-17'` → esperado 0 ou bem perto
-- Re-query do RPC `get_all_hubla_transactions` para 16/06 → esperado subir de 29 para ~32
-- Comparar a contagem nova com a aba CRM (Pipeline Inside Sales filtro A010 16/06)
+---
 
-### 5. Documentação QA
-`docs/qa/2026-06-17-fix-kiwify-linked-deal-id.md` com:
-- Diagnóstico (handler Hubla faz, Kiwify não fazia)
-- Patch aplicado (links de linha)
-- Resultado do backfill (números antes/depois)
-- Os 11 casos restantes (9 deals sem ingestão + 2 órfãos puros) listados como follow-up
+## Parte 2 — Investigar 9 deals A010 de 16/06 sem ingestão Kiwify
 
-## Fora de escopo (planos separados depois)
-- Recuperar `mjosedanielmoreira@gmail.com` e `leilaiarat@gmail.com` (2 órfãos)
-- Investigar os 9 deals criados sem ingestão de webhook Kiwify (provável falha silenciosa do webhook ou criação manual)
-- Alerta automático "venda paga sem deal" / "transação sem linked_deal_id"
+Os candidatos identificados (deals 16/06 com `kiwify_txn_count = 0`):
 
-## Risco / rollback
-- Patch só adiciona um `UPDATE`; se falhar, log mas não quebra o webhook (mesma postura do Hubla handler)
-- Backfill em `dry_run` primeiro; em produção é só `UPDATE` no campo `linked_deal_id` (idempotente, reversível por SQL com `SET linked_deal_id = NULL` filtrado pela mesma condição)
+- `leorassi@gmail.com`, `willian@flashimpressaodigital.com.br`, `dioney.vitor020@gmail.com`, `rodrigobragacompras@yahoo.com.br`, `asantoseng@outlook.com`, `nathanoliveiro89@gmail.com`, `fco.lemos@hotmail.com`, `rodrigoribeiro.rlr@gmail.com`, `luizdavi@vitallisimagens.com.br`, `fernandodelimanp@gmail.com`, `jeison.wrs@hotmail.com`, `edilsonpalacio@yahoo.com.br` (e potencialmente mais — query truncada).
+
+Note: vários têm tag "A010 Hubla" (não Kiwify) — vieram pela origem antiga, não pelo webhook Kiwify. Os realmente "sem ingestão Kiwify mas com tag Kiwify" são os ~3 que se destacam: `dioney.vitor020`, `rodrigoribeiro.rlr` (`any_txn_count = 0`).
+
+### Ação 2.1 — Query diagnóstica completa
+
+Listar todos os deals A010 de 16/06 com colunas:
+- `email`, `created_at`, `tags`, `owner_id`, `created_by`, `contract_paid_at`
+- `kiwify_txn_count`, `hubla_txn_count` (separados)
+- `webhook_events` que mencionem o email em 16-17/06 (varredura em `event_data::text ilike '%email%'`)
+- `hubla_webhook_logs` matching
+
+Exporta CSV para `/mnt/documents/2026-06-17-deals-sem-ingestao-kiwify.csv`.
+
+### Ação 2.2 — Classificação por causa raiz
+
+Cada linha cai em uma das categorias:
+1. **Veio só por Hubla (não Kiwify)** — tag "A010 Hubla", `hubla_txn_count > 0`. Não é problema do webhook Kiwify, é classificação correta.
+2. **Webhook Kiwify chegou mas falhou** — existe entrada em `webhook_events` com `status='error'` ou em logs com erro. Ação: reprocessar.
+3. **Webhook Kiwify nunca chegou** — sem trace em `webhook_events`. Ação: deal foi criado manualmente / por outra rota (replicação cross-pipeline, importação CSV). Verificar `deal_activities` do deal para descobrir origem.
+4. **Email divergente** — Kiwify enviou com email diferente do CRM (typo, normalização). Buscar `hubla_transactions` 16/06 com nome similar.
+
+### Ação 2.3 — Documento QA `docs/qa/2026-06-17-deals-sem-ingestao-kiwify.md`
+
+Para cada um dos casos: causa raiz, evidência (logs/timestamps), ação tomada ou recomendação.
+
+### Ação 2.4 — Correção dos casos categoria 2 (webhook falhou)
+
+Para cada `webhook_events` com status error em 16/06 do `kiwify-webhook-handler`: usar `useReprocessWebhook` ou invocar diretamente o handler com o payload original. Validar que `hubla_transactions` foi criada e `linked_deal_id` preenchido (já corrigido pelo patch anterior).
+
+---
+
+## Parte 3 — Verificação final
+
+1. Re-rodar `get_all_hubla_transactions` para 16/06 e 17/06 → confirmar contagem esperada (32 em 16/06, +2 em 17/06).
+2. Query: `hubla_transactions` com `source='kiwify'`, `sale_status='completed'`, `linked_deal_id IS NULL`, `created_at >= '2026-06-01'` → deve voltar 0.
+3. Adicionar verificações ao QA doc final.
+
+---
+
+## Detalhes técnicos
+
+- Function nova: `supabase/functions/kiwify-recover-orphan-transactions/index.ts` (CORS, JWT manual, `service_role` interno, params Zod-validated: `dry_run`, `hubla_ids?`, `since?`, `until?`).
+- Sem migration necessária; reuso de `crm_contacts`, `crm_deals`, `deal_activities`, `hubla_transactions`.
+- Sem alteração de UI.
+- A correção do handler Kiwify (link de `linked_deal_id`) já está aplicada — esta etapa cobre apenas o backlog e o diagnóstico residual.
+
+## Fora de escopo
+
+- Alerta automático "venda paga sem deal" (próxima iteração).
+- Refatoração do branch "dados ausentes" no `kiwify-webhook-handler` para tentar criar contact mesmo sem phone (avaliar após classificação dos 9 deals).
