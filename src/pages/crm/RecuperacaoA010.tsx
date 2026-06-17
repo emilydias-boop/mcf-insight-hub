@@ -94,7 +94,10 @@ function ItemsTable({ items }: { items: InspectItem[] }) {
               <TableRow key={i}>
                 <TableCell><Badge variant="outline">{item.planilha.source}</Badge></TableCell>
                 <TableCell className="text-xs">
-                  <div className="font-medium">{item.planilha.name || '—'}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {item.planilha.name || <span className="italic text-muted-foreground">Sem nome</span>}
+                    {item.missing_name && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">sem nome</Badge>}
+                  </div>
                   <div className="text-muted-foreground">{item.planilha.email || '—'}</div>
                   <div className="text-muted-foreground">{item.planilha.phone || '—'}</div>
                 </TableCell>
