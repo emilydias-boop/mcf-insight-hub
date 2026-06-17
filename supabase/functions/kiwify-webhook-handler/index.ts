@@ -34,6 +34,43 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 // ============= HELPERS portados do hubla-webhook-handler =============
 const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
 
+/**
+ * Registra falha de ingestão (compra paga que não virou deal completo).
+ * Nunca lança — é safety net, não pode quebrar o fluxo.
+ */
+async function logIngestFailure(
+  supabase: any,
+  args: {
+    source: 'kiwify';
+    hubla_id: string | null;
+    email: string | null;
+    phone: string | null;
+    name: string | null;
+    product_name: string | null;
+    reason: string;
+    payload: any;
+    error?: string;
+  }
+): Promise<void> {
+  try {
+    await supabase.from('webhook_ingest_failures').insert({
+      source: args.source,
+      hubla_id: args.hubla_id,
+      customer_email: args.email,
+      customer_phone: args.phone,
+      customer_name: args.name,
+      product_name: args.product_name,
+      raw_payload: args.payload || {},
+      failure_reason: args.reason,
+      last_error: args.error || null,
+      status: 'pending',
+    });
+    console.warn(`[INGEST_FAILURE][kiwify] ${args.reason}`, { hubla_id: args.hubla_id, email: args.email });
+  } catch (e) {
+    console.error('[INGEST_FAILURE] Falha ao registrar falha:', e);
+  }
+}
+
 function normalizePhone(phone: string | null): string | null {
   if (!phone) return null;
   let clean = phone.replace(/\D/g, '');
