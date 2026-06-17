@@ -2875,7 +2875,8 @@ serve(async (req) => {
               name: transactionData.customer_name,
               originName: 'A010 Hubla',
               productName: productName,
-              value: netValue
+              value: netValue,
+              hublaId,
             });
           }
           
@@ -3050,7 +3051,8 @@ serve(async (req) => {
               name: transactionData.customer_name,
               originName: 'A010 Hubla',
               productName: productName,
-              value: itemNetValue
+              value: itemNetValue,
+              hublaId,
             });
           }
 
@@ -3147,6 +3149,7 @@ serve(async (req) => {
               originName: 'A010 Hubla',
               productName: a010Name,
               value: a010Price,
+              hublaId,
             });
           }
         }
