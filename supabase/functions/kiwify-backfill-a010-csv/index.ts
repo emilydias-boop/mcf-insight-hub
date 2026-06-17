@@ -201,6 +201,7 @@ async function processRow(supabase: any, row: Row) {
       }
     }
     await supabase.from('crm_deals').update(update).eq('id', existingDeal.id);
+    await upsertHublaTransactionMirror(supabase, row, existingDeal.id, compraDate, email, phone);
     return { status: 'updated', email, deal_id: existingDeal.id };
   }
 
