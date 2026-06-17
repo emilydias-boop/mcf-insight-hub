@@ -211,7 +211,8 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
 
       // Get access token from our edge function
       const { data, error } = await supabase.functions.invoke('twilio-token', {
-        body: { identity: user.email || user.id }
+        body: { identity: user.email || user.id },
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
       });
 
       if (error || !data?.token) {
@@ -237,8 +238,14 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       twilioDevice.on('tokenWillExpire', async () => {
         console.log('Twilio token will expire soon, refreshing...');
         try {
+          const { data: refreshSession } = await supabase.auth.getSession();
+          if (!refreshSession?.session?.access_token) {
+            console.warn('[Twilio] Sem sessão ao renovar token.');
+            return;
+          }
           const { data: refreshData } = await supabase.functions.invoke('twilio-token', {
-            body: { identity: user?.email || user?.id }
+            body: { identity: user?.email || user?.id },
+            headers: { Authorization: `Bearer ${refreshSession.session.access_token}` },
           });
           if (refreshData?.token) {
             twilioDevice.updateToken(refreshData.token);
