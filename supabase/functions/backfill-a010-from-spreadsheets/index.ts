@@ -364,8 +364,9 @@ async function processRow(supabase: any, row: Row, dryRun: boolean) {
 async function inspectRow(supabase: any, row: Row) {
   const email = (row.email || '').toLowerCase().trim() || null;
   const phone = normalizePhone(row.phone);
+  const missing_name = !row.name || !String(row.name).trim();
   if (!email && !phone) {
-    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const };
+    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const, missing_name };
   }
 
   // Find by email
@@ -394,7 +395,7 @@ async function inspectRow(supabase: any, row: Row) {
   }
 
   if (!contact) {
-    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const };
+    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const, missing_name };
   }
 
   // Last deal across pipelines
@@ -454,6 +455,7 @@ async function inspectRow(supabase: any, row: Row) {
         }
       : null,
     risco,
+    missing_name,
   };
 }
 
