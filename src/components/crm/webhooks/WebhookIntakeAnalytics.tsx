@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { useWebhookEndpoints } from '@/hooks/useWebhookEndpoints';
 import { useWebhookIntakeAnalytics, WebhookLeadDetail } from '@/hooks/useWebhookIntakeAnalytics';
+import { IngestFailuresCard } from '@/components/crm/webhooks/IngestFailuresCard';
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { FileText, Search, Users, UserCheck, TrendingUp, UserX, Download } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
@@ -207,6 +208,9 @@ export function WebhookIntakeAnalytics() {
 
   return (
     <div className="space-y-6">
+      {/* Monitor de ingestão: compras pagas que não viraram deal */}
+      <IngestFailuresCard />
+
       {/* Filters */}
       <Card>
         <CardHeader>
