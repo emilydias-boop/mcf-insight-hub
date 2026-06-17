@@ -361,6 +361,102 @@ async function processRow(supabase: any, row: Row, dryRun: boolean) {
   return { status: 'created', email, deal_id: newDeal?.id, owner_id: ownerId };
 }
 
+async function inspectRow(supabase: any, row: Row) {
+  const email = (row.email || '').toLowerCase().trim() || null;
+  const phone = normalizePhone(row.phone);
+  if (!email && !phone) {
+    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const };
+  }
+
+  // Find by email
+  let contact: any = null;
+  let matchType: 'email' | 'phone' | 'none' = 'none';
+  if (email) {
+    const { data } = await supabase
+      .from('crm_contacts')
+      .select('id, name, email, phone')
+      .ilike('email', email)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (data) { contact = data; matchType = 'email'; }
+  }
+  if (!contact && phone) {
+    const digits = phone.replace(/\D/g, '');
+    const { data } = await supabase
+      .from('crm_contacts')
+      .select('id, name, email, phone')
+      .or(`phone.eq.${phone},phone.eq.+${digits},phone.eq.${digits}`)
+      .limit(1)
+      .maybeSingle();
+    if (data) { contact = data; matchType = 'phone'; }
+  }
+
+  if (!contact) {
+    return { bucket: 'no_match', match_type: 'none', planilha: row, contato_existente: null, ultimo_deal: null, risco: 'medio' as const };
+  }
+
+  // Last deal across pipelines
+  const { data: lastDeal } = await supabase
+    .from('crm_deals')
+    .select('id, name, product_name, tags, stage_id, owner_id, owner_profile_id, created_at, origin_id, custom_fields')
+    .eq('contact_id', contact.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let pipelineName: string | null = null;
+  let stageName: string | null = null;
+  if (lastDeal?.origin_id) {
+    const { data: o } = await supabase.from('crm_origins').select('name').eq('id', lastDeal.origin_id).maybeSingle();
+    pipelineName = o?.name || null;
+  }
+  if (lastDeal?.stage_id) {
+    const { data: s } = await supabase.from('crm_stages').select('stage_name').eq('id', lastDeal.stage_id).maybeSingle();
+    stageName = s?.stage_name || null;
+  }
+
+  const tags: string[] = lastDeal?.tags || [];
+  const isInsideSales = pipelineName ? /pipeline inside sales/i.test(pipelineName) : false;
+  const hasA010Tag = tags.some((t) => /a010/i.test(t));
+  const cf = lastDeal?.custom_fields || {};
+  const hasOtherSale = cf?.contrato_pago === true || /contrato pago/i.test(stageName || '') || cf?.sale_status === 'completed';
+
+  let risco: 'baixo' | 'medio' | 'alto' = 'medio';
+  if (matchType === 'email') {
+    risco = 'baixo';
+  } else if (isInsideSales || hasA010Tag) {
+    risco = 'baixo';
+  } else if (hasOtherSale) {
+    risco = 'alto';
+  } else {
+    risco = 'medio';
+  }
+
+  const bucket = matchType === 'email' ? 'matched_by_email' : 'matched_by_phone_only';
+
+  return {
+    bucket,
+    match_type: matchType,
+    planilha: row,
+    contato_existente: contact,
+    ultimo_deal: lastDeal
+      ? {
+          id: lastDeal.id,
+          name: lastDeal.name,
+          product_name: lastDeal.product_name,
+          pipeline: pipelineName,
+          stage: stageName,
+          owner_email: lastDeal.owner_id,
+          created_at: lastDeal.created_at,
+          tags,
+        }
+      : null,
+    risco,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -372,7 +468,27 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const rows: Row[] = body.rows || [];
-    const dryRun: boolean = !!body.dry_run;
+    const mode: 'inspect' | 'apply' | 'dry_run' = body.mode || (body.dry_run ? 'dry_run' : 'apply');
+
+    if (mode === 'inspect') {
+      const results = [];
+      for (const row of rows) {
+        try { results.push(await inspectRow(supabase, row)); }
+        catch (e: any) { results.push({ bucket: 'error', planilha: row, error: e?.message || String(e) }); }
+      }
+      const buckets = {
+        matched_by_email: results.filter((r: any) => r.bucket === 'matched_by_email'),
+        matched_by_phone_only: results.filter((r: any) => r.bucket === 'matched_by_phone_only'),
+        no_match: results.filter((r: any) => r.bucket === 'no_match'),
+        errors: results.filter((r: any) => r.bucket === 'error'),
+      };
+      return new Response(
+        JSON.stringify({ mode, processed: rows.length, counts: { matched_by_email: buckets.matched_by_email.length, matched_by_phone_only: buckets.matched_by_phone_only.length, no_match: buckets.no_match.length, errors: buckets.errors.length }, buckets }, null, 2),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const dryRun: boolean = mode === 'dry_run';
 
     const results: any[] = [];
     let created = 0, updated = 0, exists = 0, blocked = 0, errors = 0, skipped = 0, would_create = 0;
