@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PostgrestSingleResponse } from '@supabase/supabase-js';
+import { THIRTY_DAYS_MS } from '@/lib/r2ChannelClassify';
 
 type A010QueryResult = PostgrestSingleResponse<{ customer_email: string | null }[]>;
+type A010DatedQueryResult = PostgrestSingleResponse<{
+  customer_email: string | null;
+  sale_date: string | null;
+  created_at: string | null;
+}[]>;
 export type SalesChannel = 'a010' | 'bio' | 'live';
 
 interface DealChannelInfo {
