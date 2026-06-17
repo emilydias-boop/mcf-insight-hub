@@ -29,7 +29,7 @@ function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[
           const product = String(r[find(/prod/i) || ''] || '').trim();
           const value = Number(String(r[find(/valor|price|amount/i) || ''] || '0').replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
           return { source, name, email, phone: phone || null, product: product || null, value };
-        }).filter((r) => r.email || r.phone);
+        }).filter((r) => r.email || r.phone); // aceita linhas sem nome (fallback "Sem nome (A010)")
         resolve(rows);
       } catch (err) { reject(err); }
     };
