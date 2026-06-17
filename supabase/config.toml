@@ -111,6 +111,9 @@ verify_jwt = false
 [functions.twilio-voice-twiml]
 verify_jwt = false
 
+[functions.twilio-transcript-callback]
+verify_jwt = false
+
 [functions.sync-newsale-orphans]
 verify_jwt = false
 

@@ -216,6 +216,88 @@ serve(async (req) => {
         }
       }
 
+      // ============================================================
+      // AI TRANSCRIPTION TRIGGER
+      // For calls ≥ 60s, kick off a Twilio Voice Intelligence transcript.
+      // The transcript.completed callback (twilio-transcript-callback)
+      // will fetch sentences, summarize via Lovable AI, and persist.
+      // ============================================================
+      try {
+        const minDuration = 60;
+        if (recordingSid && durationSeconds && durationSeconds >= minDuration) {
+          const serviceSid = Deno.env.get('TWILIO_VOICE_INTELLIGENCE_SERVICE_SID');
+          const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+          const apiKeySid = Deno.env.get('TWILIO_API_KEY_SID');
+          const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET');
+          const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+
+          // Resolve call.id for CustomerKey (lets the callback map transcript → call)
+          let resolvedCallId: string | null = callRecordIdFromUrl;
+          if (!resolvedCallId && callSid) {
+            const { data: row } = await supabase
+              .from('calls').select('id').eq('twilio_call_sid', callSid).maybeSingle();
+            resolvedCallId = row?.id || null;
+          }
+
+          if (!serviceSid) {
+            console.warn('[VI] TWILIO_VOICE_INTELLIGENCE_SERVICE_SID not set — skipping transcript');
+          } else if (!resolvedCallId) {
+            console.warn('[VI] cannot resolve callId — skipping transcript');
+          } else {
+            const basicAuth = apiKeySid && apiKeySecret
+              ? btoa(`${apiKeySid}:${apiKeySecret}`)
+              : btoa(`${accountSid}:${authToken}`);
+
+            const body = new URLSearchParams({
+              ServiceSid: serviceSid,
+              Channel: JSON.stringify({
+                media_properties: {
+                  source_sid: recordingSid,
+                },
+              }),
+              LanguageCode: 'pt-BR',
+              CustomerKey: resolvedCallId,
+            });
+
+            const viResp = await fetch('https://intelligence.twilio.com/v2/Transcripts', {
+              method: 'POST',
+              headers: {
+                Authorization: `Basic ${basicAuth}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body,
+            });
+            const viData = await viResp.json().catch(() => null);
+
+            if (viResp.ok && viData?.sid) {
+              await supabase
+                .from('calls')
+                .update({
+                  transcript_sid: viData.sid,
+                  transcript_status: 'processing',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', resolvedCallId);
+              console.log(`[VI] ✅ transcript created: ${viData.sid} for call ${resolvedCallId}`);
+            } else {
+              console.error(`[VI] transcript create failed: ${viResp.status}`, viData);
+              await supabase
+                .from('calls')
+                .update({ transcript_status: 'failed', updated_at: new Date().toISOString() })
+                .eq('id', resolvedCallId);
+            }
+          }
+        } else if (durationSeconds && durationSeconds < 60 && callRecordIdFromUrl) {
+          await supabase
+            .from('calls')
+            .update({ transcript_status: 'skipped_short', updated_at: new Date().toISOString() })
+            .eq('id', callRecordIdFromUrl);
+          console.log(`[VI] skipped (duration=${durationSeconds}s < 60s)`);
+        }
+      } catch (viErr) {
+        console.error('[VI] Error triggering transcript:', viErr);
+      }
+
       // Return empty TwiML response
       return new Response(
         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',

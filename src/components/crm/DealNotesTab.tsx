@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
-import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck } from 'lucide-react';
+import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -17,7 +17,7 @@ interface DealNotesTabProps {
   contactId?: string | null;
 }
 
-type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call' | 'qualification' | 'closer';
+type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call' | 'qualification' | 'closer' | 'ai_call_summary';
 
 interface CombinedNote {
   id: string;
@@ -38,6 +38,7 @@ const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string;
   call: { bg: 'bg-green-500/10', border: 'border-green-500/30', color: 'text-green-600', label: 'Ligação' },
   qualification: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', color: 'text-purple-600', label: 'Qualificação' },
   closer: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', color: 'text-indigo-600', label: 'Pós-Reunião' },
+  ai_call_summary: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', color: 'text-fuchsia-600', label: 'Resumo IA' },
 };
 
 const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
@@ -48,6 +49,7 @@ const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
   call: <Phone className="h-3 w-3" />,
   qualification: <ClipboardList className="h-3 w-3" />,
   closer: <UserCheck className="h-3 w-3" />,
+  ai_call_summary: <Sparkles className="h-3 w-3" />,
 };
 
 export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabProps) => {
@@ -68,7 +70,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
         .from('deal_activities')
         .select('id, description, created_at, metadata, activity_type')
         .in('deal_id', uniqueIds)
-        .in('activity_type', ['note', 'qualification_note']);
+        .in('activity_type', ['note', 'qualification_note', 'ai_call_summary']);
       console.log('[DealNotesTab] manualNotes:', manualNotes?.length, 'error:', manualError);
       
       // 2. Notas de agendamento + closer_notes (meeting_slot_attendees) - ALL deals
@@ -130,12 +132,34 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
         // Notas manuais + qualificação
         ...(manualNotes || []).map(n => ({
           id: n.id,
-          content: n.description || '',
+          content: (() => {
+            if (n.activity_type === 'ai_call_summary') {
+              const m = (n.metadata as Record<string, any>) || {};
+              const s = m.summary || {};
+              const bullets = (s.bullets || []).map((b: string) => `• ${b}`).join('\n');
+              const d = s.discovery || {};
+              const discovery = [
+                `Conhece MCF há: ${d.tempo_conhece_mcf || 'não informado'}`,
+                `Profissão: ${d.profissao || 'não informado'}`,
+                `Renda: ${d.renda || 'não informado'}`,
+                `Já constrói: ${d.ja_constroi || 'não informado'}`,
+                `Possui imóvel: ${d.possui_imovel || 'não informado'}`,
+                `Possui terreno: ${d.possui_terreno || 'não informado'}`,
+                `Tem sócio: ${d.tem_socio || 'não informado'}`,
+              ].join('\n');
+              return `${bullets}\n\n— Descoberta —\n${discovery}\n\n— Próximos passos —\n${s.next_steps || '—'}`;
+            }
+            return n.description || '';
+          })(),
           created_at: n.created_at!,
-          type: (n.activity_type === 'qualification_note' ? 'qualification' : 'manual') as NoteType,
+          type: (n.activity_type === 'qualification_note'
+            ? 'qualification'
+            : n.activity_type === 'ai_call_summary'
+              ? 'ai_call_summary'
+              : 'manual') as NoteType,
           author: (n.metadata as Record<string, any>)?.sdr_name 
             || (n.metadata as Record<string, any>)?.author 
-            || 'Usuário'
+            || '🤖 IA'
         })),
         
         // Notas de agendamento (SDR notes)
@@ -175,8 +199,14 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
           id: n.id,
           content: n.note,
           created_at: n.created_at!,
-          type: (n.note_type === 'reschedule' ? 'reschedule' : 'attendee') as NoteType,
-          author: creatorMap.get(n.created_by!) || 'Usuário'
+          type: (n.note_type === 'reschedule'
+            ? 'reschedule'
+            : n.note_type === 'call_summary'
+              ? 'ai_call_summary'
+              : 'attendee') as NoteType,
+          author: n.note_type === 'call_summary'
+            ? '🤖 IA'
+            : (creatorMap.get(n.created_by!) || 'Usuário')
         })),
         
         // Notas de ligação
