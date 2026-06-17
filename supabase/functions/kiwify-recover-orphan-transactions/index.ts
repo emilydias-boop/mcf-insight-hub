@@ -113,7 +113,17 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: true }).limit(1).maybeSingle();
     if (existing) {
       contactId = existing.id;
-    } else {
+    } else if (normalizedPhone) {
+      const digits = normalizedPhone.replace(/\D/g, "");
+      const suffix = digits.slice(-9);
+      const { data: byPhone } = await supabase
+        .from("crm_contacts").select("id, phone")
+        .ilike("phone", `%${suffix}`).eq("is_archived", false)
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
+      if (byPhone) contactId = byPhone.id;
+    }
+
+    if (!contactId) {
       const { data: newContact, error: cErr } = await supabase
         .from("crm_contacts").insert({
           clint_id: `kiwify-recover-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -125,10 +135,17 @@ Deno.serve(async (req) => {
           custom_fields: { source: "kiwify-recovery", product: tx.product_name, hubla_id: tx.hubla_id },
         }).select("id").single();
       if (cErr) {
-        results.push({ hubla_id: tx.hubla_id, email, status: "error", reason: `contact: ${cErr.message}` });
-        continue;
+        // Parse duplicate_contact:phone:<suffix>:<uuid>
+        const m = cErr.message.match(/duplicate_contact:[^:]+:[^:]+:([0-9a-f-]{36})/i);
+        if (m) {
+          contactId = m[1];
+        } else {
+          results.push({ hubla_id: tx.hubla_id, email, status: "error", reason: `contact: ${cErr.message}` });
+          continue;
+        }
+      } else {
+        contactId = newContact?.id || null;
       }
-      contactId = newContact?.id || null;
     }
     if (!contactId) {
       results.push({ hubla_id: tx.hubla_id, email, status: "error", reason: "no_contact_id" });
