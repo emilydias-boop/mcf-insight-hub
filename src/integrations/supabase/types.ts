@@ -1927,6 +1927,8 @@ export type Database = {
       }
       calls: {
         Row: {
+          ai_processed_at: string | null
+          ai_summary: Json | null
           answered_by: string | null
           contact_id: string | null
           created_at: string | null
@@ -1946,11 +1948,15 @@ export type Database = {
           status: string | null
           summary: string | null
           to_number: string
+          transcript_sid: string | null
+          transcript_status: string | null
           twilio_call_sid: string | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
+          ai_processed_at?: string | null
+          ai_summary?: Json | null
           answered_by?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -1970,11 +1976,15 @@ export type Database = {
           status?: string | null
           summary?: string | null
           to_number: string
+          transcript_sid?: string | null
+          transcript_status?: string | null
           twilio_call_sid?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
+          ai_processed_at?: string | null
+          ai_summary?: Json | null
           answered_by?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -1994,6 +2004,8 @@ export type Database = {
           status?: string | null
           summary?: string | null
           to_number?: string
+          transcript_sid?: string | null
+          transcript_status?: string | null
           twilio_call_sid?: string | null
           updated_at?: string | null
           user_id?: string | null
