@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
     if (dealId) {
       const { error: linkErr } = await supabase
         .from("hubla_transactions")
-        .update({ linked_deal_id: dealId, linked_at: new Date().toISOString(), linked_method: "recovery" })
+        .update({ linked_deal_id: dealId, linked_at: new Date().toISOString(), linked_method: "manual" })
         .eq("id", tx.id);
       if (linkErr) {
         results.push({ hubla_id: tx.hubla_id, email, status: "linked_failed", deal_id: dealId, reason: linkErr.message });
