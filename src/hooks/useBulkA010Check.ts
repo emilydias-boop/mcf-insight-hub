@@ -236,3 +236,84 @@ export const useBulkChannelCheck = (
     staleTime: 5 * 60 * 1000,
   });
 };
+
+/**
+ * Hook A010 com janela de tempo (default 30 dias).
+ * Retorna Map<email, boolean> indicando se o email comprou A010 dentro da janela
+ * a partir da data de referência (default: agora).
+ *
+ * Usado no /crm/negocios para o filtro "Canal A010" e badge do Kanban,
+ * para evitar rotular como A010 leads cuja compra é antiga.
+ */
+export const useBulkA010CheckRecent = (
+  emails: string[],
+  windowMs: number = THIRTY_DAYS_MS,
+  referenceISO?: string
+) => {
+  const cleanEmails = [...new Set(emails.filter(Boolean).map(e => e.toLowerCase()))];
+  const refMs = referenceISO ? new Date(referenceISO).getTime() : Date.now();
+
+  return useQuery({
+    queryKey: [
+      'bulk-a010-check-recent',
+      windowMs,
+      // arredonda referência para hora para estabilidade de cache
+      Math.floor(refMs / (60 * 60 * 1000)),
+      cleanEmails.sort().join(','),
+    ],
+    queryFn: async (): Promise<Map<string, boolean>> => {
+      const resultMap = new Map<string, boolean>();
+      if (cleanEmails.length === 0) return resultMap;
+
+      const emailChunks = chunkArray(cleanEmails, CHUNK_SIZE);
+
+      const results = await processInBatches<string[], A010DatedQueryResult>(
+        emailChunks,
+        MAX_CONCURRENT_REQUESTS,
+        async (chunk) => supabase
+          .from('hubla_transactions')
+          .select('customer_email, sale_date, created_at')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
+      );
+
+      // Para cada email, guardar a data de compra mais recente (ms)
+      const lastByEmail = new Map<string, number>();
+      let errorCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && !result.value.error) {
+          result.value.data?.forEach(t => {
+            if (!t.customer_email) return;
+            const dateStr = t.sale_date || t.created_at;
+            if (!dateStr) return;
+            const ms = new Date(dateStr).getTime();
+            if (!Number.isFinite(ms)) return;
+            const email = t.customer_email.toLowerCase();
+            const prev = lastByEmail.get(email);
+            if (prev === undefined || ms > prev) lastByEmail.set(email, ms);
+          });
+        } else {
+          errorCount++;
+          console.error(`[useBulkA010CheckRecent] Chunk ${index + 1} falhou`);
+        }
+      });
+
+      cleanEmails.forEach(email => {
+        const last = lastByEmail.get(email);
+        const isRecent = last !== undefined && (refMs - last) <= windowMs;
+        resultMap.set(email, isRecent);
+      });
+
+      console.log(
+        `[useBulkA010CheckRecent] ${cleanEmails.length} emails, janela ${windowMs}ms, ` +
+        `${Array.from(resultMap.values()).filter(Boolean).length} A010 ativos, erros=${errorCount}`
+      );
+
+      return resultMap;
+    },
+    enabled: cleanEmails.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+};
