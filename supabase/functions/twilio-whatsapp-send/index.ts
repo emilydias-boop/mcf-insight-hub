@@ -22,7 +22,8 @@ serve(async (req) => {
   }
 
   try {
-    // Require authenticated caller
+    // Require authenticated caller: end-user JWT (with sub) OR service role
+    // (server-to-server call from cron / automation-processor).
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -30,13 +31,25 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-    );
     const jwt = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsErr } = await supabaseAuth.auth.getClaims(jwt);
-    if (claimsErr || !claimsData?.claims?.sub) {
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    let authorized = false;
+
+    if (serviceRoleKey && jwt === serviceRoleKey) {
+      authorized = true;
+    } else {
+      const supabaseAuth = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+      );
+      const { data: claimsData } = await supabaseAuth.auth.getClaims(jwt);
+      const claims = claimsData?.claims as { sub?: string; role?: string } | undefined;
+      if (claims?.role === 'service_role' || claims?.sub) {
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
