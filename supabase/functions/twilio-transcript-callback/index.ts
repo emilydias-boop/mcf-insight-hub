@@ -164,14 +164,44 @@ serve(async (req) => {
     let eventType: string | null = null;
     const contentType = req.headers.get("content-type") || "";
 
-    if (contentType.includes("application/json")) {
-      const body = await req.json();
-      transcriptSid = body.transcript_sid || body.TranscriptSid || null;
-      eventType = body.event_type || body.EventType || null;
-    } else {
-      const fd = await req.formData();
-      transcriptSid = (fd.get("transcript_sid") || fd.get("TranscriptSid"))?.toString() || null;
-      eventType = (fd.get("event_type") || fd.get("EventType"))?.toString() || null;
+    // Read raw body once so we can log it and try multiple parsing strategies.
+    const rawBody = await req.text();
+    console.log(`[transcript-callback] content-type=${contentType} raw=${rawBody.slice(0, 800)}`);
+
+    const extractFromObject = (obj: any) => {
+      if (!obj || typeof obj !== "object") return;
+      for (const [k, v] of Object.entries(obj)) {
+        const key = k.toLowerCase();
+        if (!transcriptSid && (key === "transcript_sid" || key === "transcriptsid" || key === "sid")) {
+          if (typeof v === "string" && v.startsWith("GT")) transcriptSid = v;
+        }
+        if (!eventType && (key === "event_type" || key === "eventtype" || key === "status_callback_event" || key === "type")) {
+          if (typeof v === "string") eventType = v;
+        }
+        if (v && typeof v === "object") extractFromObject(v);
+      }
+    };
+
+    if (rawBody) {
+      try {
+        const parsed = JSON.parse(rawBody);
+        extractFromObject(parsed);
+      } catch {
+        try {
+          const params = new URLSearchParams(rawBody);
+          const obj: Record<string, string> = {};
+          for (const [k, v] of params.entries()) obj[k] = v;
+          extractFromObject(obj);
+        } catch {
+          // ignore — last-ditch regex below
+        }
+      }
+    }
+
+    // Last-ditch: regex any GT... id from the raw body or URL.
+    if (!transcriptSid) {
+      const m = rawBody.match(/GT[a-f0-9]{32}/i) || req.url.match(/GT[a-f0-9]{32}/i);
+      if (m) transcriptSid = m[0];
     }
 
     console.log(`[transcript-callback] event=${eventType} sid=${transcriptSid}`);
