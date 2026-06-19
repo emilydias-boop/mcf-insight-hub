@@ -1,48 +1,62 @@
-# Bug: lead volta de "Sem Interesse" para "Em contato" após chamada
+## Problema
 
-## Causa raiz (confirmada no banco)
-
-Lead `Danilo da Costa Pereira - A010` (id `b3a5af02…`) hoje 18/06 17:19:
-- O usuário arrastou o card para **Sem Interesse** (`b06c9413…`) durante a ligação Twilio.
-- Quando o webhook `twilio-voice-webhook` recebeu o status final da chamada (`no-answer`), ele chamou a RPC `public.auto_move_deal_to_em_contato`, que **moveu o deal de "Sem Interesse" → "Em contato"** automaticamente, gravando a activity:
-
-  > "Movido automaticamente para 'Em contato' — tentativa de chamada Twilio (não atendida)"
-
-A função tem uma whitelist de estágios "de origem" permitidos para esse auto-move:
+Vendas A010 vindas via Hubla no fluxo `invoice.payment_succeeded` **sem `items`** estão falhando com:
 
 ```
-e6fab26d  ANAMNESE INCOMPLETA
-d346320a  Lead Gratuito
-3c81d73b  Lead Instagram
-cf4a369c  Novo Lead
-a1d19874  Lead Qualificado
-b06c9413  Sem Interesse   ← ERRADO
+ReferenceError: hublaId is not defined
+  at hubla-webhook-handler/index.ts:2243
 ```
 
-"Sem Interesse" é estágio terminal/negativo e **não deve** ser elegível para o auto-move pós-tentativa de chamada. Sua presença na lista faz o sistema sobrescrever a decisão consciente do usuário toda vez que ele move um lead para "Sem Interesse" enquanto a ligação ainda está finalizando no Twilio.
+A transação é gravada em `hubla_transactions` e `a010_sales`, mas o erro estoura **antes** de `createOrUpdateCRMContact(...)`, então **o lead nunca entra no CRM Inside Sales** (sem contato → sem deal → sem distribuição).
 
-Isso explica perfeitamente o sintoma descrito:
-- UI mostra o card sendo movido para "Sem Interesse" (update local + update no Supabase ok).
-- Segundos depois o webhook Twilio dispara e a RPC sobrescreve o `stage_id` para `b1c0a7e2` (Em contato).
-- No próximo refetch o card aparece de volta em "Em contato".
+## Impacto real (não são só 4)
 
-## Correção
+Os 4 logs vistos são 2 webhooks × 2 mensagens. Cruzando `hubla_transactions` A010 × `crm_contacts`:
 
-Migration única recriando `public.auto_move_deal_to_em_contato` com o mesmo corpo, removendo apenas `b06c9413-0312-4f1d-89b4-822d79bc6a90` (Sem Interesse) do array `v_allowed`. Nenhuma outra mudança de assinatura/lógica.
+- **22 leads A010 órfãos** entre 17/06 e 19/06 (7 + 9 + 6).
+- Antes de 17/06 a taxa de "sem contato" era 0–2/dia (dedup legítimo) — confirma que o bug entrou em 17/06.
+- Lista completa de emails afetados disponível na query de auditoria.
 
-Lista final de estágios elegíveis ao auto-move:
+## Causa
 
+Em `supabase/functions/hubla-webhook-handler/index.ts`, no branch "sem items" (~linha 2878), passa-se `hublaId` para `createOrUpdateCRMContact`, mas a variável `hublaId` só é declarada mais adiante, dentro do loop `for (items)` (~linha 2932). Fora do loop ela não existe → ReferenceError fatal.
+
+## Correção (1 linha)
+
+Trocar no objeto passado a `createOrUpdateCRMContact` dentro do bloco A010 sem items:
+
+```ts
+hublaId,
 ```
-ANAMNESE INCOMPLETA, Lead Gratuito, Lead Instagram, Novo Lead, Lead Qualificado
+
+por:
+
+```ts
+hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
 ```
+
+A assinatura de `createOrUpdateCRMContact` já aceita `hublaId?: string | null`.
+
+## Backfill dos 22 leads
+
+Após o deploy, rodar um script de recuperação que, para cada `hubla_transactions` A010 dos últimos 7 dias cujo `customer_email` não existe em `crm_contacts`, chama `createOrUpdateCRMContact` com:
+
+- `email`, `phone`, `name` da transação
+- `originName: 'A010 Hubla'`
+- `productName`, `value` (net_value)
+- `hublaId` = `hubla_id` da transação
+
+Opção A — edge function pontual `backfill-a010-orphans` invocada uma vez.  
+Opção B — reenviar manualmente os webhooks via fila Hubla.
+
+Recomendo Opção A (mais rápida e idempotente — `createOrUpdateCRMContact` já dedupa por origin+contato).
 
 ## Validação
 
-1. Após a migration, abrir o deal de Danilo, mover manualmente para "Sem Interesse" novamente.
-2. Disparar (ou aguardar) uma nova tentativa de chamada.
-3. Conferir em `deal_activities` que **não** aparece novo registro `stage_change` automático para "Em contato" e que `crm_deals.stage_id` permanece em `b06c9413` (Sem Interesse).
+1. Logs de `hubla-webhook-handler` sem novo `ReferenceError`.
+2. Próxima venda A010 cria contato + deal no CRM (origin `A010 Hubla`).
+3. Após backfill, a query de auditoria mostra 0 órfãos para 17/06–19/06.
 
 ## Fora de escopo
 
-- Não tocar no front (kanban, InlineCallControls, etc.). O bug é 100% server-side na RPC.
-- Não alterar o webhook `twilio-voice-webhook` — ele continua chamando a RPC, que passa a respeitar "Sem Interesse".
+Sem mudanças em frontend, schema, RLS ou outras integrações.
