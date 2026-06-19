@@ -2556,6 +2556,7 @@ async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealD
   }
 }
 
+if (import.meta.main) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
