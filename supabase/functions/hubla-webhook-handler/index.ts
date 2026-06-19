@@ -434,7 +434,7 @@ async function checkIfPartner(supabase: any, email: string | null): Promise<{isP
   return { isPartner: false, product: null };
 }
 
-async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
+export async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
   if (!data.email && !data.phone) {
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
     // SAFETY NET: compra paga sem email+phone → fica visível para revisão
