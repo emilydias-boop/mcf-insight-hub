@@ -3353,4 +3353,3 @@ Deno.serve(async (req) => {
     await finalizeWebhookLog();
   }
 });
-}
