@@ -3149,7 +3149,7 @@ Deno.serve(async (req) => {
               originName: 'A010 Hubla',
               productName: a010Name,
               value: a010Price,
-              hublaId,
+              hublaId: invoice?.id ?? null,
             });
           }
         }
