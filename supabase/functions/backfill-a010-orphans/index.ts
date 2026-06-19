@@ -1,7 +1,10 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createOrUpdateCRMContact } from "../hubla-webhook-handler/index.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -14,12 +17,6 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const days = Number(url.searchParams.get("days") ?? "7");
 
-  // Buscar compras A010 sem contato no CRM
-  const { data: orphans, error } = await supabase.rpc("exec_sql" as any, {}).then(
-    () => ({ data: null, error: { message: "rpc not used" } }),
-    () => ({ data: null, error: null }),
-  );
-  // Fallback: query direta
   const sinceIso = new Date(Date.now() - days * 86400_000).toISOString();
   const { data: txs, error: txErr } = await supabase
     .from("hubla_transactions")
