@@ -97,6 +97,7 @@ const Automacoes = lazy(() => import("./pages/admin/Automacoes"));
 const ConfiguracaoBU = lazy(() => import("./pages/admin/ConfiguracaoBU"));
 const AdminMonthLocks = lazy(() => import("./pages/admin/MonthLocks"));
 const AdminLateStatusAttempts = lazy(() => import("./pages/admin/LateStatusAttempts"));
+const AdminAuditoriaTranscricoes = lazy(() => import("./pages/admin/AuditoriaTranscricoes"));
 const AdminRegrasProcesso = lazy(() => import("./pages/admin/RegrasProcesso"));
 const CallThresholdsConfig = lazy(() => import("./pages/admin/CallThresholdsConfig"));
 const QaDocsViewer = lazy(() => import("./pages/admin/QaDocsViewer"));
@@ -225,6 +226,7 @@ const App = () => (
               <Route path="admin/configuracao-bu" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracaoBU /></RoleGuard>} />
               <Route path="admin/travas-fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminMonthLocks /></RoleGuard>} />
               <Route path="admin/alteracoes-tardias" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminLateStatusAttempts /></RoleGuard>} />
+              <Route path="admin/auditoria-transcricoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminAuditoriaTranscricoes /></RoleGuard>} />
               <Route path="admin/regras-processo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminRegrasProcesso /></RoleGuard>} />
               <Route path="admin/faixas-ligacoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><CallThresholdsConfig /></RoleGuard>} />
               <Route path="admin/documentacao-qa" element={<RoleGuard allowedRoles={['admin', 'manager']}><QaDocsViewer /></RoleGuard>} />
