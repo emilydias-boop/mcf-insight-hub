@@ -2875,7 +2875,7 @@ Deno.serve(async (req) => {
               originName: 'A010 Hubla',
               productName: productName,
               value: netValue,
-              hublaId,
+              hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
             });
           }
           
@@ -3148,7 +3148,7 @@ Deno.serve(async (req) => {
               originName: 'A010 Hubla',
               productName: a010Name,
               value: a010Price,
-              hublaId,
+              hublaId: invoice?.id ?? null,
             });
           }
         }
