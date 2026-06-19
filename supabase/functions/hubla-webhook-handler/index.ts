@@ -587,6 +587,25 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         contactId = byPhone.id;
         console.log(`[CRM] Contato existente por telefone: ${contactId}`);
       }
+
+      // Fallback: buscar pelos últimos 9 dígitos (cobre formatos não normalizados existentes)
+      if (!contactId) {
+        const suffix = phoneDigits.slice(-9);
+        if (suffix.length >= 8) {
+          const { data: bySuffix } = await supabase
+            .from('crm_contacts')
+            .select('id, email, phone')
+            .like('phone', `%${suffix}`)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (bySuffix) {
+            existingContact = bySuffix;
+            contactId = bySuffix.id;
+            console.log(`[CRM] Contato existente por sufixo de telefone (${suffix}): ${contactId}`);
+          }
+        }
+      }
     }
     
     // 4. Se encontrou contato, atualizar telefone para formato normalizado
@@ -600,23 +619,88 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     
     // 5. Se não encontrou, criar novo contato com telefone normalizado
     if (!contactId) {
+      const insertPayload = {
+        clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        name: data.name || 'Cliente A010',
+        email: data.email,
+        phone: normalizedPhone,
+        origin_id: originId,
+        tags: targetTags,
+        custom_fields: { source: 'hubla', product: data.productName }
+      };
       const { data: newContact, error: contactError } = await supabase
         .from('crm_contacts')
-        .insert({
-          clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          name: data.name || 'Cliente A010',
-          email: data.email,
-          phone: normalizedPhone,
-          origin_id: originId,
-          tags: targetTags,
-          custom_fields: { source: 'hubla', product: data.productName }
-        })
+        .insert(insertPayload)
         .select('id')
         .single();
-      
+
       if (!contactError && newContact) {
         contactId = newContact.id;
         console.log(`[CRM] Contato criado: ${data.name} (${contactId})`);
+      } else if (contactError) {
+        // Tratar colisão de unicidade (email/telefone): re-buscar e reaproveitar
+        const code = (contactError as any)?.code;
+        const msg = (contactError as any)?.message || '';
+        const isUniqueViolation = code === '23505' || /duplicate key|unique constraint/i.test(msg);
+        if (isUniqueViolation) {
+          console.warn(`[CRM] Insert de contato falhou por unicidade (${code}): ${msg}. Re-buscando contato existente.`);
+          // Re-busca por email
+          if (data.email) {
+            const { data: retryByEmail } = await supabase
+              .from('crm_contacts')
+              .select('id, phone')
+              .ilike('email', data.email)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            if (retryByEmail) {
+              contactId = retryByEmail.id;
+              existingContact = retryByEmail;
+              console.log(`[CRM] Contato reaproveitado após colisão (email): ${contactId}`);
+            }
+          }
+          // Re-busca por telefone (sufixo) se ainda não achou
+          if (!contactId && normalizedPhone) {
+            const phoneDigits = normalizedPhone.replace(/\D/g, '');
+            const suffix = phoneDigits.slice(-9);
+            if (suffix.length >= 8) {
+              const { data: retryByPhone } = await supabase
+                .from('crm_contacts')
+                .select('id, phone')
+                .like('phone', `%${suffix}`)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+              if (retryByPhone) {
+                contactId = retryByPhone.id;
+                existingContact = retryByPhone;
+                console.log(`[CRM] Contato reaproveitado após colisão (telefone ${suffix}): ${contactId}`);
+              }
+            }
+          }
+        } else {
+          console.error(`[CRM] Erro inesperado ao criar contato:`, contactError);
+        }
+      }
+
+      // Se reaproveitou contato (por colisão ou por sufixo), garantir tags A010/Hubla + origin
+      if (contactId && existingContact) {
+        const { data: currentContact } = await supabase
+          .from('crm_contacts')
+          .select('tags, origin_id')
+          .eq('id', contactId)
+          .maybeSingle();
+        if (currentContact) {
+          const currentTags: string[] = currentContact.tags || [];
+          const mergedTags = Array.from(new Set([...currentTags, ...targetTags]));
+          const updates: any = { updated_at: new Date().toISOString() };
+          if (mergedTags.length !== currentTags.length) updates.tags = mergedTags;
+          if (!currentContact.origin_id && originId) updates.origin_id = originId;
+          if (Object.keys(updates).length > 1) {
+            await supabase.from('crm_contacts').update(updates).eq('id', contactId);
+            console.log(`[CRM] Contato reaproveitado atualizado (tags/origin)`);
+          }
+        }
       }
     }
     
