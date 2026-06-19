@@ -1,62 +1,32 @@
-## Problema
+## Objetivo
+Tornar o `hubla-webhook-handler` resiliente a telefones duplicados em `crm_contacts`, fazendo **upsert** (criar ou atualizar) em vez de só INSERT. Assim o webhook nunca trava por conflito de unicidade e novas vendas A010 continuam entrando.
 
-Vendas A010 vindas via Hubla no fluxo `invoice.payment_succeeded` **sem `items`** estão falhando com:
+## Diagnóstico
+Hoje o handler tenta `INSERT` em `crm_contacts`. Quando outro contato já existe com o mesmo telefone (últimos 9 dígitos) ou mesmo email, o Postgres devolve erro de unique constraint, a função aborta e o deal nunca é criado — foi o que vimos no backfill dos 23 leads.
 
-```
-ReferenceError: hublaId is not defined
-  at hubla-webhook-handler/index.ts:2243
-```
+## Mudança proposta (somente no edge function)
 
-A transação é gravada em `hubla_transactions` e `a010_sales`, mas o erro estoura **antes** de `createOrUpdateCRMContact(...)`, então **o lead nunca entra no CRM Inside Sales** (sem contato → sem deal → sem distribuição).
+No `supabase/functions/hubla-webhook-handler/index.ts`, no trecho que cria o `crm_contact` para A010:
 
-## Impacto real (não são só 4)
+1. **Normalizar telefone** uma vez (`right(regexp_replace(phone,'\D','','g'), 9)`) e email (`lower(trim(email))`).
+2. **Buscar contato existente** antes de inserir, na ordem:
+   - a) por email normalizado
+   - b) se não achar, por últimos 9 dígitos do telefone
+3. **Se encontrou** → fazer `UPDATE` no contato:
+   - Atualiza `name`, `phone`, `email` (se vazios), adiciona tags `A010` / `A010 Hubla` sem duplicar, garante `origin_id = PIPELINE INSIDE SALES` se ainda não tiver origin, e atualiza `clint_id` para `hubla-backfill-<hubla_id>` apenas se estiver null.
+   - Usa o `id` desse contato para criar o deal.
+4. **Se não encontrou** → `INSERT` igual ao fluxo atual.
+5. **Try/catch** envolvendo o passo de contato: se mesmo assim houver erro (ex.: corrida com outro webhook simultâneo criando o mesmo telefone), capturar `code === '23505'` (unique violation), re-buscar o contato pelo email/telefone e seguir com o deal — nunca abortar a venda.
+6. **Logs**: registrar em `hubla_webhook_logs` quando um contato foi reaproveitado por telefone vs. email vs. criado novo, para auditoria.
 
-Os 4 logs vistos são 2 webhooks × 2 mensagens. Cruzando `hubla_transactions` A010 × `crm_contacts`:
-
-- **22 leads A010 órfãos** entre 17/06 e 19/06 (7 + 9 + 6).
-- Antes de 17/06 a taxa de "sem contato" era 0–2/dia (dedup legítimo) — confirma que o bug entrou em 17/06.
-- Lista completa de emails afetados disponível na query de auditoria.
-
-## Causa
-
-Em `supabase/functions/hubla-webhook-handler/index.ts`, no branch "sem items" (~linha 2878), passa-se `hublaId` para `createOrUpdateCRMContact`, mas a variável `hublaId` só é declarada mais adiante, dentro do loop `for (items)` (~linha 2932). Fora do loop ela não existe → ReferenceError fatal.
-
-## Correção (1 linha)
-
-Trocar no objeto passado a `createOrUpdateCRMContact` dentro do bloco A010 sem items:
-
-```ts
-hublaId,
-```
-
-por:
-
-```ts
-hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
-```
-
-A assinatura de `createOrUpdateCRMContact` já aceita `hublaId?: string | null`.
-
-## Backfill dos 22 leads
-
-Após o deploy, rodar um script de recuperação que, para cada `hubla_transactions` A010 dos últimos 7 dias cujo `customer_email` não existe em `crm_contacts`, chama `createOrUpdateCRMContact` com:
-
-- `email`, `phone`, `name` da transação
-- `originName: 'A010 Hubla'`
-- `productName`, `value` (net_value)
-- `hublaId` = `hubla_id` da transação
-
-Opção A — edge function pontual `backfill-a010-orphans` invocada uma vez.  
-Opção B — reenviar manualmente os webhooks via fila Hubla.
-
-Recomendo Opção A (mais rápida e idempotente — `createOrUpdateCRMContact` já dedupa por origin+contato).
+## Fora do escopo
+- Não mexer em schema, RLS ou tabelas.
+- Não criar job de monitoramento nem tela de auditoria (opções b/c da mensagem anterior). Só blindagem do handler.
+- Não alterar a lógica de criação de deal — só garante que o contato exista antes.
 
 ## Validação
-
-1. Logs de `hubla-webhook-handler` sem novo `ReferenceError`.
-2. Próxima venda A010 cria contato + deal no CRM (origin `A010 Hubla`).
-3. Após backfill, a query de auditoria mostra 0 órfãos para 17/06–19/06.
-
-## Fora de escopo
-
-Sem mudanças em frontend, schema, RLS ou outras integrações.
+- Reprocessar manualmente 1 venda Hubla A010 cujo telefone já exista em `crm_contacts` (via `supabase--curl_edge_functions`) e confirmar:
+  - contato existente foi atualizado (tags `A010`/`A010 Hubla` adicionadas)
+  - deal foi criado em PIPELINE INSIDE SALES
+  - log em `hubla_webhook_logs` indica "contato reaproveitado por telefone"
+- Conferir nos logs do edge function que não há mais `duplicate key value violates unique constraint`.
