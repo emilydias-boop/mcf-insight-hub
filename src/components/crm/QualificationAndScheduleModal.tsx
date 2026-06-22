@@ -172,10 +172,6 @@ export function QualificationAndScheduleModal({
         );
         return;
       }
-      if (contactChannel === 'whatsapp' && !whatsappPrintPath) {
-        toast.error('Anexe o print da conversa do WhatsApp para concluir a qualificação.');
-        return;
-      }
     }
 
     try {
@@ -359,13 +355,6 @@ export function QualificationAndScheduleModal({
                   {!hasAiSummary && (
                     <>
                       <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
-                      {contactChannel === 'whatsapp' && (
-                        <WhatsappPrintUploader
-                          dealId={dealId}
-                          value={whatsappPrintPath}
-                          onChange={setWhatsappPrintPath}
-                        />
-                      )}
                     </>
                   )}
 

@@ -45,7 +45,6 @@ export function useQualificationStatus(dealId?: string) {
         if (a.activity_type !== 'qualification_note') return false;
         const md = (a.metadata || {}) as Record<string, any>;
         if (md.channel !== 'whatsapp') return false;
-        if (!md.whatsapp_print_url) return false;
         const answers = md.answers || {};
         const keys = ['tempo_mcf', 'profissao', 'socio', 'renda', 'constroi_venda', 'terreno_imovel'];
         return keys.every((k) => ((answers[k] || '') as string).trim().length >= 15);
