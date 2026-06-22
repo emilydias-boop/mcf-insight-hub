@@ -85,6 +85,7 @@ export function QualificationAndScheduleModal({
   const [whatsappPrintPath, setWhatsappPrintPath] = useState<string | null>(null);
   const { data: qualStatus } = useQualificationStatus(dealId);
   const hasAiSummary = qualStatus?.source === 'ai_call_summary';
+  const isActuallyQualified = qualStatus?.isQualified === true;
 
   // Buscar sugestões de agendamento
   const { suggestions, topSuggestion, isLoading: suggestionsLoading } = useMeetingSuggestion({
@@ -127,6 +128,20 @@ export function QualificationAndScheduleModal({
       }
     }
   }, [deal]);
+
+  // Se o status de qualificação aponta que o lead AINDA NÃO está qualificado
+  // pelas regras vigentes (resumo IA ou questionário WhatsApp + print válidos),
+  // forçamos a exibição do questionário, mesmo que `custom_fields.qualification_saved`
+  // esteja marcado como true por um fluxo antigo. Isso garante que o SDR
+  // entrando pela Agenda R1 sempre veja as perguntas padrão para preencher.
+  useEffect(() => {
+    if (!open) return;
+    if (qualStatus && !isActuallyQualified) {
+      setIsQualificationSaved(false);
+      setIsEditing(true);
+      setActiveTab('qualification');
+    }
+  }, [open, qualStatus, isActuallyQualified]);
 
   // Calcular progresso
   const requiredFields = QUALIFICATION_FIELDS.filter(f => f.required);
