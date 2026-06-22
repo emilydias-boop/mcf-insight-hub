@@ -10,11 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCRMDeal } from '@/hooks/useCRMData';
 import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useMeetingSuggestion } from '@/hooks/useMeetingSuggestion';
 import { useSaveQualificationNote } from '@/hooks/useQualificationNote';
+import { useQualificationStatus } from '@/hooks/useQualificationStatus';
 import { SuggestionCard } from './SuggestionCard';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
@@ -23,7 +25,15 @@ import {
   generateQualificationSummary,
   type QualificationDataType 
 } from './qualification/QualificationFields';
-import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2 } from 'lucide-react';
+import {
+  QUALIFICATION_QUESTIONS,
+  validateAnswers,
+  answersToSummary,
+  type QualificationAnswers,
+} from './qualification/QualificationQuestions';
+import { QualificationQuestionnaire } from './qualification/QualificationQuestionnaire';
+import { WhatsappPrintUploader } from './qualification/WhatsappPrintUploader';
+import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2, Phone, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,6 +79,13 @@ export function QualificationAndScheduleModal({
   const [showManualSchedule, setShowManualSchedule] = useState(false);
   const [faleiComLead, setFaleiComLead] = useState(false);
 
+  // Novo fluxo: canal + questionário + print
+  const [contactChannel, setContactChannel] = useState<'call' | 'whatsapp'>('call');
+  const [answers, setAnswers] = useState<QualificationAnswers>({});
+  const [whatsappPrintPath, setWhatsappPrintPath] = useState<string | null>(null);
+  const { data: qualStatus } = useQualificationStatus(dealId);
+  const hasAiSummary = qualStatus?.source === 'ai_call_summary';
+
   // Buscar sugestões de agendamento
   const { suggestions, topSuggestion, isLoading: suggestionsLoading } = useMeetingSuggestion({
     qualificationData: qualificationData as any,
@@ -93,7 +110,16 @@ export function QualificationAndScheduleModal({
         solucao: fields.solucao || '',
       });
       setLeadSummary(fields.leadSummary || '');
-      
+      if (fields.qualification_channel === 'whatsapp' || fields.qualification_channel === 'call') {
+        setContactChannel(fields.qualification_channel);
+      }
+      if (fields.qualification_answers && typeof fields.qualification_answers === 'object') {
+        setAnswers(fields.qualification_answers);
+      }
+      if (typeof fields.whatsapp_print_url === 'string') {
+        setWhatsappPrintPath(fields.whatsapp_print_url);
+      }
+
       // Verificar se já foi salvo
       if (fields.qualification_saved) {
         setIsQualificationSaved(true);
@@ -122,20 +148,38 @@ export function QualificationAndScheduleModal({
   };
 
   const handleSaveQualification = async () => {
-    try {
-      // Gerar resumo se não existir
-      let summary = leadSummary;
-      if (!summary) {
-        const userName = user?.email?.split('@')[0] || 'SDR';
-        summary = generateQualificationSummary(qualificationData, userName);
-        setLeadSummary(summary);
+    // Validação do novo questionário (obrigatório quando não há resumo IA)
+    if (!hasAiSummary) {
+      const { valid, missing } = validateAnswers(answers);
+      if (!valid) {
+        toast.error(
+          `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas com no mínimo 15 caracteres (faltam ${missing.length}).`
+        );
+        return;
       }
-      
+      if (contactChannel === 'whatsapp' && !whatsappPrintPath) {
+        toast.error('Anexe o print da conversa do WhatsApp para concluir a qualificação.');
+        return;
+      }
+    }
+
+    try {
+      const userName = user?.email?.split('@')[0] || 'SDR';
+      // Resumo agora derivado das respostas do questionário
+      const summary =
+        Object.keys(answers).length > 0
+          ? answersToSummary(answers, userName)
+          : leadSummary || generateQualificationSummary(qualificationData, userName);
+      setLeadSummary(summary);
+
       await saveQualification.mutateAsync({
         dealId,
         qualificationData,
         summary,
         paraR1: true,
+        channel: contactChannel,
+        answers,
+        whatsappPrintUrl: whatsappPrintPath,
       });
 
       // Se SDR confirmou que falou com o lead, mover para "Em contato"
