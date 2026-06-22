@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,6 @@ import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft,
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QUALIFICATION_QUESTIONS } from './qualification/QualificationQuestions';
-import { useEffect } from 'react';
 
 function WhatsappPrintThumb({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null);
