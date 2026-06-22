@@ -2,12 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { QualificationDataType } from '@/components/crm/qualification/QualificationFields';
+import type { QualificationAnswers } from '@/components/crm/qualification/QualificationQuestions';
 
 interface SaveQualificationNoteParams {
   dealId: string;
   qualificationData: QualificationDataType;
   summary: string;
   paraR1?: boolean;
+  /** Novo formato: canal + respostas estruturadas + anexo do WhatsApp */
+  channel?: 'whatsapp' | 'call';
+  answers?: QualificationAnswers;
+  whatsappPrintUrl?: string | null;
 }
 
 /**
@@ -17,7 +22,15 @@ export const useSaveQualificationNote = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ dealId, qualificationData, summary, paraR1 = true }: SaveQualificationNoteParams) => {
+    mutationFn: async ({
+      dealId,
+      qualificationData,
+      summary,
+      paraR1 = true,
+      channel,
+      answers,
+      whatsappPrintUrl,
+    }: SaveQualificationNoteParams) => {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
       
@@ -41,6 +54,9 @@ export const useSaveQualificationNote = () => {
             leadSummary: summary,
             qualification_saved: true,
             qualification_date: new Date().toISOString(),
+            qualification_channel: channel ?? null,
+            qualification_answers: answers ?? null,
+            whatsapp_print_url: whatsappPrintUrl ?? null,
           },
         })
         .eq('id', dealId);
@@ -60,6 +76,9 @@ export const useSaveQualificationNote = () => {
             para_r1: paraR1,
             sdr_name: sdrName,
             qualified_at: new Date().toISOString(),
+            channel: channel ?? null,
+            answers: answers ?? null,
+            whatsapp_print_url: whatsappPrintUrl ?? null,
           },
         })
         .select()
@@ -72,6 +91,8 @@ export const useSaveQualificationNote = () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deal', variables.dealId] });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal-activities', variables.dealId] });
+      queryClient.invalidateQueries({ queryKey: ['qualification-status', variables.dealId] });
+      queryClient.invalidateQueries({ queryKey: ['all-deal-notes'] });
       toast.success('Qualificação salva!');
     },
     onError: (error: any) => {
