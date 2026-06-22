@@ -1478,6 +1478,20 @@ export function QuickScheduleModal({
         resetForm();
       }}
     />
+
+    {/* Modal de qualificação obrigatória (resumo IA da ligação ou
+        questionário WhatsApp + print). Disponível em qualquer fluxo
+        que abra este modal: Agenda R1 (slot vazio), Drawer do lead,
+        SdrScheduleDialog, etc. */}
+    {selectedDeal?.id && (
+      <QualificationAndScheduleModal
+        open={qualifyOpen}
+        onOpenChange={setQualifyOpen}
+        dealId={selectedDeal.id}
+        contactName={selectedDeal.contact?.name || selectedDeal.name}
+        autoFocus="qualification"
+      />
+    )}
     </>
   );
 }
