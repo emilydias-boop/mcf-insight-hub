@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,36 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
-import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck, Sparkles } from 'lucide-react';
+import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck, Sparkles, ImageIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { QUALIFICATION_QUESTIONS } from './qualification/QualificationQuestions';
+
+function WhatsappPrintThumb({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    supabase.storage
+      .from('qualification-attachments')
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => {
+        if (active && data?.signedUrl) setUrl(data.signedUrl);
+      });
+    return () => {
+      active = false;
+    };
+  }, [path]);
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block mt-2">
+      <img
+        src={url}
+        alt="Print do WhatsApp"
+        className="max-h-48 rounded border border-border"
+      />
+    </a>
+  );
+}
 
 interface DealNotesTabProps {
   dealUuid: string;
@@ -28,6 +55,9 @@ interface CombinedNote {
   meetingType?: string;
   closerName?: string;
   outcome?: string;
+  answers?: Record<string, string>;
+  channel?: 'whatsapp' | 'call';
+  whatsappPrintPath?: string;
 }
 
 const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string; label: string }> = {
@@ -159,7 +189,10 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
               : 'manual') as NoteType,
           author: (n.metadata as Record<string, any>)?.sdr_name 
             || (n.metadata as Record<string, any>)?.author 
-            || '🤖 IA'
+            || '🤖 IA',
+          answers: ((n.metadata as Record<string, any>)?.answers) as Record<string, string> | undefined,
+          channel: (n.metadata as Record<string, any>)?.channel as 'whatsapp' | 'call' | undefined,
+          whatsappPrintPath: (n.metadata as Record<string, any>)?.whatsapp_print_url as string | undefined,
         })),
         
         // Notas de agendamento (SDR notes)
@@ -313,6 +346,26 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
                   <p className="text-sm text-foreground whitespace-pre-wrap">
                     {note.content}
                   </p>
+                  {note.answers && (
+                    <div className="mt-2 space-y-1.5 text-xs">
+                      {QUALIFICATION_QUESTIONS.map((q) => {
+                        const v = note.answers?.[q.key];
+                        if (!v) return null;
+                        return (
+                          <div key={q.key}>
+                            <div className="font-medium text-foreground/80">▸ {q.label}</div>
+                            <div className="text-muted-foreground pl-3">{v}</div>
+                          </div>
+                        );
+                      })}
+                      {note.channel === 'whatsapp' && (
+                        <div className="flex items-center gap-1 text-emerald-600 mt-1">
+                          <MessageCircle className="h-3 w-3" /> Qualificação via WhatsApp
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {note.whatsappPrintPath && <WhatsappPrintThumb path={note.whatsappPrintPath} />}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <User className="h-3 w-3" />
                     <span>{note.author}</span>

@@ -10,11 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCRMDeal } from '@/hooks/useCRMData';
 import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useMeetingSuggestion } from '@/hooks/useMeetingSuggestion';
 import { useSaveQualificationNote } from '@/hooks/useQualificationNote';
+import { useQualificationStatus } from '@/hooks/useQualificationStatus';
 import { SuggestionCard } from './SuggestionCard';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
@@ -23,7 +25,15 @@ import {
   generateQualificationSummary,
   type QualificationDataType 
 } from './qualification/QualificationFields';
-import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2 } from 'lucide-react';
+import {
+  QUALIFICATION_QUESTIONS,
+  validateAnswers,
+  answersToSummary,
+  type QualificationAnswers,
+} from './qualification/QualificationQuestions';
+import { QualificationQuestionnaire } from './qualification/QualificationQuestionnaire';
+import { WhatsappPrintUploader } from './qualification/WhatsappPrintUploader';
+import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2, Phone, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,6 +79,13 @@ export function QualificationAndScheduleModal({
   const [showManualSchedule, setShowManualSchedule] = useState(false);
   const [faleiComLead, setFaleiComLead] = useState(false);
 
+  // Novo fluxo: canal + questionário + print
+  const [contactChannel, setContactChannel] = useState<'call' | 'whatsapp'>('call');
+  const [answers, setAnswers] = useState<QualificationAnswers>({});
+  const [whatsappPrintPath, setWhatsappPrintPath] = useState<string | null>(null);
+  const { data: qualStatus } = useQualificationStatus(dealId);
+  const hasAiSummary = qualStatus?.source === 'ai_call_summary';
+
   // Buscar sugestões de agendamento
   const { suggestions, topSuggestion, isLoading: suggestionsLoading } = useMeetingSuggestion({
     qualificationData: qualificationData as any,
@@ -93,7 +110,16 @@ export function QualificationAndScheduleModal({
         solucao: fields.solucao || '',
       });
       setLeadSummary(fields.leadSummary || '');
-      
+      if (fields.qualification_channel === 'whatsapp' || fields.qualification_channel === 'call') {
+        setContactChannel(fields.qualification_channel);
+      }
+      if (fields.qualification_answers && typeof fields.qualification_answers === 'object') {
+        setAnswers(fields.qualification_answers);
+      }
+      if (typeof fields.whatsapp_print_url === 'string') {
+        setWhatsappPrintPath(fields.whatsapp_print_url);
+      }
+
       // Verificar se já foi salvo
       if (fields.qualification_saved) {
         setIsQualificationSaved(true);
@@ -122,20 +148,38 @@ export function QualificationAndScheduleModal({
   };
 
   const handleSaveQualification = async () => {
-    try {
-      // Gerar resumo se não existir
-      let summary = leadSummary;
-      if (!summary) {
-        const userName = user?.email?.split('@')[0] || 'SDR';
-        summary = generateQualificationSummary(qualificationData, userName);
-        setLeadSummary(summary);
+    // Validação do novo questionário (obrigatório quando não há resumo IA)
+    if (!hasAiSummary) {
+      const { valid, missing } = validateAnswers(answers);
+      if (!valid) {
+        toast.error(
+          `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas com no mínimo 15 caracteres (faltam ${missing.length}).`
+        );
+        return;
       }
-      
+      if (contactChannel === 'whatsapp' && !whatsappPrintPath) {
+        toast.error('Anexe o print da conversa do WhatsApp para concluir a qualificação.');
+        return;
+      }
+    }
+
+    try {
+      const userName = user?.email?.split('@')[0] || 'SDR';
+      // Resumo agora derivado das respostas do questionário
+      const summary =
+        Object.keys(answers).length > 0
+          ? answersToSummary(answers, userName)
+          : leadSummary || generateQualificationSummary(qualificationData, userName);
+      setLeadSummary(summary);
+
       await saveQualification.mutateAsync({
         dealId,
         qualificationData,
         summary,
         paraR1: true,
+        channel: contactChannel,
+        answers,
+        whatsappPrintUrl: whatsappPrintPath,
       });
 
       // Se SDR confirmou que falou com o lead, mover para "Em contato"
@@ -253,90 +297,62 @@ export function QualificationAndScheduleModal({
                 </div>
               ) : (
                 <>
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Progresso da qualificação</span>
-                      <span className="font-medium">{Math.round(progress)}%</span>
-                    </div>
-                    <Progress value={progress} className="h-2" />
-                  </div>
-
-                  {/* Fields */}
-                  <div className="grid gap-4">
-                    {QUALIFICATION_FIELDS.map(field => {
-                      if (!shouldShowField(field)) return null;
-                      
-                      return (
-                        <div key={field.key} className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                            {field.icon && <span>{field.icon}</span>}
-                            {field.label}
-                            {field.required && <span className="text-destructive ml-1">*</span>}
-                          </Label>
-                          
-                          {field.type === 'boolean' && (
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={qualificationData[field.key] === true}
-                                onCheckedChange={(checked) => handleFieldChange(field.key, !!checked)}
-                              />
-                              <span className="text-sm">
-                                {qualificationData[field.key] ? 'Sim' : 'Não'}
-                              </span>
-                            </div>
-                          )}
-                          
-                          {field.type === 'select' && (
-                            <Select
-                              value={qualificationData[field.key] as string || ''}
-                              onValueChange={(value) => handleFieldChange(field.key, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {field.options?.map(opt => (
-                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                          
-                          {field.type === 'text' && (
-                            <Input
-                              value={qualificationData[field.key] as string || ''}
-                              onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                              placeholder="Digite..."
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Summary */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Resumo do Lead (para R1)</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleGenerateSummary}
-                        disabled={!isComplete}
+                  {/* Tipo de contato */}
+                  <div className="space-y-2 rounded-lg border border-border bg-secondary/20 p-3">
+                    <Label className="text-sm font-medium">Como foi feita a qualificação?</Label>
+                    <RadioGroup
+                      value={contactChannel}
+                      onValueChange={(v) => setContactChannel(v as 'call' | 'whatsapp')}
+                      className="grid grid-cols-2 gap-2"
+                    >
+                      <label
+                        htmlFor="ch-call"
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${
+                          contactChannel === 'call' ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
                       >
-                        <Sparkles className="h-4 w-4 mr-1" />
-                        Gerar
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={leadSummary}
-                      onChange={(e) => setLeadSummary(e.target.value)}
-                      placeholder="O resumo será gerado automaticamente ou escreva suas observações..."
-                      rows={5}
-                      className="text-sm"
-                    />
+                        <RadioGroupItem value="call" id="ch-call" />
+                        <Phone className="h-4 w-4" /> Por Ligação
+                      </label>
+                      <label
+                        htmlFor="ch-wpp"
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${
+                          contactChannel === 'whatsapp' ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
+                      >
+                        <RadioGroupItem value="whatsapp" id="ch-wpp" />
+                        <MessageCircle className="h-4 w-4" /> Por WhatsApp
+                      </label>
+                    </RadioGroup>
+
+                    {contactChannel === 'call' && (
+                      <div
+                        className={`text-xs rounded-md p-2 ${
+                          hasAiSummary
+                            ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-700 border border-amber-500/30'
+                        }`}
+                      >
+                        {hasAiSummary
+                          ? '✓ Resumo da IA já registrado para esta ligação. Qualificação OK.'
+                          : 'Faça a ligação pelo discador. Após ~30s do encerramento, a IA registra o resumo automaticamente e libera o lead. Se preferir, troque para WhatsApp e responda o questionário.'}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Questionário obrigatório (somente quando não há resumo IA) */}
+                  {!hasAiSummary && (
+                    <>
+                      <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                      {contactChannel === 'whatsapp' && (
+                        <WhatsappPrintUploader
+                          dealId={dealId}
+                          value={whatsappPrintPath}
+                          onChange={setWhatsappPrintPath}
+                        />
+                      )}
+                    </>
+                  )}
 
                   {/* Falei com o lead → move para "Em contato" */}
                   <div className="flex items-start gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
