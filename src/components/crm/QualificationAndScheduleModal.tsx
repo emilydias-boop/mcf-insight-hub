@@ -359,13 +359,6 @@ export function QualificationAndScheduleModal({
                   {!hasAiSummary && (
                     <>
                       <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
-                      {contactChannel === 'whatsapp' && (
-                        <WhatsappPrintUploader
-                          dealId={dealId}
-                          value={whatsappPrintPath}
-                          onChange={setWhatsappPrintPath}
-                        />
-                      )}
                     </>
                   )}
 
