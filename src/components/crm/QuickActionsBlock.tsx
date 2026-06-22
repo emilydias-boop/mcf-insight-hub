@@ -30,6 +30,13 @@ import { InlineCallControls } from './InlineCallControls';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
+import { useQualificationStatus } from '@/hooks/useQualificationStatus';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -54,6 +61,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+
+  const { data: qualStatus } = useQualificationStatus(deal?.id);
+  const isQualified = qualStatus?.isQualified ?? false;
   
   const alreadyRefunded = deal?.custom_fields?.reembolso_solicitado === true;
   
@@ -230,16 +240,30 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
               WhatsApp
             </Button>
             
-            {/* Botão Agendar */}
-            <Button
-              size="sm"
-              variant="outline"
-              className={`h-8 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
-              onClick={() => setShowScheduleDialog(true)}
-            >
-              {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
-              {isNoShowStage ? 'Reagendar' : 'Agendar'}
-            </Button>
+            {/* Botão Agendar — bloqueado até qualificação (resumo IA ou WhatsApp) */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`h-8 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
+                      onClick={() => setShowScheduleDialog(true)}
+                      disabled={!isQualified && !isNoShowStage}
+                    >
+                      {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
+                      {isNoShowStage ? 'Reagendar' : 'Agendar'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isQualified && !isNoShowStage && (
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    {qualStatus?.reason || 'Qualifique o lead antes de agendar R1 (ligação com resumo IA ou WhatsApp com print).'}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
             
             {/* Botão Qualificar */}
             {onQualify && (
