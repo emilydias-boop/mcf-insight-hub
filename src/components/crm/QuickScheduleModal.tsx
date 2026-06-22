@@ -115,6 +115,11 @@ function detectLeadType(tags?: string[]): LeadType {
   return 'A';
 }
 
+// Mínimo de caracteres exigido na nota do agendamento. Evita que o usuário
+// "burle" a obrigatoriedade enviando "." ou poucos caracteres sem sentido.
+const MIN_NOTES_LENGTH = 20;
+const isNotesValid = (n: string) => n.trim().length >= MIN_NOTES_LENGTH;
+
 // Helper to format phone for display
 function formatPhoneDisplay(phone: string | null | undefined): string {
   if (!phone) return '';
