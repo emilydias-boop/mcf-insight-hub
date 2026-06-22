@@ -188,6 +188,9 @@ export function QuickScheduleModal({
     extra?: Record<string, any>;
   } | null>(null);
 
+  // Modal de qualificação obrigatória (resumo IA via ligação OU questionário WhatsApp + print)
+  const [qualifyOpen, setQualifyOpen] = useState(false);
+
   // Sync internal state when preselected values change and modal opens
   useEffect(() => {
     if (open) {
