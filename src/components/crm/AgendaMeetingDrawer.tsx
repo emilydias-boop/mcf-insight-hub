@@ -929,6 +929,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     />
                   </div>
 
+                  {/* Histórico de qualificação (Resumo IA da ligação ou questionário WhatsApp + print) */}
+                  <QualificationHistorySection dealId={selectedParticipant.dealId} />
+
                   {/* Notas do SDR sobre o lead (do deal) - show for participants linked to main contact */}
                   {sdrNotes && sdrNotes.length > 0 && (
                     <div className="pt-2 border-t border-blue-500/20">
