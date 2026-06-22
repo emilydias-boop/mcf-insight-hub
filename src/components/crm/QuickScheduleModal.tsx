@@ -47,9 +47,11 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { BlockedLeadCard } from './BlockedLeadCard';
 import { useCreateApprovalRequest, useMyApprovalRequests } from '@/hooks/useApprovalRequests';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, ClipboardList, AlertTriangle } from 'lucide-react';
 import { RequestR1ApprovalDialog } from './RequestR1ApprovalDialog';
 import type { R1ForcePayload } from '@/hooks/useCreateR1ForceRequest';
+import { useQualificationStatus } from '@/hooks/useQualificationStatus';
+import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -185,6 +187,9 @@ export function QuickScheduleModal({
     ruleKey?: 'r1_force_paid_lead' | 'r1_cooldown_bypass';
     extra?: Record<string, any>;
   } | null>(null);
+
+  // Modal de qualificação obrigatória (resumo IA via ligação OU questionário WhatsApp + print)
+  const [qualifyOpen, setQualifyOpen] = useState(false);
 
   // Sync internal state when preselected values change and modal opens
   useEffect(() => {
@@ -549,6 +554,20 @@ export function QuickScheduleModal({
   }, [selectedDeal?.leadState]);
   const isLeadBlocked = blockedLeadState !== null;
 
+  // ===== Regra de qualificação obrigatória =====
+  // Lead só pode ir para R1 após qualificação (resumo IA da ligação OU
+  // questionário WhatsApp + print). Vale para todos os usuários que podem
+  // agendar (SDR, coordenador, manager, admin). Reagendamentos de No-Show
+  // ficam liberados pois o lead já passou por uma qualificação anterior.
+  const { data: qualStatus, isLoading: qualStatusLoading } = useQualificationStatus(selectedDeal?.id);
+  const isNoShowReschedule = selectedDeal?.leadState === 'no_show';
+  const needsQualification =
+    !!selectedDeal &&
+    !isLeadBlocked &&
+    !isNoShowReschedule &&
+    !qualStatusLoading &&
+    qualStatus?.isQualified === false;
+
   // Estado dinâmico de aprovação (limite de reagendamentos atingido)
   const requiresApproval = !!selectedDeal?.requiresApproval;
   const createApprovalRequest = useCreateApprovalRequest();
@@ -905,6 +924,38 @@ export function QuickScheduleModal({
 
           {!isLeadBlocked && !isApprovalBlocked && (
           <>
+          {/* Banner de qualificação obrigatória — bloqueia agendamento até
+              que o SDR registre a qualificação (ligação com resumo IA ou
+              WhatsApp com questionário + print). */}
+          {needsQualification && (
+            <div
+              className="rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-3 text-sm space-y-3"
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+                <div className="space-y-1">
+                  <div className="font-semibold text-amber-800 dark:text-amber-300">
+                    Qualificação obrigatória antes do agendamento
+                  </div>
+                  <p className="leading-snug text-foreground/80">
+                    {qualStatus?.reason ||
+                      'Faça uma ligação (resumo IA) ou registre a qualificação via WhatsApp (questionário + print) antes de agendar a R1.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => setQualifyOpen(true)}
+              >
+                <ClipboardList className="h-4 w-4 mr-1.5" />
+                Qualificar agora
+              </Button>
+            </div>
+          )}
+
           {/* Closer Selection */}
           <div className="space-y-2">
             <Label>Closer</Label>
@@ -1387,13 +1438,15 @@ export function QuickScheduleModal({
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || needsQualification || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
             >
               {createMeeting.isPending
                 ? 'Agendando...'
-                : (!isCoordinatorOrAbove && slotAvailability?.available === false)
-                  ? 'Horário lotado'
-                  : 'Agendar Reunião'
+                : needsQualification
+                  ? 'Qualifique o lead para liberar'
+                  : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                    ? 'Horário lotado'
+                    : 'Agendar Reunião'
               }
             </Button>
           )}
@@ -1425,6 +1478,20 @@ export function QuickScheduleModal({
         resetForm();
       }}
     />
+
+    {/* Modal de qualificação obrigatória (resumo IA da ligação ou
+        questionário WhatsApp + print). Disponível em qualquer fluxo
+        que abra este modal: Agenda R1 (slot vazio), Drawer do lead,
+        SdrScheduleDialog, etc. */}
+    {selectedDeal?.id && (
+      <QualificationAndScheduleModal
+        open={qualifyOpen}
+        onOpenChange={setQualifyOpen}
+        dealId={selectedDeal.id}
+        contactName={selectedDeal.contact?.name || selectedDeal.name}
+        autoFocus="qualification"
+      />
+    )}
     </>
   );
 }

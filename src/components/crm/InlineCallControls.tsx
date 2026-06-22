@@ -60,11 +60,13 @@ export function InlineCallControls({ dealId }: InlineCallControlsProps) {
         
         <Button
           variant={qualificationModalOpen ? "default" : "outline"}
-          size="icon"
-          className="h-9 w-9 rounded-full"
+          size="sm"
+          className="h-9 rounded-full px-3"
           onClick={() => openQualificationModal(dealId)}
+          title="Abrir qualificação do lead"
         >
-          <FileText className="h-4 w-4" />
+          <FileText className="h-4 w-4 mr-1.5" />
+          Qualificar
         </Button>
         
         <Button 
