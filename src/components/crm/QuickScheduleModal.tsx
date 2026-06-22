@@ -1326,16 +1326,34 @@ export function QuickScheduleModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>{weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas'} <span className="text-destructive">*</span></Label>
+            <Label className="flex items-center justify-between">
+              <span>
+                {weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas'}{' '}
+                <span className="text-destructive">*</span>
+              </span>
+              <span
+                className={cn(
+                  'text-xs font-normal',
+                  isNotesValid(notes) ? 'text-muted-foreground' : 'text-destructive',
+                )}
+              >
+                {notes.trim().length}/{MIN_NOTES_LENGTH}
+              </span>
+            </Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={weeklyLeadData ? 'Ex: Cliente pediu para remarcar, não atendeu, etc...' : 'Adicione observações sobre o lead...'}
-              rows={2}
-              className={cn(!notes.trim() && "border-destructive/50")}
+              placeholder={weeklyLeadData
+                ? 'Ex: Cliente pediu para remarcar porque estava em viagem. Reagendar para a próxima semana.'
+                : 'Descreva o contexto do lead (perfil, interesse, próximos passos). Mínimo 20 caracteres.'}
+              rows={3}
+              className={cn(!isNotesValid(notes) && 'border-destructive/50')}
             />
-            {!notes.trim() && (
-              <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
+            {!isNotesValid(notes) && (
+              <p className="text-xs text-destructive">
+                Descreva o contexto do lead com pelo menos {MIN_NOTES_LENGTH} caracteres.
+                Não basta um ponto ou frase genérica.
+              </p>
             )}
           </div>
 
