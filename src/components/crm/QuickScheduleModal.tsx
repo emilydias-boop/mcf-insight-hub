@@ -406,6 +406,17 @@ export function QuickScheduleModal({
     // Defesa adicional: nunca submeter para leads bloqueados
     if (isLeadBlocked) return;
     if (isApprovalBlocked) return;
+    // Trava de qualificação e nota mínima — não permite agendar sem
+    // qualificação registrada nem com nota irrisória (ex.: ".").
+    if (needsQualification) {
+      toast.warning('Qualifique o lead antes de agendar a R1.');
+      setQualifyOpen(true);
+      return;
+    }
+    if (!isNotesValid(notes)) {
+      toast.warning(`A nota do agendamento precisa ter pelo menos ${MIN_NOTES_LENGTH} caracteres descrevendo o contexto do lead.`);
+      return;
+    }
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
