@@ -554,6 +554,20 @@ export function QuickScheduleModal({
   }, [selectedDeal?.leadState]);
   const isLeadBlocked = blockedLeadState !== null;
 
+  // ===== Regra de qualificação obrigatória =====
+  // Lead só pode ir para R1 após qualificação (resumo IA da ligação OU
+  // questionário WhatsApp + print). Vale para todos os usuários que podem
+  // agendar (SDR, coordenador, manager, admin). Reagendamentos de No-Show
+  // ficam liberados pois o lead já passou por uma qualificação anterior.
+  const { data: qualStatus, isLoading: qualStatusLoading } = useQualificationStatus(selectedDeal?.id);
+  const isNoShowReschedule = selectedDeal?.leadState === 'no_show';
+  const needsQualification =
+    !!selectedDeal &&
+    !isLeadBlocked &&
+    !isNoShowReschedule &&
+    !qualStatusLoading &&
+    qualStatus?.isQualified === false;
+
   // Estado dinâmico de aprovação (limite de reagendamentos atingido)
   const requiresApproval = !!selectedDeal?.requiresApproval;
   const createApprovalRequest = useCreateApprovalRequest();
