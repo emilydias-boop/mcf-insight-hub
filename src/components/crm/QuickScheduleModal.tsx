@@ -924,6 +924,38 @@ export function QuickScheduleModal({
 
           {!isLeadBlocked && !isApprovalBlocked && (
           <>
+          {/* Banner de qualificação obrigatória — bloqueia agendamento até
+              que o SDR registre a qualificação (ligação com resumo IA ou
+              WhatsApp com questionário + print). */}
+          {needsQualification && (
+            <div
+              className="rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-3 text-sm space-y-3"
+              role="alert"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+                <div className="space-y-1">
+                  <div className="font-semibold text-amber-800 dark:text-amber-300">
+                    Qualificação obrigatória antes do agendamento
+                  </div>
+                  <p className="leading-snug text-foreground/80">
+                    {qualStatus?.reason ||
+                      'Faça uma ligação (resumo IA) ou registre a qualificação via WhatsApp (questionário + print) antes de agendar a R1.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => setQualifyOpen(true)}
+              >
+                <ClipboardList className="h-4 w-4 mr-1.5" />
+                Qualificar agora
+              </Button>
+            </div>
+          )}
+
           {/* Closer Selection */}
           <div className="space-y-2">
             <Label>Closer</Label>
