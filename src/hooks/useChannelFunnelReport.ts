@@ -27,6 +27,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   A017: 'A017',
   ANAMNESE: 'ANAMNESE',
   ANAMNESE_INCOMPLETA: 'ANAMNESE INCOMPLETA',
+  PLANILHA: 'PLANILHA',
   OUTROS: 'OUTROS',
 };
 export function displayChannelLabel(raw: string): string {
@@ -124,6 +125,7 @@ function classifyChannelWith30dRule(opts: {
   // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA, LIVE, LANÇ etc.
   const hasAnamneseTag = norm.some((t) => t === 'ANAMNESE');
   const hasAnamneseIncompletaTag = norm.some((t) => t === 'ANAMNESE-INCOMPLETA');
+  const hasPlanilhaTag = norm.some((t) => t === 'PLANILHA');
   const isBuyer = mostRecentA010Purchase !== null;
   const ageDays = isBuyer
     ? (referenceDate.getTime() - mostRecentA010Purchase!.getTime()) / 86_400_000
@@ -143,6 +145,8 @@ function classifyChannelWith30dRule(opts: {
   if (hasAnamneseTag) return 'ANAMNESE';
   // Não-buyer com tag ANAMNESE-INCOMPLETA → ANAMNESE INCOMPLETA
   if (hasAnamneseIncompletaTag) return 'ANAMNESE_INCOMPLETA';
+  // Não-buyer com tag PLANILHA → PLANILHA (só substitui OUTROS)
+  if (hasPlanilhaTag) return 'PLANILHA';
   return 'OUTROS';
 }
 
@@ -881,7 +885,7 @@ export function useChannelFunnelReport(
   // 6. AGREGAÇÃO POR CANAL (3 buckets fixos)
   // ================================================================
   const { rows, totals, details } = useMemo(() => {
-    const FUNNEL_CHANNELS = ['A010', 'A017', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'OUTROS'];
+    const FUNNEL_CHANNELS = ['A010', 'A017', 'ANAMNESE', 'ANAMNESE_INCOMPLETA', 'PLANILHA', 'OUTROS'];
 
     // ---------- Filtros locais ----------
     const fSearch = (filters?.search || '').trim().toLowerCase();
@@ -953,7 +957,7 @@ export function useChannelFunnelReport(
       vendaFinal: [], faturamentoBruto: [], faturamentoLiquido: [],
     });
     const det: FunnelDetails = {
-      A010: blankDetails(), A017: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
+      A010: blankDetails(), A017: blankDetails(), ANAMNESE: blankDetails(), ANAMNESE_INCOMPLETA: blankDetails(), PLANILHA: blankDetails(), OUTROS: blankDetails(), TOTAL: blankDetails(),
     };
     const pushDet = (channel: string, metric: FunnelMetricKey, item: FunnelDetailItem) => {
       if (!det[channel]) det[channel] = blankDetails();
