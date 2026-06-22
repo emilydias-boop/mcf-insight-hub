@@ -568,6 +568,16 @@ export function QuickScheduleModal({
     !qualStatusLoading &&
     qualStatus?.isQualified === false;
 
+  // Abre automaticamente o modal de qualificação obrigatória assim que o
+  // SDR/usuário seleciona um lead ainda não qualificado dentro da Agenda R1
+  // (ou qualquer outro ponto que use este modal). Evita reabrir se o usuário
+  // já fechou e ainda está corrigindo dados.
+  useEffect(() => {
+    if (open && needsQualification && !qualifyOpen) {
+      setQualifyOpen(true);
+    }
+  }, [open, needsQualification]);
+
   // Estado dinâmico de aprovação (limite de reagendamentos atingido)
   const requiresApproval = !!selectedDeal?.requiresApproval;
   const createApprovalRequest = useCreateApprovalRequest();
