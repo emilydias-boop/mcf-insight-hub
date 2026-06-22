@@ -7,9 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
-import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck, Sparkles } from 'lucide-react';
+import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft, ClipboardList, UserCheck, Sparkles, ImageIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { QUALIFICATION_QUESTIONS } from './qualification/QualificationQuestions';
 
 interface DealNotesTabProps {
   dealUuid: string;
@@ -28,6 +29,9 @@ interface CombinedNote {
   meetingType?: string;
   closerName?: string;
   outcome?: string;
+  answers?: Record<string, string>;
+  channel?: 'whatsapp' | 'call';
+  whatsappPrintPath?: string;
 }
 
 const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string; label: string }> = {
@@ -159,7 +163,10 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
               : 'manual') as NoteType,
           author: (n.metadata as Record<string, any>)?.sdr_name 
             || (n.metadata as Record<string, any>)?.author 
-            || '🤖 IA'
+            || '🤖 IA',
+          answers: ((n.metadata as Record<string, any>)?.answers) as Record<string, string> | undefined,
+          channel: (n.metadata as Record<string, any>)?.channel as 'whatsapp' | 'call' | undefined,
+          whatsappPrintPath: (n.metadata as Record<string, any>)?.whatsapp_print_url as string | undefined,
         })),
         
         // Notas de agendamento (SDR notes)
