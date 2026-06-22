@@ -11,6 +11,33 @@ import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft,
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QUALIFICATION_QUESTIONS } from './qualification/QualificationQuestions';
+import { useEffect } from 'react';
+
+function WhatsappPrintThumb({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    supabase.storage
+      .from('qualification-attachments')
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => {
+        if (active && data?.signedUrl) setUrl(data.signedUrl);
+      });
+    return () => {
+      active = false;
+    };
+  }, [path]);
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block mt-2">
+      <img
+        src={url}
+        alt="Print do WhatsApp"
+        className="max-h-48 rounded border border-border"
+      />
+    </a>
+  );
+}
 
 interface DealNotesTabProps {
   dealUuid: string;
@@ -320,6 +347,26 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
                   <p className="text-sm text-foreground whitespace-pre-wrap">
                     {note.content}
                   </p>
+                  {note.answers && (
+                    <div className="mt-2 space-y-1.5 text-xs">
+                      {QUALIFICATION_QUESTIONS.map((q) => {
+                        const v = note.answers?.[q.key];
+                        if (!v) return null;
+                        return (
+                          <div key={q.key}>
+                            <div className="font-medium text-foreground/80">▸ {q.label}</div>
+                            <div className="text-muted-foreground pl-3">{v}</div>
+                          </div>
+                        );
+                      })}
+                      {note.channel === 'whatsapp' && (
+                        <div className="flex items-center gap-1 text-emerald-600 mt-1">
+                          <MessageCircle className="h-3 w-3" /> Qualificação via WhatsApp
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {note.whatsappPrintPath && <WhatsappPrintThumb path={note.whatsappPrintPath} />}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <User className="h-3 w-3" />
                     <span>{note.author}</span>
