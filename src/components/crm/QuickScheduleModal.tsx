@@ -1438,13 +1438,15 @@ export function QuickScheduleModal({
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || needsQualification || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
             >
               {createMeeting.isPending
                 ? 'Agendando...'
-                : (!isCoordinatorOrAbove && slotAvailability?.available === false)
-                  ? 'Horário lotado'
-                  : 'Agendar Reunião'
+                : needsQualification
+                  ? 'Qualifique o lead para liberar'
+                  : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                    ? 'Horário lotado'
+                    : 'Agendar Reunião'
               }
             </Button>
           )}
