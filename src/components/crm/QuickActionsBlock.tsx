@@ -209,17 +209,21 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        {/* Controles inline quando em chamada com este deal */}
-        {isInCallWithThisDeal && deal?.id ? (
-          <InlineCallControls dealId={deal.id} />
-        ) : (
-          <>
+        {/* Controles inline aparecem ACIMA durante a chamada, mas mantemos os
+            botões de qualificar/agendar/WhatsApp visíveis para o SDR poder
+            qualificar o lead durante a ligação. */}
+        {isInCallWithThisDeal && deal?.id && (
+          <div className="w-full">
+            <InlineCallControls dealId={deal.id} />
+          </div>
+        )}
+        <>
             {/* Botão Ligar */}
             <Button
               size="sm"
               className="bg-primary hover:bg-primary/90 h-8"
               onClick={handleCall}
-              disabled={isSearchingPhone}
+              disabled={isSearchingPhone || isInCallWithThisDeal}
             >
               {isSearchingPhone ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -277,8 +281,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
                 Qualificar
               </Button>
             )}
-          </>
-        )}
+        </>
         
         {/* Mover estágio inline */}
         {futureStages.length > 0 && (
