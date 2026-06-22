@@ -168,9 +168,9 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"],
     requiredProducts: ["consorcio"],
     items: [
+      { title: "Painel Comercial", url: "/consorcio/painel-equipe" },
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "CRM", url: "/consorcio/crm" },
-      { title: "Painel Equipe", url: "/consorcio/painel-equipe" },
       { title: "Vendas", url: "/consorcio/vendas", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Pagamentos", url: "/consorcio/pagamentos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
