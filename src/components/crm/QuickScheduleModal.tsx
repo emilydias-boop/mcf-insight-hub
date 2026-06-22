@@ -115,6 +115,11 @@ function detectLeadType(tags?: string[]): LeadType {
   return 'A';
 }
 
+// Mínimo de caracteres exigido na nota do agendamento. Evita que o usuário
+// "burle" a obrigatoriedade enviando "." ou poucos caracteres sem sentido.
+const MIN_NOTES_LENGTH = 20;
+const isNotesValid = (n: string) => n.trim().length >= MIN_NOTES_LENGTH;
+
 // Helper to format phone for display
 function formatPhoneDisplay(phone: string | null | undefined): string {
   if (!phone) return '';
@@ -401,6 +406,17 @@ export function QuickScheduleModal({
     // Defesa adicional: nunca submeter para leads bloqueados
     if (isLeadBlocked) return;
     if (isApprovalBlocked) return;
+    // Trava de qualificação e nota mínima — não permite agendar sem
+    // qualificação registrada nem com nota irrisória (ex.: ".").
+    if (needsQualification) {
+      toast.warning('Qualifique o lead antes de agendar a R1.');
+      setQualifyOpen(true);
+      return;
+    }
+    if (!isNotesValid(notes)) {
+      toast.warning(`A nota do agendamento precisa ter pelo menos ${MIN_NOTES_LENGTH} caracteres descrevendo o contexto do lead.`);
+      return;
+    }
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -1310,16 +1326,34 @@ export function QuickScheduleModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>{weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas'} <span className="text-destructive">*</span></Label>
+            <Label className="flex items-center justify-between">
+              <span>
+                {weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas'}{' '}
+                <span className="text-destructive">*</span>
+              </span>
+              <span
+                className={cn(
+                  'text-xs font-normal',
+                  isNotesValid(notes) ? 'text-muted-foreground' : 'text-destructive',
+                )}
+              >
+                {notes.trim().length}/{MIN_NOTES_LENGTH}
+              </span>
+            </Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={weeklyLeadData ? 'Ex: Cliente pediu para remarcar, não atendeu, etc...' : 'Adicione observações sobre o lead...'}
-              rows={2}
-              className={cn(!notes.trim() && "border-destructive/50")}
+              placeholder={weeklyLeadData
+                ? 'Ex: Cliente pediu para remarcar porque estava em viagem. Reagendar para a próxima semana.'
+                : 'Descreva o contexto do lead (perfil, interesse, próximos passos). Mínimo 20 caracteres.'}
+              rows={3}
+              className={cn(!isNotesValid(notes) && 'border-destructive/50')}
             />
-            {!notes.trim() && (
-              <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
+            {!isNotesValid(notes) && (
+              <p className="text-xs text-destructive">
+                Descreva o contexto do lead com pelo menos {MIN_NOTES_LENGTH} caracteres.
+                Não basta um ponto ou frase genérica.
+              </p>
             )}
           </div>
 
@@ -1448,15 +1482,17 @@ export function QuickScheduleModal({
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending || needsQualification || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
+              disabled={!selectedDeal || !selectedCloser || !selectedDate || !isNotesValid(notes) || createMeeting.isPending || needsQualification || (!isCoordinatorOrAbove && slotAvailability?.available === false)}
             >
               {createMeeting.isPending
                 ? 'Agendando...'
                 : needsQualification
                   ? 'Qualifique o lead para liberar'
-                  : (!isCoordinatorOrAbove && slotAvailability?.available === false)
-                    ? 'Horário lotado'
-                    : 'Agendar Reunião'
+                  : !isNotesValid(notes)
+                    ? `Nota precisa de ${MIN_NOTES_LENGTH}+ caracteres`
+                    : (!isCoordinatorOrAbove && slotAvailability?.available === false)
+                      ? 'Horário lotado'
+                      : 'Agendar Reunião'
               }
             </Button>
           )}
