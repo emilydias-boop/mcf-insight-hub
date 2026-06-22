@@ -297,90 +297,62 @@ export function QualificationAndScheduleModal({
                 </div>
               ) : (
                 <>
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Progresso da qualificação</span>
-                      <span className="font-medium">{Math.round(progress)}%</span>
-                    </div>
-                    <Progress value={progress} className="h-2" />
-                  </div>
-
-                  {/* Fields */}
-                  <div className="grid gap-4">
-                    {QUALIFICATION_FIELDS.map(field => {
-                      if (!shouldShowField(field)) return null;
-                      
-                      return (
-                        <div key={field.key} className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                            {field.icon && <span>{field.icon}</span>}
-                            {field.label}
-                            {field.required && <span className="text-destructive ml-1">*</span>}
-                          </Label>
-                          
-                          {field.type === 'boolean' && (
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={qualificationData[field.key] === true}
-                                onCheckedChange={(checked) => handleFieldChange(field.key, !!checked)}
-                              />
-                              <span className="text-sm">
-                                {qualificationData[field.key] ? 'Sim' : 'Não'}
-                              </span>
-                            </div>
-                          )}
-                          
-                          {field.type === 'select' && (
-                            <Select
-                              value={qualificationData[field.key] as string || ''}
-                              onValueChange={(value) => handleFieldChange(field.key, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {field.options?.map(opt => (
-                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                          
-                          {field.type === 'text' && (
-                            <Input
-                              value={qualificationData[field.key] as string || ''}
-                              onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                              placeholder="Digite..."
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Summary */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Resumo do Lead (para R1)</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleGenerateSummary}
-                        disabled={!isComplete}
+                  {/* Tipo de contato */}
+                  <div className="space-y-2 rounded-lg border border-border bg-secondary/20 p-3">
+                    <Label className="text-sm font-medium">Como foi feita a qualificação?</Label>
+                    <RadioGroup
+                      value={contactChannel}
+                      onValueChange={(v) => setContactChannel(v as 'call' | 'whatsapp')}
+                      className="grid grid-cols-2 gap-2"
+                    >
+                      <label
+                        htmlFor="ch-call"
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${
+                          contactChannel === 'call' ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
                       >
-                        <Sparkles className="h-4 w-4 mr-1" />
-                        Gerar
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={leadSummary}
-                      onChange={(e) => setLeadSummary(e.target.value)}
-                      placeholder="O resumo será gerado automaticamente ou escreva suas observações..."
-                      rows={5}
-                      className="text-sm"
-                    />
+                        <RadioGroupItem value="call" id="ch-call" />
+                        <Phone className="h-4 w-4" /> Por Ligação
+                      </label>
+                      <label
+                        htmlFor="ch-wpp"
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${
+                          contactChannel === 'whatsapp' ? 'border-primary bg-primary/5' : 'border-border'
+                        }`}
+                      >
+                        <RadioGroupItem value="whatsapp" id="ch-wpp" />
+                        <MessageCircle className="h-4 w-4" /> Por WhatsApp
+                      </label>
+                    </RadioGroup>
+
+                    {contactChannel === 'call' && (
+                      <div
+                        className={`text-xs rounded-md p-2 ${
+                          hasAiSummary
+                            ? 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-700 border border-amber-500/30'
+                        }`}
+                      >
+                        {hasAiSummary
+                          ? '✓ Resumo da IA já registrado para esta ligação. Qualificação OK.'
+                          : 'Faça a ligação pelo discador. Após ~30s do encerramento, a IA registra o resumo automaticamente e libera o lead. Se preferir, troque para WhatsApp e responda o questionário.'}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Questionário obrigatório (somente quando não há resumo IA) */}
+                  {!hasAiSummary && (
+                    <>
+                      <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                      {contactChannel === 'whatsapp' && (
+                        <WhatsappPrintUploader
+                          dealId={dealId}
+                          value={whatsappPrintPath}
+                          onChange={setWhatsappPrintPath}
+                        />
+                      )}
+                    </>
+                  )}
 
                   {/* Falei com o lead → move para "Em contato" */}
                   <div className="flex items-start gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
