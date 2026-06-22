@@ -22,3 +22,4 @@
 - [Outside & A010 Late Installment Flow](mem://business-logic/outside-and-a010-late-installment-flow) — A010 cria deal em qualquer parcela; Outside sem deal cria+distribui via Hubla.
 - [QA Docs Thobson](mem://preferences/qa-documentation-thobson) — Thobson solicita feature → gerar docs/qa/<data>-<slug>.md com roadmap de testes.
 - [A010 30d window in Negocios](mem://business-logic/a010-channel-30d-window-negocios) — Filtro Canal A010 e badge A010 do Kanban em /crm/negocios usam janela de 30 dias (mesma regra do R1/R2).
+- [Qualificação obrigatória](mem://business-logic/qualification-mandatory-rule) — Agendar R1 exige resumo IA da ligação OU questionário de 6 perguntas (≥15 chars) + print do WhatsApp.
