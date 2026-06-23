@@ -1,50 +1,122 @@
-## Diagnóstico
+## Diagnóstico encontrado
 
-**Cliente:** nestoroshirojr@hotmail.com (contact `2ab53589…`, deal `20ccfca9…` em PIPELINE INSIDE SALES, owner julio.caetano).
+Em junho/2026, considerando contratos Hubla `invoice.payment_succeeded`:
 
-- **Contrato pago:** `0c80d60e-306e-4611-8308-b0d72694d289` — A000 - Contrato MCF, offer_name "A000 - Contrato MCF - Construir pra Alugar", em **20/06/2026 20:49** (R$ 388,10), `linked_deal_id = NULL`.
-- **R1:** attendee `6cc6f3c9…` foi **criado em 22/06 13:44**, depois do pagamento. R1 marcado com closer Julio para 22/06 16:30, SDR Mayara (`booked_by 29516e9e…`).
-- **R2:** attendee `72fa4150…` agendado para 23/06 18:15 com Jessica Martins (status `invited`).
+- 172 contratos reais com valor (`invoice.payment_succeeded`).
+- 36 estão sem `linked_attendee_id` → não entram corretamente para Closer/SDR quando deveriam.
+- Desses 36, 27 já têm ou tiveram R1 no mesmo deal; ou seja, são recuperáveis por reconciliação.
+- Existem também 185 eventos `NewSale` com valor 0; eles aparecem como contratos órfãos em algumas buscas, mas não devem ser usados para contabilização.
 
-**Por que não contabilizou como Outside:**
-1. No momento do `invoice.payment_succeeded` (20/06 20:49) não existia attendee R1 → `autoMarkContractPaid` foi para o fallback Outside.
-2. O fallback Outside só dispara quando `isOutsideOffer(offer_name)` é true. A whitelist atual (`OUTSIDE_OFFER_NAMES`) tem apenas `'Contrato - Curso R$ 97,00'` e `'Contrato Perfil A - Vitrine A010'`. A oferta deste contrato — **"A000 - Contrato MCF - Construir pra Alugar"** — não está na lista, então o fluxo abortou: nada de tag Outside, nada de stage Contrato Pago, nada de `linked_deal_id`.
-3. Os hooks de dashboard (`useOutsideDetection*`, `useSdrOutsideMetrics`) usam o mesmo `isOutsideOffer` → contrato fica invisível como Outside.
-4. Como ninguém marcou o attendee R1 como `contract_paid`, também não conta para Julio (correto: a venda é anterior ao R1).
+Causas principais:
 
-## Correção
+1. **Race condition entre Hubla e Agenda**
+   - O webhook tenta marcar contrato pago apenas no momento em que o pagamento chega.
+   - Se o attendee R1 ainda não existe, está `pre_scheduled`, foi criado segundos/minutos depois, ou o agendamento chegou pelo Calendly depois, o contrato fica órfão.
+   - Exemplo recente: Nestor pagou antes da R1 existir; Vinicius teve transações sem vínculo.
 
-### 1. Whitelist Outside (cliente + edge function)
-Adicionar `'A000 - Contrato MCF - Construir pra Alugar'` em:
-- `src/hooks/outsideOfferConstants.ts` → `OUTSIDE_OFFER_NAMES`
-- `supabase/functions/hubla-webhook-handler/index.ts` (linha 1371) → `OUTSIDE_OFFER_NAMES`
+2. **Filtro atual ignora attendees importantes**
+   - `autoMarkContractPaid` só considera attendee status `scheduled`, `invited`, `completed`.
+   - Nos dados há casos com `pre_scheduled`, que ficam invisíveis para a atribuição automática.
 
-Mantém o match case-insensitive já existente (`toLowerCase().trim()`), então pequenas variações de caixa continuam pegando.
+3. **Vínculo parcial deixa dashboards divergentes**
+   - Em alguns casos o `meeting_slot_attendees.contract_paid_at` foi marcado, mas `hubla_transactions.linked_attendee_id` continuou `NULL`.
+   - Isso faz uma tela contar e outra não, dependendo da fonte usada.
 
-### 2. Backfill do caso Nestor (UPDATE)
-Sem mexer no attendee (Julio NÃO deve receber a venda):
+4. **Atribuição ao closer errado pode ocorrer por match frágil**
+   - Ordem atual: CPF → email → telefone → nome.
+   - CPF/email são seguros, mas telefone e principalmente nome podem casar no attendee errado quando há duplicidade, email diferente, contatos duplicados ou compradores com dados divergentes.
+   - Levantei 27 contratos vinculados em que o email do pagamento não bate com o email do contato/deal. Alguns podem ser legítimos (cliente usa outro email no checkout), mas são sinais de risco para queda em closer/SDR errado.
 
-```sql
-UPDATE hubla_transactions
-SET linked_deal_id   = '20ccfca9-3036-4774-94cb-da4dd9e6accf',
-    linked_method    = 'manual_outside',
-    linked_at        = now()
-WHERE id = '0c80d60e-306e-4611-8308-b0d72694d289';
+5. **Contabilização de SDR depende do `booked_by` do attendee correto**
+   - Se o contrato vincula ao attendee errado, o SDR errado recebe.
+   - Se `booked_by` está nulo, o SDR não recebe.
+   - O Calendly tem fallback para herdar `meeting_slots.booked_by`, mas nem todos os fluxos garantem isso.
 
-UPDATE crm_deals
-SET tags = (SELECT array_agg(DISTINCT t) FROM unnest(coalesce(tags,'{}') || ARRAY['Outside']) t)
-WHERE id = '20ccfca9-3036-4774-94cb-da4dd9e6accf';
-```
+## Plano de correção
 
-Não altero o `stage_id` (deal está em "Reunião 01 Realizada" e o R1 acontece amanhã — manter o pipeline normal). O dashboard Outside já passa a contar com a regra de offer expandida + `contract_date < meeting_date`.
+### 1. Ajustar o webhook Hubla para ser mais confiável
 
-### 3. Validar
-Após o deploy:
-- `useOutsideDetection` deve marcar o attendee `6cc6f3c9…` como Outside (contrato 20/06 < reunião 22/06).
-- `useSdrOutsideMetrics` deve atribuir +1 Outside para a SDR Mayara (via `booked_by`).
-- `closer_meeting_links` / fechamento Julio continuam sem somar esse contrato (attendee.contract_paid_at permanece NULL).
+No `hubla-webhook-handler`:
 
-## Notas técnicas
+- Ignorar `NewSale`/valor zero para qualquer contabilização de contrato.
+- Ampliar a busca de attendees para incluir `pre_scheduled` quando houver `deal_id` e dados compatíveis.
+- Ao encontrar attendee:
+  - marcar `meeting_slot_attendees.status = 'contract_paid'`;
+  - preencher `contract_paid_at` com `sale_date` real da Hubla;
+  - vincular `hubla_transactions.linked_attendee_id`;
+  - vincular também `hubla_transactions.linked_deal_id = matchingAttendee.deal_id`;
+  - preencher `linked_method`, `linked_at`.
 
-- Nada muda para os outros A000 históricos (CLS, Caução, Incorporador 50k, etc.) — continuam sendo vendas normais com R1.
-- Se aparecerem novas ofertas que se comportem como Outside, basta acrescentá-las à constante (única fonte da verdade entre client e edge function).
+Hoje o webhook atualiza `linked_attendee_id`, mas não garante `linked_deal_id` no caminho principal.
+
+### 2. Tornar o match mais seguro para evitar closer/SDR errado
+
+Manter CPF e email como match forte.
+
+Para telefone/nome:
+
+- Só aceitar telefone se não houver múltiplos candidatos no período.
+- Só aceitar nome se também bater telefone ou CPF parcial/documento; não usar nome sozinho como decisão final.
+- Se houver ambiguidade, não atribuir automaticamente; deixar para fila de reconciliação/manual.
+
+Isso reduz casos de venda cair em outro closer ou outro SDR.
+
+### 3. Criar uma reconciliação automática para contratos órfãos
+
+Criar função SQL/RPC ou rotina de backfill segura para reprocessar contratos reais que ficaram sem `linked_attendee_id`:
+
+Critérios:
+
+- `hubla_transactions.event_type = 'invoice.payment_succeeded'`
+- `sale_status = 'completed'`
+- `count_in_dashboard = true`
+- `net_value > 0`
+- produto/categoria de contrato
+- `installment_number = 1`
+- `linked_attendee_id IS NULL`
+
+A reconciliação tenta localizar attendee R1 pelo mesmo deal/contato e janela segura:
+
+- Preferência 1: mesmo deal já em `linked_deal_id`.
+- Preferência 2: contato por email exato.
+- Preferência 3: contato por telefone sufixo 9 dígitos, se único.
+- Janela: R1 de até 14 dias antes do pagamento ou até 2 dias depois do pagamento (para cobrir race condition / agendamento tardio).
+- Excluir partner/renewal conforme regra do projeto.
+- Excluir Outside oficial: Outside deve ficar sem closer e contar como Outside para SDR/canal, não como venda do closer.
+
+Quando encontrar match único:
+
+- atualizar attendee para `contract_paid`;
+- preencher `contract_paid_at` com data da venda;
+- preencher `hubla_transactions.linked_attendee_id`, `linked_deal_id`, `linked_method = 'reconciled'`, `linked_at`.
+
+### 4. Backfill de junho/2026
+
+Rodar a reconciliação para junho/2026 e revisar o resultado:
+
+- quantos contratos foram vinculados;
+- quantos ficaram ambíguos;
+- quantos são Outside;
+- quantos não têm deal/contato e precisam de intervenção manual.
+
+Não vou marcar `contract_paid_at` para Outside (como Nestor), porque isso atribuiria indevidamente ao closer.
+
+### 5. Criar auditoria/relatório de inconsistências
+
+Gerar uma consulta de auditoria para acompanhamento contínuo:
+
+- contratos reais sem attendee;
+- contratos com attendee pago mas transação sem link;
+- transações cujo email Hubla diverge do contato do attendee;
+- deals com mais de um attendee pago;
+- attendee pago com `booked_by` nulo;
+- contrato com `linked_deal_id` diferente do `attendee.deal_id`.
+
+Isso permite identificar rapidamente quando houver nova falha.
+
+## Resultado esperado
+
+- Contratos vendidos por closer passam a contar para o closer correto via `meeting_slot_attendees.contract_paid_at`.
+- SDR passa a receber via `booked_by` do attendee correto.
+- Outside continua fora de closer e contabiliza como Outside.
+- Casos ambíguos deixam de ser atribuídos automaticamente ao closer/SDR errado e ficam para revisão.
