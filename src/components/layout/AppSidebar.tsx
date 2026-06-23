@@ -56,7 +56,7 @@ function NoShowReviewsBadge() {
   const { data: count = 0 } = useNoShowPendingReviewsCount();
   if (!count) return null;
   return (
-    <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+    <Badge variant="destructive" className="h-5 px-1.5 text-xs">
       {count}
     </Badge>
   );
@@ -726,7 +726,7 @@ export function AppSidebar() {
                     <Zap className="h-5 w-5" />
                     {!isCollapsed && <span>Auto-Discador</span>}
                     {autoDialer.queue.length > 0 && (
-                      <Badge className="ml-auto h-5 min-w-5 px-1 text-[10px] rounded-full">
+                      <Badge className="ml-auto h-5 min-w-5 px-1 text-xs rounded-full">
                         {autoDialer.stats.called}/{autoDialer.stats.total}
                       </Badge>
                     )}
@@ -746,15 +746,15 @@ export function AppSidebar() {
               className={`w-full justify-start gap-2 h-auto py-2 px-2 hover:bg-sidebar-accent ${isPersonalRouteActive() ? "bg-sidebar-accent" : ""}`}
             >
               <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm">
                   {user?.email?.[0]?.toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
               {!isCollapsed && (
                 <>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email || "Usuário"}</p>
-                    <Badge variant={getRoleBadgeVariant(role, authLoading)} className="text-[10px] px-1.5 py-0 h-4 mt-0.5">
+                    <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.email || "Usuário"}</p>
+                    <Badge variant={getRoleBadgeVariant(role, authLoading)} className="text-xs px-1.5 py-0 h-5 mt-0.5">
                       {getRoleLabel(role, authLoading)}
                     </Badge>
                   </div>
