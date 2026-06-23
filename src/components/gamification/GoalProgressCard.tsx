@@ -47,73 +47,73 @@ export function GoalProgressCard({ title, subtitle, goal }: GoalProgressCardProp
   const Icon = tone.icon;
 
   const pct = goal.target > 0 ? Math.min(goal.realized / goal.target, 1.5) : 0;
-  const radius = 38;
+  const radius = 48;
   const circ = 2 * Math.PI * radius;
   const dash = Math.min(pct, 1) * circ;
 
   return (
-    <div className="rounded-xl border bg-card p-4 flex flex-col gap-3 min-w-0">
-      <div className="flex items-start justify-between gap-2">
+    <div className="rounded-2xl border bg-card p-6 md:p-8 flex flex-col gap-5 min-w-0">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-sm md:text-base font-medium uppercase tracking-wide text-muted-foreground">
             {title}
           </div>
           {subtitle && (
-            <div className="text-[11px] text-muted-foreground/80 mt-0.5">{subtitle}</div>
+            <div className="text-xs md:text-sm text-muted-foreground/80 mt-1">{subtitle}</div>
           )}
         </div>
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs md:text-sm font-semibold",
             tone.chip,
           )}
         >
-          <Icon className="h-3 w-3" />
+          <Icon className="h-4 w-4" />
           {tone.label}
         </span>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative h-24 w-24 shrink-0">
-          <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+      <div className="flex items-center gap-6">
+        <div className="relative h-32 w-32 md:h-40 md:w-40 shrink-0">
+          <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
             <circle
-              cx="50"
-              cy="50"
+              cx="60"
+              cy="60"
               r={radius}
               className="stroke-muted"
-              strokeWidth="9"
+              strokeWidth="10"
               fill="none"
             />
             <circle
-              cx="50"
-              cy="50"
+              cx="60"
+              cy="60"
               r={radius}
               className={cn(tone.ring, "transition-all duration-700")}
-              strokeWidth="9"
+              strokeWidth="10"
               fill="none"
               strokeLinecap="round"
               strokeDasharray={`${dash} ${circ}`}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-xl font-bold leading-none tabular-nums">
+            <div className="text-3xl md:text-4xl font-bold leading-none tabular-nums">
               {goal.realized}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">
+            <div className="text-xs md:text-sm text-muted-foreground mt-1">
               de {goal.target}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-1 min-w-0 text-sm">
+        <div className="flex flex-col gap-2 min-w-0 text-base md:text-lg">
           <div className={cn("font-semibold tabular-nums", tone.text)}>
             {goal.balance >= 0 ? `+${goal.balance}` : goal.balance} vs esperado
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-sm md:text-base text-muted-foreground">
             Esperado até agora: <span className="tabular-nums">{goal.expectedSoFar}</span>
           </div>
           {goal.businessDaysTotal > 1 && (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm md:text-base text-muted-foreground">
               Dias úteis: <span className="tabular-nums">{goal.businessDaysElapsed}/{goal.businessDaysTotal}</span>
             </div>
           )}
@@ -122,7 +122,7 @@ export function GoalProgressCard({ title, subtitle, goal }: GoalProgressCardProp
 
       <p
         className={cn(
-          "text-xs leading-snug rounded-md px-2.5 py-2",
+          "text-sm md:text-base leading-relaxed rounded-lg px-4 py-3",
           goal.status === "critical"
             ? "bg-destructive/10 text-destructive font-medium"
             : goal.status === "behind"
