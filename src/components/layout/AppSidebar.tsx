@@ -683,7 +683,7 @@ export function AppSidebar() {
 
                 return (
                   <div key={item.title}>
-                    {showSeparator && !isCollapsed && <div className="my-2 mx-3 border-t border-sidebar-border" />}
+                    {showSeparator && !isCollapsed && <div className="my-3 mx-3 border-t border-sidebar-border" />}
                     {menuElement}
                   </div>
                 );
