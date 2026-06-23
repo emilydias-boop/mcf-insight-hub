@@ -40,34 +40,34 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-3xl p-0 overflow-hidden border-0 shadow-2xl"
+        className="w-screen h-screen max-w-none m-0 rounded-none border-0 shadow-none p-0 overflow-auto flex flex-col justify-center"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <div className="relative bg-gradient-to-br from-primary/10 via-background to-background p-6">
+        <div className="relative bg-gradient-to-br from-primary/10 via-background to-background p-8 md:p-12 lg:p-16 min-h-screen flex flex-col justify-center">
           <button
             type="button"
             aria-label="Fechar"
             onClick={() => onOpenChange(false)}
-            className="absolute right-4 top-4 rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+            className="absolute right-6 top-6 rounded-full p-2 text-muted-foreground hover:bg-muted transition-colors z-10"
           >
-            <X className="h-4 w-4" />
+            <X className="h-6 w-6" />
           </button>
 
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-14 w-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center text-lg font-bold shadow-sm">
-              {data ? getInitials(data.sdrName) : <Target className="h-6 w-6" />}
+          <div className="flex items-center gap-6 mb-10">
+            <div className="h-20 w-20 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold shadow-lg">
+              {data ? getInitials(data.sdrName) : <Target className="h-8 w-8" />}
             </div>
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight">
+              <DialogTitle className="text-3xl md:text-4xl font-bold tracking-tight">
                 Bora, {data?.sdrName?.split(" ")[0] || "SDR"}!
               </DialogTitle>
-              <DialogDescription className="text-sm mt-0.5">
+              <DialogDescription className="text-base md:text-lg mt-1">
                 {data ? buildHeadline(statusCount) : "Carregando seu placar..."}
               </DialogDescription>
               {data && (
-                <div className="mt-1.5 text-[11px] text-muted-foreground/80 uppercase tracking-wide">
+                <div className="mt-2 text-sm text-muted-foreground/80 uppercase tracking-wide">
                   Meta diária: {data.metaDiaria} agendamentos · BU {data.squad}
                 </div>
               )}
@@ -75,17 +75,17 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
           </div>
 
           {!hasMeta && !isLoading ? (
-            <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border bg-card p-8 text-center text-base text-muted-foreground">
               Você ainda não tem uma meta diária configurada. Fale com seu líder para liberar a gamificação.
             </div>
           ) : isLoading || !data ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Skeleton className="h-56 rounded-xl" />
-              <Skeleton className="h-56 rounded-xl" />
-              <Skeleton className="h-56 rounded-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Skeleton className="h-72 rounded-xl" />
+              <Skeleton className="h-72 rounded-xl" />
+              <Skeleton className="h-72 rounded-xl" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <GoalProgressCard title="Hoje" subtitle="Meta diária" goal={data.today} />
               <GoalProgressCard
                 title="Semana"
@@ -100,11 +100,11 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-6 pt-4 border-t">
-            <p className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between mt-10 pt-6 border-t">
+            <p className="text-sm text-muted-foreground">
               Dica: este painel reaparece a cada hora para manter você na linha de chegada.
             </p>
-            <Button size="sm" onClick={() => onOpenChange(false)}>
+            <Button size="lg" onClick={() => onOpenChange(false)}>
               Bora trabalhar
             </Button>
           </div>
