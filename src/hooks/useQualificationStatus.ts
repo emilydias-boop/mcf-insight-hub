@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useBUContext } from '@/contexts/BUContext';
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | null;
 
@@ -15,12 +16,25 @@ export interface QualificationStatus {
  * - uma `qualification_note` válida (canal whatsapp com print + respostas).
  */
 export function useQualificationStatus(dealId?: string) {
+  const { activeBU } = useBUContext();
+  const bypassForBU = activeBU === 'consorcio';
   return useQuery<QualificationStatus>({
-    queryKey: ['qualification-status', dealId],
+    queryKey: ['qualification-status', dealId, bypassForBU ? 'bypass' : 'check'],
     enabled: !!dealId,
     queryFn: async () => {
       if (!dealId) {
         return { isQualified: false, source: null, reason: 'sem deal' };
+      }
+
+      // BU - Consórcio: qualificação obrigatória não se aplica.
+      // Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA
+      // ou questionário WhatsApp) antes de agendar a R1.
+      if (bypassForBU) {
+        return {
+          isQualified: true,
+          source: null,
+          reason: 'BU - Consórcio: qualificação não exigida',
+        };
       }
 
       const { data, error } = await supabase
