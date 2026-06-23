@@ -13,6 +13,7 @@ import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner"
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { GamificationScheduler } from "@/components/gamification/GamificationScheduler";
 
 function GlobalQualificationModal() {
   const { 
@@ -63,6 +64,7 @@ export function MainLayout() {
               <QuickDialerLauncher />
               <AutoDialerDealDrawer />
               <AutoDialerInCallBanner />
+              <GamificationScheduler />
             </>
           )}
           <OverdueAlertOverlay />
