@@ -1440,7 +1440,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       .eq('meeting_slots.meeting_type', 'r1')
       .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString())
       .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-      .in('status', ['scheduled', 'invited', 'completed'])
+      .in('status', ['scheduled', 'invited', 'completed', 'pre_scheduled'])
       .eq('is_partner', false);
 
     if (queryError) {
@@ -1466,8 +1466,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     let matchingAttendee: any = null;
     let meeting: any = null;
     let matchType: string = '';
-    let phoneMatchCandidate: { attendee: any; meeting: any } | null = null;
-    let nameMatchCandidate: { attendee: any; meeting: any } | null = null;
+    const phoneMatchCandidates: { attendee: any; meeting: any }[] = [];
+    const nameMatchCandidates: { attendee: any; meeting: any }[] = [];
 
     for (const attendee of attendees) {
       if (!attendee.deal_id) {
@@ -1505,35 +1505,50 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       }
 
       // Match por TELEFONE (prioridade 2) - guardar como candidato
-      if (phoneSuffix.length >= 8 && !phoneMatchCandidate) {
+      if (phoneSuffix.length >= 8) {
         if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
-          phoneMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+          phoneMatchCandidates.push({ attendee, meeting: attendee.meeting_slots });
           console.log(`📞 [AUTO-PAGO] Candidato por TELEFONE: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
         }
       }
 
       // Match por NOME (prioridade 3) - guardar como candidato
-      if (normalizedSearchName && !nameMatchCandidate && normalizedAttendeeName) {
+      if (normalizedSearchName && normalizedAttendeeName) {
         if (normalizedAttendeeName === normalizedSearchName) {
-          nameMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+          nameMatchCandidates.push({ attendee, meeting: attendee.meeting_slots });
           console.log(`📝 [AUTO-PAGO] Candidato por NOME: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
         }
       }
     }
 
     // Usar candidatos na ordem de prioridade: email > telefone > nome
-    if (!matchingAttendee && phoneMatchCandidate) {
-      matchingAttendee = phoneMatchCandidate.attendee;
-      meeting = phoneMatchCandidate.meeting;
-      matchType = 'telefone';
-      console.log(`✅ [AUTO-PAGO] Match final por TELEFONE: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+    // Telefone só é aceito se TODOS os candidatos apontarem para o MESMO deal_id
+    // (evita atribuir ao closer/SDR errado quando há contatos duplicados).
+    if (!matchingAttendee && phoneMatchCandidates.length > 0) {
+      const uniqueDeals = new Set(phoneMatchCandidates.map((c) => c.attendee.deal_id));
+      if (uniqueDeals.size === 1) {
+        matchingAttendee = phoneMatchCandidates[0].attendee;
+        meeting = phoneMatchCandidates[0].meeting;
+        matchType = 'telefone';
+        console.log(`✅ [AUTO-PAGO] Match final por TELEFONE (único deal): ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+      } else {
+        console.log(`⚠️ [AUTO-PAGO] Telefone bateu em ${phoneMatchCandidates.length} attendees / ${uniqueDeals.size} deals diferentes — ambíguo, não atribuindo`);
+      }
     }
 
-    if (!matchingAttendee && nameMatchCandidate) {
-      matchingAttendee = nameMatchCandidate.attendee;
-      meeting = nameMatchCandidate.meeting;
-      matchType = 'nome';
-      console.log(`✅ [AUTO-PAGO] Match final por NOME: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+    // Nome puro é frágil — só aceita se também houver telefone corroborando o mesmo attendee.
+    if (!matchingAttendee && nameMatchCandidates.length > 0) {
+      const phoneAttendeeIds = new Set(phoneMatchCandidates.map((c) => c.attendee.id));
+      const corroborated = nameMatchCandidates.filter((c) => phoneAttendeeIds.has(c.attendee.id));
+      const uniqueDeals = new Set(corroborated.map((c) => c.attendee.deal_id));
+      if (corroborated.length > 0 && uniqueDeals.size === 1) {
+        matchingAttendee = corroborated[0].attendee;
+        meeting = corroborated[0].meeting;
+        matchType = 'nome+telefone';
+        console.log(`✅ [AUTO-PAGO] Match final por NOME corroborado por TELEFONE: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+      } else {
+        console.log(`⚠️ [AUTO-PAGO] Nome bateu (${nameMatchCandidates.length} candidato(s)) mas sem corroboração por telefone — ignorando para evitar atribuição errada`);
+      }
     }
 
     // Log detalhado quando não encontra match
@@ -1930,6 +1945,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         .from('hubla_transactions')
         .update({
           linked_attendee_id: matchingAttendee.id,
+          linked_deal_id: matchingAttendee.deal_id,
           linked_method: 'auto',
           linked_at: new Date().toISOString(),
           linked_by_user_id: null,
