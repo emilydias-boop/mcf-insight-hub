@@ -1,5 +1,6 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
+import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Users,
@@ -137,24 +138,50 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
       <div className="h-full flex flex-col">
         {/* Header com nome da BU */}
         <div className="border-b border-border bg-card px-6">
-          <div className="flex items-center justify-between py-2">
-            <h1 className="text-lg font-semibold text-primary">
+          <div className="flex items-center justify-between py-3">
+            <h1 className="text-xl font-semibold text-primary tracking-tight">
               CRM - {buDisplayName[bu]}
             </h1>
           </div>
-          <nav className="flex gap-1 overflow-x-auto">
+        </div>
+
+        {/* Navegação em mini cards */}
+        <div className="px-6 py-4 bg-background">
+          <nav className="flex gap-3 overflow-x-auto pb-1">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const isActive = item.end
+                ? location.pathname === item.to
+                : location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.end}
-                  className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent whitespace-nowrap"
-                  activeClassName="text-primary border-primary"
+                  className={cn(
+                    "group flex flex-col items-center justify-center gap-2 min-w-[110px] px-4 py-3 rounded-xl border-2 transition-all duration-200",
+                    "hover:shadow-md hover:-translate-y-0.5",
+                    isActive
+                      ? "border-primary bg-primary/5 text-primary shadow-[0_0_16px_-4px_hsl(var(--primary)/0.3)]"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
                 >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
+                  <div className={cn(
+                    "flex items-center justify-center h-10 w-10 rounded-lg transition-colors",
+                    isActive ? "bg-primary/10" : "bg-muted group-hover:bg-primary/5"
+                  )}>
+                    <Icon className={cn(
+                      "h-5 w-5 transition-colors",
+                      isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary"
+                    )} />
+                  </div>
+                  <span className={cn(
+                    "text-xs font-semibold text-center leading-tight",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )}>
+                    {item.label}
+                  </span>
                 </NavLink>
               );
             })}
