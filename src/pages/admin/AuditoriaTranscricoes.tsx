@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Mic, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Mic, CheckCircle2, XCircle, Clock, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface CallRow {
   id: string;
@@ -29,15 +30,17 @@ interface CallRow {
 
 export default function AuditoriaTranscricoesPage() {
   const today = format(new Date(), "yyyy-MM-dd");
-  const [date, setDate] = useState<string>(today);
+  const sevenDaysAgo = format(new Date(Date.now() - 6 * 24 * 3600 * 1000), "yyyy-MM-dd");
+  const [dateFrom, setDateFrom] = useState<string>(sevenDaysAgo);
+  const [dateTo, setDateTo] = useState<string>(today);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: calls, isLoading } = useQuery({
-    queryKey: ["auditoria-transcricoes", date, statusFilter],
+    queryKey: ["auditoria-transcricoes", dateFrom, dateTo, statusFilter],
     queryFn: async (): Promise<CallRow[]> => {
-      const start = `${date}T00:00:00-03:00`;
-      const end = `${date}T23:59:59-03:00`;
+      const start = `${dateFrom}T00:00:00-03:00`;
+      const end = `${dateTo}T23:59:59-03:00`;
       let q = supabase
         .from("calls")
         .select("id,user_id,deal_id,started_at,duration_seconds,outcome,transcript_sid,transcript_status,ai_processed_at,summary,ai_summary,profiles:user_id(id,full_name,email)")
@@ -45,7 +48,7 @@ export default function AuditoriaTranscricoesPage() {
         .lte("started_at", end)
         .gte("duration_seconds", 60)
         .order("started_at", { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (statusFilter !== "all") q = q.eq("transcript_status", statusFilter);
       const { data, error } = await q;
       if (error) throw error;
@@ -117,6 +120,45 @@ export default function AuditoriaTranscricoesPage() {
     [calls, sdrFilter]
   );
 
+  const handleExportCsv = () => {
+    const headers = [
+      "data_hora", "sdr", "email_sdr", "duracao_s", "outcome",
+      "transcript_status", "transcript_sid", "tem_summary",
+      "em_attendee_notes", "em_custom_fields", "deal_id", "resumo_ia",
+    ];
+    const rows = filtered.map((c) => {
+      const inNotes = c.deal_id ? (notesByDeal?.[c.deal_id] || 0) > 0 : false;
+      const inCustom = c.deal_id ? !!customByDeal?.[c.deal_id]?.has(c.id) : false;
+      const resumo = (c.summary || "").replace(/\r?\n/g, " ").replace(/"/g, '""');
+      return [
+        c.started_at ? format(new Date(c.started_at), "yyyy-MM-dd HH:mm:ss") : "",
+        c.profiles?.full_name || "",
+        c.profiles?.email || "",
+        c.duration_seconds ?? 0,
+        c.outcome || "",
+        c.transcript_status || "",
+        c.transcript_sid || "",
+        c.summary ? "sim" : "não",
+        inNotes ? "sim" : "não",
+        inCustom ? "sim" : "não",
+        c.deal_id || "",
+        resumo,
+      ];
+    });
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `auditoria-transcricoes-${dateFrom}_a_${dateTo}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Aggregate per SDR
   const perSdr = useMemo(() => {
     const agg = new Map<string, { name: string; total: number; completed: number; pending: number; failed: number; withSummary: number; inNotes: number; inCustom: number }>();
@@ -151,10 +193,14 @@ export default function AuditoriaTranscricoesPage() {
         <CardHeader>
           <CardTitle className="text-base">Filtros</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div>
-            <Label>Data</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Label>De</Label>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label>Até</Label>
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
           <div>
             <Label>SDR</Label>
@@ -180,13 +226,18 @@ export default function AuditoriaTranscricoesPage() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Button onClick={handleExportCsv} disabled={!filtered.length} className="w-full gap-2">
+              <Download className="h-4 w-4" /> Exportar CSV
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumo por SDR</CardTitle>
-          <CardDescription>Ligações ≥60s no dia selecionado</CardDescription>
+          <CardDescription>Ligações ≥60s no período selecionado</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -266,7 +317,7 @@ export default function AuditoriaTranscricoesPage() {
                   return (
                     <TableRow key={c.id}>
                       <TableCell className="whitespace-nowrap text-xs">
-                        {c.started_at ? format(new Date(c.started_at), "HH:mm", { locale: ptBR }) : "—"}
+                        {c.started_at ? format(new Date(c.started_at), "dd/MM HH:mm", { locale: ptBR }) : "—"}
                       </TableCell>
                       <TableCell className="text-xs">{c.profiles?.full_name || c.profiles?.email || "—"}</TableCell>
                       <TableCell className="text-xs">{c.duration_seconds ?? 0}s</TableCell>
