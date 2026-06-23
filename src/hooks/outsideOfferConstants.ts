@@ -5,6 +5,7 @@
 export const OUTSIDE_OFFER_NAMES = [
   'Contrato - Curso R$ 97,00',
   'Contrato Perfil A - Vitrine A010',
+  'A000 - Contrato MCF - Construir pra Alugar',
 ] as const;
 
 /**
