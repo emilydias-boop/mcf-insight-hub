@@ -39,7 +39,12 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden border-0 shadow-2xl">
+      <DialogContent
+        className="max-w-3xl p-0 overflow-hidden border-0 shadow-2xl"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <div className="relative bg-gradient-to-br from-primary/10 via-background to-background p-6">
           <button
             type="button"
