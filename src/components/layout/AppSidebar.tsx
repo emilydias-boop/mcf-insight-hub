@@ -46,7 +46,7 @@ function PendingApprovalsBadge() {
   const { data: count = 0 } = usePendingApprovalsCount();
   if (!count) return null;
   return (
-    <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+    <Badge variant="destructive" className="h-5 px-1.5 text-xs">
       {count}
     </Badge>
   );
