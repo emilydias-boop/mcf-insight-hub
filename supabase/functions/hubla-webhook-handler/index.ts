@@ -1440,7 +1440,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       .eq('meeting_slots.meeting_type', 'r1')
       .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString())
       .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-      .in('status', ['scheduled', 'invited', 'completed'])
+      .in('status', ['scheduled', 'invited', 'completed', 'pre_scheduled'])
       .eq('is_partner', false);
 
     if (queryError) {
@@ -1466,8 +1466,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     let matchingAttendee: any = null;
     let meeting: any = null;
     let matchType: string = '';
-    let phoneMatchCandidate: { attendee: any; meeting: any } | null = null;
-    let nameMatchCandidate: { attendee: any; meeting: any } | null = null;
+    const phoneMatchCandidates: { attendee: any; meeting: any }[] = [];
+    const nameMatchCandidates: { attendee: any; meeting: any }[] = [];
 
     for (const attendee of attendees) {
       if (!attendee.deal_id) {
