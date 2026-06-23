@@ -31,6 +31,7 @@ import {
   Phone,
   Zap,
   ShieldAlert,
+  Target,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -695,6 +696,18 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="Minha Meta"
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent("gamification:open"))
+                    }
+                    className="text-primary hover:bg-primary/10"
+                  >
+                    <Target className="h-5 w-5" />
+                    {!isCollapsed && <span>Minha Meta</span>}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     tooltip="Discador rápido (Ctrl+Shift+D)"

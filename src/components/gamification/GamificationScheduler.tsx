@@ -8,7 +8,7 @@ const STORAGE_KEY_PREFIX = "gamification:sdr:lastShownAt:";
 const BUSINESS_HOUR_START = 9;
 const BUSINESS_HOUR_END = 19; // inclusive last popup at 19:00
 const HIDDEN_ROUTES = ["/auth", "/reset-password"];
-const AUTO_DISMISS_MS = 30_000;
+export const GAMIFICATION_OPEN_EVENT = "gamification:open";
 
 function currentHourKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}`;
@@ -52,12 +52,13 @@ export function GamificationScheduler() {
     };
   }, [storageKey, routeBlocked]);
 
-  // Auto-dismiss after a while so it doesn't block the screen.
+  // Abertura manual via evento (botão "Minha Meta" na sidebar). Funciona
+  // mesmo fora do horário comercial e sem mexer no controle horário.
   useEffect(() => {
-    if (!open) return;
-    const t = window.setTimeout(() => setOpen(false), AUTO_DISMISS_MS);
-    return () => window.clearTimeout(t);
-  }, [open]);
+    const handler = () => setOpen(true);
+    window.addEventListener(GAMIFICATION_OPEN_EVENT, handler);
+    return () => window.removeEventListener(GAMIFICATION_OPEN_EVENT, handler);
+  }, []);
 
   if (!storageKey) return null;
   return <SdrGamificationDialog open={open} onOpenChange={setOpen} />;
