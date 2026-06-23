@@ -1,86 +1,50 @@
-## Objetivo
+## Diagnóstico
 
-Tornar a nota de qualificação **obrigatória** no card do lead, no formato de **questionário fixo** (6 perguntas, mín. 15 caracteres por resposta), com duas vias de captura:
+**Cliente:** nestoroshirojr@hotmail.com (contact `2ab53589…`, deal `20ccfca9…` em PIPELINE INSIDE SALES, owner julio.caetano).
 
-1. **Por Ligação** — a nota é satisfeita automaticamente pelo `ai_call_summary` (Resumo IA já existente em `deal_activities`). SDR não precisa preencher nada extra.
-2. **Por WhatsApp** — SDR marca um checkbox "Qualificação via WhatsApp", responde o questionário **e** anexa o print da conversa (obrigatório).
+- **Contrato pago:** `0c80d60e-306e-4611-8308-b0d72694d289` — A000 - Contrato MCF, offer_name "A000 - Contrato MCF - Construir pra Alugar", em **20/06/2026 20:49** (R$ 388,10), `linked_deal_id = NULL`.
+- **R1:** attendee `6cc6f3c9…` foi **criado em 22/06 13:44**, depois do pagamento. R1 marcado com closer Julio para 22/06 16:30, SDR Mayara (`booked_by 29516e9e…`).
+- **R2:** attendee `72fa4150…` agendado para 23/06 18:15 com Jessica Martins (status `invited`).
 
-A regra trava o avanço do lead (botões de qualificar / agendar R1) até que **uma das duas condições** esteja satisfeita.
+**Por que não contabilizou como Outside:**
+1. No momento do `invoice.payment_succeeded` (20/06 20:49) não existia attendee R1 → `autoMarkContractPaid` foi para o fallback Outside.
+2. O fallback Outside só dispara quando `isOutsideOffer(offer_name)` é true. A whitelist atual (`OUTSIDE_OFFER_NAMES`) tem apenas `'Contrato - Curso R$ 97,00'` e `'Contrato Perfil A - Vitrine A010'`. A oferta deste contrato — **"A000 - Contrato MCF - Construir pra Alugar"** — não está na lista, então o fluxo abortou: nada de tag Outside, nada de stage Contrato Pago, nada de `linked_deal_id`.
+3. Os hooks de dashboard (`useOutsideDetection*`, `useSdrOutsideMetrics`) usam o mesmo `isOutsideOffer` → contrato fica invisível como Outside.
+4. Como ninguém marcou o attendee R1 como `contract_paid`, também não conta para Julio (correto: a venda é anterior ao R1).
 
----
+## Correção
 
-## Comportamento
+### 1. Whitelist Outside (cliente + edge function)
+Adicionar `'A000 - Contrato MCF - Construir pra Alugar'` em:
+- `src/hooks/outsideOfferConstants.ts` → `OUTSIDE_OFFER_NAMES`
+- `supabase/functions/hubla-webhook-handler/index.ts` (linha 1371) → `OUTSIDE_OFFER_NAMES`
 
-### Regra de obrigatoriedade
-Um lead é considerado "qualificado" se:
-- Existe um `deal_activity` do tipo `ai_call_summary` para o `deal_id` (qualificação por ligação — IA já preencheu), **OU**
-- Existe um `qualification_note` (novo formato questionário) com as 6 respostas válidas (≥15 chars cada) **e** o anexo `whatsapp_print_url` quando o canal escolhido for WhatsApp.
+Mantém o match case-insensitive já existente (`toLowerCase().trim()`), então pequenas variações de caixa continuam pegando.
 
-Enquanto nenhuma condição for satisfeita: botão "Qualificar / Agendar R1" fica desabilitado com tooltip explicando o motivo.
+### 2. Backfill do caso Nestor (UPDATE)
+Sem mexer no attendee (Julio NÃO deve receber a venda):
 
-### Questionário (novo formato)
-Substitui o formulário atual em `QualificationAndScheduleModal` / `R2QualificationTab` apenas para a captura manual (WhatsApp). Perguntas, todas obrigatórias com mínimo 15 caracteres:
+```sql
+UPDATE hubla_transactions
+SET linked_deal_id   = '20ccfca9-3036-4774-94cb-da4dd9e6accf',
+    linked_method    = 'manual_outside',
+    linked_at        = now()
+WHERE id = '0c80d60e-306e-4611-8308-b0d72694d289';
 
-1. Há quanto tempo o lead conhece a MCF?
-2. Qual a profissão do lead?
-3. Possui algum sócio?
-4. Qual a renda estimada do lead?
-5. O lead já constrói para venda?
-6. O lead possui terreno ou imóvel (casa ou apartamento)?
+UPDATE crm_deals
+SET tags = (SELECT array_agg(DISTINCT t) FROM unnest(coalesce(tags,'{}') || ARRAY['Outside']) t)
+WHERE id = '20ccfca9-3036-4774-94cb-da4dd9e6accf';
+```
 
-Cada pergunta usa `Textarea` com contador `X/15` em tempo real. O botão "Salvar Qualificação" só habilita quando todas as 6 respostas têm ≥15 caracteres e (se WhatsApp) o arquivo está anexado.
+Não altero o `stage_id` (deal está em "Reunião 01 Realizada" e o R1 acontece amanhã — manter o pipeline normal). O dashboard Outside já passa a contar com a regra de offer expandida + `contract_date < meeting_date`.
 
-### Tipo de contato
-Radio/checkbox no topo do questionário:
-- **Ligação** (default) — esconde o questionário manual e mostra um aviso "Aguardando resumo da IA após a ligação" / "Resumo IA já capturado ✓" conforme `ai_call_summary` existir.
-- **WhatsApp** — exibe o questionário + uploader de print (PNG/JPG, ≤5 MB).
+### 3. Validar
+Após o deploy:
+- `useOutsideDetection` deve marcar o attendee `6cc6f3c9…` como Outside (contrato 20/06 < reunião 22/06).
+- `useSdrOutsideMetrics` deve atribuir +1 Outside para a SDR Mayara (via `booked_by`).
+- `closer_meeting_links` / fechamento Julio continuam sem somar esse contrato (attendee.contract_paid_at permanece NULL).
 
-### Anexo do print (WhatsApp)
-- Upload para bucket público `qualification-attachments` (novo, ou reaproveitar `deal-attachments` se existir).
-- URL salva em `deal_activities.metadata.whatsapp_print_url` da nota de qualificação.
-- Preview clicável na timeline / aba Notas.
+## Notas técnicas
 
----
-
-## Mudanças técnicas
-
-### Banco (migração)
-- **Bucket de storage**: criar `qualification-attachments` (público, leitura aberta; insert restrito a `authenticated`).
-- Nenhuma alteração de schema: reutilizamos `deal_activities` com `activity_type='qualification_note'` e gravamos no `metadata`:
-  ```json
-  { "channel": "whatsapp" | "call",
-    "answers": { "tempo_mcf": "...", "profissao": "...", "socio": "...", "renda": "...", "constroi_venda": "...", "terreno_imovel": "..." },
-    "whatsapp_print_url": "https://...",
-    "sdr_name": "..." }
-  ```
-
-### Frontend
-- **Novo**: `src/components/crm/qualification/QualificationQuestionnaire.tsx` — 6 textareas com validação de 15 chars + barra de progresso.
-- **Novo**: `src/components/crm/qualification/ContactTypeSelector.tsx` — radio Ligação/WhatsApp + status do resumo IA.
-- **Novo**: `src/components/crm/qualification/WhatsappPrintUploader.tsx` — upload via Supabase Storage com preview.
-- **Editar** `src/components/crm/QualificationAndScheduleModal.tsx`: substituir o formulário antigo pelo `ContactTypeSelector` + `QualificationQuestionnaire` (quando WhatsApp). Bloquear submit enquanto inválido.
-- **Editar** `src/hooks/useQualificationNote.ts`: aceitar novo payload `{ channel, answers, whatsappPrintUrl }`, validar server-side (no próprio hook + RLS já existe) e gravar em `metadata`.
-- **Novo hook**: `src/hooks/useQualificationStatus.ts` — retorna `{ isQualified, reason, source: 'ai_call_summary' | 'whatsapp' | null }` consultando `deal_activities`.
-- **Editar** componentes que disparam "Qualificar/Agendar R1" no card (`DealDetailsDrawer.tsx`, `R2QualificationTab.tsx`): usar `useQualificationStatus` para desabilitar botão + tooltip.
-- **Editar** `DealNotesTab.tsx`: renderizar o novo formato (perguntas/respostas + miniatura do print) quando `metadata.answers` existir.
-
-### Constantes
-Adicionar `QUALIFICATION_QUESTIONS` em `src/components/crm/qualification/QualificationFields.tsx` (ou novo `QualificationQuestions.ts`) com as 6 perguntas e `MIN_ANSWER_LENGTH = 15`.
-
----
-
-## Validação
-
-1. Lead novo sem ligação nem nota → botão Qualificar desabilitado, tooltip "Faça uma ligação ou registre qualificação via WhatsApp".
-2. Ligação real (>120s) cria `ai_call_summary` → botão habilita automaticamente, sem questionário manual.
-3. Marcar "WhatsApp", preencher 5 perguntas + 1 com 10 chars → submit desabilitado e contador vermelho na pergunta inválida.
-4. Preencher tudo + anexar print → submit habilita, salva em `deal_activities`, aparece na aba Notas com miniatura do print.
-5. Submit sem print no modo WhatsApp → bloqueado com mensagem.
-
----
-
-## Pontos abertos
-
-- **Já existe bucket de anexos no projeto?** Posso reaproveitar ou crio `qualification-attachments` novo (público leitura, insert por `authenticated`)?
-- **Tamanho mín. 15 chars** se aplica também à pergunta "Possui algum sócio?" (resposta natural seria "Não") — devo aceitar resposta curta + justificativa, ou manter 15 chars rígido para todas?
-- Manter os campos antigos (`profissao`, `renda`, etc. em `custom_fields`) para retrocompatibilidade, ou migrar para `metadata.answers` e remover os antigos do formulário?
+- Nada muda para os outros A000 históricos (CLS, Caução, Incorporador 50k, etc.) — continuam sendo vendas normais com R1.
+- Se aparecerem novas ofertas que se comportem como Outside, basta acrescentá-las à constante (única fonte da verdade entre client e edge function).
