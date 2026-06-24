@@ -20,7 +20,12 @@ export function useNewLeadNotifications() {
     const authorizedOrigins = getAuthorizedOriginsForRole(role);
     if (authorizedOrigins.length === 0) return;
 
-    console.log('[NewLeadNotifications] Subscrevendo a novos leads para origens:', authorizedOrigins);
+    // SDR sempre tem exatamente 1 origem autorizada (Inside Sales).
+    // Usamos filter server-side para que o Realtime entregue APENAS inserts
+    // dessa origem — antes, todo INSERT em crm_deals (Consórcio, Incorporador,
+    // partners, etc.) era enviado ao cliente e descartado no .includes().
+    const originFilter = `origin_id=eq.${authorizedOrigins[0]}`;
+    console.log('[NewLeadNotifications] Subscrevendo a novos leads com filtro:', originFilter);
 
     // Subscrever a novos deals
     const channel = supabase
@@ -31,28 +36,24 @@ export function useNewLeadNotifications() {
           event: 'INSERT',
           schema: 'public',
           table: 'crm_deals',
+          filter: originFilter,
         },
         async (payload) => {
           console.log('[NewLeadNotifications] Novo deal detectado:', payload);
           const newDeal = payload.new as any;
-          
-          if (!newDeal.origin_id) return;
 
-          // Verificar se o origin é autorizado (direto, não via grupo)
-          if (authorizedOrigins.includes(newDeal.origin_id)) {
-            console.log('[NewLeadNotifications] Lead pertence à origem autorizada!');
-            
-            // Mostrar toast de notificação
-            toast({
-              title: '🚨 Novo Lead!',
-              description: `Lead "${newDeal.name || 'Novo'}" chegou em Inside Sales`,
-              variant: 'default',
-            });
+          // Defesa em profundidade: filtro server-side já garante origem correta,
+          // mas mantemos guarda caso o filtro falhe silenciosamente.
+          if (!newDeal.origin_id || !authorizedOrigins.includes(newDeal.origin_id)) return;
 
-            // Invalidar queries do Kanban para atualizar a lista
-            queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
-            queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
-          }
+          toast({
+            title: '🚨 Novo Lead!',
+            description: `Lead "${newDeal.name || 'Novo'}" chegou em Inside Sales`,
+            variant: 'default',
+          });
+
+          queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+          queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
         }
       )
       .subscribe((status) => {
