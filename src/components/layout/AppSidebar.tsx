@@ -184,19 +184,19 @@ const menuItems: MenuItem[] = [
   },
 
 
-  // BU - MARKETING
-  {
-    title: "BU - Marketing",
-    icon: Megaphone,
-    requiredRoles: ["admin", "manager", "coordenador"],
-    items: [
-      { title: "Dashboard Ads", url: "/bu-marketing" },
-      { title: "Campanhas", url: "/bu-marketing/campanhas" },
-      { title: "Aquisição A010", url: "/bu-marketing/aquisicao-a010" },
-      { title: "Config Links A010", url: "/bu-marketing/a010-links-config" },
-      { title: "Documentos Estratégicos", url: "/bu-marketing/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
-    ],
-  },
+  // BU - MARKETING (seção inteira removida do menu — rotas mantidas comentadas em App.tsx para rollback)
+  // {
+  //   title: "BU - Marketing",
+  //   icon: Megaphone,
+  //   requiredRoles: ["admin", "manager", "coordenador"],
+  //   items: [
+  //     { title: "Dashboard Ads", url: "/bu-marketing" },
+  //     { title: "Campanhas", url: "/bu-marketing/campanhas" },
+  //     { title: "Aquisição A010", url: "/bu-marketing/aquisicao-a010" },
+  //     { title: "Config Links A010", url: "/bu-marketing/a010-links-config" },
+  //     { title: "Documentos Estratégicos", url: "/bu-marketing/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
+  //   ],
+  // },
 
   // ===== OPERACIONAL =====
 
