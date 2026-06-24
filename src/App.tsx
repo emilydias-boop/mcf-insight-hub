@@ -108,7 +108,8 @@ const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEqui
 const ConsorcioVendas = lazy(() => import("./pages/bu-consorcio/Vendas"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
 const ConsorcioCotasAVenda = lazy(() => import("./pages/bu-consorcio/CotasAVenda"));
-const Chairman = lazy(() => import("./pages/Chairman"));
+// Visão Chairman - desativada (item de menu/rota comentados abaixo). Mantida para rollback.
+// const Chairman = lazy(() => import("./pages/Chairman"));
 const Home = lazy(() => import("./pages/Home"));
 const DocumentosEstrategicos = lazy(() => import("./pages/bu-common/DocumentosEstrategicos"));
 // BU - Marketing (desativado — rotas comentadas abaixo, manter para rollback)
@@ -171,7 +172,8 @@ const App = () => (
               }
             >
               <Route path="home" element={<Home />} />
-              <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
+              {/* Visão Chairman - rota desativada (manter para rollback) */}
+              {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
               <Route index element={<Navigate to="/home" replace />} />
               <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Dashboard /></RoleGuard>} />
               
