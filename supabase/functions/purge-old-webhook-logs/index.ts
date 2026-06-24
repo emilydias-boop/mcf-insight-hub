@@ -57,36 +57,19 @@ Deno.serve(async (req) => {
 
   let deleted = 0;
   if (!dryRun && (wouldDelete ?? 0) > 0) {
-    // Delete em lotes para não estourar timeout / WAL
-    const BATCH = 500;
-    while (true) {
-      const { data: batch, error: selErr } = await supabase
-        .from("hubla_webhook_logs")
-        .select("id")
-        .lt("created_at", cutoff)
-        .not("status", "in", `(${PROTECTED_STATUSES.join(",")})`)
-        .limit(BATCH);
-      if (selErr) {
-        return new Response(
-          JSON.stringify({ error: selErr.message, deleted_so_far: deleted }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      if (!batch || batch.length === 0) break;
-      const ids = batch.map((r: any) => r.id);
-      const { error: delErr } = await supabase
-        .from("hubla_webhook_logs")
-        .delete()
-        .in("id", ids);
-      if (delErr) {
-        return new Response(
-          JSON.stringify({ error: delErr.message, deleted_so_far: deleted }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      deleted += batch.length;
-      if (batch.length < BATCH) break;
+    // Single server-side DELETE com filtro; PostgREST executa de uma vez.
+    const { error: delErr, count: delCount } = await supabase
+      .from("hubla_webhook_logs")
+      .delete({ count: "exact" })
+      .lt("created_at", cutoff)
+      .not("status", "in", `(${PROTECTED_STATUSES.join(",")})`);
+    if (delErr) {
+      return new Response(
+        JSON.stringify({ error: delErr.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+    deleted = delCount ?? 0;
   }
 
   const result = {
