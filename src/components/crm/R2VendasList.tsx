@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAgreementsByEmails } from '@/hooks/useAprovadoAgreements';
 import { AGREEMENT_STATUS_LABELS } from '@/types/billing';
 import { CreateAgreementModal } from '@/components/financeiro/cobranca/CreateAgreementModal';
-import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -76,7 +76,6 @@ const formatCurrency = (value: number | null) => {
 
 export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfig }: R2VendasListProps) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { data: allVendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd, carrinhoConfig);
   const vendas = filteredVendas ?? allVendas;
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
@@ -538,8 +537,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
                           <div className="flex items-center gap-1">
                             <Badge 
                               variant="outline" 
-                              className={`text-xs cursor-pointer ${statusColors[data.status || ''] || ''}`}
-                              onClick={() => navigate('/cobrancas')}
+                              className={`text-xs ${statusColors[data.status || ''] || ''}`}
                             >
                               {AGREEMENT_STATUS_LABELS[data.status!] || data.status}
                               {data.totalParcelas > 0 && ` ${data.parcelasPagas}/${data.totalParcelas}`}
