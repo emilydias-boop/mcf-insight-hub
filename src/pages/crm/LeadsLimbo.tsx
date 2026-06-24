@@ -197,10 +197,11 @@ export default function LeadsLimbo() {
   }, [results, localDeals, loadingDeals, latestUpload?.id]);
 
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const XLSX = await loadXLSX();
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -457,7 +458,7 @@ export default function LeadsLimbo() {
   };
 
   // Export não encontrados
-  const exportNotFound = () => {
+  const exportNotFound = async () => {
     const nf = results.filter(r => r.status === 'nao_encontrado');
     if (!nf.length) return;
     const wsData = nf.map(r => ({
@@ -468,6 +469,7 @@ export default function LeadsLimbo() {
       Valor: r.excelValue,
       Dono: r.excelOwner,
     }));
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Não Encontrados');
@@ -476,7 +478,7 @@ export default function LeadsLimbo() {
   };
 
   // Export leads filtrados
-  const exportFiltered = () => {
+  const exportFiltered = async () => {
     if (!filtered.length) return;
     const wsData = filtered.map(r => ({
       'Nome': r.excelName,
@@ -488,6 +490,7 @@ export default function LeadsLimbo() {
       'Status': r.status === 'com_dono' ? 'Com Dono' : r.status === 'sem_dono' ? 'Sem Dono' : 'Não Encontrado',
       'Dono Atual': r.localOwner || r.excelOwner || '',
     }));
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Leads Filtrados');

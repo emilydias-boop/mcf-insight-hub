@@ -170,7 +170,8 @@ function RealizadasTab() {
               variant="outline"
               size="sm"
               disabled={filtered.length === 0}
-              onClick={() => {
+              onClick={async () => {
+                const XLSX = await loadXLSX();
                 const data = filtered.map(r => ({
                   "Nome": r.contact_name || r.deal_name || '',
                   "Telefone": r.contact_phone || '',
@@ -343,7 +344,8 @@ function PropostasTab() {
           variant="outline"
           size="sm"
           disabled={propostas.length === 0}
-          onClick={() => {
+          onClick={async () => {
+            const XLSX = await loadXLSX();
             const data = propostas.map(p => ({
               "Contato": p.contact_name || p.deal_name || '',
               "Telefone": p.contact_phone || '',
@@ -468,7 +470,8 @@ function SemSucessoTab() {
           variant="outline"
           size="sm"
           disabled={deals.length === 0}
-          onClick={() => {
+          onClick={async () => {
+            const XLSX = await loadXLSX();
             const data = deals.map(d => ({
               "Contato": d.contact_name || d.deal_name || '',
               "Telefone": d.contact_phone || '',
