@@ -192,13 +192,20 @@ export default function Agenda() {
         if (norm.some((t) => t === 'PLANILHA')) return 'PLANILHA';
         return 'OUTROS';
       };
-      result = result.filter(m =>
-        m.attendees?.some(att => {
-          if (att.is_partner) return false;
-          const dealForChannel: any = (att as any).deal || (m as any).deal;
-          return classify(dealForChannel?.tags) === channelFilter;
+      // Filtra ATTENDEE-a-attendee: mantém apenas os participantes cujo deal
+      // bate com o canal selecionado. Se não sobrar nenhum participante válido,
+      // a reunião é descartada (closer correspondente fica vazio no grid).
+      result = result
+        .map((m) => {
+          const matchedAttendees = (m.attendees || []).filter((att: any) => {
+            if (att.is_partner) return false;
+            const dealForChannel: any = att.deal || (m as any).deal;
+            return classify(dealForChannel?.tags) === channelFilter;
+          });
+          if (matchedAttendees.length === 0) return null;
+          return { ...m, attendees: matchedAttendees };
         })
-      );
+        .filter((m): m is typeof result[number] => m !== null);
     }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
