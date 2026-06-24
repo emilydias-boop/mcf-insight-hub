@@ -32,11 +32,12 @@ import NotFound from "./pages/NotFound";
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoCloser"));
-const Receita = lazy(() => import("./pages/receita/Index"));
-const A010 = lazy(() => import("./pages/receita/A010"));
-const ReceitaTransacoes = lazy(() => import("./pages/receita/Transacoes"));
-const ImportarHubla = lazy(() => import("./pages/receita/ImportarHubla"));
-const ReceitaAuditoria = lazy(() => import("./pages/receita/Auditoria"));
+// [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
+// const Receita = lazy(() => import("./pages/receita/Index"));
+// const A010 = lazy(() => import("./pages/receita/A010"));
+// const ReceitaTransacoes = lazy(() => import("./pages/receita/Transacoes"));
+// const ImportarHubla = lazy(() => import("./pages/receita/ImportarHubla"));
+// const ReceitaAuditoria = lazy(() => import("./pages/receita/Auditoria"));
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const LeadsSemTag = lazy(() => import("./pages/relatorios/LeadsSemTag"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
@@ -78,8 +79,9 @@ const ColaboradorProfile = lazy(() => import("./pages/rh/ColaboradorProfile"));
 const ConfiguracoesRH = lazy(() => import("./pages/rh/Configuracoes"));
 const ProvaEquipe = lazy(() => import("./pages/rh/ProvaEquipe"));
 const ExamDetail = lazy(() => import("./pages/rh/ExamDetail"));
-const Financeiro = lazy(() => import("./pages/Financeiro"));
-const Cobrancas = lazy(() => import("./pages/Cobrancas"));
+// [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
+// const Financeiro = lazy(() => import("./pages/Financeiro"));
+// const Cobrancas = lazy(() => import("./pages/Cobrancas"));
 const MeuRH = lazy(() => import("./pages/MeuRH"));
 const MinhasReunioes = lazy(() => import("./pages/sdr/MinhasReunioes"));
 const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
@@ -177,6 +179,7 @@ const App = () => (
               <Route index element={<Navigate to="/home" replace />} />
               <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Dashboard /></RoleGuard>} />
               
+              {/* [REMOVIDO 2026-06-24] Rotas /receita desativadas — preservado para rollback.
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<Navigate to="a010" replace />} />
                 <Route path="a010" element={<A010 />} />
@@ -184,6 +187,7 @@ const App = () => (
                 <Route path="importar-hubla" element={<ImportarHubla />} />
                 <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
+              */}
               <Route path="relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Relatorios /></RoleGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsSemTag /></RoleGuard>} />
               
@@ -250,8 +254,10 @@ const App = () => (
               <Route path="rh/prova-equipe" element={<RoleGuard allowedRoles={['admin', 'rh']}><ProvaEquipe /></RoleGuard>} />
               <Route path="rh/prova-equipe/:id" element={<RoleGuard allowedRoles={['admin', 'rh']}><ExamDetail /></RoleGuard>} />
               <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracoesRH /></RoleGuard>} />
+              {/* [REMOVIDO 2026-06-24] Rotas /financeiro e /cobrancas desativadas — preservado para rollback.
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
+              */}
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
