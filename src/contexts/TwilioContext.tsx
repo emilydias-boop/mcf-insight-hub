@@ -330,7 +330,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     if (autoInitTriedRef.current) return;
     if (deviceStatus === 'ready' || deviceStatus === 'connecting') return;
-    const eligible = hasAnyRole('sdr', 'closer', 'coordenador', 'admin', 'manager', 'closer_sombra');
+    const eligible = hasAnyRole('sdr');
     if (!eligible) return;
     autoInitTriedRef.current = true;
     console.log('[Twilio] Login detectado, inicializando telefone em background...');
