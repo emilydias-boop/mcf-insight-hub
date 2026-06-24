@@ -265,7 +265,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     setStep('mapping');
   }, []);
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
