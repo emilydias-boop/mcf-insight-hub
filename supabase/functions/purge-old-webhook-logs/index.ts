@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   let deleted = 0;
   if (!dryRun && (wouldDelete ?? 0) > 0) {
     // Delete em lotes para não estourar timeout / WAL
-    const BATCH = 5000;
+    const BATCH = 500;
     while (true) {
       const { data: batch, error: selErr } = await supabase
         .from("hubla_webhook_logs")
