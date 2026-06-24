@@ -692,7 +692,8 @@ function TodasReunioesTab() {
               variant="outline"
               size="sm"
               disabled={filtered.length === 0}
-              onClick={() => {
+              onClick={async () => {
+                const XLSX = await loadXLSX();
                 const data = filtered.map(r => ({
                   "Nome": r.contact_name || r.deal_name || '',
                   "Telefone": r.contact_phone || '',

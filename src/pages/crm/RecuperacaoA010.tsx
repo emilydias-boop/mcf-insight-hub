@@ -12,7 +12,8 @@ import { useA010RecoveryInspect, type InspectRow, type InspectItem, type Inspect
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[]> {
+async function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[]> {
+  const XLSX = await loadXLSX();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
