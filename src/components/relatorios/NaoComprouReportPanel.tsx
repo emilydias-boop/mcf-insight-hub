@@ -39,7 +39,7 @@ export function NaoComprouReportPanel({ bu }: NaoComprouReportPanelProps) {
     return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR });
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (leads.length === 0) return;
 
     const rows = leads.map(lead => ({

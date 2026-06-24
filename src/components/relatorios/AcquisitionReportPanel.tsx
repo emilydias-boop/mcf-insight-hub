@@ -79,7 +79,8 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
   const originLabels = useMemo(() => byOrigin.map(r => r.label), [byOrigin]);
 
   // Export Excel with multiple sheets
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
 
     const toSheet = (rows: DimensionRow[], extraCols?: string[]) => {

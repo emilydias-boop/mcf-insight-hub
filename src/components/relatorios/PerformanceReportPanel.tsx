@@ -66,7 +66,8 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
   }, [filteredData]);
   
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = filteredData.map(row => ({
       'Closer': row.closerName,
       'Email': row.closerEmail,

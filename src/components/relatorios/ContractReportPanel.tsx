@@ -294,7 +294,8 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   }, [unifiedData]);
   
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = unifiedData.map(row => ({
       'Fonte': row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla',
       'Data Entrada': row.dealCreatedAt ? format(parseISO(row.dealCreatedAt), 'dd/MM/yyyy', { locale: ptBR }) : '',

@@ -103,8 +103,9 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     return `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`;
   }, [startDate, endDate, periodType]);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!filteredLeads.length) return;
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
       Nome: l.nome,
       Telefone: l.telefone,

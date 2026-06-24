@@ -76,7 +76,8 @@ export function ProductsReportPanel({ bu }: ProductsReportPanelProps) {
   useMemo(() => { setCurrentPage(1); }, [selectedProduct, searchTerm, dateRange]);
 
   // Export
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = filtered.map(row => ({
       'Lead': row.deal_name,
       'Contato': row.contact_name || '',

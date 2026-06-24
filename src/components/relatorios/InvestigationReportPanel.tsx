@@ -199,10 +199,12 @@ function exportToExcel(attendees: InvestigationAttendee[], filename: string, enr
     return base;
   });
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Investigação');
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+  loadXLSX().then((XLSX) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Investigação');
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+  });
 }
 
 function exportDailyToExcel(daily: import('@/hooks/useInvestigationByPeriod').DailyMetric[], filename: string) {
@@ -214,10 +216,12 @@ function exportDailyToExcel(daily: import('@/hooks/useInvestigationByPeriod').Da
     'Contratos Pagos': d.contratosPagos,
   }));
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Dia a Dia');
-  XLSX.writeFile(wb, `${filename}-dia-a-dia.xlsx`);
+  loadXLSX().then((XLSX) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dia a Dia');
+    XLSX.writeFile(wb, `${filename}-dia-a-dia.xlsx`);
+  });
 }
 
 export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) {

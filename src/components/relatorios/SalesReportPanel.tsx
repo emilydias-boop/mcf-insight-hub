@@ -692,7 +692,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   }, [byClientRows, currentPage, itemsPerPage, viewMode]);
 
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     if (viewMode === 'by_client') {
       const exportData = byClientRows.map(row => ({
         'Cliente': row.nome,

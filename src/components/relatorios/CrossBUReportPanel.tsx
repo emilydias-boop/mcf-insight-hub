@@ -271,7 +271,8 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
   };
 
   // Export Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const data = filteredRows.map(r => ({
       'Cliente': r.nome,
       'Email': r.email,

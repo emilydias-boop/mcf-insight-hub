@@ -197,6 +197,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       'Reembolsado': r.isRefunded ? 'Sim' : 'Não',
     }));
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Controle Diego');
