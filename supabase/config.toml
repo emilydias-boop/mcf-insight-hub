@@ -228,6 +228,9 @@ verify_jwt = false
 [functions.outbound-webhook-dispatcher]
 verify_jwt = false
 
+[functions.purge-old-webhook-logs]
+verify_jwt = false
+
 [functions.twilio-content-manage]
 verify_jwt = false
 
