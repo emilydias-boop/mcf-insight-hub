@@ -1,3 +1,4 @@
+import mcfLogo from "@/assets/Group_1321316528.png.asset.json";
 import { useState } from "react";
 import {
   LayoutDashboard,
@@ -548,9 +549,14 @@ export function AppSidebar() {
             <div className="flex items-center justify-between w-full">
               <button 
                 onClick={() => navigate('/home')} 
-                className="text-xl font-bold text-primary hover:opacity-80 transition-opacity cursor-pointer"
+                className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#bfff00] hover:opacity-80 transition-opacity cursor-pointer overflow-hidden"
+                title="MCF Gestão"
               >
-                MCF
+                <img 
+                  src={mcfLogo.url} 
+                  alt="MCF" 
+                  className="w-7 h-7 object-contain"
+                />
               </button>
               <Button
                 variant="ghost"
