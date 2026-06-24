@@ -295,79 +295,9 @@ export default function Agenda() {
   };
 
   const handleExportExcel = useCallback(async () => {
-    // Coleta emails/telefones para descobrir compradores A010
-    const norm9 = (raw: string | null | undefined) => {
-      const d = (raw || '').replace(/\D/g, '');
-      return d.length >= 9 ? d.slice(-9) : d;
-    };
-    const emails = new Set<string>();
-    const phones9 = new Set<string>();
-    for (const m of filteredMeetings) {
-      for (const att of m.attendees || []) {
-        if (att.is_partner) continue;
-        const e = (att.contact?.email || '').toLowerCase().trim();
-        if (e) emails.add(e);
-        const p9 = norm9(att.attendee_phone || att.contact?.phone);
-        if (p9) phones9.add(p9);
-      }
-    }
-    // Mapeia email/telefone -> sale_date mais recente
-    const a010EmailMap = new Map<string, string>();
-    const a010PhoneMap = new Map<string, string>();
-    if (emails.size > 0) {
-      const { data } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email, sale_date')
-        .eq('product_category', 'a010')
-        .eq('sale_status', 'completed')
-        .in('customer_email', Array.from(emails));
-      (data || []).forEach((r: any) => {
-        if (!r.customer_email) return;
-        const e = String(r.customer_email).toLowerCase().trim();
-        const prev = a010EmailMap.get(e);
-        if (!prev || (r.sale_date && r.sale_date > prev)) {
-          a010EmailMap.set(e, r.sale_date || prev || '');
-        }
-      });
-    }
-    if (phones9.size > 0) {
-      const { data } = await supabase
-        .from('hubla_transactions')
-        .select('customer_phone, sale_date')
-        .eq('product_category', 'a010')
-        .eq('sale_status', 'completed')
-        .not('customer_phone', 'is', null);
-      (data || []).forEach((r: any) => {
-        const p9 = norm9(r.customer_phone);
-        if (!p9 || !phones9.has(p9)) return;
-        const prev = a010PhoneMap.get(p9);
-        if (!prev || (r.sale_date && r.sale_date > prev)) {
-          a010PhoneMap.set(p9, r.sale_date || prev || '');
-        }
-      });
-    }
-
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const a010AgeMs = (email: string | null, phone: string | null, referenceISO: string): number | null => {
-      const e = (email || '').toLowerCase().trim();
-      const p9 = norm9(phone);
-      const dates: string[] = [];
-      if (e && a010EmailMap.has(e)) dates.push(a010EmailMap.get(e)!);
-      if (p9 && a010PhoneMap.has(p9)) dates.push(a010PhoneMap.get(p9)!);
-      const valid = dates.filter(Boolean).map((d) => new Date(d).getTime()).filter((n) => !isNaN(n));
-      if (valid.length === 0) {
-        if ((e && a010EmailMap.has(e)) || (p9 && a010PhoneMap.has(p9))) return 0;
-        return null;
-      }
-      const refMs = new Date(referenceISO).getTime();
-      const baseMs = isNaN(refMs) ? Date.now() : refMs;
-      return baseMs - Math.max(...valid);
-    };
-
-    const classify = (email: string | null, phone: string | null, tags: any, referenceISO: string): string => {
-      const ageMs = a010AgeMs(email, phone, referenceISO);
-      const isBuyer = ageMs !== null;
-      const isStale = ageMs !== null && ageMs > THIRTY_DAYS_MS;
+    // Classificação de canal por TAG (case-insensitive, trim) — alinhado com a Lista
+    // da Agenda R1: A010 > ANAMNESE > PLANILHA > OUTROS.
+    const classify = (tags: any): string => {
       const arr: string[] = Array.isArray(tags)
         ? tags.map((t: any) => {
             if (typeof t === 'string') {
@@ -380,13 +310,10 @@ export default function Agenda() {
           })
         : [];
       const norm = arr.map((t) => (t || '').trim().toUpperCase());
-      // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA.
-      const hasAnamnese = norm.some((t) => t === 'ANAMNESE');
-      if (isBuyer && !isStale) return 'A010';
-      if (isBuyer && isStale && hasAnamnese) return 'ANAMNESE';
-      if (isBuyer && isStale) return 'A010';
-      if (hasAnamnese) return 'ANAMNESE';
-      return 'Outro';
+      if (norm.some((t) => t === 'A010')) return 'A010';
+      if (norm.some((t) => t === 'ANAMNESE')) return 'ANAMNESE';
+      if (norm.some((t) => t === 'PLANILHA')) return 'PLANILHA';
+      return 'OUTROS';
     };
 
     const rows: Record<string, string>[] = [];
@@ -394,12 +321,7 @@ export default function Agenda() {
       for (const att of (meeting.attendees || [])) {
         if (att.is_partner) continue;
         const dealForChannel: any = (att as any).deal || meeting.deal;
-        const channel = classify(
-          att.contact?.email || null,
-          att.attendee_phone || att.contact?.phone || null,
-          dealForChannel?.tags,
-          meeting.scheduled_at,
-        );
+        const channel = classify(dealForChannel?.tags);
         rows.push({
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
           'Lead': att.attendee_name || att.contact?.name || '',
@@ -669,7 +591,8 @@ export default function Agenda() {
               <SelectItem value="all">Todos canais</SelectItem>
               <SelectItem value="A010">A010</SelectItem>
               <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
-              <SelectItem value="Outro">Outro</SelectItem>
+              <SelectItem value="PLANILHA">PLANILHA</SelectItem>
+              <SelectItem value="OUTROS">OUTROS</SelectItem>
             </SelectContent>
           </Select>
         </div>
