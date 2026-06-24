@@ -24,9 +24,9 @@ const PatrimonioRelatorios = () => {
     tipo: tipoFilter && tipoFilter !== 'all' ? tipoFilter : undefined,
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!data?.assets?.length) return;
-    
+    const XLSX = await loadXLSX();
     const rows = data.assets.map(a => ({
       'Patrimônio': a.numero_patrimonio,
       'Tipo': ASSET_TYPE_LABELS[a.tipo as keyof typeof ASSET_TYPE_LABELS] || a.tipo,

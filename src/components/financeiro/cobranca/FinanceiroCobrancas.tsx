@@ -78,12 +78,12 @@ export const FinanceiroCobrancas = () => {
   };
 
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (rows.length === 0) {
       toast.error('Nenhum dado para exportar');
       return;
     }
-
+    const XLSX = await loadXLSX();
     const exportRows = rows.map(r => ({
       'Cliente': r.customer_name,
       'Telefone': r.customer_phone || '',
