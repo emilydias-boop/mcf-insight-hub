@@ -9,8 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -44,45 +42,23 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; variant: 'default'
   refunded: { label: 'Reembolsado', variant: 'outline', icon: XCircle },
 };
 
-/** Normaliza telefone para os últimos 9 dígitos (padrão usado em deduplicação). */
-function normalizePhone9(raw: string | null | undefined): string {
-  if (!raw) return '';
-  const digits = raw.replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : digits;
-}
-
 /**
- * Classificação de canal SIMPLIFICADA para a Agenda R1:
- * - A010: comprou A010 (hubla_transactions com product_category='a010' e sale_status='completed', por email/telefone)
- * - ANAMNESE: tem tag exatamente "ANAMNESE" ou "ANAMNESE-INSTA"
- * - Outro: qualquer outra coisa
+ * Classificação de canal SIMPLIFICADA da Agenda R1 — baseada
+ * EXCLUSIVAMENTE em tags do deal (case-insensitive, trim):
+ * - A010 → deal tem tag "A010"
+ * - ANAMNESE → deal tem tag "ANAMNESE"
+ * - PLANILHA → deal tem tag "PLANILHA"
+ * - OUTROS → qualquer outra coisa
+ * Prioridade quando há múltiplas tags: A010 > ANAMNESE > PLANILHA.
  */
-type SimpleChannel = 'A010' | 'ANAMNESE' | 'Outro';
+type SimpleChannel = 'A010' | 'ANAMNESE' | 'PLANILHA' | 'OUTROS';
 
-function classifySimple(opts: {
-  /** ms desde a venda A010 mais recente (null se não for buyer) */
-  a010AgeMs: number | null;
-  tags: string[];
-}): SimpleChannel {
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const isA010Buyer = opts.a010AgeMs !== null;
-  const isStale = opts.a010AgeMs !== null && opts.a010AgeMs > THIRTY_DAYS_MS;
+function classifySimple(opts: { tags: string[] }): SimpleChannel {
   const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
-  // SOMENTE tag exata "ANAMNESE" (anamnese completa). NÃO contar ANAMNESE-INSTA.
-  const hasAnamnese = norm.some((t) => t === 'ANAMNESE');
-
-  // Buyer A010 recente (≤30d) → A010, mesmo com tag ANAMNESE
-  if (isA010Buyer && !isStale) return 'A010';
-
-  // Buyer A010 esfriado (>30d) E tem tag ANAMNESE (entrou no fluxo) → ANAMNESE
-  if (isA010Buyer && isStale && hasAnamnese) return 'ANAMNESE';
-
-  // Buyer A010 esfriado SEM tag ANAMNESE → continua A010
-  if (isA010Buyer && isStale) return 'A010';
-
-  // Não é buyer A010
-  if (hasAnamnese) return 'ANAMNESE';
-  return 'Outro';
+  if (norm.some((t) => t === 'A010')) return 'A010';
+  if (norm.some((t) => t === 'ANAMNESE')) return 'ANAMNESE';
+  if (norm.some((t) => t === 'PLANILHA')) return 'PLANILHA';
+  return 'OUTROS';
 }
 
 interface AttendeeRow {
@@ -102,103 +78,6 @@ interface AttendeeRow {
 export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '', channelFilter }: MeetingsListProps) {
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
-
-  // Coleta emails e telefones (últimos 9 dígitos) de todos os attendees visíveis
-  const { emails, phones9 } = useMemo(() => {
-    const eSet = new Set<string>();
-    const pSet = new Set<string>();
-    for (const m of meetings) {
-      for (const att of m.attendees || []) {
-        if (att.is_partner) continue;
-        const email = (att.contact?.email || '').toLowerCase().trim();
-        if (email) eSet.add(email);
-        const phone9 = normalizePhone9(att.attendee_phone || att.contact?.phone);
-        if (phone9) pSet.add(phone9);
-      }
-      const dealEmail = (m.deal?.contact?.email || '').toLowerCase().trim();
-      if (dealEmail) eSet.add(dealEmail);
-      const dealPhone9 = normalizePhone9(m.deal?.contact?.phone);
-      if (dealPhone9) pSet.add(dealPhone9);
-    }
-    return { emails: Array.from(eSet), phones9: Array.from(pSet) };
-  }, [meetings]);
-
-  // Lookup em hubla_transactions (product_category='a010' completed): identifica buyers e traz a sale_date mais recente
-  // para aplicar a regra "A010 com +30 dias e tag ANAMNESE → vira ANAMNESE".
-  const { data: a010Sets } = useQuery({
-    queryKey: ['a010-buyers-lookup', emails, phones9],
-    queryFn: async () => {
-      const emailMap = new Map<string, string>(); // email -> ISO sale_date mais recente
-      const phoneMap = new Map<string, string>(); // phone9 -> ISO sale_date mais recente
-      if (emails.length === 0 && phones9.length === 0) {
-        return { emailMap, phoneMap };
-      }
-      if (emails.length > 0) {
-        const { data } = await supabase
-          .from('hubla_transactions')
-          .select('customer_email, sale_date')
-          .eq('product_category', 'a010')
-          .eq('sale_status', 'completed')
-          .in('customer_email', emails);
-        (data || []).forEach((r: any) => {
-          if (!r.customer_email) return;
-          const e = String(r.customer_email).toLowerCase().trim();
-          const prev = emailMap.get(e);
-          if (!prev || (r.sale_date && r.sale_date > prev)) {
-            emailMap.set(e, r.sale_date || prev || '');
-          }
-        });
-      }
-      if (phones9.length > 0) {
-        const { data } = await supabase
-          .from('hubla_transactions')
-          .select('customer_phone, sale_date')
-          .eq('product_category', 'a010')
-          .eq('sale_status', 'completed')
-          .not('customer_phone', 'is', null);
-        (data || []).forEach((r: any) => {
-          const p9 = normalizePhone9(r.customer_phone);
-          if (!p9 || !phones9.includes(p9)) return;
-          const prev = phoneMap.get(p9);
-          if (!prev || (r.sale_date && r.sale_date > prev)) {
-            phoneMap.set(p9, r.sale_date || prev || '');
-          }
-        });
-      }
-      return { emailMap, phoneMap };
-    },
-    enabled: emails.length > 0 || phones9.length > 0,
-    staleTime: 60_000,
-  });
-
-  /**
-   * Retorna a idade (ms) entre o evento (R1 scheduled_at) e a venda A010
-   * MAIS RECENTE do lead, ou null se não for buyer. Usar scheduled_at como
-   * âncora mantém o canal estável historicamente (alinhado com o Funil
-   * por Canal do Relatório).
-   */
-  const a010Age = (
-    email: string | null | undefined,
-    phone: string | null | undefined,
-    referenceISO: string,
-  ): number | null => {
-    if (!a010Sets) return null;
-    const e = (email || '').toLowerCase().trim();
-    const p9 = normalizePhone9(phone);
-    const dates: string[] = [];
-    if (e && a010Sets.emailMap.has(e)) dates.push(a010Sets.emailMap.get(e)!);
-    if (p9 && a010Sets.phoneMap.has(p9)) dates.push(a010Sets.phoneMap.get(p9)!);
-    const valid = dates.filter(Boolean).map((d) => new Date(d).getTime()).filter((n) => !isNaN(n));
-    if (valid.length === 0) {
-      // É buyer mas sem sale_date utilizável → trata como recente (A010)
-      if ((e && a010Sets.emailMap.has(e)) || (p9 && a010Sets.phoneMap.has(p9))) return 0;
-      return null;
-    }
-    const mostRecent = Math.max(...valid);
-    const refMs = new Date(referenceISO).getTime();
-    const baseMs = isNaN(refMs) ? Date.now() : refMs;
-    return baseMs - mostRecent;
-  };
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
@@ -233,14 +112,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                 return (t as any)?.name || '';
               })
             : [];
-          const channel = classifySimple({
-            a010AgeMs: a010Age(
-              att.contact?.email,
-              att.attendee_phone || att.contact?.phone,
-              meeting.scheduled_at,
-            ),
-            tags: tagsArr,
-          });
+          const channel = classifySimple({ tags: tagsArr });
 
           if (channelFilter && channel !== channelFilter) continue;
 
@@ -273,14 +145,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
               return (t as any)?.name || '';
             })
           : [];
-        const channel = classifySimple({
-          a010AgeMs: a010Age(
-            dealForChannel?.contact?.email,
-            dealForChannel?.contact?.phone,
-            meeting.scheduled_at,
-          ),
-          tags: tagsArr,
-        });
+        const channel = classifySimple({ tags: tagsArr });
 
         if (channelFilter && channel !== channelFilter) continue;
 
@@ -301,7 +166,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
       }
     }
     return rows;
-  }, [meetings, statusFilter, searchTerm, channelFilter, a010Sets]);
+  }, [meetings, statusFilter, searchTerm, channelFilter]);
 
   const handleUpdateStatus = (meetingId: string, status: string) => {
     updateStatus.mutate({ meetingId, status });
@@ -325,7 +190,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     );
   }
 
-  const channelCounts = { A010: 0, ANAMNESE: 0, Outro: 0 } as Record<SimpleChannel, number>;
+  const channelCounts = { A010: 0, ANAMNESE: 0, PLANILHA: 0, OUTROS: 0 } as Record<SimpleChannel, number>;
   for (const r of attendeeRows) channelCounts[r.channel]++;
   const total = attendeeRows.length;
 
@@ -340,7 +205,8 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             <>
               <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
               <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
-              <Badge variant="outline" className="text-muted-foreground">Outro: {channelCounts.Outro}</Badge>
+              <Badge variant="outline" className="border-emerald-400 text-emerald-600">PLANILHA: {channelCounts.PLANILHA}</Badge>
+              <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
             </>
           )}
           <Badge variant="secondary" className="font-semibold">Total: {total}</Badge>
@@ -398,7 +264,8 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                       'text-[11px]',
                       row.channel === 'A010' && 'border-blue-400 text-blue-600',
                       row.channel === 'ANAMNESE' && 'border-purple-400 text-purple-600',
-                      row.channel === 'Outro' && 'text-muted-foreground'
+                      row.channel === 'PLANILHA' && 'border-emerald-400 text-emerald-600',
+                      row.channel === 'OUTROS' && 'text-muted-foreground'
                     )}
                   >
                     {row.channel}
