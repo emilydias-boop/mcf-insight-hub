@@ -13161,6 +13161,14 @@ export type Database = {
             Args: { target_date: string; valid_emails?: string[] }
             Returns: Json
           }
+      get_outside_detection_for_deals: {
+        Args: { p_deal_ids: string[] }
+        Returns: {
+          deal_id: string
+          is_outside: boolean
+          product_name: string
+        }[]
+      }
       get_pendentes_audit_incorporador: {
         Args: { p_end: string; p_start: string }
         Returns: Json
