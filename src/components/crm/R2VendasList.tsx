@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAgreementsByEmails } from '@/hooks/useAprovadoAgreements';
 import { AGREEMENT_STATUS_LABELS } from '@/types/billing';
 import { CreateAgreementModal } from '@/components/financeiro/cobranca/CreateAgreementModal';
-import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
