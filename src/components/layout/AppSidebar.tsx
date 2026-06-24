@@ -128,20 +128,21 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   // ===== DASHBOARD =====
-  // Visão Chairman - Executive Dashboard
-  {
-    title: "Visão Chairman",
-    url: "/chairman",
-    icon: Crown,
-    requiredRoles: ["admin", "manager"],
-  },
-  
-  {
-    title: "Visão Diretor",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-    requiredRoles: ["admin", "manager", "coordenador"],
-  },
+  // Visão Chairman - desativada (manter comentado para rollback)
+  // {
+  //   title: "Visão Chairman",
+  //   url: "/chairman",
+  //   icon: Crown,
+  //   requiredRoles: ["admin", "manager"],
+  // },
+  //
+  // Visão Diretor - desativada (rota /dashboard segue ativa pois é compartilhada)
+  // {
+  //   title: "Visão Diretor",
+  //   url: "/dashboard",
+  //   icon: LayoutDashboard,
+  //   requiredRoles: ["admin", "manager", "coordenador"],
+  // },
 
   // ===== BUSINESS UNITS =====
 
