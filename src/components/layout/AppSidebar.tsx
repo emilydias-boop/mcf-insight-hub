@@ -159,7 +159,9 @@ const menuItems: MenuItem[] = [
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
-      { title: "Documentos Estratégicos", url: "/bu-incorporador/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
+      // Removido em 2026-06-24 a pedido — funcionalidade não utilizada na BU Incorporador.
+      // Rota /bu-incorporador/documentos-estrategicos continua registrada em App.tsx para rollback rápido.
+      // { title: "Documentos Estratégicos", url: "/bu-incorporador/documentos-estrategicos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
