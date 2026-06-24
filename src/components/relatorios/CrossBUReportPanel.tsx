@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface CrossBUReportPanelProps {
@@ -271,7 +271,8 @@ export function CrossBUReportPanel({ bu }: CrossBUReportPanelProps) {
   };
 
   // Export Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const data = filteredRows.map(r => ({
       'Cliente': r.nome,
       'Email': r.email,

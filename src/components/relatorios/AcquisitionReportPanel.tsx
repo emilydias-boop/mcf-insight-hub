@@ -14,7 +14,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport, DimensionRow } from '@/hooks/useAcquisitionReport';
 import { useChannelFunnelReport, displayChannelLabel } from '@/hooks/useChannelFunnelReport';
 import { ChannelFunnelTable } from './ChannelFunnelTable';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface AcquisitionReportPanelProps {
   bu: BusinessUnit;
@@ -79,7 +79,8 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
   const originLabels = useMemo(() => byOrigin.map(r => r.label), [byOrigin]);
 
   // Export Excel with multiple sheets
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
 
     const toSheet = (rows: DimensionRow[], extraCols?: string[]) => {

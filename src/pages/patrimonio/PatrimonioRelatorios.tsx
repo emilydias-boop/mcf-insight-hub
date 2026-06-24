@@ -12,7 +12,7 @@ import {
 import { useAssetReports } from '@/hooks/useAssetReports';
 import { ASSET_STATUS_LABELS, ASSET_TYPE_LABELS } from '@/types/patrimonio';
 import { ArrowLeft, Download, Package, AlertTriangle, ShieldX, Users } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 const PatrimonioRelatorios = () => {
   const navigate = useNavigate();
@@ -24,9 +24,9 @@ const PatrimonioRelatorios = () => {
     tipo: tipoFilter && tipoFilter !== 'all' ? tipoFilter : undefined,
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!data?.assets?.length) return;
-    
+    const XLSX = await loadXLSX();
     const rows = data.assets.map(a => ({
       'Patrimônio': a.numero_patrimonio,
       'Tipo': ASSET_TYPE_LABELS[a.tipo as keyof typeof ASSET_TYPE_LABELS] || a.tipo,

@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { useProductsAcquiredReport } from '@/hooks/useProductsAcquiredReport';
 import { useProdutoAdquiridoOptions } from '@/hooks/useDealProdutosAdquiridos';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface ProductsReportPanelProps {
@@ -76,7 +76,8 @@ export function ProductsReportPanel({ bu }: ProductsReportPanelProps) {
   useMemo(() => { setCurrentPage(1); }, [selectedProduct, searchTerm, dateRange]);
 
   // Export
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = filtered.map(row => ({
       'Lead': row.deal_name,
       'Contato': row.contact_name || '',

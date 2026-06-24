@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { CloserLead } from "@/hooks/useCloserDetailData";
 import { CheckCircle, DollarSign, Search, Download, X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface CloserLeadsTableProps {
   leads: CloserLead[];
@@ -97,7 +97,8 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     return filtered;
   }, [leads, search, statusFilter, sdrFilter]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await loadXLSX();
     const data = filteredLeads.map(l => ({
       "Data": format(new Date(l.scheduled_at), "dd/MM/yyyy HH:mm", { locale: ptBR }),
       "Nome": l.contact_name,

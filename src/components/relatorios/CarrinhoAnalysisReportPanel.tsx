@@ -13,7 +13,7 @@ import { useCarrinhoAnalysisReport, LeadCarrinhoCompleto } from '@/hooks/useCarr
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useCarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { cn } from '@/lib/utils';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { DateRange } from 'react-day-picker';
 import { BrazilMap, BrazilMapStateData } from './BrazilMap';
 import { PostSaleFunnelPanel } from './PostSaleFunnelPanel';
@@ -103,8 +103,9 @@ export function CarrinhoAnalysisReportPanel({ bu }: CarrinhoAnalysisReportPanelP
     return `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`;
   }, [startDate, endDate, periodType]);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!filteredLeads.length) return;
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(filteredLeads.map(l => ({
       Nome: l.nome,
       Telefone: l.telefone,

@@ -1,8 +1,9 @@
-import * as XLSX from 'xlsx';
 import type { Employee } from '@/types/hr';
 import { format } from 'date-fns';
+import { loadXLSX } from '@/lib/lazyExport';
 
-export function exportEmployeesToXlsx(employees: Employee[]) {
+export async function exportEmployeesToXlsx(employees: Employee[]) {
+  const XLSX = await loadXLSX();
   const rows = employees.map(e => ({
     'Nome Completo': e.nome_completo,
     CPF: e.cpf || '',

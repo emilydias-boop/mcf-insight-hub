@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { usePerformanceReport } from '@/hooks/usePerformanceReport';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useAuth } from '@/contexts/AuthContext';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface PerformanceReportPanelProps {
@@ -66,7 +66,8 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
   }, [filteredData]);
   
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = filteredData.map(row => ({
       'Closer': row.closerName,
       'Email': row.closerEmail,

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Download, Plus, Trash2, BookOpen } from 'lucide-react';
+import { ArrowLeft, Download, Plus, Trash2, BookOpen, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useExam, useExamScores, useCreateScore, useDeleteScore, ExamScore } from '@/hooks/useExams';
@@ -37,6 +37,17 @@ export default function ExamDetail() {
   const { data: scores = [], isLoading: loadingScores } = useExamScores(id || null);
   const createScore = useCreateScore();
   const deleteScore = useDeleteScore();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!exam) return;
+    setExporting(true);
+    try {
+      await exportExamScores(exam, scores);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
@@ -134,8 +145,9 @@ export default function ExamDetail() {
             </div>
           </div>
         </div>
-        <Button variant="outline" onClick={() => exportExamScores(exam, scores)} disabled={scores.length === 0}>
-          <Download className="h-4 w-4 mr-2" /> Exportar XLSX
+        <Button variant="outline" onClick={handleExport} disabled={scores.length === 0 || exporting}>
+          {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+          {exporting ? 'Gerando...' : 'Exportar XLSX'}
         </Button>
       </div>
 

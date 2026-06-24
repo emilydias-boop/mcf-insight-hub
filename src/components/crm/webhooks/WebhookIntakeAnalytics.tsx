@@ -12,8 +12,7 @@ import { IngestFailuresCard } from '@/components/crm/webhooks/IngestFailuresCard
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { FileText, Search, Users, UserCheck, TrendingUp, UserX, Download } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { loadJsPDF } from '@/lib/lazyExport';
 
 export function WebhookIntakeAnalytics() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -52,9 +51,9 @@ export function WebhookIntakeAnalytics() {
     return filtered;
   }, [analytics?.leads, search, stageFilter, ownerFilter]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!analytics || !selectedEndpoint) return;
-
+    const { jsPDF, autoTable } = await loadJsPDF();
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const now = new Date();

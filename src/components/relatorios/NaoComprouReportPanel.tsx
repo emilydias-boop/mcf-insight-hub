@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNaoComprouReport, useNaoComprouClosers, NaoComprouLead } from '@/hooks/useNaoComprouReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface NaoComprouReportPanelProps {
   bu: BusinessUnit;
@@ -39,7 +39,7 @@ export function NaoComprouReportPanel({ bu }: NaoComprouReportPanelProps) {
     return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR });
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (leads.length === 0) return;
 
     const rows = leads.map(lead => ({
@@ -59,6 +59,7 @@ export function NaoComprouReportPanel({ bu }: NaoComprouReportPanelProps) {
       'Data Não Comprou': formatDateTime(lead.carrinho_updated_at),
     }));
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Não Comprou');

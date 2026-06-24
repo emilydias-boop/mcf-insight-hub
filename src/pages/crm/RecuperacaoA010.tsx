@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,8 @@ import { useA010RecoveryInspect, type InspectRow, type InspectItem, type Inspect
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[]> {
+async function parseSheet(file: File, source: 'hubla' | 'kiwify'): Promise<InspectRow[]> {
+  const XLSX = await loadXLSX();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

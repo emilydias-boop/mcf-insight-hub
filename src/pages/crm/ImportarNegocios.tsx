@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import {
   Select,
@@ -154,6 +154,7 @@ const ImportarNegocios = () => {
       if (ext === 'xlsx' || ext === 'xls') {
         try {
           const data = await selectedFile.arrayBuffer();
+          const XLSX = await loadXLSX();
           const workbook = XLSX.read(data);
           const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
           const csvFile = new File(

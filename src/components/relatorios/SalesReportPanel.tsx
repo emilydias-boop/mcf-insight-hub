@@ -14,7 +14,7 @@ import { DateRange } from 'react-day-picker';
 import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
 import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -692,7 +692,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   }, [byClientRows, currentPage, itemsPerPage, viewMode]);
 
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     if (viewMode === 'by_client') {
       const exportData = byClientRows.map(row => ({
         'Cliente': row.nome,

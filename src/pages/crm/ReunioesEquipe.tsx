@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { parseYearMonthLocal, parseYmdLocal } from "@/lib/dateHelpers";
 import { ptBR } from "date-fns/locale";
-import * as XLSX from "xlsx";
+import { loadXLSX } from '@/lib/lazyExport';
 import { WEEK_STARTS_ON, contarDiasUteis, getWeekStartsOn } from "@/lib/businessDays";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { Calendar, Users, RefreshCw, Download, Building2, Briefcase } from "lucide-react";
@@ -691,7 +691,8 @@ export default function ReunioesEquipe() {
   };
 
   // Export to Excel function - contextual based on active tab
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
 
     if (activeTab === "closers" && closerMetrics) {

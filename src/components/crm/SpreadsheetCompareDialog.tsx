@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { compareSpreadsheetGlobal, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { ExpandableResultsTable } from '@/components/crm/ExpandableResultsTable';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';
@@ -265,7 +265,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     setStep('mapping');
   }, []);
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -283,6 +283,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       };
       reader.readAsText(file);
     } else {
+      const XLSX = await loadXLSX();
       const reader = new FileReader();
       reader.onload = (evt) => {
         try {
@@ -609,7 +610,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     return filtered;
   }, [results, statusFilter, searchText]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     const exportData = filteredResults.map(r => {
       const base: Record<string, string> = {
         'Nome (Planilha)': r.excelName,
@@ -633,6 +634,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       return base;
     });
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Comparação');

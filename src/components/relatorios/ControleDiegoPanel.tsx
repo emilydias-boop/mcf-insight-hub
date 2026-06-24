@@ -18,9 +18,7 @@ import { ControleDiegoDrawer } from './ControleDiegoDrawer';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { TagFilterPopover } from '@/components/crm/TagFilterPopover';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { loadXLSX, loadJsPDF } from '@/lib/lazyExport';
 
 interface ControleDiegoPanelProps {
   bu?: BusinessUnit;
@@ -182,7 +180,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   };
 
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const allRows = [...pending, ...sent];
     const data = allRows.map(r => ({
       'Nome do Lead': r.leadName,
@@ -199,6 +197,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
       'Reembolsado': r.isRefunded ? 'Sim' : 'Não',
     }));
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Controle Diego');
@@ -216,8 +215,9 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   };
 
   // Export to PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const allRows = [...pending, ...sent];
+    const { jsPDF, autoTable } = await loadJsPDF();
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     // Header

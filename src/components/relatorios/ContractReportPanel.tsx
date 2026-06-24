@@ -16,7 +16,7 @@ import { useContractReport, getDefaultContractReportFilters, ContractReportFilte
 import { useHublaA000Contracts, normalizePhoneForMatch, normalizeEmailForMatch } from '@/hooks/useHublaA000Contracts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 type DataSource = 'all' | 'agenda' | 'hubla' | 'pending';
@@ -294,7 +294,8 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   }, [unifiedData]);
   
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const exportData = unifiedData.map(row => ({
       'Fonte': row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla',
       'Data Entrada': row.dealCreatedAt ? format(parseISO(row.dealCreatedAt), 'dd/MM/yyyy', { locale: ptBR }) : '',

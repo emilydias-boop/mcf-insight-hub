@@ -11,7 +11,7 @@ import { Download, MessageCircle, X, Loader2, Send, PhoneCall, Clock, PhoneOff, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
 import type { CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -49,7 +49,8 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
     setDrawerOpen(true);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await loadXLSX();
     const rows = allData.map(r => ({
       'Cliente': r.cliente_nome,
       'Grupo': r.grupo,
