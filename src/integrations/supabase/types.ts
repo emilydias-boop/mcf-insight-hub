@@ -12938,6 +12938,14 @@ export type Database = {
         Args: { bu_filter?: string; end_date: string; start_date: string }
         Returns: Json
       }
+      get_consorcio_commission_summary: {
+        Args: { p_card_ids: string[] }
+        Returns: {
+          comissao_pendente: number
+          comissao_recebida: number
+          comissao_total: number
+        }[]
+      }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
