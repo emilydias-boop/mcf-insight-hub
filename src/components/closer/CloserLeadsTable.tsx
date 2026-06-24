@@ -97,7 +97,8 @@ export function CloserLeadsTable({ leads, isLoading, showR1Sdr = false }: Closer
     return filtered;
   }, [leads, search, statusFilter, sdrFilter]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await loadXLSX();
     const data = filteredLeads.map(l => ({
       "Data": format(new Date(l.scheduled_at), "dd/MM/yyyy HH:mm", { locale: ptBR }),
       "Nome": l.contact_name,

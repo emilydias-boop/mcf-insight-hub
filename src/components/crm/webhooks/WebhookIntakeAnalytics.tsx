@@ -51,9 +51,9 @@ export function WebhookIntakeAnalytics() {
     return filtered;
   }, [analytics?.leads, search, stageFilter, ownerFilter]);
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!analytics || !selectedEndpoint) return;
-
+    const { jsPDF, autoTable } = await loadJsPDF();
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
     const now = new Date();

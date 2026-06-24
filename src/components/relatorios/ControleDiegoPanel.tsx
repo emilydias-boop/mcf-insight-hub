@@ -180,7 +180,7 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   };
 
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const allRows = [...pending, ...sent];
     const data = allRows.map(r => ({
       'Nome do Lead': r.leadName,
@@ -215,8 +215,9 @@ export function ControleDiegoPanel({ bu }: ControleDiegoPanelProps) {
   };
 
   // Export to PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const allRows = [...pending, ...sent];
+    const { jsPDF, autoTable } = await loadJsPDF();
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     // Header

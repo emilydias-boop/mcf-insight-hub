@@ -283,6 +283,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       };
       reader.readAsText(file);
     } else {
+      const XLSX = await loadXLSX();
       const reader = new FileReader();
       reader.onload = (evt) => {
         try {
