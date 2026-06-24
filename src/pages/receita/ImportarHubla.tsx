@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 type FileType = "sales" | "refunds";
 

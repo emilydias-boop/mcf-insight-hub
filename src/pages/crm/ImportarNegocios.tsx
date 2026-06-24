@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import {
   Select,

@@ -26,7 +26,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { format, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 interface InvestigationReportPanelProps {
   bu: BusinessUnit;
 }

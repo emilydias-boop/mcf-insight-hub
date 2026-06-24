@@ -14,7 +14,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAcquisitionReport, DimensionRow } from '@/hooks/useAcquisitionReport';
 import { useChannelFunnelReport, displayChannelLabel } from '@/hooks/useChannelFunnelReport';
 import { ChannelFunnelTable } from './ChannelFunnelTable';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface AcquisitionReportPanelProps {
   bu: BusinessUnit;

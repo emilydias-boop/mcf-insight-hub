@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { useProductsAcquiredReport } from '@/hooks/useProductsAcquiredReport';
 import { useProdutoAdquiridoOptions } from '@/hooks/useDealProdutosAdquiridos';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface ProductsReportPanelProps {

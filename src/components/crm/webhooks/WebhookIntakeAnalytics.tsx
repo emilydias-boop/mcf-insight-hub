@@ -12,8 +12,7 @@ import { IngestFailuresCard } from '@/components/crm/webhooks/IngestFailuresCard
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { FileText, Search, Users, UserCheck, TrendingUp, UserX, Download } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { loadJsPDF } from '@/lib/lazyExport';
 
 export function WebhookIntakeAnalytics() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);

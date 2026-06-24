@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNaoComprouReport, useNaoComprouClosers, NaoComprouLead } from '@/hooks/useNaoComprouReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface NaoComprouReportPanelProps {
   bu: BusinessUnit;

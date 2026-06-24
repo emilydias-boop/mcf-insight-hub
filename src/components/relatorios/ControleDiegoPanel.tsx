@@ -18,9 +18,7 @@ import { ControleDiegoDrawer } from './ControleDiegoDrawer';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { TagFilterPopover } from '@/components/crm/TagFilterPopover';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { loadXLSX, loadJsPDF } from '@/lib/lazyExport';
 
 interface ControleDiegoPanelProps {
   bu?: BusinessUnit;

@@ -13,7 +13,7 @@ import { useCarrinhoAnalysisReport, LeadCarrinhoCompleto } from '@/hooks/useCarr
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useCarrinhoConfig } from '@/hooks/useCarrinhoConfig';
 import { cn } from '@/lib/utils';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { DateRange } from 'react-day-picker';
 import { BrazilMap, BrazilMapStateData } from './BrazilMap';
 import { PostSaleFunnelPanel } from './PostSaleFunnelPanel';

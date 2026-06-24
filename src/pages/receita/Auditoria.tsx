@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, RefreshCw, Download } from "lucide-react";
 import { format, parseISO, startOfDay, endOfDay, addDays, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import * as XLSX from "xlsx";
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface SpreadsheetRow {
   date: string;

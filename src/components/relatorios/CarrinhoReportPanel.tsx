@@ -10,7 +10,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useCarrinhoReport, useCarrinhoClosers } from '@/hooks/useCarrinhoReport';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface CarrinhoReportPanelProps {
   bu: BusinessUnit;

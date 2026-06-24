@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { compareSpreadsheetGlobal, SpreadsheetRow, useCreateNotFoundDeals } from '@/hooks/useSpreadsheetCompare';
 import { ExpandableResultsTable } from '@/components/crm/ExpandableResultsTable';
 import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealStatusHelper';

@@ -12,7 +12,7 @@ import {
 import { useAssetReports } from '@/hooks/useAssetReports';
 import { ASSET_STATUS_LABELS, ASSET_TYPE_LABELS } from '@/types/patrimonio';
 import { ArrowLeft, Download, Package, AlertTriangle, ShieldX, Users } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 
 const PatrimonioRelatorios = () => {
   const navigate = useNavigate();

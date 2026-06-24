@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { CloserLead } from "@/hooks/useCloserDetailData";
 import { CheckCircle, DollarSign, Search, Download, X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { loadXLSX } from '@/lib/lazyExport';
 
 interface CloserLeadsTableProps {
   leads: CloserLead[];

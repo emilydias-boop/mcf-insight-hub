@@ -11,7 +11,7 @@ import { Download, MessageCircle, X, Loader2, Send, PhoneCall, Clock, PhoneOff, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
 import type { CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 

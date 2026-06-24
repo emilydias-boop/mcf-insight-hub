@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface CrossBUReportPanelProps {

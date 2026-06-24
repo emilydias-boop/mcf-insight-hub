@@ -14,7 +14,7 @@ import { DateRange } from 'react-day-picker';
 import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
 import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { formatCurrency } from '@/lib/formatters';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

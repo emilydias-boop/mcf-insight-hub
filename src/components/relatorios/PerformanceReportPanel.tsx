@@ -12,7 +12,7 @@ import { DateRange } from 'react-day-picker';
 import { usePerformanceReport } from '@/hooks/usePerformanceReport';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useAuth } from '@/contexts/AuthContext';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface PerformanceReportPanelProps {

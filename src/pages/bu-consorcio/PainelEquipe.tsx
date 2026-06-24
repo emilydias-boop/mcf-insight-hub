@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import * as XLSX from "xlsx";
+import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";

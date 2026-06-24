@@ -20,7 +20,7 @@ import { Plus, RefreshCw, Download, Undo2, LayoutList, CalendarRange, TrendingUp
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+import { loadXLSX } from '@/lib/lazyExport';
 import { formatCurrency } from '@/lib/formatters';
 
 const PRODUCT_GROUPS: Record<string, string[]> = {
