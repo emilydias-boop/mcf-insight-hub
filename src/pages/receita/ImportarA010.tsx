@@ -15,9 +15,11 @@ export default function ImportarA010() {
       setIsImporting(true);
       setResult(null);
 
-      // Fetch CSV from public folder
-      const response = await fetch('/a010-sales-import.csv');
-      const csvData = await response.text();
+      // CSV de importação one-shot foi removido de public/ (servido em todo deploy).
+      // Para re-importar, anexe um arquivo CSV manualmente ou suba para Supabase Storage.
+      throw new Error('Importação one-shot já realizada. CSV não está mais disponível em /public.');
+      // eslint-disable-next-line no-unreachable
+      const csvData = '';
 
       console.log('CSV loaded, calling import function...');
 
