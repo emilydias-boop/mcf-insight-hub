@@ -61,8 +61,9 @@ export function CarrinhoReportPanel({ bu }: CarrinhoReportPanelProps) {
     return format(new Date(d), 'dd/MM/yyyy', { locale: ptBR });
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredContracts.length === 0) return;
+    const XLSX = await loadXLSX();
     const rows = filteredContracts.map(c => ({
       'Nome': c.customer_name || '-',
       'Email': c.customer_email || '-',

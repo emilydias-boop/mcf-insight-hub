@@ -59,6 +59,7 @@ export function NaoComprouReportPanel({ bu }: NaoComprouReportPanelProps) {
       'Data Não Comprou': formatDateTime(lead.carrinho_updated_at),
     }));
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Não Comprou');
