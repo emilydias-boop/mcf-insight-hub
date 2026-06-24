@@ -76,7 +76,6 @@ const formatCurrency = (value: number | null) => {
 
 export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfig }: R2VendasListProps) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { data: allVendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart, weekEnd, carrinhoConfig);
   const vendas = filteredVendas ?? allVendas;
   const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
