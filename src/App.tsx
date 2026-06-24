@@ -111,10 +111,11 @@ const ConsorcioCotasAVenda = lazy(() => import("./pages/bu-consorcio/CotasAVenda
 const Chairman = lazy(() => import("./pages/Chairman"));
 const Home = lazy(() => import("./pages/Home"));
 const DocumentosEstrategicos = lazy(() => import("./pages/bu-common/DocumentosEstrategicos"));
-const MarketingDashboard = lazy(() => import("./pages/bu-marketing/MarketingDashboard"));
-const CampanhasDashboard = lazy(() => import("./pages/bu-marketing/CampanhasDashboard"));
-const A010AcquisitionDashboard = lazy(() => import("./pages/bu-marketing/A010AcquisitionDashboard"));
-const A010LinkMappingsConfig = lazy(() => import("./pages/bu-marketing/A010LinkMappingsConfig"));
+// BU - Marketing (desativado — rotas comentadas abaixo, manter para rollback)
+// const MarketingDashboard = lazy(() => import("./pages/bu-marketing/MarketingDashboard"));
+// const CampanhasDashboard = lazy(() => import("./pages/bu-marketing/CampanhasDashboard"));
+// const A010AcquisitionDashboard = lazy(() => import("./pages/bu-marketing/A010AcquisitionDashboard"));
+// const A010LinkMappingsConfig = lazy(() => import("./pages/bu-marketing/A010LinkMappingsConfig"));
 const PatrimonioIndex = lazy(() => import("./pages/patrimonio/Index"));
 const AssetDetailsPage = lazy(() => import("./pages/patrimonio/AssetDetailsPage"));
 const MyEquipmentPage = lazy(() => import("./pages/patrimonio/MyEquipmentPage"));
@@ -211,12 +212,12 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
-              {/* BU Marketing */}
-              <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} />
-              <Route path="bu-marketing/campanhas" element={<ResourceGuard resource="dashboard"><CampanhasDashboard /></ResourceGuard>} />
-              <Route path="bu-marketing/aquisicao-a010" element={<ResourceGuard resource="dashboard"><A010AcquisitionDashboard /></ResourceGuard>} />
-              <Route path="bu-marketing/a010-links-config" element={<ResourceGuard resource="dashboard" requiredLevel="edit"><A010LinkMappingsConfig /></ResourceGuard>} />
-              <Route path="bu-marketing/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="marketing" /></ResourceGuard>} />
+              {/* BU Marketing — desativado (rollback: descomentar imports acima + estas rotas) */}
+              {/* <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} /> */}
+              {/* <Route path="bu-marketing/campanhas" element={<ResourceGuard resource="dashboard"><CampanhasDashboard /></ResourceGuard>} /> */}
+              {/* <Route path="bu-marketing/aquisicao-a010" element={<ResourceGuard resource="dashboard"><A010AcquisitionDashboard /></ResourceGuard>} /> */}
+              {/* <Route path="bu-marketing/a010-links-config" element={<ResourceGuard resource="dashboard" requiredLevel="edit"><A010LinkMappingsConfig /></ResourceGuard>} /> */}
+              {/* <Route path="bu-marketing/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="marketing" /></ResourceGuard>} /> */}
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
