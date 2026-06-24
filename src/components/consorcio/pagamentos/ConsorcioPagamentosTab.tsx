@@ -49,7 +49,8 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
     setDrawerOpen(true);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await loadXLSX();
     const rows = allData.map(r => ({
       'Cliente': r.cliente_nome,
       'Grupo': r.grupo,

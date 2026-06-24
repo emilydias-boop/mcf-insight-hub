@@ -156,7 +156,7 @@ export const ExportDealsDialog = ({ open, onOpenChange, deals, stages, channelMa
     );
   }, [deals, selectedStages, selectedChannels, channelMap]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const activeFields = EXPORT_FIELDS.filter(f => selectedFields.has(f.key));
     const rows = filteredDeals.map(deal =>
       activeFields.reduce((row, field) => {
@@ -164,7 +164,7 @@ export const ExportDealsDialog = ({ open, onOpenChange, deals, stages, channelMa
         return row;
       }, {} as Record<string, any>)
     );
-
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Negócios');
