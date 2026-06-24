@@ -1,7 +1,8 @@
-import * as XLSX from 'xlsx';
 import { ExamScore, Exam } from '@/hooks/useExams';
+import { loadXLSX } from '@/lib/lazyExport';
 
-export function exportExamScores(exam: Exam, scores: ExamScore[]) {
+export async function exportExamScores(exam: Exam, scores: ExamScore[]) {
+  const XLSX = await loadXLSX();
   const rows = scores.map((s, i) => ({
     'Posição': i + 1,
     'Colaborador': s.employee?.nome_completo || 'N/A',
