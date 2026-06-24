@@ -173,6 +173,33 @@ export default function Agenda() {
         m.attendees?.some(att => !att.is_partner && validStatuses.includes(att.status))
       );
     }
+    if (channelFilter) {
+      const classify = (tags: any): string => {
+        const arr: string[] = Array.isArray(tags)
+          ? tags.map((t: any) => {
+              if (typeof t === 'string') {
+                if (t.startsWith('{')) {
+                  try { const p = JSON.parse(t); return p?.name || t; } catch { return t; }
+                }
+                return t;
+              }
+              return (t as any)?.name || '';
+            })
+          : [];
+        const norm = arr.map((t) => (t || '').trim().toUpperCase());
+        if (norm.some((t) => t === 'A010')) return 'A010';
+        if (norm.some((t) => t === 'ANAMNESE')) return 'ANAMNESE';
+        if (norm.some((t) => t === 'PLANILHA')) return 'PLANILHA';
+        return 'OUTROS';
+      };
+      result = result.filter(m =>
+        m.attendees?.some(att => {
+          if (att.is_partner) return false;
+          const dealForChannel: any = (att as any).deal || (m as any).deal;
+          return classify(dealForChannel?.tags) === channelFilter;
+        })
+      );
+    }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
       const searchDigits = searchTerm.replace(/\D/g, '');
@@ -187,7 +214,7 @@ export default function Agenda() {
       );
     }
     return result;
-  }, [meetings, closerFilter, statusFilter, searchTerm, isCloser, myCloser?.id]);
+  }, [meetings, closerFilter, statusFilter, searchTerm, channelFilter, isCloser, myCloser?.id]);
 
   const handlePrev = () => {
     if (viewMode === 'day') {
