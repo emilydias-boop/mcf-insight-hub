@@ -598,7 +598,8 @@ export default function ConsorcioPainelEquipe() {
     updateUrlParams("custom", selectedMonth, customStartDate, date);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const resumoData = filteredBySDR.map(sdr => ({
       "SDR": sdr.sdrName,
       "Agendamento": sdr.agendamentos,

@@ -140,6 +140,7 @@ export default function ImportarHubla() {
         toast.info("Convertendo Excel para CSV...");
         
         const arrayBuffer = await selectedFile.arrayBuffer();
+        const XLSX = await loadXLSX();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];

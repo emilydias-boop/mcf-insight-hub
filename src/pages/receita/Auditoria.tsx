@@ -107,6 +107,7 @@ export default function Auditoria() {
   };
 
   const parseSpreadsheet = async (file: File): Promise<SpreadsheetRow[]> => {
+    const XLSX = await loadXLSX();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       

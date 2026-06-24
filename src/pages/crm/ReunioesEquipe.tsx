@@ -691,7 +691,8 @@ export default function ReunioesEquipe() {
   };
 
   // Export to Excel function - contextual based on active tab
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
 
     if (activeTab === "closers" && closerMetrics) {
