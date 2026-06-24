@@ -538,8 +538,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
                           <div className="flex items-center gap-1">
                             <Badge 
                               variant="outline" 
-                              className={`text-xs cursor-pointer ${statusColors[data.status || ''] || ''}`}
-                              onClick={() => navigate('/cobrancas')}
+                              className={`text-xs ${statusColors[data.status || ''] || ''}`}
                             >
                               {AGREEMENT_STATUS_LABELS[data.status!] || data.status}
                               {data.totalParcelas > 0 && ` ${data.parcelasPagas}/${data.totalParcelas}`}
