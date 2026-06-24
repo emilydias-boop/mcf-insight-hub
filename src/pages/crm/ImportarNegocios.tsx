@@ -154,6 +154,7 @@ const ImportarNegocios = () => {
       if (ext === 'xlsx' || ext === 'xls') {
         try {
           const data = await selectedFile.arrayBuffer();
+          const XLSX = await loadXLSX();
           const workbook = XLSX.read(data);
           const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
           const csvFile = new File(

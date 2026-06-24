@@ -610,7 +610,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     return filtered;
   }, [results, statusFilter, searchText]);
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     const exportData = filteredResults.map(r => {
       const base: Record<string, string> = {
         'Nome (Planilha)': r.excelName,
@@ -634,6 +634,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       return base;
     });
 
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Comparação');
