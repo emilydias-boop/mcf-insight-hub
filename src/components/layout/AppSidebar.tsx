@@ -549,13 +549,13 @@ export function AppSidebar() {
             <div className="flex items-center justify-between w-full">
               <button 
                 onClick={() => navigate('/home')} 
-                className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#bfff00] hover:opacity-80 transition-opacity cursor-pointer overflow-hidden"
+                className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#bfff00] hover:opacity-80 transition-opacity cursor-pointer overflow-hidden"
                 title="MCF Gestão"
               >
                 <img 
                   src={mcfLogo.url} 
                   alt="MCF" 
-                  className="w-7 h-7 object-contain"
+                  className="w-10 h-10 object-contain"
                 />
               </button>
               <Button
