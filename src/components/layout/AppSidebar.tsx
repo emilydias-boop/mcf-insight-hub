@@ -1,3 +1,4 @@
+import mcfLogo from "@/assets/Group_1321316528.png.asset.json";
 import { useState } from "react";
 import {
   LayoutDashboard,
