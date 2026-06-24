@@ -176,23 +176,14 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       let comissaoPendente = 0;
 
       if (cardIds.length > 0) {
-        // Fetch sum of commissions per card to avoid row limit
-        for (const cardId of cardIds) {
-          const { data: installments } = await supabase
-            .from('consortium_installments')
-            .select('valor_comissao, status')
-            .eq('card_id', cardId);
-
-          installments?.forEach(inst => {
-            const valor = Number(inst.valor_comissao);
-            comissaoTotal += valor;
-            if (inst.status === 'pago') {
-              comissaoRecebida += valor;
-            } else {
-              comissaoPendente += valor;
-            }
-          });
-        }
+        // N5 perf: agregação feita no Postgres via RPC — 1 chamada em vez de N.
+        const { data: summary, error: summaryError } = await supabase
+          .rpc('get_consorcio_commission_summary', { p_card_ids: cardIds });
+        if (summaryError) throw summaryError;
+        const row = Array.isArray(summary) ? summary[0] : summary;
+        comissaoTotal = Number(row?.comissao_total ?? 0);
+        comissaoRecebida = Number(row?.comissao_recebida ?? 0);
+        comissaoPendente = Number(row?.comissao_pendente ?? 0);
       }
 
       // === Cartas Novas: cotas pendentes de cadastro ===
