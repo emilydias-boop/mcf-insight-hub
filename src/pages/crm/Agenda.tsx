@@ -205,7 +205,7 @@ export default function Agenda() {
           if (matchedAttendees.length === 0) return null;
           return { ...m, attendees: matchedAttendees };
         })
-        .filter((m): m is typeof result[number] => m !== null);
+        .filter((m): m is NonNullable<typeof m> => m !== null);
     }
     if (searchTerm.length >= 2) {
       const search = searchTerm.toLowerCase();
