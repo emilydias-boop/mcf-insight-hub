@@ -201,19 +201,19 @@ const menuItems: MenuItem[] = [
 
   // ===== OPERACIONAL =====
 
-  // FINANCEIRO
-  {
-    title: "Financeiro",
-    icon: DollarSign,
-    resource: "financeiro",
-    separator: true,
-    items: [
-      { title: "Receita", url: "/receita" },
-      { title: "Transações", url: "/financeiro?tab=transacoes" },
-      { title: "Pagamentos", url: "/financeiro", requiredRoles: ["admin", "financeiro"] },
-      { title: "Cobranças", url: "/cobrancas", requiredRoles: ["admin", "financeiro"] },
-    ],
-  },
+  // [REMOVIDO 2026-06-24] Seção Financeiro desativada do menu — preservado para rollback.
+  // {
+  //   title: "Financeiro",
+  //   icon: DollarSign,
+  //   resource: "financeiro",
+  //   separator: true,
+  //   items: [
+  //     { title: "Receita", url: "/receita" },
+  //     { title: "Transações", url: "/financeiro?tab=transacoes" },
+  //     { title: "Pagamentos", url: "/financeiro", requiredRoles: ["admin", "financeiro"] },
+  //     { title: "Cobranças", url: "/cobrancas", requiredRoles: ["admin", "financeiro"] },
+  //   ],
+  // },
 
 
   // RH
