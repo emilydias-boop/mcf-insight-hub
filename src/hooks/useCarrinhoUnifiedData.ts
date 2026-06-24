@@ -106,8 +106,9 @@ export function useCarrinhoUnifiedData(
 
       return (data || []) as CarrinhoLeadRow[];
     },
+    // Atualização via realtime channel (meeting_slot_attendees + meeting_slots).
+    // refetchInterval removido para não duplicar com o realtime.
     staleTime: 5000,
-    refetchInterval: 20000,
     refetchOnWindowFocus: true,
   });
 }

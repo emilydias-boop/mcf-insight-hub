@@ -26,7 +26,9 @@ export const useWebhookLogs = (limit: number = 50) => {
       if (error) throw error;
       return data as WebhookEvent[];
     },
-    refetchInterval: 5000 // Atualizar a cada 5 segundos
+    refetchInterval: 30000, // 30s (era 5s) — reduz pressão em webhook_events
+    refetchIntervalInBackground: false, // pausa quando a aba não está visível
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -90,7 +92,9 @@ export const useWebhookStats = () => {
         eventTypeCounts
       };
     },
-    refetchInterval: 10000 // Atualizar a cada 10 segundos
+    refetchInterval: 60000, // 60s (era 10s) — stats agregadas, não precisa de tempo real
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 };
 
