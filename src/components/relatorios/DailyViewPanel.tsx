@@ -223,7 +223,11 @@ export function DailyViewPanel(_props: Props) {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <DatePickerCustom mode="single" value={date} onChange={(d: any) => d && setDate(d)} />
+              <DatePickerCustom
+                mode="single"
+                selected={date}
+                onSelect={(d) => d && d instanceof Date && setDate(d)}
+              />
               <Button variant="outline" size="sm" onClick={() => setDate(defaultYesterdayBusinessDay())}>
                 Ontem
               </Button>
