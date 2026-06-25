@@ -5734,6 +5734,33 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_view_overrides: {
+        Row: {
+          bu: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          person_id: string
+        }
+        Insert: {
+          bu?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          person_id: string
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          person_id?: string
+        }
+        Relationships: []
+      }
       dashboard_preferences: {
         Row: {
           auto_refresh: boolean
@@ -12977,14 +13004,27 @@ export type Database = {
           meetings_count: number
         }[]
       }
-      get_daily_view_incorporador: {
-        Args: {
-          p_closer_meta_contratos?: number
-          p_closer_meta_reunioes?: number
-          p_date: string
-        }
-        Returns: Json
-      }
+      get_daily_view_incorporador:
+        | {
+            Args: {
+              p_closer_meta_contratos?: number
+              p_closer_meta_reunioes?: number
+              p_date: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_closer_meta_contratos?: number
+              p_closer_meta_reunioes?: number
+              p_date: string
+              p_extra_closer_ids?: string[]
+              p_extra_sdr_ids?: string[]
+              p_hidden_closer_ids?: string[]
+              p_hidden_sdr_ids?: string[]
+            }
+            Returns: Json
+          }
       get_distinct_products: {
         Args: never
         Returns: {
