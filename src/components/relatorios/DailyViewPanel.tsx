@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { CalendarCheck, Target, Trophy, AlertTriangle, ChevronRight } from 'lucide-react';
+import { CalendarCheck, Target, Trophy, AlertTriangle, ChevronRight, X, Plus } from 'lucide-react';
 import { format, subDays, isWeekend } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -17,8 +17,16 @@ import {
 } from '@/hooks/useDailyViewIncorporador';
 import { SdrDailyDrilldownDialog } from './daily-view/SdrDailyDrilldownDialog';
 import { CloserDailyDrilldownDialog } from './daily-view/CloserDailyDrilldownDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface Props { bu: BusinessUnit; }
 
