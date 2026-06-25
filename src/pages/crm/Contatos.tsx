@@ -179,6 +179,25 @@ const Contatos = () => {
     return origins.size === 1 ? Array.from(origins)[0] : undefined;
   }, [selectedDeals]);
 
+  // Quantos contatos selecionados não têm deal ativo na BU atual (serão ignorados na troca de dono)
+  const ignoredOnTransferCount = useMemo(
+    () => filteredContacts.filter(c => selectedIds.has(c.id) && !c.latestDeal?.id).length,
+    [filteredContacts, selectedIds]
+  );
+
+  const handleOpenChangeOwner = useCallback(() => {
+    if (selectedDealIds.length === 0) {
+      toast.error('Nenhum dos contatos selecionados possui negócio ativo na BU atual.');
+      return;
+    }
+    if (ignoredOnTransferCount > 0) {
+      toast.warning(
+        `${ignoredOnTransferCount} contato(s) sem negócio ativo na BU serão ignorados na transferência.`
+      );
+    }
+    setChangeOwnerDialogOpen(true);
+  }, [selectedDealIds.length, ignoredOnTransferCount]);
+
   // Pagination range
   const getPaginationRange = () => {
     const range: (number | 'ellipsis')[] = [];
