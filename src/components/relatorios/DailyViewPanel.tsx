@@ -226,6 +226,10 @@ export function DailyViewPanel(_props: Props) {
   const [date, setDate] = useState<Date>(defaultYesterdayBusinessDay());
   const [metaReunioes, setMetaReunioes] = useState(2);
   const [metaContratos, setMetaContratos] = useState(1);
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+  const queryClient = useQueryClient();
+  const [pickerKind, setPickerKind] = useState<null | 'sdr' | 'closer'>(null);
 
   const { data, isLoading } = useDailyViewIncorporador(date, metaReunioes, metaContratos);
 
@@ -265,6 +269,39 @@ export function DailyViewPanel(_props: Props) {
 
   const [openSdr, setOpenSdr] = useState<DailyViewSdr | null>(null);
   const [openCloser, setOpenCloser] = useState<DailyViewCloser | null>(null);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['daily-view-incorporador'] });
+
+  const hideMutation = useMutation({
+    mutationFn: async (args: { kind: 'sdr_hidden' | 'closer_hidden'; person_id: string }) => {
+      const { error } = await supabase
+        .from('daily_view_overrides' as any)
+        .insert({ bu: 'incorporador', kind: args.kind, person_id: args.person_id });
+      if (error && !String(error.message).includes('duplicate')) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success('Card removido'); },
+    onError: (e: any) => toast.error('Falha ao remover: ' + e.message),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (args: { kind: 'sdr_extra' | 'closer_extra'; person_id: string }) => {
+      // If person was previously hidden, unhide first
+      const hiddenKind = args.kind === 'sdr_extra' ? 'sdr_hidden' : 'closer_hidden';
+      await supabase
+        .from('daily_view_overrides' as any)
+        .delete()
+        .eq('bu', 'incorporador')
+        .eq('kind', hiddenKind)
+        .eq('person_id', args.person_id);
+      const { error } = await supabase
+        .from('daily_view_overrides' as any)
+        .insert({ bu: 'incorporador', kind: args.kind, person_id: args.person_id });
+      if (error && !String(error.message).includes('duplicate')) throw error;
+    },
+    onSuccess: () => { invalidate(); setPickerKind(null); toast.success('Card adicionado'); },
+    onError: (e: any) => toast.error('Falha ao adicionar: ' + e.message),
+  });
 
   const totals = useMemo(() => {
     const sdrs = filteredSdrs;
@@ -340,6 +377,13 @@ export function DailyViewPanel(_props: Props) {
         </TabsList>
 
         <TabsContent value="sdrs" className="mt-4">
+          {isAdmin && (
+            <div className="flex justify-end mb-3">
+              <Button size="sm" variant="outline" onClick={() => setPickerKind('sdr')}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar SDR
+              </Button>
+            </div>
+          )}
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-40" />)}
@@ -349,14 +393,20 @@ export function DailyViewPanel(_props: Props) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSdrs.map((s) => (
-                <SdrCard key={s.sdr_id} sdr={s} onClick={() => setOpenSdr(s)} />
+                <SdrCard
+                  key={s.sdr_id}
+                  sdr={s}
+                  onClick={() => setOpenSdr(s)}
+                  onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'sdr_hidden', person_id: s.sdr_id }) : undefined}
+                />
               ))}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="closers" className="mt-4">
-          <div className="flex items-center gap-3 mb-4 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
             <span>Metas diárias do closer:</span>
             <label className="flex items-center gap-1">
               Reuniões
@@ -378,6 +428,12 @@ export function DailyViewPanel(_props: Props) {
                 className="w-14 h-7 rounded-md border border-border bg-background px-2 text-foreground"
               />
             </label>
+            </div>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setPickerKind('closer')}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Closer
+              </Button>
+            )}
           </div>
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -388,7 +444,12 @@ export function DailyViewPanel(_props: Props) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredClosers.map((c) => (
-                <CloserCard key={c.closer_id} closer={c} onClick={() => setOpenCloser(c)} />
+                <CloserCard
+                  key={c.closer_id}
+                  closer={c}
+                  onClick={() => setOpenCloser(c)}
+                  onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'closer_hidden', person_id: c.closer_id }) : undefined}
+                />
               ))}
             </div>
           )}
@@ -407,6 +468,92 @@ export function DailyViewPanel(_props: Props) {
         open={!!openCloser}
         onClose={() => setOpenCloser(null)}
       />
+
+      <PersonPickerDialog
+        kind={pickerKind}
+        onClose={() => setPickerKind(null)}
+        existingIds={new Set([
+          ...(pickerKind === 'sdr' ? filteredSdrs.map((s) => s.sdr_id) : filteredClosers.map((c) => c.closer_id)),
+        ])}
+        onPick={(id) =>
+          addMutation.mutate({
+            kind: pickerKind === 'sdr' ? 'sdr_extra' : 'closer_extra',
+            person_id: id,
+          })
+        }
+      />
     </div>
+  );
+}
+
+function PersonPickerDialog({
+  kind,
+  onClose,
+  onPick,
+  existingIds,
+}: {
+  kind: null | 'sdr' | 'closer';
+  onClose: () => void;
+  onPick: (id: string) => void;
+  existingIds: Set<string>;
+}) {
+  const { data: options = [], isLoading } = useQuery({
+    queryKey: ['daily-view-picker-options', kind],
+    enabled: !!kind,
+    queryFn: async (): Promise<{ id: string; name: string; email: string | null }[]> => {
+      if (kind === 'sdr') {
+        const { data, error } = await supabase
+          .from('sdr')
+          .select('id, name, email')
+          .eq('active', true)
+          .order('name');
+        if (error) throw error;
+        return (data || []) as any;
+      }
+      const { data, error } = await supabase
+        .from('closers')
+        .select('id, name, email')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as any;
+    },
+  });
+
+  const available = options.filter((o) => !existingIds.has(o.id));
+
+  return (
+    <Dialog open={!!kind} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            Adicionar {kind === 'sdr' ? 'SDR' : 'Closer'} ao Daily View
+          </DialogTitle>
+        </DialogHeader>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Carregando…</p>
+        ) : available.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            Nenhum {kind === 'sdr' ? 'SDR' : 'Closer'} disponível para adicionar.
+          </p>
+        ) : (
+          <div className="max-h-[60vh] overflow-y-auto divide-y divide-border rounded-md border border-border">
+            {available.map((o) => (
+              <button
+                key={o.id}
+                onClick={() => onPick(o.id)}
+                className="w-full text-left px-3 py-2 hover:bg-muted/50 transition flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{o.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{o.email}</p>
+                </div>
+                <Plus className="h-4 w-4 text-primary shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
