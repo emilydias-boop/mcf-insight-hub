@@ -99,8 +99,10 @@ export const DealKanbanCard = ({
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
   
-  // Apenas admin, manager e coordenador podem transferir leads
-  const canChangeOwner = role === 'admin' || role === 'manager' || role === 'coordenador';
+  // Admin/manager/coordenador sempre podem; SDR/Closer com flag can_transfer_leads também.
+  const { canTransferLeads } = useMyContactsCapabilities();
+  const canChangeOwner =
+    role === 'admin' || role === 'manager' || role === 'coordenador' || canTransferLeads;
   
   const handleCheckboxChange = (e: React.MouseEvent) => {
     e.stopPropagation();
