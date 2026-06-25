@@ -2144,6 +2144,50 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                   {!isEditing && (
                     <ConsorciadoSearchPanel tipoPessoa="pj" onSelect={applyConsorciadoMatch} />
                   )}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowChecklistPJ(v => !v)}
+                    >
+                      {showChecklistPJ ? 'Fechar' : '📋 Colar Check-list PJ'}
+                    </Button>
+                  </div>
+                  {showChecklistPJ && (
+                    <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                      <label className="text-xs text-muted-foreground">Cole o texto do check-list PJ abaixo:</label>
+                      <Textarea
+                        value={checklistTextPJ}
+                        onChange={e => setChecklistTextPJ(e.target.value)}
+                        rows={6}
+                        placeholder={"Razão Social: ...\nCNPJ: ...\nNatureza Jurídica: ...\nInscrição Estadual: ...\nData de Fundação: dd/mm/aaaa\nEndereço Comercial: ...\nCEP: ...\nTelefone Comercial: ...\nE-mail comercial: ...\nFaturamento médio: R$ ...\nNúmero de funcionários: ..."}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const parsed = parseChecklistPJ(checklistTextPJ);
+                          if (parsed.razao_social) form.setValue('razao_social', parsed.razao_social);
+                          if (parsed.cnpj) form.setValue('cnpj', parsed.cnpj);
+                          if (parsed.natureza_juridica) form.setValue('natureza_juridica', parsed.natureza_juridica);
+                          if (parsed.inscricao_estadual) form.setValue('inscricao_estadual', parsed.inscricao_estadual);
+                          if (parsed.data_fundacao) form.setValue('data_fundacao', parsed.data_fundacao);
+                          if (parsed.endereco_comercial) form.setValue('endereco_comercial_rua', parsed.endereco_comercial);
+                          if (parsed.endereco_comercial_cep) form.setValue('endereco_comercial_cep', formatCep(parsed.endereco_comercial_cep));
+                          if (parsed.telefone_comercial) form.setValue('telefone_comercial', formatPhone(parsed.telefone_comercial));
+                          if (parsed.email_comercial) form.setValue('email_comercial', parsed.email_comercial);
+                          if (parsed.faturamento_mensal) form.setValue('faturamento_mensal', parsed.faturamento_mensal);
+                          if (parsed.num_funcionarios) form.setValue('num_funcionarios', parsed.num_funcionarios);
+                          toast.success('Campos preenchidos a partir do check-list');
+                          setShowChecklistPJ(false);
+                          setChecklistTextPJ('');
+                        }}
+                      >
+                        Preencher Campos
+                      </Button>
+                    </div>
+                  )}
                   <FormField
                     control={form.control}
                     name="razao_social"
