@@ -1820,6 +1820,51 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                   {!isEditing && (
                     <ConsorciadoSearchPanel tipoPessoa="pf" onSelect={applyConsorciadoMatch} />
                   )}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowChecklist(v => !v)}
+                    >
+                      {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
+                    </Button>
+                  </div>
+                  {showChecklist && (
+                    <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                      <label className="text-xs text-muted-foreground">Cole o texto do check-list abaixo:</label>
+                      <Textarea
+                        value={checklistText}
+                        onChange={e => setChecklistText(e.target.value)}
+                        rows={6}
+                        placeholder={"Nome Completo: ...\nRG: ...\nCPF: ...\nCPF Cônjuge: ...\nEndereço Residencial: ...\nCEP: ...\nTelefone: ...\nE-mail: ...\nProfissão: ...\nRenda: R$ ...\nPatrimônio: R$ ...\nChave Pix: ..."}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const parsed = parseChecklistPF(checklistText);
+                          if (parsed.nome_completo) form.setValue('nome_completo', parsed.nome_completo);
+                          if (parsed.rg) form.setValue('rg', parsed.rg);
+                          if (parsed.cpf) form.setValue('cpf', formatCpf(parsed.cpf));
+                          if (parsed.cpf_conjuge) form.setValue('cpf_conjuge', formatCpf(parsed.cpf_conjuge));
+                          if (parsed.endereco_completo) form.setValue('endereco_rua', parsed.endereco_completo);
+                          if (parsed.endereco_cep) form.setValue('endereco_cep', formatCep(parsed.endereco_cep));
+                          if (parsed.telefone) form.setValue('telefone', formatPhone(parsed.telefone));
+                          if (parsed.email) form.setValue('email', parsed.email);
+                          if (parsed.profissao) form.setValue('profissao', parsed.profissao);
+                          if (parsed.renda) form.setValue('renda', parsed.renda);
+                          if (parsed.patrimonio) form.setValue('patrimonio', parsed.patrimonio);
+                          if (parsed.pix) form.setValue('pix', parsed.pix);
+                          toast.success('Campos preenchidos a partir do check-list');
+                          setShowChecklist(false);
+                          setChecklistText('');
+                        }}
+                      >
+                        Preencher Campos
+                      </Button>
+                    </div>
+                  )}
                   <FormField
                     control={form.control}
                     name="nome_completo"
