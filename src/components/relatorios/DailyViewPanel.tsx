@@ -17,6 +17,8 @@ import {
 } from '@/hooks/useDailyViewIncorporador';
 import { SdrDailyDrilldownDialog } from './daily-view/SdrDailyDrilldownDialog';
 import { CloserDailyDrilldownDialog } from './daily-view/CloserDailyDrilldownDialog';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props { bu: BusinessUnit; }
 
@@ -185,12 +187,46 @@ export function DailyViewPanel(_props: Props) {
 
   const { data, isLoading } = useDailyViewIncorporador(date, metaReunioes, metaContratos);
 
+  const allEmails = useMemo(() => {
+    const e = new Set<string>();
+    (data?.sdrs || []).forEach((s) => s.email && e.add(s.email.toLowerCase()));
+    (data?.closers || []).forEach((c) => c.email && e.add(c.email.toLowerCase()));
+    return Array.from(e);
+  }, [data]);
+
+  const { data: inactiveEmails } = useQuery({
+    queryKey: ['daily-view-inactive-emails', allEmails],
+    queryFn: async (): Promise<Set<string>> => {
+      if (allEmails.length === 0) return new Set();
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('email, access_status')
+        .in('email', allEmails);
+      return new Set(
+        (profs || [])
+          .filter((p) => p.access_status && p.access_status !== 'ativo')
+          .map((p) => (p.email || '').toLowerCase())
+      );
+    },
+    enabled: allEmails.length > 0,
+    staleTime: 60_000,
+  });
+
+  const filteredSdrs = useMemo(
+    () => (data?.sdrs || []).filter((s) => !inactiveEmails?.has((s.email || '').toLowerCase())),
+    [data, inactiveEmails]
+  );
+  const filteredClosers = useMemo(
+    () => (data?.closers || []).filter((c) => !inactiveEmails?.has((c.email || '').toLowerCase())),
+    [data, inactiveEmails]
+  );
+
   const [openSdr, setOpenSdr] = useState<DailyViewSdr | null>(null);
   const [openCloser, setOpenCloser] = useState<DailyViewCloser | null>(null);
 
   const totals = useMemo(() => {
-    const sdrs = data?.sdrs || [];
-    const closers = data?.closers || [];
+    const sdrs = filteredSdrs;
+    const closers = filteredClosers;
     return {
       metaAg: sdrs.reduce((a, s) => a + s.meta_diaria, 0),
       realAg: sdrs.reduce((a, s) => a + s.agendamentos, 0),
@@ -201,7 +237,7 @@ export function DailyViewPanel(_props: Props) {
       metaC: closers.reduce((a, c) => a + c.meta_contratos, 0),
       realC: closers.reduce((a, c) => a + c.contratos_pagos, 0),
     };
-  }, [data]);
+  }, [filteredSdrs, filteredClosers]);
 
   return (
     <div className="space-y-6">
@@ -218,7 +254,7 @@ export function DailyViewPanel(_props: Props) {
                   Avaliando <span className="text-foreground font-medium capitalize">
                     {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </span>
-                  {' '}• {data?.sdrs?.length ?? 0} SDRs · {data?.closers?.length ?? 0} Closers
+                  {' '}• {filteredSdrs.length} SDRs · {filteredClosers.length} Closers
                 </p>
               </div>
             </div>
@@ -257,8 +293,8 @@ export function DailyViewPanel(_props: Props) {
 
       <Tabs defaultValue="sdrs">
         <TabsList>
-          <TabsTrigger value="sdrs">SDRs ({data?.sdrs?.length ?? 0})</TabsTrigger>
-          <TabsTrigger value="closers">Closers ({data?.closers?.length ?? 0})</TabsTrigger>
+            <TabsTrigger value="sdrs">SDRs ({filteredSdrs.length})</TabsTrigger>
+            <TabsTrigger value="closers">Closers ({filteredClosers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sdrs" className="mt-4">
@@ -266,11 +302,11 @@ export function DailyViewPanel(_props: Props) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-40" />)}
             </div>
-          ) : (data?.sdrs?.length ?? 0) === 0 ? (
+          ) : filteredSdrs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Sem SDRs no squad Incorporador para essa data.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data!.sdrs.map((s) => (
+              {filteredSdrs.map((s) => (
                 <SdrCard key={s.sdr_id} sdr={s} onClick={() => setOpenSdr(s)} />
               ))}
             </div>
@@ -305,11 +341,11 @@ export function DailyViewPanel(_props: Props) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-44" />)}
             </div>
-          ) : (data?.closers?.length ?? 0) === 0 ? (
+          ) : filteredClosers.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Sem closers na BU Incorporador.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data!.closers.map((c) => (
+              {filteredClosers.map((c) => (
                 <CloserCard key={c.closer_id} closer={c} onClick={() => setOpenCloser(c)} />
               ))}
             </div>
