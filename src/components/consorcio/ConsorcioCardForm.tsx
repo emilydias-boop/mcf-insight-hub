@@ -35,6 +35,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
@@ -241,6 +243,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const [loadingCnpj, setLoadingCnpj] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
   const [selectedDocType, setSelectedDocType] = useState<TipoDocumento>('cnh');
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [checklistText, setChecklistText] = useState('');
+  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
+  const [checklistTextPJ, setChecklistTextPJ] = useState('');
   
   const isEditing = !!card;
   const { data: employees } = useEmployees();
