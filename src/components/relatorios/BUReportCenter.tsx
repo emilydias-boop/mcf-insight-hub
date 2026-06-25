@@ -13,6 +13,7 @@ import { NaoComprouReportPanel } from './NaoComprouReportPanel';
 import { CrossBUReportPanel } from './CrossBUReportPanel';
 import { ControleDiegoPanel } from './ControleDiegoPanel';
 import { CarrinhoAnalysisReportPanel } from './CarrinhoAnalysisReportPanel';
+import { DailyViewPanel } from './DailyViewPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -116,6 +117,10 @@ export function BUReportCenter({
         
         {selectedReport === 'carrinho_analysis' && (
           <CarrinhoAnalysisReportPanel bu={bu} />
+        )}
+        
+        {selectedReport === 'daily_view' && (
+          <DailyViewPanel bu={bu} />
         )}
         
         {/* Empty State */}
