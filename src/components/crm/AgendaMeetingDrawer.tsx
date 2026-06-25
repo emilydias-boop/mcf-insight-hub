@@ -439,17 +439,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const handleSendLinkViaWhatsApp = (phone: string, name: string) => {
     if (!phone) return;
     const formattedPhone = phone.replace(/\D/g, '');
-    
-    if (!videoConferenceLink) {
-      toast.error('Nenhum link de reunião disponível');
-      return;
+
+    if (videoConferenceLink) {
+      const safeLink = ensureProtocol(videoConferenceLink);
+      const message = encodeURIComponent(
+        `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${safeLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
+      );
+      window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
+    } else {
+      // Reunião sem link (ex.: passada): abre WhatsApp sem mensagem pré-pronta
+      window.open(`https://wa.me/55${formattedPhone}`, '_blank');
     }
-    
-    const safeLink = ensureProtocol(videoConferenceLink);
-    const message = encodeURIComponent(
-      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${safeLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
-    );
-    window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
   };
 
   const handleAddPartner = () => {
@@ -807,7 +807,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           <ArrowRightLeft className="h-4 w-4 text-purple-600" />
                         </Button>
                       )}
-                      {p.phone && videoConferenceLink && (
+                      {p.phone && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -816,6 +816,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                             e.stopPropagation();
                             handleSendLinkViaWhatsApp(p.phone!, p.name);
                           }}
+                          title="Abrir WhatsApp"
                         >
                           <MessageCircle className="h-4 w-4 text-green-600" />
                         </Button>
