@@ -68,7 +68,12 @@ function SdrCard({ sdr, onClick }: { sdr: DailyViewSdr; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-2xl border border-border bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_24px_-8px_hsl(var(--primary)/0.4)] hover:border-primary/40 group"
+      className={cn(
+        'text-left rounded-2xl border-2 bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 group',
+        hit
+          ? 'border-primary/80 shadow-[0_0_28px_-10px_hsl(var(--primary)/0.55)] hover:shadow-[0_0_36px_-8px_hsl(var(--primary)/0.65)] hover:border-primary'
+          : 'border-destructive/80 shadow-[0_0_28px_-10px_hsl(var(--destructive)/0.45)] hover:shadow-[0_0_36px_-8px_hsl(var(--destructive)/0.55)] hover:border-destructive'
+      )}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -117,7 +122,12 @@ function CloserCard({ closer, onClick }: { closer: DailyViewCloser; onClick: () 
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-2xl border border-border bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_24px_-8px_hsl(var(--primary)/0.4)] hover:border-primary/40 group"
+      className={cn(
+        'text-left rounded-2xl border-2 bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 group',
+        allHit
+          ? 'border-primary/80 shadow-[0_0_28px_-10px_hsl(var(--primary)/0.55)] hover:shadow-[0_0_36px_-8px_hsl(var(--primary)/0.65)] hover:border-primary'
+          : 'border-destructive/80 shadow-[0_0_28px_-10px_hsl(var(--destructive)/0.45)] hover:shadow-[0_0_36px_-8px_hsl(var(--destructive)/0.55)] hover:border-destructive'
+      )}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 min-w-0">
