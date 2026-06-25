@@ -2172,7 +2172,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           if (parsed.cnpj) form.setValue('cnpj', parsed.cnpj);
                           if (parsed.natureza_juridica) form.setValue('natureza_juridica', parsed.natureza_juridica);
                           if (parsed.inscricao_estadual) form.setValue('inscricao_estadual', parsed.inscricao_estadual);
-                          if (parsed.data_fundacao) form.setValue('data_fundacao', parsed.data_fundacao);
+                          if (parsed.data_fundacao) {
+                            const d = parseDateWithoutTimezone(parsed.data_fundacao);
+                            if (d) form.setValue('data_fundacao', d as any);
+                          }
                           if (parsed.endereco_comercial) form.setValue('endereco_comercial_rua', parsed.endereco_comercial);
                           if (parsed.endereco_comercial_cep) form.setValue('endereco_comercial_cep', formatCep(parsed.endereco_comercial_cep));
                           if (parsed.telefone_comercial) form.setValue('telefone_comercial', formatPhone(parsed.telefone_comercial));
