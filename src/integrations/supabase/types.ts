@@ -12938,6 +12938,28 @@ export type Database = {
         Args: { bu_filter?: string; end_date: string; start_date: string }
         Returns: Json
       }
+      get_closer_daily_contracts: {
+        Args: { p_closer_id: string; p_date: string }
+        Returns: {
+          attendee_id: string
+          contract_paid_at: string
+          deal_id: string
+          lead_name: string
+          product_name: string
+          value: number
+        }[]
+      }
+      get_closer_daily_meetings: {
+        Args: { p_closer_id: string; p_date: string }
+        Returns: {
+          attendee_id: string
+          deal_id: string
+          lead_name: string
+          scheduled_at: string
+          status: string
+          tags: string[]
+        }[]
+      }
       get_consorcio_commission_summary: {
         Args: { p_card_ids: string[] }
         Returns: {
@@ -12954,6 +12976,14 @@ export type Database = {
           deals_count: number
           meetings_count: number
         }[]
+      }
+      get_daily_view_incorporador: {
+        Args: {
+          p_closer_meta_contratos?: number
+          p_closer_meta_reunioes?: number
+          p_date: string
+        }
+        Returns: Json
       }
       get_distinct_products: {
         Args: never
@@ -13210,6 +13240,16 @@ export type Database = {
           total_movimentacoes: number
         }[]
       }
+      get_sdr_call_daily_summary: {
+        Args: { p_end: string; p_sdr_user_id: string; p_start: string }
+        Returns: {
+          attempts: number
+          day: string
+          effective: number
+          qualified: number
+          total_seconds: number
+        }[]
+      }
       get_sdr_cockpit_count: { Args: { p_owner_id: string }; Returns: number }
       get_sdr_cockpit_queue: {
         Args: { p_limit?: number; p_offset?: number; p_owner_id: string }
@@ -13226,6 +13266,19 @@ export type Database = {
           stage_moved_at: string
           stage_name: string
           urgency: string
+        }[]
+      }
+      get_sdr_daily_bookings: {
+        Args: { p_date: string; p_sdr_email: string }
+        Returns: {
+          attendee_id: string
+          closer_name: string
+          deal_id: string
+          lead_name: string
+          lead_phone: string
+          scheduled_at: string
+          status: string
+          tags: string[]
         }[]
       }
       get_sdr_meetings_from_agenda:
