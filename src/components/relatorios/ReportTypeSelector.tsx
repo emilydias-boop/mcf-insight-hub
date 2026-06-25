@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart, History, Video, TrendingDown } from 'lucide-react';
+import { FileText, DollarSign, BarChart3, Target, Package, Search, UserX, ShoppingCart, History, Video, TrendingDown, CalendarCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products' | 'investigation' | 'nao_comprou' | 'carrinho' | 'cross_bu' | 'controle_diego' | 'carrinho_analysis';
+export type ReportType = 'contracts' | 'sales' | 'performance' | 'acquisition' | 'products' | 'investigation' | 'nao_comprou' | 'carrinho' | 'cross_bu' | 'controle_diego' | 'carrinho_analysis' | 'daily_view';
 
 interface ReportTypeOption {
   id: ReportType;
@@ -77,6 +77,12 @@ const reportOptions: ReportTypeOption[] = [
     title: 'Análise de Carrinho',
     description: 'Aproveitamento do carrinho até R2',
     icon: TrendingDown,
+  },
+  {
+    id: 'daily_view',
+    title: 'Daily View',
+    description: 'Meta de ontem vs realizado por SDR e Closer',
+    icon: CalendarCheck,
   },
 ];
 
