@@ -35,6 +35,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
@@ -241,6 +243,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const [loadingCnpj, setLoadingCnpj] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
   const [selectedDocType, setSelectedDocType] = useState<TipoDocumento>('cnh');
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [checklistText, setChecklistText] = useState('');
+  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
+  const [checklistTextPJ, setChecklistTextPJ] = useState('');
   
   const isEditing = !!card;
   const { data: employees } = useEmployees();
@@ -1814,6 +1820,51 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                   {!isEditing && (
                     <ConsorciadoSearchPanel tipoPessoa="pf" onSelect={applyConsorciadoMatch} />
                   )}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowChecklist(v => !v)}
+                    >
+                      {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
+                    </Button>
+                  </div>
+                  {showChecklist && (
+                    <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                      <label className="text-xs text-muted-foreground">Cole o texto do check-list abaixo:</label>
+                      <Textarea
+                        value={checklistText}
+                        onChange={e => setChecklistText(e.target.value)}
+                        rows={6}
+                        placeholder={"Nome Completo: ...\nRG: ...\nCPF: ...\nCPF Cônjuge: ...\nEndereço Residencial: ...\nCEP: ...\nTelefone: ...\nE-mail: ...\nProfissão: ...\nRenda: R$ ...\nPatrimônio: R$ ...\nChave Pix: ..."}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const parsed = parseChecklistPF(checklistText);
+                          if (parsed.nome_completo) form.setValue('nome_completo', parsed.nome_completo);
+                          if (parsed.rg) form.setValue('rg', parsed.rg);
+                          if (parsed.cpf) form.setValue('cpf', formatCpf(parsed.cpf));
+                          if (parsed.cpf_conjuge) form.setValue('cpf_conjuge', formatCpf(parsed.cpf_conjuge));
+                          if (parsed.endereco_completo) form.setValue('endereco_rua', parsed.endereco_completo);
+                          if (parsed.endereco_cep) form.setValue('endereco_cep', formatCep(parsed.endereco_cep));
+                          if (parsed.telefone) form.setValue('telefone', formatPhone(parsed.telefone));
+                          if (parsed.email) form.setValue('email', parsed.email);
+                          if (parsed.profissao) form.setValue('profissao', parsed.profissao);
+                          if (parsed.renda) form.setValue('renda', parsed.renda);
+                          if (parsed.patrimonio) form.setValue('patrimonio', parsed.patrimonio);
+                          if (parsed.pix) form.setValue('pix', parsed.pix);
+                          toast.success('Campos preenchidos a partir do check-list');
+                          setShowChecklist(false);
+                          setChecklistText('');
+                        }}
+                      >
+                        Preencher Campos
+                      </Button>
+                    </div>
+                  )}
                   <FormField
                     control={form.control}
                     name="nome_completo"
@@ -2092,6 +2143,53 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                 <TabsContent value="dados" className="space-y-4">
                   {!isEditing && (
                     <ConsorciadoSearchPanel tipoPessoa="pj" onSelect={applyConsorciadoMatch} />
+                  )}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowChecklistPJ(v => !v)}
+                    >
+                      {showChecklistPJ ? 'Fechar' : '📋 Colar Check-list PJ'}
+                    </Button>
+                  </div>
+                  {showChecklistPJ && (
+                    <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                      <label className="text-xs text-muted-foreground">Cole o texto do check-list PJ abaixo:</label>
+                      <Textarea
+                        value={checklistTextPJ}
+                        onChange={e => setChecklistTextPJ(e.target.value)}
+                        rows={6}
+                        placeholder={"Razão Social: ...\nCNPJ: ...\nNatureza Jurídica: ...\nInscrição Estadual: ...\nData de Fundação: dd/mm/aaaa\nEndereço Comercial: ...\nCEP: ...\nTelefone Comercial: ...\nE-mail comercial: ...\nFaturamento médio: R$ ...\nNúmero de funcionários: ..."}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const parsed = parseChecklistPJ(checklistTextPJ);
+                          if (parsed.razao_social) form.setValue('razao_social', parsed.razao_social);
+                          if (parsed.cnpj) form.setValue('cnpj', parsed.cnpj);
+                          if (parsed.natureza_juridica) form.setValue('natureza_juridica', parsed.natureza_juridica);
+                          if (parsed.inscricao_estadual) form.setValue('inscricao_estadual', parsed.inscricao_estadual);
+                          if (parsed.data_fundacao) {
+                            const d = parseDateWithoutTimezone(parsed.data_fundacao);
+                            if (d) form.setValue('data_fundacao', d as any);
+                          }
+                          if (parsed.endereco_comercial) form.setValue('endereco_comercial_rua', parsed.endereco_comercial);
+                          if (parsed.endereco_comercial_cep) form.setValue('endereco_comercial_cep', formatCep(parsed.endereco_comercial_cep));
+                          if (parsed.telefone_comercial) form.setValue('telefone_comercial', formatPhone(parsed.telefone_comercial));
+                          if (parsed.email_comercial) form.setValue('email_comercial', parsed.email_comercial);
+                          if (parsed.faturamento_mensal) form.setValue('faturamento_mensal', parsed.faturamento_mensal);
+                          if (parsed.num_funcionarios) form.setValue('num_funcionarios', parsed.num_funcionarios);
+                          toast.success('Campos preenchidos a partir do check-list');
+                          setShowChecklistPJ(false);
+                          setChecklistTextPJ('');
+                        }}
+                      >
+                        Preencher Campos
+                      </Button>
+                    </div>
                   )}
                   <FormField
                     control={form.control}
