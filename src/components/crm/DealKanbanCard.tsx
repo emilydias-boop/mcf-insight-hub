@@ -31,6 +31,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
+import { useMyContactsCapabilities } from "@/hooks/useMyContactsCapabilities";
 import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
