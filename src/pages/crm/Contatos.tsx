@@ -475,7 +475,7 @@ const Contatos = () => {
             transferLabel="Enviar p/ Pipeline..."
             onDuplicate={!restrictedToTransfer && activeBU !== 'consorcio' ? () => setDuplicateDialogOpen(true) : undefined}
             isDuplicating={duplicateMutation.isPending}
-            onChangeOwner={selectedDealIds.length > 0 ? () => setChangeOwnerDialogOpen(true) : undefined}
+            onChangeOwner={selectedIds.size > 0 ? handleOpenChangeOwner : undefined}
             isChangingOwner={bulkTransfer.isPending}
             onMoveStage={!restrictedToTransfer && selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
             onMovePipeline={!restrictedToTransfer && selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
