@@ -70,14 +70,25 @@ function PersonAvatar({ name }: { name: string }) {
   );
 }
 
-function SdrCard({ sdr, onClick }: { sdr: DailyViewSdr; onClick: () => void }) {
+function SdrCard({ sdr, onClick, onRemove }: { sdr: DailyViewSdr; onClick: () => void; onRemove?: () => void }) {
   const hit = sdr.meta_diaria > 0 && sdr.agendamentos >= sdr.meta_diaria;
   const diff = sdr.agendamentos - sdr.meta_diaria;
   return (
-    <button
-      onClick={onClick}
-      className={cn(
+    <div className="relative">
+      {onRemove && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          title="Remover card"
+          className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        onClick={onClick}
+        className={cn(
         'text-left rounded-2xl border-2 bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 group',
+        'w-full',
         hit
           ? 'border-primary/80 shadow-[0_0_28px_-10px_hsl(var(--primary)/0.55)] hover:shadow-[0_0_36px_-8px_hsl(var(--primary)/0.65)] hover:border-primary'
           : 'border-destructive/80 shadow-[0_0_28px_-10px_hsl(var(--destructive)/0.45)] hover:shadow-[0_0_36px_-8px_hsl(var(--destructive)/0.55)] hover:border-destructive'
@@ -119,19 +130,31 @@ function SdrCard({ sdr, onClick }: { sdr: DailyViewSdr; onClick: () => void }) {
         </span>
       </div>
       <ProgressBar value={sdr.agendamentos} max={sdr.meta_diaria} />
-    </button>
+      </button>
+    </div>
   );
 }
 
-function CloserCard({ closer, onClick }: { closer: DailyViewCloser; onClick: () => void }) {
+function CloserCard({ closer, onClick, onRemove }: { closer: DailyViewCloser; onClick: () => void; onRemove?: () => void }) {
   const hitR = closer.reunioes_realizadas >= closer.meta_reunioes;
   const hitC = closer.contratos_pagos >= closer.meta_contratos;
   const allHit = hitR && hitC;
   return (
-    <button
-      onClick={onClick}
-      className={cn(
+    <div className="relative">
+      {onRemove && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          title="Remover card"
+          className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        onClick={onClick}
+        className={cn(
         'text-left rounded-2xl border-2 bg-card/60 backdrop-blur p-5 transition-all hover:-translate-y-0.5 group',
+        'w-full',
         allHit
           ? 'border-primary/80 shadow-[0_0_28px_-10px_hsl(var(--primary)/0.55)] hover:shadow-[0_0_36px_-8px_hsl(var(--primary)/0.65)] hover:border-primary'
           : 'border-destructive/80 shadow-[0_0_28px_-10px_hsl(var(--destructive)/0.45)] hover:shadow-[0_0_36px_-8px_hsl(var(--destructive)/0.55)] hover:border-destructive'
@@ -173,7 +196,8 @@ function CloserCard({ closer, onClick }: { closer: DailyViewCloser; onClick: () 
           <div className="mt-2"><ProgressBar value={closer.contratos_pagos} max={closer.meta_contratos} /></div>
         </div>
       </div>
-    </button>
+      </button>
+    </div>
   );
 }
 
