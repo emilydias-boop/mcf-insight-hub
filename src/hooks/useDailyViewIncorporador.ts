@@ -31,10 +31,25 @@ export function useDailyViewIncorporador(date: Date, metaReunioes = 2, metaContr
   return useQuery({
     queryKey: ["daily-view-incorporador", dateStr, metaReunioes, metaContratos],
     queryFn: async (): Promise<DailyViewResponse> => {
+      // Load overrides (admin-managed). Ignored silently when user has no read access.
+      const { data: ovs } = await supabase
+        .from("daily_view_overrides" as any)
+        .select("kind, person_id")
+        .eq("bu", "incorporador");
+      const rows = (ovs as any[] | null) || [];
+      const extraSdr = rows.filter((r) => r.kind === "sdr_extra").map((r) => r.person_id);
+      const extraCloser = rows.filter((r) => r.kind === "closer_extra").map((r) => r.person_id);
+      const hiddenSdr = rows.filter((r) => r.kind === "sdr_hidden").map((r) => r.person_id);
+      const hiddenCloser = rows.filter((r) => r.kind === "closer_hidden").map((r) => r.person_id);
+
       const { data, error } = await supabase.rpc("get_daily_view_incorporador" as any, {
         p_date: dateStr,
         p_closer_meta_reunioes: metaReunioes,
         p_closer_meta_contratos: metaContratos,
+        p_extra_sdr_ids: extraSdr,
+        p_extra_closer_ids: extraCloser,
+        p_hidden_sdr_ids: hiddenSdr,
+        p_hidden_closer_ids: hiddenCloser,
       });
       if (error) throw error;
       return (data as DailyViewResponse) || { reference_date: dateStr, sdrs: [], closers: [] };
