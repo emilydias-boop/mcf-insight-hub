@@ -146,6 +146,9 @@ export function useSdrGamificationProgress(enabled: boolean) {
           .from("sdr")
           .select("name, email, squad, meta_diaria")
           .eq("user_id", user.id)
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
         row = data as any;
       }
@@ -154,6 +157,9 @@ export function useSdrGamificationProgress(enabled: boolean) {
           .from("sdr")
           .select("name, email, squad, meta_diaria")
           .eq("email", sdrEmail)
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
         row = data as any;
       }
