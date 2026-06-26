@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBUContext } from '@/contexts/BUContext';
 
-export type QualificationSource = 'ai_call_summary' | 'whatsapp' | null;
+export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
 export interface QualificationStatus {
   isQualified: boolean;
@@ -55,27 +55,33 @@ export function useQualificationStatus(dealId?: string) {
         };
       }
 
-      const wppNote = data?.find((a) => {
+      const manualNote = data?.find((a) => {
         if (a.activity_type !== 'qualification_note') return false;
         const md = (a.metadata || {}) as Record<string, any>;
-        if (md.channel !== 'whatsapp') return false;
+        if (md.channel !== 'whatsapp' && md.channel !== 'call') return false;
         const answers = md.answers || {};
         const keys = ['tempo_mcf', 'profissao', 'socio', 'renda', 'constroi_venda', 'terreno_imovel'];
         return keys.every((k) => ((answers[k] || '') as string).trim().length >= 15);
       });
 
-      if (wppNote) {
+      if (manualNote) {
+        const md = (manualNote.metadata || {}) as Record<string, any>;
+        const ch: 'call' | 'whatsapp' = md.channel === 'call' ? 'call' : 'whatsapp';
         return {
           isQualified: true,
-          source: 'whatsapp',
-          reason: 'Qualificação via WhatsApp registrada',
+          source: ch,
+          reason:
+            ch === 'call'
+              ? 'Qualificação via ligação externa registrada'
+              : 'Qualificação via WhatsApp registrada',
         };
       }
 
       return {
         isQualified: false,
         source: null,
-        reason: 'Faça uma ligação (resumo IA) ou registre a qualificação via WhatsApp',
+        reason:
+          'Ligue pelo sistema (IA), registre uma ligação externa ou responda o questionário via WhatsApp',
       };
     },
     staleTime: 30_000,
