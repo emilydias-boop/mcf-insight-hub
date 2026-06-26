@@ -308,6 +308,13 @@ export function QualificationAndScheduleModal({
                 </div>
               ) : (
                 <>
+                  {/* Banner IA: aparece sempre que houver transcrição registrada */}
+                  {hasAiSummary && (
+                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300">
+                      ✓ Ligação pelo sistema com resumo da IA já registrado. A qualificação está liberada — você pode complementar respondendo as perguntas abaixo, se quiser.
+                    </div>
+                  )}
+
                   {/* Tipo de contato */}
                   <div className="space-y-2 rounded-lg border border-border bg-secondary/20 p-3">
                     <Label className="text-sm font-medium">Como foi feita a qualificação?</Label>
@@ -323,7 +330,7 @@ export function QualificationAndScheduleModal({
                         }`}
                       >
                         <RadioGroupItem value="call" id="ch-call" />
-                        <Phone className="h-4 w-4" /> Por Ligação
+                        <Phone className="h-4 w-4" /> Ligação (sistema ou telefone próprio)
                       </label>
                       <label
                         htmlFor="ch-wpp"
@@ -345,17 +352,22 @@ export function QualificationAndScheduleModal({
                         }`}
                       >
                         {hasAiSummary
-                          ? '✓ Resumo da IA já registrado para esta ligação. Qualificação OK.'
-                          : 'Faça a ligação pelo discador. Após ~30s do encerramento, a IA registra o resumo automaticamente e libera o lead. Se preferir, troque para WhatsApp e responda o questionário.'}
+                          ? '✓ Resumo da IA já registrado. Não é preciso gravar de novo — basta agendar.'
+                          : 'Sem resumo da IA disponível. Se a ligação foi pelo seu telefone próprio (externo ao sistema), apenas responda as perguntas abaixo — não é preciso gravar nem refazer a ligação pelo discador.'}
                       </div>
                     )}
                   </div>
 
-                  {/* Questionário obrigatório (somente quando não há resumo IA) */}
-                  {!hasAiSummary && (
-                    <>
-                      <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
-                    </>
+                  {/*
+                    Questionário:
+                    - Obrigatório quando não há resumo IA (qualifica via ligação externa ou WhatsApp).
+                    - Opcional quando já existe resumo IA (apenas complementa).
+                  */}
+                  <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                  {hasAiSummary && (
+                    <p className="text-[11px] text-muted-foreground -mt-2">
+                      Preenchimento opcional — a IA já qualificou este lead.
+                    </p>
                   )}
 
                   {/* Falei com o lead → move para "Em contato" */}
