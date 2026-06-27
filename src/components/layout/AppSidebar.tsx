@@ -307,6 +307,7 @@ const menuItems: MenuItem[] = [
       { title: "Faixas de Ligações", url: "/admin/faixas-ligacoes", requiredRoles: ["admin", "manager"] },
       { title: "Documentação QA", url: "/admin/documentacao-qa", requiredRoles: ["admin", "manager"] },
       { title: "Revisão de No-Shows", url: "/crm/revisao-no-shows", requiredRoles: ["admin", "manager", "coordenador"] },
+      { title: "Integração MCF Pay", url: "/admin/integracao-mcf-pay", requiredRoles: ["admin"] },
     ],
   },
 ];

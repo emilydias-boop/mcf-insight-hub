@@ -104,6 +104,7 @@ const AdminRegrasProcesso = lazy(() => import("./pages/admin/RegrasProcesso"));
 const CallThresholdsConfig = lazy(() => import("./pages/admin/CallThresholdsConfig"));
 const QaDocsViewer = lazy(() => import("./pages/admin/QaDocsViewer"));
 const OutsideDetectionDiff = lazy(() => import("./pages/admin/OutsideDetectionDiff"));
+const IntegracaoMcfPay = lazy(() => import("./pages/admin/IntegracaoMcfPay"));
 const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento"));
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
@@ -239,6 +240,7 @@ const App = () => (
               <Route path="admin/faixas-ligacoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><CallThresholdsConfig /></RoleGuard>} />
               <Route path="admin/documentacao-qa" element={<RoleGuard allowedRoles={['admin', 'manager']}><QaDocsViewer /></RoleGuard>} />
               <Route path="admin/outside-detection-diff" element={<RoleGuard allowedRoles={['admin']}><OutsideDetectionDiff /></RoleGuard>} />
+              <Route path="admin/integracao-mcf-pay" element={<RoleGuard allowedRoles={['admin']}><IntegracaoMcfPay /></RoleGuard>} />
               
               <Route path="fechamento-sdr" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard></RoleGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard></RoleGuard>} />
