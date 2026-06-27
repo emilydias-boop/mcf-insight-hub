@@ -242,3 +242,6 @@ verify_jwt = false
 
 [functions.automation-test-send]
 verify_jwt = false
+
+[functions.notify-mcf-pay]
+verify_jwt = false
