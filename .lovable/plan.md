@@ -1,117 +1,86 @@
-# Daily View — Relatórios · BU Incorporador MCF
 
-Painel diário consolidado mostrando, **no dia de hoje**, como o time fechou **ontem** (último dia útil) contra a meta. Visual no design system do app (verde-lima `#bfff00` + preto quente), com cards flutuantes, gauges e badges de status.
+# Integração CRM ↔ MCF Pay
 
-## 1. Localização e navegação
+## 1. O que encontrei no schema atual (validação antes de codar)
 
-- Novo item no seletor `ReportTypeSelector`: **"Daily View"** (`daily_view`).
-- Adicionado ao array `availableReports` em `src/pages/bu-incorporador/Relatorios.tsx`.
-- Renderiza um novo componente `DailyViewPanel` dentro do `BUReportCenter`.
+**`crm_deals`** (campos relevantes):
+- `id` (uuid) → será o `crm_deal_id` enviado no webhook.
+- `stage_id` (uuid) → FK para `crm_stages`.
+- `owner_id` (text), `owner_profile_id` (uuid).
+- `original_sdr_email` (text), `r1_closer_email` (text), `r2_closer_email` (text) → já temos identificação de SDR e Closer por e-mail.
+- `custom_fields` (jsonb) e `tags` (array) → podem absorver overrides.
 
-## 2. Layout da tela
+**`crm_stages`**: o stage final tem vários nomes ("Fechado", "Contrato Pago", "Contrato na Mão", "Contrato Consórcio", "PRODUTOS FECHADOS", "CONTRATO PAGO", "SELECT - Parceiro Pagou", "PARCELINHA - MCF Pagou") — varia por pipeline/BU. **Não existe um campo único `status` no deal**; o "ganho" é derivado do `stage_id` apontando para um desses stages.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ Daily View · Ontem (qua, 24/06)        [Trocar data ▾]      │
-│ Squad Incorporador · X SDRs · Y Closers avaliados            │
-├──────────────────────────────────────────────────────────────┤
-│  Cards-resumo (4):                                           │
-│  ▸ Meta SDR de agendamentos: 42 / 48  (87%)                  │
-│  ▸ SDRs que bateram: 6 de 9                                  │
-│  ▸ Reuniões realizadas (Closer): 11 / 14  (78%)              │
-│  ▸ Contratos pagos: 3 / 5                                    │
-├──────────────────────────────────────────────────────────────┤
-│  Abas: [ SDRs ]  [ Closers ]                                 │
-│                                                              │
-│  Tab SDRs — grid de cards por pessoa                         │
-│   ┌──────────────────────┐  ┌──────────────────────┐         │
-│   │ ● Carol Correa       │  │ ○ Cleyton Lima       │         │
-│   │ Meta: 5  Feito: 7    │  │ Meta: 5  Feito: 3    │         │
-│   │ ████████ 140%        │  │ ████░░░░ 60%         │         │
-│   │ [Bateu] verde-lima   │  │ [Faltou 2] vermelho  │         │
-│   │ "Ver detalhes →"     │  │ "Ver detalhes →"     │         │
-│   └──────────────────────┘  └──────────────────────┘         │
-│                                                              │
-│  Tab Closers — mesma estrutura com 2 KPIs por card:          │
-│   Reuniões realizadas (meta) | Contratos pagos (meta)        │
-└──────────────────────────────────────────────────────────────┘
-```
+**`profiles`**: não tem `mcf_pay_code` hoje. Tem `id`, `email`, `full_name`.
 
-Clique no card → abre `SdrDailyDrilldownDialog` ou `CloserDailyDrilldownDialog`.
+**`hubla_transactions`**: tem `customer_email`, `hubla_id`, mas **não tem `asaas_payment_id`** explicitamente. Existe `asaas-webhook-handler` (edge function), então o ID do Asaas pode ser obtido de outro lugar — por ora, o webhook vai **omitir** `purchase_ref.asaas_payment_id` e o MCF Pay casa só pelo `crm_deal_id`.
 
-### Drilldown SDR (Dialog grande)
-- **Header**: nome, foto/avatar, meta x realizado de ontem, badge bateu/não bateu.
-- **Bloco 1 — Ligações (ontem + últimos 7 dias)**: tabela compacta com colunas `Data | Tentativas | Conexões efetivas | Qualificadas | Tempo total`. Reaproveita o RPC já existente atrás de `useSdrCallsByLead` agregando por dia.
-- **Bloco 2 — Leads agendados ontem**: lista com `Lead | Telefone | Closer | Origem (Tag)`. Tag colorida: **ANAMNESE** (azul), **PLANILHA** (roxo), **A010** (verde-lima), **OUTROS** (cinza). Classificação reusa `src/lib/channelClassifier.ts`.
+## 2. Decisões propostas (preciso da sua confirmação)
 
-### Drilldown Closer (Dialog grande)
-- Header com meta de reuniões e meta de contratos.
-- **Reuniões realizadas ontem**: tabela `Lead | Horário | Status | Tag de origem`.
-- **Contratos pagos ontem**: tabela `Lead | Produto | Valor | Data pagamento`.
+### 2.1. Gatilho do disparo
+**Recomendação:** disparar quando o `stage_id` mudar para um stage marcado como "ganho". Implementação:
+- Adicionar coluna booleana `is_won_stage` em `public.crm_stages` (default false).
+- Marcar como `true` todos os stages cujo nome corresponde aos padrões acima (uma vez, via migration).
+- Trigger `AFTER UPDATE OF stage_id ON crm_deals`: se o novo stage tem `is_won_stage = true` e o anterior não, enfileira o webhook.
+- Isso resolve "qual é o status fechado" sem depender de string-match em runtime e é facilmente ajustável pela UI no futuro.
 
-## 3. Dados e RPCs
+### 2.2. Onde guardar `closer_code` e `sdr_code`
+**Recomendação:** novas colunas em `public.profiles`:
+- `mcf_pay_closer_code text` (nullable, único quando preenchido)
+- `mcf_pay_sdr_code text` (nullable, único quando preenchido)
 
-### RPC novo: `get_daily_view_incorporador(p_date date)`
-Retorna JSON consolidado para uma data (default = ontem útil, calculado no client):
+E **override opcional por deal** dentro de `crm_deals.custom_fields` (`mcf_pay_closer_code`, `mcf_pay_sdr_code`) para casos especiais — sem precisar de DDL nova no deal.
 
-```json
-{
-  "reference_date": "2026-06-24",
-  "sdrs": [
-    { "sdr_id": "...", "name": "...", "email": "...",
-      "meta_diaria": 5, "agendamentos": 7, "bateu": true }
-  ],
-  "closers": [
-    { "closer_id": "...", "name": "...", "email": "...",
-      "meta_reunioes": 2, "reunioes_realizadas": 3,
-      "meta_contratos": 1, "contratos_pagos": 0 }
-  ]
-}
-```
+Resolução no momento do disparo:
+1. `closer_code`: override no `custom_fields` → senão profile do `r2_closer_email` → senão profile do `r1_closer_email` → senão profile do `owner_profile_id`.
+2. `sdr_code`: override no `custom_fields` → senão profile do `original_sdr_email`.
 
-Regras:
-- **SDRs**: somente quem estava no squad `incorporador` na data (usa `sdr_squad_history` quando existir, fallback `sdr.squad`). `meta_diaria` vem direto de `sdr.meta_diaria`. `agendamentos` = reuniões R1 agendadas pelo SDR cuja `scheduled_at` cai na data (mesma lógica de `get_sdr_metrics_from_agenda`).
-- **Closers**: somente closers ativos com `bu='incorporador'`. `reunioes_realizadas` = `meeting_slot_attendees.status IN ('completed','contract_paid','refunded')` excluindo outsides, no `meeting_slots.scheduled_at` da data. `contratos_pagos` = transações pagas naquele dia atribuídas ao closer (mesma regra de `useCloserAgendaMetrics`, recortada para 1 dia). Metas diárias do closer derivadas de `cargo_metricas_config` (nome_metrica `reunioes_realizadas` e `contratos_pagos`) / dias úteis do mês; quando não houver registro, mostrar "—".
+Se ambos vierem nulos, o registro vai para `mcf_pay_dispatch_logs` com status `skipped_no_codes` e **não** é enviado.
 
-### Drilldown SDR
-- **Ligações por dia**: novo RPC `get_sdr_call_daily_summary(p_sdr_id uuid, p_start date, p_end date)` retornando `{ day, attempts, effective, qualified, total_seconds }` agregando `calls` por SDR. Janela = últimos 7 dias terminando em `reference_date`.
-- **Leads agendados ontem**: reaproveita `meeting_slot_attendees` filtrando por `booked_by_email = sdr.email` + data. Tag é calculada em JS com `channelClassifier` baseando-se nas tags do lead.
+## 3. Entregáveis
 
-### Drilldown Closer
-- Lista de reuniões: query direta em `meeting_slots` + `meeting_slot_attendees` no dia.
-- Lista de contratos: query em `hubla_transactions` filtrando pelo closer atribuído no dia.
+### 3.1. Banco (1 migration)
+- `ALTER TABLE public.profiles ADD COLUMN mcf_pay_closer_code text, ADD COLUMN mcf_pay_sdr_code text` (+ índices únicos parciais).
+- `ALTER TABLE public.crm_stages ADD COLUMN is_won_stage boolean NOT NULL DEFAULT false` + UPDATE marcando os stages conhecidos.
+- `CREATE TABLE public.mcf_pay_dispatch_logs` (id, deal_id, attempt, status [`pending|success|failed|skipped_no_codes`], http_status, payload jsonb, response jsonb, signature_preview, next_retry_at, error_message, created_at) + GRANTs (`authenticated` SELECT, `service_role` ALL) + RLS (admins/coordenadores leem; insert apenas service_role) + índices.
+- `CREATE TABLE public.mcf_pay_config` (singleton: id boolean primary key default true, webhook_url text, is_active boolean, updated_by, updated_at) + GRANTs + RLS (apenas admins). O secret **não** vai aqui.
+- Trigger `AFTER UPDATE OF stage_id ON crm_deals` → `pg_net.http_post` para a edge function `notify-mcf-pay` (modo "enqueue") quando entra num stage com `is_won_stage = true`.
 
-## 4. Arquivos a criar/alterar
+### 3.2. Secret
+- `MCF_PAY_WEBHOOK_SECRET` registrado via `add_secret` (você cola o valor quando o MCF Pay estiver pronto).
 
-Frontend:
-- `src/pages/bu-incorporador/Relatorios.tsx` — incluir `daily_view`.
-- `src/components/relatorios/ReportTypeSelector.tsx` — adicionar opção com ícone `CalendarCheck`.
-- `src/components/relatorios/BUReportCenter.tsx` — render do novo painel.
-- `src/components/relatorios/DailyViewPanel.tsx` (novo) — layout principal.
-- `src/components/relatorios/daily-view/DailySummaryCards.tsx` (novo).
-- `src/components/relatorios/daily-view/SdrDailyCard.tsx` (novo).
-- `src/components/relatorios/daily-view/CloserDailyCard.tsx` (novo).
-- `src/components/relatorios/daily-view/SdrDailyDrilldownDialog.tsx` (novo).
-- `src/components/relatorios/daily-view/CloserDailyDrilldownDialog.tsx` (novo).
-- `src/hooks/useDailyViewIncorporador.ts` (novo) — chama o RPC consolidado.
-- `src/hooks/useSdrCallDailySummary.ts` (novo) — RPC de 7 dias.
+### 3.3. Edge Function `notify-mcf-pay`
+Aceita dois modos:
+- **`{ deal_id, attempt }`** → busca o deal, monta o payload conforme contrato (`event: "deal.paid"`, `crm_deal_id`, `closer_code`, `sdr_code`, `purchase_ref` omitido por enquanto), serializa **uma vez** o body raw, assina HMAC-SHA256 hex e envia POST com `x-crm-signature`.
+- **`{ test: true }`** → envia payload de exemplo com `crm_deal_id: "test-<uuid>"`.
 
-Backend (migration):
-- RPC `get_daily_view_incorporador(p_date date)` (security definer, leitura).
-- RPC `get_sdr_call_daily_summary(p_sdr_id uuid, p_start date, p_end date)`.
-- Grants `EXECUTE` para `authenticated`.
+Lógica de resposta:
+- HTTP 200 + `ok:true` → log `success`.
+- HTTP 200 + `ok:false` com `reason in ("purchase_not_found_yet","purchase_not_paid_yet")` → log `pending`, agenda próximo retry (5min → 30min → 2h; após 3 falhas vira `failed`).
+- HTTP 400 com `error:"Assinatura inválida"` → log `failed`, **sem retry**.
+- Outros erros / timeout → conta como retry.
 
-## 5. Design system
+Retries: cron `pg_cron` a cada 5 minutos invoca `notify-mcf-pay` com `{ retry_queue: true }`, que processa logs com `status='pending'` e `next_retry_at <= now()`.
 
-- Fonte títulos: **Space Grotesk**; corpo: **Inter** (já no projeto).
-- Cards: `rounded-2xl border border-border bg-card/60 backdrop-blur` com sombra suave; barra de progresso usando `bg-primary` (verde-lima) quando bateu, `bg-destructive` quando faltou >20%, `bg-amber-500` quando faltou ≤20%.
-- Badges: pill com `ring-1 ring-primary/40` para "Bateu meta"; `ring-destructive/40` para "Faltou".
-- Avatares circulares com inicial em `bg-primary/15 text-primary`.
-- Hover do card: `translate-y-[-2px] shadow-[0_0_24px_-8px_hsl(var(--primary)/0.4)]`.
-- Sem cores fixas em Tailwind (`text-white`, `bg-black`); somente tokens semânticos.
+### 3.4. Frontend — `Configurações > Integrações > MCF Pay`
+Nova página em `src/pages/admin/IntegracaoMcfPay.tsx` + entrada na sidebar (área de admin), contendo:
+- Input "URL do webhook MCF Pay" + toggle "Ativo" → grava em `mcf_pay_config`.
+- Aviso: "Secret armazenado com segurança como `MCF_PAY_WEBHOOK_SECRET`" + link para Edge Function Secrets.
+- Botão **Enviar teste** → invoca `notify-mcf-pay` com `{ test: true }` e mostra o resultado.
+- Tabela "Últimos 20 envios" lendo `mcf_pay_dispatch_logs` (deal, status, http_status, criado_em, último erro) com botão **Reenviar** (chama a edge function com `{ deal_id, force: true }`).
+- Sub-seção "Mapeamento de códigos" com link para a tela de Gerenciamento de Usuários, onde adicionarei dois campos novos (`mcf_pay_closer_code`, `mcf_pay_sdr_code`) no `UserTargetsForm` ou em um formulário separado.
 
-## 6. Fora de escopo
+### 3.5. UI auxiliar
+- Em `src/components/user-management/`: novo card "Códigos MCF Pay" para editar os dois campos por usuário (apenas admin).
 
-- Edição de meta diária na tela (já existe em RH/Comp Plan).
-- Exportação CSV/PDF (pode entrar em iteração futura).
-- Outras BUs (este painel é exclusivo de Incorporador, conforme pedido).
+## 4. O que **não** vou fazer agora
+- Não vou puxar `asaas_payment_id` (não está mapeado no schema do CRM hoje). Quando você apontar onde ele vive, eu incluo no `purchase_ref`.
+- Não vou tocar nos webhooks Hubla/Asaas existentes.
+
+## 5. Perguntas antes de codar
+1. **Confirma o gatilho** = "stage do deal entra em `is_won_stage = true`"? Ou prefere disparar também quando algum status externo (ex.: `hubla_transactions.sale_status = 'completed'` ligado ao deal) virar pago?
+2. **Lista de stages "ganho"**: posso marcar automaticamente todos com nome em (`Fechado`, `Contrato Pago`, `Contrato na Mão`, `Contrato Consórcio`, `PRODUTOS FECHADOS`, `CONTRATO PAGO`, `SELECT - Parceiro Pagou`, `PARCELINHA - MCF Pagou`) — ou quer revisar essa lista antes?
+3. **Escopo por BU**: integrar com **todos** os pipelines/BUs ou só uma BU específica (ex.: Incorporador)? Posso adicionar uma flag por `crm_origins` se for o caso.
+
+Assim que você responder essas 3 perguntas, executo a migration + edge function + UI numa única leva.
