@@ -5661,6 +5661,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          is_won_stage: boolean
           origin_id: string | null
           stage_name: string
           stage_order: number
@@ -5672,6 +5673,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_won_stage?: boolean
           origin_id?: string | null
           stage_name: string
           stage_order: number
@@ -5683,6 +5685,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_won_stage?: boolean
           origin_id?: string | null
           stage_name?: string
           stage_order?: number
@@ -8217,6 +8220,81 @@ export type Database = {
           },
         ]
       }
+      mcf_pay_config: {
+        Row: {
+          created_at: string
+          id: boolean
+          is_active: boolean
+          updated_at: string
+          updated_by: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: boolean
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: boolean
+          is_active?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      mcf_pay_dispatch_logs: {
+        Row: {
+          attempt: number
+          created_at: string
+          deal_id: string | null
+          error_message: string | null
+          event: string
+          http_status: number | null
+          id: string
+          next_retry_at: string | null
+          payload: Json | null
+          response: Json | null
+          sent_at: string | null
+          signature_preview: string | null
+          status: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          deal_id?: string | null
+          error_message?: string | null
+          event?: string
+          http_status?: number | null
+          id?: string
+          next_retry_at?: string | null
+          payload?: Json | null
+          response?: Json | null
+          sent_at?: string | null
+          signature_preview?: string | null
+          status?: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          deal_id?: string | null
+          error_message?: string | null
+          event?: string
+          http_status?: number | null
+          id?: string
+          next_retry_at?: string | null
+          payload?: Json | null
+          response?: Json | null
+          sent_at?: string | null
+          signature_preview?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       meeting_reminder_settings: {
         Row: {
           ac_field_ids: Json | null
@@ -9652,6 +9730,8 @@ export type Database = {
           full_name: string | null
           id: string
           last_login_at: string | null
+          mcf_pay_closer_code: string | null
+          mcf_pay_sdr_code: string | null
           show_on_tv: boolean | null
           squad: string[] | null
           updated_at: string | null
@@ -9672,6 +9752,8 @@ export type Database = {
           full_name?: string | null
           id: string
           last_login_at?: string | null
+          mcf_pay_closer_code?: string | null
+          mcf_pay_sdr_code?: string | null
           show_on_tv?: boolean | null
           squad?: string[] | null
           updated_at?: string | null
@@ -9692,6 +9774,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_login_at?: string | null
+          mcf_pay_closer_code?: string | null
+          mcf_pay_sdr_code?: string | null
           show_on_tv?: boolean | null
           squad?: string[] | null
           updated_at?: string | null
