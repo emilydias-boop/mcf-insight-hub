@@ -24,6 +24,7 @@ import {
   Loader2, Shield, Settings, Link2, KeyRound, 
   Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Trash2 
 } from "lucide-react";
+import { McfPayCodesCard } from "./McfPayCodesCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -941,6 +942,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </Button>
               </CardContent>
             </Card>
+
+            {userId && <McfPayCodesCard userId={userId} />}
           </TabsContent>
         </Tabs>
       </SheetContent>
