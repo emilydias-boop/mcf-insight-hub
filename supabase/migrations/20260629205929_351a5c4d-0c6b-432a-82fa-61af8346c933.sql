@@ -1,0 +1,1 @@
+ALTER TABLE public.mcf_pay_dispatch_logs ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'outbound'; CREATE INDEX IF NOT EXISTS idx_mcf_pay_logs_direction_created ON public.mcf_pay_dispatch_logs (direction, created_at DESC); CREATE INDEX IF NOT EXISTS idx_mcf_pay_logs_deal ON public.mcf_pay_dispatch_logs (deal_id);

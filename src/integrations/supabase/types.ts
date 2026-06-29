@@ -8252,6 +8252,7 @@ export type Database = {
           attempt: number
           created_at: string
           deal_id: string | null
+          direction: string
           error_message: string | null
           event: string
           http_status: number | null
@@ -8267,6 +8268,7 @@ export type Database = {
           attempt?: number
           created_at?: string
           deal_id?: string | null
+          direction?: string
           error_message?: string | null
           event?: string
           http_status?: number | null
@@ -8282,6 +8284,7 @@ export type Database = {
           attempt?: number
           created_at?: string
           deal_id?: string | null
+          direction?: string
           error_message?: string | null
           event?: string
           http_status?: number | null
