@@ -1,60 +1,57 @@
 # Webhook reverso MCF Pay → CRM
 
-## Payload que o CRM espera receber
+## Decisões confirmadas
+
+- Segredo HMAC separado: `MCF_PAY_CALLBACK_SECRET` (já gerado).
+- Identificador: apenas `deal_id` (UUID).
+- Em caso de duplicata com Hubla: **MCF Pay prevalece** — sobrescreve `contract_paid_at` com a data do MCF Pay e marca a fonte como `mcf_pay`.
+- Faturamento MCF Pay aparece em Daily View, Meu Desempenho e Contratos. Painel Comercial fica de fora por enquanto.
+
+## Payload que o MCF Pay deve enviar
 
 ```text
-POST /functions/v1/mcf-pay-callback
+POST https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/mcf-pay-callback
 Content-Type: application/json
-X-MCF-Pay-Signature: <HMAC-SHA256 do body com o segredo compartilhado>
+x-mcf-pay-signature: <HMAC-SHA256(body, MCF_PAY_CALLBACK_SECRET) em hex>
 
 {
   "event": "payment.confirmed",
   "timestamp": "2026-06-29T14:30:00Z",
   "data": {
-    "deal_id": "<uuid do crm_deals>",
-    "external_reference": "<código opcional do MCF Pay>",
-    "status": "paid",
-    "paid_at": "2026-06-29T14:25:00Z",
-    "amount": 17490.00,
-    "closer_code": "<mcf_pay_closer_code do profile>",
-    "sdr_code": "<mcf_pay_sdr_code do profile>",
-    "metadata": {
-      "buyer_email": "cliente@email.com",
-      "buyer_phone": "5511999999999",
-      "offer_name": "A000 - Contrato",
-      "transaction_id": "<id da transação no MCF Pay>"
-    }
+    "deal_id": "bef4ff52-...",         // obrigatório (UUID do crm_deals)
+    "status": "paid",                  // "paid" | "refunded"
+    "paid_at": "2026-06-29T14:25:00Z", // ISO-8601 UTC
+    "amount": 17490.00,                // BRL
+    "transaction_id": "txn_mcfpay_abc123" // opcional, para auditoria
   }
 }
 ```
 
-Resposta de sucesso: `200 OK` + `{ "received": true }`.
-Falha: retry do MCF Pay em 5 min, 30 min e 2h.
+Resposta:
+- `200 OK` + `{ "ok": true }` → MCF Pay considera entregue.
+- 4xx (ex.: assinatura inválida, deal não existe) → não tentar de novo.
+- 5xx ou timeout → MCF Pay reenvia em 5min, 30min e 2h.
 
-## O que o CRM vai fazer ao receber
+Para `status: "refunded"`, o CRM zera `contract_paid_at` do attendee correspondente e registra no log.
 
-1. Validar a assinatura HMAC-SHA256 (segredo separado do webhook de ida).
-2. Buscar o `crm_deals` pelo `deal_id`.
-3. Se não encontrar, tentar match por `buyer_email` + `buyer_phone` + `offer_name`.
-4. Se o deal já estiver marcado como pago pela Hubla (contrato_paid_at preenchido), registrar como "conferência duplicada" e não contar 2x.
-5. Se não estiver pago, atualizar o deal para etapa vencedora e preencher:
-   - `contract_paid_at` = `paid_at`
-   - `contract_value` = `amount`
-   - `payment_source` = 'mcf_pay'
-6. Gravar log auditável em `mcf_pay_dispatch_logs` (agora em sentido reverso) para rastreio.
-7. Disponibilizar essa venda nos relatórios: Daily View, Painel Comercial e Meu Desempenho.
+## O que o CRM faz ao receber
 
-## Infraestrutura a implementar
+1. Validar `x-mcf-pay-signature` contra `MCF_PAY_CALLBACK_SECRET`.
+2. Buscar o `meeting_slot_attendees` ligado ao `deal_id` (ou o próprio `crm_deals` se não houver attendee).
+3. Atualizar:
+   - `meeting_slot_attendees.contract_paid_at` = `paid_at` (sobrescreve Hubla se existir).
+   - `meeting_slot_attendees.status` = `contract_paid`.
+   - Marcar fonte `mcf_pay` em `custom_fields.payment_source` do deal.
+4. Gravar log em `mcf_pay_dispatch_logs` com `direction = 'inbound'`.
+5. Responder 200.
 
-1. Edge Function `mcf-pay-callback` (recebe e valida payload).
-2. Segredo `MCF_PAY_CALLBACK_SECRET` (HMAC-SHA256).
-3. Nova coluna `crm_deals.payment_source` ('hubla' | 'mcf_pay' | 'manual').
-4. Trigger/Função para garantir que deals pagos pelo MCF Pay contem nos relatórios sem duplicar com Hubla.
-5. Tela de log `/admin/integracao-mcf-pay` mostrando também recebimentos reversos.
+## Infraestrutura
 
-## Decisões pendentes
+1. Nova edge function `mcf-pay-callback` (verify_jwt = false, valida HMAC em código).
+2. Coluna nova `mcf_pay_dispatch_logs.direction` (`outbound` | `inbound`).
+3. Tela `/admin/integracao-mcf-pay` ganha aba "Recebidos" mostrando os callbacks inbound com payload, status HTTP e deal vinculado.
+4. Secret `MCF_PAY_CALLBACK_SECRET` (já criado) precisa ser cadastrado também no MCF Pay para gerar a assinatura.
 
-1. O segredo do callback deve ser separado (`MCF_PAY_CALLBACK_SECRET`) ou reaproveitar o `MCF_PAY_WEBHOOK_SECRET` de ida?
-2. O identificador de retorno deve ser apenas `deal_id`, ou incluir também `external_reference`?
-3. O Painel Comercial deve incluir MCF Pay no faturamento bruto agora, ou apenas em Daily View/Meu Desempenho/Contratos por enquanto?
-4. Quando Hubla já registrou a mesma venda, ignoramos silenciosamente ou registramos como "conferência duplicada" nos logs?
+## Após implementar
+
+Envio a URL `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/mcf-pay-callback` e o valor do segredo (consultável em Workspace Settings → Secrets) para você cadastrar no MCF Pay.
