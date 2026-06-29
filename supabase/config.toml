@@ -245,3 +245,6 @@ verify_jwt = false
 
 [functions.notify-mcf-pay]
 verify_jwt = false
+
+[functions.mcf-pay-callback]
+verify_jwt = false
