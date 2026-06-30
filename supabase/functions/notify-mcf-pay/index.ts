@@ -95,7 +95,10 @@ async function resolveCodesForDeal(dealId: string) {
   return { closer_code, sdr_code, customer, transaction_id };
 }
 
-async function dispatch(dealId: string | null, opts: { test?: boolean; previousAttempt?: number; logId?: string } = {}) {
+async function dispatch(
+  dealId: string | null,
+  opts: { test?: boolean; previousAttempt?: number; logId?: string; source?: string; force?: boolean } = {},
+) {
   const config = await getConfig();
   if (!config?.is_active || !config?.webhook_url) {
     await supabase.from("mcf_pay_dispatch_logs").insert({
@@ -103,8 +106,31 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
       status: "skipped_inactive",
       error_message: "Integração MCF Pay inativa ou sem URL configurada",
       attempt: (opts.previousAttempt ?? 0) + 1,
+      source: opts.source ?? "manual",
     });
     return { ok: false, reason: "inactive" };
+  }
+
+  // Idempotência: pular se já temos sucesso recente para o mesmo deal
+  if (!opts.test && dealId && !opts.force && !opts.logId) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: prior } = await supabase
+      .from("mcf_pay_dispatch_logs")
+      .select("id")
+      .eq("deal_id", dealId)
+      .eq("status", "success")
+      .gte("created_at", since)
+      .limit(1);
+    if (prior && prior.length > 0) {
+      await supabase.from("mcf_pay_dispatch_logs").insert({
+        deal_id: dealId,
+        status: "skipped_duplicate",
+        error_message: "Já existe disparo bem-sucedido nas últimas 24h",
+        attempt: 1,
+        source: opts.source ?? "manual",
+      });
+      return { ok: true, reason: "duplicate_skipped" };
+    }
   }
 
   let payload: Record<string, unknown>;
@@ -126,6 +152,7 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
         status: "failed",
         error_message: "Deal não encontrado",
         attempt: (opts.previousAttempt ?? 0) + 1,
+        source: opts.source ?? "manual",
       });
       return { ok: false, reason: "deal_not_found" };
     }
@@ -135,6 +162,7 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
         status: "skipped_no_codes",
         error_message: "Nenhum closer_code/sdr_code resolvido",
         attempt: (opts.previousAttempt ?? 0) + 1,
+        source: opts.source ?? "manual",
       });
       return { ok: false, reason: "no_codes" };
     }
@@ -221,6 +249,7 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
     error_message: errorMessage,
     next_retry_at: nextRetryAt,
     sent_at: status === "success" ? new Date().toISOString() : null,
+    source: opts.source ?? "manual",
   };
 
   if (opts.logId) {
@@ -242,8 +271,38 @@ async function processRetryQueue() {
   const results = [];
   for (const row of queued ?? []) {
     if (!row.deal_id) continue;
-    const r = await dispatch(row.deal_id, { previousAttempt: row.attempt, logId: row.id });
+    const r = await dispatch(row.deal_id, { previousAttempt: row.attempt, logId: row.id, source: "retry" });
     results.push({ id: row.id, ...r });
+  }
+  return { processed: results.length, results };
+}
+
+async function processSweep() {
+  // Pega deals com contract_paid_at nas últimas 72h que não têm disparo success/skipped_duplicate
+  const since = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+  const { data: rows } = await supabase
+    .from("meeting_slot_attendees")
+    .select("deal_id, contract_paid_at")
+    .not("deal_id", "is", null)
+    .not("contract_paid_at", "is", null)
+    .gte("contract_paid_at", since)
+    .limit(200);
+
+  const dealIds = Array.from(new Set((rows ?? []).map((r: any) => r.deal_id as string)));
+  if (dealIds.length === 0) return { processed: 0, results: [] };
+
+  const { data: existing } = await supabase
+    .from("mcf_pay_dispatch_logs")
+    .select("deal_id, status")
+    .in("deal_id", dealIds)
+    .in("status", ["success", "skipped_duplicate", "skipped_no_codes", "skipped_inactive"]);
+  const skip = new Set((existing ?? []).map((r: any) => r.deal_id as string));
+
+  const todo = dealIds.filter((id) => !skip.has(id)).slice(0, 25);
+  const results = [];
+  for (const id of todo) {
+    const r = await dispatch(id, { source: "sweep" });
+    results.push({ deal_id: id, ...r });
   }
   return { processed: results.length, results };
 }
@@ -252,16 +311,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));
+    if (body.sweep === true) {
+      const r = await processSweep();
+      return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     if (body.retry_queue) {
       const r = await processRetryQueue();
       return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (body.test === true) {
-      const r = await dispatch(null, { test: true });
+      const r = await dispatch(null, { test: true, source: body.source ?? "manual" });
       return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (body.deal_id) {
-      const r = await dispatch(body.deal_id, { previousAttempt: body.force ? 0 : undefined });
+      const r = await dispatch(body.deal_id, {
+        previousAttempt: body.force ? 0 : undefined,
+        source: body.source ?? "manual",
+        force: Boolean(body.force),
+      });
       return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     return new Response(JSON.stringify({ error: "missing deal_id, test or retry_queue" }), {
