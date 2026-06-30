@@ -389,9 +389,22 @@ Deno.serve(async (req) => {
     status: "success",
     http_status: 200,
     payload: body,
-    response: { ok: true, attendee_id: attendee?.id ?? null, applied: isPaid ? "paid" : "refunded" },
+    response: {
+      ok: true,
+      attendee_id: attendee?.id ?? null,
+      applied: isPaid ? "paid" : "refunded",
+      match_strategy: matchStrategy,
+      resolved_deal_id: resolvedDealId,
+      candidates: resolved.candidates ?? null,
+    },
     signature_preview: expected.slice(0, 16),
   });
 
-  return json({ ok: true, deal_id: dealId, attendee_id: attendee?.id ?? null });
+  return json({
+    ok: true,
+    deal_id: dealId,
+    resolved_deal_id: resolvedDealId,
+    attendee_id: attendee?.id ?? null,
+    match_strategy: matchStrategy,
+  });
 });
