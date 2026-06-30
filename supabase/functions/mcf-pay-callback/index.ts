@@ -24,6 +24,11 @@ async function hmacHex(body: string): Promise<string> {
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function constEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -85,17 +90,28 @@ Deno.serve(async (req) => {
   }
   const provided = sigHeader.toLowerCase().replace(/^sha256=/, "");
   if (!provided || !constEq(provided, expected)) {
+    // Telemetria de debug (sem vazar o segredo): fingerprint do secret usado no CRM,
+    // primeiros chars das duas assinaturas, content-type e tamanho do corpo.
+    const secretFp = SECRET ? (await sha256Hex(SECRET)).slice(0, 8) : "empty";
+    const debug = {
+      provided_preview: provided.slice(0, 16) || null,
+      expected_preview: expected.slice(0, 16),
+      crm_secret_fingerprint: secretFp,
+      body_length: rawBody.length,
+      content_type: req.headers.get("content-type"),
+      header_present: Boolean(sigHeader),
+    };
     await log({
       deal_id: null,
       event: "callback",
       status: "failed",
       http_status: 401,
       payload: { raw: rawBody.slice(0, 2000) },
-      response: null,
+      response: debug,
       error_message: "invalid_signature",
       signature_preview: provided.slice(0, 16) || null,
     });
-    return json({ ok: false, error: "invalid_signature" }, 401);
+    return json({ ok: false, error: "invalid_signature", debug }, 401);
   }
 
   // Parse payload
