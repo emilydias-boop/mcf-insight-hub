@@ -20,6 +20,7 @@ type Log = {
   error_message: string | null;
   created_at: string;
   response: any;
+  source?: string | null;
 };
 
 type InboundLog = Log & {
@@ -57,7 +58,7 @@ export default function IntegracaoMcfPay() {
   const loadLogs = async () => {
     const { data } = await supabase
       .from("mcf_pay_dispatch_logs")
-      .select("id, deal_id, status, attempt, http_status, error_message, created_at, response")
+      .select("id, deal_id, status, attempt, http_status, error_message, created_at, response, source")
       .or("direction.eq.outbound,direction.is.null")
       .order("created_at", { ascending: false })
       .limit(20);
@@ -127,6 +128,10 @@ export default function IntegracaoMcfPay() {
         <p className="text-muted-foreground">Envia o webhook <code>deal.paid</code> para o MCF Pay quando um deal entra numa etapa de fechado.</p>
       </div>
 
+      <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3 text-sm">
+        <strong>Disparo automático ativo:</strong> trigger em <code>contract_paid_at</code> + varredura de segurança a cada 15 min para vendas das últimas 72h.
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Configuração</CardTitle>
@@ -183,6 +188,7 @@ export default function IntegracaoMcfPay() {
               <TableRow>
                 <TableHead>Quando</TableHead>
                 <TableHead>Deal</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>HTTP</TableHead>
                 <TableHead>Tentativa</TableHead>
@@ -192,12 +198,15 @@ export default function IntegracaoMcfPay() {
             </TableHeader>
             <TableBody>
               {logs.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhum envio ainda</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Nenhum envio ainda</TableCell></TableRow>
               )}
               {logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="text-xs">{new Date(log.created_at).toLocaleString("pt-BR")}</TableCell>
                   <TableCell className="font-mono text-xs">{log.deal_id ? log.deal_id.slice(0, 8) : "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    <Badge variant="outline">{log.source ?? "manual"}</Badge>
+                  </TableCell>
                   <TableCell><Badge variant={statusVariant[log.status] ?? "outline"}>{log.status}</Badge></TableCell>
                   <TableCell>{log.http_status ?? "—"}</TableCell>
                   <TableCell>{log.attempt}</TableCell>
