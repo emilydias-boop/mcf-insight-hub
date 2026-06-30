@@ -8262,6 +8262,7 @@ export type Database = {
           response: Json | null
           sent_at: string | null
           signature_preview: string | null
+          source: string | null
           status: string
         }
         Insert: {
@@ -8278,6 +8279,7 @@ export type Database = {
           response?: Json | null
           sent_at?: string | null
           signature_preview?: string | null
+          source?: string | null
           status?: string
         }
         Update: {
@@ -8294,6 +8296,7 @@ export type Database = {
           response?: Json | null
           sent_at?: string | null
           signature_preview?: string | null
+          source?: string | null
           status?: string
         }
         Relationships: []
