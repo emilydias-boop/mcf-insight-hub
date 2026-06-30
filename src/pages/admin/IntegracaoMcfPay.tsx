@@ -259,6 +259,25 @@ export default function IntegracaoMcfPay() {
                         <TableCell>{log.http_status ?? "—"}</TableCell>
                         <TableCell className="text-xs font-mono space-y-0.5">
                           {log.error_message && <div className="text-destructive">{log.error_message}</div>}
+                          {debug?.match_strategy && (
+                            <div>match: <strong>{debug.match_strategy}</strong></div>
+                          )}
+                          {debug?.resolved_deal_id && (
+                            <div>deal resolvido: {String(debug.resolved_deal_id).slice(0, 8)}…</div>
+                          )}
+                          {debug?.tried && (
+                            <div className="text-muted-foreground">
+                              tentou: {Object.entries(debug.tried)
+                                .filter(([, v]) => v)
+                                .map(([k, v]) => `${k}=${String(v).slice(0, 24)}`)
+                                .join(" · ") || "—"}
+                            </div>
+                          )}
+                          {Array.isArray(debug?.candidates) && debug.candidates.length > 0 && (
+                            <div className="text-muted-foreground">
+                              candidatos: {debug.candidates.length}
+                            </div>
+                          )}
                           {debug?.crm_secret_fingerprint && (
                             <div>secret-fp CRM: <strong>{debug.crm_secret_fingerprint}</strong></div>
                           )}
