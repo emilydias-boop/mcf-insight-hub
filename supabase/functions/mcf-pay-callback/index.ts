@@ -355,6 +355,10 @@ Deno.serve(async (req) => {
   const attendee = attendees?.[0] ?? null;
 
   const effectivePaidAt = paidAt ?? new Date().toISOString();
+  const alreadyPaid = Boolean(attendee?.contract_paid_at);
+  // Preserva contract_paid_at existente (fonte de verdade da venda manual).
+  const finalContractPaidAt = attendee?.contract_paid_at ?? effectivePaidAt;
+  const keptExisting = alreadyPaid;
 
   // Atualiza custom_fields no deal (fonte mcf_pay)
   const currentCustom = (deal.custom_fields as Record<string, unknown>) ?? {};
@@ -373,7 +377,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("meeting_slot_attendees")
         .update({
-          contract_paid_at: effectivePaidAt,
+          contract_paid_at: finalContractPaidAt,
           status: "contract_paid",
         })
         .eq("id", attendee.id);
@@ -398,6 +402,8 @@ Deno.serve(async (req) => {
       ok: true,
       attendee_id: attendee?.id ?? null,
       applied: isPaid ? "paid" : "refunded",
+      already_paid: alreadyPaid,
+      kept_existing_contract_paid_at: keptExisting,
       match_strategy: matchStrategy,
       resolved_deal_id: resolvedDealId,
       candidates: resolved.candidates ?? null,
@@ -410,6 +416,7 @@ Deno.serve(async (req) => {
     deal_id: dealId,
     resolved_deal_id: resolvedDealId,
     attendee_id: attendee?.id ?? null,
+    already_paid: alreadyPaid,
     match_strategy: matchStrategy,
   });
 });
