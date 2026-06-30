@@ -127,17 +127,22 @@ async function resolveDeal(data: any): Promise<ResolveResult> {
     return { deal: deals[0], strategy: strat };
   }
 
-  // Múltiplos: preferir deal com attendee mais recente sem contract_paid_at
+  // Múltiplos: se já existir attendee marcado como contract_paid (provável
+  // vínculo manual), priorizar esse deal; caso contrário, preferir o mais
+  // recente sem contract_paid_at.
   const dealIds = deals.map((d) => d.id);
   const { data: attendees } = await supabase
     .from("meeting_slot_attendees")
     .select("deal_id, contract_paid_at, created_at")
     .in("deal_id", dealIds)
     .order("created_at", { ascending: false });
+  const paid = (attendees ?? []).find((a) => a.contract_paid_at);
   const unpaid = (attendees ?? []).find((a) => !a.contract_paid_at);
-  const picked = unpaid
-    ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
-    : deals[0];
+  const picked = paid
+    ? deals.find((d) => d.id === paid.deal_id) ?? deals[0]
+    : unpaid
+      ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
+      : deals[0];
 
   // Carregar contatos para mostrar candidatos no log
   const contactRows = new Map<string, { email: string | null; phone: string | null }>();
@@ -350,6 +355,10 @@ Deno.serve(async (req) => {
   const attendee = attendees?.[0] ?? null;
 
   const effectivePaidAt = paidAt ?? new Date().toISOString();
+  const alreadyPaid = Boolean(attendee?.contract_paid_at);
+  // Preserva contract_paid_at existente (fonte de verdade da venda manual).
+  const finalContractPaidAt = attendee?.contract_paid_at ?? effectivePaidAt;
+  const keptExisting = alreadyPaid;
 
   // Atualiza custom_fields no deal (fonte mcf_pay)
   const currentCustom = (deal.custom_fields as Record<string, unknown>) ?? {};
@@ -368,7 +377,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("meeting_slot_attendees")
         .update({
-          contract_paid_at: effectivePaidAt,
+          contract_paid_at: finalContractPaidAt,
           status: "contract_paid",
         })
         .eq("id", attendee.id);
@@ -393,6 +402,8 @@ Deno.serve(async (req) => {
       ok: true,
       attendee_id: attendee?.id ?? null,
       applied: isPaid ? "paid" : "refunded",
+      already_paid: alreadyPaid,
+      kept_existing_contract_paid_at: keptExisting,
       match_strategy: matchStrategy,
       resolved_deal_id: resolvedDealId,
       candidates: resolved.candidates ?? null,
@@ -405,6 +416,7 @@ Deno.serve(async (req) => {
     deal_id: dealId,
     resolved_deal_id: resolvedDealId,
     attendee_id: attendee?.id ?? null,
+    already_paid: alreadyPaid,
     match_strategy: matchStrategy,
   });
 });

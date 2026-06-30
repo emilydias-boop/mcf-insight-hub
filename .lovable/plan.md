@@ -1,34 +1,24 @@
-## Diagnóstico
+## Objetivo
 
-O MCF Pay enviou o webhook com sucesso (assinatura válida — fingerprint bate). O payload é:
+Garantir que o callback `mcf-pay-callback` processe normalmente (HTTP 200) mesmo quando o attendee/deal já está marcado como `contract_paid` manualmente — sem pular etapas e sem bloquear.
 
-```json
-{
-  "event": "payment.confirmed",
-  "data": {
-    "amount": 497,
-    "status": "paid",
-    "paid_at": "2026-06-30T15:49:23...",
-    "customer_email": "andre.st@unochapeco.edu.br",
-    "transaction_id": "pay_348fwsh5ngpkxypn"
-  }
-}
-```
+## Estado atual
 
-O CRM rejeitou com **HTTP 400 `missing_deal_id_or_event`** porque a função `mcf-pay-callback` exige `data.deal_id` no payload **antes** de tentar resolver o deal por outras estratégias. Como o MCF Pay não enviou `deal_id` (a invoice foi criada manualmente lá), nunca chega ao fallback por email/telefone/nome que já implementamos.
+A função já atualiza `meeting_slot_attendees.contract_paid_at`/`status` e `crm_deals.custom_fields` independentemente do status anterior, mas há dois pontos que podem confundir/parar o fluxo quando o lead já foi pago manualmente:
 
-## Correção
+1. Em `resolveDeal`, quando há múltiplos deals do mesmo contato, o desempate prefere o attendee **sem** `contract_paid_at`. Se o único deal existente já estiver pago manualmente, ele ainda é escolhido (cai no `deals[0]`), mas em cenários com vários deals do mesmo cliente o pago manualmente pode ser ignorado.
+2. O log de sucesso não distingue se já estava pago — dificulta auditoria de "pago manualmente vs pago via MCF Pay".
 
-Em `supabase/functions/mcf-pay-callback/index.ts`:
+## Mudanças em `supabase/functions/mcf-pay-callback/index.ts`
 
-1. Remover a checagem antecipada `if (!dealId || !event)` que bloqueia tudo.
-2. Manter apenas a validação de `event` (continua obrigatório).
-3. Deixar `resolveDeal(data)` executar com qualquer combinação de campos disponíveis: `deal_id`, `transaction_id`, `customer_email`, `customer_phone`, `customer_name`. Se nada casar, ele já retorna `404 deal_not_found` com telemetria das estratégias tentadas.
-4. Ajustar o log de `deal_not_found` para incluir corretamente os campos planos (`customer_email`, etc.) que já estão sendo enviados.
-
-Redeploy da função e pedir ao usuário para reenviar o webhook pelo painel do MCF Pay. Esperado: HTTP 200, deal do André Stormoski (`andre.st@unochapeco.edu.br`) resolvido via `customer_email`, attendee marcado como `contract_paid` e `mcf_pay_transaction_id` gravado em `custom_fields` para os próximos eventos.
+1. **Desempate inverso**: quando o payload traz `transaction_id`, priorizar deal cujo attendee já está `contract_paid` (provável vínculo manual aguardando confirmação do pagamento). Caso contrário, manter a preferência pelo unpaid.
+2. **Sempre aplicar updates** (já faz) e gravar `mcf_pay_transaction_id` em `custom_fields` mesmo se já pago — ancora o vínculo para próximos eventos.
+3. **Preservar `contract_paid_at` mais antigo**: se o attendee já tem `contract_paid_at`, manter o existente (fonte de verdade da venda manual) e apenas registrar `mcf_pay_paid_at` em `custom_fields`. Não sobrescrever para frente nem para trás.
+4. **Telemetria**: incluir no log de sucesso `already_paid: true|false` e `kept_existing_contract_paid_at: true|false` para auditoria.
+5. **Resposta 200** sempre que a assinatura for válida e o deal resolvido, mesmo idempotente.
 
 ## Verificação
 
-- Consultar `mcf_pay_dispatch_logs` (`direction = 'inbound'`) após o reenvio: deve aparecer `status = success`, `match_strategy = customer_email`, `resolved_deal_id` igual ao deal do André.
-- Confirmar em `meeting_slot_attendees` que o attendee do deal foi marcado como `contract_paid` com `contract_paid_at = 2026-06-30T15:49:23...`.
+- Reenviar o webhook do André (já pago manualmente): esperar HTTP 200, `match_strategy = customer_email`, `already_paid = true`, `kept_existing_contract_paid_at = true`, e `custom_fields.mcf_pay_transaction_id = pay_348fwsh5ngpkxypn`.
+- Conferir que `contract_paid_at` do attendee não foi alterado.
+- Conferir aba "Recebidos" em `/admin/integracao-mcf-pay` mostrando o evento como sucesso.
