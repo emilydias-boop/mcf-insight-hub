@@ -127,17 +127,22 @@ async function resolveDeal(data: any): Promise<ResolveResult> {
     return { deal: deals[0], strategy: strat };
   }
 
-  // Múltiplos: preferir deal com attendee mais recente sem contract_paid_at
+  // Múltiplos: se já existir attendee marcado como contract_paid (provável
+  // vínculo manual), priorizar esse deal; caso contrário, preferir o mais
+  // recente sem contract_paid_at.
   const dealIds = deals.map((d) => d.id);
   const { data: attendees } = await supabase
     .from("meeting_slot_attendees")
     .select("deal_id, contract_paid_at, created_at")
     .in("deal_id", dealIds)
     .order("created_at", { ascending: false });
+  const paid = (attendees ?? []).find((a) => a.contract_paid_at);
   const unpaid = (attendees ?? []).find((a) => !a.contract_paid_at);
-  const picked = unpaid
-    ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
-    : deals[0];
+  const picked = paid
+    ? deals.find((d) => d.id === paid.deal_id) ?? deals[0]
+    : unpaid
+      ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
+      : deals[0];
 
   // Carregar contatos para mostrar candidatos no log
   const contactRows = new Map<string, { email: string | null; phone: string | null }>();
