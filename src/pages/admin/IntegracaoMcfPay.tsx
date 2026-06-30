@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, Send, RotateCw, ExternalLink } from "lucide-react";
 
@@ -19,6 +20,12 @@ type Log = {
   error_message: string | null;
   created_at: string;
   response: any;
+};
+
+type InboundLog = Log & {
+  event: string | null;
+  payload: any;
+  signature_preview: string | null;
 };
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -37,6 +44,7 @@ export default function IntegracaoMcfPay() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isActive, setIsActive] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [inboundLogs, setInboundLogs] = useState<InboundLog[]>([]);
 
   const loadConfig = async () => {
     const { data } = await supabase.from("mcf_pay_config").select("*").eq("id", true).maybeSingle();
@@ -50,14 +58,25 @@ export default function IntegracaoMcfPay() {
     const { data } = await supabase
       .from("mcf_pay_dispatch_logs")
       .select("id, deal_id, status, attempt, http_status, error_message, created_at, response")
+      .or("direction.eq.outbound,direction.is.null")
       .order("created_at", { ascending: false })
       .limit(20);
     setLogs((data ?? []) as Log[]);
   };
 
+  const loadInbound = async () => {
+    const { data } = await supabase
+      .from("mcf_pay_dispatch_logs")
+      .select("id, deal_id, status, attempt, http_status, error_message, created_at, response, event, payload, signature_preview")
+      .eq("direction", "inbound")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setInboundLogs((data ?? []) as InboundLog[]);
+  };
+
   useEffect(() => {
     (async () => {
-      await Promise.all([loadConfig(), loadLogs()]);
+      await Promise.all([loadConfig(), loadLogs(), loadInbound()]);
       setLoading(false);
     })();
   }, []);
@@ -142,6 +161,12 @@ export default function IntegracaoMcfPay() {
         </CardContent>
       </Card>
 
+      <Tabs defaultValue="enviados">
+        <TabsList>
+          <TabsTrigger value="enviados">Enviados (CRM → MCF Pay)</TabsTrigger>
+          <TabsTrigger value="recebidos">Recebidos (MCF Pay → CRM)</TabsTrigger>
+        </TabsList>
+        <TabsContent value="enviados">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -192,6 +217,70 @@ export default function IntegracaoMcfPay() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="recebidos">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Callbacks recebidos do MCF Pay</CardTitle>
+                <CardDescription>
+                  Eventos de pagamento que chegam em <code>/mcf-pay-callback</code>. Em caso de
+                  <code> invalid_signature</code>, compare o <strong>fingerprint do secret</strong> abaixo com o que está no MCF Pay.
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={loadInbound}>
+                <RotateCw className="mr-2 h-4 w-4" /> Atualizar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Quando</TableHead>
+                    <TableHead>Evento</TableHead>
+                    <TableHead>Deal</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>HTTP</TableHead>
+                    <TableHead>Debug</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inboundLogs.length === 0 && (
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum callback recebido</TableCell></TableRow>
+                  )}
+                  {inboundLogs.map((log) => {
+                    const debug = log.response && typeof log.response === "object" ? log.response : null;
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs">{new Date(log.created_at).toLocaleString("pt-BR")}</TableCell>
+                        <TableCell className="text-xs">{log.event ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">{log.deal_id ? log.deal_id.slice(0, 8) : "—"}</TableCell>
+                        <TableCell><Badge variant={statusVariant[log.status] ?? "outline"}>{log.status}</Badge></TableCell>
+                        <TableCell>{log.http_status ?? "—"}</TableCell>
+                        <TableCell className="text-xs font-mono space-y-0.5">
+                          {log.error_message && <div className="text-destructive">{log.error_message}</div>}
+                          {debug?.crm_secret_fingerprint && (
+                            <div>secret-fp CRM: <strong>{debug.crm_secret_fingerprint}</strong></div>
+                          )}
+                          {debug?.provided_preview && (
+                            <div>sig recebida: {debug.provided_preview}…</div>
+                          )}
+                          {debug?.expected_preview && (
+                            <div>sig esperada: {debug.expected_preview}…</div>
+                          )}
+                          {debug?.body_length != null && (
+                            <div>body: {debug.body_length}b · ct: {debug.content_type ?? "?"}</div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Card>
         <CardHeader>
