@@ -1,53 +1,34 @@
-**Diagnóstico atual**
-- HMAC do callback já valida (`200` na assinatura).
-- O MCF Pay envia `data.deal_id = 7f293b67...`, mas esse UUID não existe em `crm_deals`. Não há `mcf_pay_transaction_id` gravado em nenhum deal.
-- Resultado: `404 deal_not_found` em todas as tentativas.
+## Diagnóstico
 
-**Estratégia: usar o cliente (nome/email/telefone) como chave de reconciliação**
+O MCF Pay enviou o webhook com sucesso (assinatura válida — fingerprint bate). O payload é:
 
-Em vez de depender só do `deal_id`, vamos casar o pagamento ao lead pelos dados do cliente que o MCF Pay já conhece.
-
-1. **Outbound CRM → MCF Pay (`notify-mcf-pay`)**
-   - Continuar enviando `crm_deal_id`.
-   - Passar a enviar também `customer`: `{ name, email, phone_e164, phone_digits }` extraídos de `crm_contacts` via `crm_deals.contact_id`.
-   - Isso permite ao MCF Pay devolver os mesmos campos no callback e também ajuda a operação deles.
-
-2. **Inbound MCF Pay → CRM (`mcf-pay-callback`)**
-   Resolver o deal por esta cadeia, parando no primeiro acerto:
-   1. `data.crm_deal_id` (novo, preferencial)
-   2. `data.deal_id` direto em `crm_deals.id`
-   3. `data.metadata.crm_deal_id`
-   4. `crm_deals.custom_fields->>mcf_pay_transaction_id == data.transaction_id`
-   5. **Por cliente** (`data.customer` ou campos planos `customer_email`, `customer_phone`, `customer_name`):
-      - email: `lower(crm_contacts.email) = lower(payload.email)`
-      - telefone: comparar últimos 9 dígitos (padrão do projeto) contra `crm_contacts.phone`
-      - nome: `unaccent(lower(...))` como desempate
-      - Estratégia de escolha:
-        - se 1 deal único bater, usar.
-        - se vários, preferir deal com R2 mais recente e/ou ainda sem `contract_paid_at` em attendees.
-        - se 0 ou ambíguo, registrar `deal_not_found_ambiguous` com a lista de candidatos no log para reconciliação manual.
-
-3. **Persistir o vínculo após o primeiro casamento**
-   - Quando o deal for resolvido por cliente, gravar `mcf_pay_transaction_id` no `custom_fields` do deal — próximos eventos da mesma transação resolvem direto.
-
-4. **Telemetria/UX**
-   - Log inbound passa a registrar `match_strategy` (`deal_id` / `transaction_id` / `customer_email` / `customer_phone` / `customer_name`).
-   - Na aba "Recebidos" da tela `/admin/integracao-mcf-pay`, exibir a estratégia usada e, em caso de ambíguo, listar os deals candidatos com botão "Vincular este deal".
-
-5. **Reaplicar pagamento ao vincular manualmente**
-   - Ao escolher um deal candidato, reexecutar a lógica de marcação (`contract_paid_at`, `status = contract_paid` no attendee, atualização de `custom_fields`).
-
-6. **Validar**
-   - Reenviar o webhook do MCF Pay com o cliente real → deve retornar `200` e marcar pago em agendas/relatórios.
-   - Confirmar que o `mcf_pay_transaction_id` ficou salvo no deal para reenvios futuros.
-
-**O que preciso do MCF Pay (mensagem pronta)**
-Pedir para incluírem no payload `payment.confirmed`:
-```
-"customer": {
-  "name": "...",
-  "email": "...",
-  "phone": "+55119..."
+```json
+{
+  "event": "payment.confirmed",
+  "data": {
+    "amount": 497,
+    "status": "paid",
+    "paid_at": "2026-06-30T15:49:23...",
+    "customer_email": "andre.st@unochapeco.edu.br",
+    "transaction_id": "pay_348fwsh5ngpkxypn"
+  }
 }
 ```
-Mesmo sem isso, se a invoice no MCF Pay tiver email/telefone do cliente, qualquer um dos três já é suficiente para o casamento.
+
+O CRM rejeitou com **HTTP 400 `missing_deal_id_or_event`** porque a função `mcf-pay-callback` exige `data.deal_id` no payload **antes** de tentar resolver o deal por outras estratégias. Como o MCF Pay não enviou `deal_id` (a invoice foi criada manualmente lá), nunca chega ao fallback por email/telefone/nome que já implementamos.
+
+## Correção
+
+Em `supabase/functions/mcf-pay-callback/index.ts`:
+
+1. Remover a checagem antecipada `if (!dealId || !event)` que bloqueia tudo.
+2. Manter apenas a validação de `event` (continua obrigatório).
+3. Deixar `resolveDeal(data)` executar com qualquer combinação de campos disponíveis: `deal_id`, `transaction_id`, `customer_email`, `customer_phone`, `customer_name`. Se nada casar, ele já retorna `404 deal_not_found` com telemetria das estratégias tentadas.
+4. Ajustar o log de `deal_not_found` para incluir corretamente os campos planos (`customer_email`, etc.) que já estão sendo enviados.
+
+Redeploy da função e pedir ao usuário para reenviar o webhook pelo painel do MCF Pay. Esperado: HTTP 200, deal do André Stormoski (`andre.st@unochapeco.edu.br`) resolvido via `customer_email`, attendee marcado como `contract_paid` e `mcf_pay_transaction_id` gravado em `custom_fields` para os próximos eventos.
+
+## Verificação
+
+- Consultar `mcf_pay_dispatch_logs` (`direction = 'inbound'`) após o reenvio: deve aparecer `status = success`, `match_strategy = customer_email`, `resolved_deal_id` igual ao deal do André.
+- Confirmar em `meeting_slot_attendees` que o attendee do deal foi marcado como `contract_paid` com `contract_paid_at = 2026-06-30T15:49:23...`.

@@ -279,18 +279,18 @@ Deno.serve(async (req) => {
   const amount: number | null = typeof data?.amount === "number" ? data.amount : null;
   const transactionId: string | null = data?.transaction_id ?? null;
 
-  if (!dealId || !event) {
+  if (!event) {
     await log({
       deal_id: dealId,
-      event: event || "callback",
+      event: "callback",
       status: "failed",
       http_status: 400,
       payload: body,
       response: null,
-      error_message: "missing_deal_id_or_event",
+      error_message: "missing_event",
       signature_preview: expected.slice(0, 16),
     });
-    return json({ ok: false, error: "missing_deal_id_or_event" }, 400);
+    return json({ ok: false, error: "missing_event" }, 400);
   }
 
   // Resolver deal por múltiplas estratégias (id, transaction_id, cliente)
