@@ -1,20 +1,22 @@
-## Caminho 2 — Cadastro via tela
+## Disparar webhook MCF Pay para o deal do André Stormoski
 
-Você vai cadastrar os códigos MCF Pay na tela `/admin/gerenciamento-usuarios`, no card "Códigos MCF Pay", para cada usuário envolvido na venda do André Stormoski:
+Códigos validados em `profiles`:
+- Millena Mikelly (SDR): `S003` ✅
+- William Ferreira (Closer R1): `A003` ✅
+- Jessica Martins (Closer R2): não cadastrado — fallback aceito pelo usuário
 
-1. **Millena Mikelly** (SDR) → preencher `mcf_pay_sdr_code`
-2. **Jessica Martins** (Closer R2) → preencher `mcf_pay_closer_code`
-3. **William Ferreira** (Closer R1) → opcional, `mcf_pay_closer_code`
+### Execução
 
-### Após o cadastro
+1. Invocar `notify-mcf-pay` via `supabase--curl_edge_functions` com `{ "deal_id": "16e243e9-...", "force": true }` para o deal do André Stormoski (forçar reenvio mesmo já estando em "Contrato Pago").
+2. A função vai resolver os códigos via `resolveCodesForDeal`:
+   - `closer_code` = `A003` (fallback R1 = William, pois R2/Jessica não tem código)
+   - `sdr_code` = `S003` (Millena)
+   - `customer` = dados do André (name/email/phone) via `contact_id`
+3. Conferir em `mcf_pay_dispatch_logs` o último registro: `payload` enviado, `http_status`, `response.ok`, `signature_preview`.
+4. Reportar resultado: payload exato + resposta do MCF Pay.
 
-Me avise aqui no chat ("códigos cadastrados") e eu vou:
+### Observação para você
 
-1. Validar via `read_query` se os campos `mcf_pay_sdr_code` / `mcf_pay_closer_code` estão preenchidos nos 3 profiles.
-2. Disparar manualmente a Edge Function `notify-mcf-pay` para o deal `16e243e9...` (André Stormoski), forçando o envio mesmo já estando em "Contrato Pago".
-3. Conferir em `mcf_pay_dispatch_logs` se o POST saiu com `closer_code` + `sdr_code` no payload e retornou HTTP 200 do MCF Pay.
-4. Reportar o resultado (payload enviado + resposta) para você confirmar no MCF Pay que a comissão foi atribuída.
+Webhook vai com `closer_code=A003` (William). Quando a Jessica cadastrar o código dela em `/usuarios`, é só me pedir que eu redisparo — o callback já é idempotente e preserva `contract_paid_at` (implementado nas turnos anteriores), então o reenvio só atualizará a atribuição de comissão no MCF Pay sem mexer no CRM.
 
-### Observação
-
-Não é necessária nenhuma alteração de código nesta etapa — a infra de envio de `closer_code`/`sdr_code` no payload já foi implementada anteriormente. É só popular os campos e redisparar.
+Nenhuma alteração de código nesta etapa.
