@@ -1,34 +1,53 @@
-## Diagnóstico
+**Diagnóstico atual**
+- HMAC do callback já valida (`200` na assinatura).
+- O MCF Pay envia `data.deal_id = 7f293b67...`, mas esse UUID não existe em `crm_deals`. Não há `mcf_pay_transaction_id` gravado em nenhum deal.
+- Resultado: `404 deal_not_found` em todas as tentativas.
 
-✅ Assinatura HMAC agora valida (segredos sincronizados, fingerprint `38fe8923` dos dois lados).
+**Estratégia: usar o cliente (nome/email/telefone) como chave de reconciliação**
 
-❌ Novo erro: `deal_not_found`. O `deal_id` recebido (`7f293b67-e941-4f07-ab65-c41a921c67c2`) é o `invoice.id` do MCF Pay, não o UUID do deal no CRM. Confirmei via `SELECT` em `crm_deals` — esse UUID não existe lá.
+Em vez de depender só do `deal_id`, vamos casar o pagamento ao lead pelos dados do cliente que o MCF Pay já conhece.
 
-## Causa
+1. **Outbound CRM → MCF Pay (`notify-mcf-pay`)**
+   - Continuar enviando `crm_deal_id`.
+   - Passar a enviar também `customer`: `{ name, email, phone_e164, phone_digits }` extraídos de `crm_contacts` via `crm_deals.contact_id`.
+   - Isso permite ao MCF Pay devolver os mesmos campos no callback e também ajuda a operação deles.
 
-No envio outbound do CRM (`notify-mcf-pay`), mandamos o `crm_deals.id` como referência. O MCF Pay deveria persistir esse valor junto da invoice e devolver no callback de pagamento. Em vez disso, está devolvendo o próprio `invoice.id`.
+2. **Inbound MCF Pay → CRM (`mcf-pay-callback`)**
+   Resolver o deal por esta cadeia, parando no primeiro acerto:
+   1. `data.crm_deal_id` (novo, preferencial)
+   2. `data.deal_id` direto em `crm_deals.id`
+   3. `data.metadata.crm_deal_id`
+   4. `crm_deals.custom_fields->>mcf_pay_transaction_id == data.transaction_id`
+   5. **Por cliente** (`data.customer` ou campos planos `customer_email`, `customer_phone`, `customer_name`):
+      - email: `lower(crm_contacts.email) = lower(payload.email)`
+      - telefone: comparar últimos 9 dígitos (padrão do projeto) contra `crm_contacts.phone`
+      - nome: `unaccent(lower(...))` como desempate
+      - Estratégia de escolha:
+        - se 1 deal único bater, usar.
+        - se vários, preferir deal com R2 mais recente e/ou ainda sem `contract_paid_at` em attendees.
+        - se 0 ou ambíguo, registrar `deal_not_found_ambiguous` com a lista de candidatos no log para reconciliação manual.
 
-## Plano
+3. **Persistir o vínculo após o primeiro casamento**
+   - Quando o deal for resolvido por cliente, gravar `mcf_pay_transaction_id` no `custom_fields` do deal — próximos eventos da mesma transação resolvem direto.
 
-**Lado MCF Pay (correção principal — você precisa pedir lá):**
+4. **Telemetria/UX**
+   - Log inbound passa a registrar `match_strategy` (`deal_id` / `transaction_id` / `customer_email` / `customer_phone` / `customer_name`).
+   - Na aba "Recebidos" da tela `/admin/integracao-mcf-pay`, exibir a estratégia usada e, em caso de ambíguo, listar os deals candidatos com botão "Vincular este deal".
 
-Cole esta mensagem no chat do projeto MCF Pay no Lovable:
+5. **Reaplicar pagamento ao vincular manualmente**
+   - Ao escolher um deal candidato, reexecutar a lógica de marcação (`contract_paid_at`, `status = contract_paid` no attendee, atualização de `custom_fields`).
 
-> No callback `payment.confirmed` enviado pro CRM, o campo `data.deal_id` está vindo com o `invoice.id` do MCF Pay (ex.: `7f293b67-...`), mas tem que ser o **UUID do deal no CRM** que veio no webhook outbound do CRM (campo `deal_id` do payload `deal.won`).
->
-> Ajuste:
-> 1. Quando o CRM envia o webhook `deal.won`, persista o `deal_id` recebido na invoice/transação correspondente (coluna `crm_deal_id` ou metadata).
-> 2. No callback `payment.confirmed` pro CRM, mande esse `crm_deal_id` salvo no campo `data.deal_id` — não o `invoice.id`.
-> 3. Reenvie o webhook da invoice `7f293b67-e941-4f07-ab65-c41a921c67c2` (e das outras 2 pendentes) com o `deal_id` correto.
+6. **Validar**
+   - Reenviar o webhook do MCF Pay com o cliente real → deve retornar `200` e marcar pago em agendas/relatórios.
+   - Confirmar que o `mcf_pay_transaction_id` ficou salvo no deal para reenvios futuros.
 
-**Lado CRM (defesa em profundidade — opcional, eu faço se aprovar):**
-
-Como fallback, adicionar lookup secundário em `mcf-pay-callback`: se `deal_id` não existir em `crm_deals`, tentar localizar por `data.transaction_id` em `crm_deals.custom_fields.mcf_pay_transaction_id` (campo que já populamos no callback bem-sucedido). Não resolve o caso atual (transaction_id `pay_348fwsh5ngpkxypn` ainda não está em nenhum deal porque o primeiro callback nunca completou), mas previne race conditions futuras.
-
-**Investigação extra:**
-
-Verificar nos logs do `notify-mcf-pay` qual `deal_id` foi enviado pro MCF Pay quando o deal `7f293b67` foi marcado como ganho — assim você tem o UUID correto pra dar pro MCF Pay reconciliar manualmente as 3 invoices pendentes.
-
-## Próximo passo
-
-Aprova eu (a) buscar nos logs de outbound o `deal_id` correto que foi enviado pra essa transação, e (b) adicionar o fallback por `transaction_id` no callback?
+**O que preciso do MCF Pay (mensagem pronta)**
+Pedir para incluírem no payload `payment.confirmed`:
+```
+"customer": {
+  "name": "...",
+  "email": "...",
+  "phone": "+55119..."
+}
+```
+Mesmo sem isso, se a invoice no MCF Pay tiver email/telefone do cliente, qualquer um dos três já é suficiente para o casamento.
