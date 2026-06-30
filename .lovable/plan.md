@@ -1,20 +1,11 @@
-## Adicionar `purchase_ref.transaction_id` ao payload do `notify-mcf-pay`
+## Redisparar webhook do André para o MCF Pay
 
-### Mudança em `supabase/functions/notify-mcf-pay/index.ts`
-
-1. Em `resolveCodesForDeal`, ler também `custom_fields.mcf_pay_transaction_id` do deal (já vem no `select` atual via `custom_fields`).
-2. Retornar `transaction_id` junto com `closer_code`, `sdr_code`, `customer`.
-3. No bloco que monta o `payload` (caminho não-test), preencher:
-   ```ts
-   purchase_ref: codes.transaction_id ? { transaction_id: codes.transaction_id } : {}
-   ```
-   Mantém o objeto vazio quando não há transação vinculada (comportamento atual).
+Você já ajustou o MCF Pay para casar pelo `customer.email/phone/name`. Vou reenviar o disparo e validar.
 
 ### Execução
 
-1. Editar o arquivo acima (deploy automático).
-2. Redisparar via `supabase--curl_edge_functions` POST `/notify-mcf-pay` com `{ deal_id: "16e243e9-31e6-4c11-b29b-8447a46d0e8a", force: true }`.
-3. Conferir em `mcf_pay_dispatch_logs` o novo registro: esperar `response.ok=true` agora que o MCF Pay consegue casar pela `transaction_id` `pay_348fwsh5ngpkxypn`.
-4. Reportar resultado.
+1. POST `/notify-mcf-pay` via `supabase--curl_edge_functions` com `{ deal_id: "16e243e9-31e6-4c11-b29b-8447a46d0e8a", force: true }`.
+2. Ler o último registro de `mcf_pay_dispatch_logs` para esse deal: esperar `status=success`, `http_status=200`, `response.ok=true` e idealmente um `response.matched_by` indicando qual chave casou.
+3. Reportar payload enviado + resposta. Se ainda vier `purchase_not_found_yet` ou outro erro, abro um diagnóstico (provavelmente algo no normalizador do MCF Pay).
 
-Sem mudanças de schema, sem migrações.
+Sem alteração de código.
