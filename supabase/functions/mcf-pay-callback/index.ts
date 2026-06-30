@@ -12,6 +12,155 @@ const SECRET = Deno.env.get("MCF_PAY_CALLBACK_SECRET") ?? "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+function normalizePhone(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const digits = String(input).replace(/\D+/g, "");
+  if (digits.length < 8) return null;
+  return digits.slice(-9);
+}
+
+function normalizeName(input: string | null | undefined): string | null {
+  if (!input) return null;
+  return String(input)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
+
+type ResolveResult = {
+  deal: any | null;
+  strategy: string;
+  candidates?: Array<{ id: string; name: string | null; contact_email: string | null; contact_phone: string | null }>;
+};
+
+async function resolveDeal(data: any): Promise<ResolveResult> {
+  const tryById = async (id: string | null | undefined, strategy: string) => {
+    if (!id || typeof id !== "string") return null;
+    const { data: d } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields, contact_id")
+      .eq("id", id)
+      .maybeSingle();
+    return d ? { deal: d, strategy } : null;
+  };
+
+  // 1. crm_deal_id explícito
+  let r = await tryById(data?.crm_deal_id, "crm_deal_id");
+  if (r) return r;
+  // 2. data.deal_id direto
+  r = await tryById(data?.deal_id, "deal_id");
+  if (r) return r;
+  // 3. metadata.crm_deal_id
+  r = await tryById(data?.metadata?.crm_deal_id, "metadata.crm_deal_id");
+  if (r) return r;
+
+  // 4. transaction_id em custom_fields
+  const txId: string | null = data?.transaction_id ?? null;
+  if (txId) {
+    const { data: byTx } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields, contact_id")
+      .eq("custom_fields->>mcf_pay_transaction_id", txId)
+      .maybeSingle();
+    if (byTx) return { deal: byTx, strategy: "transaction_id" };
+  }
+
+  // 5. Cliente: email / telefone / nome
+  const customer = data?.customer ?? {};
+  const email = (customer.email ?? data?.customer_email ?? null)?.toString().toLowerCase().trim() || null;
+  const phoneRaw = customer.phone ?? data?.customer_phone ?? null;
+  const nameRaw = customer.name ?? data?.customer_name ?? null;
+  const phone9 = normalizePhone(phoneRaw);
+  const nameNorm = normalizeName(nameRaw);
+
+  const contactIds = new Set<string>();
+
+  if (email) {
+    const { data: byEmail } = await supabase
+      .from("crm_contacts")
+      .select("id")
+      .ilike("email", email)
+      .limit(50);
+    for (const c of byEmail ?? []) contactIds.add(c.id);
+  }
+  if (phone9) {
+    const { data: byPhone } = await supabase
+      .from("crm_contacts")
+      .select("id, phone")
+      .ilike("phone", `%${phone9}%`)
+      .limit(200);
+    for (const c of byPhone ?? []) {
+      if (normalizePhone(c.phone) === phone9) contactIds.add(c.id);
+    }
+  }
+  if (contactIds.size === 0 && nameNorm && nameNorm.length >= 5) {
+    const { data: byName } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .ilike("name", `%${nameRaw}%`)
+      .limit(50);
+    for (const c of byName ?? []) {
+      if (normalizeName(c.name) === nameNorm) contactIds.add(c.id);
+    }
+  }
+
+  if (contactIds.size === 0) {
+    return { deal: null, strategy: "no_match" };
+  }
+
+  const { data: deals } = await supabase
+    .from("crm_deals")
+    .select("id, custom_fields, contact_id, updated_at, created_at")
+    .in("contact_id", Array.from(contactIds))
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (!deals || deals.length === 0) {
+    return { deal: null, strategy: "contact_no_deal" };
+  }
+
+  if (deals.length === 1) {
+    const strat = email ? "customer_email" : phone9 ? "customer_phone" : "customer_name";
+    return { deal: deals[0], strategy: strat };
+  }
+
+  // Múltiplos: preferir deal com attendee mais recente sem contract_paid_at
+  const dealIds = deals.map((d) => d.id);
+  const { data: attendees } = await supabase
+    .from("meeting_slot_attendees")
+    .select("deal_id, contract_paid_at, created_at")
+    .in("deal_id", dealIds)
+    .order("created_at", { ascending: false });
+  const unpaid = (attendees ?? []).find((a) => !a.contract_paid_at);
+  const picked = unpaid
+    ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
+    : deals[0];
+
+  // Carregar contatos para mostrar candidatos no log
+  const contactRows = new Map<string, { email: string | null; phone: string | null }>();
+  if (contactIds.size > 0) {
+    const { data: cs } = await supabase
+      .from("crm_contacts")
+      .select("id, email, phone")
+      .in("id", Array.from(contactIds));
+    for (const c of cs ?? []) contactRows.set(c.id, { email: c.email, phone: c.phone });
+  }
+
+  return {
+    deal: picked,
+    strategy: (email ? "customer_email" : phone9 ? "customer_phone" : "customer_name") + "_ambiguous_resolved",
+    candidates: deals.map((d: any) => ({
+      id: d.id,
+      name: null,
+      contact_email: contactRows.get(d.contact_id)?.email ?? null,
+      contact_phone: contactRows.get(d.contact_id)?.phone ?? null,
+    })),
+  };
+}
+
 async function hmacHex(body: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
