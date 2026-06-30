@@ -36,7 +36,7 @@ async function getConfig() {
 async function resolveCodesForDeal(dealId: string) {
   const { data: deal } = await supabase
     .from("crm_deals")
-    .select("id, custom_fields, owner_profile_id, original_sdr_email, r1_closer_email, r2_closer_email")
+    .select("id, custom_fields, owner_profile_id, original_sdr_email, r1_closer_email, r2_closer_email, contact_id")
     .eq("id", dealId)
     .maybeSingle();
   if (!deal) return null;
@@ -80,7 +80,18 @@ async function resolveCodesForDeal(dealId: string) {
     sdr_code = profilesByEmail.get(deal.original_sdr_email.toLowerCase())?.mcf_pay_sdr_code || null;
   }
 
-  return { closer_code, sdr_code };
+  // Carregar dados do cliente
+  let customer: { name: string | null; email: string | null; phone: string | null } | null = null;
+  if (deal.contact_id) {
+    const { data: c } = await supabase
+      .from("crm_contacts")
+      .select("name, email, phone")
+      .eq("id", deal.contact_id)
+      .maybeSingle();
+    if (c) customer = { name: c.name ?? null, email: c.email ?? null, phone: c.phone ?? null };
+  }
+
+  return { closer_code, sdr_code, customer };
 }
 
 async function dispatch(dealId: string | null, opts: { test?: boolean; previousAttempt?: number; logId?: string } = {}) {
@@ -129,8 +140,11 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
     payload = {
       event: "deal.paid",
       crm_deal_id: dealId,
+      deal_id: dealId,
       closer_code: codes.closer_code ?? undefined,
       sdr_code: codes.sdr_code ?? undefined,
+      customer: codes.customer ?? undefined,
+      metadata: { crm_deal_id: dealId },
       purchase_ref: {},
     };
   }
