@@ -145,11 +145,37 @@ Deno.serve(async (req) => {
   }
 
   // Buscar deal
-  const { data: deal } = await supabase
+  let { data: deal } = await supabase
     .from("crm_deals")
     .select("id, custom_fields")
     .eq("id", dealId)
     .maybeSingle();
+
+  // Fallback 1: dealId pode ser o transaction_id (MCF Pay enviou invoice.id como deal_id)
+  let resolvedDealId = dealId;
+  if (!deal && transactionId) {
+    const { data: byTx } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields")
+      .eq("custom_fields->>mcf_pay_transaction_id", transactionId)
+      .maybeSingle();
+    if (byTx) {
+      deal = byTx;
+      resolvedDealId = byTx.id;
+    }
+  }
+  // Fallback 2: tentar usar o próprio dealId como transaction_id em custom_fields
+  if (!deal) {
+    const { data: byInvoice } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields")
+      .eq("custom_fields->>mcf_pay_transaction_id", dealId)
+      .maybeSingle();
+    if (byInvoice) {
+      deal = byInvoice;
+      resolvedDealId = byInvoice.id;
+    }
+  }
 
   if (!deal) {
     await log({
@@ -186,7 +212,7 @@ Deno.serve(async (req) => {
   const { data: attendees } = await supabase
     .from("meeting_slot_attendees")
     .select("id, contract_paid_at, status, meeting_slot_id")
-    .eq("deal_id", dealId)
+    .eq("deal_id", resolvedDealId)
     .order("created_at", { ascending: false })
     .limit(1);
   const attendee = attendees?.[0] ?? null;
@@ -203,7 +229,7 @@ Deno.serve(async (req) => {
     mcf_pay_transaction_id: transactionId ?? currentCustom.mcf_pay_transaction_id ?? null,
     mcf_pay_last_event_at: new Date().toISOString(),
   };
-  await supabase.from("crm_deals").update({ custom_fields: newCustom as never }).eq("id", dealId);
+  await supabase.from("crm_deals").update({ custom_fields: newCustom as never }).eq("id", resolvedDealId);
 
   if (attendee) {
     if (isPaid) {
