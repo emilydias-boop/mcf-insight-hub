@@ -293,38 +293,11 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "missing_deal_id_or_event" }, 400);
   }
 
-  // Buscar deal
-  let { data: deal } = await supabase
-    .from("crm_deals")
-    .select("id, custom_fields")
-    .eq("id", dealId)
-    .maybeSingle();
-
-  // Fallback 1: dealId pode ser o transaction_id (MCF Pay enviou invoice.id como deal_id)
-  let resolvedDealId = dealId;
-  if (!deal && transactionId) {
-    const { data: byTx } = await supabase
-      .from("crm_deals")
-      .select("id, custom_fields")
-      .eq("custom_fields->>mcf_pay_transaction_id", transactionId)
-      .maybeSingle();
-    if (byTx) {
-      deal = byTx;
-      resolvedDealId = byTx.id;
-    }
-  }
-  // Fallback 2: tentar usar o próprio dealId como transaction_id em custom_fields
-  if (!deal) {
-    const { data: byInvoice } = await supabase
-      .from("crm_deals")
-      .select("id, custom_fields")
-      .eq("custom_fields->>mcf_pay_transaction_id", dealId)
-      .maybeSingle();
-    if (byInvoice) {
-      deal = byInvoice;
-      resolvedDealId = byInvoice.id;
-    }
-  }
+  // Resolver deal por múltiplas estratégias (id, transaction_id, cliente)
+  const resolved = await resolveDeal(data);
+  let deal: any = resolved.deal;
+  let matchStrategy = resolved.strategy;
+  let resolvedDealId = deal?.id ?? dealId;
 
   if (!deal) {
     await log({
@@ -333,11 +306,21 @@ Deno.serve(async (req) => {
       status: "failed",
       http_status: 404,
       payload: body,
-      response: null,
+      response: {
+        match_strategy: matchStrategy,
+        tried: {
+          crm_deal_id: data?.crm_deal_id ?? null,
+          deal_id: data?.deal_id ?? null,
+          transaction_id: transactionId,
+          customer_email: data?.customer?.email ?? data?.customer_email ?? null,
+          customer_phone: data?.customer?.phone ?? data?.customer_phone ?? null,
+          customer_name: data?.customer?.name ?? data?.customer_name ?? null,
+        },
+      },
       error_message: "deal_not_found",
       signature_preview: expected.slice(0, 16),
     });
-    return json({ ok: false, error: "deal_not_found" }, 404);
+    return json({ ok: false, error: "deal_not_found", match_strategy: matchStrategy }, 404);
   }
 
   const isPaid = event === "payment.confirmed" || status === "paid";
