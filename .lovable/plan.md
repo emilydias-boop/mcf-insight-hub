@@ -1,22 +1,20 @@
-## Disparar webhook MCF Pay para o deal do André Stormoski
+## Adicionar `purchase_ref.transaction_id` ao payload do `notify-mcf-pay`
 
-Códigos validados em `profiles`:
-- Millena Mikelly (SDR): `S003` ✅
-- William Ferreira (Closer R1): `A003` ✅
-- Jessica Martins (Closer R2): não cadastrado — fallback aceito pelo usuário
+### Mudança em `supabase/functions/notify-mcf-pay/index.ts`
+
+1. Em `resolveCodesForDeal`, ler também `custom_fields.mcf_pay_transaction_id` do deal (já vem no `select` atual via `custom_fields`).
+2. Retornar `transaction_id` junto com `closer_code`, `sdr_code`, `customer`.
+3. No bloco que monta o `payload` (caminho não-test), preencher:
+   ```ts
+   purchase_ref: codes.transaction_id ? { transaction_id: codes.transaction_id } : {}
+   ```
+   Mantém o objeto vazio quando não há transação vinculada (comportamento atual).
 
 ### Execução
 
-1. Invocar `notify-mcf-pay` via `supabase--curl_edge_functions` com `{ "deal_id": "16e243e9-...", "force": true }` para o deal do André Stormoski (forçar reenvio mesmo já estando em "Contrato Pago").
-2. A função vai resolver os códigos via `resolveCodesForDeal`:
-   - `closer_code` = `A003` (fallback R1 = William, pois R2/Jessica não tem código)
-   - `sdr_code` = `S003` (Millena)
-   - `customer` = dados do André (name/email/phone) via `contact_id`
-3. Conferir em `mcf_pay_dispatch_logs` o último registro: `payload` enviado, `http_status`, `response.ok`, `signature_preview`.
-4. Reportar resultado: payload exato + resposta do MCF Pay.
+1. Editar o arquivo acima (deploy automático).
+2. Redisparar via `supabase--curl_edge_functions` POST `/notify-mcf-pay` com `{ deal_id: "16e243e9-31e6-4c11-b29b-8447a46d0e8a", force: true }`.
+3. Conferir em `mcf_pay_dispatch_logs` o novo registro: esperar `response.ok=true` agora que o MCF Pay consegue casar pela `transaction_id` `pay_348fwsh5ngpkxypn`.
+4. Reportar resultado.
 
-### Observação para você
-
-Webhook vai com `closer_code=A003` (William). Quando a Jessica cadastrar o código dela em `/usuarios`, é só me pedir que eu redisparo — o callback já é idempotente e preserva `contract_paid_at` (implementado nas turnos anteriores), então o reenvio só atualizará a atribuição de comissão no MCF Pay sem mexer no CRM.
-
-Nenhuma alteração de código nesta etapa.
+Sem mudanças de schema, sem migrações.
