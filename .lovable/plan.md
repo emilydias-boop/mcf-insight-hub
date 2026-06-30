@@ -1,24 +1,20 @@
-## Objetivo
+## Caminho 2 — Cadastro via tela
 
-Garantir que o callback `mcf-pay-callback` processe normalmente (HTTP 200) mesmo quando o attendee/deal já está marcado como `contract_paid` manualmente — sem pular etapas e sem bloquear.
+Você vai cadastrar os códigos MCF Pay na tela `/admin/gerenciamento-usuarios`, no card "Códigos MCF Pay", para cada usuário envolvido na venda do André Stormoski:
 
-## Estado atual
+1. **Millena Mikelly** (SDR) → preencher `mcf_pay_sdr_code`
+2. **Jessica Martins** (Closer R2) → preencher `mcf_pay_closer_code`
+3. **William Ferreira** (Closer R1) → opcional, `mcf_pay_closer_code`
 
-A função já atualiza `meeting_slot_attendees.contract_paid_at`/`status` e `crm_deals.custom_fields` independentemente do status anterior, mas há dois pontos que podem confundir/parar o fluxo quando o lead já foi pago manualmente:
+### Após o cadastro
 
-1. Em `resolveDeal`, quando há múltiplos deals do mesmo contato, o desempate prefere o attendee **sem** `contract_paid_at`. Se o único deal existente já estiver pago manualmente, ele ainda é escolhido (cai no `deals[0]`), mas em cenários com vários deals do mesmo cliente o pago manualmente pode ser ignorado.
-2. O log de sucesso não distingue se já estava pago — dificulta auditoria de "pago manualmente vs pago via MCF Pay".
+Me avise aqui no chat ("códigos cadastrados") e eu vou:
 
-## Mudanças em `supabase/functions/mcf-pay-callback/index.ts`
+1. Validar via `read_query` se os campos `mcf_pay_sdr_code` / `mcf_pay_closer_code` estão preenchidos nos 3 profiles.
+2. Disparar manualmente a Edge Function `notify-mcf-pay` para o deal `16e243e9...` (André Stormoski), forçando o envio mesmo já estando em "Contrato Pago".
+3. Conferir em `mcf_pay_dispatch_logs` se o POST saiu com `closer_code` + `sdr_code` no payload e retornou HTTP 200 do MCF Pay.
+4. Reportar o resultado (payload enviado + resposta) para você confirmar no MCF Pay que a comissão foi atribuída.
 
-1. **Desempate inverso**: quando o payload traz `transaction_id`, priorizar deal cujo attendee já está `contract_paid` (provável vínculo manual aguardando confirmação do pagamento). Caso contrário, manter a preferência pelo unpaid.
-2. **Sempre aplicar updates** (já faz) e gravar `mcf_pay_transaction_id` em `custom_fields` mesmo se já pago — ancora o vínculo para próximos eventos.
-3. **Preservar `contract_paid_at` mais antigo**: se o attendee já tem `contract_paid_at`, manter o existente (fonte de verdade da venda manual) e apenas registrar `mcf_pay_paid_at` em `custom_fields`. Não sobrescrever para frente nem para trás.
-4. **Telemetria**: incluir no log de sucesso `already_paid: true|false` e `kept_existing_contract_paid_at: true|false` para auditoria.
-5. **Resposta 200** sempre que a assinatura for válida e o deal resolvido, mesmo idempotente.
+### Observação
 
-## Verificação
-
-- Reenviar o webhook do André (já pago manualmente): esperar HTTP 200, `match_strategy = customer_email`, `already_paid = true`, `kept_existing_contract_paid_at = true`, e `custom_fields.mcf_pay_transaction_id = pay_348fwsh5ngpkxypn`.
-- Conferir que `contract_paid_at` do attendee não foi alterado.
-- Conferir aba "Recebidos" em `/admin/integracao-mcf-pay` mostrando o evento como sucesso.
+Não é necessária nenhuma alteração de código nesta etapa — a infra de envio de `closer_code`/`sdr_code` no payload já foi implementada anteriormente. É só popular os campos e redisparar.
