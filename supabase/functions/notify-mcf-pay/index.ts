@@ -44,6 +44,7 @@ async function resolveCodesForDeal(dealId: string) {
   const custom = (deal.custom_fields as Record<string, unknown>) ?? {};
   let closer_code = (custom.mcf_pay_closer_code as string) || null;
   let sdr_code = (custom.mcf_pay_sdr_code as string) || null;
+  const transaction_id = (custom.mcf_pay_transaction_id as string) || null;
 
   const emails = new Set<string>();
   if (deal.r2_closer_email) emails.add(deal.r2_closer_email.toLowerCase());
@@ -91,7 +92,7 @@ async function resolveCodesForDeal(dealId: string) {
     if (c) customer = { name: c.name ?? null, email: c.email ?? null, phone: c.phone ?? null };
   }
 
-  return { closer_code, sdr_code, customer };
+  return { closer_code, sdr_code, customer, transaction_id };
 }
 
 async function dispatch(dealId: string | null, opts: { test?: boolean; previousAttempt?: number; logId?: string } = {}) {
@@ -145,7 +146,7 @@ async function dispatch(dealId: string | null, opts: { test?: boolean; previousA
       sdr_code: codes.sdr_code ?? undefined,
       customer: codes.customer ?? undefined,
       metadata: { crm_deal_id: dealId },
-      purchase_ref: {},
+      purchase_ref: codes.transaction_id ? { transaction_id: codes.transaction_id } : {},
     };
   }
 
