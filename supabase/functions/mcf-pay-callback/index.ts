@@ -12,6 +12,155 @@ const SECRET = Deno.env.get("MCF_PAY_CALLBACK_SECRET") ?? "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+function normalizePhone(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const digits = String(input).replace(/\D+/g, "");
+  if (digits.length < 8) return null;
+  return digits.slice(-9);
+}
+
+function normalizeName(input: string | null | undefined): string | null {
+  if (!input) return null;
+  return String(input)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
+
+type ResolveResult = {
+  deal: any | null;
+  strategy: string;
+  candidates?: Array<{ id: string; name: string | null; contact_email: string | null; contact_phone: string | null }>;
+};
+
+async function resolveDeal(data: any): Promise<ResolveResult> {
+  const tryById = async (id: string | null | undefined, strategy: string) => {
+    if (!id || typeof id !== "string") return null;
+    const { data: d } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields, contact_id")
+      .eq("id", id)
+      .maybeSingle();
+    return d ? { deal: d, strategy } : null;
+  };
+
+  // 1. crm_deal_id explícito
+  let r = await tryById(data?.crm_deal_id, "crm_deal_id");
+  if (r) return r;
+  // 2. data.deal_id direto
+  r = await tryById(data?.deal_id, "deal_id");
+  if (r) return r;
+  // 3. metadata.crm_deal_id
+  r = await tryById(data?.metadata?.crm_deal_id, "metadata.crm_deal_id");
+  if (r) return r;
+
+  // 4. transaction_id em custom_fields
+  const txId: string | null = data?.transaction_id ?? null;
+  if (txId) {
+    const { data: byTx } = await supabase
+      .from("crm_deals")
+      .select("id, custom_fields, contact_id")
+      .eq("custom_fields->>mcf_pay_transaction_id", txId)
+      .maybeSingle();
+    if (byTx) return { deal: byTx, strategy: "transaction_id" };
+  }
+
+  // 5. Cliente: email / telefone / nome
+  const customer = data?.customer ?? {};
+  const email = (customer.email ?? data?.customer_email ?? null)?.toString().toLowerCase().trim() || null;
+  const phoneRaw = customer.phone ?? data?.customer_phone ?? null;
+  const nameRaw = customer.name ?? data?.customer_name ?? null;
+  const phone9 = normalizePhone(phoneRaw);
+  const nameNorm = normalizeName(nameRaw);
+
+  const contactIds = new Set<string>();
+
+  if (email) {
+    const { data: byEmail } = await supabase
+      .from("crm_contacts")
+      .select("id")
+      .ilike("email", email)
+      .limit(50);
+    for (const c of byEmail ?? []) contactIds.add(c.id);
+  }
+  if (phone9) {
+    const { data: byPhone } = await supabase
+      .from("crm_contacts")
+      .select("id, phone")
+      .ilike("phone", `%${phone9}%`)
+      .limit(200);
+    for (const c of byPhone ?? []) {
+      if (normalizePhone(c.phone) === phone9) contactIds.add(c.id);
+    }
+  }
+  if (contactIds.size === 0 && nameNorm && nameNorm.length >= 5) {
+    const { data: byName } = await supabase
+      .from("crm_contacts")
+      .select("id, name")
+      .ilike("name", `%${nameRaw}%`)
+      .limit(50);
+    for (const c of byName ?? []) {
+      if (normalizeName(c.name) === nameNorm) contactIds.add(c.id);
+    }
+  }
+
+  if (contactIds.size === 0) {
+    return { deal: null, strategy: "no_match" };
+  }
+
+  const { data: deals } = await supabase
+    .from("crm_deals")
+    .select("id, custom_fields, contact_id, updated_at, created_at")
+    .in("contact_id", Array.from(contactIds))
+    .is("archived_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (!deals || deals.length === 0) {
+    return { deal: null, strategy: "contact_no_deal" };
+  }
+
+  if (deals.length === 1) {
+    const strat = email ? "customer_email" : phone9 ? "customer_phone" : "customer_name";
+    return { deal: deals[0], strategy: strat };
+  }
+
+  // Múltiplos: preferir deal com attendee mais recente sem contract_paid_at
+  const dealIds = deals.map((d) => d.id);
+  const { data: attendees } = await supabase
+    .from("meeting_slot_attendees")
+    .select("deal_id, contract_paid_at, created_at")
+    .in("deal_id", dealIds)
+    .order("created_at", { ascending: false });
+  const unpaid = (attendees ?? []).find((a) => !a.contract_paid_at);
+  const picked = unpaid
+    ? deals.find((d) => d.id === unpaid.deal_id) ?? deals[0]
+    : deals[0];
+
+  // Carregar contatos para mostrar candidatos no log
+  const contactRows = new Map<string, { email: string | null; phone: string | null }>();
+  if (contactIds.size > 0) {
+    const { data: cs } = await supabase
+      .from("crm_contacts")
+      .select("id, email, phone")
+      .in("id", Array.from(contactIds));
+    for (const c of cs ?? []) contactRows.set(c.id, { email: c.email, phone: c.phone });
+  }
+
+  return {
+    deal: picked,
+    strategy: (email ? "customer_email" : phone9 ? "customer_phone" : "customer_name") + "_ambiguous_resolved",
+    candidates: deals.map((d: any) => ({
+      id: d.id,
+      name: null,
+      contact_email: contactRows.get(d.contact_id)?.email ?? null,
+      contact_phone: contactRows.get(d.contact_id)?.phone ?? null,
+    })),
+  };
+}
+
 async function hmacHex(body: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -144,38 +293,11 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "missing_deal_id_or_event" }, 400);
   }
 
-  // Buscar deal
-  let { data: deal } = await supabase
-    .from("crm_deals")
-    .select("id, custom_fields")
-    .eq("id", dealId)
-    .maybeSingle();
-
-  // Fallback 1: dealId pode ser o transaction_id (MCF Pay enviou invoice.id como deal_id)
-  let resolvedDealId = dealId;
-  if (!deal && transactionId) {
-    const { data: byTx } = await supabase
-      .from("crm_deals")
-      .select("id, custom_fields")
-      .eq("custom_fields->>mcf_pay_transaction_id", transactionId)
-      .maybeSingle();
-    if (byTx) {
-      deal = byTx;
-      resolvedDealId = byTx.id;
-    }
-  }
-  // Fallback 2: tentar usar o próprio dealId como transaction_id em custom_fields
-  if (!deal) {
-    const { data: byInvoice } = await supabase
-      .from("crm_deals")
-      .select("id, custom_fields")
-      .eq("custom_fields->>mcf_pay_transaction_id", dealId)
-      .maybeSingle();
-    if (byInvoice) {
-      deal = byInvoice;
-      resolvedDealId = byInvoice.id;
-    }
-  }
+  // Resolver deal por múltiplas estratégias (id, transaction_id, cliente)
+  const resolved = await resolveDeal(data);
+  let deal: any = resolved.deal;
+  let matchStrategy = resolved.strategy;
+  let resolvedDealId = deal?.id ?? dealId;
 
   if (!deal) {
     await log({
@@ -184,11 +306,21 @@ Deno.serve(async (req) => {
       status: "failed",
       http_status: 404,
       payload: body,
-      response: null,
+      response: {
+        match_strategy: matchStrategy,
+        tried: {
+          crm_deal_id: data?.crm_deal_id ?? null,
+          deal_id: data?.deal_id ?? null,
+          transaction_id: transactionId,
+          customer_email: data?.customer?.email ?? data?.customer_email ?? null,
+          customer_phone: data?.customer?.phone ?? data?.customer_phone ?? null,
+          customer_name: data?.customer?.name ?? data?.customer_name ?? null,
+        },
+      },
       error_message: "deal_not_found",
       signature_preview: expected.slice(0, 16),
     });
-    return json({ ok: false, error: "deal_not_found" }, 404);
+    return json({ ok: false, error: "deal_not_found", match_strategy: matchStrategy }, 404);
   }
 
   const isPaid = event === "payment.confirmed" || status === "paid";
@@ -257,9 +389,22 @@ Deno.serve(async (req) => {
     status: "success",
     http_status: 200,
     payload: body,
-    response: { ok: true, attendee_id: attendee?.id ?? null, applied: isPaid ? "paid" : "refunded" },
+    response: {
+      ok: true,
+      attendee_id: attendee?.id ?? null,
+      applied: isPaid ? "paid" : "refunded",
+      match_strategy: matchStrategy,
+      resolved_deal_id: resolvedDealId,
+      candidates: resolved.candidates ?? null,
+    },
     signature_preview: expected.slice(0, 16),
   });
 
-  return json({ ok: true, deal_id: dealId, attendee_id: attendee?.id ?? null });
+  return json({
+    ok: true,
+    deal_id: dealId,
+    resolved_deal_id: resolvedDealId,
+    attendee_id: attendee?.id ?? null,
+    match_strategy: matchStrategy,
+  });
 });
