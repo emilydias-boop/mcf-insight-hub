@@ -248,11 +248,22 @@ export function DailyViewPanel(_props: Props) {
         .from('profiles')
         .select('email, access_status')
         .in('email', allEmails);
-      return new Set(
-        (profs || [])
-          .filter((p) => p.access_status && p.access_status !== 'ativo')
-          .map((p) => (p.email || '').toLowerCase())
-      );
+      // Um mesmo e-mail pode ter múltiplos perfis (duplicados). Só consideramos
+      // o e-mail inativo se NENHUM dos perfis com esse e-mail estiver 'ativo'.
+      const byEmail = new Map<string, string[]>();
+      (profs || []).forEach((p) => {
+        const key = (p.email || '').toLowerCase();
+        if (!key) return;
+        const arr = byEmail.get(key) || [];
+        arr.push(p.access_status || '');
+        byEmail.set(key, arr);
+      });
+      const inactive = new Set<string>();
+      byEmail.forEach((statuses, email) => {
+        const anyActive = statuses.some((s) => s === 'ativo');
+        if (!anyActive) inactive.add(email);
+      });
+      return inactive;
     },
     enabled: allEmails.length > 0,
     staleTime: 60_000,
