@@ -363,6 +363,7 @@ export default function Agenda() {
           'Canal': channel,
           'Closer': meeting.closer?.name || '',
           'Status': STATUS_LABELS[att.status] || att.status || '',
+          'Nota do Closer': (att as any).closer_notes || '',
         });
       }
     }
