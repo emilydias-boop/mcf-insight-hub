@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { CalendarCheck, Target, Trophy, AlertTriangle, ChevronRight, X, Plus } from 'lucide-react';
+import { CalendarCheck, Target, Trophy, AlertTriangle, ChevronRight, X, Plus, Gamepad2 } from 'lucide-react';
 import { format, subDays, isWeekend } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -27,6 +27,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { SdrGamificationDialog } from '@/components/gamification/SdrGamificationDialog';
+import { CloserGamificationDialog } from '@/components/gamification/CloserGamificationDialog';
+
+const GAMIFICATION_AUTHORIZED_EMAILS = new Set([
+  'thobson.motta@minhacasafinanciada.com',
+  'jessica.bellini@minhacasafinanciada.com',
+  'jessica.bellini.r2@minhacasafinanciada.com',
+]);
 
 interface Props { bu: BusinessUnit; }
 
@@ -70,7 +78,7 @@ function PersonAvatar({ name }: { name: string }) {
   );
 }
 
-function SdrCard({ sdr, onClick, onRemove }: { sdr: DailyViewSdr; onClick: () => void; onRemove?: () => void }) {
+function SdrCard({ sdr, onClick, onRemove, onOpenGamification }: { sdr: DailyViewSdr; onClick: () => void; onRemove?: () => void; onOpenGamification?: () => void }) {
   const hit = sdr.meta_diaria > 0 && sdr.agendamentos >= sdr.meta_diaria;
   const diff = sdr.agendamentos - sdr.meta_diaria;
   return (
@@ -82,6 +90,15 @@ function SdrCard({ sdr, onClick, onRemove }: { sdr: DailyViewSdr; onClick: () =>
           className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
         >
           <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {onOpenGamification && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenGamification(); }}
+          title="Ver gamificação em runtime"
+          className="absolute -top-2 -left-2 z-10 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
+        >
+          <Gamepad2 className="h-3.5 w-3.5" />
         </button>
       )}
       <button
@@ -135,7 +152,7 @@ function SdrCard({ sdr, onClick, onRemove }: { sdr: DailyViewSdr; onClick: () =>
   );
 }
 
-function CloserCard({ closer, onClick, onRemove }: { closer: DailyViewCloser; onClick: () => void; onRemove?: () => void }) {
+function CloserCard({ closer, onClick, onRemove, onOpenGamification }: { closer: DailyViewCloser; onClick: () => void; onRemove?: () => void; onOpenGamification?: () => void }) {
   const hitR = closer.reunioes_realizadas >= closer.meta_reunioes;
   const hitC = closer.contratos_pagos >= closer.meta_contratos;
   const allHit = hitR && hitC;
@@ -148,6 +165,15 @@ function CloserCard({ closer, onClick, onRemove }: { closer: DailyViewCloser; on
           className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
         >
           <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {onOpenGamification && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenGamification(); }}
+          title="Ver gamificação em runtime"
+          className="absolute -top-2 -left-2 z-10 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:scale-110 transition"
+        >
+          <Gamepad2 className="h-3.5 w-3.5" />
         </button>
       )}
       <button
@@ -226,10 +252,13 @@ export function DailyViewPanel(_props: Props) {
   const [date, setDate] = useState<Date>(defaultYesterdayBusinessDay());
   const [metaReunioes, setMetaReunioes] = useState(2);
   const [metaContratos, setMetaContratos] = useState(1);
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const canViewGamification = !!user?.email && GAMIFICATION_AUTHORIZED_EMAILS.has(user.email.toLowerCase());
   const queryClient = useQueryClient();
   const [pickerKind, setPickerKind] = useState<null | 'sdr' | 'closer'>(null);
+  const [gamifSdr, setGamifSdr] = useState<DailyViewSdr | null>(null);
+  const [gamifCloser, setGamifCloser] = useState<DailyViewCloser | null>(null);
 
   const { data, isLoading } = useDailyViewIncorporador(date, metaReunioes, metaContratos);
 
@@ -409,6 +438,7 @@ export function DailyViewPanel(_props: Props) {
                   sdr={s}
                   onClick={() => setOpenSdr(s)}
                   onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'sdr_hidden', person_id: s.sdr_id }) : undefined}
+                  onOpenGamification={canViewGamification ? () => setGamifSdr(s) : undefined}
                 />
               ))}
             </div>
@@ -460,6 +490,7 @@ export function DailyViewPanel(_props: Props) {
                   closer={c}
                   onClick={() => setOpenCloser(c)}
                   onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'closer_hidden', person_id: c.closer_id }) : undefined}
+                  onOpenGamification={canViewGamification ? () => setGamifCloser(c) : undefined}
                 />
               ))}
             </div>
@@ -479,6 +510,26 @@ export function DailyViewPanel(_props: Props) {
         open={!!openCloser}
         onClose={() => setOpenCloser(null)}
       />
+
+      {canViewGamification && (
+        <SdrGamificationDialog
+          open={!!gamifSdr}
+          onOpenChange={(o) => !o && setGamifSdr(null)}
+          impersonateEmail={gamifSdr?.email || undefined}
+          impersonateName={gamifSdr?.name}
+        />
+      )}
+      {canViewGamification && gamifCloser && (
+        <CloserGamificationDialog
+          open={!!gamifCloser}
+          onOpenChange={(o) => !o && setGamifCloser(null)}
+          closerId={gamifCloser.closer_id}
+          closerName={gamifCloser.name}
+          closerEmail={gamifCloser.email}
+          metaReunioesDia={metaReunioes}
+          metaContratosDia={metaContratos}
+        />
+      )}
 
       <PersonPickerDialog
         kind={pickerKind}

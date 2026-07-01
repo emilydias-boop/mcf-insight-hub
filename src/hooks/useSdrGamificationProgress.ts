@@ -132,16 +132,17 @@ function computeGoal(params: {
   };
 }
 
-export function useSdrGamificationProgress(enabled: boolean) {
+export function useSdrGamificationProgress(enabled: boolean, impersonateEmail?: string) {
   const { user } = useAuth();
-  const sdrEmail = user?.email || undefined;
+  const sdrEmail = (impersonateEmail || user?.email || undefined)?.toLowerCase();
+  const isImpersonating = !!impersonateEmail;
 
   const { data: sdrRecord } = useQuery({
     queryKey: ["gamification-sdr-record", user?.id, sdrEmail],
     queryFn: async () => {
       if (!user?.id && !sdrEmail) return null;
       let row: { name: string | null; email: string | null; squad: string | null; meta_diaria: number | null } | null = null;
-      if (user?.id) {
+      if (user?.id && !isImpersonating) {
         const { data } = await supabase
           .from("sdr")
           .select("name, email, squad, meta_diaria")
@@ -156,7 +157,7 @@ export function useSdrGamificationProgress(enabled: boolean) {
         const { data } = await supabase
           .from("sdr")
           .select("name, email, squad, meta_diaria")
-          .eq("email", sdrEmail)
+          .ilike("email", sdrEmail)
           .eq("active", true)
           .order("created_at", { ascending: false })
           .limit(1)
