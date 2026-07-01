@@ -2711,6 +2711,33 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_bi_metas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          meta_valor: number
+          month_ref: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meta_valor?: number
+          month_ref: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meta_valor?: number
+          month_ref?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       consorcio_boletos: {
         Row: {
           card_id: string | null
@@ -12923,6 +12950,10 @@ export type Database = {
           _tx: Database["public"]["Tables"]["hubla_transactions"]["Row"]
         }
         Returns: Json
+      }
+      can_edit_bi_consorcio_meta: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       check_duplicate_contact_by_identity: {
         Args: { p_email?: string; p_phone?: string }
