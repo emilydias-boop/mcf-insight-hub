@@ -406,13 +406,14 @@ export default function BIConsorcio() {
 }
 
 function KpiCard({
-  icon, label, value, hint, accent,
+  icon, label, value, hint, accent, extra,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   hint?: string;
   accent?: "primary" | "success" | "danger" | "muted";
+  extra?: React.ReactNode;
 }) {
   const styles: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
@@ -426,12 +427,89 @@ function KpiCard({
         <div className="flex items-start gap-3">
           <div className={"p-2.5 rounded-lg " + (styles[accent || "primary"])}>{icon}</div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+              {extra}
+            </div>
             <p className="text-2xl font-bold mt-1 truncate">{value}</p>
             {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DiasUteisPopover({
+  todosDias, consideradosSet, canEdit, onToggle, onReset, isOverride, saving,
+}: {
+  todosDias: Date[];
+  consideradosSet: Set<string>;
+  canEdit: boolean;
+  onToggle: (iso: string) => void;
+  onReset: () => void;
+  isOverride: boolean;
+  saving: boolean;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-primary transition-colors"
+          aria-label="Ver e editar dias considerados"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <p className="text-sm font-semibold">Dias considerados no cálculo</p>
+            <p className="text-[11px] text-muted-foreground">
+              {canEdit
+                ? "Marque/desmarque dias (ex.: inclua sábados)."
+                : "Somente editores autorizados podem alterar."}
+            </p>
+          </div>
+          {canEdit && isOverride && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 gap-1 text-[11px]"
+              onClick={onReset}
+              disabled={saving}
+            >
+              <RotateCcw className="h-3 w-3" /> Padrão
+            </Button>
+          )}
+        </div>
+        <ScrollArea className="h-64 pr-2">
+          <div className="space-y-1">
+            {todosDias.map((d) => {
+              const iso = format(d, "yyyy-MM-dd");
+              const checked = consideradosSet.has(iso);
+              const label = format(d, "EEE, dd/MM", { locale: ptBR });
+              return (
+                <label
+                  key={iso}
+                  className={
+                    "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer hover:bg-muted " +
+                    (checked ? "text-foreground" : "text-muted-foreground")
+                  }
+                >
+                  <Checkbox
+                    checked={checked}
+                    disabled={!canEdit || saving}
+                    onCheckedChange={() => onToggle(iso)}
+                  />
+                  <span className="capitalize">{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
   );
 }
