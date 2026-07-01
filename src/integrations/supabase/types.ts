@@ -2715,6 +2715,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          dias_uteis_override: Json | null
           id: string
           meta_valor: number
           month_ref: string
@@ -2723,6 +2724,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          dias_uteis_override?: Json | null
           id?: string
           meta_valor?: number
           month_ref: string
@@ -2731,6 +2733,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          dias_uteis_override?: Json | null
           id?: string
           meta_valor?: number
           month_ref?: string

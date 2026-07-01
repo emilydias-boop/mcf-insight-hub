@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_bi_metas ADD COLUMN IF NOT EXISTS dias_uteis_override jsonb;
