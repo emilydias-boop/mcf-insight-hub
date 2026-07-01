@@ -10,7 +10,7 @@ import { TableCell, TableRow } from '@/components/ui/table';
 
 import { HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, getFixedGrossPrice, normalizeProductKey } from '@/lib/incorporadorPricing';
 
 export interface TransactionGroup {
   id: string; // baseId (hubla_id sem -offer-X)
@@ -209,11 +209,44 @@ export function TransactionGroupRow({
   // Linhas expandidas (detalhes de cada item)
   const ExpandedRows = () => (
     <>
-      {group.allTransactions.map((tx, index) => {
-        const isLast = index === group.allTransactions.length - 1;
-        const isOrderBump = tx.hubla_id?.includes('-offer-');
-        const bruto = getIndividualGross(tx);
-        const isFirst = globalFirstIds.has(tx.id);
+      {(() => {
+        // Pré-computa brutos e identifica: raiz da fatura, família principal, offer-vencedor da família principal.
+        const rows = group.allTransactions.map(tx => ({
+          tx,
+          isOrderBump: !!tx.hubla_id?.includes('-offer-'),
+          bruto: getIndividualGross(tx),
+          isFirst: globalFirstIds.has(tx.id),
+        }));
+
+        const rootRow = rows.find(r => !r.isOrderBump);
+        const anyOfferPositive = rows.some(r => r.isOrderBump && r.bruto > 0);
+        // Ocultar raiz quando está (dup) e algum sibling offer tem bruto > 0
+        const hideRoot = !!rootRow && rootRow.bruto === 0 && anyOfferPositive;
+
+        // Família do produto principal da fatura (usa a raiz; se não houver, usa 1º offer)
+        const mainFamily = normalizeProductKey(
+          (rootRow?.tx.product_name ?? rows[0]?.tx.product_name) || null
+        );
+
+        // Offer vencedor (maior bruto > 0) dentro da família principal → não é "Bump" real
+        let mainOfferId: string | null = null;
+        let mainOfferBruto = -1;
+        for (const r of rows) {
+          if (!r.isOrderBump) continue;
+          if (r.bruto <= 0) continue;
+          if (normalizeProductKey(r.tx.product_name) !== mainFamily) continue;
+          if (r.bruto > mainOfferBruto) {
+            mainOfferBruto = r.bruto;
+            mainOfferId = r.tx.id;
+          }
+        }
+
+        const visible = rows.filter(r => !(hideRoot && r === rootRow));
+
+        return visible.map((r, index) => {
+        const { tx, isOrderBump, bruto, isFirst } = r;
+        const isLast = index === visible.length - 1;
+        const isMainProduct = !isOrderBump || tx.id === mainOfferId;
 
         return (
           <TableRow 
@@ -238,12 +271,15 @@ export function TransactionGroupRow({
                 <span className="truncate text-sm" title={tx.product_name || ''}>
                   {tx.product_name || '-'}
                 </span>
-                <Badge 
-                  variant={isOrderBump ? 'outline' : 'default'} 
-                  className="shrink-0 text-[10px] px-1.5 py-0"
-                >
-                  {isOrderBump ? 'Bump' : 'Principal'}
-                </Badge>
+                {isMainProduct ? (
+                  <Badge variant="default" className="shrink-0 text-[10px] px-1.5 py-0">
+                    Principal
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0">
+                    Bump
+                  </Badge>
+                )}
               </div>
             </TableCell>
 
@@ -313,7 +349,8 @@ export function TransactionGroupRow({
             </TableCell>
           </TableRow>
         );
-      })}
+        });
+      })()}
     </>
   );
 
