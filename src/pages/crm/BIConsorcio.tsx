@@ -7,18 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, format,
-  eachWeekOfInterval, isWithinInterval, parseISO, max, min,
+  startOfMonth, endOfMonth, endOfWeek, format,
+  eachWeekOfInterval, eachDayOfInterval, isWithinInterval, parseISO, max, min,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Target, TrendingUp, CalendarDays, Wallet, Trophy, Pencil,
-  CheckCircle2, AlertCircle, Sparkles,
+  CheckCircle2, AlertCircle, Sparkles, Info, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  contarDiasUteis, getDiasUteisMesAtual, CONSORCIO_WEEK_STARTS_ON,
+  isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
 
 const ALLOWED_EDITORS = [
@@ -46,7 +49,7 @@ export default function BIConsorcio() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("consorcio_bi_metas")
-        .select("id, meta_valor, month_ref")
+        .select("id, meta_valor, month_ref, dias_uteis_override")
         .eq("month_ref", monthRefISO)
         .maybeSingle();
       if (error) throw error;
@@ -82,6 +85,55 @@ export default function BIConsorcio() {
     onError: (e: any) => toast.error("Erro ao salvar meta: " + e.message),
   });
 
+  // === Dias úteis com override editável ===
+  const todosDiasMes = useMemo(
+    () => eachDayOfInterval({ start: monthStart, end: monthEnd }),
+    [monthRefISO]
+  );
+  const diasPadraoISO = useMemo(
+    () => todosDiasMes.filter(isDiaUtil).map((d) => format(d, "yyyy-MM-dd")),
+    [todosDiasMes]
+  );
+  const overrideISO: string[] | null = Array.isArray((metaRow as any)?.dias_uteis_override)
+    ? ((metaRow as any).dias_uteis_override as string[])
+    : null;
+  const diasConsideradosISO = overrideISO ?? diasPadraoISO;
+  const diasConsideradosSet = useMemo(() => new Set(diasConsideradosISO), [diasConsideradosISO]);
+
+  const saveDias = useMutation({
+    mutationFn: async (novosDias: string[] | null) => {
+      if (metaRow?.id) {
+        const { error } = await supabase
+          .from("consorcio_bi_metas")
+          .update({ dias_uteis_override: novosDias as any, updated_at: new Date().toISOString() })
+          .eq("id", metaRow.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("consorcio_bi_metas")
+          .insert({
+            month_ref: monthRefISO,
+            meta_valor: 0,
+            dias_uteis_override: novosDias as any,
+            created_by: user?.id,
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Dias considerados atualizados");
+      qc.invalidateQueries({ queryKey: ["consorcio-bi-meta", monthRefISO] });
+    },
+    onError: (e: any) => toast.error("Erro ao salvar dias: " + e.message),
+  });
+
+  const toggleDia = (iso: string) => {
+    const base = new Set(diasConsideradosISO);
+    if (base.has(iso)) base.delete(iso);
+    else base.add(iso);
+    saveDias.mutate(Array.from(base).sort());
+  };
+
   // === Cartas fechadas (propostas) do mês ===
   const { data: propostas, isLoading: propLoading } = useQuery({
     queryKey: ["consorcio-bi-propostas", monthRefISO],
@@ -96,7 +148,7 @@ export default function BIConsorcio() {
     },
   });
 
-  const diasUteisMes = getDiasUteisMesAtual();
+  const diasUteisMes = diasConsideradosISO.length;
   const metaDia = diasUteisMes > 0 ? meta / diasUteisMes : 0;
 
   // Semanas do mês (segunda a domingo)
@@ -109,7 +161,9 @@ export default function BIConsorcio() {
       const wEnd = endOfWeek(wStart, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON as 1 });
       const clampedStart = max([wStart, monthStart]);
       const clampedEnd = min([wEnd, monthEnd]);
-      const dias = contarDiasUteis(clampedStart, clampedEnd);
+      const dias = eachDayOfInterval({ start: clampedStart, end: clampedEnd }).filter((d) =>
+        diasConsideradosSet.has(format(d, "yyyy-MM-dd"))
+      ).length;
       return {
         index: i + 1,
         start: clampedStart,
@@ -118,7 +172,7 @@ export default function BIConsorcio() {
         metaSemana: dias * metaDia,
       };
     });
-  }, [monthRefISO, metaDia]);
+  }, [monthRefISO, metaDia, diasConsideradosSet]);
 
   // Realizado por semana + total
   const { realizadoTotal, realizadoPorSemana, realizadoHoje } = useMemo(() => {
@@ -219,8 +273,19 @@ export default function BIConsorcio() {
               icon={<Wallet className="h-5 w-5" />}
               label="Meta por dia útil"
               value={fmtBRL(metaDia)}
-              hint="média diária"
+              hint={`${diasUteisMes} dias considerados`}
               accent="muted"
+              extra={
+                <DiasUteisPopover
+                  todosDias={todosDiasMes}
+                  consideradosSet={diasConsideradosSet}
+                  canEdit={canEdit}
+                  onToggle={toggleDia}
+                  onReset={() => saveDias.mutate(null)}
+                  isOverride={!!overrideISO}
+                  saving={saveDias.isPending}
+                />
+              }
             />
             <KpiCard
               icon={<TrendingUp className="h-5 w-5" />}
