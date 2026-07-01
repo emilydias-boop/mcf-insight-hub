@@ -173,6 +173,7 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"],
     requiredProducts: ["consorcio"],
     items: [
+      { title: "BI Consórcio", url: "/consorcio/bi-consorcio" },
       { title: "Painel Comercial", url: "/consorcio/painel-equipe" },
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "CRM", url: "/consorcio/crm" },
