@@ -217,6 +217,7 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
+                <Route path="bi-consorcio" element={<BIConsorcio />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
