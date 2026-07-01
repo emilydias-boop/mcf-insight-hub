@@ -252,10 +252,13 @@ export function DailyViewPanel(_props: Props) {
   const [date, setDate] = useState<Date>(defaultYesterdayBusinessDay());
   const [metaReunioes, setMetaReunioes] = useState(2);
   const [metaContratos, setMetaContratos] = useState(1);
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const canViewGamification = !!user?.email && GAMIFICATION_AUTHORIZED_EMAILS.has(user.email.toLowerCase());
   const queryClient = useQueryClient();
   const [pickerKind, setPickerKind] = useState<null | 'sdr' | 'closer'>(null);
+  const [gamifSdr, setGamifSdr] = useState<DailyViewSdr | null>(null);
+  const [gamifCloser, setGamifCloser] = useState<DailyViewCloser | null>(null);
 
   const { data, isLoading } = useDailyViewIncorporador(date, metaReunioes, metaContratos);
 
@@ -435,6 +438,7 @@ export function DailyViewPanel(_props: Props) {
                   sdr={s}
                   onClick={() => setOpenSdr(s)}
                   onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'sdr_hidden', person_id: s.sdr_id }) : undefined}
+                  onOpenGamification={canViewGamification ? () => setGamifSdr(s) : undefined}
                 />
               ))}
             </div>
@@ -486,6 +490,7 @@ export function DailyViewPanel(_props: Props) {
                   closer={c}
                   onClick={() => setOpenCloser(c)}
                   onRemove={isAdmin ? () => hideMutation.mutate({ kind: 'closer_hidden', person_id: c.closer_id }) : undefined}
+                  onOpenGamification={canViewGamification ? () => setGamifCloser(c) : undefined}
                 />
               ))}
             </div>
@@ -505,6 +510,26 @@ export function DailyViewPanel(_props: Props) {
         open={!!openCloser}
         onClose={() => setOpenCloser(null)}
       />
+
+      {canViewGamification && (
+        <SdrGamificationDialog
+          open={!!gamifSdr}
+          onOpenChange={(o) => !o && setGamifSdr(null)}
+          impersonateEmail={gamifSdr?.email || undefined}
+          impersonateName={gamifSdr?.name}
+        />
+      )}
+      {canViewGamification && gamifCloser && (
+        <CloserGamificationDialog
+          open={!!gamifCloser}
+          onOpenChange={(o) => !o && setGamifCloser(null)}
+          closerId={gamifCloser.closer_id}
+          closerName={gamifCloser.name}
+          closerEmail={gamifCloser.email}
+          metaReunioesDia={metaReunioes}
+          metaContratosDia={metaContratos}
+        />
+      )}
 
       <PersonPickerDialog
         kind={pickerKind}
