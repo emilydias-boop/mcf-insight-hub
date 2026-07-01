@@ -7,18 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, format,
-  eachWeekOfInterval, isWithinInterval, parseISO, max, min,
+  startOfMonth, endOfMonth, endOfWeek, format,
+  eachWeekOfInterval, eachDayOfInterval, isWithinInterval, parseISO, max, min,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Target, TrendingUp, CalendarDays, Wallet, Trophy, Pencil,
-  CheckCircle2, AlertCircle, Sparkles,
+  CheckCircle2, AlertCircle, Sparkles, Info, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  contarDiasUteis, getDiasUteisMesAtual, CONSORCIO_WEEK_STARTS_ON,
+  isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
 
 const ALLOWED_EDITORS = [
@@ -46,7 +49,7 @@ export default function BIConsorcio() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("consorcio_bi_metas")
-        .select("id, meta_valor, month_ref")
+        .select("id, meta_valor, month_ref, dias_uteis_override")
         .eq("month_ref", monthRefISO)
         .maybeSingle();
       if (error) throw error;
@@ -82,6 +85,55 @@ export default function BIConsorcio() {
     onError: (e: any) => toast.error("Erro ao salvar meta: " + e.message),
   });
 
+  // === Dias úteis com override editável ===
+  const todosDiasMes = useMemo(
+    () => eachDayOfInterval({ start: monthStart, end: monthEnd }),
+    [monthRefISO]
+  );
+  const diasPadraoISO = useMemo(
+    () => todosDiasMes.filter(isDiaUtil).map((d) => format(d, "yyyy-MM-dd")),
+    [todosDiasMes]
+  );
+  const overrideISO: string[] | null = Array.isArray((metaRow as any)?.dias_uteis_override)
+    ? ((metaRow as any).dias_uteis_override as string[])
+    : null;
+  const diasConsideradosISO = overrideISO ?? diasPadraoISO;
+  const diasConsideradosSet = useMemo(() => new Set(diasConsideradosISO), [diasConsideradosISO]);
+
+  const saveDias = useMutation({
+    mutationFn: async (novosDias: string[] | null) => {
+      if (metaRow?.id) {
+        const { error } = await supabase
+          .from("consorcio_bi_metas")
+          .update({ dias_uteis_override: novosDias as any, updated_at: new Date().toISOString() })
+          .eq("id", metaRow.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("consorcio_bi_metas")
+          .insert({
+            month_ref: monthRefISO,
+            meta_valor: 0,
+            dias_uteis_override: novosDias as any,
+            created_by: user?.id,
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Dias considerados atualizados");
+      qc.invalidateQueries({ queryKey: ["consorcio-bi-meta", monthRefISO] });
+    },
+    onError: (e: any) => toast.error("Erro ao salvar dias: " + e.message),
+  });
+
+  const toggleDia = (iso: string) => {
+    const base = new Set(diasConsideradosISO);
+    if (base.has(iso)) base.delete(iso);
+    else base.add(iso);
+    saveDias.mutate(Array.from(base).sort());
+  };
+
   // === Cartas fechadas (propostas) do mês ===
   const { data: propostas, isLoading: propLoading } = useQuery({
     queryKey: ["consorcio-bi-propostas", monthRefISO],
@@ -96,7 +148,7 @@ export default function BIConsorcio() {
     },
   });
 
-  const diasUteisMes = getDiasUteisMesAtual();
+  const diasUteisMes = diasConsideradosISO.length;
   const metaDia = diasUteisMes > 0 ? meta / diasUteisMes : 0;
 
   // Semanas do mês (segunda a domingo)
@@ -109,7 +161,9 @@ export default function BIConsorcio() {
       const wEnd = endOfWeek(wStart, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON as 1 });
       const clampedStart = max([wStart, monthStart]);
       const clampedEnd = min([wEnd, monthEnd]);
-      const dias = contarDiasUteis(clampedStart, clampedEnd);
+      const dias = eachDayOfInterval({ start: clampedStart, end: clampedEnd }).filter((d) =>
+        diasConsideradosSet.has(format(d, "yyyy-MM-dd"))
+      ).length;
       return {
         index: i + 1,
         start: clampedStart,
@@ -118,7 +172,7 @@ export default function BIConsorcio() {
         metaSemana: dias * metaDia,
       };
     });
-  }, [monthRefISO, metaDia]);
+  }, [monthRefISO, metaDia, diasConsideradosSet]);
 
   // Realizado por semana + total
   const { realizadoTotal, realizadoPorSemana, realizadoHoje } = useMemo(() => {
@@ -219,8 +273,19 @@ export default function BIConsorcio() {
               icon={<Wallet className="h-5 w-5" />}
               label="Meta por dia útil"
               value={fmtBRL(metaDia)}
-              hint="média diária"
+              hint={`${diasUteisMes} dias considerados`}
               accent="muted"
+              extra={
+                <DiasUteisPopover
+                  todosDias={todosDiasMes}
+                  consideradosSet={diasConsideradosSet}
+                  canEdit={canEdit}
+                  onToggle={toggleDia}
+                  onReset={() => saveDias.mutate(null)}
+                  isOverride={!!overrideISO}
+                  saving={saveDias.isPending}
+                />
+              }
             />
             <KpiCard
               icon={<TrendingUp className="h-5 w-5" />}
@@ -341,13 +406,14 @@ export default function BIConsorcio() {
 }
 
 function KpiCard({
-  icon, label, value, hint, accent,
+  icon, label, value, hint, accent, extra,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   hint?: string;
   accent?: "primary" | "success" | "danger" | "muted";
+  extra?: React.ReactNode;
 }) {
   const styles: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
@@ -361,12 +427,89 @@ function KpiCard({
         <div className="flex items-start gap-3">
           <div className={"p-2.5 rounded-lg " + (styles[accent || "primary"])}>{icon}</div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+              {extra}
+            </div>
             <p className="text-2xl font-bold mt-1 truncate">{value}</p>
             {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DiasUteisPopover({
+  todosDias, consideradosSet, canEdit, onToggle, onReset, isOverride, saving,
+}: {
+  todosDias: Date[];
+  consideradosSet: Set<string>;
+  canEdit: boolean;
+  onToggle: (iso: string) => void;
+  onReset: () => void;
+  isOverride: boolean;
+  saving: boolean;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-primary transition-colors"
+          aria-label="Ver e editar dias considerados"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <p className="text-sm font-semibold">Dias considerados no cálculo</p>
+            <p className="text-[11px] text-muted-foreground">
+              {canEdit
+                ? "Marque/desmarque dias (ex.: inclua sábados)."
+                : "Somente editores autorizados podem alterar."}
+            </p>
+          </div>
+          {canEdit && isOverride && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 gap-1 text-[11px]"
+              onClick={onReset}
+              disabled={saving}
+            >
+              <RotateCcw className="h-3 w-3" /> Padrão
+            </Button>
+          )}
+        </div>
+        <ScrollArea className="h-64 pr-2">
+          <div className="space-y-1">
+            {todosDias.map((d) => {
+              const iso = format(d, "yyyy-MM-dd");
+              const checked = consideradosSet.has(iso);
+              const label = format(d, "EEE, dd/MM", { locale: ptBR });
+              return (
+                <label
+                  key={iso}
+                  className={
+                    "flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer hover:bg-muted " +
+                    (checked ? "text-foreground" : "text-muted-foreground")
+                  }
+                >
+                  <Checkbox
+                    checked={checked}
+                    disabled={!canEdit || saving}
+                    onCheckedChange={() => onToggle(iso)}
+                  />
+                  <span className="capitalize">{label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
   );
 }
