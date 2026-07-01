@@ -126,6 +126,7 @@ const AssetDetailsPage = lazy(() => import("./pages/patrimonio/AssetDetailsPage"
 const MyEquipmentPage = lazy(() => import("./pages/patrimonio/MyEquipmentPage"));
 const PatrimonioRelatorios = lazy(() => import("./pages/patrimonio/PatrimonioRelatorios"));
 const BUCRMLayout = lazy(() => import("./pages/crm/BUCRMLayout"));
+const BIConsorcio = lazy(() => import("./pages/crm/BIConsorcio"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
