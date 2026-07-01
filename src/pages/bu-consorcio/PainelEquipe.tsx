@@ -4,7 +4,8 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, e
 import { ptBR } from "date-fns/locale";
 import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
-import { Calendar, Users, Download, Briefcase, TrendingUp } from "lucide-react";
+import { Calendar, Users, Download, Briefcase, TrendingUp, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
@@ -113,15 +114,64 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
           metaAnual={combined.metaAnual}
           isLoading={setoresLoading || summaryLoading}
         />
-        {canEdit && (
-          <button
-            onClick={onEditGoals}
-            className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-            title="Editar metas"
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
-        )}
+        <TooltipProvider delayDuration={100}>
+          <div className="absolute top-3 right-3 flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Origem dos valores"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-sm text-xs leading-relaxed">
+                <div className="space-y-2">
+                  <div>
+                    <p className="font-semibold text-foreground">Apurado (Semana / Mês / Ano)</p>
+                    <p>
+                      Soma de <b>valor_credito</b> de todas as cotas cadastradas em
+                      <b> BU Consórcio → Cotas</b> (rota <code>/consorcio/vendas</code>),
+                      filtradas por <b>data de contratação</b> dentro do período.
+                    </p>
+                    <p className="mt-1">
+                      Cotas novas entram via <b>Adicionar Cota</b> ou aprovando em
+                      <b> Cadastros Pendentes</b> (rota <code>/consorcio</code>).
+                    </p>
+                    <p className="mt-1">
+                      + Comissão do setor <b>Crédito Imobiliário</b> registrada em
+                      <b> BU Consórcio → Pagamentos</b> (rota <code>/consorcio/pagamentos</code>).
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">Meta (Semana / Mês / Ano)</p>
+                    <p>
+                      Configurada pelo botão <b>engrenagem ⚙️</b> ao lado
+                      (permissão de admin/manager/coordenador). Chaves:
+                      <code> setor_efeito_alavanca_[semana|mes|ano] </code> +
+                      <code> setor_credito_[semana|mes|ano]</code>.
+                    </p>
+                  </div>
+                  <div className="pt-1 border-t border-border/50">
+                    <p className="text-muted-foreground">
+                      Semana: segunda a domingo · Mês: mês corrente · Ano: 2026 completo.
+                    </p>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            {canEdit && (
+              <button
+                onClick={onEditGoals}
+                className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
+                title="Editar metas"
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </TooltipProvider>
       </div>
     </div>
   );
