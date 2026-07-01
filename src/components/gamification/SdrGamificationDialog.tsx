@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface SdrGamificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  impersonateEmail?: string;
+  impersonateName?: string;
 }
 
 function getInitials(name: string) {
@@ -26,8 +28,9 @@ function buildHeadline(statusCount: { ahead: number; behind: number; critical: n
   return "No ritmo certo. Bora seguir!";
 }
 
-export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDialogProps) {
-  const { data, isLoading, hasMeta } = useSdrGamificationProgress(open);
+export function SdrGamificationDialog({ open, onOpenChange, impersonateEmail, impersonateName }: SdrGamificationDialogProps) {
+  const { data, isLoading, hasMeta } = useSdrGamificationProgress(open, impersonateEmail);
+  const isImpersonating = !!impersonateEmail;
 
   const statusCount = data
     ? {
@@ -61,10 +64,14 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-3xl md:text-4xl font-bold tracking-tight">
-                Bora, {data?.sdrName?.split(" ")[0] || "SDR"}!
+                {isImpersonating
+                  ? `Gamificação · ${data?.sdrName || impersonateName || impersonateEmail}`
+                  : `Bora, ${data?.sdrName?.split(" ")[0] || "SDR"}!`}
               </DialogTitle>
               <DialogDescription className="text-base md:text-lg mt-1">
-                {data ? buildHeadline(statusCount) : "Carregando seu placar..."}
+                {isImpersonating
+                  ? `Runtime · Hoje · Semana · Mês${data ? ` — ${data.sdrEmail}` : ""}`
+                  : data ? buildHeadline(statusCount) : "Carregando seu placar..."}
               </DialogDescription>
               {data && (
                 <div className="mt-2 text-sm text-muted-foreground/80 uppercase tracking-wide">
@@ -102,10 +109,12 @@ export function SdrGamificationDialog({ open, onOpenChange }: SdrGamificationDia
 
           <div className="flex items-center justify-between mt-10 pt-6 border-t">
             <p className="text-sm text-muted-foreground">
-              Dica: este painel reaparece a cada hora para manter você na linha de chegada.
+              {isImpersonating
+                ? "Visão administrativa em runtime — dados ao vivo."
+                : "Dica: este painel reaparece a cada hora para manter você na linha de chegada."}
             </p>
             <Button size="lg" onClick={() => onOpenChange(false)}>
-              Bora trabalhar
+              {isImpersonating ? "Fechar" : "Bora trabalhar"}
             </Button>
           </div>
         </div>
