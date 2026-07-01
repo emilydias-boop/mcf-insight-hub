@@ -195,6 +195,7 @@ const App = () => (
               <Route path="relatorios/leads-sem-tag" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsSemTag /></RoleGuard>} />
               
               {/* BU Consórcio */}
+              <Route path="consorcio/bi-consorcio" element={<ResourceGuard resource="crm"><BIConsorcio /></ResourceGuard>} />
               <Route path="consorcio" element={<ResourceGuard resource="crm"><ConsorcioIndex /></ResourceGuard>} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
@@ -218,7 +219,6 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
-                <Route path="bi-consorcio" element={<BIConsorcio />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
