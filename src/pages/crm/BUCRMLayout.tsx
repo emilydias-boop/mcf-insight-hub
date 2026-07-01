@@ -13,7 +13,8 @@ import {
   ShoppingCart,
   ClipboardCheck,
   Inbox,
-  History
+  History,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -30,7 +31,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'meu-historico', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
+    'agenda', 'meu-historico', 'pos-reuniao', 'bi-consorcio', 'meus-no-shows', 'configuracoes'
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios',
@@ -101,6 +102,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
     { key: 'meus-no-shows', to: `${basePath}/meus-no-shows`, label: 'Meus No-Shows', icon: ShieldAlert },
     { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
+    { key: 'bi-consorcio', to: `${basePath}/bi-consorcio`, label: 'BI Consórcio', icon: BarChart3 },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
   

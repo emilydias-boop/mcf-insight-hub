@@ -126,6 +126,7 @@ const AssetDetailsPage = lazy(() => import("./pages/patrimonio/AssetDetailsPage"
 const MyEquipmentPage = lazy(() => import("./pages/patrimonio/MyEquipmentPage"));
 const PatrimonioRelatorios = lazy(() => import("./pages/patrimonio/PatrimonioRelatorios"));
 const BUCRMLayout = lazy(() => import("./pages/crm/BUCRMLayout"));
+const BIConsorcio = lazy(() => import("./pages/crm/BIConsorcio"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -217,6 +218,7 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
+                <Route path="bi-consorcio" element={<BIConsorcio />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
