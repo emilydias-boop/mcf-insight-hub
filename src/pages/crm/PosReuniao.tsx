@@ -446,6 +446,9 @@ function PropostasTab() {
                     {p.consortium_card_id && (
                       <>
                         <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                        <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Documentos
+                        </Button>
                         {p.documentos_pendentes && (
                           <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
                             <FileText className="h-3 w-3 mr-1" /> Anexar Documentos
