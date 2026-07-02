@@ -248,3 +248,6 @@ verify_jwt = false
 
 [functions.mcf-pay-callback]
 verify_jwt = false
+
+[functions.external-query]
+verify_jwt = false
