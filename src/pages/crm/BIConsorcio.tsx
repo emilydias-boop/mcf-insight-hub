@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import {
   isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
+import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
