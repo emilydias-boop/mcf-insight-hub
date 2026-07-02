@@ -35,12 +35,14 @@ export default function PosReuniao() {
         <TabsList>
           <TabsTrigger value="realizadas">Realizadas</TabsTrigger>
           <TabsTrigger value="propostas">Propostas</TabsTrigger>
+          <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
         </TabsList>
 
         <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
+        <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
         <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
       </Tabs>
