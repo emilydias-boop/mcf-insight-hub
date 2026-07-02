@@ -20,12 +20,12 @@ import {
   CheckCircle2, AlertCircle, Sparkles, Info, RotateCcw,
   Tv, Copy, Check, Download, QrCode, ExternalLink,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
 import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 import { BITVMode } from "@/components/consorcio/BITVMode";
-import { Tv } from "lucide-react";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
