@@ -38,10 +38,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-  // Auth: x-api-key
-  const expected = Deno.env.get("EXTERNAL_QUERY_API_KEY");
-  const provided = req.headers.get("x-api-key");
-  if (!expected || !provided || provided !== expected) {
+  // Auth: x-api-key (trim defensivo para tolerar espaços/CR do secret)
+  const expected = (Deno.env.get("EXTERNAL_QUERY_API_KEY") ?? "").trim();
+  const provided = (req.headers.get("x-api-key") ?? "").trim();
+  if (!expected) {
+    console.error("EXTERNAL_QUERY_API_KEY não está configurado no ambiente");
+    return json({ error: "Server misconfigured" }, 500);
+  }
+  if (!provided || provided !== expected) {
     return json({ error: "Unauthorized" }, 401);
   }
 
