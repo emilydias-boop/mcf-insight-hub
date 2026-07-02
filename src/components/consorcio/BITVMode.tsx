@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { X, Trophy, Flame, Target, TrendingUp, Zap, Rocket, Sparkles } from "lucide-react";
+import { CampaignCarousel } from "./CampaignCarousel";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -39,6 +40,13 @@ export function BITVMode({
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Carrossel da campanha: aparece a cada 5 min
+  const [showCampaign, setShowCampaign] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => setShowCampaign(true), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, []);
 
