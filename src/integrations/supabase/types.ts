@@ -2061,6 +2061,83 @@ export type Database = {
           },
         ]
       }
+      campaign_participants: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          name: string
+          photo_path: string | null
+          role: string
+          sort_order: number
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          name: string
+          photo_path?: string | null
+          role: string
+          sort_order?: number
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          photo_path?: string | null
+          role?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_participants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          active: boolean
+          closer_prize: string | null
+          closer_question: string | null
+          created_at: string
+          id: string
+          month_ref: string | null
+          sdr_prize: string | null
+          sdr_question: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          closer_prize?: string | null
+          closer_question?: string | null
+          created_at?: string
+          id?: string
+          month_ref?: string | null
+          sdr_prize?: string | null
+          sdr_question?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          closer_prize?: string | null
+          closer_question?: string | null
+          created_at?: string
+          id?: string
+          month_ref?: string | null
+          sdr_prize?: string | null
+          sdr_question?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cargo_metricas_config: {
         Row: {
           ativo: boolean | null
