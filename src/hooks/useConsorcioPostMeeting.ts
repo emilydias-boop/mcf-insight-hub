@@ -260,7 +260,9 @@ export function useProposals() {
         consortium_card_id: p.consortium_card_id,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
-        documentos_pendentes: !!p.consortium_card_id && !cardsWithDocs.has(p.consortium_card_id),
+        documentos_pendentes:
+          p.status === 'aceita' &&
+          (!p.consortium_card_id || !cardsWithDocs.has(p.consortium_card_id)),
       })) as Proposal[];
     },
   });
