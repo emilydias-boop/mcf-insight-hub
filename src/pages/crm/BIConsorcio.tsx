@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import {
   isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
+import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -302,6 +303,18 @@ export default function BIConsorcio() {
               accent={faltaMes === 0 ? "success" : "danger"}
             />
           </div>
+
+          {/* Gauge visual BI */}
+          <BIProgressGauge
+            meta={meta}
+            realizado={realizadoTotal}
+            semanas={semanas.map((s, i) => ({
+              index: s.index,
+              metaSemana: s.metaSemana,
+              realizado: realizadoPorSemana[i] || 0,
+              isCurrent: i === semanaAtualIdx,
+            }))}
+          />
 
           {/* Progresso do mês */}
           <Card className="overflow-hidden">
