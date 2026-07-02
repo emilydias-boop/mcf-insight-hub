@@ -34,6 +34,142 @@ const ALLOWED_TABLES = new Set<string>([
   "consorcio_closer_payout",
 ]);
 
+// ============================================================
+// Pricing logic — mirrored from src/lib/incorporadorPricing.ts
+// and src/components/incorporador/TransactionGroupRow.tsx
+// Keep in sync when the frontend logic changes.
+// ============================================================
+const FIXED_GROSS_PRICES_FALLBACK: { pattern: string; price: number }[] = [
+  { pattern: "a005 - mcf p2", price: 0 },
+  { pattern: "a009 - mcf incorporador completo + the club", price: 19500 },
+  { pattern: "a001 - mcf incorporador completo", price: 14500 },
+  { pattern: "a000 - contrato", price: 497 },
+  { pattern: "a010", price: 47 },
+  { pattern: "plano construtor básico", price: 997 },
+  { pattern: "a004 - mcf plano anticrise básico", price: 5500 },
+  { pattern: "a003 - mcf plano anticrise completo", price: 7500 },
+];
+
+const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
+  if (!productName) return originalPrice;
+  const n = productName.toLowerCase().trim();
+  for (const { pattern, price } of FIXED_GROSS_PRICES_FALLBACK) {
+    if (n.includes(pattern)) return price;
+  }
+  return originalPrice;
+};
+
+interface Tx {
+  id: string;
+  hubla_id: string | null;
+  product_name: string | null;
+  product_price: number | null;
+  net_value: number | null;
+  installment_number: number | null;
+  gross_override: number | null;
+  reference_price: number | null;
+  customer_email: string | null;
+  sale_date: string;
+}
+
+const getDeduplicatedGross = (tx: Tx, isFirst: boolean): number => {
+  const installment = tx.installment_number || 1;
+  if (installment > 1) return 0;
+  if (tx.gross_override !== null && tx.gross_override !== undefined) return Number(tx.gross_override);
+  if (!isFirst) return 0;
+  if (tx.product_name?.toLowerCase().trim() === "parceria") return Number(tx.product_price || 0);
+  if (tx.reference_price !== null && tx.reference_price !== undefined) return Number(tx.reference_price);
+  return getFixedGrossPrice(tx.product_name, Number(tx.product_price || 0));
+};
+
+const normalizeProductKey = (productName: string | null): string => {
+  if (!productName) return "unknown";
+  const u = productName.toUpperCase().trim();
+  if (u.includes("A009")) return "A009";
+  if (u.includes("A005")) return "A005";
+  if (u.includes("A004")) return "A004";
+  if (u.includes("A003")) return "A003";
+  if (u.includes("A001")) return "A001";
+  if (u.includes("A010")) return "A010";
+  if (u.includes("A000") || u.includes("CONTRATO")) return "A000";
+  if (u.includes("PLANO CONSTRUTOR")) return "PLANO_CONSTRUTOR";
+  return u.substring(0, 40);
+};
+
+const clientProductKey = (email: string | null, product: string | null) =>
+  `${(email || "unknown").toLowerCase().trim()}|${normalizeProductKey(product)}`;
+
+const computeFirstIdsJS = (txs: Tx[]): Set<string> => {
+  const first = new Map<string, { id: string; date: number }>();
+  for (const tx of txs) {
+    const key = clientProductKey(tx.customer_email, tx.product_name);
+    const d = new Date(tx.sale_date).getTime();
+    const ex = first.get(key);
+    if (!ex || d < ex.date) first.set(key, { id: tx.id, date: d });
+  }
+  return new Set(Array.from(first.values()).map(v => v.id));
+};
+
+async function computeBUTotals(
+  supabase: ReturnType<typeof createClient>,
+  bu: string,
+  startDate: string,
+  endDate: string,
+) {
+  const { data: rows, error } = await supabase.rpc("get_hubla_transactions_by_bu", {
+    p_bu: bu,
+    p_search: null,
+    p_start_date: startDate,
+    p_end_date: endDate,
+    p_limit: 5000,
+  });
+  if (error) throw error;
+  const txs = (rows ?? []) as Tx[];
+
+  // First IDs: prefer authoritative RPC for incorporador; JS fallback for other BUs.
+  let firstIds: Set<string>;
+  if (bu === "incorporador") {
+    const { data: firstRows, error: fErr } = await supabase.rpc("get_first_transaction_ids");
+    if (fErr) throw fErr;
+    firstIds = new Set(((firstRows ?? []) as { id: string }[]).map(r => r.id));
+  } else {
+    firstIds = computeFirstIdsJS(txs);
+  }
+
+  // Group by base hubla_id (strip -offer-N) to match groupTransactionsByPurchase
+  type Group = { hasBumps: boolean; bumps: Tx[]; all: Tx[]; gross: number };
+  const groups = new Map<string, Group>();
+  for (const tx of txs) {
+    const baseId = tx.hubla_id?.replace(/-offer-\d+$/, "") || tx.id;
+    const isBump = !!tx.hubla_id?.includes("-offer-");
+    let g = groups.get(baseId);
+    if (!g) { g = { hasBumps: false, bumps: [], all: [], gross: 0 }; groups.set(baseId, g); }
+    g.all.push(tx);
+    if (isBump) { g.bumps.push(tx); g.hasBumps = true; }
+    g.gross += getDeduplicatedGross(tx, firstIds.has(tx.id));
+  }
+
+  let bruto = 0;
+  let liquido = 0;
+  for (const g of groups.values()) {
+    if (g.hasBumps) {
+      // With bumps: net = sum of bumps only (main = cart total, would double-count)
+      liquido += g.bumps.reduce((s, t) => s + Number(t.net_value || 0), 0);
+      // Gross: prefer bumps-only if non-zero, else keep full group gross
+      const bumpsGross = g.bumps.reduce(
+        (s, t) => s + getDeduplicatedGross(t, firstIds.has(t.id)),
+        0,
+      );
+      bruto += bumpsGross > 0 ? bumpsGross : g.gross;
+    } else {
+      bruto += g.gross;
+      liquido += g.all.reduce((s, t) => s + Number(t.net_value || 0), 0);
+    }
+  }
+
+  return { bruto, liquido, total_transacoes: txs.length };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -51,6 +187,10 @@ Deno.serve(async (req) => {
 
   // Parse body
   let body: {
+    action?: string;
+    bu?: string;
+    start_date?: string;
+    end_date?: string;
     table?: string;
     filters?: Record<string, unknown>;
     select?: string;
@@ -60,6 +200,43 @@ Deno.serve(async (req) => {
     body = await req.json();
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+
+  const clientName = req.headers.get("x-client-name") ?? "external-query";
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0]?.trim() || null;
+
+  // ---- Action: get_bu_totals ----
+  if (body.action === "get_bu_totals") {
+    const bu = (body.bu ?? "").toString().trim().toLowerCase();
+    const startDate = (body.start_date ?? "").toString().trim();
+    const endDate = (body.end_date ?? "").toString().trim();
+    const allowedBUs = new Set(["incorporador", "consorcio", "credito"]);
+    if (!allowedBUs.has(bu)) return json({ error: "Invalid or missing 'bu'" }, 400);
+    if (!startDate || !endDate) return json({ error: "Missing 'start_date' or 'end_date'" }, 400);
+
+    try {
+      const totals = await computeBUTotals(supabase, bu, startDate, endDate);
+      try {
+        await supabase.from("audit_logs").insert({
+          action: "external_query_get_bu_totals",
+          table_name: "hubla_transactions",
+          new_data: { client: clientName, bu, start_date: startDate, end_date: endDate, ...totals },
+          ip_address: ip,
+          user_agent: req.headers.get("user-agent"),
+        });
+      } catch (e) { console.error("audit_logs insert failed", e); }
+      return json(totals);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return json({ error: msg }, 400);
+    }
   }
 
   const table = (body.table ?? "").toString().trim();
@@ -75,12 +252,6 @@ Deno.serve(async (req) => {
   if (!/^[a-z0-9_,\s\*\(\)\.:]+$/i.test(select)) {
     return json({ error: "Invalid select expression" }, 400);
   }
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { persistSession: false } },
-  );
 
   // Build query. Supports scalar equality, arrays (IN) and simple operator objects:
   // { gte: x, lte: y, like: '%foo%', in: [1,2] }
@@ -116,10 +287,6 @@ Deno.serve(async (req) => {
 
   const { data, error } = await query;
 
-  // Audit log (best-effort — never block response)
-  const clientName = req.headers.get("x-client-name") ?? "external-query";
-  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-  const ip = ipHeader.split(",")[0]?.trim() || null;
   try {
     await supabase.from("audit_logs").insert({
       action: error ? "external_query_error" : "external_query",
