@@ -13142,6 +13142,7 @@ export type Database = {
         }[]
       }
       get_bi_public_consorcio: { Args: { _token: string }; Returns: Json }
+      get_bi_public_incorporador: { Args: { _token: string }; Returns: Json }
       get_carrinho_r2_attendees: {
         Args: {
           p_apply_contract_cutoff?: boolean
