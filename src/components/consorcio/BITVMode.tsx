@@ -43,11 +43,12 @@ export function BITVMode({
     return () => clearInterval(t);
   }, []);
 
-  // Carrossel da campanha: aparece a cada 5 min
+  // Carrossel da campanha: aparece 15s após abrir e depois a cada 5 min
   const [showCampaign, setShowCampaign] = useState(false);
   useEffect(() => {
+    const first = setTimeout(() => setShowCampaign(true), 15 * 1000);
     const t = setInterval(() => setShowCampaign(true), 5 * 60 * 1000);
-    return () => clearInterval(t);
+    return () => { clearTimeout(first); clearInterval(t); };
   }, []);
 
   useEffect(() => {
