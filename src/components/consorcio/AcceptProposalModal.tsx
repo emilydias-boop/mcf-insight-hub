@@ -238,25 +238,7 @@ export function AcceptProposalModal({
   }, [form]);
 
   const onSubmit = async (data: any) => {
-    // Validate documents
-    if (tipoPessoa === 'pf' && pfDocuments.length === 0) {
-      form.setError('root', { message: 'Upload do RG ou CNH é obrigatório' });
-      return;
-    }
-    if (tipoPessoa === 'pj') {
-      if (!pjDocContratoSocial) {
-        form.setError('root', { message: 'Upload do Contrato Social é obrigatório' });
-        return;
-      }
-      if (!pjDocRgSocios) {
-        form.setError('root', { message: 'Upload do RG/CNH dos sócios é obrigatório' });
-        return;
-      }
-      if (!pjDocCartaoCnpj) {
-        form.setError('root', { message: 'Upload do Cartão CNPJ é obrigatório' });
-        return;
-      }
-    }
+    // Documentos são opcionais — podem ser anexados posteriormente
 
     // Build documents array
     const documents: Array<{ file: File; tipo: TipoDocumento }> = [];
