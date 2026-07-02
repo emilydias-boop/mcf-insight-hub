@@ -27,6 +27,7 @@ import {
 import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 import { BITVMode } from "@/components/consorcio/BITVMode";
 import { CampaignCarousel } from "@/components/consorcio/CampaignCarousel";
+import { CampaignManagerDialog } from "@/components/consorcio/CampaignManagerDialog";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -48,6 +49,7 @@ export default function BIConsorcio() {
   const monthRefISO = format(monthStart, "yyyy-MM-dd");
   const [tvMode, setTvMode] = useState(false);
   const [previewCampaign, setPreviewCampaign] = useState(false);
+  const [manageCampaign, setManageCampaign] = useState(false);
 
   // === Meta ===
   const { data: metaRow, isLoading: metaLoading } = useQuery({
@@ -246,9 +248,15 @@ export default function BIConsorcio() {
         >
           <Sparkles className="h-4 w-4" /> Prévia Campanha
         </Button>
+        {canEdit && (
+          <Button variant="outline" onClick={() => setManageCampaign(true)} className="gap-2">
+            <Trophy className="h-4 w-4" /> Gerenciar Campanha
+          </Button>
+        )}
       </div>
 
       {previewCampaign && <CampaignCarousel onClose={() => setPreviewCampaign(false)} />}
+      <CampaignManagerDialog open={manageCampaign} onOpenChange={setManageCampaign} />
 
 
       {tvMode && (
