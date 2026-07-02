@@ -28,6 +28,7 @@ const PriceCacheInitializer = () => {
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+const BIConsorcioPublic = lazy(() => import("./pages/public/BIConsorcioPublic"));
 
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -164,6 +165,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/bi/consorcio" element={<BIConsorcioPublic />} />
             
             {/* Protected routes */}
             <Route
