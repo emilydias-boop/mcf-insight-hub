@@ -54,6 +54,7 @@ export const OUTBOUND_EVENTS = [
   { value: 'sale.created', label: 'Venda Criada' },
   { value: 'sale.updated', label: 'Venda Atualizada' },
   { value: 'sale.refunded', label: 'Venda Reembolsada' },
+  { value: 'sale.linked', label: 'Venda Vinculada (Closer/SDR)' },
   { value: 'consorcio.venda.criada', label: 'Consórcio - Venda Criada' },
   { value: 'consorcio.venda.atualizada', label: 'Consórcio - Venda Atualizada' },
   { value: 'consorcio.venda.cancelada', label: 'Consórcio - Venda Cancelada' },
