@@ -87,6 +87,7 @@ export interface Proposal {
   origin_id: string;
   created_at: string;
   documentos_pendentes?: boolean;
+  completa?: boolean;
 }
 
 export interface SemSucessoDeal {
