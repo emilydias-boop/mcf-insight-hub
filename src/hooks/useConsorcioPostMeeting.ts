@@ -227,6 +227,21 @@ export function useProposals() {
 
       if (error) throw error;
 
+      // Check for pending documents on linked consortium cards
+      const cardIds = (data || [])
+        .map(p => p.consortium_card_id)
+        .filter(Boolean) as string[];
+      const cardsWithDocs = new Set<string>();
+      if (cardIds.length > 0) {
+        const { data: docs } = await supabase
+          .from('consortium_documents')
+          .select('card_id')
+          .in('card_id', cardIds);
+        (docs || []).forEach(d => {
+          if (d.card_id) cardsWithDocs.add(d.card_id);
+        });
+      }
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -245,6 +260,7 @@ export function useProposals() {
         consortium_card_id: p.consortium_card_id,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
+        documentos_pendentes: !!p.consortium_card_id && !cardsWithDocs.has(p.consortium_card_id),
       })) as Proposal[];
     },
   });
