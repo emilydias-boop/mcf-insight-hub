@@ -274,17 +274,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // Processar contratos COM contract_paid_at (prioridade)
       contractsByPaymentDate?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
-        const scheduledAt = (att.meeting_slot as any)?.scheduled_at;
-        const contractPaidAt = att.contract_paid_at;
-        
-        // EXCLUIR OUTSIDE: contrato pago ANTES da reunião não conta
-        if (contractPaidAt && scheduledAt) {
-          const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
-          if (isOutside) {
-            return; // Outside - não contar como contrato pago
-          }
-        }
-        
+        // Outside real (venda sem R1 vinculada) é detectado na Part B abaixo.
+        // Pagar pouco antes do horário agendado NÃO é Outside — é antecipação.
         if (closerId && !countedAttendeeIds.has(att.id)) {
           contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
           countedAttendeeIds.add(att.id);
