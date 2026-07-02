@@ -86,6 +86,7 @@ export interface Proposal {
   consortium_card_id: string | null;
   origin_id: string;
   created_at: string;
+  documentos_pendentes?: boolean;
 }
 
 export interface SemSucessoDeal {
