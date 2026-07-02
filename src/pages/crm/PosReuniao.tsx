@@ -382,7 +382,11 @@ function PropostasTab() {
             </TableHeader>
             <TableBody>
               {propostas.map(p => (
-                <TableRow key={p.id} className="cursor-pointer" onClick={() => setSelectedDealId(p.deal_id)}>
+                <TableRow
+                  key={p.id}
+                  className={`cursor-pointer ${p.documentos_pendentes ? 'bg-destructive/10 hover:bg-destructive/20 border-l-4 border-l-destructive' : ''}`}
+                  onClick={() => setSelectedDealId(p.deal_id)}
+                >
                   <TableCell className="font-medium">
                     {p.contact_name || p.deal_name}
                   </TableCell>
@@ -392,9 +396,16 @@ function PropostasTab() {
                     <Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
-                      {p.status}
-                    </Badge>
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
+                        {p.status}
+                      </Badge>
+                      {p.documentos_pendentes && (
+                        <Badge variant="destructive" className="text-xs">
+                          Documento pendente
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                     {p.status === 'pendente' && (
