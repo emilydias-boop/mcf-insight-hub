@@ -1381,6 +1381,33 @@ export type Database = {
         }
         Relationships: []
       }
+      bi_public_tokens: {
+        Row: {
+          active: boolean
+          bu: string
+          created_at: string
+          created_by: string | null
+          note: string | null
+          token: string
+        }
+        Insert: {
+          active?: boolean
+          bu: string
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+          token: string
+        }
+        Update: {
+          active?: boolean
+          bu?: string
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+          token?: string
+        }
+        Relationships: []
+      }
       billing_agreement_installments: {
         Row: {
           agreement_id: string
@@ -13037,6 +13064,7 @@ export type Database = {
           total_installments: number
         }[]
       }
+      get_bi_public_consorcio: { Args: { _token: string }; Returns: Json }
       get_carrinho_r2_attendees: {
         Args: {
           p_apply_contract_cutoff?: boolean
