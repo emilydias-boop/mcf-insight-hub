@@ -164,6 +164,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/bi/consorcio" element={<BIConsorcioPublic />} />
             
             {/* Protected routes */}
             <Route
