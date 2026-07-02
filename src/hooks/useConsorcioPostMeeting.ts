@@ -242,6 +242,36 @@ export function useProposals() {
         });
       }
 
+      // Also check documents attached via pending_registrations (deal-level uploads
+      // before/without a linked consortium card)
+      const dealIds = (data || [])
+        .map(p => p.deal_id)
+        .filter(Boolean) as string[];
+      const dealsWithDocs = new Set<string>();
+      if (dealIds.length > 0) {
+        const { data: pendingRegs } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('id, deal_id')
+          .in('deal_id', dealIds);
+        const pendingIdToDeal = new Map<string, string>();
+        (pendingRegs || []).forEach(pr => {
+          if (pr.id && pr.deal_id) pendingIdToDeal.set(pr.id, pr.deal_id);
+        });
+        const pendingIds = Array.from(pendingIdToDeal.keys());
+        if (pendingIds.length > 0) {
+          const { data: pendingDocs } = await supabase
+            .from('consortium_documents')
+            .select('pending_registration_id')
+            .in('pending_registration_id', pendingIds);
+          (pendingDocs || []).forEach(d => {
+            const dealId = d.pending_registration_id
+              ? pendingIdToDeal.get(d.pending_registration_id)
+              : undefined;
+            if (dealId) dealsWithDocs.add(dealId);
+          });
+        }
+      }
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -262,7 +292,8 @@ export function useProposals() {
         created_at: p.created_at || '',
         documentos_pendentes:
           p.status === 'aceita' &&
-          (!p.consortium_card_id || !cardsWithDocs.has(p.consortium_card_id)),
+          !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&
+          !(p.deal_id && dealsWithDocs.has(p.deal_id)),
       })) as Proposal[];
     },
   });
