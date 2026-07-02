@@ -239,6 +239,8 @@ export default function BIConsorcio() {
         </Button>
       </div>
 
+      <TVLauncherCard copied={copied} setCopied={setCopied} />
+
       {tvMode && (
         <BITVMode
           meta={meta}
