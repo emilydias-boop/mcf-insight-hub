@@ -329,7 +329,8 @@ function RealizadasTab() {
 
 // ─── Propostas Tab ───────────────────────────────────────────
 function PropostasTab() {
-  const { data: propostas = [], isLoading } = useProposals();
+  const { data: allPropostas = [], isLoading } = useProposals();
+  const propostas = useMemo(() => allPropostas.filter(p => !p.completa), [allPropostas]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
