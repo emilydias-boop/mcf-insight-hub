@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Trophy, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import closer1 from "@/assets/campanha/closer1.asset.json";
 import closer2 from "@/assets/campanha/closer2.asset.json";
 import sdr1 from "@/assets/campanha/sdr1.asset.json";
@@ -7,11 +9,11 @@ import sdr2 from "@/assets/campanha/sdr2.asset.json";
 
 interface Person { name?: string; url: string }
 
-const CLOSERS: Person[] = [
+const FALLBACK_CLOSERS: Person[] = [
   { name: "André Duarte", url: closer1.url },
   { name: "Closer", url: closer2.url },
 ];
-const SDRS: Person[] = [
+const FALLBACK_SDRS: Person[] = [
   { name: "SDR", url: sdr1.url },
   { name: "SDR", url: sdr2.url },
 ];
@@ -28,9 +30,59 @@ export function CampaignCarousel({ onClose }: Props) {
   const [phase, setPhase] = useState<"closer" | "sdr">("closer");
   const [idx, setIdx] = useState(0);
 
-  const list = phase === "closer" ? CLOSERS : SDRS;
-  const prize = phase === "closer" ? "R$ 5.000,00" : "R$ 3.000,00";
+  const { data } = useQuery({
+    queryKey: ["campaign-carousel"],
+    queryFn: async () => {
+      const { data: c } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!c) return null;
+      const { data: parts } = await supabase
+        .from("campaign_participants")
+        .select("*")
+        .eq("campaign_id", c.id)
+        .order("sort_order");
+      return { campaign: c, participants: parts ?? [] };
+    },
+  });
+
+  const { closers, sdrs, closerPrize, sdrPrize, closerQ, sdrQ } = useMemo(() => {
+    if (!data?.campaign) {
+      return {
+        closers: FALLBACK_CLOSERS,
+        sdrs: FALLBACK_SDRS,
+        closerPrize: "R$ 5.000,00",
+        sdrPrize: "R$ 3.000,00",
+        closerQ: "Quem vai levar",
+        sdrQ: "Quem vai levar",
+      };
+    }
+    const toPerson = (p: any): Person => ({
+      name: p.name,
+      url: p.photo_path
+        ? supabase.storage.from("campaign-photos").getPublicUrl(p.photo_path).data.publicUrl
+        : "",
+    });
+    const cl = data.participants.filter((p: any) => p.role === "closer").map(toPerson).filter((p: Person) => p.url);
+    const sd = data.participants.filter((p: any) => p.role === "sdr").map(toPerson).filter((p: Person) => p.url);
+    return {
+      closers: cl.length ? cl : FALLBACK_CLOSERS,
+      sdrs: sd.length ? sd : FALLBACK_SDRS,
+      closerPrize: data.campaign.closer_prize || "R$ 5.000,00",
+      sdrPrize: data.campaign.sdr_prize || "R$ 3.000,00",
+      closerQ: data.campaign.closer_question || "Quem vai levar",
+      sdrQ: data.campaign.sdr_question || "Quem vai levar",
+    };
+  }, [data]);
+
+  const list = phase === "closer" ? closers : sdrs;
+  const prize = phase === "closer" ? closerPrize : sdrPrize;
   const role = phase === "closer" ? "Closer" : "SDR";
+  const question = phase === "closer" ? closerQ : sdrQ;
 
   // ciclo de fotos
   useEffect(() => {
@@ -54,7 +106,8 @@ export function CampaignCarousel({ onClose }: Props) {
     return () => clearTimeout(t);
   }, [phase, onClose]);
 
-  const person = list[idx];
+  const person = list[idx % Math.max(1, list.length)];
+  if (!person) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden bg-[#050505]/95 backdrop-blur-xl animate-fade-in">
@@ -74,7 +127,7 @@ export function CampaignCarousel({ onClose }: Props) {
           <Sparkles className="w-5 h-5 text-[#bfff00]" />
         </div>
         <h1 className="text-6xl md:text-8xl font-black tracking-tight text-white leading-none">
-          Quem vai levar
+          {question}
         </h1>
         <div className="mt-4 text-7xl md:text-9xl font-black text-[#bfff00] drop-shadow-[0_0_40px_rgba(191,255,0,0.6)]">
           {prize}
