@@ -1,53 +1,55 @@
-## Objetivo
-Criar um **BI Comercial** para a BU Incorporador espelhando o BI Consórcio (mesma UI e Modo TV), com paleta diferenciada e usando os mesmos valores/regras do card **MCF Incorporador** do Painel Comercial (semana Sáb→Sex, mês corrente, ano corrente).
 
-## Escopo funcional
+## Diagnóstico
 
-1. Nova rota interna: `/crm/consorcio/bi-comercial` → página `BIComercial`
-2. Nova rota pública (TV): `/bi/incorporador?k=<token>` → página `BIComercialPublic`
-3. `mcfgestao.com/tv` continua abrindo o Consórcio; para rotacionar TVs, o usuário abre `/bi/incorporador?k=...` em outra tela/aba.
+Vasculhei o banco pelo dia 02/07/2026 (janela BRT) e encontrei o seguinte:
 
-## Fonte de dados (mesma do Painel Comercial → Setor "MCF Incorporador")
+**Existem sim 18 contratos pagos no dia** para BU Incorporador (`meeting_slot_attendees.contract_paid_at` dentro do dia, `is_partner=false`, R1). O Jardel **está entre eles** — o que confunde é que ele aparece com outro nome no painel/lista.
 
-- Vendas: `get_hubla_transactions_by_bu('incorporador', ...)` filtradas por `sale_date`, aplicando a mesma **deduplicação por cliente+produto** já usada em `useSetoresDashboard` (`get_first_transaction_ids` + `getDeduplicatedGross`).
-- Metas: `team_targets` com `target_type` = `setor_incorporador_semana` / `_mes` / `_ano`.
-- Semana Sáb→Sex (weekStartsOn = 6), Mês corrente (`startOfMonth`/`endOfMonth`), Ano corrente.
-- Meta editável do BI **não** é criada — os valores de meta vêm de `team_targets` (mesmos do Painel Comercial). Edição continua sendo feita no cadastro de metas existente.
+### Registro do "Jardel" no banco
 
-## Componentes visuais
+- `meeting_slot_attendees.id = 83920180-5019-462a-bc6f-9b029b1f062e`
+- `attendee_name = "Francisco Pereira Alves "` (sem "Jardel", com espaço no fim)
+- `attendee_phone = +5588994278311`
+- `status = contract_paid`, `is_partner = false`
+- `contract_paid_at = 2026-07-02 21:10:40 UTC` (18:10 BRT — depois da R1 das 17h, portanto **não é outside**)
+- Slot R1 do closer **Julio** (`697b1c04-…`), booked_by **Elienai Damasceno** (SDR válido do squad incorporador)
+- `deal_id = 8506677a-…` → contato `Francisco Pereira Alves` com e-mail `j2rconstrucaobs@gmail.com`
+- Transação Hubla correspondente (mcfpay, `A000 - Contrato`, R$ 497) tem `customer_name = "jardel francisco pereira alves"` e `customer_email = jardel23jj@gmail.com` — outro e-mail
 
-- Reutilizar `BITVMode` extraindo cor em prop (`accent: "lime" | "orange"`).
-    - Consórcio: `#bfff00` (verde neon) — mantém.
-    - Incorporador: `#ff7a00` (laranja neon) + secundária magenta.
-- Cabeçalho na TV do Incorporador: "MCF · BI Comercial ao vivo · Incorporador".
-- Gauge central mostra % da **meta do mês**; KPIs à direita: Hoje, Dias corridos no mês, Semana atual; Ranking Semanal com 4-5 semanas Sáb→Sex do mês.
+Ou seja: **o lead que você chama de "Jardel" é o que aparece na lista como "Francisco Pereira Alves"**. Ele conta como 1 contrato do Julio, mas o nome exibido não bate com o do cliente porque:
 
-## Backend
+1. O `attendee_name` gravado no agendamento (Calendly/importação) veio como "Francisco Pereira Alves" (nome do contato do CRM), sem o "Jardel".
+2. Na Hubla o cliente pagou com o nome completo "Jardel Francisco Pereira Alves" e um e-mail diferente (`jardel23jj@…` vs `j2rconstrucaobs@…`), por isso o link Hubla ↔ attendee foi feito por vínculo de `deal_id` / telefone, mas o **nome exibido** vem do attendee, não da Hubla.
 
-Nova RPC pública `public.get_bi_public_incorporador(_token text)` (SECURITY DEFINER):
-- Valida token em `bi_public_tokens` com `bu = 'incorporador'`.
-- Retorna JSON com: `month_ref`, `meta_semana`, `meta_mes`, `meta_ano`, `apurado_semana`, `apurado_mes`, `apurado_ano`, `apurado_hoje`, e `daily` (array `{d, v}` do mês corrente já deduplicado).
-- Deduplicação é feita reaproveitando `get_first_transaction_ids()` numa CTE e aplicando `installment_number > 1 → 0`, `gross_override` prioritário, `reference_price` senão `product_price`.
+### Sobre "17 vs 18"
 
-Semear token para `incorporador` em `bi_public_tokens`.
+A RPC/consulta do painel (`useR1CloserMetrics`) conta todos os 18 attendees — Jardel incluso — e agrupa por closer:
 
-## Página interna `BIComercial`
+- William 8, Julio 6 (incluindo Jardel), Leticia 3, Jessica 1 → total 18
 
-- Cards: Meta do mês, Meta por dia corrido, Realizado no mês, Falta atingir.
-- Semanas Sáb→Sex do mês com progresso e meta rateada (meta_mes/número de dias do mês × dias da semana).
-- Botão "Modo TV" abre `BITVMode` com `accent="orange"`.
-- Botão "Prévia Campanha" (reutiliza `CampaignCarousel`).
-- Sem editor de meta e sem dias-úteis-override (para não conflitar com `team_targets`).
+Portanto o painel deveria estar mostrando **18**, não 17. Preciso confirmar em runtime se realmente está em 17 (pode ser cache de 30s do React Query ou o painel estar somando apenas 5 contratos do Julio por algum filtro na tela específica). O dado bruto no banco está correto e completo.
 
-## Sidebar
+## Proposta
 
-Adicionar item "BI Comercial" no grupo BU Incorporador (visível só a admins/gestores, igual ao BI Consórcio).
+1. **Corrigir o nome exibido do lead**
+   - Atualizar `meeting_slot_attendees.attendee_name` do id `83920180-…` para `"Jardel Francisco Pereira Alves"`.
+   - Opcional (recomendo perguntar antes): atualizar também o `crm_contacts.name` e o `crm_deals.name` do deal `8506677a-…` para o nome completo, para não voltar a divergir em novas reuniões.
+
+2. **Revalidar a contagem 17 vs 18 no painel em runtime**
+   - Abrir `/crm/reunioes-equipe?preset=today`, forçar refresh (invalidar React Query) e conferir se o total de contratos passou a marcar 18.
+   - Se **ainda** aparecer 17 depois do refresh, investigar dois pontos específicos onde o Jardel pode estar sendo silenciosamente excluído no cliente:
+     - `useR1CloserMetrics` → bloco de outside detection: como o `deal.contact.email` (`j2rconstrucaobs@…`) é diferente do `customer_email` da Hubla (`jardel23jj@…`), o join por e-mail não casa e ele não deveria ser marcado como outside — confirmar via log.
+     - Bloco de dedup (`closerDealMap`): dois attendees pagos no mesmo slot/deal — no caso do Jardel o `deal_id` é diferente do outro attendee do mesmo slot (Antonio Augusto), então também não deveria ser dedupado. Confirmar.
+
+3. **Melhoria opcional para o futuro** (deixo para outra rodada, só sinalizo aqui)
+   - Quando um pagamento Hubla é vinculado a um attendee, sincronizar o `attendee_name` com o `customer_name` completo da Hubla (evita esse tipo de divergência de identificação em vendas onde o pagador tem nome mais completo que o contato do CRM).
 
 ## Detalhes técnicos
 
-- `src/components/consorcio/BITVMode.tsx` → aceitar `accent?: "lime"|"orange"` e `title?: string`.
-- `src/pages/crm/BIComercial.tsx` — nova página interna.
-- `src/pages/public/BIComercialPublic.tsx` — nova página pública consumindo a nova RPC.
-- `src/App.tsx` — adicionar as duas rotas.
-- Migration: criar RPC + insert de token `bi_public_tokens`.
-- Sem alteração no BI Consórcio.
+- Migration curta com dois `UPDATE` (attendee_name e, se aprovado, contact/deal name).
+- Nenhuma mudança de RPC ou de lógica de contagem é necessária para resolver o sintoma reportado.
+- Depois do UPDATE, o painel/lista passa a exibir "Jardel Francisco Pereira Alves" e a confusão some.
+
+## Confirmação que preciso antes de implementar
+
+Só quero validar: além do `attendee_name` do agendamento, você quer que eu **também** atualize o nome do contato e do deal no CRM para "Jardel Francisco Pereira Alves"? (Recomendo sim, mas prefiro perguntar porque mexe em outros lugares do sistema onde esse deal aparece.)
