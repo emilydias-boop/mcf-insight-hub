@@ -18,8 +18,8 @@ import { ptBR } from "date-fns/locale";
 import {
   Target, TrendingUp, CalendarDays, Wallet, Trophy, Pencil,
   CheckCircle2, AlertCircle, Sparkles, Info, RotateCcw,
+  Tv, Copy, Check, Download, QrCode, ExternalLink,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
