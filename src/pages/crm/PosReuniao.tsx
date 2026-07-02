@@ -507,6 +507,88 @@ function SemSucessoTab() {
   const retomar = useRetomarContato();
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
+  return <_SemSucessoTabInner />;
+}
+
+// ─── Concluídas Tab ──────────────────────────────────────────
+function ConcluidasTab() {
+  const { data: allPropostas = [], isLoading } = useProposals();
+  const propostas = useMemo(() => allPropostas.filter(p => p.completa), [allPropostas]);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
+
+  if (isLoading) return <LoadingState />;
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Propostas Concluídas ({propostas.length})</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {propostas.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta concluída ainda.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contato</TableHead>
+                <TableHead>Valor Crédito</TableHead>
+                <TableHead>Prazo</TableHead>
+                <TableHead>Produto</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {propostas.map(p => (
+                <TableRow
+                  key={p.id}
+                  className="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border-l-4 border-l-emerald-500"
+                  onClick={() => setSelectedDealId(p.deal_id)}
+                >
+                  <TableCell className="font-medium">{p.contact_name || p.deal_name}</TableCell>
+                  <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
+                  <TableCell>{p.prazo_meses} meses</TableCell>
+                  <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
+                  <TableCell>
+                    <Badge className="bg-emerald-600 text-white text-xs">Check-list + Docs OK</Badge>
+                  </TableCell>
+                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
+                    {p.consortium_card_id && (
+                      <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                        <FileText className="h-3 w-3 mr-1" /> Ver Documentos
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {uploadTarget && uploadTarget.consortium_card_id && (
+          <UploadPendingDocumentsDialog
+            open={!!uploadTarget}
+            onOpenChange={o => !o && setUploadTarget(null)}
+            cardId={uploadTarget.consortium_card_id}
+            contactName={uploadTarget.contact_name || uploadTarget.deal_name}
+          />
+        )}
+
+        <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function _SemSucessoTabInner() {
+  const { data: deals = [], isLoading } = useSemSucesso();
+  const retomar = useRetomarContato();
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+
   if (isLoading) return <LoadingState />;
 
   return (
