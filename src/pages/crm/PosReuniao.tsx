@@ -35,12 +35,14 @@ export default function PosReuniao() {
         <TabsList>
           <TabsTrigger value="realizadas">Realizadas</TabsTrigger>
           <TabsTrigger value="propostas">Propostas</TabsTrigger>
+          <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
         </TabsList>
 
         <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
+        <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
         <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
       </Tabs>
@@ -327,7 +329,8 @@ function RealizadasTab() {
 
 // ─── Propostas Tab ───────────────────────────────────────────
 function PropostasTab() {
-  const { data: propostas = [], isLoading } = useProposals();
+  const { data: allPropostas = [], isLoading } = useProposals();
+  const propostas = useMemo(() => allPropostas.filter(p => !p.completa), [allPropostas]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -443,6 +446,9 @@ function PropostasTab() {
                     {p.consortium_card_id && (
                       <>
                         <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                        <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Documentos
+                        </Button>
                         {p.documentos_pendentes && (
                           <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
                             <FileText className="h-3 w-3 mr-1" /> Anexar Documentos
@@ -497,6 +503,84 @@ function PropostasTab() {
 
 // ─── Sem Sucesso Tab ─────────────────────────────────────────
 function SemSucessoTab() {
+  return <_SemSucessoTabInner />;
+}
+
+// ─── Concluídas Tab ──────────────────────────────────────────
+function ConcluidasTab() {
+  const { data: allPropostas = [], isLoading } = useProposals();
+  const propostas = useMemo(() => allPropostas.filter(p => p.completa), [allPropostas]);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
+
+  if (isLoading) return <LoadingState />;
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Propostas Concluídas ({propostas.length})</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {propostas.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta concluída ainda.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contato</TableHead>
+                <TableHead>Valor Crédito</TableHead>
+                <TableHead>Prazo</TableHead>
+                <TableHead>Produto</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {propostas.map(p => (
+                <TableRow
+                  key={p.id}
+                  className="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border-l-4 border-l-emerald-500"
+                  onClick={() => setSelectedDealId(p.deal_id)}
+                >
+                  <TableCell className="font-medium">{p.contact_name || p.deal_name}</TableCell>
+                  <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
+                  <TableCell>{p.prazo_meses} meses</TableCell>
+                  <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
+                  <TableCell>
+                    <Badge className="bg-emerald-600 text-white text-xs">Check-list + Docs OK</Badge>
+                  </TableCell>
+                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
+                    {p.consortium_card_id && (
+                      <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                        <FileText className="h-3 w-3 mr-1" /> Ver Documentos
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {uploadTarget && uploadTarget.consortium_card_id && (
+          <UploadPendingDocumentsDialog
+            open={!!uploadTarget}
+            onOpenChange={o => !o && setUploadTarget(null)}
+            cardId={uploadTarget.consortium_card_id}
+            contactName={uploadTarget.contact_name || uploadTarget.deal_name}
+          />
+        )}
+
+        <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function _SemSucessoTabInner() {
   const { data: deals = [], isLoading } = useSemSucesso();
   const retomar = useRetomarContato();
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);

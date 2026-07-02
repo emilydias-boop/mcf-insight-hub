@@ -87,6 +87,7 @@ export interface Proposal {
   origin_id: string;
   created_at: string;
   documentos_pendentes?: boolean;
+  completa?: boolean;
 }
 
 export interface SemSucessoDeal {
@@ -294,6 +295,11 @@ export function useProposals() {
           p.status === 'aceita' &&
           !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&
           !(p.deal_id && dealsWithDocs.has(p.deal_id)),
+        completa:
+          p.status === 'aceita' &&
+          !!p.consortium_card_id &&
+          ((p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) ||
+            (p.deal_id && dealsWithDocs.has(p.deal_id))),
       })) as Proposal[];
     },
   });
