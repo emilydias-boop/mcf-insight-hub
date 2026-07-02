@@ -463,12 +463,13 @@ export function AcceptProposalModal({
                           if (parsed.email_comercial) form.setValue('email_comercial', parsed.email_comercial);
                           if (parsed.faturamento_mensal) form.setValue('faturamento_mensal', parsed.faturamento_mensal);
                           if (parsed.num_funcionarios !== undefined) form.setValue('num_funcionarios', parsed.num_funcionarios);
-                          // Handle socios
-                          if (parsed.socios_cpfs && parsed.socios_cpfs.length > 0) {
-                            const rendaPorSocio = parsed.renda_socios ? Math.round((parsed.renda_socios / parsed.socios_cpfs.length) * 100) / 100 : 0;
-                            // Remove existing socios and add new ones
-                            while (socioFields.length > 0) removeSocio(0);
-                            parsed.socios_cpfs.forEach(cpf => {
+                          // Handle socios — only when parser found valid CPFs
+                          const validCpfs = (parsed.socios_cpfs || []).filter(c => /\d/.test(c));
+                          if (validCpfs.length > 0) {
+                            const rendaPorSocio = parsed.renda_socios ? Math.round((parsed.renda_socios / validCpfs.length) * 100) / 100 : 0;
+                            // Remove existing socios (iterate backwards to avoid index shift / infinite loop)
+                            for (let i = socioFields.length - 1; i >= 0; i--) removeSocio(i);
+                            validCpfs.forEach(cpf => {
                               addSocio({ cpf: formatCpf(cpf), renda: rendaPorSocio });
                             });
                           }
