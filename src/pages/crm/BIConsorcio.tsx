@@ -304,6 +304,18 @@ export default function BIConsorcio() {
             />
           </div>
 
+          {/* Gauge visual BI */}
+          <BIProgressGauge
+            meta={meta}
+            realizado={realizadoTotal}
+            semanas={semanas.map((s, i) => ({
+              index: s.index,
+              metaSemana: s.metaSemana,
+              realizado: realizadoPorSemana[i] || 0,
+              isCurrent: i === semanaAtualIdx,
+            }))}
+          />
+
           {/* Progresso do mês */}
           <Card className="overflow-hidden">
             <CardHeader>
