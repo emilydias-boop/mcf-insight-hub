@@ -46,7 +46,16 @@ export function CampaignCarousel({ onClose }: Props) {
         .select("*")
         .eq("campaign_id", c.id)
         .order("sort_order");
-      return { campaign: c, participants: parts ?? [] };
+      const withUrls = await Promise.all(
+        (parts ?? []).map(async (p: any) => {
+          if (!p.photo_path) return { ...p, _url: "" };
+          const { data: signed } = await supabase.storage
+            .from("campaign-photos")
+            .createSignedUrl(p.photo_path, 60 * 60 * 6);
+          return { ...p, _url: signed?.signedUrl || "" };
+        })
+      );
+      return { campaign: c, participants: withUrls };
     },
   });
 
@@ -63,9 +72,7 @@ export function CampaignCarousel({ onClose }: Props) {
     }
     const toPerson = (p: any): Person => ({
       name: p.name,
-      url: p.photo_path
-        ? supabase.storage.from("campaign-photos").getPublicUrl(p.photo_path).data.publicUrl
-        : "",
+      url: p._url || "",
     });
     const cl = data.participants.filter((p: any) => p.role === "closer").map(toPerson).filter((p: Person) => p.url);
     const sd = data.participants.filter((p: any) => p.role === "sdr").map(toPerson).filter((p: Person) => p.url);
