@@ -567,6 +567,27 @@ export function useMarcarAguardarRetorno() {
 
 export { CONSORCIO_STAGE_IDS, CONSORCIO_ORIGIN_IDS };
 
+// Mutation: Excluir proposta (abate do realizado do BI)
+export function useExcluirProposta() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (proposal_id: string) => {
+      const { error } = await supabase
+        .from('consorcio_proposals')
+        .delete()
+        .eq('id', proposal_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Proposta excluída — valor abatido do realizado.');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
+    },
+    onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
+  });
+}
+
 // Fetch ALL consorcio deals (todas reuniões, qualquer stage)
 export function useTodasReunioes() {
   return useQuery({
