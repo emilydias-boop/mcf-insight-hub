@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trophy, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,8 @@ interface Props {
 export function CampaignCarousel({ onClose }: Props) {
   const [phase, setPhase] = useState<"closer" | "sdr">("closer");
   const [idx, setIdx] = useState(0);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   const { data } = useQuery({
     queryKey: ["campaign-carousel"],
@@ -109,9 +111,9 @@ export function CampaignCarousel({ onClose }: Props) {
   // encerra após bloco de SDR
   useEffect(() => {
     if (phase !== "sdr") return;
-    const t = setTimeout(onClose, BLOCK_MS);
+    const t = setTimeout(() => onCloseRef.current?.(), BLOCK_MS);
     return () => clearTimeout(t);
-  }, [phase, onClose]);
+  }, [phase]);
 
   const person = list[idx % Math.max(1, list.length)];
   if (!person) return null;
@@ -125,21 +127,21 @@ export function CampaignCarousel({ onClose }: Props) {
       </div>
 
       {/* Header campanha */}
-      <div className="relative z-10 text-center mb-10 px-8">
-        <div className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-[#bfff00]/20 border border-[#bfff00]/40 mb-6">
-          <Sparkles className="w-5 h-5 text-[#bfff00]" />
-          <span className="text-[#bfff00] font-bold tracking-widest uppercase text-sm">
+      <div className="relative z-10 text-center mb-6 px-8">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#bfff00]/20 border border-[#bfff00]/40 mb-4">
+          <Sparkles className="w-4 h-4 text-[#bfff00]" />
+          <span className="text-[#bfff00] font-bold tracking-widest uppercase text-xs">
             Campanha do Mês
           </span>
-          <Sparkles className="w-5 h-5 text-[#bfff00]" />
+          <Sparkles className="w-4 h-4 text-[#bfff00]" />
         </div>
-        <h1 className="text-6xl md:text-8xl font-black tracking-tight text-white leading-none">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white leading-tight">
           {question}
         </h1>
-        <div className="mt-4 text-7xl md:text-9xl font-black text-[#bfff00] drop-shadow-[0_0_40px_rgba(191,255,0,0.6)]">
+        <div className="mt-3 text-5xl md:text-6xl font-black text-[#bfff00] drop-shadow-[0_0_40px_rgba(191,255,0,0.6)]">
           {prize}
         </div>
-        <div className="mt-2 text-2xl md:text-3xl text-white/70 font-semibold">
+        <div className="mt-2 text-lg md:text-xl text-white/70 font-semibold">
           para o melhor <span className="text-[#bfff00]">{role}</span> do mês?
         </div>
       </div>
@@ -150,7 +152,7 @@ export function CampaignCarousel({ onClose }: Props) {
           <div className="absolute -inset-4 rounded-full bg-gradient-to-r from-[#bfff00] via-emerald-400 to-fuchsia-500 blur-2xl opacity-70 animate-pulse" />
           <div
             key={`${phase}-${idx}`}
-            className="relative w-[420px] h-[420px] md:w-[520px] md:h-[520px] rounded-full overflow-hidden border-[6px] border-[#bfff00] shadow-[0_0_80px_rgba(191,255,0,0.6)] animate-scale-in"
+            className="relative w-[260px] h-[260px] md:w-[320px] md:h-[320px] rounded-full overflow-hidden border-[5px] border-[#bfff00] shadow-[0_0_60px_rgba(191,255,0,0.6)] animate-scale-in"
           >
             <img
               src={person.url}
@@ -158,8 +160,8 @@ export function CampaignCarousel({ onClose }: Props) {
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="absolute -top-4 -right-4 bg-[#bfff00] text-black rounded-full p-4 shadow-2xl animate-pulse">
-            <Trophy className="w-10 h-10" />
+          <div className="absolute -top-3 -right-3 bg-[#bfff00] text-black rounded-full p-3 shadow-2xl animate-pulse">
+            <Trophy className="w-7 h-7" />
           </div>
         </div>
       </div>
