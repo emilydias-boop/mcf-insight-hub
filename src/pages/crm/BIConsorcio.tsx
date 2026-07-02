@@ -24,6 +24,8 @@ import {
   isDiaUtil, CONSORCIO_WEEK_STARTS_ON,
 } from "@/lib/businessDays";
 import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
+import { BITVMode } from "@/components/consorcio/BITVMode";
+import { Tv } from "lucide-react";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -43,6 +45,7 @@ export default function BIConsorcio() {
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
   const monthRefISO = format(monthStart, "yyyy-MM-dd");
+  const [tvMode, setTvMode] = useState(false);
 
   // === Meta ===
   const { data: metaRow, isLoading: metaLoading } = useQuery({
@@ -56,6 +59,7 @@ export default function BIConsorcio() {
       if (error) throw error;
       return data;
     },
+    refetchInterval: tvMode ? 30000 : false,
   });
   const meta = Number(metaRow?.meta_valor ?? 0);
 
@@ -147,6 +151,7 @@ export default function BIConsorcio() {
       if (error) throw error;
       return data || [];
     },
+    refetchInterval: tvMode ? 30000 : false,
   });
 
   const diasUteisMes = diasConsideradosISO.length;
@@ -225,7 +230,34 @@ export default function BIConsorcio() {
             <Pencil className="h-4 w-4" /> Editar meta do mês
           </Button>
         )}
+        <Button
+          onClick={() => setTvMode(true)}
+          className="gap-2 bg-[#bfff00] text-black hover:bg-[#bfff00]/90 font-bold shadow-[0_0_20px_-4px_rgba(191,255,0,0.6)]"
+        >
+          <Tv className="h-4 w-4" /> Modo TV
+        </Button>
       </div>
+
+      {tvMode && (
+        <BITVMode
+          meta={meta}
+          realizado={realizadoTotal}
+          realizadoHoje={realizadoHoje}
+          metaDia={metaDia}
+          diasUteis={diasUteisMes}
+          monthStart={monthStart}
+          semanas={semanas.map((s, i) => ({
+            index: s.index,
+            metaSemana: s.metaSemana,
+            realizado: realizadoPorSemana[i] || 0,
+            isCurrent: i === semanaAtualIdx,
+            diasUteis: s.diasUteis,
+            start: s.start,
+            end: s.end,
+          }))}
+          onClose={() => setTvMode(false)}
+        />
+      )}
 
       {/* Meta editor */}
       {editing && canEdit && (
