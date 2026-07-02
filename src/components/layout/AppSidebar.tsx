@@ -154,6 +154,7 @@ const menuItems: MenuItem[] = [
     requiredProducts: ["incorporador"],
     separator: true,
     items: [
+      { title: "BI Comercial", url: "/bu-incorporador/bi-comercial" },
       { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
       { title: "Movimentações por Estágio", url: "/crm/movimentacoes" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
