@@ -26,6 +26,7 @@ import {
 } from "@/lib/businessDays";
 import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 import { BITVMode } from "@/components/consorcio/BITVMode";
+import { CampaignCarousel } from "@/components/consorcio/CampaignCarousel";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -46,6 +47,7 @@ export default function BIConsorcio() {
   const monthEnd = endOfMonth(today);
   const monthRefISO = format(monthStart, "yyyy-MM-dd");
   const [tvMode, setTvMode] = useState(false);
+  const [previewCampaign, setPreviewCampaign] = useState(false);
 
   // === Meta ===
   const { data: metaRow, isLoading: metaLoading } = useQuery({
@@ -237,7 +239,16 @@ export default function BIConsorcio() {
         >
           <Tv className="h-4 w-4" /> Modo TV
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => setPreviewCampaign(true)}
+          className="gap-2"
+        >
+          <Sparkles className="h-4 w-4" /> Prévia Campanha
+        </Button>
       </div>
+
+      {previewCampaign && <CampaignCarousel onClose={() => setPreviewCampaign(false)} />}
 
 
       {tvMode && (
