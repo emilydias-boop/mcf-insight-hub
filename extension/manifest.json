@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "MCF TV Launcher",
+  "version": "1.0.0",
+  "description": "Abre o Dashboard TV do Consórcio MCF em um clique.",
+  "permissions": ["tabs"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_title": "Abrir TV MCF Consórcio"
+  },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
