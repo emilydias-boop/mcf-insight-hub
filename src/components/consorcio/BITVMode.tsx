@@ -74,6 +74,7 @@ export function BITVMode({
 
   return (
     <div className="fixed inset-0 z-[100] overflow-hidden bg-[#050505] text-white">
+      {showCampaign && <CampaignCarousel onClose={() => setShowCampaign(false)} />}
       {/* animated background */}
       <div className="absolute inset-0 opacity-40">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-[#bfff00] blur-[180px] animate-pulse" />
