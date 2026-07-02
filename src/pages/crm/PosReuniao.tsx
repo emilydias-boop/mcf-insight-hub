@@ -8,7 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
@@ -335,6 +339,8 @@ function PropostasTab() {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
+  const excluir = useExcluirProposta();
 
   if (isLoading) return <LoadingState />;
 
@@ -456,6 +462,15 @@ function PropostasTab() {
                         )}
                       </>
                     )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteTarget(p)}
+                      title="Excluir proposta (abate do realizado)"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -496,6 +511,38 @@ function PropostasTab() {
         )}
 
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
+
+        <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir proposta?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget && (
+                  <>
+                    Você está excluindo a proposta de <strong>{deleteTarget.contact_name || deleteTarget.deal_name}</strong> no valor de{' '}
+                    <strong>{formatCurrency(deleteTarget.valor_credito || 0)}</strong>.
+                    <br /><br />
+                    O valor será <strong>abatido do realizado</strong> exibido no BI Consórcio.
+                    Esta ação não pode ser desfeita.
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async () => {
+                  if (!deleteTarget) return;
+                  await excluir.mutateAsync(deleteTarget.id);
+                  setDeleteTarget(null);
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
