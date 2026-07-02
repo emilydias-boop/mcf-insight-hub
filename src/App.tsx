@@ -29,6 +29,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 const BIConsorcioPublic = lazy(() => import("./pages/public/BIConsorcioPublic"));
+const BIIncorporadorPublic = lazy(() => import("./pages/public/BIIncorporadorPublic"));
 const TVLauncher = lazy(() => import("./pages/public/TVLauncher"));
 
 // Lazy — all other routes (split into per-route chunks)
@@ -129,6 +130,7 @@ const MyEquipmentPage = lazy(() => import("./pages/patrimonio/MyEquipmentPage"))
 const PatrimonioRelatorios = lazy(() => import("./pages/patrimonio/PatrimonioRelatorios"));
 const BUCRMLayout = lazy(() => import("./pages/crm/BUCRMLayout"));
 const BIConsorcio = lazy(() => import("./pages/crm/BIConsorcio"));
+const BIComercial = lazy(() => import("./pages/crm/BIComercial"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,6 +169,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 <Route path="/bi/consorcio" element={<BIConsorcioPublic />} />
+            <Route path="/bi/incorporador" element={<BIIncorporadorPublic />} />
             <Route path="/tv" element={<TVLauncher />} />
             
             {/* Protected routes */}
