@@ -43,13 +43,18 @@ export function BITVMode({
     return () => clearInterval(t);
   }, []);
 
-  // Carrossel da campanha: aparece 15s após abrir e depois a cada 5 min
+  // Carrossel: primeira aparição em 15s; depois, sempre 5 min após fechar.
   const [showCampaign, setShowCampaign] = useState(false);
+  const [hasShownOnce, setHasShownOnce] = useState(false);
   useEffect(() => {
-    const first = setTimeout(() => setShowCampaign(true), 15 * 1000);
-    const t = setInterval(() => setShowCampaign(true), 5 * 60 * 1000);
-    return () => { clearTimeout(first); clearInterval(t); };
-  }, []);
+    if (showCampaign) return;
+    const delay = hasShownOnce ? 5 * 60 * 1000 : 15 * 1000;
+    const t = setTimeout(() => {
+      setShowCampaign(true);
+      setHasShownOnce(true);
+    }, delay);
+    return () => clearTimeout(t);
+  }, [showCampaign, hasShownOnce]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
