@@ -29,6 +29,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 const BIConsorcioPublic = lazy(() => import("./pages/public/BIConsorcioPublic"));
+const TVLauncher = lazy(() => import("./pages/public/TVLauncher"));
 
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
