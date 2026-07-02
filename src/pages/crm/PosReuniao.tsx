@@ -13,6 +13,7 @@ import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
+import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
@@ -330,6 +331,7 @@ function PropostasTab() {
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -401,7 +403,19 @@ function PropostasTab() {
                         {p.status}
                       </Badge>
                       {p.documentos_pendentes && (
-                        <Badge variant="destructive" className="text-xs">
+                        <Badge
+                          variant="destructive"
+                          className="text-xs cursor-pointer hover:opacity-80"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (p.consortium_card_id) {
+                              setUploadTarget(p);
+                            } else {
+                              setAcceptTarget(p);
+                            }
+                          }}
+                          title={p.consortium_card_id ? 'Anexar documentos faltantes' : 'Cadastrar cota para anexar documentos'}
+                        >
                           Documento pendente
                         </Badge>
                       )}
@@ -427,7 +441,14 @@ function PropostasTab() {
                       </Button>
                     )}
                     {p.consortium_card_id && (
-                      <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                      <>
+                        <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                        {p.documentos_pendentes && (
+                          <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                            <FileText className="h-3 w-3 mr-1" /> Anexar Documentos
+                          </Button>
+                        )}
+                      </>
                     )}
                   </TableCell>
                 </TableRow>
@@ -456,6 +477,15 @@ function PropostasTab() {
             dealId={acceptTarget.deal_id}
             contactName={acceptTarget.contact_name || acceptTarget.deal_name}
             vendedorName=""
+          />
+        )}
+
+        {uploadTarget && uploadTarget.consortium_card_id && (
+          <UploadPendingDocumentsDialog
+            open={!!uploadTarget}
+            onOpenChange={o => !o && setUploadTarget(null)}
+            cardId={uploadTarget.consortium_card_id}
+            contactName={uploadTarget.contact_name || uploadTarget.deal_name}
           />
         )}
 
