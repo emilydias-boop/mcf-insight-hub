@@ -503,10 +503,6 @@ function PropostasTab() {
 
 // ─── Sem Sucesso Tab ─────────────────────────────────────────
 function SemSucessoTab() {
-  const { data: deals = [], isLoading } = useSemSucesso();
-  const retomar = useRetomarContato();
-  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
-
   return <_SemSucessoTabInner />;
 }
 
