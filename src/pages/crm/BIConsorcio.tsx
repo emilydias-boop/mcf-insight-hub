@@ -65,6 +65,7 @@ export default function BIConsorcio() {
 
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [copied, setCopied] = useState(false);
   useEffect(() => { setEditValue(String(meta || "")); }, [meta]);
 
   const saveMeta = useMutation({
