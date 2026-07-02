@@ -561,3 +561,117 @@ function DiasUteisPopover({
     </Popover>
   );
 }
+
+function TVLauncherCard({
+  copied,
+  setCopied,
+}: {
+  copied: boolean;
+  setCopied: (v: boolean) => void;
+}) {
+  const shortUrl = "https://mcfgestao.com/tv";
+  const fullUrl = "https://mcfgestao.com/bi/consorcio?k=c6009ecc80511bdf3cec8ec7f8debc1308c0";
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
+  const downloadExtension = () => {
+    fetch("/mcf-tv-launcher.zip")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "mcf-tv-launcher.zip";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast.success("Extensão baixada. Descompacte e carregue em chrome://extensions");
+      })
+      .catch((err) => toast.error(err.message));
+  };
+
+  return (
+    <Card className="border-primary/30 bg-gradient-to-br from-[#bfff00]/5 to-transparent overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-[#bfff00] text-black">
+                <Tv className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold">Abrir na TV sem digitar</h3>
+                <p className="text-xs text-muted-foreground">
+                  Três opções rápidas para colocar o dashboard na televisão.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={shortUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#bfff00] text-black font-bold text-sm hover:opacity-90"
+              >
+                <ExternalLink className="h-4 w-4" /> Abrir /tv
+              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => copy(shortUrl)}
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copiado" : "Copiar /tv"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={downloadExtension}
+              >
+                <Download className="h-4 w-4" /> Extensão Chrome
+              </Button>
+            </div>
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>
+                <strong className="text-foreground">URL curta:</strong>{" "}
+                <code className="bg-muted px-1 py-0.5 rounded">{shortUrl}</code>{" "}
+                (digite uma vez no navegador da TV e salve como favorito)
+              </p>
+              <p>
+                <strong className="text-foreground">Chrome:</strong> baixe a extensão, descompacte, abra{" "}
+                <code className="bg-muted px-1 py-0.5 rounded">chrome://extensions</code>{" "}
+                com modo de desenvolvedor e clique em "Carregar sem compactação".
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="text-center space-y-1">
+              <QrCode className="h-4 w-4 mx-auto text-muted-foreground" />
+              <img
+                src="/qr-tv-short.png"
+                alt="QR code para abrir TV MCF"
+                className="w-28 h-28 rounded-lg border border-border bg-white"
+                loading="lazy"
+              />
+              <p className="text-[10px] text-muted-foreground">Escaneie para abrir /tv</p>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
