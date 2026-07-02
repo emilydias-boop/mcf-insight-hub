@@ -411,11 +411,11 @@ export function AcceptProposalModal({
 
                     <h3 className="font-semibold text-sm">Documentos</h3>
                     <div className="space-y-2">
-                      <Label>RG ou CNH (PDF) *</Label>
+                      <Label>RG ou CNH (PDF, JPG, JPEG) *</Label>
                       <div className="flex items-center gap-2">
                         <Input
                           type="file"
-                          accept=".pdf"
+                          accept=".pdf,.jpg,.jpeg"
                           onChange={e => {
                             const file = e.target.files?.[0];
                             if (file) setPfDocuments(prev => [...prev, file]);
@@ -576,8 +576,8 @@ export function AcceptProposalModal({
                         {pjDocContratoSocial && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{pjDocContratoSocial.name}</p>}
                       </div>
                       <div>
-                        <Label>RG/CNH dos Sócios (PDF) *</Label>
-                        <Input type="file" accept=".pdf" onChange={e => setPjDocRgSocios(e.target.files?.[0] || null)} />
+                        <Label>RG/CNH dos Sócios (PDF, JPG, JPEG) *</Label>
+                        <Input type="file" accept=".pdf,.jpg,.jpeg" onChange={e => setPjDocRgSocios(e.target.files?.[0] || null)} />
                         {pjDocRgSocios && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{pjDocRgSocios.name}</p>}
                       </div>
                       <div>
