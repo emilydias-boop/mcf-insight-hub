@@ -1,0 +1,243 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  endOfMonth, endOfWeek, eachWeekOfInterval, eachDayOfInterval,
+  isWithinInterval, parseISO, max, min, format,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  Target, TrendingUp, CalendarDays, Wallet, Trophy,
+  CheckCircle2, AlertCircle, Sparkles, Tv,
+} from "lucide-react";
+import { BITVMode } from "@/components/consorcio/BITVMode";
+
+// Token público de Incorporador (seed em bi_public_tokens)
+const PUBLIC_TOKEN = "i9f42a8c1de5b7c30a9e4b6d8f2103bc7e5a9";
+const WEEK_STARTS_ON = 6 as const; // Sáb → Sex
+
+const fmtBRL = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+export default function BIComercial() {
+  const [tvMode, setTvMode] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["bi-incorporador-runtime"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_bi_public_incorporador", { _token: PUBLIC_TOKEN });
+      if (error) throw error;
+      return data as any;
+    },
+    refetchInterval: tvMode ? 30_000 : 60_000,
+  });
+
+  const view = useMemo(() => {
+    if (!data || data.error) return null;
+    const monthStart = parseISO(data.month_ref);
+    const monthEnd = endOfMonth(monthStart);
+    const today = new Date();
+    const meta = Number(data.meta_mes || 0);
+    const totalDias = eachDayOfInterval({ start: monthStart, end: monthEnd }).length;
+    const metaDia = totalDias > 0 ? meta / totalDias : 0;
+
+    const rawSem = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: WEEK_STARTS_ON });
+    const semanas = rawSem.map((wStart, i) => {
+      const wEnd = endOfWeek(wStart, { weekStartsOn: WEEK_STARTS_ON });
+      const start = max([wStart, monthStart]);
+      const end = min([wEnd, monthEnd]);
+      const dias = eachDayOfInterval({ start, end }).length;
+      return { index: i + 1, start, end, diasUteis: dias, metaSemana: dias * metaDia };
+    });
+
+    const todayStr = format(today, "yyyy-MM-dd");
+    let realizado = 0, realizadoHoje = 0;
+    const bySem = semanas.map(() => 0);
+    for (const row of (data.daily || []) as Array<{ d: string; v: string }>) {
+      const v = Number(row.v || 0);
+      const d = parseISO(row.d);
+      realizado += v;
+      if (row.d === todayStr) realizadoHoje += v;
+      const idx = semanas.findIndex(s => isWithinInterval(d, { start: s.start, end: s.end }));
+      if (idx >= 0) bySem[idx] += v;
+    }
+    const semanaAtualIdx = semanas.findIndex(s => isWithinInterval(today, { start: s.start, end: s.end }));
+    const metaSemana = Number(data.meta_semana || 0);
+    const metaAno = Number(data.meta_ano || 0);
+    const apuradoSemana = Number(data.apurado_semana || 0);
+    const apuradoAno = Number(data.apurado_ano || 0);
+
+    return {
+      meta, realizado, realizadoHoje, metaDia, totalDias, monthStart,
+      semanas: semanas.map((s, i) => ({
+        ...s,
+        realizado: bySem[i] || 0,
+        isCurrent: i === semanaAtualIdx,
+      })),
+      metaSemana, metaAno, apuradoSemana, apuradoAno,
+    };
+  }, [data]);
+
+  if (isLoading || !view) {
+    return (
+      <div className="space-y-4 p-2">
+        <Skeleton className="h-12 w-72" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+      </div>
+    );
+  }
+
+  const progresso = view.meta > 0 ? Math.min(100, (view.realizado / view.meta) * 100) : 0;
+  const falta = Math.max(0, view.meta - view.realizado);
+
+  return (
+    <div className="space-y-6 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Sparkles className="h-7 w-7" style={{ color: "#ff7a00" }} />
+            BI Comercial — Incorporador
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {format(view.monthStart, "MMMM 'de' yyyy", { locale: ptBR })} · valores do card MCF Incorporador (semana Sáb→Sex).
+          </p>
+        </div>
+        <Button
+          onClick={() => setTvMode(true)}
+          className="gap-2 font-bold text-black hover:opacity-90"
+          style={{ backgroundColor: "#ff7a00", boxShadow: "0 0 20px -4px rgba(255,122,0,0.6)" }}
+        >
+          <Tv className="h-4 w-4" /> Modo TV
+        </Button>
+      </div>
+
+      {tvMode && (
+        <BITVMode
+          meta={view.meta}
+          realizado={view.realizado}
+          realizadoHoje={view.realizadoHoje}
+          metaDia={view.metaDia}
+          diasUteis={view.totalDias}
+          monthStart={view.monthStart}
+          semanas={view.semanas.map(s => ({
+            index: s.index, metaSemana: s.metaSemana, realizado: s.realizado,
+            isCurrent: s.isCurrent, diasUteis: s.diasUteis, start: s.start, end: s.end,
+          }))}
+          onClose={() => setTvMode(false)}
+          accent="orange"
+          title="MCF · BI Comercial ao vivo · Incorporador"
+        />
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard icon={<Target className="h-5 w-5" />} label="Meta do mês" value={fmtBRL(view.meta)} hint={`${view.totalDias} dias corridos`} />
+        <KpiCard icon={<Wallet className="h-5 w-5" />} label="Meta por dia" value={fmtBRL(view.metaDia)} hint="mês fracionado" />
+        <KpiCard icon={<TrendingUp className="h-5 w-5" />} label="Realizado no mês" value={fmtBRL(view.realizado)} hint={`${progresso.toFixed(1)}% da meta`} />
+        <KpiCard
+          icon={falta === 0 ? <Trophy className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+          label={falta === 0 ? "Meta batida" : "Falta atingir"}
+          value={fmtBRL(falta)}
+          hint={falta === 0 ? "parabéns" : `hoje: ${fmtBRL(view.realizadoHoje)}`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <MiniPeriodo label="Semana atual" meta={view.metaSemana} real={view.apuradoSemana} />
+        <MiniPeriodo label="Mês" meta={view.meta} real={view.realizado} />
+        <MiniPeriodo label="Ano" meta={view.metaAno} real={view.apuradoAno} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" style={{ color: "#ff7a00" }} />
+            Progresso mensal
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Progress value={progresso} className="h-4" />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>0%</span>
+            <span>{progresso.toFixed(1)}% concluído</span>
+            <span>100%</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <CalendarDays className="h-5 w-5" style={{ color: "#ff7a00" }} />
+          Semanas do mês (Sáb → Sex)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {view.semanas.map((s) => {
+            const pct = s.metaSemana > 0 ? Math.min(100, (s.realizado / s.metaSemana) * 100) : 0;
+            const bateu = s.realizado >= s.metaSemana && s.metaSemana > 0;
+            return (
+              <Card key={s.index} className={s.isCurrent ? "border-2" : ""} style={s.isCurrent ? { borderColor: "#ff7a00" } : undefined}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Semana {s.index}</CardTitle>
+                    {bateu && <CheckCircle2 className="h-4 w-4 text-success" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {format(s.start, "dd/MM")} → {format(s.end, "dd/MM")} · {s.diasUteis} dias
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Meta</span>
+                    <span className="font-mono">{fmtBRL(s.metaSemana)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Realizado</span>
+                    <span className="font-mono font-semibold">{fmtBRL(s.realizado)}</span>
+                  </div>
+                  <Progress value={pct} className="h-2" />
+                  <div className="text-right text-xs font-bold">{pct.toFixed(0)}%</div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: string; hint?: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          {icon}<span>{label}</span>
+        </div>
+        <div className="text-2xl font-black tabular-nums">{value}</div>
+        {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniPeriodo({ label, meta, real }: { label: string; meta: number; real: number }) {
+  const pct = meta > 0 ? Math.min(100, (real / meta) * 100) : 0;
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-2">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className="flex items-baseline justify-between">
+          <div className="text-xl font-black tabular-nums">{fmtBRL(real)}</div>
+          <div className="text-xs text-muted-foreground">de {fmtBRL(meta)}</div>
+        </div>
+        <Progress value={pct} className="h-2" />
+        <div className="text-right text-xs font-bold">{pct.toFixed(1)}%</div>
+      </CardContent>
+    </Card>
+  );
+}
