@@ -17,7 +17,7 @@ import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendi
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
-  useRetomarContato, useTodasReunioes,
+  useRetomarContato, useTodasReunioes, useExcluirProposta,
   type CompletedMeeting, type Proposal, type SemSucessoDeal, type AllMeetingDeal,
 } from '@/hooks/useConsorcioPostMeeting';
 import { useMyCloser } from '@/hooks/useMyCloser';
