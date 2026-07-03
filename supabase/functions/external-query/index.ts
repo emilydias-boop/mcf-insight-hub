@@ -279,32 +279,58 @@ Deno.serve(async (req) => {
         no_show += Number(m.no_shows || 0);
       }
 
-      // Contrato Pago: attendees.contract_paid_at no intervalo,
-      // via meeting_slots -> closers com bu='incorporador'.
+      // Contrato Pago: mesma fonte do Painel Comercial (useR1CloserMetrics).
+      // Ancoragem por contract_paid_at (BRT = UTC-3 -> janela shift +3h),
+      // filtrada por meeting_type='r1', is_partner=false, closers da BU incorporador.
+      // Fallback: status='contract_paid' sem contract_paid_at, ancorado por scheduled_at.
       const { data: closers, error: cErr } = await supabase
         .from("closers")
         .select("id")
         .eq("bu", "incorporador");
       if (cErr) throw cErr;
-      const closerIds = (closers ?? []).map((c: any) => c.id);
+      const closerIds = new Set((closers ?? []).map((c: any) => c.id));
+
+      // Janela BRT: soma 3h em ambos os extremos para casar UTC do timestamp
+      const startUTC = new Date(`${startDate}T00:00:00-03:00`).toISOString();
+      const endUTC = new Date(`${endDate}T23:59:59-03:00`).toISOString();
 
       let contrato_pago = 0;
-      if (closerIds.length > 0) {
-        const { data: slots, error: sErr } = await supabase
-          .from("meeting_slots")
-          .select("id, meeting_slot_attendees ( id, status, is_partner, contract_paid_at )")
-          .in("closer_id", closerIds)
-          .gte("scheduled_at", `${startDate}T00:00:00`)
-          .lte("scheduled_at", `${endDate}T23:59:59`);
-        if (sErr) throw sErr;
-        for (const slot of (slots ?? []) as any[]) {
-          for (const att of slot.meeting_slot_attendees ?? []) {
-            if (att.is_partner) continue;
-            if (att.status !== "contract_paid" && att.status !== "refunded") continue;
-            if (!att.contract_paid_at) continue;
-            const paidDate = String(att.contract_paid_at).slice(0, 10);
-            if (paidDate >= startDate && paidDate <= endDate) contrato_pago += 1;
-          }
+      const counted = new Set<string>();
+
+      // Primary: contract_paid_at no intervalo
+      const { data: primary, error: pErr } = await supabase
+        .from("meeting_slot_attendees")
+        .select("id, meeting_slot:meeting_slots!inner(closer_id, meeting_type)")
+        .eq("meeting_slot.meeting_type", "r1")
+        .eq("is_partner", false)
+        .not("contract_paid_at", "is", null)
+        .gte("contract_paid_at", startUTC)
+        .lte("contract_paid_at", endUTC);
+      if (pErr) throw pErr;
+      for (const att of (primary ?? []) as any[]) {
+        const closerId = att.meeting_slot?.closer_id;
+        if (closerId && closerIds.has(closerId) && !counted.has(att.id)) {
+          counted.add(att.id);
+          contrato_pago += 1;
+        }
+      }
+
+      // Fallback: status='contract_paid' sem timestamp, ancorado por scheduled_at
+      const { data: fallback, error: fbErr } = await supabase
+        .from("meeting_slot_attendees")
+        .select("id, meeting_slot:meeting_slots!inner(closer_id, meeting_type, scheduled_at)")
+        .eq("status", "contract_paid")
+        .eq("meeting_slot.meeting_type", "r1")
+        .eq("is_partner", false)
+        .is("contract_paid_at", null)
+        .gte("meeting_slot.scheduled_at", startUTC)
+        .lte("meeting_slot.scheduled_at", endUTC);
+      if (fbErr) throw fbErr;
+      for (const att of (fallback ?? []) as any[]) {
+        const closerId = att.meeting_slot?.closer_id;
+        if (closerId && closerIds.has(closerId) && !counted.has(att.id)) {
+          counted.add(att.id);
+          contrato_pago += 1;
         }
       }
 
