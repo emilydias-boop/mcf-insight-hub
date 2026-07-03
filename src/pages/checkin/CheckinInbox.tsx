@@ -27,12 +27,14 @@ const STATUS_COLOR: Record<string, string> = {
   concluido: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
 };
 
-const PUBLIC_CHECKIN_ORIGIN = 'https://mcfgestao.com';
-
 function getPublicCheckinUrl(token: string) {
   const currentOrigin = window.location.origin;
-  const isPrivateLovableEditor = window.location.hostname.endsWith('lovableproject.com');
-  const publicOrigin = isPrivateLovableEditor ? PUBLIC_CHECKIN_ORIGIN : currentOrigin;
+  const currentHost = window.location.hostname;
+  const isPrivateLovableEditor = currentHost.endsWith('lovableproject.com');
+  const previewId = currentHost.split('.')[0];
+  const publicOrigin = isPrivateLovableEditor
+    ? `https://id-preview--${previewId}.lovable.app`
+    : currentOrigin;
 
   return `${publicOrigin}/checkin/sala/${token}`;
 }
