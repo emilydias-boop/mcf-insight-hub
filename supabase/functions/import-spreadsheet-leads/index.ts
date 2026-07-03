@@ -74,12 +74,31 @@ Deno.serve(async (req) => {
       const emailNorm = (lead.email || '').replace(/^["']|["']$/g, '').toLowerCase().trim();
       const phoneClean = cleanPhone.replace(/\D/g, '');
       const phoneSuffix = phoneClean.length >= 9 ? phoneClean.slice(-9) : phoneClean;
+      // Escape LIKE wildcards to avoid `_` in emails matching any char.
+      const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => '\\' + m);
+      const emailLike = escapeLike(emailNorm);
+      const phoneSuffixLike = escapeLike(phoneSuffix);
 
       try {
         let contactId: string;
 
         if (lead.contact_id) {
           contactId = lead.contact_id;
+          // Backfill missing email/phone on the reused contact so deals never
+          // show up empty. Never overwrite existing values.
+          if (emailNorm || cleanPhone) {
+            const { data: existing } = await supabase
+              .from('crm_contacts')
+              .select('email, phone')
+              .eq('id', contactId)
+              .maybeSingle();
+            const patch: Record<string, string> = {};
+            if (emailNorm && !existing?.email) patch.email = emailNorm;
+            if (cleanPhone && !existing?.phone) patch.phone = cleanPhone;
+            if (Object.keys(patch).length > 0) {
+              await supabase.from('crm_contacts').update(patch).eq('id', contactId);
+            }
+          }
         } else {
           let existingContact: any = null;
 
@@ -87,7 +106,7 @@ Deno.serve(async (req) => {
             const { data } = await supabase
               .from('crm_contacts')
               .select('id')
-              .ilike('email', emailNorm)
+              .ilike('email', emailLike)
               .limit(1);
             if (data?.length) existingContact = data[0];
           }
@@ -96,20 +115,29 @@ Deno.serve(async (req) => {
             const { data } = await supabase
               .from('crm_contacts')
               .select('id')
-              .ilike('phone', `%${phoneSuffix}`)
+              .ilike('phone', `%${phoneSuffixLike}`)
               .limit(1);
             if (data?.length) existingContact = data[0];
           }
 
-          // Fallback: últimos 8 dígitos (ignora dígito 9 variável do celular BR)
-          if (!existingContact && phoneClean.length >= 8) {
-            const phoneSuffix8 = phoneClean.slice(-8);
-            const { data } = await supabase
+          // Fallback de 8 dígitos removido: gerava colisões (dois telefones
+          // não relacionados terminando nos mesmos 8 dígitos), fazendo
+          // reaproveitar contact_id errado e perder o telefone/email da planilha.
+
+          // Backfill: se casamos por email/phone e o contato existente estiver
+          // faltando o outro campo, preencher com os dados da planilha.
+          if (existingContact && (emailNorm || cleanPhone)) {
+            const { data: existing } = await supabase
               .from('crm_contacts')
-              .select('id')
-              .ilike('phone', `%${phoneSuffix8}`)
-              .limit(1);
-            if (data?.length) existingContact = data[0];
+              .select('email, phone')
+              .eq('id', existingContact.id)
+              .maybeSingle();
+            const patch: Record<string, string> = {};
+            if (emailNorm && !existing?.email) patch.email = emailNorm;
+            if (cleanPhone && !existing?.phone) patch.phone = cleanPhone;
+            if (Object.keys(patch).length > 0) {
+              await supabase.from('crm_contacts').update(patch).eq('id', existingContact.id);
+            }
           }
 
           if (existingContact) {

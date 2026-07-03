@@ -35,14 +35,23 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
 };
 
 const AUTO_MAP_HINTS: Record<ColumnKey, string[]> = {
-  name: ['nome', 'name', 'lead', 'contato', 'contact', 'cliente'],
-  email: ['email', 'e-mail', 'mail'],
-  phone: ['telefone', 'phone', 'celular', 'tel', 'whatsapp'],
+  name: ['nome', 'name', 'lead', 'contato', 'contact', 'cliente', 'razao social', 'razão social'],
+  email: ['email', 'e-mail', 'mail', 'e mail', 'endereco de email', 'endereço de email'],
+  phone: ['telefone', 'telefones', 'phone', 'celular', 'celulares', 'tel', 'whatsapp', 'wpp', 'numero', 'número', 'contato telefonico', 'contato telefônico'],
 };
 
 function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
   const mapping: Record<ColumnKey, string> = { name: '', email: '', phone: '' };
-  const normalized = headers.map(h => h.toLowerCase().trim());
+  // Normalize: lowercase, strip diacritics/invisible chars, collapse whitespace
+  const normalized = headers.map(h =>
+    String(h ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 
   for (const key of COLUMN_KEYS) {
     const hints = AUTO_MAP_HINTS[key];
@@ -324,8 +333,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   }, [pastedText, processFileData]);
 
   const handleCompare = useCallback(async (skipNumericCheck = false) => {
-    if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
-      toast.error('Mapeie pelo menos uma coluna (nome, email ou telefone)');
+    if (!columnMapping.email && !columnMapping.phone) {
+      toast.error('Mapeie ao menos a coluna de Email OU Telefone. Só o nome não é suficiente — os leads seriam criados sem contato.');
       return;
     }
 
@@ -834,7 +843,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
-              <Button size="sm" onClick={() => handleCompare()} disabled={isComparing}>
+              <Button
+                size="sm"
+                onClick={() => handleCompare()}
+                disabled={isComparing || (!columnMapping.email && !columnMapping.phone)}
+                title={!columnMapping.email && !columnMapping.phone ? 'Mapeie Email ou Telefone antes de continuar' : undefined}
+              >
                 {isComparing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />

@@ -118,39 +118,34 @@ export async function compareSpreadsheetGlobal(
       batch.map(async (row) => {
         const emailKey = normalize(row.email);
         const phoneKey = last9Digits(row.phone);
-        const nameKey = normalize(row.name);
 
         let contact: any = null;
 
-        // 1. Search by email
+        // 1. Search by email (exact, case-insensitive) — never use ilike with raw
+        // value because emails contain `_` which is a LIKE wildcard.
         if (emailKey && !contact) {
           const { data } = await supabase
             .from('crm_contacts')
             .select('id, name, email, phone')
-            .ilike('email', emailKey)
+            .ilike('email', emailKey.replace(/[\\%_]/g, (m) => '\\' + m))
             .limit(1);
           if (data?.length) contact = data[0];
         }
 
-        // 2. Search by phone suffix
+        // 2. Search by phone suffix (last 9 digits — strict).
         if (!contact && phoneKey) {
+          const suffixEscaped = phoneKey.replace(/[\\%_]/g, (m) => '\\' + m);
           const { data } = await supabase
             .from('crm_contacts')
             .select('id, name, email, phone')
-            .ilike('phone', `%${phoneKey}`)
+            .ilike('phone', `%${suffixEscaped}`)
             .limit(1);
           if (data?.length) contact = data[0];
         }
 
-        // 3. Search by name (exact, case-insensitive)
-        if (!contact && nameKey) {
-          const { data } = await supabase
-            .from('crm_contacts')
-            .select('id, name, email, phone')
-            .ilike('name', nameKey)
-            .limit(1);
-          if (data?.length) contact = data[0];
-        }
+        // NOTE: name-based fallback removed intentionally — it produced false
+        // positives, matching unrelated homonymous contacts (often empty) and
+        // making imports reuse the wrong contact_id, losing email/phone.
 
         if (!contact) {
           return {
