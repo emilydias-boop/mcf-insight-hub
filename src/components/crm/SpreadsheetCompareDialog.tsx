@@ -333,8 +333,8 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
   }, [pastedText, processFileData]);
 
   const handleCompare = useCallback(async (skipNumericCheck = false) => {
-    if (!columnMapping.name && !columnMapping.email && !columnMapping.phone) {
-      toast.error('Mapeie pelo menos uma coluna (nome, email ou telefone)');
+    if (!columnMapping.email && !columnMapping.phone) {
+      toast.error('Mapeie ao menos a coluna de Email OU Telefone. Só o nome não é suficiente — os leads seriam criados sem contato.');
       return;
     }
 
@@ -843,7 +843,12 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={handleReset}>Voltar</Button>
-              <Button size="sm" onClick={() => handleCompare()} disabled={isComparing}>
+              <Button
+                size="sm"
+                onClick={() => handleCompare()}
+                disabled={isComparing || (!columnMapping.email && !columnMapping.phone)}
+                title={!columnMapping.email && !columnMapping.phone ? 'Mapeie Email ou Telefone antes de continuar' : undefined}
+              >
                 {isComparing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
