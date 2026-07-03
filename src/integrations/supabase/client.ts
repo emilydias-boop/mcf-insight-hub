@@ -25,3 +25,4 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
 
 // Export URL for health checks
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
+export const SUPABASE_PUBLISHABLE_KEY = SUPABASE_ANON_KEY;
