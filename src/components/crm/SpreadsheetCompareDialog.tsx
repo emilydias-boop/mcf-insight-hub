@@ -35,14 +35,23 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
 };
 
 const AUTO_MAP_HINTS: Record<ColumnKey, string[]> = {
-  name: ['nome', 'name', 'lead', 'contato', 'contact', 'cliente'],
-  email: ['email', 'e-mail', 'mail'],
-  phone: ['telefone', 'phone', 'celular', 'tel', 'whatsapp'],
+  name: ['nome', 'name', 'lead', 'contato', 'contact', 'cliente', 'razao social', 'razão social'],
+  email: ['email', 'e-mail', 'mail', 'e mail', 'endereco de email', 'endereço de email'],
+  phone: ['telefone', 'telefones', 'phone', 'celular', 'celulares', 'tel', 'whatsapp', 'wpp', 'numero', 'número', 'contato telefonico', 'contato telefônico'],
 };
 
 function autoMapColumns(headers: string[]): Record<ColumnKey, string> {
   const mapping: Record<ColumnKey, string> = { name: '', email: '', phone: '' };
-  const normalized = headers.map(h => h.toLowerCase().trim());
+  // Normalize: lowercase, strip diacritics/invisible chars, collapse whitespace
+  const normalized = headers.map(h =>
+    String(h ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 
   for (const key of COLUMN_KEYS) {
     const hints = AUTO_MAP_HINTS[key];
