@@ -1,30 +1,86 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   endOfMonth, endOfWeek, eachWeekOfInterval, eachDayOfInterval,
-  isWithinInterval, parseISO, max, min, format,
+  isWithinInterval, parseISO, max, min, format, startOfMonth,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Target, TrendingUp, CalendarDays, Wallet, Trophy,
-  CheckCircle2, AlertCircle, Sparkles, Tv,
+  CheckCircle2, AlertCircle, Sparkles, Tv, Pencil,
 } from "lucide-react";
+import { toast } from "sonner";
 import { BITVMode } from "@/components/consorcio/BITVMode";
 
 // Token público de Incorporador (seed em bi_public_tokens)
 const PUBLIC_TOKEN = "i9f42a8c1de5b7c30a9e4b6d8f2103bc7e5a9";
 const WEEK_STARTS_ON = 6 as const; // Sáb → Sex
 
+const ALLOWED_EDITORS = [
+  "thobson.motta@minhacasafinanciada.com",
+  "jessica.bellini@minhacasafinanciada.com",
+  "jessica.bellini.r2@minhacasafinanciada.com",
+];
+
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export default function BIComercial() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const canEdit = !!user?.email && ALLOWED_EDITORS.includes(user.email.toLowerCase());
   const [tvMode, setTvMode] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+
+  const monthRefISO = format(startOfMonth(new Date()), "yyyy-MM-dd");
+
+  const { data: metaRow } = useQuery({
+    queryKey: ["incorporador-bi-meta", monthRefISO],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("incorporador_bi_metas")
+        .select("id, meta_valor, month_ref")
+        .eq("month_ref", monthRefISO)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: tvMode ? 30_000 : false,
+  });
+
+  useEffect(() => { setEditValue(String(metaRow?.meta_valor ?? "")); }, [metaRow]);
+
+  const saveMeta = useMutation({
+    mutationFn: async (valor: number) => {
+      if (metaRow?.id) {
+        const { error } = await (supabase as any)
+          .from("incorporador_bi_metas")
+          .update({ meta_valor: valor, updated_at: new Date().toISOString() })
+          .eq("id", metaRow.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("incorporador_bi_metas")
+          .insert({ month_ref: monthRefISO, meta_valor: valor, created_by: user?.id });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Meta atualizada");
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["incorporador-bi-meta", monthRefISO] });
+      qc.invalidateQueries({ queryKey: ["bi-incorporador-runtime"] });
+    },
+    onError: (e: any) => toast.error("Erro ao salvar meta: " + e.message),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["bi-incorporador-runtime"],
@@ -108,6 +164,11 @@ export default function BIComercial() {
             {format(view.monthStart, "MMMM 'de' yyyy", { locale: ptBR })} · valores do card MCF Incorporador (semana Sáb→Sex).
           </p>
         </div>
+        {canEdit && !editing && (
+          <Button variant="outline" onClick={() => setEditing(true)} className="gap-2">
+            <Pencil className="h-4 w-4" /> Editar meta do mês
+          </Button>
+        )}
         <Button
           onClick={() => setTvMode(true)}
           className="gap-2 font-bold text-black hover:opacity-90"
@@ -116,6 +177,37 @@ export default function BIComercial() {
           <Tv className="h-4 w-4" /> Modo TV
         </Button>
       </div>
+
+      {editing && canEdit && (
+        <Card className="border-2" style={{ borderColor: "#ff7a00", background: "rgba(255,122,0,0.05)" }}>
+          <CardHeader>
+            <CardTitle className="text-base">Definir meta integral do mês</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[240px]">
+              <label className="text-xs text-muted-foreground">Valor total (R$)</label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder="Ex: 5000000"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                O valor é distribuído automaticamente por dia, semana (Sáb→Sex) e replicado no Modo TV.
+              </p>
+            </div>
+            <Button
+              onClick={() => saveMeta.mutate(Number(editValue) || 0)}
+              disabled={saveMeta.isPending}
+              style={{ backgroundColor: "#ff7a00", color: "#000" }}
+            >
+              Salvar
+            </Button>
+            <Button variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {tvMode && (
         <BITVMode

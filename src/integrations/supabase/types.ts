@@ -7749,6 +7749,36 @@ export type Database = {
         }
         Relationships: []
       }
+      incorporador_bi_metas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dias_uteis_override: Json | null
+          id: string
+          meta_valor: number
+          month_ref: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dias_uteis_override?: Json | null
+          id?: string
+          meta_valor?: number
+          month_ref: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dias_uteis_override?: Json | null
+          id?: string
+          meta_valor?: number
+          month_ref?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       incorporator_goals: {
         Row: {
           created_at: string | null
@@ -13059,6 +13089,10 @@ export type Database = {
         Returns: Json
       }
       can_edit_bi_consorcio_meta: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      can_edit_bi_incorporador_meta: {
         Args: { _user_id: string }
         Returns: boolean
       }
