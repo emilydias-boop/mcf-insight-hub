@@ -42,12 +42,12 @@ export default function CustomerRoom() {
   return (
     <div className="min-h-[100dvh] bg-muted/20 flex flex-col">
       {/* Header */}
-      <header className="bg-primary text-primary-foreground px-4 py-4 shadow sticky top-0 z-10">
+      <header className="bg-primary text-primary-foreground px-5 py-5 shadow sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
-          <div className="text-sm opacity-80">Check-in MCF</div>
-          <div className="font-semibold text-lg sm:text-xl">Olá, {room.customer_name.split(' ')[0]}</div>
+          <div className="text-base sm:text-lg font-medium opacity-90 tracking-wide">Check-in MCF</div>
+          <div className="font-bold text-2xl sm:text-2xl mt-1 leading-tight">Olá, {room.customer_name.split(' ')[0]}</div>
           {room.product_name && (
-            <div className="text-sm opacity-80 mt-0.5">{room.product_name}</div>
+            <div className="text-base sm:text-base opacity-90 mt-1">{room.product_name}</div>
           )}
         </div>
       </header>
@@ -65,11 +65,11 @@ export default function CustomerRoom() {
           const mine = m.sender_type === 'customer';
           return (
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
+              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-[17px] sm:text-base leading-relaxed shadow-sm ${
                 mine ? 'bg-primary text-primary-foreground' : 'bg-card border'
               }`}>
                 {!mine && m.sender_name && (
-                  <div className="text-xs font-medium opacity-70 mb-1">{m.sender_name}</div>
+                  <div className="text-sm font-medium opacity-70 mb-1">{m.sender_name}</div>
                 )}
                 <div className="whitespace-pre-wrap break-words">{m.body}</div>
                 <div className={`text-xs mt-1 flex items-center gap-1 opacity-70 ${mine ? 'justify-end' : ''}`}>
@@ -94,7 +94,7 @@ export default function CustomerRoom() {
             onChange={(e) => setText(e.target.value)}
             placeholder="Digite sua mensagem…"
             rows={2}
-            className="resize-none text-base min-h-[52px]"
+            className="resize-none text-[17px] sm:text-base min-h-[56px] py-3 px-4 rounded-2xl"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -102,8 +102,8 @@ export default function CustomerRoom() {
               }
             }}
           />
-          <Button onClick={submit} disabled={!text.trim() || sending} size="lg" className="h-[52px] px-4">
-            <Send className="h-5 w-5" />
+          <Button onClick={submit} disabled={!text.trim() || sending} size="lg" className="h-[56px] w-[56px] p-0 rounded-full shrink-0">
+            <Send className="h-6 w-6" />
           </Button>
         </div>
       </div>
