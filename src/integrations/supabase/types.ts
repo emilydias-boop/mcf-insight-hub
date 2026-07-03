@@ -2346,6 +2346,232 @@ export type Database = {
         }
         Relationships: []
       }
+      checkin_messages: {
+        Row: {
+          body: string
+          created_at: string
+          delivered_at: string | null
+          id: string
+          read_at: string | null
+          room_id: string
+          sender_name: string | null
+          sender_type: Database["public"]["Enums"]["checkin_sender"]
+          sender_user_id: string | null
+          sent_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          read_at?: string | null
+          room_id: string
+          sender_name?: string | null
+          sender_type: Database["public"]["Enums"]["checkin_sender"]
+          sender_user_id?: string | null
+          sent_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          read_at?: string | null
+          room_id?: string
+          sender_name?: string | null
+          sender_type?: Database["public"]["Enums"]["checkin_sender"]
+          sender_user_id?: string | null
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkin_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "checkin_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      checkin_room_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          detail: Json | null
+          event_type: string
+          id: string
+          room_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          event_type: string
+          id?: string
+          room_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          event_type?: string
+          id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkin_room_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_room_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkin_room_events_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "checkin_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checkin_rooms: {
+        Row: {
+          access_token: string
+          assigned_to: string | null
+          attendee_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          deal_id: string | null
+          hubla_transaction_id: string | null
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          product_name: string | null
+          purchase_date: string | null
+          status: Database["public"]["Enums"]["checkin_room_status"]
+          unread_for_customer: number
+          unread_for_team: number
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string
+          assigned_to?: string | null
+          attendee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          deal_id?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          status?: Database["public"]["Enums"]["checkin_room_status"]
+          unread_for_customer?: number
+          unread_for_team?: number
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          assigned_to?: string | null
+          attendee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          deal_id?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          product_name?: string | null
+          purchase_date?: string | null
+          status?: Database["public"]["Enums"]["checkin_room_status"]
+          unread_for_customer?: number
+          unread_for_team?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkin_rooms_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_attendee_id_fkey"
+            columns: ["attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closer_availability: {
         Row: {
           closer_id: string
@@ -14029,6 +14255,12 @@ export type Database = {
         | "transfer_completed"
         | "transfer_cancelled"
         | "pos_contemplacao_decision"
+      checkin_room_status:
+        | "novo"
+        | "em_atendimento"
+        | "aguardando_cliente"
+        | "concluido"
+      checkin_sender: "customer" | "staff" | "system"
       cobranca_acao_tipo:
         | "boleto_enviado"
         | "lead_respondeu"
@@ -14407,6 +14639,13 @@ export const Constants = {
         "transfer_cancelled",
         "pos_contemplacao_decision",
       ],
+      checkin_room_status: [
+        "novo",
+        "em_atendimento",
+        "aguardando_cliente",
+        "concluido",
+      ],
+      checkin_sender: ["customer", "staff", "system"],
       cobranca_acao_tipo: [
         "boleto_enviado",
         "lead_respondeu",
