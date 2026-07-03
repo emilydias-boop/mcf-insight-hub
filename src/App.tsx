@@ -31,6 +31,8 @@ import NotFound from "./pages/NotFound";
 const BIConsorcioPublic = lazy(() => import("./pages/public/BIConsorcioPublic"));
 const BIIncorporadorPublic = lazy(() => import("./pages/public/BIIncorporadorPublic"));
 const TVLauncher = lazy(() => import("./pages/public/TVLauncher"));
+const CheckinInbox = lazy(() => import("./pages/checkin/CheckinInbox"));
+const CustomerRoom = lazy(() => import("./pages/checkin/CustomerRoom"));
 
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -171,6 +173,7 @@ const App = () => (
 <Route path="/bi/consorcio" element={<BIConsorcioPublic />} />
             <Route path="/bi/incorporador" element={<BIIncorporadorPublic />} />
             <Route path="/tv" element={<TVLauncher />} />
+            <Route path="/checkin/sala/:token" element={<CustomerRoom />} />
             
             {/* Protected routes */}
             <Route
@@ -184,6 +187,7 @@ const App = () => (
               }
             >
               <Route path="home" element={<Home />} />
+              <Route path="checkin" element={<CheckinInbox />} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
               <Route index element={<Navigate to="/home" replace />} />

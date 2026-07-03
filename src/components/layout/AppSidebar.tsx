@@ -33,6 +33,7 @@ import {
   Zap,
   ShieldAlert,
   Target,
+  MessageSquare,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -128,6 +129,11 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   // ===== DASHBOARD =====
+  {
+    title: "Check-in MCF",
+    url: "/checkin",
+    icon: MessageSquare,
+  },
   // Visão Chairman - desativada (manter comentado para rollback)
   // {
   //   title: "Visão Chairman",
