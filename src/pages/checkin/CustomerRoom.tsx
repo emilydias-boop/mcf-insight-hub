@@ -29,55 +29,55 @@ export default function CustomerRoom() {
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando…</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground text-base">Carregando…</div>;
   if (error || !room) return (
     <div className="min-h-screen flex items-center justify-center p-6 text-center">
       <div>
-        <div className="text-lg font-semibold mb-2">Sala não encontrada</div>
-        <div className="text-sm text-muted-foreground">Verifique o link recebido ou entre em contato com nosso suporte.</div>
+        <div className="text-xl font-semibold mb-2">Sala não encontrada</div>
+        <div className="text-base text-muted-foreground">Verifique o link recebido ou entre em contato com nosso suporte.</div>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-muted/20 flex flex-col">
+    <div className="min-h-[100dvh] bg-muted/20 flex flex-col">
       {/* Header */}
-      <header className="bg-primary text-primary-foreground px-4 py-3 shadow">
+      <header className="bg-primary text-primary-foreground px-4 py-4 shadow sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
           <div className="text-sm opacity-80">Check-in MCF</div>
-          <div className="font-semibold">Olá, {room.customer_name.split(' ')[0]}</div>
+          <div className="font-semibold text-lg sm:text-xl">Olá, {room.customer_name.split(' ')[0]}</div>
           {room.product_name && (
-            <div className="text-xs opacity-80 mt-0.5">{room.product_name}</div>
+            <div className="text-sm opacity-80 mt-0.5">{room.product_name}</div>
           )}
         </div>
       </header>
 
       {/* Boas-vindas */}
       <div className="max-w-2xl w-full mx-auto px-4 pt-4">
-        <div className="bg-card border rounded-lg p-4 text-sm text-muted-foreground">
+        <div className="bg-card border rounded-lg p-4 text-base leading-relaxed text-muted-foreground">
           Este é o seu espaço exclusivo para tirar dúvidas sobre o MCF. Nossa equipe responde por aqui — todo o histórico fica guardado para você consultar quando quiser.
         </div>
       </div>
 
       {/* Mensagens */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-2xl w-full mx-auto space-y-2">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 max-w-2xl w-full mx-auto space-y-3">
         {messages.map((m) => {
           const mine = m.sender_type === 'customer';
           return (
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm shadow-sm ${
+              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
                 mine ? 'bg-primary text-primary-foreground' : 'bg-card border'
               }`}>
                 {!mine && m.sender_name && (
-                  <div className="text-[10px] font-medium opacity-70 mb-0.5">{m.sender_name}</div>
+                  <div className="text-xs font-medium opacity-70 mb-1">{m.sender_name}</div>
                 )}
                 <div className="whitespace-pre-wrap break-words">{m.body}</div>
-                <div className={`text-[10px] mt-1 flex items-center gap-0.5 opacity-70 ${mine ? 'justify-end' : ''}`}>
+                <div className={`text-xs mt-1 flex items-center gap-1 opacity-70 ${mine ? 'justify-end' : ''}`}>
                   {format(new Date(m.sent_at), 'HH:mm', { locale: ptBR })}
                   {mine && (
-                    m.read_at ? <CheckCheck className="h-3 w-3 text-sky-300" />
-                    : m.delivered_at ? <CheckCheck className="h-3 w-3" />
-                    : <Check className="h-3 w-3" />
+                    m.read_at ? <CheckCheck className="h-3.5 w-3.5 text-sky-300" />
+                    : m.delivered_at ? <CheckCheck className="h-3.5 w-3.5" />
+                    : <Check className="h-3.5 w-3.5" />
                   )}
                 </div>
               </div>
@@ -87,14 +87,14 @@ export default function CustomerRoom() {
       </div>
 
       {/* Composer */}
-      <div className="bg-card border-t p-3 sticky bottom-0">
-        <div className="max-w-2xl mx-auto flex gap-2">
+      <div className="bg-card border-t p-3 sticky bottom-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="max-w-2xl mx-auto flex gap-2 items-end">
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Digite sua mensagem…"
             rows={2}
-            className="resize-none"
+            className="resize-none text-base min-h-[52px]"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -102,8 +102,8 @@ export default function CustomerRoom() {
               }
             }}
           />
-          <Button onClick={submit} disabled={!text.trim() || sending}>
-            <Send className="h-4 w-4" />
+          <Button onClick={submit} disabled={!text.trim() || sending} size="lg" className="h-[52px] px-4">
+            <Send className="h-5 w-5" />
           </Button>
         </div>
       </div>
