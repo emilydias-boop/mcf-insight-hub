@@ -131,13 +131,6 @@ export function useCustomerRoom(token: string | null) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         throw e;
       }
-      // no-op: substituído acima
-      return;
-      // eslint-disable-next-line no-unreachable
-      await callFn('messages', {
-        method: 'POST',
-        body: JSON.stringify({ token, body: trimmed }),
-      });
     },
     [token, load, room?.customer_name],
   );
