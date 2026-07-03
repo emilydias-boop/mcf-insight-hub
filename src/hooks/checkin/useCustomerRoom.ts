@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase, SUPABASE_PROJECT_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_PROJECT_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 
 export interface CustomerRoomData {
   id: string;
@@ -25,7 +25,12 @@ const FN_URL = `${SUPABASE_PROJECT_URL}/functions/v1/checkin-customer`;
 async function callFn(path: string, init?: RequestInit) {
   const res = await fetch(`${FN_URL}/${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      ...(init?.headers ?? {}),
+    },
   });
   if (!res.ok) {
     const t = await res.text();
