@@ -27,6 +27,18 @@ const STATUS_COLOR: Record<string, string> = {
   concluido: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
 };
 
+function getPublicCheckinUrl(token: string) {
+  const currentOrigin = window.location.origin;
+  const currentHost = window.location.hostname;
+  const isPrivateLovableEditor = currentHost.endsWith('lovableproject.com');
+  const previewId = currentHost.split('.')[0];
+  const publicOrigin = isPrivateLovableEditor
+    ? `https://id-preview--${previewId}.lovable.app`
+    : currentOrigin;
+
+  return `${publicOrigin}/checkin/sala/${token}`;
+}
+
 export default function CheckinInbox() {
   const { data: rooms = [], isLoading } = useCheckinRooms();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -229,7 +241,7 @@ function ConversationPane({ room }: { room: CheckinRoom }) {
 }
 
 function CustomerInfoPanel({ room }: { room: CheckinRoom }) {
-  const url = `${window.location.origin}/checkin/sala/${room.access_token}`;
+  const url = getPublicCheckinUrl(room.access_token);
   return (
     <Card className="w-72 p-4 shrink-0 flex flex-col gap-4 overflow-y-auto">
       <div className="flex items-center gap-2">
