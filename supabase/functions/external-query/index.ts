@@ -239,6 +239,92 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ---- Action: get_metas_equipe_mensal ----
+  // Payload: { action, mes: 1-12, ano: 2026 }
+  // Reutiliza a RPC public.get_sdr_metrics_from_agenda (bu_filter='incorporador')
+  // + conta contract_paid a partir de meeting_slot_attendees.contract_paid_at
+  //   (mesma lógica de useCloserContractsList, escopada por closers.bu='incorporador').
+  if (body.action === "get_metas_equipe_mensal") {
+    const mes = Number((body as any).mes);
+    const ano = Number((body as any).ano);
+    if (!Number.isInteger(mes) || mes < 1 || mes > 12) return json({ error: "Invalid 'mes'" }, 400);
+    if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) return json({ error: "Invalid 'ano'" }, 400);
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startDate = `${ano}-${pad(mes)}-01`;
+    const lastDay = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+    const endDate = `${ano}-${pad(mes)}-${pad(lastDay)}`;
+
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc("get_sdr_metrics_from_agenda", {
+        start_date: startDate,
+        end_date: endDate,
+        sdr_email_filter: null,
+        bu_filter: "incorporador",
+      });
+      if (rpcErr) throw rpcErr;
+
+      const metrics = ((rpcData as any)?.metrics ?? []) as Array<{
+        agendamentos?: number;
+        r1_agendada?: number;
+        r1_realizada?: number;
+        no_shows?: number;
+      }>;
+
+      let agendamento = 0, r1_agendada = 0, r1_realizada = 0, no_show = 0;
+      for (const m of metrics) {
+        agendamento += Number(m.agendamentos || 0);
+        r1_agendada += Number(m.r1_agendada || 0);
+        r1_realizada += Number(m.r1_realizada || 0);
+        no_show += Number(m.no_shows || 0);
+      }
+
+      // Contrato Pago: attendees.contract_paid_at no intervalo,
+      // via meeting_slots -> closers com bu='incorporador'.
+      const { data: closers, error: cErr } = await supabase
+        .from("closers")
+        .select("id")
+        .eq("bu", "incorporador");
+      if (cErr) throw cErr;
+      const closerIds = (closers ?? []).map((c: any) => c.id);
+
+      let contrato_pago = 0;
+      if (closerIds.length > 0) {
+        const { data: slots, error: sErr } = await supabase
+          .from("meeting_slots")
+          .select("id, meeting_slot_attendees ( id, status, is_partner, contract_paid_at )")
+          .in("closer_id", closerIds)
+          .gte("scheduled_at", `${startDate}T00:00:00`)
+          .lte("scheduled_at", `${endDate}T23:59:59`);
+        if (sErr) throw sErr;
+        for (const slot of (slots ?? []) as any[]) {
+          for (const att of slot.meeting_slot_attendees ?? []) {
+            if (att.is_partner) continue;
+            if (att.status !== "contract_paid" && att.status !== "refunded") continue;
+            if (!att.contract_paid_at) continue;
+            const paidDate = String(att.contract_paid_at).slice(0, 10);
+            if (paidDate >= startDate && paidDate <= endDate) contrato_pago += 1;
+          }
+        }
+      }
+
+      const result = { agendamento, r1_agendada, r1_realizada, no_show, contrato_pago };
+      try {
+        await supabase.from("audit_logs").insert({
+          action: "external_query_get_metas_equipe_mensal",
+          table_name: "meeting_slot_attendees",
+          new_data: { client: clientName, mes, ano, start_date: startDate, end_date: endDate, ...result },
+          ip_address: ip,
+          user_agent: req.headers.get("user-agent"),
+        });
+      } catch (e) { console.error("audit_logs insert failed", e); }
+      return json(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return json({ error: msg }, 400);
+    }
+  }
+
   const table = (body.table ?? "").toString().trim();
   const select = typeof body.select === "string" && body.select.trim() ? body.select : "*";
   const limit = Math.min(Math.max(Number(body.limit ?? 100), 1), 1000);
