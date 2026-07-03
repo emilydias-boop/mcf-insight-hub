@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, SUPABASE_PROJECT_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 
 export interface CustomerRoomData {
@@ -44,17 +44,28 @@ export function useCustomerRoom(token: string | null) {
   const [messages, setMessages] = useState<CustomerMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const didInitialLoad = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
     try {
-      setLoading(true);
+      if (!opts?.silent && !didInitialLoad.current) setLoading(true);
       const data = await callFn(`messages?token=${encodeURIComponent(token)}`);
       setRoom(data.room);
-      setMessages(data.messages ?? []);
+      setMessages((prev) => {
+        const incoming: CustomerMessage[] = data.messages ?? [];
+        // Merge: mantém otimistas ainda não confirmadas e evita "piscar" quando nada mudou
+        const map = new Map<string, CustomerMessage>();
+        for (const m of prev) map.set(m.id, m);
+        for (const m of incoming) map.set(m.id, m);
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime(),
+        );
+      });
     } catch (e: any) {
       setError(e.message);
     } finally {
+      didInitialLoad.current = true;
       setLoading(false);
     }
   }, [token]);
@@ -63,6 +74,7 @@ export function useCustomerRoom(token: string | null) {
     load();
   }, [load]);
 
+  // Realtime (silencioso — sem piscar tela)
   useEffect(() => {
     if (!room?.id) return;
     const channel = supabase
@@ -71,7 +83,7 @@ export function useCustomerRoom(token: string | null) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'checkin_messages', filter: `room_id=eq.${room.id}` },
         () => {
-          load();
+          load({ silent: true });
         },
       )
       .subscribe();
@@ -80,16 +92,47 @@ export function useCustomerRoom(token: string | null) {
     };
   }, [room?.id, load]);
 
+  // Fallback: polling leve caso o realtime não esteja acessível ao anon
+  useEffect(() => {
+    if (!room?.id) return;
+    const iv = setInterval(() => load({ silent: true }), 5000);
+    return () => clearInterval(iv);
+  }, [room?.id, load]);
+
   const send = useCallback(
     async (body: string) => {
       if (!token) return;
-      await callFn('messages', {
-        method: 'POST',
-        body: JSON.stringify({ token, body }),
-      });
-      await load();
+      const trimmed = body.trim();
+      if (!trimmed) return;
+      // Otimista: já mostra a mensagem enquanto o servidor confirma
+      const tempId = `tmp-${Date.now()}`;
+      const optimistic: CustomerMessage = {
+        id: tempId,
+        sender_type: 'customer',
+        sender_name: room?.customer_name ?? null,
+        body: trimmed,
+        sent_at: new Date().toISOString(),
+        delivered_at: null,
+        read_at: null,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+      try {
+        const res = await callFn('messages', {
+          method: 'POST',
+          body: JSON.stringify({ token, body: trimmed }),
+        });
+        if (res?.message) {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? res.message : m)));
+        } else {
+          await load({ silent: true });
+        }
+      } catch (e) {
+        // remove otimista em caso de falha
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        throw e;
+      }
     },
-    [token, load],
+    [token, load, room?.customer_name],
   );
 
   return { room, messages, loading, error, send, reload: load };
