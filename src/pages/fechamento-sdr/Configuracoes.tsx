@@ -46,6 +46,7 @@ const ConfiguracoesSdr = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeBU = useActiveBU();
+  const [activeTab, setActiveTab] = useState('equipe');
 
   // Determinar BU efetiva: URL > contexto > fallback
   const buFromUrl = searchParams.get('bu') as BusinessUnit | null;
