@@ -42,7 +42,7 @@ export default function ConsorcioFechamentoConfig() {
         </div>
       </div>
 
-      <Tabs defaultValue="equipe" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="equipe" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
