@@ -104,27 +104,54 @@ function FunnelViz({ rows }: { rows: ClientRow[] }) {
   const pct = (n: number) => (entry > 0 ? (n / entry) * 100 : 0);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <TrendingDown className="h-4 w-4 text-primary" />
-          Funil do Ciclo de Vendas
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-stretch gap-2">
-          <StageNode label="Entrada (A010)" value={entry} active />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="No CRM" value={withDeal} pct={pct(withDeal)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="R1" value={withR1} pct={pct(withR1)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="R2" value={withR2} pct={pct(withR2)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="Final (A001/03/09)" value={final} pct={pct(final)} />
-        </div>
-      </CardContent>
-    </Card>
+    <TooltipProvider delayDuration={150}>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingDown className="h-4 w-4 text-primary" />
+            Funil do Ciclo de Vendas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-stretch gap-2">
+            <StageNode
+              label="Entrada (A010)"
+              value={entry}
+              active
+              tooltip="Clientes que compraram pelo menos um produto de entrada (A010/A017) no período."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="No CRM"
+              value={withDeal}
+              pct={pct(withDeal)}
+              tooltip="Clientes de entrada que possuem um deal cadastrado no CRM."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="R1"
+              value={withR1}
+              pct={pct(withR1)}
+              tooltip="Clientes de entrada que têm pelo menos uma reunião R1 agendada ou realizada."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="R2"
+              value={withR2}
+              pct={pct(withR2)}
+              tooltip="Clientes de entrada que têm pelo menos uma reunião R2 agendada ou realizada."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="Final (A001/03/09)"
+              value={final}
+              pct={pct(final)}
+              tooltip="Clientes de entrada que compraram A001, A003 ou A009 no período."
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }
 
