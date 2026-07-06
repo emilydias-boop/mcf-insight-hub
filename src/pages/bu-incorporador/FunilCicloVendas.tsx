@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, ChevronDown, ChevronRight, Filter, TrendingDown, Search, ArrowDown, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CalendarIcon, ChevronDown, ChevronRight, Filter, TrendingDown, Search, ArrowDown, CheckCircle2, XCircle, Clock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFunilCicloVendas, ClientRow, ClientTransaction, MeetingInfo } from '@/hooks/useFunilCicloVendas';
 
@@ -66,18 +67,30 @@ function MeetingBadge({ m, type }: { m: MeetingInfo | null; type: 'R1' | 'R2' })
   );
 }
 
-function StageNode({ label, value, pct, active }: { label: string; value: number; pct?: number; active?: boolean }) {
+function StageNode({ label, value, pct, active, tooltip }: { label: string; value: number; pct?: number; active?: boolean; tooltip?: string }) {
   return (
-    <div className={cn(
-      'flex-1 rounded-lg border p-3 text-center transition-colors',
-      active ? 'border-primary bg-primary/5' : 'border-border'
-    )}>
-      <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
-      {pct !== undefined && (
-        <div className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(0)}%</div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={cn(
+          'flex-1 rounded-lg border p-3 text-center transition-colors cursor-help',
+          active ? 'border-primary bg-primary/5' : 'border-border'
+        )}>
+          <div className="flex items-center justify-center gap-1">
+            <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{label}</div>
+            {tooltip && <Info className="h-3 w-3 text-muted-foreground" />}
+          </div>
+          <div className="text-2xl font-bold mt-1">{value}</div>
+          {pct !== undefined && (
+            <div className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(0)}%</div>
+          )}
+        </div>
+      </TooltipTrigger>
+      {tooltip && (
+        <TooltipContent side="top" className="max-w-xs">
+          <p className="text-xs">{tooltip}</p>
+        </TooltipContent>
       )}
-    </div>
+    </Tooltip>
   );
 }
 
@@ -91,27 +104,54 @@ function FunnelViz({ rows }: { rows: ClientRow[] }) {
   const pct = (n: number) => (entry > 0 ? (n / entry) * 100 : 0);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <TrendingDown className="h-4 w-4 text-primary" />
-          Funil do Ciclo de Vendas
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-stretch gap-2">
-          <StageNode label="Entrada (A010)" value={entry} active />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="No CRM" value={withDeal} pct={pct(withDeal)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="R1" value={withR1} pct={pct(withR1)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="R2" value={withR2} pct={pct(withR2)} />
-          <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
-          <StageNode label="Final (A001/03/09)" value={final} pct={pct(final)} />
-        </div>
-      </CardContent>
-    </Card>
+    <TooltipProvider delayDuration={150}>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingDown className="h-4 w-4 text-primary" />
+            Funil do Ciclo de Vendas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-stretch gap-2">
+            <StageNode
+              label="Entrada (A010)"
+              value={entry}
+              active
+              tooltip="Clientes que compraram pelo menos um produto de entrada (A010/A017) no período."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="No CRM"
+              value={withDeal}
+              pct={pct(withDeal)}
+              tooltip="Clientes de entrada que possuem um deal cadastrado no CRM."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="R1"
+              value={withR1}
+              pct={pct(withR1)}
+              tooltip="Clientes de entrada que têm pelo menos uma reunião R1 agendada ou realizada."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="R2"
+              value={withR2}
+              pct={pct(withR2)}
+              tooltip="Clientes de entrada que têm pelo menos uma reunião R2 agendada ou realizada."
+            />
+            <ArrowDown className="h-5 w-5 text-muted-foreground self-center rotate-[-90deg]" />
+            <StageNode
+              label="Final (A001/03/09)"
+              value={final}
+              pct={pct(final)}
+              tooltip="Clientes de entrada que compraram A001, A003 ou A009 no período."
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }
 
@@ -309,27 +349,55 @@ export default function FunilCicloVendas() {
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Status</span>
               <div className="flex gap-3 h-9 items-center">
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semR1}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
-                  />
-                  Sem R1
-                </label>
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semR2}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
-                  />
-                  Sem R2
-                </label>
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semFinal}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
-                  />
-                  Sem Venda Final
-                </label>
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semR1}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
+                        />
+                        Sem R1
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que compraram o produto de entrada e ainda não possuem nenhuma reunião R1 agendada ou realizada.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semR2}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
+                        />
+                        Sem R2
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que já passaram pela R1, mas ainda não possuem nenhuma reunião R2 agendada ou realizada.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semFinal}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
+                        />
+                        Sem Venda Final
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que compraram o produto de entrada, mas ainda não compraram nenhum produto final (A001, A003 ou A009).</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
