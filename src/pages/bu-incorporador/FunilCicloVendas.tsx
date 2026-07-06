@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, ChevronDown, ChevronRight, Filter, TrendingDown, Search, ArrowDown, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CalendarIcon, ChevronDown, ChevronRight, Filter, TrendingDown, Search, ArrowDown, CheckCircle2, XCircle, Clock, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFunilCicloVendas, ClientRow, ClientTransaction, MeetingInfo } from '@/hooks/useFunilCicloVendas';
 
