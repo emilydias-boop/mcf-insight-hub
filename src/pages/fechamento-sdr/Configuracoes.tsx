@@ -198,7 +198,7 @@ const ConfiguracoesSdr = () => {
         </TabsContent>
 
         <TabsContent value="plans">
-          <PlansOteTab defaultBU={effectiveBu} lockBU />
+          <PlansOteTab defaultBU={effectiveBu} lockBU onNavigateToMetricas={() => setActiveTab('metricas')} />
         </TabsContent>
 
         <TabsContent value="metricas">
