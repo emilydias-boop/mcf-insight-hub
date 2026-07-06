@@ -26,7 +26,6 @@ interface PlanValues {
   valor_organizacao: number;
   meta_no_show_pct: number;
   meta_reunioes_realizadas_pct: number;
-  meta_contratos_pct?: number | null;
   meta_comissao_consorcio?: number | null;
   meta_comissao_holding?: number | null;
 }
