@@ -739,6 +739,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
           squad={Object.entries(BU_MAPPING).find(([, dept]) => dept === editDialog.employee!.departamento)?.[0] || editDialog.employee.departamento}
           roleType={editDialog.employee.role_type}
           anoMes={format(selectedDate, 'yyyy-MM')}
+          onOpenMetricas={onNavigateToMetricas}
           currentValues={{
             ote_total: getDisplayValues(editDialog.employee).ote,
             fixo_valor: getDisplayValues(editDialog.employee).fixo,
