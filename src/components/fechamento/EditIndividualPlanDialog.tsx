@@ -256,6 +256,98 @@ export const EditIndividualPlanDialog = ({
             </div>
           )}
 
+          {/* Metas Percentuais - KPIs */}
+          <div className="border-t pt-3">
+            <Label className="text-xs text-muted-foreground mb-2 block flex items-center gap-2">
+              <Percent className="h-3.5 w-3.5" />
+              Metas Percentuais (KPIs)
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="meta_no_show_pct" className="flex items-center gap-1.5 text-[10px]">
+                  Teto de No-Show (%)
+                  <span title="Taxa máxima aceitável de no-show. Acima desse teto a performance decresce.">
+                    <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </span>
+                </Label>
+                <Input
+                  id="meta_no_show_pct"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.meta_no_show_pct}
+                  onChange={(e) => handleChange('meta_no_show_pct', e.target.value)}
+                  className="h-8 text-sm"
+                />
+                {catalogValues && (
+                  <span className="text-[10px] text-muted-foreground">
+                    Padrão: {catalogValues.meta_no_show_pct}%
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="meta_reunioes_realizadas_pct" className="flex items-center gap-1.5 text-[10px]">
+                  Reuniões Realizadas (%)
+                  <span title="Percentual de reuniões agendadas que devem ser realizadas. Ex.: 60% significa que, se houver 100 agendadas, a meta é 60 realizadas.">
+                    <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </span>
+                </Label>
+                <Input
+                  id="meta_reunioes_realizadas_pct"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.meta_reunioes_realizadas_pct}
+                  onChange={(e) => handleChange('meta_reunioes_realizadas_pct', e.target.value)}
+                  className="h-8 text-sm"
+                />
+                {catalogValues && (
+                  <span className="text-[10px] text-muted-foreground">
+                    Padrão: {catalogValues.meta_reunioes_realizadas_pct}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Intermediações de Contrato - somente leitura, vindo de Métricas Ativas */}
+            <div className="mt-3 p-2.5 rounded-md border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-[10px] flex items-center gap-1.5">
+                    Intermediações de Contrato (%)
+                    <span title="Percentual de R1 realizadas que devem virar contrato. Configurado por cargo/squad na aba Métricas Ativas.">
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </span>
+                  </Label>
+                  <div className="text-sm font-medium">
+                    {formData.meta_contratos_pct != null ? `${formData.meta_contratos_pct}%` : 'Não configurado'}
+                  </div>
+                </div>
+                {onOpenMetricas && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      onOpenMetricas();
+                      onOpenChange(false);
+                    }}
+                    className="text-xs h-8"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    Métricas Ativas
+                  </Button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Esse percentual é definido por cargo/squad na aba Métricas Ativas.
+              </p>
+            </div>
+          </div>
+
           {/* Valores por Métrica - Dynamic based on active metrics */}
           <div className="border-t pt-3">
             <Label className="text-xs text-muted-foreground mb-2 block flex items-center gap-2">
