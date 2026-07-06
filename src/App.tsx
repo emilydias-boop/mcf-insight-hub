@@ -79,6 +79,7 @@ const MeuFechamento = lazy(() => import("./pages/fechamento-sdr/MeuFechamento"))
 const MeuPlaybook = lazy(() => import("./pages/playbook/MeuPlaybook"));
 const TransacoesIncorp = lazy(() => import("./pages/bu-incorporador/TransacoesIncorp"));
 const IncorporadorRelatorios = lazy(() => import("./pages/bu-incorporador/Relatorios"));
+const IncorporadorFunilCiclo = lazy(() => import("./pages/bu-incorporador/FunilCicloVendas"));
 const RHColaboradores = lazy(() => import("./pages/rh/Colaboradores"));
 const ColaboradorProfile = lazy(() => import("./pages/rh/ColaboradorProfile"));
 const ConfiguracoesRH = lazy(() => import("./pages/rh/Configuracoes"));
@@ -263,6 +264,7 @@ const App = () => (
               {/* BU Incorporador */}
               <Route path="bu-incorporador/transacoes" element={<ResourceGuard resource="crm"><TransacoesIncorp /></ResourceGuard>} />
               <Route path="bu-incorporador/relatorios" element={<ResourceGuard resource="relatorios"><IncorporadorRelatorios /></ResourceGuard>} />
+              <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} />
               <Route path="bu-incorporador/bi-comercial" element={<ResourceGuard resource="crm"><BIComercial /></ResourceGuard>} />
               <Route path="bu-incorporador/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="incorporador" /></ResourceGuard>} />
               
