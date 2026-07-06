@@ -745,6 +745,11 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: editDialog.employee.comp_plan?.valor_docs_reuniao || 0,
             valor_tentativas: editDialog.employee.comp_plan?.valor_tentativas || 0,
             valor_organizacao: editDialog.employee.comp_plan?.valor_organizacao || 0,
+            meta_no_show_pct: editDialog.employee.comp_plan?.meta_no_show_pct ?? 30,
+            meta_reunioes_realizadas_pct: (editDialog.employee.comp_plan?.meta_reunioes_agendadas && editDialog.employee.comp_plan?.meta_reunioes_realizadas)
+              ? Math.round((editDialog.employee.comp_plan!.meta_reunioes_realizadas! / editDialog.employee.comp_plan!.meta_reunioes_agendadas!) * 100)
+              : 70,
+            meta_contratos_pct: activeMetrics.find(m => m.nome_metrica === 'contratos')?.meta_percentual ?? null,
             meta_comissao_consorcio: editDialog.employee.comp_plan?.meta_comissao_consorcio || null,
             meta_comissao_holding: editDialog.employee.comp_plan?.meta_comissao_holding || null,
           }}
@@ -757,6 +762,9 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: 0,
             valor_tentativas: 0,
             valor_organizacao: 0,
+            meta_no_show_pct: 30,
+            meta_reunioes_realizadas_pct: 70,
+            meta_contratos_pct: activeMetrics.find(m => m.nome_metrica === 'contratos')?.meta_percentual ?? null,
           } : undefined}
           isPersonalized={!!editDialog.employee.comp_plan}
           onSave={handleSavePlan}
