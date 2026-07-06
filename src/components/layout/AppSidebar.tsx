@@ -166,6 +166,7 @@ const menuItems: MenuItem[] = [
       { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
+      { title: "Funil e Ciclo de Vendas", url: "/bu-incorporador/funil-ciclo-vendas" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
       // Removido em 2026-06-24 a pedido — funcionalidade não utilizada na BU Incorporador.
       // Rota /bu-incorporador/documentos-estrategicos continua registrada em App.tsx para rollback rápido.
