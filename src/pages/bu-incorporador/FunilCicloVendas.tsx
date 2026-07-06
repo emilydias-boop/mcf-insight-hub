@@ -136,7 +136,7 @@ function TimelineRow({ row }: { row: ClientRow }) {
       done: !!row.r2,
     },
     {
-      label: 'Contrato Final',
+      label: 'Venda Final',
       date: row.finalPurchases[0]?.saleDate || null,
       sub: row.finalPurchases.map((p) => `${p.productCode} · ${formatBRL(p.netValue)}`).join(', ') || 'Sem venda final',
       done: row.hasFinal,
@@ -238,6 +238,11 @@ export default function FunilCicloVendas() {
   const [entryProducts, setEntryProducts] = useState<string[]>(['A010']);
   const [onlyWithEntry, setOnlyWithEntry] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilters, setStatusFilters] = useState<{ semR1: boolean; semR2: boolean; semFinal: boolean }>({
+    semR1: false,
+    semR2: false,
+    semFinal: false,
+  });
 
   const { data: rows = [], isLoading } = useFunilCicloVendas({
     startDate,
@@ -247,14 +252,20 @@ export default function FunilCicloVendas() {
   });
 
   const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((r) =>
-      (r.customerName || '').toLowerCase().includes(q) ||
-      (r.customerEmail || '').toLowerCase().includes(q) ||
-      (r.customerPhone || '').includes(q)
-    );
-  }, [rows, search]);
+    let out = rows;
+    if (statusFilters.semR1) out = out.filter((r) => !r.hasR1);
+    if (statusFilters.semR2) out = out.filter((r) => !r.hasR2);
+    if (statusFilters.semFinal) out = out.filter((r) => !r.hasFinal);
+    if (search) {
+      const q = search.toLowerCase();
+      out = out.filter((r) =>
+        (r.customerName || '').toLowerCase().includes(q) ||
+        (r.customerEmail || '').toLowerCase().includes(q) ||
+        (r.customerPhone || '').includes(q)
+      );
+    }
+    return out;
+  }, [rows, search, statusFilters]);
 
   const toggleProduct = (p: string) => {
     setEntryProducts((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
