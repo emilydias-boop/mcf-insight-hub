@@ -47,6 +47,7 @@ interface EditIndividualPlanDialogProps {
   isPersonalized: boolean;
   onSave: (values: PlanValues) => void;
   isSaving?: boolean;
+  onOpenMetricas?: () => void;
 }
 
 export const EditIndividualPlanDialog = ({
