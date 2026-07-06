@@ -313,39 +313,45 @@ export const EditIndividualPlanDialog = ({
             </div>
 
             {/* Intermediações de Contrato - somente leitura, vindo de Métricas Ativas */}
-            <div className="mt-3 p-2.5 rounded-md border bg-muted/30">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-[10px] flex items-center gap-1.5">
-                    Intermediações de Contrato (%)
-                    <span title="Percentual de R1 realizadas que devem virar contrato. Configurado por cargo/squad na aba Métricas Ativas.">
-                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
-                    </span>
-                  </Label>
-                  <div className="text-sm font-medium">
-                    {formData.meta_contratos_pct != null ? `${formData.meta_contratos_pct}%` : 'Não configurado'}
+            {(() => {
+              const metricaContratos = activeMetrics?.find(m => m.nome_metrica === 'contratos');
+              const metaContratosPct = metricaContratos?.meta_percentual ?? null;
+              return (
+                <div className="mt-3 p-2.5 rounded-md border bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-[10px] flex items-center gap-1.5">
+                        Intermediações de Contrato (%)
+                        <span title="Percentual de R1 realizadas que devem virar contrato. Configurado por cargo/squad na aba Métricas Ativas.">
+                          <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </span>
+                      </Label>
+                      <div className="text-sm font-medium">
+                        {metaContratosPct != null ? `${metaContratosPct}%` : 'Não configurado'}
+                      </div>
+                    </div>
+                    {onOpenMetricas && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onOpenMetricas();
+                          onOpenChange(false);
+                        }}
+                        className="text-xs h-8"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                        Métricas Ativas
+                      </Button>
+                    )}
                   </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Esse percentual é definido por cargo/squad na aba Métricas Ativas.
+                  </p>
                 </div>
-                {onOpenMetricas && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      onOpenMetricas();
-                      onOpenChange(false);
-                    }}
-                    className="text-xs h-8"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                    Métricas Ativas
-                  </Button>
-                )}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Esse percentual é definido por cargo/squad na aba Métricas Ativas.
-              </p>
-            </div>
+              );
+            })()}
           </div>
 
           {/* Valores por Métrica - Dynamic based on active metrics */}
