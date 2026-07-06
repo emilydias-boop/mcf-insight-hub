@@ -160,7 +160,7 @@ export default function ConsorcioFechamentoConfig() {
 
         {/* Aba Planos OTE - filtrado para Consórcio */}
         <TabsContent value="plans">
-          <PlansOteTab defaultBU="consorcio" lockBU />
+          <PlansOteTab defaultBU="consorcio" lockBU onNavigateToMetricas={() => setActiveTab("metricas")} />
         </TabsContent>
 
         {/* Aba Métricas Ativas - filtrado para Consórcio */}
