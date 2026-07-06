@@ -136,7 +136,7 @@ function TimelineRow({ row }: { row: ClientRow }) {
       done: !!row.r2,
     },
     {
-      label: 'Contrato Final',
+      label: 'Venda Final',
       date: row.finalPurchases[0]?.saleDate || null,
       sub: row.finalPurchases.map((p) => `${p.productCode} · ${formatBRL(p.netValue)}`).join(', ') || 'Sem venda final',
       done: row.hasFinal,
@@ -238,6 +238,11 @@ export default function FunilCicloVendas() {
   const [entryProducts, setEntryProducts] = useState<string[]>(['A010']);
   const [onlyWithEntry, setOnlyWithEntry] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilters, setStatusFilters] = useState<{ semR1: boolean; semR2: boolean; semFinal: boolean }>({
+    semR1: false,
+    semR2: false,
+    semFinal: false,
+  });
 
   const { data: rows = [], isLoading } = useFunilCicloVendas({
     startDate,
@@ -247,14 +252,20 @@ export default function FunilCicloVendas() {
   });
 
   const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((r) =>
-      (r.customerName || '').toLowerCase().includes(q) ||
-      (r.customerEmail || '').toLowerCase().includes(q) ||
-      (r.customerPhone || '').includes(q)
-    );
-  }, [rows, search]);
+    let out = rows;
+    if (statusFilters.semR1) out = out.filter((r) => !r.hasR1);
+    if (statusFilters.semR2) out = out.filter((r) => !r.hasR2);
+    if (statusFilters.semFinal) out = out.filter((r) => !r.hasFinal);
+    if (search) {
+      const q = search.toLowerCase();
+      out = out.filter((r) =>
+        (r.customerName || '').toLowerCase().includes(q) ||
+        (r.customerEmail || '').toLowerCase().includes(q) ||
+        (r.customerPhone || '').includes(q)
+      );
+    }
+    return out;
+  }, [rows, search, statusFilters]);
 
   const toggleProduct = (p: string) => {
     setEntryProducts((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -293,6 +304,33 @@ export default function FunilCicloVendas() {
                 <Checkbox checked={onlyWithEntry} onCheckedChange={(v) => setOnlyWithEntry(!!v)} />
                 Só clientes com compra de entrada
               </label>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Status</span>
+              <div className="flex gap-3 h-9 items-center">
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semR1}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
+                  />
+                  Sem R1
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semR2}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
+                  />
+                  Sem R2
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semFinal}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
+                  />
+                  Sem Venda Final
+                </label>
+              </div>
             </div>
 
             <div className="flex-1 min-w-[200px]">
