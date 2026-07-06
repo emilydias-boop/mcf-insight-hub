@@ -349,27 +349,55 @@ export default function FunilCicloVendas() {
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Status</span>
               <div className="flex gap-3 h-9 items-center">
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semR1}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
-                  />
-                  Sem R1
-                </label>
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semR2}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
-                  />
-                  Sem R2
-                </label>
-                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={statusFilters.semFinal}
-                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
-                  />
-                  Sem Venda Final
-                </label>
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semR1}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
+                        />
+                        Sem R1
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que compraram o produto de entrada e ainda não possuem nenhuma reunião R1 agendada ou realizada.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semR2}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
+                        />
+                        Sem R2
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que já passaram pela R1, mas ainda não possuem nenhuma reunião R2 agendada ou realizada.</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={statusFilters.semFinal}
+                          onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
+                        />
+                        Sem Venda Final
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs">Mostrar apenas clientes que compraram o produto de entrada, mas ainda não compraram nenhum produto final (A001, A003 ou A009).</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
