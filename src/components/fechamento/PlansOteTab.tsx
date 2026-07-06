@@ -77,7 +77,13 @@ interface EmployeeWithPlan {
     variavel_total: number;
     meta_diaria?: number;
     meta_reunioes_agendadas?: number;
+    meta_reunioes_realizadas?: number;
     dias_uteis?: number;
+    valor_meta_rpg: number;
+    valor_docs_reuniao: number;
+    valor_tentativas: number;
+    valor_organizacao: number;
+    meta_no_show_pct?: number;
     valor_meta_rpg: number;
     valor_docs_reuniao: number;
     valor_tentativas: number;
