@@ -67,18 +67,30 @@ function MeetingBadge({ m, type }: { m: MeetingInfo | null; type: 'R1' | 'R2' })
   );
 }
 
-function StageNode({ label, value, pct, active }: { label: string; value: number; pct?: number; active?: boolean }) {
+function StageNode({ label, value, pct, active, tooltip }: { label: string; value: number; pct?: number; active?: boolean; tooltip?: string }) {
   return (
-    <div className={cn(
-      'flex-1 rounded-lg border p-3 text-center transition-colors',
-      active ? 'border-primary bg-primary/5' : 'border-border'
-    )}>
-      <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
-      {pct !== undefined && (
-        <div className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(0)}%</div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className={cn(
+          'flex-1 rounded-lg border p-3 text-center transition-colors cursor-help',
+          active ? 'border-primary bg-primary/5' : 'border-border'
+        )}>
+          <div className="flex items-center justify-center gap-1">
+            <div className="text-[11px] uppercase text-muted-foreground tracking-wide">{label}</div>
+            {tooltip && <Info className="h-3 w-3 text-muted-foreground" />}
+          </div>
+          <div className="text-2xl font-bold mt-1">{value}</div>
+          {pct !== undefined && (
+            <div className="text-xs text-muted-foreground mt-0.5">{pct.toFixed(0)}%</div>
+          )}
+        </div>
+      </TooltipTrigger>
+      {tooltip && (
+        <TooltipContent side="top" className="max-w-xs">
+          <p className="text-xs">{tooltip}</p>
+        </TooltipContent>
       )}
-    </div>
+    </Tooltip>
   );
 }
 
