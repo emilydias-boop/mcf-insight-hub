@@ -18,6 +18,7 @@ const CONSORCIO_DEPT = "BU - Consórcio";
 
 export default function ConsorcioFechamentoConfig() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("equipe");
 
   // Query para colaboradores com cargo
   const { data: employees, isLoading: employeesLoading } = useEmployeesWithCargo();
