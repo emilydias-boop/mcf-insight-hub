@@ -66,6 +66,7 @@ export const EditIndividualPlanDialog = ({
   isPersonalized,
   onSave,
   isSaving = false,
+  onOpenMetricas,
 }: EditIndividualPlanDialogProps) => {
   const [formData, setFormData] = useState<PlanValues>(currentValues);
   const [autoCalculateVariavel, setAutoCalculateVariavel] = useState(true);
