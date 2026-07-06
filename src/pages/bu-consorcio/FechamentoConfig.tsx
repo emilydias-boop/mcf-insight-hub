@@ -18,6 +18,7 @@ const CONSORCIO_DEPT = "BU - Consórcio";
 
 export default function ConsorcioFechamentoConfig() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("equipe");
 
   // Query para colaboradores com cargo
   const { data: employees, isLoading: employeesLoading } = useEmployeesWithCargo();
@@ -41,7 +42,7 @@ export default function ConsorcioFechamentoConfig() {
         </div>
       </div>
 
-      <Tabs defaultValue="equipe" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="equipe" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -159,7 +160,7 @@ export default function ConsorcioFechamentoConfig() {
 
         {/* Aba Planos OTE - filtrado para Consórcio */}
         <TabsContent value="plans">
-          <PlansOteTab defaultBU="consorcio" lockBU />
+          <PlansOteTab defaultBU="consorcio" lockBU onNavigateToMetricas={() => setActiveTab("metricas")} />
         </TabsContent>
 
         {/* Aba Métricas Ativas - filtrado para Consórcio */}

@@ -1,40 +1,41 @@
-## Diagnóstico
+## Contexto atual
 
-Confirmei o bug consultando o banco: os 45 contatos criados na sua importação de ontem (`clint_id LIKE 'spreadsheet_import_1783027%'`) foram criados com `email = NULL` e `phone = NULL`, mesmo a planilha (`Lead_planilha_-_24-06-2026_-_02-07-2026-2.csv`) tendo esses dados nas colunas `Email ` e `telefone`.
+Os tetos/percentuais dos KPIs mostrados no print do "Editar KPIs" vêm de três lugares:
 
-O fluxo atual (`src/components/crm/SpreadsheetCompareDialog.tsx` → `compareSpreadsheetGlobal` → edge function `import-spreadsheet-leads`):
+| KPI | Fonte de dados | Hoje editável na UI? |
+|---|---|---|
+| **Teto de No-Show** (ex.: 40%) | `sdr_comp_plan.meta_no_show_pct` | **Não** — hardcoded `30` no salvamento do plano |
+| **Reuniões Realizadas %** (ex.: 60% das agendadas) | `sdr_comp_plan.meta_reunioes_realizadas / meta_reunioes_agendadas` | **Não** — hardcoded `0.7` no salvamento |
+| **Intermediações de Contrato %** (ex.: 30% das realizadas) | `fechamento_metrica_mes.meta_percentual` para a métrica `contratos` | **Sim** — já editável na aba **Métricas Ativas** |
 
-1. Faz o parse do CSV e tenta auto-mapear as colunas `Nome`, `Email `, `telefone` para os campos `name`, `email`, `phone`.
-2. Compara com a base global. Rows `not_found` são enviadas com `{ name, email, phone }` para a edge function.
-3. A edge function cria `crm_contacts` com esses valores.
+## O que será feito
 
-O problema aconteceu porque as colunas `email` e/ou `phone` ficaram desmapeadas no passo 2 (auto-map falhou pelo espaço em `Email ` ou o usuário passou direto), e o código **permite prosseguir mapeando apenas o `name`**. Resultado: todos os leads viram "not_found" pelo nome, a edge function cria contatos vazios, o deal aparece sem telefone e sem email.
+1. Adicionar na tela **Planos OTE > Editar Plano Individual** campos editáveis para:
+   - **Teto de No-Show** (%)
+   - **Percentual de Reuniões Realizadas** (% sobre agendadas)
+   - Exibir o **Percentual de Intermediações de Contrato** com link direto para a aba **Métricas Ativas** (por ser configuração por cargo/squad, não por SDR)
 
-Além disso, encontrei problemas correlatos que também podem causar leads sem dados:
+2. Ajustar a mutation `saveCompPlan` em `PlansOteTab.tsx` para salvar os novos valores no `sdr_comp_plan` em vez dos hardcodeds (`meta_no_show_pct: 30` e `meta_reunioes_realizadas: meta_diaria * 19 * 0.7`).
 
-- Em `compareSpreadsheetGlobal` (`src/hooks/useSpreadsheetCompare.ts`), a busca por **nome exato** (linhas 145-153) casa qualquer contato homônimo já existente (mesmo vazio) e marca como `found_elsewhere`, reusando o `contact_id` errado.
-- As buscas usam `.ilike()` com o valor cru — se o email contiver `_` ou `%`, esses caracteres viram wildcards e podem casar contatos errados.
+3. Atualizar `EditIndividualPlanDialog.tsx` para receber, exibir e devolver os novos valores no formulário.
 
-## O que vou mudar
+4. Adicionar tooltips/explicações nos campos para deixar claro que eles impactam os cálculos de performance e multiplicador no fechamento.
 
-**1. `src/components/crm/SpreadsheetCompareDialog.tsx`**
-- Melhorar `autoMapColumns`: normalizar removendo espaços internos duplos e caracteres invisíveis; reconhecer também `telefone(s)`, `celular(es)`, `whatsapp`, `contato`, `número`.
-- Bloquear o botão "Continuar" (e mostrar toast) se **nem `email` nem `phone` estiverem mapeados** — só nome não é suficiente.
-- Mostrar um preview das 3 primeiras linhas mapeadas antes de comparar, para o usuário conferir visualmente que os valores estão nas colunas certas.
+5. Garantir que, quando um plano individual é criado a partir de um plano anterior (mês passado), os novos campos sejam copiados corretamente.
 
-**2. `src/hooks/useSpreadsheetCompare.ts` (`compareSpreadsheetGlobal`)**
-- Trocar `.ilike('email', emailKey)` por `.eq('email', emailKey)` (ou usar `filter` com escape) para evitar wildcards acidentais.
-- Remover a busca por nome exato como fallback de matching — ela produz falsos positivos que reusam contatos vazios. Se o usuário quiser esse comportamento, pode ser adicionado explicitamente no futuro; hoje causa perda de dados.
+## Arquivos envolvidos
 
-**3. `supabase/functions/import-spreadsheet-leads/index.ts`**
-- Mesma correção de `.ilike` → `.eq`/`.filter` escapado nas buscas por email.
-- Reduzir agressividade do fallback de 8 dígitos: só usar se o suffix de 9 dígitos não casar e o telefone tiver DDI+DDD válidos.
-- Quando um `contact_id` for reusado (found_elsewhere) mas o contato existente tiver `email` ou `phone` nulos, preencher com os dados da planilha (nunca sobrescrever dados existentes).
-
-**4. Recuperar os leads afetados desta importação**
-- Rodar um `UPDATE` para preencher `crm_contacts.email` e `crm_contacts.phone` dos 45 contatos com `clint_id LIKE 'spreadsheet_import_1783027%'`, cruzando pelo nome com os dados do CSV que você enviou.
+- `src/components/fechamento/EditIndividualPlanDialog.tsx`
+- `src/components/fechamento/PlansOteTab.tsx`
+- `src/types/sdr-fechamento.ts` (se necessário ajustar tipos de `PlanValues`)
+- `src/lib/sdrMetaPercentuais.ts` (não precisa mudar — já lê do comp plan)
 
 ## Fora do escopo
 
-- Não vou mexer no fluxo de "Colar Lista" além do que já é compartilhado.
-- Não vou alterar como o card do CRM exibe telefone/email — o problema é no dado gravado, não na UI.
+- Não alterar o cálculo da performance inversa de No-Show nem as faixas de multiplicador.
+- Não alterar o funcionamento da aba **Métricas Ativas** — apenas melhorar a navegabilidade para ela.
+- Não criar novas colunas no banco — os campos `meta_no_show_pct`, `meta_reunioes_realizadas` e `meta_reunioes_agendadas` já existem em `sdr_comp_plan`.
+
+## Resultado esperado
+
+A tela de Planos OTE passa a permitir que gestores configurem o teto de No-Show e o percentual de Reuniões Realizadas por SDR/mês, e a tela de Editar KPIs reflete esses valores automaticamente sem precisar de ajustes manuais no banco.

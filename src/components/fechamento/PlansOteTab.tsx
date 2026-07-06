@@ -77,11 +77,13 @@ interface EmployeeWithPlan {
     variavel_total: number;
     meta_diaria?: number;
     meta_reunioes_agendadas?: number;
+    meta_reunioes_realizadas?: number;
     dias_uteis?: number;
     valor_meta_rpg: number;
     valor_docs_reuniao: number;
     valor_tentativas: number;
     valor_organizacao: number;
+    meta_no_show_pct?: number;
     meta_comissao_consorcio?: number | null;
     meta_comissao_holding?: number | null;
   } | null;
@@ -91,9 +93,10 @@ interface EmployeeWithPlan {
 interface PlansOteTabProps {
   defaultBU?: string;
   lockBU?: boolean;
+  onNavigateToMetricas?: () => void;
 }
 
-export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => {
+export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }: PlansOteTabProps) => {
   // Estados de filtros
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCargoId, setSelectedCargoId] = useState<string>('__all__');
@@ -202,11 +205,11 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
         valor_tentativas: values.valor_tentativas,
         valor_organizacao: values.valor_organizacao,
         meta_reunioes_agendadas: values.meta_diaria * 19,
-        meta_reunioes_realizadas: Math.round(values.meta_diaria * 19 * 0.7),
+        meta_reunioes_realizadas: Math.round((values.meta_reunioes_realizadas_pct ?? 70) / 100 * (values.meta_diaria * 19)),
         meta_tentativas: 84 * 19,
         meta_organizacao: 100,
         dias_uteis: 19,
-        meta_no_show_pct: 30,
+        meta_no_show_pct: values.meta_no_show_pct ?? 30,
         ifood_mensal: 0,
         ifood_ultrameta: 0,
         status: 'PENDING',
@@ -329,11 +332,13 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             fixo_valor: plan.fixo_valor,
             variavel_total: plan.variavel_total,
             meta_reunioes_agendadas: plan.meta_reunioes_agendadas,
+            meta_reunioes_realizadas: plan.meta_reunioes_realizadas,
             dias_uteis: plan.dias_uteis,
             valor_meta_rpg: plan.valor_meta_rpg,
             valor_docs_reuniao: plan.valor_docs_reuniao,
             valor_tentativas: plan.valor_tentativas,
             valor_organizacao: plan.valor_organizacao,
+            meta_no_show_pct: (plan as any).meta_no_show_pct ?? 30,
             meta_comissao_consorcio: (plan as any).meta_comissao_consorcio || null,
             meta_comissao_holding: (plan as any).meta_comissao_holding || null,
           } : null,
@@ -734,6 +739,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           squad={Object.entries(BU_MAPPING).find(([, dept]) => dept === editDialog.employee!.departamento)?.[0] || editDialog.employee.departamento}
           roleType={editDialog.employee.role_type}
           anoMes={format(selectedDate, 'yyyy-MM')}
+          onOpenMetricas={onNavigateToMetricas}
           currentValues={{
             ote_total: getDisplayValues(editDialog.employee).ote,
             fixo_valor: getDisplayValues(editDialog.employee).fixo,
@@ -743,6 +749,10 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: editDialog.employee.comp_plan?.valor_docs_reuniao || 0,
             valor_tentativas: editDialog.employee.comp_plan?.valor_tentativas || 0,
             valor_organizacao: editDialog.employee.comp_plan?.valor_organizacao || 0,
+            meta_no_show_pct: editDialog.employee.comp_plan?.meta_no_show_pct ?? 30,
+            meta_reunioes_realizadas_pct: (editDialog.employee.comp_plan?.meta_reunioes_agendadas && editDialog.employee.comp_plan?.meta_reunioes_realizadas)
+              ? Math.round((editDialog.employee.comp_plan!.meta_reunioes_realizadas! / editDialog.employee.comp_plan!.meta_reunioes_agendadas!) * 100)
+              : 70,
             meta_comissao_consorcio: editDialog.employee.comp_plan?.meta_comissao_consorcio || null,
             meta_comissao_holding: editDialog.employee.comp_plan?.meta_comissao_holding || null,
           }}
@@ -755,6 +765,8 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
             valor_docs_reuniao: 0,
             valor_tentativas: 0,
             valor_organizacao: 0,
+            meta_no_show_pct: 30,
+            meta_reunioes_realizadas_pct: 70,
           } : undefined}
           isPersonalized={!!editDialog.employee.comp_plan}
           onSave={handleSavePlan}

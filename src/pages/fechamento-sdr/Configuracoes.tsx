@@ -46,6 +46,7 @@ const ConfiguracoesSdr = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeBU = useActiveBU();
+  const [activeTab, setActiveTab] = useState('equipe');
 
   // Determinar BU efetiva: URL > contexto > fallback
   const buFromUrl = searchParams.get('bu') as BusinessUnit | null;
@@ -88,7 +89,7 @@ const ConfiguracoesSdr = () => {
         </Badge>
       </div>
 
-      <Tabs defaultValue="equipe" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="equipe" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -197,7 +198,7 @@ const ConfiguracoesSdr = () => {
         </TabsContent>
 
         <TabsContent value="plans">
-          <PlansOteTab defaultBU={effectiveBu} lockBU />
+          <PlansOteTab defaultBU={effectiveBu} lockBU onNavigateToMetricas={() => setActiveTab('metricas')} />
         </TabsContent>
 
         <TabsContent value="metricas">
