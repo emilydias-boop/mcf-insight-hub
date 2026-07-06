@@ -96,7 +96,7 @@ interface PlansOteTabProps {
   onNavigateToMetricas?: () => void;
 }
 
-export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => {
+export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }: PlansOteTabProps) => {
   // Estados de filtros
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCargoId, setSelectedCargoId] = useState<string>('__all__');
