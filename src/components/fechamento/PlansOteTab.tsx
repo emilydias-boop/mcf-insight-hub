@@ -93,6 +93,7 @@ interface EmployeeWithPlan {
 interface PlansOteTabProps {
   defaultBU?: string;
   lockBU?: boolean;
+  onNavigateToMetricas?: () => void;
 }
 
 export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => {
