@@ -306,6 +306,33 @@ export default function FunilCicloVendas() {
               </label>
             </div>
 
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Status</span>
+              <div className="flex gap-3 h-9 items-center">
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semR1}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR1: !!v }))}
+                  />
+                  Sem R1
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semR2}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semR2: !!v }))}
+                  />
+                  Sem R2
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={statusFilters.semFinal}
+                    onCheckedChange={(v) => setStatusFilters((s) => ({ ...s, semFinal: !!v }))}
+                  />
+                  Sem Venda Final
+                </label>
+              </div>
+            </div>
+
             <div className="flex-1 min-w-[200px]">
               <span className="text-xs text-muted-foreground block mb-1">Buscar</span>
               <div className="relative">
