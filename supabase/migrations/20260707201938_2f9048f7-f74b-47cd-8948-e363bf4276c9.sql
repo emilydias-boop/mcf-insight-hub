@@ -1,0 +1,1 @@
+UPDATE public.sdr SET user_id = NULL WHERE id = 'a365e9dc-38a8-448b-a460-2daa1ba280c0' AND active = false;
