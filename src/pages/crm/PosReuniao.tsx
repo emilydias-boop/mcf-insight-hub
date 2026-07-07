@@ -334,7 +334,14 @@ function RealizadasTab() {
 // ─── Propostas Tab ───────────────────────────────────────────
 function PropostasTab() {
   const { data: allPropostas = [], isLoading } = useProposals();
-  const propostas = useMemo(() => allPropostas.filter(p => !p.completa), [allPropostas]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'aceita' | 'documento-pendente'>('all');
+  const propostas = useMemo(() => {
+    let list = allPropostas.filter(p => !p.completa);
+    if (statusFilter === 'pendente') return list.filter(p => p.status === 'pendente');
+    if (statusFilter === 'aceita') return list.filter(p => p.status === 'aceita');
+    if (statusFilter === 'documento-pendente') return list.filter(p => p.documentos_pendentes);
+    return list;
+  }, [allPropostas, statusFilter]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -350,7 +357,20 @@ function PropostasTab() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Propostas Enviadas</CardTitle>
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-base">Propostas Enviadas ({propostas.length})</CardTitle>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Status</SelectItem>
+              <SelectItem value="pendente">Pendente</SelectItem>
+              <SelectItem value="aceita">Aceita</SelectItem>
+              <SelectItem value="documento-pendente">Documento pendente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           variant="outline"
           size="sm"
