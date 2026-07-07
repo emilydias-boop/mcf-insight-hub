@@ -3245,6 +3245,7 @@ export type Database = {
       }
       consorcio_bi_metas: {
         Row: {
+          closer_targets: Json
           created_at: string
           created_by: string | null
           dias_uteis_override: Json | null
@@ -3254,6 +3255,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          closer_targets?: Json
           created_at?: string
           created_by?: string | null
           dias_uteis_override?: Json | null
@@ -3263,6 +3265,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          closer_targets?: Json
           created_at?: string
           created_by?: string | null
           dias_uteis_override?: Json | null

@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_bi_metas ADD COLUMN IF NOT EXISTS closer_targets jsonb NOT NULL DEFAULT '{}'::jsonb;
