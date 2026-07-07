@@ -141,7 +141,6 @@ async function resolveCodesForDeal(dealId: string) {
             .filter(Boolean) as string[],
         ),
       );
-      tried.push(`_dbg:rows=${rows.length}/slots=${slotIds.length}/closers=${closerIds.length}`);
       if (closerIds.length > 0) {
         tried.push("slot_closer");
         const { data: closerRows } = await supabase
@@ -154,13 +153,11 @@ async function resolveCodesForDeal(dealId: string) {
         const closerEmails = Array.from(
           new Set(Array.from(closerEmailById.values()).filter(Boolean) as string[]),
         );
-        tried.push(`_dbg:closerRows=${(closerRows ?? []).length}/emails=${closerEmails.length}`);
         if (closerEmails.length > 0) {
           const { data: closerProfiles } = await supabase
             .from("profiles")
             .select("email, mcf_pay_closer_code")
             .in("email", closerEmails);
-          tried.push(`_dbg:closerProfiles=${(closerProfiles ?? []).length}`);
           const codeByEmail = new Map(
             (closerProfiles ?? []).map((p: any) => [
               (p.email as string).toLowerCase(),
