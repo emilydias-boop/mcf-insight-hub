@@ -79,7 +79,7 @@ export default function AReceber() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const { data: canManage } = useCanManageAr();
+  const { canManage } = useCanManageAr();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
