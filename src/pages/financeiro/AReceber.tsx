@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, ExternalLink, Wallet, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
+import { useCanManageAr } from '@/hooks/useArGestores';
 import {
   AR_TITULO_STATUS_LABEL,
   AR_TITULO_TIPO_LABEL,
@@ -23,6 +24,18 @@ import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+// Gera um identificador estável de 6 dígitos a partir do id do título:
+// 4 dígitos derivados do id + 2 dígitos do ano corrente.
+const yearSuffix = String(new Date().getFullYear()).slice(-2);
+function ticketNumber(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const four = String(hash % 10000).padStart(4, '0');
+  return `${four}${yearSuffix}`;
+}
 
 const PRODUCT_OPTIONS = [
   { value: 'todos', label: 'Todos os produtos' },
@@ -66,6 +79,7 @@ export default function AReceber() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
+  const { data: canManage } = useCanManageAr();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
@@ -98,6 +112,15 @@ export default function AReceber() {
       toast.success('Responsável atualizado');
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao atualizar responsável');
+    }
+  };
+
+  const handleChangeTipo = async (tituloId: string, novoTipo: ArTitulo['tipo']) => {
+    try {
+      await updateTitulo.mutateAsync({ id: tituloId, tipo: novoTipo });
+      toast.success('Tipo atualizado');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao atualizar tipo');
     }
   };
 
@@ -187,6 +210,7 @@ export default function AReceber() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[90px]">Nº</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Produto</TableHead>
                   <TableHead>Tipo</TableHead>
@@ -197,14 +221,20 @@ export default function AReceber() {
                   <TableHead>Parcelas</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Responsável</TableHead>
-                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(titulos ?? []).map(t => {
                   const precisaLancar = t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0;
                   return (
-                    <TableRow key={t.id} className={precisaLancar ? 'bg-orange-500/5' : undefined}>
+                    <TableRow
+                      key={t.id}
+                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}cursor-pointer hover:bg-muted/40`}
+                      onDoubleClick={() => navigate(`/financeiro/a-receber/${t.id}`)}
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {ticketNumber(t.id)}
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{t.customer_name}</div>
                         <div className="text-xs text-muted-foreground">{t.customer_email || t.customer_document || '—'}</div>
@@ -213,7 +243,23 @@ export default function AReceber() {
                         <div className="text-xs font-medium">{t.product_code}</div>
                         <div className="text-xs text-muted-foreground line-clamp-1 max-w-[180px]">{t.product_name}</div>
                       </TableCell>
-                      <TableCell><TipoBadge tipo={t.tipo} /></TableCell>
+                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
+                        {canManage ? (
+                          <Select
+                            value={t.tipo}
+                            onValueChange={(v) => handleChangeTipo(t.id, v as ArTitulo['tipo'])}
+                          >
+                            <SelectTrigger className="h-8 min-w-[130px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="integral">Integral</SelectItem>
+                              <SelectItem value="parcelado">Parcelado</SelectItem>
+                              <SelectItem value="pendente_lancamento">Pendente de lançamento</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <TipoBadge tipo={t.tipo} />
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs">
                         {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                       </TableCell>
@@ -226,7 +272,7 @@ export default function AReceber() {
                           : `${t.parcelas_pagas}/${t.parcelas_total}`}
                       </TableCell>
                       <TableCell><StatusBadge status={t.status} /></TableCell>
-                      <TableCell>
+                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
                         <Select
                           value={t.responsavel_id ?? 'none'}
                           onValueChange={(v) => handleAssign(t.id, v)}
@@ -237,11 +283,6 @@ export default function AReceber() {
                             {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="ghost" onClick={() => navigate(`/financeiro/a-receber/${t.id}`)}>
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
                       </TableCell>
                     </TableRow>
                   );
