@@ -652,6 +652,16 @@ export default function BIConsorcio() {
           )}
         </>
       )}
+      {weekDetail && (
+        <WeekDetailDialog
+          open={!!weekDetail}
+          onOpenChange={(v) => !v && setWeekDetail(null)}
+          weekIndex={weekDetail.index}
+          start={weekDetail.start}
+          end={weekDetail.end}
+          metaSemana={weekDetail.metaSemana}
+        />
+      )}
     </div>
   );
 }
