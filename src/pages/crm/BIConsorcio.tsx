@@ -82,6 +82,10 @@ export default function BIConsorcio() {
         .select("id, name, email, color")
         .eq("is_active", true)
         .eq("bu", "consorcio")
+        .in("id", [
+          "1472d772-a48b-4c88-ba07-398898532df4", // Andre dos Santos Duarte
+          "4e3eabf5-149f-4130-ad8b-72fa929671f6", // João Pedro Martins Vieira
+        ])
         .order("name");
       if (error) throw error;
       return data || [];
