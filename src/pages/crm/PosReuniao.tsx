@@ -573,6 +573,20 @@ function PropostasTab() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {editTarget && (
+          <EditProposalModal
+            open={!!editTarget}
+            onOpenChange={o => !o && setEditTarget(null)}
+            proposalId={editTarget.id}
+            contactName={editTarget.contact_name || ''}
+            dealName={editTarget.deal_name || ''}
+            initialValorCredito={Number(editTarget.valor_credito) || 0}
+            initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
+            initialTipoProduto={editTarget.tipo_produto || ''}
+            initialDetails={editTarget.proposal_details || ''}
+          />
+        )}
       </CardContent>
     </Card>
   );
