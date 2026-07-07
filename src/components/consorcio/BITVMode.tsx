@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X, Trophy, Flame, Target, TrendingUp, Zap, Rocket, Sparkles } from "lucide-react";
+import { X, Trophy, Flame, Target, TrendingUp, Zap, Rocket, Sparkles, Users } from "lucide-react";
 import { CampaignCarousel } from "./CampaignCarousel";
 
 const fmtBRL = (v: number) =>
@@ -23,6 +23,14 @@ interface WeekData {
   end: Date;
 }
 
+export interface TVCloserData {
+  id: string;
+  name: string;
+  color?: string | null;
+  metaIndividual: number;
+  realizado: number;
+}
+
 interface Props {
   meta: number;
   realizado: number;
@@ -36,12 +44,13 @@ interface Props {
   title?: string;
   subtitle?: string;
   showCampaign?: boolean;
+  closers?: TVCloserData[];
 }
 
 export function BITVMode({
   meta, realizado, realizadoHoje, metaDia, diasUteis, semanas, monthStart, onClose,
   accent = "lime", title = "MCF · BI Consórcio ao vivo", subtitle,
-  showCampaign: enableCampaign = true,
+  showCampaign: enableCampaign = true, closers,
 }: Props) {
   const ACC = accent === "orange" ? "#ff7a00" : "#bfff00";
   const ACC_GLOW = accent === "orange" ? "rgba(255,122,0,0.6)" : "rgba(191,255,0,0.6)";
@@ -305,6 +314,78 @@ export function BITVMode({
             </div>
           </div>
         </div>
+
+        {closers && closers.length > 0 && (
+          <div className="mt-6 rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-transparent backdrop-blur-sm p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-5 w-5" style={{ color: ACC }} />
+              <div className="text-xs uppercase tracking-[0.3em] text-white/60 font-bold">
+                Metas individuais dos Closers
+              </div>
+            </div>
+            <div className={`grid gap-4 ${closers.length <= 2 ? "grid-cols-2" : closers.length === 3 ? "grid-cols-3" : "grid-cols-2 xl:grid-cols-4"}`}>
+              {closers.map((c) => {
+                const p = c.metaIndividual > 0 ? (c.realizado / c.metaIndividual) * 100 : 0;
+                const done = c.metaIndividual > 0 && c.realizado >= c.metaIndividual;
+                const falta = Math.max(0, c.metaIndividual - c.realizado);
+                const barColor = c.color || ACC;
+                return (
+                  <div
+                    key={c.id}
+                    className="relative rounded-2xl border p-5 transition-all"
+                    style={{
+                      borderColor: done ? `${ACC}99` : "rgba(255,255,255,0.1)",
+                      backgroundColor: done ? `${ACC}0d` : "rgba(255,255,255,0.02)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="h-10 w-10 rounded-xl flex items-center justify-center font-black text-black text-lg shrink-0"
+                          style={{ backgroundColor: barColor }}
+                        >
+                          {c.name.trim().charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-base truncate flex items-center gap-2">
+                            {c.name.trim()}
+                            {done && <Trophy className="h-4 w-4" style={{ color: ACC }} />}
+                          </div>
+                          <div className="text-xs text-white/50 tabular-nums">
+                            meta {fmtBRLShort(c.metaIndividual)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-2xl font-black tabular-nums" style={{ color: ACC }}>
+                          {p.toFixed(0)}%
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <div className="text-xl font-black tabular-nums">{fmtBRLShort(c.realizado)}</div>
+                      <div className="text-xs text-white/60 tabular-nums">
+                        {done ? "meta batida" : `faltam ${fmtBRLShort(falta)}`}
+                      </div>
+                    </div>
+                    <div className="relative h-3 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000"
+                        style={{
+                          width: `${Math.min(100, p)}%`,
+                          boxShadow: `0 0 12px ${ACC_GLOW}`,
+                          background: done
+                            ? `linear-gradient(90deg, ${ACC}, ${ACC_STOP2})`
+                            : `linear-gradient(90deg, #d946ef, ${ACC}, ${ACC_STOP2})`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 text-center text-xs text-white/40 uppercase tracking-[0.3em]">
           Atualizado automaticamente · ESC para sair
