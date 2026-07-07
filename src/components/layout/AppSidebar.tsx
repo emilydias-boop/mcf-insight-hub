@@ -210,7 +210,18 @@ const menuItems: MenuItem[] = [
 
   // ===== OPERACIONAL =====
 
-  // [REMOVIDO 2026-06-24] Seção Financeiro desativada do menu — preservado para rollback.
+  // Financeiro — novo módulo "À Receber" (2026-07-07)
+  {
+    title: "Financeiro",
+    icon: DollarSign,
+    separator: true,
+    requiredRoles: ["admin", "financeiro"],
+    items: [
+      { title: "À Receber", url: "/financeiro/a-receber", requiredRoles: ["admin", "financeiro"] },
+    ],
+  },
+
+  // [REMOVIDO 2026-06-24] Seção Financeiro antiga desativada do menu — preservado para rollback.
   // {
   //   title: "Financeiro",
   //   icon: DollarSign,

@@ -88,6 +88,8 @@ const ExamDetail = lazy(() => import("./pages/rh/ExamDetail"));
 // [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
 // const Financeiro = lazy(() => import("./pages/Financeiro"));
 // const Cobrancas = lazy(() => import("./pages/Cobrancas"));
+const FinanceiroAReceber = lazy(() => import("./pages/financeiro/AReceber"));
+const FinanceiroAReceberDetalhe = lazy(() => import("./pages/financeiro/AReceberDetalhe"));
 const MeuRH = lazy(() => import("./pages/MeuRH"));
 const MinhasReunioes = lazy(() => import("./pages/sdr/MinhasReunioes"));
 const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
@@ -278,6 +280,8 @@ const App = () => (
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
               */}
+              <Route path="financeiro/a-receber" element={<RoleGuard allowedRoles={['admin','financeiro']}><FinanceiroAReceber /></RoleGuard>} />
+              <Route path="financeiro/a-receber/:id" element={<RoleGuard allowedRoles={['admin','financeiro']}><FinanceiroAReceberDetalhe /></RoleGuard>} />
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
