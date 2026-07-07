@@ -11,6 +11,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
+import { ArAccessGuard } from "./components/auth/ArAccessGuard";
 import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import { UpdateNotifier } from "./components/layout/UpdateNotifier";
@@ -280,8 +281,8 @@ const App = () => (
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
               */}
-              <Route path="financeiro/a-receber" element={<RoleGuard allowedRoles={['admin']}><FinanceiroAReceber /></RoleGuard>} />
-              <Route path="financeiro/a-receber/:id" element={<RoleGuard allowedRoles={['admin']}><FinanceiroAReceberDetalhe /></RoleGuard>} />
+              <Route path="financeiro/a-receber" element={<ArAccessGuard><FinanceiroAReceber /></ArAccessGuard>} />
+              <Route path="financeiro/a-receber/:id" element={<ArAccessGuard><FinanceiroAReceberDetalhe /></ArAccessGuard>} />
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />

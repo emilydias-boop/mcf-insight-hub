@@ -43,6 +43,7 @@ import { useMyProducts } from "@/hooks/useMyProducts";
 import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
 import { usePendingApprovalsCount } from "@/hooks/useApprovalRequests";
 import { useNoShowPendingReviewsCount } from "@/hooks/useNoShowReviews";
+import { useCanManageAr } from "@/hooks/useArGestores";
 
 function PendingApprovalsBadge() {
   const { data: count = 0 } = usePendingApprovalsCount();
@@ -375,6 +376,7 @@ export function AppSidebar() {
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBUs = [] } = useMyBU();
+  const { canManage: canManageAr } = useCanManageAr();
   const { state, toggleSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -463,6 +465,9 @@ export function AppSidebar() {
 
   // Filtragem de menu items
   const filteredMenuItems = allMenuItems.filter((item) => {
+    // À Receber: admin OU gestor delegado
+    const isArItem = item.items?.some(s => s.url?.startsWith('/financeiro/a-receber'));
+    if (isArItem && canManageAr) return true;
     // Verificação de roles
     if (item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
       return false;

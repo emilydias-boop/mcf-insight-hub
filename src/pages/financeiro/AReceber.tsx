@@ -18,6 +18,8 @@ import {
   type ArTitulo,
 } from '@/types/aReceber';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -62,6 +64,8 @@ function TipoBadge({ tipo }: { tipo: ArTitulo['tipo'] }) {
 
 export default function AReceber() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
@@ -99,11 +103,14 @@ export default function AReceber() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas a Receber</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009).
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas a Receber</h1>
+          <p className="text-sm text-muted-foreground">
+            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009).
+          </p>
+        </div>
+        {isAdmin && <ArGestoresDialog />}
       </div>
 
       {/* KPIs */}

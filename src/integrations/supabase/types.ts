@@ -275,6 +275,24 @@ export type Database = {
         }
         Relationships: []
       }
+      ar_gestores: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ar_historico: {
         Row: {
           created_at: string
@@ -13507,6 +13525,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_manage_ar: { Args: { _user_id: string }; Returns: boolean }
       check_duplicate_contact_by_identity: {
         Args: { p_email?: string; p_phone?: string }
         Returns: {
