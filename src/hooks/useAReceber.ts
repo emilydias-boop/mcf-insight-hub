@@ -229,17 +229,21 @@ export function useFinanceiroUsers() {
   return useQuery({
     queryKey: ['financeiro-users'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: roles, error: e1 } = await supabase
         .from('user_roles')
-        .select('user_id, role, profiles!user_roles_user_id_fkey(id, full_name, email)' as any)
+        .select('user_id, role')
         .in('role', ['financeiro', 'admin'] as any);
-      if (error) throw error;
-      const uniq = new Map<string, { id: string; full_name: string; email: string }>();
-      (data as any[] | null)?.forEach(r => {
-        const p = r.profiles;
-        if (p?.id) uniq.set(p.id, { id: p.id, full_name: p.full_name || p.email || '(sem nome)', email: p.email || '' });
-      });
-      return Array.from(uniq.values()).sort((a, b) => a.full_name.localeCompare(b.full_name));
+      if (e1) throw e1;
+      const ids = Array.from(new Set((roles ?? []).map(r => r.user_id).filter(Boolean)));
+      if (ids.length === 0) return [];
+      const { data: profs, error: e2 } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', ids);
+      if (e2) throw e2;
+      return (profs ?? [])
+        .map(p => ({ id: p.id, full_name: p.full_name || p.email || '(sem nome)', email: p.email || '' }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
     },
   });
 }
