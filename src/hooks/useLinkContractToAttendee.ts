@@ -143,6 +143,27 @@ export function useLinkContractToAttendee() {
         }
       }
 
+      // 5. Reenviar webhook ao MCF Pay para atribuir SDR/Closer.
+      //    Não bloquear a vinculação em caso de erro — a edge function
+      //    já registra o log em mcf_pay_dispatch_logs e agenda retry.
+      if (dealId) {
+        try {
+          const { data: notifyData, error: notifyError } = await supabase.functions.invoke(
+            'notify-mcf-pay',
+            { body: { deal_id: dealId, source: 'manual_link_contract', force: true } }
+          );
+          if (notifyError) {
+            console.warn('[notify-mcf-pay] invoke error', notifyError);
+          } else if (notifyData?.ok === true) {
+            toast.info('Reenviado ao MCF Pay');
+          } else {
+            console.warn('[notify-mcf-pay] non-ok response', notifyData);
+          }
+        } catch (e) {
+          console.warn('[notify-mcf-pay] exception', e);
+        }
+      }
+
       return { transactionId, attendeeId };
     },
     onSuccess: () => {
