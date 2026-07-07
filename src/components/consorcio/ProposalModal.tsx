@@ -25,13 +25,33 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
   const [tipoProduto, setTipoProduto] = useState('');
   const enviarProposta = useEnviarProposta();
 
+  // Formata valor em BRL (1.000.000,00) enquanto o usuário digita.
+  // Armazena internamente como string com centavos preservados.
+  const formatBRL = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    const cents = Number(digits) / 100;
+    return cents.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const parseBRL = (formatted: string): number => {
+    const digits = formatted.replace(/\D/g, '');
+    if (!digits) return 0;
+    return Number(digits) / 100;
+  };
+
+  const valorNumerico = parseBRL(valorCredito);
+
   const handleSubmit = () => {
-    if (!valorCredito || !prazoMeses || !tipoProduto) return;
+    if (!valorNumerico || !prazoMeses || !tipoProduto) return;
     enviarProposta.mutate({
       deal_id: dealId,
       origin_id: originId,
       proposal_details: details,
-      valor_credito: Number(valorCredito),
+      valor_credito: valorNumerico,
       prazo_meses: Number(prazoMeses),
       tipo_produto: tipoProduto,
     }, {
@@ -54,7 +74,13 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
         <div className="space-y-4">
           <div>
             <Label>Valor do Crédito (R$)</Label>
-            <Input type="number" value={valorCredito} onChange={e => setValorCredito(e.target.value)} placeholder="Ex: 150000" />
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={valorCredito}
+              onChange={e => setValorCredito(formatBRL(e.target.value))}
+              placeholder="Ex: 150.000,00"
+            />
           </div>
           <div>
             <Label>Prazo (meses)</Label>
@@ -77,7 +103,7 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={enviarProposta.isPending || !valorCredito || !prazoMeses || !tipoProduto}>
+          <Button onClick={handleSubmit} disabled={enviarProposta.isPending || !valorNumerico || !prazoMeses || !tipoProduto}>
             {enviarProposta.isPending ? 'Enviando...' : 'Registrar Proposta'}
           </Button>
         </DialogFooter>
