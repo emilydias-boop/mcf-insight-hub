@@ -215,9 +215,9 @@ const menuItems: MenuItem[] = [
     title: "Financeiro",
     icon: DollarSign,
     separator: true,
-    requiredRoles: ["admin", "financeiro"],
+    requiredRoles: ["admin"],
     items: [
-      { title: "À Receber", url: "/financeiro/a-receber", requiredRoles: ["admin", "financeiro"] },
+      { title: "À Receber", url: "/financeiro/a-receber", requiredRoles: ["admin"] },
     ],
   },
 
