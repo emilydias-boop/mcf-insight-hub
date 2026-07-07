@@ -588,6 +588,38 @@ export function useExcluirProposta() {
   });
 }
 
+// Mutation: Editar proposta existente (corrige valores lançados errados)
+export function useEditarProposta() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      proposal_id: string;
+      valor_credito: number;
+      prazo_meses: number;
+      tipo_produto: string;
+      proposal_details?: string;
+    }) => {
+      const { error } = await supabase
+        .from('consorcio_proposals')
+        .update({
+          valor_credito: params.valor_credito,
+          prazo_meses: params.prazo_meses,
+          tipo_produto: params.tipo_produto,
+          proposal_details: params.proposal_details ?? '',
+        })
+        .eq('id', params.proposal_id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Proposta atualizada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-realizado-by-closer'] });
+    },
+    onError: (e: any) => toast.error('Erro ao atualizar: ' + e.message),
+  });
+}
+
 // Fetch ALL consorcio deals (todas reuniões, qualquer stage)
 export function useTodasReunioes() {
   return useQuery({
