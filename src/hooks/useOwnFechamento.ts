@@ -50,24 +50,33 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return null;
 
+      // Prefer ACTIVE record; fallback to any. Guards against duplicate sdr
+      // rows sharing the same user_id/email (e.g., legacy inactive entries)
+      // that would otherwise make .single() fail and hide the user's payout.
       let { data, error } = await supabase
         .from('sdr')
         .select('*')
         .eq('user_id', authUser.id)
-        .single();
-      
-      if (error?.code === 'PGRST116' && authUser.email) {
+        .order('active', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data && authUser.email) {
         const emailResult = await supabase
           .from('sdr')
           .select('*')
           .eq('email', authUser.email)
-          .single();
-        
+          .order('active', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         data = emailResult.data;
         error = emailResult.error;
       }
-      
-      if (error && error.code !== 'PGRST116') throw error;
+
+      if (error) throw error;
       return data as Sdr | null;
     },
     enabled: !!user,
