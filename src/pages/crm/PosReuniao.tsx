@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -17,6 +17,7 @@ import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
+import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
