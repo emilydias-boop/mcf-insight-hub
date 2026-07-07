@@ -323,6 +323,15 @@ export default function BIConsorcio() {
             start: s.start,
             end: s.end,
           }))}
+          closers={(consorcioClosers || [])
+            .filter((c) => (closerTargets[c.id] || 0) > 0)
+            .map((c) => ({
+              id: c.id,
+              name: c.name,
+              color: c.color,
+              metaIndividual: (Number(closerTargets[c.id] || 0) / 100) * meta,
+              realizado: realizadoByCloser?.get(c.id) || 0,
+            }))}
           onClose={() => setTvMode(false)}
         />
       )}
