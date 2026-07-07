@@ -275,6 +275,190 @@ export type Database = {
         }
         Relationships: []
       }
+      ar_historico: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          metadata: Json | null
+          parcela_id: string | null
+          tipo: string
+          titulo_id: string
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          parcela_id?: string | null
+          tipo: string
+          titulo_id: string
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          parcela_id?: string | null
+          tipo?: string
+          titulo_id?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ar_historico_parcela_id_fkey"
+            columns: ["parcela_id"]
+            isOneToOne: false
+            referencedRelation: "ar_parcelas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ar_historico_titulo_id_fkey"
+            columns: ["titulo_id"]
+            isOneToOne: false
+            referencedRelation: "ar_titulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ar_parcelas: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          forma_pagamento: string | null
+          id: string
+          numero: number
+          observacoes: string | null
+          status: string
+          tipo_parcela: string
+          titulo_id: string
+          updated_at: string
+          valor: number
+          valor_pago: number | null
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          forma_pagamento?: string | null
+          id?: string
+          numero: number
+          observacoes?: string | null
+          status?: string
+          tipo_parcela?: string
+          titulo_id: string
+          updated_at?: string
+          valor: number
+          valor_pago?: number | null
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          forma_pagamento?: string | null
+          id?: string
+          numero?: number
+          observacoes?: string | null
+          status?: string
+          tipo_parcela?: string
+          titulo_id?: string
+          updated_at?: string
+          valor?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ar_parcelas_titulo_id_fkey"
+            columns: ["titulo_id"]
+            isOneToOne: false
+            referencedRelation: "ar_titulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ar_titulos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_document: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          hubla_transaction_id: string | null
+          id: string
+          observacoes: string | null
+          payment_method: string | null
+          product_code: string | null
+          product_name: string
+          responsavel_id: string | null
+          sale_date: string | null
+          status: string
+          tipo: string
+          total_installments_hubla: number | null
+          updated_at: string
+          updated_by: string | null
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_document?: string | null
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          observacoes?: string | null
+          payment_method?: string | null
+          product_code?: string | null
+          product_name: string
+          responsavel_id?: string | null
+          sale_date?: string | null
+          status?: string
+          tipo?: string
+          total_installments_hubla?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_total?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_document?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          observacoes?: string | null
+          payment_method?: string | null
+          product_code?: string | null
+          product_name?: string
+          responsavel_id?: string | null
+          sale_date?: string | null
+          status?: string
+          tipo?: string
+          total_installments_hubla?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       areas_catalogo: {
         Row: {
           ativo: boolean | null
@@ -13277,6 +13461,7 @@ export type Database = {
         }
         Returns: Json
       }
+      ar_extract_product_code: { Args: { p_name: string }; Returns: string }
       assign_partner_to_gr: {
         Args: {
           p_bu?: string
