@@ -46,6 +46,8 @@ async function resolveCodesForDeal(dealId: string) {
   let sdr_code = (custom.mcf_pay_sdr_code as string) || null;
   const transaction_id = (custom.mcf_pay_transaction_id as string) || null;
 
+  const tried: string[] = [];
+
   const emails = new Set<string>();
   if (deal.r2_closer_email) emails.add(deal.r2_closer_email.toLowerCase());
   if (deal.r1_closer_email) emails.add(deal.r1_closer_email.toLowerCase());
@@ -64,21 +66,126 @@ async function resolveCodesForDeal(dealId: string) {
 
   if (!closer_code) {
     for (const email of [deal.r2_closer_email, deal.r1_closer_email].filter(Boolean) as string[]) {
+      tried.push(email === deal.r2_closer_email ? "r2_email" : "r1_email");
       const code = profilesByEmail.get(email.toLowerCase())?.mcf_pay_closer_code;
       if (code) { closer_code = code; break; }
-    }
-    if (!closer_code && deal.owner_profile_id) {
-      const { data: owner } = await supabase
-        .from("profiles")
-        .select("mcf_pay_closer_code")
-        .eq("id", deal.owner_profile_id)
-        .maybeSingle();
-      closer_code = (owner?.mcf_pay_closer_code as string) || null;
     }
   }
 
   if (!sdr_code && deal.original_sdr_email) {
+    tried.push("sdr_email");
     sdr_code = profilesByEmail.get(deal.original_sdr_email.toLowerCase())?.mcf_pay_sdr_code || null;
+  }
+
+  // ===== Fallbacks via agenda (meeting_slot_attendees + meeting_slots) =====
+  // Necessário quando o deal não tem r1/r2_closer_email/original_sdr_email preenchidos,
+  // mas o SDR agendou a reunião no calendário do Closer.
+  if (!closer_code || !sdr_code) {
+    const { data: attendees } = await supabase
+      .from("meeting_slot_attendees")
+      .select("booked_by, booked_at, meeting_slot_id")
+      .eq("deal_id", dealId)
+      .order("booked_at", { ascending: false, nullsFirst: false })
+      .limit(10);
+
+    const rows = (attendees ?? []) as any[];
+
+    // Buscar slots relacionados (sem depender de FK definido no PostgREST)
+    const slotIds = Array.from(
+      new Set(rows.map((r) => r.meeting_slot_id).filter(Boolean) as string[]),
+    );
+    const slotById = new Map<string, { closer_id: string | null; scheduled_at: string | null }>();
+    if (slotIds.length > 0) {
+      const { data: slots } = await supabase
+        .from("meeting_slots")
+        .select("id, closer_id, scheduled_at")
+        .in("id", slotIds);
+      for (const s of slots ?? []) {
+        slotById.set(s.id as string, {
+          closer_id: (s as any).closer_id ?? null,
+          scheduled_at: (s as any).scheduled_at ?? null,
+        });
+      }
+    }
+    for (const r of rows) {
+      (r as any).meeting_slots = r.meeting_slot_id ? slotById.get(r.meeting_slot_id) ?? null : null;
+    }
+
+    // SDR fallback: booked_by do attendee mais recente → profiles.mcf_pay_sdr_code
+    if (!sdr_code) {
+      const bookedByIds = Array.from(
+        new Set(rows.map((r) => r.booked_by).filter(Boolean) as string[]),
+      );
+      if (bookedByIds.length > 0) {
+        tried.push("slot_booked_by");
+        const { data: bookerProfiles } = await supabase
+          .from("profiles")
+          .select("id, mcf_pay_sdr_code")
+          .in("id", bookedByIds);
+        const byId = new Map(
+          (bookerProfiles ?? []).map((p: any) => [p.id, p.mcf_pay_sdr_code as string | null]),
+        );
+        for (const r of rows) {
+          const code = r.booked_by ? byId.get(r.booked_by) : null;
+          if (code) { sdr_code = code; break; }
+        }
+      }
+    }
+
+    // Closer fallback: meeting_slots.closer_id → closers.email → profiles.email → mcf_pay_closer_code
+    if (!closer_code) {
+      const closerIds = Array.from(
+        new Set(
+          rows
+            .map((r) => (r.meeting_slots?.closer_id as string | null) ?? null)
+            .filter(Boolean) as string[],
+        ),
+      );
+      if (closerIds.length > 0) {
+        tried.push("slot_closer");
+        const { data: closerRows } = await supabase
+          .from("closers")
+          .select("id, email")
+          .in("id", closerIds);
+        const closerEmailById = new Map(
+          (closerRows ?? []).map((c: any) => [c.id, (c.email as string | null)?.toLowerCase() ?? null]),
+        );
+        const closerEmails = Array.from(
+          new Set(Array.from(closerEmailById.values()).filter(Boolean) as string[]),
+        );
+        if (closerEmails.length > 0) {
+          const { data: closerProfiles } = await supabase
+            .from("profiles")
+            .select("email, mcf_pay_closer_code")
+            .in("email", closerEmails);
+          const codeByEmail = new Map(
+            (closerProfiles ?? []).map((p: any) => [
+              (p.email as string).toLowerCase(),
+              p.mcf_pay_closer_code as string | null,
+            ]),
+          );
+          // Preferir slot mais recente
+          for (const r of rows) {
+            const cid = r.meeting_slots?.closer_id as string | null;
+            const cemail = cid ? closerEmailById.get(cid) : null;
+            const code = cemail ? codeByEmail.get(cemail) : null;
+            if (code) { closer_code = code; break; }
+          }
+        }
+      }
+    }
+  }
+
+  // Owner do deal como último fallback (para closer_code E sdr_code)
+  if ((!closer_code || !sdr_code) && deal.owner_profile_id) {
+    tried.push("owner");
+    const { data: owner } = await supabase
+      .from("profiles")
+      .select("mcf_pay_closer_code, mcf_pay_sdr_code")
+      .eq("id", deal.owner_profile_id)
+      .maybeSingle();
+    if (!closer_code) closer_code = (owner?.mcf_pay_closer_code as string) || null;
+    if (!sdr_code) sdr_code = (owner?.mcf_pay_sdr_code as string) || null;
   }
 
   // Carregar dados do cliente
@@ -92,7 +199,7 @@ async function resolveCodesForDeal(dealId: string) {
     if (c) customer = { name: c.name ?? null, email: c.email ?? null, phone: c.phone ?? null };
   }
 
-  return { closer_code, sdr_code, customer, transaction_id };
+  return { closer_code, sdr_code, customer, transaction_id, tried };
 }
 
 async function dispatch(
@@ -134,6 +241,7 @@ async function dispatch(
   }
 
   let payload: Record<string, unknown>;
+  let debugTried: string[] = [];
   if (opts.test) {
     payload = {
       event: "deal.paid",
@@ -157,14 +265,21 @@ async function dispatch(
       return { ok: false, reason: "deal_not_found" };
     }
     if (!codes.closer_code && !codes.sdr_code) {
+      const reason = "both_missing";
       await supabase.from("mcf_pay_dispatch_logs").insert({
         deal_id: dealId,
         status: "skipped_no_codes",
-        error_message: "Nenhum closer_code/sdr_code resolvido",
+        error_message: `Nenhum closer_code/sdr_code resolvido (${reason}); tried=${(codes.tried ?? []).join(",") || "none"}`,
         attempt: (opts.previousAttempt ?? 0) + 1,
         source: opts.source ?? "manual",
       });
       return { ok: false, reason: "no_codes" };
+    }
+    if (!codes.closer_code || !codes.sdr_code) {
+      // Segue disparo mesmo com um lado ausente, mas registra em log de auditoria
+      console.log(
+        `[notify-mcf-pay] partial codes for deal ${dealId}: closer=${codes.closer_code ?? "MISSING"} sdr=${codes.sdr_code ?? "MISSING"} tried=${(codes.tried ?? []).join(",")}`,
+      );
     }
     payload = {
       event: "deal.paid",
@@ -176,6 +291,8 @@ async function dispatch(
       metadata: { crm_deal_id: dealId },
       purchase_ref: codes.transaction_id ? { transaction_id: codes.transaction_id } : {},
     };
+    // Guardar `tried` no escopo do dispatch para logar sem poluir o payload enviado
+    debugTried = codes.tried ?? [];
   }
 
   const rawBody = JSON.stringify(payload);
@@ -244,7 +361,9 @@ async function dispatch(
     attempt,
     http_status: httpStatus || null,
     payload,
-    response: responseJson,
+    response: responseJson && typeof responseJson === "object"
+      ? { ...responseJson, _debug_tried: debugTried }
+      : { raw: responseJson, _debug_tried: debugTried },
     signature_preview: signature ? signature.slice(0, 16) : null,
     error_message: errorMessage,
     next_retry_at: nextRetryAt,
