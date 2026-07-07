@@ -30,6 +30,7 @@ import { CampaignCarousel } from "@/components/consorcio/CampaignCarousel";
 import { CampaignManagerDialog } from "@/components/consorcio/CampaignManagerDialog";
 import { useConsorcioRealizadoByCloser } from "@/hooks/useConsorcioRealizadoByCloser";
 import { Users } from "lucide-react";
+import { WeekDetailDialog } from "@/components/consorcio/WeekDetailDialog";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -98,6 +99,7 @@ export default function BIConsorcio() {
   const [editValue, setEditValue] = useState("");
   const [editPct, setEditPct] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
+  const [weekDetail, setWeekDetail] = useState<null | { index: number; start: Date; end: Date; metaSemana: number }>(null);
   useEffect(() => { setEditValue(String(meta || "")); }, [meta]);
   useEffect(() => {
     const init: Record<string, string> = {};
@@ -511,9 +513,18 @@ export default function BIConsorcio() {
                   <Card
                     key={i}
                     className={
-                      "relative overflow-hidden transition-all hover:shadow-lg " +
+                      "relative overflow-hidden transition-all hover:shadow-lg cursor-pointer " +
                       (isCurrent ? "border-primary shadow-[0_0_24px_-8px_hsl(var(--primary)/0.5)]" : "")
                     }
+                    onClick={() => setWeekDetail({ index: s.index, start: s.start, end: s.end, metaSemana: s.metaSemana })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setWeekDetail({ index: s.index, start: s.start, end: s.end, metaSemana: s.metaSemana });
+                      }
+                    }}
                   >
                     {isCurrent && (
                       <div className="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
@@ -640,6 +651,16 @@ export default function BIConsorcio() {
             </p>
           )}
         </>
+      )}
+      {weekDetail && (
+        <WeekDetailDialog
+          open={!!weekDetail}
+          onOpenChange={(v) => !v && setWeekDetail(null)}
+          weekIndex={weekDetail.index}
+          start={weekDetail.start}
+          end={weekDetail.end}
+          metaSemana={weekDetail.metaSemana}
+        />
       )}
     </div>
   );
