@@ -280,6 +280,8 @@ const App = () => (
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />
               */}
+              <Route path="financeiro/a-receber" element={<RoleGuard allowedRoles={['admin','financeiro']}><FinanceiroAReceber /></RoleGuard>} />
+              <Route path="financeiro/a-receber/:id" element={<RoleGuard allowedRoles={['admin','financeiro']}><FinanceiroAReceberDetalhe /></RoleGuard>} />
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
