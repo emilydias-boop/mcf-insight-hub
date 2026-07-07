@@ -348,6 +348,7 @@ function PropostasTab() {
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
+  const [editTarget, setEditTarget] = useState<Proposal | null>(null);
   const excluir = useExcluirProposta();
 
   if (isLoading) return <LoadingState />;
@@ -483,6 +484,14 @@ function PropostasTab() {
                         )}
                       </>
                     )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditTarget(p)}
+                      title="Editar valores da proposta"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
