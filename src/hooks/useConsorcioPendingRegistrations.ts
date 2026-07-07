@@ -157,8 +157,12 @@ export function usePendingRegistrations() {
       if (error) throw error;
       const rows = (data || []) as any[];
 
-      // Resolver nomes de closer (owner_id → profiles) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
-      const ownerIds = Array.from(new Set(rows.map((r) => r.deal?.owner_id).filter(Boolean)));
+      // Resolver nomes de closer (owner_id → profiles/employees) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
+      // owner_id em crm_deals é TEXT: pode conter UUID OU e-mail do owner. Tratamos os dois casos.
+      const ownerRaw = Array.from(new Set(rows.map((r) => r.deal?.owner_id).filter(Boolean))) as string[];
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const ownerIds = ownerRaw.filter((v) => uuidRegex.test(v));
+      const ownerEmails = ownerRaw.filter((v) => !uuidRegex.test(v)).map(normalizeEmail);
       const sdrEmails = Array.from(
         new Set(rows.map((r) => normalizeEmail(r.deal?.original_sdr_email)).filter(Boolean)),
       );
@@ -166,6 +170,7 @@ export function usePendingRegistrations() {
       const profilesById = new Map<string, string>();
       const profilesByEmail = new Map<string, string>();
       const employeesByEmail = new Map<string, string>();
+      const ownersByEmail = new Map<string, string>();
       if (ownerIds.length) {
         const { data: profsById } = await supabase
           .from('profiles')
@@ -174,6 +179,20 @@ export function usePendingRegistrations() {
 
         (profsById || []).forEach((p) => {
           if (p.id) profilesById.set(p.id, p.full_name || p.email);
+        });
+      }
+      if (ownerEmails.length) {
+        const [{ data: ownerProfs }, { data: ownerEmps }] = await Promise.all([
+          supabase.from('profiles').select('full_name, email').in('email', ownerEmails),
+          supabase.from('employees').select('nome_completo, email_pessoal').in('email_pessoal', ownerEmails),
+        ]);
+        (ownerProfs || []).forEach((p) => {
+          const email = normalizeEmail(p.email);
+          if (email) ownersByEmail.set(email, p.full_name || p.email);
+        });
+        (ownerEmps || []).forEach((e) => {
+          const email = normalizeEmail(e.email_pessoal);
+          if (email && !ownersByEmail.has(email)) ownersByEmail.set(email, e.nome_completo);
         });
       }
       if (sdrEmails.length) {
@@ -247,9 +266,13 @@ export function usePendingRegistrations() {
           empresa_paga_parcelas: r.empresa_paga_parcelas,
         });
 
-        const closerName = (r.deal?.owner_id ? profilesById.get(r.deal.owner_id) : null)
-          || r.vendedor_name_cota
-          || null;
+        const ownerRawVal = r.deal?.owner_id as string | null | undefined;
+        const closerName = (() => {
+          if (!ownerRawVal) return null;
+          if (uuidRegex.test(ownerRawVal)) return profilesById.get(ownerRawVal) || null;
+          const email = normalizeEmail(ownerRawVal);
+          return ownersByEmail.get(email) || email || null;
+        })() || r.vendedor_name_cota || null;
         const sdrEmail = normalizeEmail(r.deal?.original_sdr_email);
         const sdrName = sdrEmail ? employeesByEmail.get(sdrEmail) || profilesByEmail.get(sdrEmail) || sdrEmail : null;
         const originName = r.deal?.origin?.display_name || r.deal?.origin?.name || null;
