@@ -376,6 +376,7 @@ export function AppSidebar() {
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBUs = [] } = useMyBU();
+  const { canManage: canManageAr } = useCanManageAr();
   const { state, toggleSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
