@@ -28,6 +28,8 @@ import { BIProgressGauge } from "@/components/consorcio/BIProgressGauge";
 import { BITVMode } from "@/components/consorcio/BITVMode";
 import { CampaignCarousel } from "@/components/consorcio/CampaignCarousel";
 import { CampaignManagerDialog } from "@/components/consorcio/CampaignManagerDialog";
+import { useConsorcioRealizadoByCloser } from "@/hooks/useConsorcioRealizadoByCloser";
+import { Users } from "lucide-react";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -57,7 +59,7 @@ export default function BIConsorcio() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("consorcio_bi_metas")
-        .select("id, meta_valor, month_ref, dias_uteis_override")
+        .select("id, meta_valor, month_ref, dias_uteis_override, closer_targets")
         .eq("month_ref", monthRefISO)
         .maybeSingle();
       if (error) throw error;
@@ -66,24 +68,55 @@ export default function BIConsorcio() {
     refetchInterval: tvMode ? 30000 : false,
   });
   const meta = Number(metaRow?.meta_valor ?? 0);
+  const closerTargets: Record<string, number> =
+    (metaRow as any)?.closer_targets && typeof (metaRow as any).closer_targets === "object"
+      ? ((metaRow as any).closer_targets as Record<string, number>)
+      : {};
+
+  // === Closers do Consórcio ===
+  const { data: consorcioClosers } = useQuery({
+    queryKey: ["consorcio-closers-ativos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("closers")
+        .select("id, name, email, color")
+        .eq("is_active", true)
+        .eq("bu", "consorcio")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: realizadoByCloser } = useConsorcioRealizadoByCloser(monthStart, monthEnd);
 
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [editPct, setEditPct] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
   useEffect(() => { setEditValue(String(meta || "")); }, [meta]);
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    (consorcioClosers || []).forEach((c) => {
+      const v = closerTargets[c.id];
+      init[c.id] = v != null ? String(v) : "";
+    });
+    setEditPct(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consorcioClosers, metaRow?.id]);
 
   const saveMeta = useMutation({
-    mutationFn: async (valor: number) => {
+    mutationFn: async ({ valor, targets }: { valor: number; targets: Record<string, number> }) => {
       if (metaRow?.id) {
         const { error } = await supabase
           .from("consorcio_bi_metas")
-          .update({ meta_valor: valor, updated_at: new Date().toISOString() })
+          .update({ meta_valor: valor, closer_targets: targets as any, updated_at: new Date().toISOString() })
           .eq("id", metaRow.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("consorcio_bi_metas")
-          .insert({ month_ref: monthRefISO, meta_valor: valor, created_by: user?.id });
+          .insert({ month_ref: monthRefISO, meta_valor: valor, closer_targets: targets as any, created_by: user?.id });
         if (error) throw error;
       }
     },
@@ -94,6 +127,16 @@ export default function BIConsorcio() {
     },
     onError: (e: any) => toast.error("Erro ao salvar meta: " + e.message),
   });
+
+  const pctSum = Object.values(editPct).reduce((a, v) => a + (Number(v) || 0), 0);
+  const handleSaveMeta = () => {
+    const targets: Record<string, number> = {};
+    Object.entries(editPct).forEach(([id, v]) => {
+      const n = Number(v);
+      if (n > 0) targets[id] = n;
+    });
+    saveMeta.mutate({ valor: Number(editValue) || 0, targets });
+  };
 
   // === Dias úteis com override editável ===
   const todosDiasMes = useMemo(
@@ -286,24 +329,70 @@ export default function BIConsorcio() {
           <CardHeader>
             <CardTitle className="text-base">Definir meta integral do mês</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[240px]">
-              <label className="text-xs text-muted-foreground">Valor total (R$)</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                placeholder="Ex: 5000000"
-              />
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[240px]">
+                <label className="text-xs text-muted-foreground">Valor total (R$)</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  placeholder="Ex: 5000000"
+                />
+              </div>
             </div>
-            <Button
-              onClick={() => saveMeta.mutate(Number(editValue) || 0)}
-              disabled={saveMeta.isPending}
-            >
-              Salvar
-            </Button>
-            <Button variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+
+            <div className="rounded-md border border-border/60 bg-background/60 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  % da meta por closer
+                </p>
+                <span
+                  className={
+                    "text-xs font-mono " +
+                    (Math.abs(pctSum - 100) < 0.01
+                      ? "text-success"
+                      : pctSum > 100
+                      ? "text-destructive"
+                      : "text-muted-foreground")
+                  }
+                >
+                  Soma: {pctSum.toFixed(1)}%
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {(consorcioClosers || []).map((c) => (
+                  <div key={c.id} className="flex items-center gap-2">
+                    <span className="flex-1 text-sm truncate">{c.name}</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      className="w-24 h-8 text-right"
+                      placeholder="0"
+                      value={editPct[c.id] ?? ""}
+                      onChange={(e) =>
+                        setEditPct((prev) => ({ ...prev, [c.id]: e.target.value }))
+                      }
+                    />
+                    <span className="text-xs text-muted-foreground w-4">%</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                A % define a meta individual (% × meta do mês). O realizado é calculado pelas
+                propostas lançadas por cada closer no mês.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleSaveMeta} disabled={saveMeta.isPending}>
+                Salvar
+              </Button>
+              <Button variant="ghost" onClick={() => setEditing(false)}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -459,6 +548,78 @@ export default function BIConsorcio() {
               })}
             </div>
           </div>
+
+          {/* Metas individuais por closer */}
+          {(consorcioClosers || []).some((c) => (closerTargets[c.id] || 0) > 0) && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                Metas individuais dos closers
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {(consorcioClosers || [])
+                  .filter((c) => (closerTargets[c.id] || 0) > 0)
+                  .map((c) => {
+                    const pct = Number(closerTargets[c.id] || 0);
+                    const metaCloser = (meta * pct) / 100;
+                    const real = realizadoByCloser?.get(c.id) || 0;
+                    const prog = metaCloser > 0 ? Math.min(100, (real / metaCloser) * 100) : 0;
+                    const falta = Math.max(0, metaCloser - real);
+                    const bateu = metaCloser > 0 && real >= metaCloser;
+                    return (
+                      <Card key={c.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm font-semibold truncate">
+                              {c.name}
+                            </CardTitle>
+                            {bateu && <Trophy className="h-4 w-4 text-success" />}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {pct.toFixed(1)}% da meta do mês
+                          </p>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div>
+                            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                              <span>Meta</span>
+                              <span className="font-mono">{fmtBRL(metaCloser)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">Realizado</span>
+                              <span className="font-mono font-semibold">{fmtBRL(real)}</span>
+                            </div>
+                            <Progress
+                              value={prog}
+                              className="h-2.5"
+                              indicatorClassName={bateu ? "bg-success" : ""}
+                            />
+                            <div className="flex justify-between text-[11px] text-muted-foreground mt-1">
+                              <span>0%</span>
+                              <span>{prog.toFixed(1)}%</span>
+                              <span>100%</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs pt-1 border-t">
+                            <span className="text-muted-foreground">
+                              {bateu ? "Meta batida" : "Falta"}
+                            </span>
+                            <span
+                              className={
+                                "font-mono font-semibold " +
+                                (bateu ? "text-success" : "text-destructive")
+                              }
+                            >
+                              {bateu ? "🏆" : fmtBRL(falta)}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           {!canEdit && (
             <p className="text-xs text-muted-foreground text-center">
