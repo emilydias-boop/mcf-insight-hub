@@ -23,6 +23,7 @@ import {
   AR_TITULO_STATUS_LABEL, AR_TITULO_TIPO_LABEL, AR_PARCELA_STATUS_LABEL, AR_PARCELA_TIPO_LABEL,
   type ArParcela,
 } from '@/types/aReceber';
+import { useCanManageAr } from '@/hooks/useArGestores';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -56,6 +57,7 @@ export default function AReceberDetalhe() {
   const markPaga = useMarkArParcelaPaga();
   const delParcela = useDeleteArParcela();
   const updateTitulo = useUpdateArTitulo();
+  const { canManage } = useCanManageAr();
 
   const totals = useMemo(() => {
     const list = parcelas ?? [];
@@ -190,7 +192,30 @@ export default function AReceberDetalhe() {
             </div>
             <div className="flex gap-2">
               <Badge variant="outline">{titulo.product_code}</Badge>
-              <Badge variant="outline">{AR_TITULO_TIPO_LABEL[titulo.tipo]}</Badge>
+              {canManage ? (
+                <Select
+                  value={titulo.tipo}
+                  onValueChange={async (v) => {
+                    try {
+                      await updateTitulo.mutateAsync({ id: titulo.id, tipo: v as any });
+                      toast.success('Tipo do título atualizado');
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Erro ao atualizar tipo');
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-[190px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="integral">{AR_TITULO_TIPO_LABEL.integral}</SelectItem>
+                    <SelectItem value="parcelado">{AR_TITULO_TIPO_LABEL.parcelado}</SelectItem>
+                    <SelectItem value="pendente_lancamento">{AR_TITULO_TIPO_LABEL.pendente_lancamento}</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge variant="outline">{AR_TITULO_TIPO_LABEL[titulo.tipo]}</Badge>
+              )}
               <Badge variant="outline">{AR_TITULO_STATUS_LABEL[titulo.status]}</Badge>
             </div>
           </div>
