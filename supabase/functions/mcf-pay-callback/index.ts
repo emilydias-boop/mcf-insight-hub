@@ -411,6 +411,39 @@ Deno.serve(async (req) => {
     signature_preview: expected.slice(0, 16),
   });
 
+  // === Registro no módulo Financeiro > À Receber (não altera parcelas — só histórico) ===
+  try {
+    const arEmail =
+      (data?.customer?.email ?? data?.customer_email ?? null)?.toString().toLowerCase().trim() || null;
+    if (arEmail) {
+      const { data: titulos } = await supabase
+        .from("ar_titulos")
+        .select("id")
+        .eq("customer_email", arEmail)
+        .in("product_code", ["A001", "A002", "A003", "A004", "A009"])
+        .neq("status", "cancelado");
+      if (titulos && titulos.length > 0) {
+        const rows = titulos.map((t: any) => ({
+          titulo_id: t.id,
+          tipo: isPaid ? "mcf_pay_confirmacao" : "mcf_pay_reembolso",
+          descricao: isPaid
+            ? `MCF PAY confirmou recebimento (tx ${transactionId ?? "s/id"})`
+            : `MCF PAY estornou pagamento (tx ${transactionId ?? "s/id"})`,
+          valor: amount ?? null,
+          metadata: {
+            transaction_id: transactionId,
+            paid_at: effectivePaidAt,
+            deal_id: resolvedDealId,
+            event,
+          },
+        }));
+        await supabase.from("ar_historico").insert(rows as never);
+      }
+    }
+  } catch (err) {
+    console.warn("[ar_historico] falha ao registrar evento MCF PAY:", err);
+  }
+
   return json({
     ok: true,
     deal_id: dealId,
