@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -17,6 +17,7 @@ import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
+import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
@@ -347,6 +348,7 @@ function PropostasTab() {
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
+  const [editTarget, setEditTarget] = useState<Proposal | null>(null);
   const excluir = useExcluirProposta();
 
   if (isLoading) return <LoadingState />;
@@ -485,6 +487,14 @@ function PropostasTab() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      onClick={() => setEditTarget(p)}
+                      title="Editar valores da proposta"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       className="text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteTarget(p)}
                       title="Excluir proposta (abate do realizado)"
@@ -563,6 +573,20 @@ function PropostasTab() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {editTarget && (
+          <EditProposalModal
+            open={!!editTarget}
+            onOpenChange={o => !o && setEditTarget(null)}
+            proposalId={editTarget.id}
+            contactName={editTarget.contact_name || ''}
+            dealName={editTarget.deal_name || ''}
+            initialValorCredito={Number(editTarget.valor_credito) || 0}
+            initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
+            initialTipoProduto={editTarget.tipo_produto || ''}
+            initialDetails={editTarget.proposal_details || ''}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -579,6 +603,7 @@ function ConcluidasTab() {
   const propostas = useMemo(() => allPropostas.filter(p => p.completa), [allPropostas]);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
+  const [editTarget, setEditTarget] = useState<Proposal | null>(null);
 
   if (isLoading) return <LoadingState />;
 
@@ -625,6 +650,9 @@ function ConcluidasTab() {
                         <FileText className="h-3 w-3 mr-1" /> Ver Documentos
                       </Button>
                     )}
+                    <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)} title="Editar valores da proposta">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -638,6 +666,20 @@ function ConcluidasTab() {
             onOpenChange={o => !o && setUploadTarget(null)}
             cardId={uploadTarget.consortium_card_id}
             contactName={uploadTarget.contact_name || uploadTarget.deal_name}
+          />
+        )}
+
+        {editTarget && (
+          <EditProposalModal
+            open={!!editTarget}
+            onOpenChange={o => !o && setEditTarget(null)}
+            proposalId={editTarget.id}
+            contactName={editTarget.contact_name || ''}
+            dealName={editTarget.deal_name || ''}
+            initialValorCredito={Number(editTarget.valor_credito) || 0}
+            initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
+            initialTipoProduto={editTarget.tipo_produto || ''}
+            initialDetails={editTarget.proposal_details || ''}
           />
         )}
 
