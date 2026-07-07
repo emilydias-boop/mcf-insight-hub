@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X, Trophy, Flame, Target, TrendingUp, Zap, Rocket, Sparkles } from "lucide-react";
+import { X, Trophy, Flame, Target, TrendingUp, Zap, Rocket, Sparkles, Users } from "lucide-react";
 import { CampaignCarousel } from "./CampaignCarousel";
 
 const fmtBRL = (v: number) =>
@@ -23,6 +23,14 @@ interface WeekData {
   end: Date;
 }
 
+export interface TVCloserData {
+  id: string;
+  name: string;
+  color?: string | null;
+  metaIndividual: number;
+  realizado: number;
+}
+
 interface Props {
   meta: number;
   realizado: number;
@@ -36,12 +44,13 @@ interface Props {
   title?: string;
   subtitle?: string;
   showCampaign?: boolean;
+  closers?: TVCloserData[];
 }
 
 export function BITVMode({
   meta, realizado, realizadoHoje, metaDia, diasUteis, semanas, monthStart, onClose,
   accent = "lime", title = "MCF · BI Consórcio ao vivo", subtitle,
-  showCampaign: enableCampaign = true,
+  showCampaign: enableCampaign = true, closers,
 }: Props) {
   const ACC = accent === "orange" ? "#ff7a00" : "#bfff00";
   const ACC_GLOW = accent === "orange" ? "rgba(255,122,0,0.6)" : "rgba(191,255,0,0.6)";
