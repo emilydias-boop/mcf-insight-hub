@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.checkin-customer]
 verify_jwt = false
 
+[functions.twilio-wa-webhook]
+verify_jwt = false
+
 
 [functions.import-weekly-metrics]
 verify_jwt = false
