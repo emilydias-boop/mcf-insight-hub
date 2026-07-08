@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
     }
 
     const to = `whatsapp:${e164}`;
+    const from = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
     const twilioResp = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
       {
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
           'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({ To: to, From: fromNumber, Body: body }),
+        body: new URLSearchParams({ To: to, From: from, Body: body }),
       },
     );
     const twilioJson = await twilioResp.json().catch(() => ({}));
