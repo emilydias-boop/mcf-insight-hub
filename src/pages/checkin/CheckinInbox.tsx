@@ -69,7 +69,7 @@ export default function CheckinInbox() {
       {/* Lista */}
       <Card className="w-80 flex flex-col overflow-hidden">
         <div className="p-3 border-b space-y-2">
-          <h2 className="font-semibold text-sm">Check-in MCF</h2>
+          <h2 className="font-semibold text-sm">MCF - Atendimento</h2>
           <Input
             placeholder="Buscar nome, telefone ou e-mail…"
             value={search}

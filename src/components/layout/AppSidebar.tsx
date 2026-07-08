@@ -131,7 +131,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   // ===== DASHBOARD =====
   {
-    title: "Check-in MCF",
+    title: "MCF - Atendimento",
     url: "/checkin",
     icon: MessageSquare,
   },

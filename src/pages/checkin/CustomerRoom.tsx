@@ -44,7 +44,7 @@ export default function CustomerRoom() {
       {/* Header */}
       <header className="bg-primary text-primary-foreground px-5 py-5 shadow sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
-          <div className="text-base sm:text-lg font-medium opacity-90 tracking-wide">Check-in MCF</div>
+          <div className="text-base sm:text-lg font-medium opacity-90 tracking-wide">MCF - Atendimento</div>
           <div className="font-bold text-2xl sm:text-2xl mt-1 leading-tight">Olá, {room.customer_name.split(' ')[0]}</div>
           {room.product_name && (
             <div className="text-base sm:text-base opacity-90 mt-1">{room.product_name}</div>
