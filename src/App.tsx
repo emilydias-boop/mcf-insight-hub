@@ -34,6 +34,7 @@ const BIIncorporadorPublic = lazy(() => import("./pages/public/BIIncorporadorPub
 const TVLauncher = lazy(() => import("./pages/public/TVLauncher"));
 const CheckinInbox = lazy(() => import("./pages/checkin/CheckinInbox"));
 const CustomerRoom = lazy(() => import("./pages/checkin/CustomerRoom"));
+const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoAccess"));
 
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -192,6 +193,7 @@ const App = () => (
             >
               <Route path="home" element={<Home />} />
               <Route path="checkin" element={<CheckinInbox />} />
+              <Route path="checkin/acesso" element={<RoleGuard allowedRoles={['admin', 'manager']}><McfAtendimentoAccess /></RoleGuard>} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
               <Route index element={<Navigate to="/home" replace />} />
