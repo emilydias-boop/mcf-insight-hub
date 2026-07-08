@@ -1,47 +1,57 @@
-## Contexto
 
-Vendas de Contrato Pago falham no outbound `notify-mcf-pay` com `skipped_no_codes` porque a função `resolveCodesForDeal()` só lê `r1_closer_email`, `r2_closer_email`, `original_sdr_email` e `owner_profile_id` do deal — que nesses casos estão nulos. Mas o SDR **agendou a reunião no calendário do Closer**, então os dados existem em `meeting_slot_attendees.booked_by` (SDR) e `meeting_slots.assigned_closer_id` (Closer).
+## O que vamos construir
 
-Correção isolada ao edge function `notify-mcf-pay` — sem alterar tabelas, RPCs, painéis ou relatórios.
+Um canal WhatsApp compartilhado dentro da tela **MCF - Atendimento**:
 
-## Correção
+- Um único número Twilio (WhatsApp Business) usado por todos os operadores autorizados.
+- Cliente recebe no WhatsApp dele; qualquer operador com permissão vê e responde de dentro do app.
+- Toda a conversa fica registrada, com autor de cada mensagem enviada.
+- Tempo real via Supabase Realtime — mensagens novas aparecem sem refresh.
+- Botão "Iniciar conversa" que dispara o template aprovado com a data-limite (hoje + 2 dias) preenchida automaticamente.
 
-### 1. Estender `resolveCodesForDeal()` em `supabase/functions/notify-mcf-pay/index.ts`
+## Escopo desta entrega
 
-**Closer code** — primeiro código encontrado vence:
-1. `deals.r2_closer_email` → `profiles.mcf_pay_closer_code` (atual)
-2. `deals.r1_closer_email` → `profiles.mcf_pay_closer_code` (atual)
-3. **NOVO** — `meeting_slots.assigned_closer_id` do R2 mais recente do deal → `closers.profile_id` → `profiles.mcf_pay_closer_code`
-4. **NOVO** — mesmo caminho para R1 mais recente
-5. `deals.owner_profile_id` → `profiles.mcf_pay_closer_code` (atual)
+**Incluso:**
+1. Tabelas `wa_conversations`, `wa_messages`, `mcf_atendimento_access` (lista de usuários permitidos).
+2. Edge function `twilio-wa-webhook` — recebe mensagens do cliente (Twilio → app).
+3. Edge function `twilio-wa-send` — envia mensagens escritas pelo operador.
+4. Edge function `twilio-wa-start` — envia o template inicial já com `{{1}} = data + 2 dias úteis`.
+5. Painel na tela **MCF - Atendimento**:
+   - Lista de conversas WhatsApp à esquerda (contato, última mensagem, badge de não lidas).
+   - Painel de chat à direita com histórico + input para responder.
+   - Botão "Iniciar conversa WhatsApp" (colar telefone + nome, ou originado do contrato A000).
+6. Gestão de acesso: nova aba em Configurações onde admin adiciona/remove usuários que podem ver e responder.
+7. Sandbox Twilio funciona de imediato para testes; ao aprovar o template basta trocar 2 secrets.
 
-**SDR code** — primeiro código encontrado vence:
-1. `deals.original_sdr_email` → `profiles.mcf_pay_sdr_code` (atual)
-2. **NOVO** — `meeting_slot_attendees.booked_by` do attendee mais recente do deal → `profiles.mcf_pay_sdr_code`
-3. **NOVO** — `deals.owner_profile_id` → `profiles.mcf_pay_sdr_code`
+**Fica para fase 2 (aviso explícito):**
+- **Auto-agendamento R2 na agenda Incorporador MCF quando o cliente escolher horário.** Isso exige: parser da resposta do cliente (linguagem natural → data/hora), consulta de disponibilidade real na agenda R2 filtrada por BU Incorporador, criação do slot com "Observações R2 = agendamento automático MCF - Atendimento". É um bloco grande e melhor validar o fluxo básico de mensageria antes. Nessa entrega, quando o cliente responder, a mensagem chega para o operador humano tratar.
 
-Consulta única por deal com join `meeting_slot_attendees` → `meeting_slots` filtrando por `deal_id`, ordenado por `starts_at DESC`.
+## Configuração Twilio (o que você faz)
 
-### 2. Logs mais úteis
-
-Substituir `skipped_no_codes` genérico por:
-- `skipped_no_codes:closer_missing` / `sdr_missing` / `both_missing`
-- Incluir no payload de log quais fontes foram tentadas (`tried: ['r2_email','r1_email','slot_assigned_closer','owner']`).
-
-### 3. Reprocessar falhas recentes
-
-Após deploy, reprocessar deals com `status='skipped_no_codes'` dos últimos 30 dias em `mcf_pay_dispatch_logs`, chamando `notify-mcf-pay` com `{ deal_id, source: 'backfill_agenda_attribution', force: true }`. Validar que viram `success` com `closer_code`/`sdr_code` no payload.
-
-## Fora do escopo
-
-- Nenhuma alteração em tabelas, RPCs, migrações ou UI.
-- Nenhum impacto em painéis (SDR/Closer, Reuniões de Equipe, Fechamento, Consórcio) ou relatórios.
-- Não preenche retroativamente `r1_closer_email`/`original_sdr_email` nos deals.
-- Não altera inbound MCF Pay → CRM (funciona).
+1. Vou pedir 3 secrets: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (formato `whatsapp:+14155238886` para sandbox, ou seu número aprovado).
+2. Para testes agora: use o Sandbox do Twilio (`whatsapp:+14155238886`) — cada testador manda o código join do sandbox uma vez.
+3. Quando o template for aprovado: adiciono secret `TWILIO_WA_TEMPLATE_SID` (ContentSid) e o send passa a usar template.
+4. No console Twilio, aponte o webhook "When a message comes in" para: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-wa-webhook`.
 
 ## Detalhes técnicos
 
-- Arquivo único: `supabase/functions/notify-mcf-pay/index.ts`.
-- Sem migração — usa colunas existentes (`meeting_slot_attendees.booked_by`, `meeting_slots.assigned_closer_id`, `closers.profile_id`, `profiles.mcf_pay_*_code`).
-- Segue a hierarquia `sdr-attribution-hierarchy-v4`.
-- Validação: 6 deals atuais em falha (Antonio Jailson, Filipe Palheta, Luiz Fabrício, Maria Eliane, Ariana Bordin, ADILSON) devem virar `status='success'` em `mcf_pay_dispatch_logs`.
+**Tabelas:**
+- `wa_conversations(id, phone_e164, contact_name, deal_id nullable, last_message_at, last_message_preview, unread_count, created_at)`
+- `wa_messages(id, conversation_id, direction 'inbound'|'outbound', body, twilio_message_sid, sent_by_user_id nullable, status, created_at)`
+- `mcf_atendimento_access(user_id PK, granted_by, granted_at)`
+- RLS: SELECT/INSERT em `wa_*` só para usuários em `mcf_atendimento_access` ou admins. Webhook usa service role (bypass RLS).
+- Realtime habilitado em `wa_messages` e `wa_conversations`.
+
+**Edge functions (verify_jwt=false no webhook, true nas demais):**
+- `twilio-wa-webhook`: valida assinatura Twilio, upsert conversation, insert message inbound.
+- `twilio-wa-send`: valida que usuário tem acesso, chama gateway Twilio `POST /Messages.json`, persiste outbound.
+- `twilio-wa-start`: monta `contentVariables` com data D+2 (formato pt-BR) e envia via `ContentSid`.
+
+**Frontend:**
+- `src/pages/checkin/CheckinInbox.tsx` ganha uma sub-aba/seção "WhatsApp".
+- Componentes novos: `WaConversationList`, `WaChatPane`, `WaStartConversationDialog`.
+- Nova página `src/pages/settings/McfAtendimentoAccess.tsx` para gerenciar quem tem acesso.
+
+## Confirmação antes de rodar
+
+Como o auto-agendamento R2 não entra nesta primeira fase, confirma se posso seguir com a mensageria compartilhada + template inicial agora, e a gente trata o auto-agendamento como próximo passo depois de validar o fluxo?
