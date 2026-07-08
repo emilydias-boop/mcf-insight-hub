@@ -8,10 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Send, User } from 'lucide-react';
+import { Copy, Send, User, MessageSquare, DoorOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import WhatsAppPanel from '@/components/whatsapp/WhatsAppPanel';
 
 const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
@@ -40,6 +42,19 @@ function getPublicCheckinUrl(token: string) {
 }
 
 export default function CheckinInbox() {
+  return (
+    <Tabs defaultValue="rooms" className="space-y-3">
+      <TabsList>
+        <TabsTrigger value="rooms" className="gap-1.5"><DoorOpen className="h-4 w-4" />Salas do cliente</TabsTrigger>
+        <TabsTrigger value="whatsapp" className="gap-1.5"><MessageSquare className="h-4 w-4" />WhatsApp</TabsTrigger>
+      </TabsList>
+      <TabsContent value="rooms" className="mt-0"><RoomsInbox /></TabsContent>
+      <TabsContent value="whatsapp" className="mt-0"><WhatsAppPanel /></TabsContent>
+    </Tabs>
+  );
+}
+
+function RoomsInbox() {
   const { data: rooms = [], isLoading } = useCheckinRooms();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
