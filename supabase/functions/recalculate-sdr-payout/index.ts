@@ -164,7 +164,7 @@ const calculatePayoutValues = (
     ? planMetaR / planMetaA
     : 0.7;
   const metaRealizadasAjustada = configOverrides?.meta_realizadas_ajustada
-    ?? Math.round((kpi.reunioes_agendadas || 0) * realizadasPctFromPlan);
+    ?? Math.round((metaAgendadasAjustada || 0) * realizadasPctFromPlan);
   
   // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
   const hasMetaTentativasOverride = configOverrides?.meta_tentativas_ajustada != null;
