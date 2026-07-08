@@ -303,7 +303,7 @@ function TemplateFormDialog({
   );
 
   const addVar = () => {
-    const nextIndex = (variables.at(-1)?.index ?? 0) + 1;
+    const nextIndex = (variables.length > 0 ? variables[variables.length - 1].index : 0) + 1;
     setVariables([...variables, { index: nextIndex, label: '', source: 'custom' }]);
   };
   const updateVar = (idx: number, patch: Partial<WaTemplateVariable>) => {
