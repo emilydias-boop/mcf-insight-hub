@@ -411,7 +411,7 @@ function Composer({
 function previewWithVars(preview: string, vars: Record<string, string>): string {
   let out = preview;
   for (const [k, v] of Object.entries(vars)) {
-    out = out.replaceAll(`{{${k}}}`, v || `{{${k}}}`);
+    out = out.split(`{{${k}}}`).join(v || `{{${k}}}`);
   }
   return out;
 }
