@@ -45,8 +45,13 @@ Deno.serve(async (req) => {
     if (!hasAccess) return json({ error: 'Sem acesso ao MCF - Atendimento' }, 403);
 
     const { room_id, body } = await req.json();
-    if (!room_id || !body || typeof body !== 'string') {
-      return json({ error: 'room_id e body são obrigatórios' }, 400);
+    const payload = await (async () => {
+      // fallback: já lemos acima? não — reconstruímos abaixo
+      return null;
+    })();
+    void payload;
+    if (!room_id) {
+      return json({ error: 'room_id é obrigatório' }, 400);
     }
 
     const { data: room, error: roomErr } = await admin
