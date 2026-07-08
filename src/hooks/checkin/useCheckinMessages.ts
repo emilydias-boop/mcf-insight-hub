@@ -54,24 +54,19 @@ export function useCheckinMessages(roomId: string | null) {
   const sendMessage = useMutation({
     mutationFn: async ({ body }: { body: string }) => {
       if (!roomId) throw new Error('room not selected');
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
-      const { data: profile } = user
-        ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).maybeSingle()
-        : { data: null } as any;
-
-      const { error } = await supabase.from('checkin_messages').insert({
-        room_id: roomId,
-        sender_type: 'staff',
-        sender_user_id: user?.id ?? null,
-        sender_name: profile?.full_name ?? profile?.email ?? user?.email ?? 'Equipe MCF',
-        body: body.trim(),
-        delivered_at: new Date().toISOString(),
+      const { data, error } = await supabase.functions.invoke('twilio-wa-send', {
+        body: { room_id: roomId, body: body.trim() },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onError: (err: any) => {
-      toast.error(err.message ?? 'Erro ao enviar mensagem');
+      toast.error(err.message ?? 'Erro ao enviar mensagem via WhatsApp');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['checkin-messages', roomId] });
+      qc.invalidateQueries({ queryKey: ['checkin-rooms'] });
     },
   });
 

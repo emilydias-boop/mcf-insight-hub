@@ -1,87 +1,82 @@
-// Twilio WhatsApp inbound webhook — recebe mensagens do cliente e persiste
+// Twilio WhatsApp inbound webhook — roteia mensagem do cliente para a checkin_room dele
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
-function normalizePhone(raw: string): string {
-  // "whatsapp:+5511999999999" → "+5511999999999"
+function stripWa(raw: string): string {
   return raw.replace(/^whatsapp:/i, '').trim();
+}
+
+function digitsOnly(v: string | null | undefined): string {
+  return (v ?? '').replace(/\D/g, '');
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
+    const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Twilio manda application/x-www-form-urlencoded
     const form = await req.formData();
-    const from = normalizePhone(String(form.get('From') ?? ''));
+    const fromRaw = String(form.get('From') ?? '');
     const body = String(form.get('Body') ?? '');
     const messageSid = String(form.get('MessageSid') ?? '');
     const profileName = form.get('ProfileName') ? String(form.get('ProfileName')) : null;
 
-    if (!from || !body) {
-      return new Response('missing', { status: 200, headers: corsHeaders });
+    if (!fromRaw || !body) {
+      return new Response('<?xml version="1.0" encoding="UTF-8"?><Response/>', {
+        status: 200, headers: { 'Content-Type': 'text/xml' },
+      });
     }
 
-    // upsert conversation
-    const { data: existing } = await supabase
-      .from('wa_conversations')
-      .select('id, unread_count, contact_name')
-      .eq('phone_e164', from)
-      .maybeSingle();
+    const fromDigits = digitsOnly(stripWa(fromRaw));
+    // usa os últimos 10 dígitos (DDD + número) como chave de match
+    const suffix = fromDigits.slice(-10);
 
-    let conversationId: string;
-    if (existing) {
-      conversationId = existing.id;
-      await supabase
-        .from('wa_conversations')
-        .update({
-          contact_name: existing.contact_name ?? profileName,
-          last_message_at: new Date().toISOString(),
-          last_message_preview: body.slice(0, 200),
-          last_direction: 'inbound',
-          unread_count: (existing.unread_count ?? 0) + 1,
-        })
-        .eq('id', conversationId);
-    } else {
-      const { data: created, error: cErr } = await supabase
-        .from('wa_conversations')
-        .insert({
-          phone_e164: from,
-          contact_name: profileName,
-          last_message_at: new Date().toISOString(),
-          last_message_preview: body.slice(0, 200),
-          last_direction: 'inbound',
-          unread_count: 1,
-        })
-        .select('id')
-        .single();
-      if (cErr || !created) throw cErr ?? new Error('failed to create conversation');
-      conversationId = created.id;
+    // busca a sala mais recente cujo telefone bate no sufixo
+    const { data: rooms } = await admin
+      .from('checkin_rooms')
+      .select('id, customer_phone, customer_name, unread_for_team, created_at')
+      .not('customer_phone', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    const room = (rooms ?? []).find((r) => digitsOnly(r.customer_phone).endsWith(suffix));
+
+    if (!room) {
+      console.warn('twilio-wa-webhook: nenhuma sala para', fromRaw);
+      return new Response('<?xml version="1.0" encoding="UTF-8"?><Response/>', {
+        status: 200, headers: { 'Content-Type': 'text/xml' },
+      });
     }
 
-    await supabase.from('wa_messages').insert({
-      conversation_id: conversationId,
-      direction: 'inbound',
+    const nowIso = new Date().toISOString();
+    await admin.from('checkin_messages').insert({
+      room_id: room.id,
+      sender_type: 'customer',
+      sender_name: profileName ?? room.customer_name ?? null,
       body,
-      twilio_message_sid: messageSid || null,
-      status: 'received',
+      delivered_at: nowIso,
     });
 
-    // Twilio espera TwiML (vazio = sem auto-resposta)
+    await admin
+      .from('checkin_rooms')
+      .update({
+        last_message_at: nowIso,
+        last_message_preview: body.slice(0, 200),
+        unread_for_team: (room.unread_for_team ?? 0) + 1,
+      })
+      .eq('id', room.id);
+
     return new Response('<?xml version="1.0" encoding="UTF-8"?><Response/>', {
-      status: 200,
-      headers: { 'Content-Type': 'text/xml' },
+      status: 200, headers: { 'Content-Type': 'text/xml' },
     });
   } catch (err) {
     console.error('twilio-wa-webhook error', err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
