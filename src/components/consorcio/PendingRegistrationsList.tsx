@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -43,6 +43,7 @@ import {
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
+import { loadXLSX } from '@/lib/lazyExport';
 
 export function PendingRegistrationsList() {
   const { data: registrations = [], isLoading } = usePendingRegistrations();
@@ -70,6 +71,36 @@ export function PendingRegistrationsList() {
   // reset page when filters/pageSize change
   useEffect(() => { setPage(0); }, [filters, pageSize]);
 
+  const handleExport = async () => {
+    const XLSX = await loadXLSX();
+    const rows = filtered.map((reg) => {
+      const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
+      const doc = reg.tipo_pessoa === 'pf' ? reg.cpf : reg.cnpj;
+      return {
+        'Origem': reg.origem_label || '',
+        'Tipo Pessoa': reg.tipo_pessoa === 'pf' ? 'PF' : 'PJ',
+        'Nome / Razão Social': nome || '',
+        'CPF/CNPJ': doc || '',
+        'Sócios (PJ)': reg.tipo_pessoa === 'pj' ? (reg.socios?.length || 0) : '',
+        'Valor da Cota': reg.valor_credito ? Number(reg.valor_credito) : '',
+        'Qtd Parcelas Empresa': reg.parcelas_empresa.length,
+        'Tipo Contrato': tipoContratoLabel(reg.tipo_contrato),
+        'Total a Pagar (Empresa)': reg.valor_total_empresa ? Number(reg.valor_total_empresa) : '',
+        'Closer': reg.closer_name || '',
+        'SDR': reg.sdr_name || '',
+        'Cotas Existentes': reg.cotas_existentes_count,
+        'Destinada': reg.total_destinado > 1 ? `${reg.parte_atual}/${reg.total_destinado}` : '1/1',
+        'Solicitado em': reg.aceite_date
+          ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+          : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR }),
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Cadastros Pendentes');
+    XLSX.writeFile(wb, `cadastros-pendentes-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -94,9 +125,14 @@ export function PendingRegistrationsList() {
           Cadastros Pendentes ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Adicionar Pendente
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Exportar
+          </Button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Adicionar Pendente
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {filtered.length === 0 ? (
