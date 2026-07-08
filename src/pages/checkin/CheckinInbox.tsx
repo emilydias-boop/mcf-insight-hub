@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useCheckinRooms, CheckinRoom } from '@/hooks/checkin/useCheckinRooms';
-import { useCheckinMessages, useUpdateRoom, CheckinMessage } from '@/hooks/checkin/useCheckinMessages';
-import { useWaTemplates, WaTemplate, WaTemplateVariable } from '@/hooks/checkin/useWaTemplates';
+import { useCheckinMessages, useUpdateRoom } from '@/hooks/checkin/useCheckinMessages';
+import { useWaTemplates, WaTemplateVariable } from '@/hooks/checkin/useWaTemplates';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
