@@ -52,10 +52,23 @@ export function useCheckinMessages(roomId: string | null) {
   }, [roomId, qc]);
 
   const sendMessage = useMutation({
-    mutationFn: async ({ body }: { body: string }) => {
+    mutationFn: async (input: {
+      body?: string;
+      template_sid?: string;
+      template_variables?: Record<string, string>;
+    }) => {
       if (!roomId) throw new Error('room not selected');
+      const payload: Record<string, unknown> = { room_id: roomId };
+      if (input.template_sid) {
+        payload.template_sid = input.template_sid;
+        if (input.template_variables) payload.template_variables = input.template_variables;
+      } else if (input.body) {
+        payload.body = input.body.trim();
+      } else {
+        throw new Error('Informe body ou template_sid');
+      }
       const { data, error } = await supabase.functions.invoke('twilio-wa-send', {
-        body: { room_id: roomId, body: body.trim() },
+        body: payload,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

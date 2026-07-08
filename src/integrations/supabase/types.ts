@@ -12759,6 +12759,42 @@ export type Database = {
           },
         ]
       }
+      wa_templates: {
+        Row: {
+          body_preview: string | null
+          content_sid: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          body_preview?: string | null
+          content_sid: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          body_preview?: string | null
+          content_sid?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: []
+      }
       webhook_configs: {
         Row: {
           created_at: string | null
