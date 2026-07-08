@@ -44,10 +44,10 @@ Deno.serve(async (req) => {
     // Nome do remetente
     const { data: profile } = await admin
       .from('profiles')
-      .select('nome, email')
+      .select('full_name, email')
       .eq('id', userId)
       .maybeSingle();
-    const senderName = profile?.nome ?? profile?.email ?? 'Operador';
+    const senderName = profile?.full_name ?? profile?.email ?? 'Operador';
 
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');

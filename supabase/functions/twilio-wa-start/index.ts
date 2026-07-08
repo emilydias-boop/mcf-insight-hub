@@ -121,8 +121,8 @@ Deno.serve(async (req) => {
     }
 
     const { data: profile } = await admin
-      .from('profiles').select('nome, email').eq('id', userId).maybeSingle();
-    const senderName = profile?.nome ?? profile?.email ?? 'Operador';
+      .from('profiles').select('full_name, email').eq('id', userId).maybeSingle();
+    const senderName = profile?.full_name ?? profile?.email ?? 'Operador';
 
     await admin.from('wa_messages').insert({
       conversation_id: conversationId,
