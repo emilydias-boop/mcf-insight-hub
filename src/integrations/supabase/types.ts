@@ -13759,6 +13759,10 @@ export type Database = {
           total_installments: number
         }[]
       }
+      get_bi_incorporador_weekly_rankings: {
+        Args: { _month_ref?: string }
+        Returns: Json
+      }
       get_bi_public_consorcio: { Args: { _token: string }; Returns: Json }
       get_bi_public_incorporador: { Args: { _token: string }; Returns: Json }
       get_carrinho_r2_attendees: {

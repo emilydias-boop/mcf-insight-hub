@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Target, TrendingUp, CalendarDays, Wallet, Trophy,
   CheckCircle2, AlertCircle, Sparkles, Tv, Pencil,
+  Users, Award, TrendingDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BITVMode } from "@/components/consorcio/BITVMode";
@@ -91,6 +92,22 @@ export default function BIComercial() {
     },
     refetchInterval: tvMode ? 30_000 : 60_000,
   });
+
+  const { data: rankings } = useQuery({
+    queryKey: ["bi-incorporador-weekly-rankings", monthRefISO],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_bi_incorporador_weekly_rankings", { _month_ref: monthRefISO });
+      if (error) throw error;
+      return data as { month_ref: string; weeks: WeeklyRankingRow[] };
+    },
+    refetchInterval: tvMode ? 60_000 : 120_000,
+  });
+
+  const rankingsByWeekStart = useMemo(() => {
+    const map = new Map<string, WeeklyRankingRow>();
+    (rankings?.weeks || []).forEach((w) => map.set(w.week_start, w));
+    return map;
+  }, [rankings]);
 
   const view = useMemo(() => {
     if (!data || data.error) return null;
@@ -271,6 +288,8 @@ export default function BIComercial() {
           {view.semanas.map((s) => {
             const pct = s.metaSemana > 0 ? Math.min(100, (s.realizado / s.metaSemana) * 100) : 0;
             const bateu = s.realizado >= s.metaSemana && s.metaSemana > 0;
+            const wkKey = format(s.start, "yyyy-MM-dd");
+            const rk = rankingsByWeekStart.get(wkKey);
             return (
               <Card key={s.index} className={s.isCurrent ? "border-2" : ""} style={s.isCurrent ? { borderColor: "#ff7a00" } : undefined}>
                 <CardHeader className="pb-2">
@@ -282,7 +301,7 @@ export default function BIComercial() {
                     {format(s.start, "dd/MM")} → {format(s.end, "dd/MM")} · {s.diasUteis} dias
                   </p>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Meta</span>
                     <span className="font-mono">{fmtBRL(s.metaSemana)}</span>
@@ -293,12 +312,90 @@ export default function BIComercial() {
                   </div>
                   <Progress value={pct} className="h-2" />
                   <div className="text-right text-xs font-bold">{pct.toFixed(0)}%</div>
+
+                  <WeeklyRefundBlock rk={rk} />
+                  <WeeklyRankingBlock title="Top 5 SDRs (contratos intermediados)" icon={<Users className="h-3.5 w-3.5" />} items={rk?.top_sdrs || []} limit={5} />
+                  <WeeklyRankingBlock title="Top 3 Closers (contratos vendidos)" icon={<Award className="h-3.5 w-3.5" />} items={rk?.top_closers || []} limit={3} />
                 </CardContent>
               </Card>
             );
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+type RankingItem = { sdr_id?: string; closer_id?: string; name: string; contratos: number; valor: number };
+type WeeklyRankingRow = {
+  week_start: string;
+  vendas_valor: number;
+  vendas_qtd: number;
+  reembolsos_valor: number;
+  reembolsos_qtd: number;
+  saldo: number;
+  top_sdrs: RankingItem[];
+  top_closers: RankingItem[];
+};
+
+function WeeklyRefundBlock({ rk }: { rk: WeeklyRankingRow | undefined }) {
+  const vendasQtd = rk?.vendas_qtd ?? 0;
+  const vendasVal = rk?.vendas_valor ?? 0;
+  const refQtd = rk?.reembolsos_qtd ?? 0;
+  const refVal = rk?.reembolsos_valor ?? 0;
+  const saldo = vendasVal - refVal;
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/30 p-2 space-y-1">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <TrendingUp className="h-3 w-3 text-success" /> Vendas
+        </span>
+        <span className="font-mono font-semibold">{vendasQtd} · {fmtBRL(vendasVal)}</span>
+      </div>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <TrendingDown className="h-3 w-3 text-destructive" /> Reembolsos
+        </span>
+        <span className="font-mono font-semibold text-destructive">
+          {refQtd} · {refVal > 0 ? `- ${fmtBRL(refVal)}` : fmtBRL(0)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/60">
+        <span className="font-medium">Saldo</span>
+        <span className={`font-mono font-bold ${saldo >= 0 ? "text-success" : "text-destructive"}`}>
+          {fmtBRL(saldo)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyRankingBlock({
+  title, icon, items, limit,
+}: { title: string; icon: React.ReactNode; items: RankingItem[]; limit: number }) {
+  const list = (items || []).slice(0, limit);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+        {icon}<span>{title}</span>
+      </div>
+      {list.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground/70 italic">Sem contratos nesta semana</div>
+      ) : (
+        <ol className="space-y-0.5">
+          {list.map((it, idx) => (
+            <li key={(it.sdr_id || it.closer_id || it.name) + idx} className="flex items-center justify-between text-[11px]">
+              <span className="truncate max-w-[70%]">
+                <span className="inline-block w-4 text-muted-foreground">{idx + 1}º</span>
+                {it.name}
+              </span>
+              <span className="font-mono font-semibold">
+                {it.contratos} · <span className="text-muted-foreground">{fmtBRL(it.valor)}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
