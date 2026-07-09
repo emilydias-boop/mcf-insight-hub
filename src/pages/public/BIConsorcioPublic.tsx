@@ -9,9 +9,9 @@ import {
 import { BITVMode } from "@/components/consorcio/BITVMode";
 import { isDiaUtil, CONSORCIO_WEEK_STARTS_ON } from "@/lib/businessDays";
 
-export default function BIConsorcioPublic() {
+export default function BIConsorcioPublic({ tokenOverride, onClose }: { tokenOverride?: string; onClose?: () => void } = {}) {
   const [sp] = useSearchParams();
-  const token = sp.get("k") || "";
+  const token = tokenOverride ?? (sp.get("k") || "");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["bi-public-consorcio", token],
@@ -87,7 +87,7 @@ export default function BIConsorcioPublic() {
       diasUteis={view.diasUteis}
       monthStart={view.monthStart}
       semanas={view.semanas}
-      onClose={() => { /* rota pública: sem fechar */ }}
+      onClose={onClose ?? (() => { /* rota pública: sem fechar */ })}
     />
   );
 }
