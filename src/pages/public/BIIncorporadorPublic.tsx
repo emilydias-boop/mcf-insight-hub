@@ -11,9 +11,9 @@ import { BITVMode } from "@/components/consorcio/BITVMode";
 // Incorporador: semana Sáb → Sex
 const WEEK_STARTS_ON = 6 as const;
 
-export default function BIIncorporadorPublic() {
+export default function BIIncorporadorPublic({ tokenOverride, onClose }: { tokenOverride?: string; onClose?: () => void } = {}) {
   const [sp] = useSearchParams();
-  const token = sp.get("k") || "";
+  const token = tokenOverride ?? (sp.get("k") || "");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["bi-public-incorporador", token],
@@ -81,7 +81,7 @@ export default function BIIncorporadorPublic() {
       diasUteis={view.diasUteis}
       monthStart={view.monthStart}
       semanas={view.semanas}
-      onClose={() => { /* rota pública */ }}
+      onClose={onClose ?? (() => { /* rota pública */ })}
       accent="orange"
       title="MCF · BI Comercial ao vivo · Incorporador"
     />
