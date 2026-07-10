@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const CRM = () => {
   const { role, user } = useAuth();
@@ -17,7 +19,27 @@ const CRM = () => {
   const isAgendaOnly = role && agendaOnlyRoles.includes(role) && !isR1SupportActive;
   
   // Verificar se usuário tem permissão especial para R2
-  const canViewR2 = canUserAccessR2(role, user?.id);
+  const canViewR2ByRole = canUserAccessR2(role, user?.id);
+
+  // Permissão individual em user_permissions para agenda_r2
+  const { data: r2UserPermission } = useQuery({
+    queryKey: ['crm-nav-r2-permission', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('user_permissions')
+        .select('permission_level')
+        .eq('user_id', user.id)
+        .eq('resource', 'agenda_r2')
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+  const hasR2UserPermission = !!r2UserPermission?.permission_level &&
+    r2UserPermission.permission_level !== 'none';
+  const canViewR2 = canViewR2ByRole || hasR2UserPermission;
   
   const allNavItems = [
     { to: '/crm', label: 'Visão Geral', icon: LayoutDashboard, end: true },
@@ -44,6 +66,7 @@ const CRM = () => {
     
     if (canViewR2) {
       allowedTabs.push('/crm/agenda-r2');
+      allowedTabs.push('/crm/r2-carrinho');
     }
     
     navItems = allNavItems.filter(item => allowedTabs.includes(item.to));
