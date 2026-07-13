@@ -369,6 +369,9 @@ Deno.serve(async (req) => {
     mcf_pay_amount: isPaid ? amount : currentCustom.mcf_pay_amount ?? null,
     mcf_pay_transaction_id: transactionId ?? currentCustom.mcf_pay_transaction_id ?? null,
     mcf_pay_last_event_at: new Date().toISOString(),
+    mcf_pay_refunded_at: isRefunded
+      ? new Date().toISOString()
+      : currentCustom.mcf_pay_refunded_at ?? null,
   };
   await supabase.from("crm_deals").update({ custom_fields: newCustom as never }).eq("id", resolvedDealId);
 
@@ -389,6 +392,27 @@ Deno.serve(async (req) => {
           // mantemos status atual para investigação manual em reembolso
         })
         .eq("id", attendee.id);
+    }
+  }
+
+  // === Registra atividade canônica de reembolso (fonte oficial de contagem) ===
+  if (isRefunded) {
+    try {
+      const refundedAtIso = new Date().toISOString();
+      await supabase.from("deal_activities").insert({
+        deal_id: resolvedDealId,
+        activity_type: "refund_mcf_pay",
+        description: `MCF PAY estornou pagamento (tx ${transactionId ?? "s/id"})`,
+        metadata: {
+          source: "mcf_pay",
+          refunded_at: refundedAtIso,
+          transaction_id: transactionId,
+          amount,
+          event,
+        },
+      } as never);
+    } catch (err) {
+      console.warn("[mcf-pay-callback] falha ao registrar deal_activities refund_mcf_pay:", err);
     }
   }
 
