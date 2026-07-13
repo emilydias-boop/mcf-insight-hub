@@ -108,8 +108,15 @@ export function R2AgendaKPICards({ meetings, rangeStart, rangeEnd }: Props) {
     const noShowPct = denomNS > 0 ? (noShows / denomNS) * 100 : 0;
 
     const refundedList = active.filter((a: any) => a.status === "refunded");
+    const updatedStatuses = new Set([
+      "completed",
+      "contract_paid",
+      "no_show",
+      "refunded",
+      "desistencia",
+    ]);
     const noStatusList = active.filter(
-      (a: any) => !a.r2_status_id
+      (a: any) => !updatedStatuses.has(a.status)
     );
 
     // Build lookup sets from sales
