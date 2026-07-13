@@ -1,53 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { 
-  ExternalLink, MessageSquare, Phone, 
-  ChevronDown, Check, X, Video, 
-  AlertCircle
+  ExternalLink, Phone, Video
 } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, 
   TableHeader, TableRow
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, 
   SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import {
-  Popover, PopoverContent, PopoverTrigger
-} from '@/components/ui/popover';
-import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { R2MeetingRow, R2StatusOption, R2ThermometerOption, LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from '@/types/r2Agenda';
+import { R2MeetingRow, R2StatusOption, R2ThermometerOption, ATTENDANCE_STATUS_OPTIONS } from '@/types/r2Agenda';
 import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
 import { R2LeadBadges } from './R2LeadBadges';
 import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 
 interface R2ListViewTableProps {
   meetings: R2MeetingRow[];
-  statusOptions: R2StatusOption[];
-  thermometerOptions: R2ThermometerOption[];
+  statusOptions?: R2StatusOption[];
+  thermometerOptions?: R2ThermometerOption[];
   onSelectMeeting: (meeting: R2MeetingRow) => void;
   isLoading?: boolean;
 }
 
 export function R2ListViewTable({
   meetings,
-  statusOptions,
-  thermometerOptions,
   onSelectMeeting,
   isLoading
 }: R2ListViewTableProps) {
   const updateAttendee = useUpdateR2Attendee();
-  const [editingCell, setEditingCell] = useState<string | null>(null);
 
   // Flatten meetings to rows (one row per attendee)
   const rows = useMemo(() => {
@@ -84,15 +71,6 @@ export function R2ListViewTable({
       attendeeId,
       updates: { [field]: value }
     });
-    setEditingCell(null);
-  };
-
-  const handleThermometerToggle = (attendeeId: string, currentIds: string[], thermometerId: string) => {
-    const newIds = currentIds.includes(thermometerId)
-      ? currentIds.filter(id => id !== thermometerId)
-      : [...currentIds, thermometerId];
-    
-    handleQuickUpdate(attendeeId, 'thermometer_ids', newIds);
   };
 
   if (isLoading) {
