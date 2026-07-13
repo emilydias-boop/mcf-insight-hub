@@ -79,6 +79,10 @@ export function useAutomationLogs(filters: AutomationLogFilters = {}) {
         query = query.or(`recipient.ilike.%${filters.search}%`);
       }
 
+      if (filters.tag) {
+        query = query.filter('metadata->tags', 'cs', JSON.stringify([filters.tag]));
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as AutomationLog[];
