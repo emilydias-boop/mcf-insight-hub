@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_pending_registrations ADD COLUMN IF NOT EXISTS boas_vindas_enviado_em timestamptz;

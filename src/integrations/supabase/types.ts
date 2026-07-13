@@ -4054,6 +4054,7 @@ export type Database = {
       consorcio_pending_registrations: {
         Row: {
           aceite_date: string | null
+          boas_vindas_enviado_em: string | null
           categoria: string | null
           cnpj: string | null
           condicao_pagamento: string | null
@@ -4114,6 +4115,7 @@ export type Database = {
         }
         Insert: {
           aceite_date?: string | null
+          boas_vindas_enviado_em?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
@@ -4174,6 +4176,7 @@ export type Database = {
         }
         Update: {
           aceite_date?: string | null
+          boas_vindas_enviado_em?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
