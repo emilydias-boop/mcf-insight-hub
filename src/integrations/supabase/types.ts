@@ -13634,6 +13634,7 @@ export type Database = {
         Returns: Json
       }
       ar_extract_product_code: { Args: { p_name: string }; Returns: string }
+      ar_get_reference_price: { Args: { p_code: string }; Returns: number }
       assign_partner_to_gr: {
         Args: {
           p_bu?: string
