@@ -75,6 +75,7 @@ import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveBU } from "@/hooks/useActiveBU";
+import { R2AgendaKPICards } from "@/components/crm/R2AgendaKPICards";
 
 type ViewMode = "day" | "week" | "month";
 
