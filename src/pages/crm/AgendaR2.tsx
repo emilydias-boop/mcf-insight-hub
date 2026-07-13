@@ -524,6 +524,13 @@ export default function AgendaR2() {
         </div>
       </div>
 
+      {/* KPI Cards (respeitam filtros e período) */}
+      <R2AgendaKPICards
+        meetings={filteredMeetings as any}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+      />
+
       {/* Navigation Bar */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Date Navigation */}
