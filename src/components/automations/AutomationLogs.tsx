@@ -27,7 +27,8 @@ import {
   Clock,
   XCircle,
   Eye,
-  Send
+  Send,
+  Tag
 } from "lucide-react";
 import { useAutomationLogs, AutomationLog, AutomationLogFilters } from "@/hooks/useAutomationLogs";
 import { useAutomationFlows } from "@/hooks/useAutomationFlows";
@@ -39,12 +40,17 @@ export function AutomationLogs() {
     limit: 100,
   });
   const [search, setSearch] = useState("");
+  const [tagSearch, setTagSearch] = useState("");
   
   const { data: logs, isLoading } = useAutomationLogs(filters);
   const { data: flows } = useAutomationFlows();
 
   const handleSearch = () => {
     setFilters(prev => ({ ...prev, search }));
+  };
+
+  const handleTagSearch = () => {
+    setFilters(prev => ({ ...prev, tag: tagSearch || undefined }));
   };
 
   const getStatusBadge = (status: AutomationLog['status']) => {
@@ -98,6 +104,19 @@ export function AutomationLogs() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Tag className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar por tag..."
+                  className="pl-8"
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleTagSearch()}
                 />
               </div>
             </div>
@@ -159,6 +178,19 @@ export function AutomationLogs() {
               </SelectContent>
             </Select>
           </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-muted-foreground/20"
+              onClick={() => {
+                setTagSearch('consorcio_boas_vindas');
+                setFilters(prev => ({ ...prev, tag: 'consorcio_boas_vindas' }));
+              }}
+            >
+              <Tag className="h-3 w-3 mr-1" />
+              consorcio_boas_vindas
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 
@@ -173,13 +205,14 @@ export function AutomationLogs() {
                 <TableHead>Destinatário</TableHead>
                 <TableHead>Contato</TableHead>
                 <TableHead>Template</TableHead>
+                <TableHead>Tags</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhum registro encontrado
                   </TableCell>
                 </TableRow>
@@ -212,6 +245,19 @@ export function AutomationLogs() {
                     </TableCell>
                     <TableCell>
                       {log.template?.name || (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {Array.isArray(log.metadata?.tags) && log.metadata.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {log.metadata.tags.map((tag: string) => (
+                            <Badge key={tag} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
                         <span className="text-muted-foreground text-xs">-</span>
                       )}
                     </TableCell>

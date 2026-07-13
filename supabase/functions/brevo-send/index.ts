@@ -1,9 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || Deno.env.get('VITE_SUPABASE_URL') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
 
 const MCF_DOMAIN = '@minhacasafinanciada.com';
 const DEFAULT_SENDER_EMAIL = `marketing${MCF_DOMAIN}`;
@@ -23,8 +33,10 @@ interface BrevoSendRequest {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
+
+  let logId: string | null = null;
 
   try {
     const apiKey = Deno.env.get('BREVO_API_KEY');
@@ -43,6 +55,34 @@ serve(async (req) => {
     const useMcfSender = senderEmail && senderEmail.endsWith(MCF_DOMAIN);
     const finalSenderEmail = useMcfSender ? senderEmail : DEFAULT_SENDER_EMAIL;
     const finalSenderName = useMcfSender && senderName ? senderName : DEFAULT_SENDER_NAME;
+
+    // Persist log entry before sending
+    if (supabaseAdmin) {
+      const { data: log, error: logError } = await supabaseAdmin
+        .from('automation_logs')
+        .insert({
+          channel: 'email',
+          recipient: to,
+          status: 'pending',
+          deal_id: dealId || null,
+          content_sent: htmlContent,
+          metadata: {
+            tags: tags || [],
+            subject,
+            senderEmail: finalSenderEmail,
+            senderName: finalSenderName,
+            dealId: dealId || null,
+          },
+        })
+        .select('id')
+        .single();
+
+      if (logError) {
+        console.error('[BREVO-SEND] Failed to create automation log:', logError);
+      } else if (log) {
+        logId = log.id;
+      }
+    }
 
     const payload: Record<string, unknown> = {
       sender: {
@@ -86,10 +126,43 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error('[BREVO-SEND] Brevo API error:', data);
-      throw new Error(data.message || `Brevo API error: ${response.status}`);
+      const errorMessage = data.message || `Brevo API error: ${response.status}`;
+
+      if (logId && supabaseAdmin) {
+        const { error: updateError } = await supabaseAdmin
+          .from('automation_logs')
+          .update({
+            status: 'failed',
+            error_message: errorMessage,
+            external_status: String(response.status),
+          })
+          .eq('id', logId);
+
+        if (updateError) {
+          console.error('[BREVO-SEND] Failed to update automation log:', updateError);
+        }
+      }
+
+      throw new Error(errorMessage);
     }
 
     console.log('[BREVO-SEND] Email sent successfully:', data);
+
+    if (logId && supabaseAdmin) {
+      const { error: updateError } = await supabaseAdmin
+        .from('automation_logs')
+        .update({
+          status: 'sent',
+          external_id: data.messageId ? String(data.messageId) : null,
+          external_status: 'sent',
+          sent_at: new Date().toISOString(),
+        })
+        .eq('id', logId);
+
+      if (updateError) {
+        console.error('[BREVO-SEND] Failed to update automation log:', updateError);
+      }
+    }
 
     // NOTA: auto-move para "Em contato" foi removido daqui.
     // brevo-send é invocado por automações e por fluxos sistêmicos (NFSe, relatórios),
@@ -102,6 +175,21 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error('[BREVO-SEND] Error:', error.message);
+
+    if (logId && supabaseAdmin) {
+      const { error: updateError } = await supabaseAdmin
+        .from('automation_logs')
+        .update({
+          status: 'failed',
+          error_message: error.message,
+        })
+        .eq('id', logId);
+
+      if (updateError) {
+        console.error('[BREVO-SEND] Failed to update automation log:', updateError);
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

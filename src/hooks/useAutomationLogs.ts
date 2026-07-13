@@ -35,6 +35,7 @@ export interface AutomationLogFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
+  tag?: string;
   limit?: number;
 }
 
@@ -76,6 +77,10 @@ export function useAutomationLogs(filters: AutomationLogFilters = {}) {
 
       if (filters.search) {
         query = query.or(`recipient.ilike.%${filters.search}%`);
+      }
+
+      if (filters.tag) {
+        query = query.contains('metadata', { tags: [filters.tag] });
       }
 
       const { data, error } = await query;
