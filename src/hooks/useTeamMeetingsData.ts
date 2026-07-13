@@ -12,6 +12,7 @@ export interface TeamKPIs {
   totalNoShows: number;
   totalContratos: number;
   totalOutside: number;
+  totalReembolsos?: number;
   totalR1Agendada: number;
   totalSemStatus?: number;
   taxaConversao: number;

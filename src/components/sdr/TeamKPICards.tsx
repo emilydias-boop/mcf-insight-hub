@@ -156,6 +156,14 @@ export function TeamKPICards({
       tooltip: "Contratos pagos sem R1 anterior. Fato consumado no período."
     }]),
     {
+      title: "Reembolsos",
+      value: kpis.totalReembolsos || 0,
+      icon: XCircle,
+      color: "text-red-400",
+      bgColor: "bg-red-400/10",
+      tooltip: "Contratos reembolsados no período (registrados via botão Reembolso). Já são abatidos da coluna Contrato Pago e do card Contratos.",
+    },
+    {
       title: "Taxa Conversão",
       value: `${kpis.taxaConversao.toFixed(1)}%`,
       icon: TrendingUp,
