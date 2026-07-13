@@ -27,7 +27,8 @@ import {
   Clock,
   XCircle,
   Eye,
-  Send
+  Send,
+  Tag
 } from "lucide-react";
 import { useAutomationLogs, AutomationLog, AutomationLogFilters } from "@/hooks/useAutomationLogs";
 import { useAutomationFlows } from "@/hooks/useAutomationFlows";
