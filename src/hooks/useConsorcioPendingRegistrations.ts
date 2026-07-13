@@ -477,6 +477,7 @@ export function useCreatePendingRegistration() {
                 subject,
                 htmlContent,
                 tags: ['consorcio_boas_vindas', 'pending_registration'],
+                dealId: input.deal_id,
               },
             });
             if (mailError) {
