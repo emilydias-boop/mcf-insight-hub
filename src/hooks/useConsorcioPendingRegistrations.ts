@@ -8,6 +8,7 @@ import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
+import { buildConsorcioBoasVindasEmail } from '@/lib/consorcioBoasVindasEmail';
 
 export interface PendingRegistration {
   id: string;
@@ -455,6 +456,41 @@ export function useCreatePendingRegistration() {
               uploaded_by: user.id,
             } as any);
         }
+      }
+
+      // 4. Enviar email de boas-vindas (idempotente) — não bloqueia sucesso do cadastro
+      try {
+        const emailDestino = (input.tipo_pessoa === 'pj' ? input.email_comercial : input.email) || null;
+        const nomeCliente = (input.tipo_pessoa === 'pj' ? input.razao_social : input.nome_completo) || 'Cliente';
+        if (emailDestino) {
+          const { data: current } = await supabase
+            .from('consorcio_pending_registrations')
+            .select('boas_vindas_enviado_em')
+            .eq('id', registration.id)
+            .single();
+          if (!(current as any)?.boas_vindas_enviado_em) {
+            const { subject, htmlContent } = buildConsorcioBoasVindasEmail({ nomeCliente });
+            const { error: mailError } = await supabase.functions.invoke('brevo-send', {
+              body: {
+                to: emailDestino,
+                name: nomeCliente,
+                subject,
+                htmlContent,
+                tags: ['consorcio_boas_vindas', 'pending_registration'],
+              },
+            });
+            if (mailError) {
+              console.error('[boas-vindas] Falha ao enviar email:', mailError);
+            } else {
+              await supabase
+                .from('consorcio_pending_registrations')
+                .update({ boas_vindas_enviado_em: new Date().toISOString() } as any)
+                .eq('id', registration.id);
+            }
+          }
+        }
+      } catch (mailErr) {
+        console.error('[boas-vindas] Exceção ao enviar email:', mailErr);
       }
 
       return registration;
