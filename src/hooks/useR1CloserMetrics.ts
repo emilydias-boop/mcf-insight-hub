@@ -35,6 +35,7 @@ export interface R1CloserMetric {
   contrato_pago: number;
   outside: number;
   r2_agendada: number;
+  reembolsos: number;
 }
 
 export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 'incorporador') {
