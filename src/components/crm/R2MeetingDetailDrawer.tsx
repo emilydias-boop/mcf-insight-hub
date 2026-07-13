@@ -632,15 +632,7 @@ export function R2MeetingDetailDrawer({
           </div>
           
           {canManage && (
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline"
-                className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
-                onClick={() => setRefundModalOpen(true)}
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reembolso
-              </Button>
+            <div className="grid grid-cols-1 gap-2">
               <Button 
                 variant="outline"
                 className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950"
