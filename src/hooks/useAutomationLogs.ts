@@ -80,7 +80,7 @@ export function useAutomationLogs(filters: AutomationLogFilters = {}) {
       }
 
       if (filters.tag) {
-        query = query.filter('metadata->tags', 'cs', JSON.stringify([filters.tag]));
+        query = query.contains('metadata', { tags: [filters.tag] });
       }
 
       const { data, error } = await query;
