@@ -414,10 +414,6 @@ export default function AReceberDetalhe() {
         </CardContent>
       </Card>
 
-      {/* Modal baixar parcela */}
-      <Dialog open={!!payingId} onOpenChange={(o) => !o && setPayingId(null)}>
-      </Dialog>
-
       {/* Modal renegociar / gerar parcelas restantes */}
       <Dialog open={openRenegociar} onOpenChange={setOpenRenegociar}>
         <DialogContent>
