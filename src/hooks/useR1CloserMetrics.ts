@@ -482,11 +482,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // (MCF PAY e Hubla). Registrado em deal_activities pelos edge functions
       // mcf-pay-callback (activity_type='refund_mcf_pay') e
       // hubla-webhook-handler (activity_type='refund_hubla').
-      // O botão manual de Reembolso (RefundModal) NÃO alimenta essa contagem.
+      // Também incluímos para não perder histórico:
+      //   - deal_activities.activity_type='loss_marked' com metadata.refunded_at
+      //     (reembolsos registrados via botão manual antes da migração);
+      //   - hubla_transactions.sale_status='refunded' com linked_deal_id
+      //     (reembolsos Hubla anteriores ao webhook passar a criar activities).
       const { data: refundActivities } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
-        .in('activity_type', ['refund_mcf_pay', 'refund_hubla'])
+        .in('activity_type', ['refund_mcf_pay', 'refund_hubla', 'loss_marked'])
         .gte('created_at', start)
         .lte('created_at', end);
 
@@ -494,6 +498,12 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         new Set(
           (refundActivities || [])
             .filter((a: any) => {
+              // loss_marked só conta se tiver marca explícita de reembolso.
+              const isRefund =
+                a?.metadata?.refunded_at != null ||
+                a?.metadata?.source === 'mcf_pay' ||
+                a?.metadata?.source === 'hubla';
+              if (!isRefund) return false;
               const ts = a?.metadata?.refunded_at || a?.created_at;
               return !!ts && ts >= start && ts <= end;
             })
@@ -501,7 +511,24 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             .filter(Boolean)
         )
       );
-      const refundAttendees = refundedDealIds.length > 0
+
+      // Fallback Hubla: transações reembolsadas no período com deal vinculado
+      // que talvez não tenham gerado deal_activities.
+      const { data: hublaRefunds } = await supabase
+        .from('hubla_transactions')
+        .select('linked_deal_id, updated_at')
+        .eq('sale_status', 'refunded')
+        .not('linked_deal_id', 'is', null)
+        .gte('updated_at', start)
+        .lte('updated_at', end);
+
+      const refundedDealIdSet = new Set<string>(refundedDealIds);
+      (hublaRefunds || []).forEach((r: any) => {
+        if (r?.linked_deal_id) refundedDealIdSet.add(r.linked_deal_id as string);
+      });
+      const allRefundedDealIds = Array.from(refundedDealIdSet);
+
+      const refundAttendees = allRefundedDealIds.length > 0
         ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
             (chunk) => supabase
               .from('meeting_slot_attendees')
@@ -509,7 +536,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
               .in('deal_id', chunk)
               .eq('meeting_slot.meeting_type', 'r1')
               .eq('is_partner', false),
-            refundedDealIds
+            allRefundedDealIds
           )
         : [];
 
