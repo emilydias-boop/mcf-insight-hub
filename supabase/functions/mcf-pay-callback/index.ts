@@ -399,7 +399,7 @@ Deno.serve(async (req) => {
   if (isRefunded) {
     try {
       const refundedAtIso = new Date().toISOString();
-      await supabase.from("deal_activities").insert({
+      const { error: actErr } = await supabase.from("deal_activities").insert({
         deal_id: resolvedDealId,
         activity_type: "refund_mcf_pay",
         description: `MCF PAY estornou pagamento (tx ${transactionId ?? "s/id"})`,
@@ -411,6 +411,9 @@ Deno.serve(async (req) => {
           event,
         },
       } as never);
+      if (actErr) {
+        console.error("[mcf-pay-callback] deal_activities insert error:", actErr);
+      }
     } catch (err) {
       console.warn("[mcf-pay-callback] falha ao registrar deal_activities refund_mcf_pay:", err);
     }
