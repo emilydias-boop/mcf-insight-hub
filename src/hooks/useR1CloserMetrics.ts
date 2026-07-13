@@ -478,12 +478,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Reembolsos são registrados em deal_activities (activity_type='loss_marked')
-      // com metadata->>'refunded_at' — não existe coluna refunded_at em crm_deals.
+      // Fonte OFICIAL de reembolso = webhook do MCF PAY.
+      // Registrado em deal_activities com activity_type='refund_mcf_pay' e
+      // metadata.refunded_at pelo edge function mcf-pay-callback.
+      // O botão manual de Reembolso (RefundModal) NÃO alimenta essa contagem.
       const { data: refundActivities } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
-        .eq('activity_type', 'loss_marked')
+        .eq('activity_type', 'refund_mcf_pay')
         .gte('created_at', start)
         .lte('created_at', end);
 
