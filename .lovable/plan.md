@@ -1,57 +1,52 @@
+## Situação atual
 
-## O que vamos construir
+Hoje **não existe automação de email** disparada após "Cadastrar Dados da Cota". O fluxo do modal `AcceptProposalModal` → `useCreatePendingRegistration` apenas:
 
-Um canal WhatsApp compartilhado dentro da tela **MCF - Atendimento**:
+1. Marca a proposta como `aceita`
+2. Cria o registro em `consorcio_pending_registrations` com status `aguardando_abertura`
+3. Faz upload dos documentos
 
-- Um único número Twilio (WhatsApp Business) usado por todos os operadores autorizados.
-- Cliente recebe no WhatsApp dele; qualquer operador com permissão vê e responde de dentro do app.
-- Toda a conversa fica registrada, com autor de cada mensagem enviada.
-- Tempo real via Supabase Realtime — mensagens novas aparecem sem refresh.
-- Botão "Iniciar conversa" que dispara o template aprovado com a data-limite (hoje + 2 dias) preenchida automaticamente.
+Nenhum `supabase.functions.invoke('brevo-send', ...)` é chamado no fluxo — o único envio de email na base é a função `brevo-send`, usada por notificações de documentos e relatórios.
 
-## Escopo desta entrega
+## O que fazer
 
-**Incluso:**
-1. Tabelas `wa_conversations`, `wa_messages`, `mcf_atendimento_access` (lista de usuários permitidos).
-2. Edge function `twilio-wa-webhook` — recebe mensagens do cliente (Twilio → app).
-3. Edge function `twilio-wa-send` — envia mensagens escritas pelo operador.
-4. Edge function `twilio-wa-start` — envia o template inicial já com `{{1}} = data + 2 dias úteis`.
-5. Painel na tela **MCF - Atendimento**:
-   - Lista de conversas WhatsApp à esquerda (contato, última mensagem, badge de não lidas).
-   - Painel de chat à direita com histórico + input para responder.
-   - Botão "Iniciar conversa WhatsApp" (colar telefone + nome, ou originado do contrato A000).
-6. Gestão de acesso: nova aba em Configurações onde admin adiciona/remove usuários que podem ver e responder.
-7. Sandbox Twilio funciona de imediato para testes; ao aprovar o template basta trocar 2 secrets.
+Adicionar envio automático de email de boas-vindas ao lead imediatamente após criar o `pending_registration`, usando a função existente `brevo-send`.
 
-**Fica para fase 2 (aviso explícito):**
-- **Auto-agendamento R2 na agenda Incorporador MCF quando o cliente escolher horário.** Isso exige: parser da resposta do cliente (linguagem natural → data/hora), consulta de disponibilidade real na agenda R2 filtrada por BU Incorporador, criação do slot com "Observações R2 = agendamento automático MCF - Atendimento". É um bloco grande e melhor validar o fluxo básico de mensageria antes. Nessa entrega, quando o cliente responder, a mensagem chega para o operador humano tratar.
+### 1. Novo builder de template
+Criar `src/lib/consorcioBoasVindasEmail.ts` exportando `buildConsorcioBoasVindasEmail({ nomeCliente })` que retorna `{ subject, htmlContent }`:
 
-## Configuração Twilio (o que você faz)
+- **Assunto:** "Parabéns pela sua nova Carta de Consórcio! Conheça seu time de acompanhamento"
+- **HTML:** layout no mesmo padrão do `buildEmailHtml` (header MCF, corpo, footer), com o texto fornecido pelo usuário. Contatos da Emily e Antony renderizados como blocos destacados com WhatsApp clicável (`https://wa.me/5511940652061`, `https://wa.me/5511940284344`) e emails como `mailto:`.
 
-1. Vou pedir 3 secrets: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` (formato `whatsapp:+14155238886` para sandbox, ou seu número aprovado).
-2. Para testes agora: use o Sandbox do Twilio (`whatsapp:+14155238886`) — cada testador manda o código join do sandbox uma vez.
-3. Quando o template for aprovado: adiciono secret `TWILIO_WA_TEMPLATE_SID` (ContentSid) e o send passa a usar template.
-4. No console Twilio, aponte o webhook "When a message comes in" para: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-wa-webhook`.
+### 2. Disparo no hook
+Em `src/hooks/useConsorcioPendingRegistrations.ts`, dentro de `useCreatePendingRegistration.mutationFn`, após o upload dos documentos e antes do `return registration`:
 
-## Detalhes técnicos
+- Determinar `emailDestino` = `input.email` (PF) ou `input.email_comercial` (PJ)
+- Determinar `nomeCliente` = `input.nome_completo` (PF) ou `input.razao_social` (PJ)
+- Se houver email, invocar (fire-and-forget com `try/catch` para não bloquear sucesso do cadastro):
 
-**Tabelas:**
-- `wa_conversations(id, phone_e164, contact_name, deal_id nullable, last_message_at, last_message_preview, unread_count, created_at)`
-- `wa_messages(id, conversation_id, direction 'inbound'|'outbound', body, twilio_message_sid, sent_by_user_id nullable, status, created_at)`
-- `mcf_atendimento_access(user_id PK, granted_by, granted_at)`
-- RLS: SELECT/INSERT em `wa_*` só para usuários em `mcf_atendimento_access` ou admins. Webhook usa service role (bypass RLS).
-- Realtime habilitado em `wa_messages` e `wa_conversations`.
+```ts
+await supabase.functions.invoke('brevo-send', {
+  body: {
+    to: emailDestino,
+    name: nomeCliente,
+    subject,
+    htmlContent,
+    tags: ['consorcio_boas_vindas', 'pending_registration'],
+  },
+});
+```
 
-**Edge functions (verify_jwt=false no webhook, true nas demais):**
-- `twilio-wa-webhook`: valida assinatura Twilio, upsert conversation, insert message inbound.
-- `twilio-wa-send`: valida que usuário tem acesso, chama gateway Twilio `POST /Messages.json`, persiste outbound.
-- `twilio-wa-start`: monta `contentVariables` com data D+2 (formato pt-BR) e envia via `ContentSid`.
+- Logar erro no console e seguir; não estourar toast de erro para o SDR.
 
-**Frontend:**
-- `src/pages/checkin/CheckinInbox.tsx` ganha uma sub-aba/seção "WhatsApp".
-- Componentes novos: `WaConversationList`, `WaChatPane`, `WaStartConversationDialog`.
-- Nova página `src/pages/settings/McfAtendimentoAccess.tsx` para gerenciar quem tem acesso.
+### 3. Idempotência
+Adicionar coluna `boas_vindas_enviado_em timestamptz` em `consorcio_pending_registrations` (migração) e só disparar quando `null`, marcando `now()` após sucesso. Isso evita reenvio se o SDR reabrir/repetir o fluxo.
 
-## Confirmação antes de rodar
+### 4. Sem mudanças em UI
+O modal e a tela `/consorcio` permanecem iguais. Nenhum controle novo para o usuário — o email é 100% automático.
 
-Como o auto-agendamento R2 não entra nesta primeira fase, confirma se posso seguir com a mensageria compartilhada + template inicial agora, e a gente trata o auto-agendamento como próximo passo depois de validar o fluxo?
+## Fora do escopo
+
+- Não altera Brevo/sender (continua `marketing@minhacasafinanciada.com`)
+- Não envia cópia para Emily/Antony (posso adicionar via `cc` se você quiser — me diga)
+- Não cria template no painel Brevo; o HTML é montado no cliente
