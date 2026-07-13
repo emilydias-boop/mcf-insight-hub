@@ -416,6 +416,61 @@ export default function AReceberDetalhe() {
 
       {/* Modal baixar parcela */}
       <Dialog open={!!payingId} onOpenChange={(o) => !o && setPayingId(null)}>
+      </Dialog>
+
+      {/* Modal renegociar / gerar parcelas restantes */}
+      <Dialog open={openRenegociar} onOpenChange={setOpenRenegociar}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renegociar parcelas restantes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Valor do título</div>
+                <div className="font-semibold">{brl(Number(titulo.valor_total))}</div>
+              </div>
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Já recebido</div>
+                <div className="font-semibold text-emerald-600">{brl(totals.pago)}</div>
+              </div>
+            </div>
+            <div className="rounded border p-2 text-sm">
+              <div className="text-xs text-muted-foreground">Saldo a parcelar</div>
+              <div className="font-semibold text-amber-600">{brl(saldoRestante)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Nº de parcelas negociadas</Label>
+                <Input type="number" min="1" value={renegQtd} onChange={e => setRenegQtd(e.target.value)} />
+              </div>
+              <div>
+                <Label>1º vencimento</Label>
+                <Input type="date" value={renegPrimeiraVenc} onChange={e => setRenegPrimeiraVenc(e.target.value)} />
+              </div>
+            </div>
+            {Number(renegQtd) > 0 && saldoRestante > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Serão geradas {renegQtd} parcelas mensais de aproximadamente{' '}
+                <strong>{brl(saldoRestante / Number(renegQtd))}</strong> (última parcela ajustada). Parcelas
+                pendentes/atrasadas atuais serão substituídas; pagas serão mantidas.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenRenegociar(false)}>Cancelar</Button>
+            <Button
+              onClick={confirmarRenegociar}
+              disabled={createParcelas.isPending || delParcela.isPending || updateTitulo.isPending}
+            >
+              Gerar parcelas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal baixar parcela (conteúdo) */}
+      <Dialog open={!!payingId} onOpenChange={(o) => !o && setPayingId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Baixar parcela</DialogTitle></DialogHeader>
           <div className="space-y-3">
