@@ -478,14 +478,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Fonte OFICIAL de reembolso = webhook do MCF PAY.
-      // Registrado em deal_activities com activity_type='refund_mcf_pay' e
-      // metadata.refunded_at pelo edge function mcf-pay-callback.
+      // Fonte OFICIAL de reembolso = webhooks das plataformas de pagamento
+      // (MCF PAY e Hubla). Registrado em deal_activities pelos edge functions
+      // mcf-pay-callback (activity_type='refund_mcf_pay') e
+      // hubla-webhook-handler (activity_type='refund_hubla').
       // O botão manual de Reembolso (RefundModal) NÃO alimenta essa contagem.
       const { data: refundActivities } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
-        .eq('activity_type', 'refund_mcf_pay')
+        .in('activity_type', ['refund_mcf_pay', 'refund_hubla'])
         .gte('created_at', start)
         .lte('created_at', end);
 
