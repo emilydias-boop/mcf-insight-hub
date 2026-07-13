@@ -50,8 +50,9 @@ export function CloserSummaryTable({
       contrato_pago: acc.contrato_pago + row.contrato_pago,
       outside: acc.outside + row.outside,
       r2_agendada: acc.r2_agendada + row.r2_agendada,
+      reembolsos: acc.reembolsos + (row.reembolsos || 0),
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0 }
   );
 
   // Calculate total conversion rate (Contrato / Realizada)
@@ -78,6 +79,7 @@ export function CloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
             </TableRow>
           </TableHeader>
@@ -144,6 +146,11 @@ export function CloserSummaryTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
+                    <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                      {row.reembolsos || 0}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
                   </TableCell>
                 </TableRow>
@@ -185,6 +192,11 @@ export function CloserSummaryTable({
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
                   {totals.r2_agendada}
                 </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={`font-medium ${totals.reembolsos > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                  {totals.reembolsos}
+                </span>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${
