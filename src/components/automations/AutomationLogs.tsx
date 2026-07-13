@@ -236,6 +236,19 @@ export function AutomationLogs() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {Array.isArray(log.metadata?.tags) && log.metadata.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {log.metadata.tags.map((tag: string) => (
+                            <Badge key={tag} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {getStatusBadge(log.status)}
                       {log.error_message && (
                         <p className="text-xs text-destructive mt-1 max-w-[200px] truncate" title={log.error_message}>
