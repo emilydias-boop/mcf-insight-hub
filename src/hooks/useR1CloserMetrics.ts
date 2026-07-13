@@ -478,35 +478,22 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Fonte OFICIAL de reembolso = webhooks das plataformas de pagamento
-      // (MCF PAY e Hubla). Registrado em deal_activities pelos edge functions
-      // mcf-pay-callback (activity_type='refund_mcf_pay') e
+      // Fonte ÚNICA de reembolso = webhooks automáticos das plataformas de
+      // pagamento (MCF PAY e Hubla). Registrado em deal_activities pelos edge
+      // functions mcf-pay-callback (activity_type='refund_mcf_pay') e
       // hubla-webhook-handler (activity_type='refund_hubla').
-      // Também incluímos para não perder histórico:
-      //   - deal_activities.activity_type='loss_marked' com metadata.refunded_at
-      //     (reembolsos registrados via botão manual antes da migração);
-      //   - hubla_transactions.sale_status='refunded' com linked_deal_id
-      //     (reembolsos Hubla anteriores ao webhook passar a criar activities).
+      // Lançamentos manuais (loss_marked com metadata.refunded_at) NÃO contam
+      // mais como reembolso para evitar interpretação incorreta.
       const { data: refundActivities } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
-        .in('activity_type', ['refund_mcf_pay', 'refund_hubla', 'loss_marked'])
+        .in('activity_type', ['refund_mcf_pay', 'refund_hubla'])
         .gte('created_at', start)
         .lte('created_at', end);
 
       const refundedDealIds = Array.from(
         new Set(
           (refundActivities || [])
-            .filter((a: any) => {
-              // loss_marked só conta se tiver marca explícita de reembolso.
-              const isRefund =
-                a?.metadata?.refunded_at != null ||
-                a?.metadata?.source === 'mcf_pay' ||
-                a?.metadata?.source === 'hubla';
-              if (!isRefund) return false;
-              const ts = a?.metadata?.refunded_at || a?.created_at;
-              return !!ts && ts >= start && ts <= end;
-            })
             .map((a: any) => a.deal_id as string)
             .filter(Boolean)
         )

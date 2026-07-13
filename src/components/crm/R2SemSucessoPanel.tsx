@@ -190,13 +190,7 @@ export function R2SemSucessoPanel({ closers }: R2SemSucessoPanelProps) {
                             <Undo2 className="h-4 w-4 mr-2 text-primary" />
                             Voltar para Pendentes
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setRefundLead(lead);
-                            setRefundModalOpen(true);
-                          }}>
-                            <RotateCcw className="h-4 w-4 mr-2 text-warning" />
-                            Reembolso
-                          </DropdownMenuItem>
+                          {/* Reembolso removido: lançado automaticamente pelos webhooks MCF PAY / Hubla */}
                           <DropdownMenuItem onClick={() => {
                             setPartnerLead(lead);
                             setPartnerDialogOpen(true);
