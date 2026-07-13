@@ -478,15 +478,23 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Buscar deals com refunded_at no período e mapear para o closer via R1 attendee.
-      const { data: refundedDeals } = await supabase
-        .from('crm_deals')
-        .select('id')
-        .not('refunded_at', 'is', null)
-        .gte('refunded_at', start)
-        .lte('refunded_at', end);
+      // Reembolsos são registrados em deal_activities (activity_type='loss_marked')
+      // com metadata->>'refunded_at' — não existe coluna refunded_at em crm_deals.
+      const { data: refundActivities } = await supabase
+        .from('deal_activities')
+        .select('deal_id, metadata')
+        .eq('activity_type', 'loss_marked')
+        .gte('metadata->>refunded_at', start)
+        .lte('metadata->>refunded_at', end);
 
-      const refundedDealIds = (refundedDeals || []).map((d: any) => d.id as string);
+      const refundedDealIds = Array.from(
+        new Set(
+          (refundActivities || [])
+            .filter((a: any) => a?.metadata?.refunded_at)
+            .map((a: any) => a.deal_id as string)
+            .filter(Boolean)
+        )
+      );
       const refundAttendees = refundedDealIds.length > 0
         ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
             (chunk) => supabase
