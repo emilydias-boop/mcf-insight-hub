@@ -35,6 +35,7 @@ export interface R1CloserMetric {
   contrato_pago: number;
   outside: number;
   r2_agendada: number;
+  reembolsos: number;
 }
 
 export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 'incorporador') {
@@ -476,6 +477,43 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
       });
 
+      // ========== REFUNDS BY REFUND DATE ==========
+      // Buscar deals com refunded_at no período e mapear para o closer via R1 attendee.
+      const { data: refundedDeals } = await supabase
+        .from('crm_deals')
+        .select('id')
+        .not('refunded_at', 'is', null)
+        .gte('refunded_at', start)
+        .lte('refunded_at', end);
+
+      const refundedDealIds = (refundedDeals || []).map((d: any) => d.id as string);
+      const refundAttendees = refundedDealIds.length > 0
+        ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
+            (chunk) => supabase
+              .from('meeting_slot_attendees')
+              .select('deal_id, contract_paid_at, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
+              .in('deal_id', chunk)
+              .eq('meeting_slot.meeting_type', 'r1')
+              .eq('is_partner', false),
+            refundedDealIds
+          )
+        : [];
+
+      // 1 refund por deal — escolher R1 mais recente para atribuir o closer.
+      const refundByCloser = new Map<string, number>();
+      const refundByDeal = new Map<string, { closerId: string; ts: number }>();
+      refundAttendees.forEach((att: any) => {
+        const slot = att.meeting_slot;
+        const closerId = slot?.closer_id;
+        if (!closerId || !att.deal_id) return;
+        const ts = new Date(slot.scheduled_at).getTime();
+        const prev = refundByDeal.get(att.deal_id);
+        if (!prev || ts > prev.ts) refundByDeal.set(att.deal_id, { closerId, ts });
+      });
+      refundByDeal.forEach(({ closerId }) => {
+        refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
+      });
+
       // Calculate metrics for each R1 closer
       const metricsMap = new Map<string, R1CloserMetric>();
 
@@ -488,9 +526,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           r1_agendada: 0,
           r1_realizada: 0,
           noshow: 0,
-          contrato_pago: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0),
+          contrato_pago: Math.max(
+            0,
+            (contractsByCloser.get(closer.id) || 0)
+              + (manualByCloser.get(closer.id) || 0)
+              - (refundByCloser.get(closer.id) || 0)
+          ),
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
+          reembolsos: refundByCloser.get(closer.id) || 0,
         });
       });
 
@@ -502,6 +546,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         ...outsideByCloser.keys(),
         ...r2CountByCloser.keys(),
         ...manualByCloser.keys(),
+        ...refundByCloser.keys(),
       ]);
       closersWithProduction.forEach(closerId => {
         if (metricsMap.has(closerId)) return;
@@ -514,9 +559,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           r1_agendada: 0,
           r1_realizada: 0,
           noshow: 0,
-          contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
+          contrato_pago: Math.max(
+            0,
+            (contractsByCloser.get(closerId) || 0)
+              + (manualByCloser.get(closerId) || 0)
+              - (refundByCloser.get(closerId) || 0)
+          ),
           outside: outsideByCloser.get(closerId) || 0,
           r2_agendada: r2CountByCloser.get(closerId) || 0,
+          reembolsos: refundByCloser.get(closerId) || 0,
         });
       });
 
@@ -541,9 +592,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
             r1_agendada: 0,
             r1_realizada: 0,
             noshow: 0,
-            contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
+            contrato_pago: Math.max(
+              0,
+              (contractsByCloser.get(closerId) || 0)
+                + (manualByCloser.get(closerId) || 0)
+                - (refundByCloser.get(closerId) || 0)
+            ),
             outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
+            reembolsos: refundByCloser.get(closerId) || 0,
           };
           metricsMap.set(closerId, metric);
         }
