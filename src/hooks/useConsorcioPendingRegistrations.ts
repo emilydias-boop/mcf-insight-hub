@@ -8,6 +8,7 @@ import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
+import { buildConsorcioBoasVindasEmail } from '@/lib/consorcioBoasVindasEmail';
 
 export interface PendingRegistration {
   id: string;
