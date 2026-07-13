@@ -192,6 +192,7 @@ export function AutomationLogs() {
                 <TableHead>Destinatário</TableHead>
                 <TableHead>Contato</TableHead>
                 <TableHead>Template</TableHead>
+                <TableHead>Tags</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
