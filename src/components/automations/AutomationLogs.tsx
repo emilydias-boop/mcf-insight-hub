@@ -178,6 +178,19 @@ export function AutomationLogs() {
               </SelectContent>
             </Select>
           </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-muted-foreground/20"
+              onClick={() => {
+                setTagSearch('consorcio_boas_vindas');
+                setFilters(prev => ({ ...prev, tag: 'consorcio_boas_vindas' }));
+              }}
+            >
+              <Tag className="h-3 w-3 mr-1" />
+              consorcio_boas_vindas
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 
