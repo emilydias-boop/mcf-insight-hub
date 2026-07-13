@@ -107,6 +107,19 @@ export function AutomationLogs() {
                 />
               </div>
             </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Tag className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar por tag..."
+                  className="pl-8"
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleTagSearch()}
+                />
+              </div>
+            </div>
             
             <Select
               value={filters.channel || "all"}
