@@ -273,10 +273,7 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                             <Calendar className="h-4 w-4 mr-2 text-purple-600" />
                             Agendar R2
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleRefund(lead)}>
-                            <RotateCcw className="h-4 w-4 mr-2 text-orange-600" />
-                            Reembolso
-                          </DropdownMenuItem>
+                          {/* Reembolso removido: agora é lançado automaticamente pelos webhooks MCF PAY / Hubla */}
                           <DropdownMenuItem onClick={() => {
                             setPartnerLead(lead);
                             setPartnerDialogOpen(true);
