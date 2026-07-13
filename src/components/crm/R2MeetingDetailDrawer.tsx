@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -22,7 +22,6 @@ import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useUpdateCRMContact } from '@/hooks/useCRMData';
 import { RefundModal } from './RefundModal';
 import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
-import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
 import { R2NotesTab } from './r2-drawer/R2NotesTab';
 import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,8 +36,8 @@ import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDe
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
-  statusOptions: R2StatusOption[];
-  thermometerOptions: R2ThermometerOption[];
+  statusOptions?: R2StatusOption[];
+  thermometerOptions?: R2ThermometerOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReschedule: (meeting: R2MeetingRow) => void;
@@ -56,8 +55,6 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
 
 export function R2MeetingDetailDrawer({
   meeting,
-  statusOptions,
-  thermometerOptions,
   open,
   onOpenChange,
   onReschedule
@@ -235,12 +232,7 @@ export function R2MeetingDetailDrawer({
       meetingType: 'r2',
     }, {
       onSuccess: () => {
-        if (newStatus === 'completed') {
-          toast.info(
-            'Lembre-se de preencher o Status Final na aba "Avaliação R2"',
-            { duration: 5000 }
-          );
-        }
+        // status updated
       }
     });
   };
@@ -584,12 +576,11 @@ export function R2MeetingDetailDrawer({
 
             {/* Tabbed Content */}
             {attendee && (
-              <Tabs defaultValue={isAnamneseLead ? 'avaliacao' : 'qualificacao'} className="w-full">
+              <Tabs defaultValue={isAnamneseLead ? 'notas' : 'qualificacao'} className="w-full">
                 <TabsList className="w-full">
                   {!isAnamneseLead && (
                     <TabsTrigger value="qualificacao" className="text-xs">Qualificação</TabsTrigger>
                   )}
-                  <TabsTrigger value="avaliacao" className="text-xs">Avaliação R2</TabsTrigger>
                   <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
                 </TabsList>
 
@@ -598,15 +589,6 @@ export function R2MeetingDetailDrawer({
                     <R2QualificationTab attendee={attendee} saveTrigger={saveTrigger} />
                   </TabsContent>
                 )}
-                
-                <TabsContent value="avaliacao" className="mt-4">
-                  <R2EvaluationTab 
-                    attendee={attendee}
-                    statusOptions={statusOptions}
-                    thermometerOptions={thermometerOptions}
-                    saveTrigger={saveTrigger}
-                  />
-                </TabsContent>
                 
                 <TabsContent value="notas" className="mt-4">
                   <R2NotesTab attendee={attendee} />
@@ -650,14 +632,28 @@ export function R2MeetingDetailDrawer({
           </div>
           
           {canManage && (
-            <Button 
-              variant="outline"
-              className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
-              onClick={() => setRefundModalOpen(true)}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reembolso
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button 
+                variant="outline"
+                className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
+                onClick={() => setRefundModalOpen(true)}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reembolso
+              </Button>
+              <Button 
+                variant="outline"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950"
+                onClick={() => {
+                  if (confirm('Marcar este lead como Desistência?')) {
+                    handleParticipantStatusChange('desistencia');
+                  }
+                }}
+              >
+                <Ban className="h-4 w-4 mr-2" />
+                Desistência
+              </Button>
+            </div>
           )}
 
           {canCancel && (
