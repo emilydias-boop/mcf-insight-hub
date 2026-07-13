@@ -3283,6 +3283,44 @@ Deno.serve(async (req) => {
             .eq('sale_date', new Date(invoice.created_at || invoice.createdAt).toISOString().split('T')[0]);
 
           console.log(`🔄 Reembolso processado: ${hublaId}`);
+
+          // === Zera contract_paid_at do attendee vinculado (se existir) ===
+          // Sem isso, o contrato permanece contado no Contrato Pago mesmo após reembolso.
+          const { data: linkedTx } = await supabase
+            .from('hubla_transactions')
+            .select('linked_attendee_id, linked_deal_id')
+            .eq('hubla_id', hublaId)
+            .maybeSingle();
+
+          const linkedAttendeeId = linkedTx?.linked_attendee_id ?? null;
+          const linkedDealId = linkedTx?.linked_deal_id ?? null;
+
+          if (linkedAttendeeId) {
+            await supabase
+              .from('meeting_slot_attendees')
+              .update({ contract_paid_at: null })
+              .eq('id', linkedAttendeeId);
+            console.log(`🔴 [REEMBOLSO HUBLA] contract_paid_at zerado no attendee ${linkedAttendeeId}`);
+          }
+
+          // === Registra atividade canônica de reembolso (fonte oficial de contagem) ===
+          if (linkedDealId) {
+            try {
+              await supabase.from('deal_activities').insert({
+                deal_id: linkedDealId,
+                activity_type: 'refund_hubla',
+                description: `Hubla estornou pagamento (invoice ${hublaId})`,
+                metadata: {
+                  source: 'hubla',
+                  refunded_at: new Date().toISOString(),
+                  hubla_id: hublaId,
+                  event: eventType,
+                },
+              } as never);
+            } catch (err) {
+              console.warn('[hubla] falha ao registrar deal_activities refund_hubla:', err);
+            }
+          }
           
           // === NOVO: Atualizar deal no CRM com badge de reembolso ===
           const customerEmail = invoice.customer?.email || invoice.customer_email || invoice.payer?.email;
