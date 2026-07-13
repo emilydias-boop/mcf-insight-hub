@@ -75,6 +75,7 @@ import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveBU } from "@/hooks/useActiveBU";
+import { R2AgendaKPICards } from "@/components/crm/R2AgendaKPICards";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -522,6 +523,13 @@ export default function AgendaR2() {
           )}
         </div>
       </div>
+
+      {/* KPI Cards (respeitam filtros e período) */}
+      <R2AgendaKPICards
+        meetings={filteredMeetings as any}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+      />
 
       {/* Navigation Bar */}
       <div className="flex items-center justify-between flex-wrap gap-4">
