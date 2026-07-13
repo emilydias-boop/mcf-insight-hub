@@ -40,12 +40,17 @@ export function AutomationLogs() {
     limit: 100,
   });
   const [search, setSearch] = useState("");
+  const [tagSearch, setTagSearch] = useState("");
   
   const { data: logs, isLoading } = useAutomationLogs(filters);
   const { data: flows } = useAutomationFlows();
 
   const handleSearch = () => {
     setFilters(prev => ({ ...prev, search }));
+  };
+
+  const handleTagSearch = () => {
+    setFilters(prev => ({ ...prev, tag: tagSearch || undefined }));
   };
 
   const getStatusBadge = (status: AutomationLog['status']) => {
