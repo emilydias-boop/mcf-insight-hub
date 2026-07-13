@@ -482,15 +482,18 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       // com metadata->>'refunded_at' — não existe coluna refunded_at em crm_deals.
       const { data: refundActivities } = await supabase
         .from('deal_activities')
-        .select('deal_id, metadata')
+        .select('deal_id, metadata, created_at')
         .eq('activity_type', 'loss_marked')
-        .gte('metadata->>refunded_at', start)
-        .lte('metadata->>refunded_at', end);
+        .gte('created_at', start)
+        .lte('created_at', end);
 
       const refundedDealIds = Array.from(
         new Set(
           (refundActivities || [])
-            .filter((a: any) => a?.metadata?.refunded_at)
+            .filter((a: any) => {
+              const ts = a?.metadata?.refunded_at || a?.created_at;
+              return !!ts && ts >= start && ts <= end;
+            })
             .map((a: any) => a.deal_id as string)
             .filter(Boolean)
         )
