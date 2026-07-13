@@ -35,6 +35,7 @@ export interface AutomationLogFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
+  tag?: string;
   limit?: number;
 }
 
