@@ -460,6 +460,7 @@ export function useCreatePendingRegistration() {
 
       return registration;
     },
+  }, // placeholder - unused
     onSuccess: () => {
       toast.success('Cadastro enviado para Controle Consórcio!');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
