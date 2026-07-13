@@ -96,14 +96,38 @@ export function R2AgendaKPICards({ meetings, rangeStart, rangeEnd }: Props) {
       (a) => a.status !== "cancelled" && a.status !== "rescheduled"
     );
 
-    const agendadas = active.length;
-    const realizadas = active.filter(
-      (a) =>
-        a.status === "completed" ||
-        a.status === "contract_paid" ||
-        a.status === "refunded"
-    ).length;
-    const noShows = active.filter((a) => a.status === "no_show").length;
+    // Dedup por lead: múltiplos reagendamentos/no-shows do mesmo lead no mês
+    // contam como 1 agendamento. No-show só conta se o lead NUNCA foi realizado
+    // no período; se depois virar realizada, o lead passa a contar como
+    // realizada (e sai do no-show).
+    const leadKey = (a: any) => {
+      const email = normalizeEmail(a.email || a.deal?.contact?.email);
+      const phone = normalizePhone(a.phone || a.deal?.contact?.phone);
+      const deal = a.deal_id || a.deal?.id || "";
+      return deal || email || phone || a.id;
+    };
+    const isRealizada = (s: string) =>
+      s === "completed" || s === "contract_paid" || s === "refunded";
+
+    const byLead = new Map<string, any[]>();
+    active.forEach((a: any) => {
+      const k = leadKey(a);
+      const arr = byLead.get(k) || [];
+      arr.push(a);
+      byLead.set(k, arr);
+    });
+
+    let agendadas = 0;
+    let realizadas = 0;
+    let noShows = 0;
+    byLead.forEach((arr) => {
+      agendadas += 1;
+      if (arr.some((a) => isRealizada(a.status))) {
+        realizadas += 1;
+      } else if (arr.some((a) => a.status === "no_show")) {
+        noShows += 1;
+      }
+    });
     const denomNS = realizadas + noShows;
     const noShowPct = denomNS > 0 ? (noShows / denomNS) * 100 : 0;
 
