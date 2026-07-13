@@ -421,7 +421,8 @@ export default function ReunioesEquipe() {
   const contractsFromClosers = useMemo(() => {
     const contratoPago = closerMetrics?.reduce((sum, c) => sum + c.contrato_pago, 0) || 0;
     const outside = closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
-    return { contratoPago, outside, total: contratoPago + outside };
+    const reembolsos = closerMetrics?.reduce((sum, c) => sum + (c.reembolsos || 0), 0) || 0;
+    return { contratoPago, outside, reembolsos, total: contratoPago + outside };
   }, [closerMetrics]);
 
   // Derive ALL R1 KPIs from closerMetrics (source of truth — same data as Closers table)
@@ -559,6 +560,7 @@ export default function ReunioesEquipe() {
       totalSemStatus,
       totalContratos: contractsFromClosers.contratoPago,
       totalOutside: contractsFromClosers.outside,
+      totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
         : 0,
