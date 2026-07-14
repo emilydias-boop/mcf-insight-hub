@@ -274,15 +274,36 @@ export function useProposals() {
         }
       }
 
-      // Fetch consorcio closers to map owner_id (email) -> closer name
-      const { data: consorcioClosers } = await supabase
-        .from('closers')
-        .select('name, email')
-        .eq('bu', 'consorcio');
+      // Map owner_id (email) -> closer/profile name.
+      // Não filtramos por bu porque o owner pode ser closer de outra BU
+      // (ex.: Jessica Bellini/incorporador atendendo consórcio).
+      const ownerEmails = Array.from(new Set(
+        (data || [])
+          .map(p => (p.crm_deals as any)?.owner_id)
+          .filter(Boolean)
+          .map((e: string) => String(e).toLowerCase())
+      ));
       const closerNameByEmail: Record<string, string> = {};
-      (consorcioClosers || []).forEach(c => {
-        if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
-      });
+      if (ownerEmails.length > 0) {
+        const { data: closersAll } = await supabase
+          .from('closers')
+          .select('name, email')
+          .in('email', ownerEmails);
+        (closersAll || []).forEach(c => {
+          if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
+        });
+        // Fallback via profiles para owners que não estão em closers
+        const missing = ownerEmails.filter(e => !closerNameByEmail[e]);
+        if (missing.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('email, full_name')
+            .in('email', missing);
+          (profs || []).forEach((p: any) => {
+            if (p.email && p.full_name) closerNameByEmail[p.email.toLowerCase()] = p.full_name;
+          });
+        }
+      }
 
       return (data || []).map(p => ({
         id: p.id,
