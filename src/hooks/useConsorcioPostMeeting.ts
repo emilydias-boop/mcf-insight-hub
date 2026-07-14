@@ -86,6 +86,7 @@ export interface Proposal {
   consortium_card_id: string | null;
   origin_id: string;
   created_at: string;
+  closer_name: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
 }
@@ -221,7 +222,7 @@ export function useProposals() {
           motivo_recusa,
           consortium_card_id,
           created_at,
-          crm_deals (name, origin_id, crm_contacts (name, phone, email))
+          crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
         .in('status', ['pendente', 'aceita'])
         .order('created_at', { ascending: false });
@@ -273,6 +274,16 @@ export function useProposals() {
         }
       }
 
+      // Fetch consorcio closers to map owner_id (email) -> closer name
+      const { data: consorcioClosers } = await supabase
+        .from('closers')
+        .select('name, email')
+        .eq('bu', 'consorcio');
+      const closerNameByEmail: Record<string, string> = {};
+      (consorcioClosers || []).forEach(c => {
+        if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
+      });
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -291,6 +302,11 @@ export function useProposals() {
         consortium_card_id: p.consortium_card_id,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
+        closer_name: (() => {
+          const ownerId = (p.crm_deals as any)?.owner_id;
+          if (!ownerId) return '';
+          return closerNameByEmail[String(ownerId).toLowerCase()] || ownerId;
+        })(),
         documentos_pendentes:
           p.status === 'aceita' &&
           !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&

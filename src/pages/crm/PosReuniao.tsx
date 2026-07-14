@@ -337,13 +337,26 @@ function RealizadasTab() {
 function PropostasTab() {
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'aceita' | 'documento-pendente'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [closerFilter, setCloserFilter] = useState('all');
+
+  const closerOptions = useMemo(() => {
+    const names = [...new Set(allPropostas.map(p => p.closer_name).filter(Boolean))];
+    return names.sort();
+  }, [allPropostas]);
+
   const propostas = useMemo(() => {
     let list = allPropostas.filter(p => !p.completa);
-    if (statusFilter === 'pendente') return list.filter(p => p.status === 'pendente');
-    if (statusFilter === 'aceita') return list.filter(p => p.status === 'aceita');
-    if (statusFilter === 'documento-pendente') return list.filter(p => p.documentos_pendentes);
+    if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
+    else if (statusFilter === 'aceita') list = list.filter(p => p.status === 'aceita');
+    else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
+    if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
+    }
     return list;
-  }, [allPropostas, statusFilter]);
+  }, [allPropostas, statusFilter, closerFilter, searchTerm]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -363,6 +376,26 @@ function PropostasTab() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <CardTitle className="text-base">Propostas Enviadas ({propostas.length})</CardTitle>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por contato..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 h-8"
+            />
+          </div>
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Closer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Closers</SelectItem>
+              {closerOptions.map(c => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
             <SelectTrigger className="w-[180px] h-8">
               <SelectValue placeholder="Status" />
@@ -389,6 +422,7 @@ function PropostasTab() {
               "Prazo (meses)": p.prazo_meses,
               "Produto": p.tipo_produto || '',
               "Status": p.status || '',
+              "Closer": p.closer_name || '',
             }));
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
@@ -412,6 +446,7 @@ function PropostasTab() {
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Closer</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -454,6 +489,7 @@ function PropostasTab() {
                       )}
                     </div>
                   </TableCell>
+                  <TableCell className="text-sm">{p.closer_name || '—'}</TableCell>
                   <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                     {p.status === 'pendente' && (
                       <>
