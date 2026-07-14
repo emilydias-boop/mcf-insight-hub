@@ -17,6 +17,8 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           created_at,
           meeting_type,
           notes,
+          meeting_link,
+          video_conference_link,
           booked_by,
           closer:closers!meeting_slots_closer_id_fkey(
             id,
@@ -70,6 +72,33 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         .order('scheduled_at', { ascending: true });
 
       if (meetingsError) throw meetingsError;
+
+      const closerIds = [
+        ...new Set(
+          (meetings || [])
+            .map(m => ((m as Record<string, unknown>).closer as { id?: string } | null)?.id)
+            .filter(Boolean) as string[]
+        ),
+      ];
+
+      let dailySlotLinkMap: Record<string, string> = {};
+      if (closerIds.length > 0) {
+        const { data: dailySlots, error: dailySlotsError } = await supabase
+          .from('r2_daily_slots')
+          .select('closer_id, slot_date, start_time, google_meet_link')
+          .in('closer_id', closerIds)
+          .gte('slot_date', format(startOfDay(startDate), 'yyyy-MM-dd'))
+          .lte('slot_date', format(endOfDay(endDate), 'yyyy-MM-dd'));
+
+        if (dailySlotsError) throw dailySlotsError;
+
+        dailySlotLinkMap = (dailySlots || []).reduce((acc, slot) => {
+          if (slot.google_meet_link) {
+            acc[`${slot.closer_id}|${slot.slot_date}|${slot.start_time.slice(0, 5)}`] = slot.google_meet_link;
+          }
+          return acc;
+        }, {} as Record<string, string>);
+      }
 
       // Fetch all status options
       const { data: statusOptions } = await supabase
@@ -235,6 +264,17 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         const meetingObj = meeting as Record<string, unknown>;
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
         const bookedById = meetingObj.booked_by as string | null;
+        const closerId = (meetingObj.closer as { id?: string } | null)?.id || null;
+        const scheduledDate = new Date(meetingObj.scheduled_at as string);
+        const scheduledDateKey = format(scheduledDate, 'yyyy-MM-dd');
+        const scheduledTimeKey = format(scheduledDate, 'HH:mm');
+        const dailySlotLink = closerId
+          ? dailySlotLinkMap[`${closerId}|${scheduledDateKey}|${scheduledTimeKey}`] || null
+          : null;
+        const resolvedMeetingLink =
+          (meetingObj.video_conference_link as string | null) ||
+          (meetingObj.meeting_link as string | null) ||
+          dailySlotLink;
 
         // Find SDR from R1 booked_by, fallback to deal.owner_id
         let sdr: { email: string; name: string | null } | null = null;
@@ -264,6 +304,8 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
 
         return {
           ...meetingObj,
+          meeting_link: (meetingObj.meeting_link as string | null) || resolvedMeetingLink,
+          video_conference_link: (meetingObj.video_conference_link as string | null) || resolvedMeetingLink,
           sdr,
           r1_closer: r1Closer,
           booked_by: bookedById ? profilesById[bookedById] || { id: bookedById, name: null } : null,
@@ -284,6 +326,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           
           return {
             ...att,
+            meeting_link: (att.meeting_link as string | null) || resolvedMeetingLink,
             // Map database column names to expected property names
             name: att.attendee_name as string | null,
             phone: att.attendee_phone as string | null,

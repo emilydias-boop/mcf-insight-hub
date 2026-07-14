@@ -136,6 +136,7 @@ export function R2MeetingDetailDrawer({
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
   const focusedSdr = attendee?.sdr || meeting.sdr || null;
   const focusedR1Closer = attendee?.r1_closer || meeting.r1_closer || null;
+  const meetingLink = attendee?.meeting_link || meeting.video_conference_link || meeting.meeting_link || null;
 
   const isAnamneseLead = (() => {
     if (!leadProfile) return false;
@@ -461,6 +462,25 @@ export function R2MeetingDetailDrawer({
                 <div>
                   <div className="text-sm text-muted-foreground">Closer R2</div>
                   <div className="font-medium">{meeting.closer?.name}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                <div className="min-w-0">
+                  <div className="text-sm text-muted-foreground">Link da reunião</div>
+                  {meetingLink ? (
+                    <a
+                      href={meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-primary hover:underline break-all"
+                    >
+                      {meetingLink}
+                    </a>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Sem link cadastrado</div>
+                  )}
                 </div>
               </div>
               

@@ -114,6 +114,8 @@ export interface R2MeetingRow {
   created_at: string;
   meeting_type: string;
   notes: string | null;
+  meeting_link?: string | null;
+  video_conference_link?: string | null;
   closer: {
     id: string;
     name: string;
