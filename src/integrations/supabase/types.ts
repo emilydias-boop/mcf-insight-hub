@@ -402,6 +402,9 @@ export type Database = {
       }
       ar_titulos: {
         Row: {
+          cobranca_stage: string | null
+          cobranca_stage_manual: boolean
+          cobranca_stage_updated_at: string | null
           created_at: string
           created_by: string | null
           customer_document: string | null
@@ -424,6 +427,9 @@ export type Database = {
           valor_total: number
         }
         Insert: {
+          cobranca_stage?: string | null
+          cobranca_stage_manual?: boolean
+          cobranca_stage_updated_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_document?: string | null
@@ -446,6 +452,9 @@ export type Database = {
           valor_total?: number
         }
         Update: {
+          cobranca_stage?: string | null
+          cobranca_stage_manual?: boolean
+          cobranca_stage_updated_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_document?: string | null
@@ -13699,6 +13708,7 @@ export type Database = {
         Returns: string
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
+      compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
