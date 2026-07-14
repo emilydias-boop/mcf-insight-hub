@@ -442,6 +442,7 @@ function PropostasTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Contato</TableHead>
+                <TableHead>Data Proposta</TableHead>
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
@@ -451,7 +452,12 @@ function PropostasTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {propostas.map(p => (
+              {propostas.map(p => {
+                const proposalDate = p.created_at ? new Date(p.created_at) : null;
+                const daysOverdue = proposalDate && p.documentos_pendentes
+                  ? Math.max(0, Math.floor((Date.now() - proposalDate.getTime()) / (1000 * 60 * 60 * 24)))
+                  : 0;
+                return (
                 <TableRow
                   key={p.id}
                   className={`cursor-pointer ${p.documentos_pendentes ? 'bg-destructive/10 hover:bg-destructive/20 border-l-4 border-l-destructive' : ''}`}
@@ -459,6 +465,23 @@ function PropostasTab() {
                 >
                   <TableCell className="font-medium">
                     {p.contact_name || p.deal_name}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {proposalDate ? (
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          {format(proposalDate, "dd/MM/yyyy", { locale: ptBR })}
+                        </span>
+                        {p.documentos_pendentes && daysOverdue > 0 && (
+                          <span
+                            className="animate-frantic-blink font-extrabold text-2xl leading-none text-destructive drop-shadow-sm"
+                            title={`Documentação pendente há ${daysOverdue} dia(s)`}
+                          >
+                            {daysOverdue}d
+                          </span>
+                        )}
+                      </div>
+                    ) : '—'}
                   </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
@@ -557,7 +580,8 @@ function PropostasTab() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         )}
