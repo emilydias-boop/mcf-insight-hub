@@ -469,9 +469,14 @@ function PropostasTab() {
                       </>
                     )}
                     {p.status === 'aceita' && !p.consortium_card_id && (
-                      <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
-                        <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
+                        </Button>
+                      </>
                     )}
                     {p.consortium_card_id && (
                       <>
