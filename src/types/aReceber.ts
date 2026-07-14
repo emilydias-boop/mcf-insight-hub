@@ -2,6 +2,13 @@ export type ArTituloTipo = 'integral' | 'parcelado' | 'pendente_lancamento';
 export type ArTituloStatus = 'aberto' | 'quitado' | 'cancelado';
 export type ArParcelaTipo = 'entrada' | 'parcela';
 export type ArParcelaStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelado';
+export type ArCobrancaStage = 'mes' | 'atraso' | 'judicial';
+
+export const AR_COBRANCA_STAGE_LABEL: Record<ArCobrancaStage, string> = {
+  mes: 'Cobrança do mês',
+  atraso: 'Cobrança em atraso',
+  judicial: 'Cobrança judicial',
+};
 
 export interface ArTitulo {
   id: string;
@@ -27,6 +34,13 @@ export interface ArTitulo {
   valor_pendente?: number;
   parcelas_pagas?: number;
   parcelas_total?: number;
+  cobranca_stage?: ArCobrancaStage | null;
+  cobranca_stage_manual?: boolean;
+  cobranca_stage_updated_at?: string | null;
+  // enriched (kanban)
+  stage_effective?: ArCobrancaStage;
+  proxima_parcela?: string | null;
+  dias_atraso?: number;
 }
 
 export interface ArParcela {
