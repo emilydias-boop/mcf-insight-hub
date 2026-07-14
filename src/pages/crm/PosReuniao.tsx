@@ -553,6 +553,16 @@ function PropostasTab() {
           />
         )}
 
+        {viewTarget && (
+          <ViewRegistrationDialog
+            open={!!viewTarget}
+            onOpenChange={o => !o && setViewTarget(null)}
+            proposalId={viewTarget.id}
+            consortiumCardId={viewTarget.consortium_card_id}
+            contactName={viewTarget.contact_name || viewTarget.deal_name}
+          />
+        )}
+
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
 
         <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
