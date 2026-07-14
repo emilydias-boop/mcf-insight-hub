@@ -19,6 +19,7 @@ import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
+import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
@@ -347,6 +348,7 @@ function PropostasTab() {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
+  const [viewTarget, setViewTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
   const excluir = useExcluirProposta();
@@ -474,6 +476,17 @@ function PropostasTab() {
                     {p.consortium_card_id && (
                       <>
                         <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="Cota já cadastrada"
+                        >
+                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
                           <FileText className="h-3 w-3 mr-1" /> Documentos
                         </Button>
@@ -537,6 +550,16 @@ function PropostasTab() {
             onOpenChange={o => !o && setUploadTarget(null)}
             cardId={uploadTarget.consortium_card_id}
             contactName={uploadTarget.contact_name || uploadTarget.deal_name}
+          />
+        )}
+
+        {viewTarget && (
+          <ViewRegistrationDialog
+            open={!!viewTarget}
+            onOpenChange={o => !o && setViewTarget(null)}
+            proposalId={viewTarget.id}
+            consortiumCardId={viewTarget.consortium_card_id}
+            contactName={viewTarget.contact_name || viewTarget.deal_name}
           />
         )}
 
