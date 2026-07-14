@@ -251,6 +251,51 @@ export function useDeleteArParcela() {
   });
 }
 
+// ============ COBRANÇA STAGE ============
+export function useUpdateCobrancaStage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tituloId, stage, motivo }: { tituloId: string; stage: ArCobrancaStage; motivo?: string }) => {
+      const { error } = await supabase
+        .from('ar_titulos' as any)
+        .update({
+          cobranca_stage: stage,
+          cobranca_stage_manual: true,
+          cobranca_stage_updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', tituloId);
+      if (error) throw error;
+      await supabase.from('ar_historico' as any).insert({
+        titulo_id: tituloId,
+        tipo: 'mudanca_stage',
+        descricao: motivo || `Stage alterado para ${stage}`,
+        metadata: { stage },
+      } as any);
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['ar-titulos'] });
+      qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
+    },
+  });
+}
+
+export function useRegistrarCobrancaContato() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tituloId, descricao }: { tituloId: string; descricao: string }) => {
+      const { error } = await supabase.from('ar_historico' as any).insert({
+        titulo_id: tituloId,
+        tipo: 'contato_cobranca',
+        descricao,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
+    },
+  });
+}
+
 // ============ HISTÓRICO ============
 export function useArHistorico(tituloId: string | null) {
   return useQuery({
