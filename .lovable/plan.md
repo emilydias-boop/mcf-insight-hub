@@ -1,47 +1,66 @@
-## Objetivo
-Permitir que o time consulte, dentro do próprio app, os emails de boas-vindas do consórcio disparados após o cadastro da cota. O log ficará na tela existente **Automações > Logs**, usando a tabela `automation_logs`.
+# Kanban de Cobrança — /financeiro/a-receber
 
-## O que muda
+Nova aba "Kanban Cobrança" na página A Receber, com pipeline visual de 3 colunas para gerenciar títulos em aberto. Cada título de `ar_titulos` fica em um stage; o grid atual passa a exibir um tag colorido indicando o stage.
 
-### 1. Enriquecer o disparo do email
-No hook `useCreatePendingRegistrations.ts`, ao invocar `brevo-send`, passar também:
-- `dealId: input.deal_id` (para vincular o log ao negócio)
-- `tags: ['consorcio_boas_vindas', 'pending_registration']` (já enviado hoje)
+## Stages
 
-Isso permite rastrear qual lead recebeu o email e abrir o card do negócio a partir do log.
+1. **Cobrança do mês** — títulos com parcelas pendentes vencendo no mês vigente (ainda não vencidas ou vencidas hoje).
+2. **Cobrança em atraso** — títulos com ao menos uma parcela vencida (data_vencimento < hoje) e não paga.
+3. **Cobrança judicial** — movido manualmente pelos advogados/financeiro; permanece nesta coluna até baixa ou cancelamento.
 
-### 2. Persistir envios na tabela `automation_logs`
-Alterar a edge function `supabase/functions/brevo-send/index.ts` para gravar um registro em `automation_logs` toda vez que for chamada:
-- Antes de enviar: insere registro com `status = 'pending'`.
-- Após sucesso da Brevo: atualiza para `status = 'sent'`, preenche `external_id` com o `messageId` da Brevo e `sent_at = now()`.
-- Em caso de erro: atualiza para `status = 'failed'` e preenche `error_message`.
-- Campos preenchidos:
-  - `channel = 'email'`
-  - `recipient = to`
-  - `deal_id = dealId` (quando informado)
-  - `content_sent = subject + htmlContent` (ou apenas `subject`, conforme prática atual)
-  - `metadata = { tags, senderEmail, senderName, subject }`
+Regra:
+- Stage 3 é sempre manual (persistido).
+- Stages 1 e 2 são calculados por data automaticamente, mas o usuário pode arrastar entre 1 e 2 (override manual persistido).
+- Títulos `quitado`/`cancelado` não aparecem no Kanban.
 
-A gravação será feita com cliente de service-role (`SUPABASE_SERVICE_ROLE_KEY`), garantindo que a edge function consiga inserir independentemente do usuário que disparou o cadastro.
+## Persistência
 
-### 3. Adicionar filtro por tag na consulta de logs
-Atualizar o hook `useAutomationLogs.ts` para aceitar um novo filtro opcional `tag`. A consulta filtrará registros cujo `metadata->tags` contenha a tag informada, permitindo por exemplo:
-- Ver todos os emails de boas-vindas do consórcio.
-- Ver todos os emails de qualquer automação/tag específica.
+Nova coluna em `ar_titulos`:
+- `cobranca_stage` text (`'mes' | 'atraso' | 'judicial'`) — nullable; quando null, stage é derivado por data.
+- `cobranca_stage_manual` boolean default false — indica se o usuário fixou manualmente (previne recomputo automático).
+- `cobranca_stage_updated_at` timestamptz.
 
-### 4. Melhorar a tela de logs
-Atualizar o componente `AutomationLogs.tsx` para:
-- Exibir um campo de filtro por tag (texto livre ou chip fixo "consorcio_boas_vindas").
-- Mostrar as tags do `metadata` na listagem, quando existirem.
-- Manter os filtros existentes (canal, status, fluxo, busca por destinatário).
+Função `public.compute_cobranca_stage(titulo_id uuid)` retorna o stage derivado (consulta `ar_parcelas`). Usada como fallback quando `cobranca_stage_manual = false`.
 
-### 5. Verificar permissões
-Confirmar que a tabela `automation_logs` já possui grants para `service_role` (ALL) e que as policies permitem leitura aos perfis adequados. Se necessário, ajustar RLS para que a tela de Automações continue exibindo os logs.
+## UI
+
+**Aba nova** em `src/pages/AReceber.tsx` (ou wrapper equivalente): `Listagem` | `Kanban Cobrança`.
+
+**Componente** `src/components/financeiro/aReceber/KanbanCobranca.tsx`:
+- 3 colunas com contador e soma de valor_pendente.
+- Cards com: cliente, produto, valor pendente, próxima parcela vencendo, dias em atraso (badge vermelho quando aplicável), responsável.
+- Drag-and-drop entre colunas (dnd-kit já usado no projeto).
+- Ações no card:
+  - **Baixar parcela** — abre modal existente de baixa (reuso do fluxo do A Receber).
+  - **Registrar contato** — mini-dialog que insere linha em `ar_historico` (`tipo = 'contato_cobranca'`).
+  - **Mover para judicial** — atalho que seta stage=judicial e loga em `ar_historico`.
+  - **Abrir detalhes** — abre o drawer atual do título.
+
+**Grid A Receber**: nova coluna "Stage" com badge colorido (azul=mês, âmbar=atraso, vermelho=judicial). Filtro por stage na barra de filtros.
+
+## Hooks / dados
+
+- `useCobrancaKanban()` — busca todos os títulos `status='aberto'` com enriquecimento de parcelas + stage efetivo.
+- `useUpdateCobrancaStage()` — grava `cobranca_stage`, `cobranca_stage_manual=true`, `cobranca_stage_updated_at`, e registra `ar_historico` com `tipo='mudanca_stage'`.
+- `useRegisterCobrancaContato()` — insere em `ar_historico`.
+- Reuso: `useMarkArParcelaPaga`, `useArHistorico`.
+
+## Migração (schema)
+
+```sql
+ALTER TABLE public.ar_titulos
+  ADD COLUMN cobranca_stage text CHECK (cobranca_stage IN ('mes','atraso','judicial')),
+  ADD COLUMN cobranca_stage_manual boolean NOT NULL DEFAULT false,
+  ADD COLUMN cobranca_stage_updated_at timestamptz;
+
+CREATE INDEX idx_ar_titulos_cobranca_stage ON public.ar_titulos(cobranca_stage) WHERE status = 'aberto';
+```
+Função SQL `compute_cobranca_stage` para derivação por data (usada em views/queries e no client).
+
+Sem novas tabelas → RLS/GRANTs existentes de `ar_titulos` cobrem os novos campos.
 
 ## Fora de escopo
-- Não criar nova tabela (reaproveita `automation_logs`).
-- Não alterar o template do email nem o fluxo de cadastro da cota.
-- Não enviar cópia (CC) para Emily/Antony.
 
-## Resultado esperado
-Após aprovado e implementado, toda vez que um SDR cadastrar os dados da cota, o envio do email de boas-vindas aparecerá em **Automações > Logs**, filtrável por tag `consorcio_boas_vindas`, com destinatário, status (enviado/falha), data/hora e link com o negócio.
+- Notificações automáticas por WhatsApp/email a partir do Kanban.
+- Régua de cobrança automatizada (será tratada em outro épico se necessário).
+- Alteração das regras de baixa financeira existentes.
