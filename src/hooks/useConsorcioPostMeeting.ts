@@ -86,6 +86,7 @@ export interface Proposal {
   consortium_card_id: string | null;
   origin_id: string;
   created_at: string;
+  closer_name: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
 }
