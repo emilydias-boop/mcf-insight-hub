@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { ArTitulo, ArParcela, ArHistorico, ArTituloStatus, ArParcelaStatus } from '@/types/aReceber';
+import type { ArTitulo, ArParcela, ArHistorico, ArTituloStatus, ArParcelaStatus, ArCobrancaStage } from '@/types/aReceber';
 
 // ============ TÍTULOS ============
 export interface ArTitulosFilters {
@@ -9,6 +9,7 @@ export interface ArTitulosFilters {
   product_code?: string;
   search?: string;
   responsavel_id?: string;
+  cobranca_stage?: ArCobrancaStage | 'todos';
 }
 
 export function useArTitulos(filters: ArTitulosFilters = {}) {
@@ -39,32 +40,76 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
       const ids = titulos.map(t => t.id);
       const { data: parcelas } = await supabase
         .from('ar_parcelas' as any)
-        .select('titulo_id,valor,valor_pago,status')
+        .select('titulo_id,valor,valor_pago,status,data_vencimento')
         .in('titulo_id', ids);
 
-      const map = new Map<string, { pago: number; pendente: number; qtdPagas: number; qtdTotal: number }>();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
+
+      type Agg = {
+        pago: number; pendente: number; qtdPagas: number; qtdTotal: number;
+        hasAtraso: boolean; hasMes: boolean;
+        proxima: string | null; diasAtraso: number;
+      };
+      const map = new Map<string, Agg>();
       (parcelas as any[] | null)?.forEach(p => {
-        const cur = map.get(p.titulo_id) || { pago: 0, pendente: 0, qtdPagas: 0, qtdTotal: 0 };
+        const cur = map.get(p.titulo_id) || {
+          pago: 0, pendente: 0, qtdPagas: 0, qtdTotal: 0,
+          hasAtraso: false, hasMes: false, proxima: null, diasAtraso: 0,
+        };
         cur.qtdTotal += 1;
         if (p.status === 'pago') {
           cur.pago += Number(p.valor_pago ?? p.valor ?? 0);
           cur.qtdPagas += 1;
         } else if (p.status !== 'cancelado') {
           cur.pendente += Number(p.valor ?? 0);
+          const dv = p.data_vencimento ? new Date(p.data_vencimento + 'T00:00:00') : null;
+          if (dv) {
+            const dvMonthKey = `${dv.getFullYear()}-${dv.getMonth()}`;
+            if (dv < today) {
+              cur.hasAtraso = true;
+              const dias = Math.floor((today.getTime() - dv.getTime()) / 86400000);
+              if (dias > cur.diasAtraso) cur.diasAtraso = dias;
+            } else if (dvMonthKey === monthKey) {
+              cur.hasMes = true;
+            }
+            if (!cur.proxima || dv < new Date(cur.proxima + 'T00:00:00')) {
+              cur.proxima = p.data_vencimento;
+            }
+          }
         }
         map.set(p.titulo_id, cur);
       });
 
-      return titulos.map(t => {
+      const enriched: ArTitulo[] = titulos.map(t => {
         const m = map.get(t.id);
+        let stageEffective: ArCobrancaStage;
+        if (t.cobranca_stage && t.cobranca_stage_manual) {
+          stageEffective = t.cobranca_stage;
+        } else if (t.cobranca_stage === 'judicial') {
+          stageEffective = 'judicial';
+        } else if (m?.hasAtraso) {
+          stageEffective = 'atraso';
+        } else {
+          stageEffective = 'mes';
+        }
         return {
           ...t,
           valor_pago: m?.pago ?? 0,
           valor_pendente: m?.pendente ?? Number(t.valor_total),
           parcelas_pagas: m?.qtdPagas ?? 0,
           parcelas_total: m?.qtdTotal ?? 0,
+          proxima_parcela: m?.proxima ?? null,
+          dias_atraso: m?.diasAtraso ?? 0,
+          stage_effective: stageEffective,
         };
       });
+
+      if (filters.cobranca_stage && filters.cobranca_stage !== 'todos') {
+        return enriched.filter(t => t.stage_effective === filters.cobranca_stage);
+      }
+      return enriched;
     },
   });
 }
