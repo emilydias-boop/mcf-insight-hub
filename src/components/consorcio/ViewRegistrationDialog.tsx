@@ -7,7 +7,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, FileText, ExternalLink } from 'lucide-react';
-import { useConsorcioDocuments } from '@/hooks/useConsorcioDocuments';
 import { TIPO_DOCUMENTO_OPTIONS } from '@/types/consorcio';
 
 interface Props {
@@ -51,7 +50,25 @@ export function ViewRegistrationDialog({ open, onOpenChange, proposalId, consort
   });
 
   const cardId = consortiumCardId || reg?.consortium_card_id || null;
-  const { data: documents = [] } = useConsorcioDocuments(open ? cardId : null);
+  const pendingId = reg?.id || null;
+
+  const { data: documents = [] } = useQuery({
+    queryKey: ['consorcio-view-documents', cardId, pendingId],
+    enabled: open && (!!cardId || !!pendingId),
+    queryFn: async () => {
+      let query = supabase.from('consortium_documents').select('*');
+      if (cardId && pendingId) {
+        query = query.or(`card_id.eq.${cardId},pending_registration_id.eq.${pendingId}`);
+      } else if (cardId) {
+        query = query.eq('card_id', cardId);
+      } else if (pendingId) {
+        query = query.eq('pending_registration_id', pendingId);
+      }
+      const { data, error } = await query.order('uploaded_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
 
   const tipoPessoa = reg?.tipo_pessoa as 'pf' | 'pj' | undefined;
 
