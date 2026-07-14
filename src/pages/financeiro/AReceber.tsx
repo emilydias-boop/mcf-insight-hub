@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Wallet, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
@@ -17,10 +18,12 @@ import {
   AR_TITULO_TIPO_LABEL,
   type ArTituloStatus,
   type ArTitulo,
+  type ArCobrancaStage,
 } from '@/types/aReceber';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
+import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -85,6 +88,7 @@ export default function AReceber() {
   const [tipo, setTipo] = useState<string>('todos');
   const [product, setProduct] = useState<string>('todos');
   const [responsavel, setResponsavel] = useState<string>('todos');
+  const [cobrancaStage, setCobrancaStage] = useState<string>('todos');
 
   const { data: titulos, isLoading } = useArTitulos({
     search: search || undefined,
@@ -92,6 +96,7 @@ export default function AReceber() {
     tipo: tipo === 'todos' ? undefined : tipo,
     product_code: product === 'todos' ? undefined : product,
     responsavel_id: responsavel === 'todos' ? undefined : responsavel,
+    cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
   });
 
   const { data: users } = useFinanceiroUsers();
@@ -136,6 +141,12 @@ export default function AReceber() {
         {isAdmin && <ArGestoresDialog />}
       </div>
 
+      <Tabs defaultValue="listagem" className="w-full">
+        <TabsList>
+          <TabsTrigger value="listagem">Listagem</TabsTrigger>
+          <TabsTrigger value="kanban">Kanban Cobrança</TabsTrigger>
+        </TabsList>
+        <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
@@ -158,7 +169,7 @@ export default function AReceber() {
 
       {/* Filtros */}
       <Card>
-        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar por cliente, e-mail, CPF…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
@@ -193,6 +204,15 @@ export default function AReceber() {
               {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={cobrancaStage} onValueChange={setCobrancaStage}>
+            <SelectTrigger><SelectValue placeholder="Stage cobrança" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os stages</SelectItem>
+              <SelectItem value="mes">Cobrança do mês</SelectItem>
+              <SelectItem value="atraso">Cobrança em atraso</SelectItem>
+              <SelectItem value="judicial">Cobrança judicial</SelectItem>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
@@ -220,6 +240,7 @@ export default function AReceber() {
                   <TableHead className="text-right">Saldo</TableHead>
                   <TableHead>Parcelas</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Cobrança</TableHead>
                   <TableHead>Responsável</TableHead>
                 </TableRow>
               </TableHeader>
@@ -272,6 +293,13 @@ export default function AReceber() {
                           : `${t.parcelas_pagas}/${t.parcelas_total}`}
                       </TableCell>
                       <TableCell><StatusBadge status={t.status} /></TableCell>
+                      <TableCell>
+                        {t.status === 'aberto' && t.stage_effective ? (
+                          <CobrancaStageBadge stage={t.stage_effective} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell onDoubleClick={(e) => e.stopPropagation()}>
                         <Select
                           value={t.responsavel_id ?? 'none'}
@@ -292,6 +320,11 @@ export default function AReceber() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="kanban" className="mt-4">
+          <KanbanCobranca />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
