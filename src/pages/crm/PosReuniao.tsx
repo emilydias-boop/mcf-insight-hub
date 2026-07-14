@@ -337,13 +337,26 @@ function RealizadasTab() {
 function PropostasTab() {
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'aceita' | 'documento-pendente'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [closerFilter, setCloserFilter] = useState('all');
+
+  const closerOptions = useMemo(() => {
+    const names = [...new Set(allPropostas.map(p => p.closer_name).filter(Boolean))];
+    return names.sort();
+  }, [allPropostas]);
+
   const propostas = useMemo(() => {
     let list = allPropostas.filter(p => !p.completa);
-    if (statusFilter === 'pendente') return list.filter(p => p.status === 'pendente');
-    if (statusFilter === 'aceita') return list.filter(p => p.status === 'aceita');
-    if (statusFilter === 'documento-pendente') return list.filter(p => p.documentos_pendentes);
+    if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
+    else if (statusFilter === 'aceita') list = list.filter(p => p.status === 'aceita');
+    else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
+    if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
+    }
     return list;
-  }, [allPropostas, statusFilter]);
+  }, [allPropostas, statusFilter, closerFilter, searchTerm]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
