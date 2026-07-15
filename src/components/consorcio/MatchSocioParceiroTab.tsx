@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,10 @@ import { toast } from 'sonner';
 import { useProposals, type Proposal } from '@/hooks/useConsorcioPostMeeting';
 import { ViewRegistrationDialog } from './ViewRegistrationDialog';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UploadRow {
   nome: string;
@@ -49,10 +53,79 @@ function nameScore(a: string, b: string): number {
 
 export function MatchSocioParceiroTab() {
   const { data: propostas = [], isLoading } = useProposals();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [rows, setRows] = useState<UploadRow[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [viewTarget, setViewTarget] = useState<Proposal | null>(null);
   const [filter, setFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
+  const [uploadMeta, setUploadMeta] = useState<{
+    id: string;
+    uploaded_by_name: string | null;
+    created_at: string;
+  } | null>(null);
+
+  // Load latest saved upload (shared across all users with CRM Consórcio access)
+  const { data: latestUpload } = useQuery({
+    queryKey: ['consorcio-match-upload-latest'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consorcio_match_uploads')
+        .select('id, file_name, uploaded_by, uploaded_by_name, row_count, rows, created_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
+
+  // Hydrate local state from the latest saved upload on first load
+  useEffect(() => {
+    if (latestUpload && !fileName) {
+      const savedRows = Array.isArray(latestUpload.rows)
+        ? (latestUpload.rows as unknown as UploadRow[])
+        : [];
+      setRows(savedRows);
+      setFileName(latestUpload.file_name);
+      setUploadMeta({
+        id: latestUpload.id,
+        uploaded_by_name: latestUpload.uploaded_by_name,
+        created_at: latestUpload.created_at,
+      });
+    }
+  }, [latestUpload, fileName]);
+
+  const saveUpload = useMutation({
+    mutationFn: async (payload: { fileName: string; parsed: UploadRow[] }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      const { data, error } = await supabase
+        .from('consorcio_match_uploads')
+        .insert({
+          file_name: payload.fileName,
+          uploaded_by: user.id,
+          uploaded_by_name: profile?.full_name || user.email || 'Desconhecido',
+          row_count: payload.parsed.length,
+          rows: payload.parsed as any,
+        })
+        .select('id, uploaded_by_name, created_at')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setUploadMeta(data as any);
+      queryClient.invalidateQueries({ queryKey: ['consorcio-match-upload-latest'] });
+      toast.success('Planilha salva — visível para todos com acesso ao CRM Consórcio.');
+    },
+    onError: (e: any) => toast.error('Erro ao salvar planilha: ' + (e?.message || e)),
+  });
 
   // Indexes for fast lookup
   const indexes = useMemo(() => {
@@ -154,6 +227,39 @@ export function MatchSocioParceiroTab() {
     }
   }
 
+  async function handleUploadAndSave(file: File) {
+    try {
+      const XLSX = await loadXLSX();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json: any[] = XLSX.utils.sheet_to_json(ws, { defval: null });
+      const parsed: UploadRow[] = json.map(r => {
+        const findKey = (keys: string[]) => {
+          const k = Object.keys(r).find(kk => keys.some(x => kk.toLowerCase().trim() === x));
+          return k ? r[k] : null;
+        };
+        const nome = findKey(['nome', 'name', 'contato']) ?? '';
+        const email = findKey(['email', 'e-mail']) ?? '';
+        const telefone = findKey(['telefone', 'phone', 'celular', 'whatsapp']) ?? '';
+        return {
+          nome: String(nome || '').trim(),
+          email: String(email || '').trim(),
+          telefone: String(telefone || '').trim(),
+        };
+      }).filter(r => r.nome || r.email || r.telefone);
+      if (!parsed.length) {
+        toast.error('Planilha vazia ou sem colunas Nome/Email/Telefone.');
+        return;
+      }
+      setRows(parsed);
+      setFileName(file.name);
+      await saveUpload.mutateAsync({ fileName: file.name, parsed });
+    } catch (e: any) {
+      toast.error('Erro ao ler planilha: ' + (e?.message || e));
+    }
+  }
+
   async function exportResults() {
     const XLSX = await loadXLSX();
     const data = results.map(r => ({
@@ -197,7 +303,7 @@ export function MatchSocioParceiroTab() {
               className="hidden"
               onChange={e => {
                 const f = e.target.files?.[0];
-                if (f) handleUpload(f);
+                if (f) handleUploadAndSave(f);
                 e.currentTarget.value = '';
               }}
             />
@@ -209,12 +315,18 @@ export function MatchSocioParceiroTab() {
             <span className="text-xs text-muted-foreground">
               <FileText className="h-3 w-3 inline mr-1" />
               {fileName}
+              {uploadMeta && (
+                <span className="ml-2">
+                  · enviado por <strong>{uploadMeta.uploaded_by_name || '—'}</strong> em{' '}
+                  {format(new Date(uploadMeta.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </span>
+              )}
             </span>
           )}
           {rows.length > 0 && (
             <>
-              <Button size="sm" variant="ghost" onClick={() => { setRows([]); setFileName(''); }}>
-                <Trash2 className="h-4 w-4 mr-1" /> Limpar
+              <Button size="sm" variant="ghost" onClick={() => { setRows([]); setFileName(''); setUploadMeta(null); }}>
+                <Trash2 className="h-4 w-4 mr-1" /> Limpar (local)
               </Button>
               <Button size="sm" variant="outline" onClick={exportResults}>
                 <Download className="h-4 w-4 mr-1" /> Exportar resultado
