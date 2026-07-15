@@ -18,7 +18,17 @@ import { useAuth } from '@/contexts/AuthContext';
 interface UploadRow {
   nome: string;
   email: string;
+  telefone: string;
+}
 
+type MatchQuality = 'phone' | 'email' | 'none';
+
+interface MatchResult extends UploadRow {
+  proposal: Proposal | null;
+  quality: MatchQuality;
+}
+
+const onlyDigits = (s: string) => (s || '').toString().replace(/\D/g, '');
 
 export function MatchSocioParceiroTab() {
   const { data: propostas = [], isLoading } = useProposals();
