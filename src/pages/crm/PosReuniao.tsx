@@ -378,7 +378,7 @@ function PropostasTab() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
-          <CardTitle className="text-base">Propostas Enviadas ({propostas.length})</CardTitle>
+          <CardTitle className="text-base">Cartas Negociadas ({propostas.length})</CardTitle>
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
