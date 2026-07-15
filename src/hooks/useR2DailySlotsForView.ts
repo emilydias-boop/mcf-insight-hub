@@ -15,8 +15,10 @@ export interface R2DailySlotsMap {
 }
 
 /**
- * Hook to fetch R2 daily slots for a range of dates and convert to a map
- * If no daily slots exist for a date, falls back to weekday-based slots from closer_meeting_links
+ * Hook to fetch R2 daily slots for a range of dates and convert to a map.
+ * Weekday slots remain available unless a closer has an explicit date schedule
+ * with at least one free/manual daily slot. Daily rows created only to mirror an
+ * already-booked meeting must not hide the closer's normal weekday agenda.
  */
 export function useR2DailySlotsForView(
   startDate: Date | undefined,
@@ -55,9 +57,6 @@ export function useR2DailySlotsForView(
         dailySlotsByDate[dateStr].push(slot);
       }
       
-      // Debug log - remove after confirming fix
-      console.log('[R2 Daily Slots] dailySlots count:', dailySlots?.length, 'keys:', Object.keys(dailySlotsByDate));
-
       // Fetch weekday-based slots for fallback (only for R2 closers)
       const weekdayQuery = supabase
         .from('closer_meeting_links')
@@ -73,6 +72,38 @@ export function useR2DailySlotsForView(
 
       if (weekdayError) throw weekdayError;
 
+      // Fetch booked R2 meetings so we can identify daily slots that were
+      // implicitly created by scheduling/confirming a lead. Those rows should
+      // not turn off the normal weekday fallback for that closer/date.
+      const meetingsQuery = supabase
+        .from('meeting_slots')
+        .select('closer_id, scheduled_at')
+        .eq('meeting_type', 'r2')
+        .gte('scheduled_at', startOfDay(startDate).toISOString())
+        .lte('scheduled_at', endOfDay(endDate).toISOString())
+        .in('status', ['scheduled', 'rescheduled']);
+
+      if (closerIds.length > 0) {
+        meetingsQuery.in('closer_id', closerIds);
+      }
+
+      const { data: bookedMeetings, error: bookedMeetingsError } = await meetingsQuery;
+
+      if (bookedMeetingsError) throw bookedMeetingsError;
+
+      const bookedTimesByCloserDate: Record<string, Set<string>> = {};
+      for (const meeting of bookedMeetings || []) {
+        if (!meeting.closer_id || !meeting.scheduled_at) continue;
+        const meetingDate = new Date(meeting.scheduled_at);
+        const dateStr = format(meetingDate, 'yyyy-MM-dd');
+        const time = format(meetingDate, 'HH:mm');
+        const key = `${dateStr}|${meeting.closer_id}`;
+        if (!bookedTimesByCloserDate[key]) {
+          bookedTimesByCloserDate[key] = new Set<string>();
+        }
+        bookedTimesByCloserDate[key].add(time);
+      }
+
       // Group weekday slots by day_of_week
       const weekdaySlotsByDay: Record<number, typeof weekdaySlots> = {};
       for (const slot of weekdaySlots || []) {
@@ -82,13 +113,23 @@ export function useR2DailySlotsForView(
         weekdaySlotsByDay[slot.day_of_week].push(slot);
       }
 
-      // Build the result map for each date.
-      // IMPORTANT: the "daily slots override weekday slots" decision must be
-      // made PER CLOSER — not per date. Otherwise, as soon as any single
-      // closer has a r2_daily_slots row for the date (ex.: created implicitly
-      // by scheduling a lead), the other closers lose the weekday fallback
-      // and their fixed schedule visually disappears from the "Por Sócio"
-      // grid.
+      const addSlotToResult = (
+        dateStr: string,
+        time: string,
+        closerId: string,
+        googleMeetLink: string | null,
+      ) => {
+        if (!result[dateStr][time]) {
+          result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
+        }
+        if (!result[dateStr][time].closerIds.includes(closerId)) {
+          result[dateStr][time].closerIds.push(closerId);
+        }
+        result[dateStr][time].meetLinks[closerId] = googleMeetLink;
+      };
+
+      // Build the result map for each date. The override decision is per closer
+      // and ignores daily rows that only mirror an already-booked meeting.
       for (const date of dates) {
         const dateStr = format(date, 'yyyy-MM-dd');
         result[dateStr] = {};
@@ -97,19 +138,31 @@ export function useR2DailySlotsForView(
         const dayOfWeek = date.getDay();
         const weekdaySlotsForDay = weekdaySlotsByDay[dayOfWeek] || [];
 
-        // Which closers have explicit daily slots for this date?
-        const closersWithDailySlots = new Set(
-          dailySlotsForDate.map(s => s.closer_id)
-        );
+        const dailySlotsByCloser: Record<string, typeof dailySlotsForDate> = {};
+        for (const slot of dailySlotsForDate) {
+          if (!dailySlotsByCloser[slot.closer_id]) {
+            dailySlotsByCloser[slot.closer_id] = [];
+          }
+          dailySlotsByCloser[slot.closer_id].push(slot);
+        }
+
+        // A closer has an explicit date schedule only when at least one daily
+        // slot is not simply the exact time of an existing booked meeting.
+        const closersWithExplicitDailySchedule = new Set<string>();
+        for (const [closerId, slots] of Object.entries(dailySlotsByCloser)) {
+          const bookedTimes = bookedTimesByCloserDate[`${dateStr}|${closerId}`] || new Set<string>();
+          const hasManualOrFreeDailySlot = slots.some(
+            slot => !bookedTimes.has(slot.start_time.slice(0, 5))
+          );
+          if (hasManualOrFreeDailySlot) {
+            closersWithExplicitDailySchedule.add(closerId);
+          }
+        }
 
         // 1) Daily slots take precedence for the closers that defined them.
         for (const slot of dailySlotsForDate) {
           const time = slot.start_time.slice(0, 5); // "HH:MM"
-          if (!result[dateStr][time]) {
-            result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
-          }
-          result[dateStr][time].closerIds.push(slot.closer_id);
-          result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
+          addSlotToResult(dateStr, time, slot.closer_id, slot.google_meet_link);
         }
 
         // 2) Weekday fallback ONLY for closers that don't have daily slots
@@ -117,15 +170,11 @@ export function useR2DailySlotsForView(
         const relevantWeekdaySlots = (closerIds.length > 0
           ? weekdaySlotsForDay.filter(s => closerIds.includes(s.closer_id))
           : weekdaySlotsForDay
-        ).filter(s => !closersWithDailySlots.has(s.closer_id));
+        ).filter(s => !closersWithExplicitDailySchedule.has(s.closer_id));
 
         for (const slot of relevantWeekdaySlots) {
           const time = slot.start_time.slice(0, 5);
-          if (!result[dateStr][time]) {
-            result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
-          }
-          result[dateStr][time].closerIds.push(slot.closer_id);
-          result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
+          addSlotToResult(dateStr, time, slot.closer_id, slot.google_meet_link);
         }
       }
 
