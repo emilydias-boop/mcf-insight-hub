@@ -89,6 +89,7 @@ export interface Proposal {
   closer_name: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
+  cadastro_completo?: boolean;
 }
 
 export interface SemSucessoDeal {
