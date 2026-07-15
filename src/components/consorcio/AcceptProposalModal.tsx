@@ -652,11 +652,32 @@ export function AcceptProposalModal({
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancelar
                   </Button>
-                  <Button type="submit" disabled={createRegistration.isPending}>
+                  <Button
+                    type="submit"
+                    disabled={createRegistration.isPending || !canSubmit}
+                    title={
+                      !checklistOk
+                        ? 'Preencha todos os campos do checklist antes de enviar'
+                        : !docsOk
+                          ? (tipoPessoa === 'pf'
+                              ? 'Anexe ao menos 1 documento (CNH/RG) antes de enviar'
+                              : 'Anexe Contrato Social, RG dos sócios e Cartão CNPJ antes de enviar')
+                          : undefined
+                    }
+                  >
                     {createRegistration.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Confirmar e Enviar para Controle Consórcio
                   </Button>
                 </div>
+                {!canSubmit && (
+                  <p className="text-xs text-destructive text-right">
+                    {!checklistOk
+                      ? 'Preencha todos os campos do checklist para habilitar o envio.'
+                      : (tipoPessoa === 'pf'
+                          ? 'Anexe ao menos 1 documento (CNH/RG) para habilitar o envio.'
+                          : 'Anexe Contrato Social, RG dos sócios e Cartão CNPJ para habilitar o envio.')}
+                  </p>
+                )}
               </form>
             </Form>
           </div>
