@@ -249,7 +249,7 @@ function RealizadasTab() {
                       <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
                       <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                         <Button size="sm" onClick={() => setProposalTarget(r)}>
-                          <Send className="h-3 w-3 mr-1" /> Proposta
+                          <Send className="h-3 w-3 mr-1" /> Lançar Carta
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
                           <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
