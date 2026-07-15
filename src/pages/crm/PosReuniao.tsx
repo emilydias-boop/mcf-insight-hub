@@ -40,7 +40,7 @@ export default function PosReuniao() {
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="realizadas">Realizadas</TabsTrigger>
+          <TabsTrigger value="realizadas">Reuniões Realizadas</TabsTrigger>
           <TabsTrigger value="propostas">Propostas</TabsTrigger>
           <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
