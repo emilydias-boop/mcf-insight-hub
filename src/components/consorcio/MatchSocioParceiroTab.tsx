@@ -84,7 +84,9 @@ export function MatchSocioParceiroTab() {
   // Hydrate local state from the latest saved upload on first load
   useEffect(() => {
     if (latestUpload && !fileName) {
-      const savedRows = Array.isArray(latestUpload.rows) ? latestUpload.rows as UploadRow[] : [];
+      const savedRows = Array.isArray(latestUpload.rows)
+        ? (latestUpload.rows as unknown as UploadRow[])
+        : [];
       setRows(savedRows);
       setFileName(latestUpload.file_name);
       setUploadMeta({
