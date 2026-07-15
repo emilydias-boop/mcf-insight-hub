@@ -5,7 +5,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Trophy } from "lucide-react";
+import { Trophy, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -136,6 +137,39 @@ export function WeekDetailDialog({ open, onOpenChange, weekIndex, start, end, me
 
   const bateu = metaSemana > 0 && total >= metaSemana;
 
+  const handleExportCSV = () => {
+    const header = ["Closer", "Cliente", "Data", "Valor"];
+    const lines = [header.join(";")];
+    grouped.forEach((g) => {
+      g.items
+        .slice()
+        .sort((a, b) => a.data.getTime() - b.data.getTime())
+        .forEach((r) => {
+          const clean = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
+          lines.push(
+            [
+              clean(g.name),
+              clean(r.dealName || ""),
+              format(r.data, "dd/MM/yyyy"),
+              String(r.valor).replace(".", ","),
+            ].join(";")
+          );
+        });
+      lines.push([`"${g.name} — Total"`, "", "", String(g.total).replace(".", ",")].join(";"));
+    });
+    lines.push([`"TOTAL GERAL"`, "", "", String(total).replace(".", ",")].join(";"));
+    const csv = "\uFEFF" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `semana-${weekIndex}-${format(start, "yyyy-MM-dd")}-a-${format(end, "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -150,6 +184,18 @@ export function WeekDetailDialog({ open, onOpenChange, weekIndex, start, end, me
             Meta {fmtBRL(metaSemana)} · Realizado <span className="font-semibold text-foreground">{fmtBRL(total)}</span>
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={isLoading || rows.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+        </div>
 
         <ScrollArea className="max-h-[60vh] pr-3">
           {isLoading ? (
