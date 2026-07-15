@@ -386,6 +386,10 @@ export function useProposals() {
           !!p.consortium_card_id &&
           ((p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) ||
             (p.deal_id && dealsWithDocs.has(p.deal_id))),
+        cadastro_completo:
+          p.status === 'aceita' &&
+          !!p.deal_id &&
+          hasCompletePendingRegistration(p.deal_id),
       })) as Proposal[];
     },
   });
