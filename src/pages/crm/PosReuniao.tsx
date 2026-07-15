@@ -555,7 +555,7 @@ function PropostasTab() {
                           disabled
                           title="Cota já cadastrada"
                         >
-                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
+                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
                           <FileText className="h-3 w-3 mr-1" /> Ver Dados
