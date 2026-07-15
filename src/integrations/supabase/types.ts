@@ -4000,6 +4000,36 @@ export type Database = {
           },
         ]
       }
+      consorcio_match_uploads: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          row_count: number
+          rows: Json
+          uploaded_by: string | null
+          uploaded_by_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          row_count?: number
+          rows?: Json
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          row_count?: number
+          rows?: Json
+          uploaded_by?: string | null
+          uploaded_by_name?: string | null
+        }
+        Relationships: []
+      }
       consorcio_objetivo_options: {
         Row: {
           created_at: string
