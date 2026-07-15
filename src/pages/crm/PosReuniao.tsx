@@ -406,7 +406,7 @@ function PropostasTab() {
             <SelectContent>
               <SelectItem value="all">Todos Status</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="aceita">Aceita</SelectItem>
+              <SelectItem value="aceita">Cadastrada</SelectItem>
               <SelectItem value="documento-pendente">Documento pendente</SelectItem>
             </SelectContent>
           </Select>
