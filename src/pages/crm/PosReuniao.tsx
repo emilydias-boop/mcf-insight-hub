@@ -523,7 +523,7 @@ function PropostasTab() {
                           size="sm"
                           onClick={() => setAcceptTarget(p)}
                         >
-                          <CheckCircle className="h-3 w-3 mr-1" /> Aceite
+                          <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(p)}>
                           <XCircle className="h-3 w-3 mr-1" /> Recusar
