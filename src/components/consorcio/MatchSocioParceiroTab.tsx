@@ -134,30 +134,9 @@ export function MatchSocioParceiroTab() {
       } else if (email && indexes.byEmail.has(email)) {
         p = indexes.byEmail.get(email)!;
         q = 'email';
-      } else if (r.nome) {
-        // fuzzy fallback by name
-        let best: { p: Proposal; s: number } | null = null;
-        for (const cand of propostas) {
-          const s = nameScore(r.nome, cand.contact_name || cand.deal_name || '');
-          if (s >= 0.6 && (!best || s > best.s)) best = { p: cand, s };
-        }
-        if (best) {
-          p = best.p;
-          q = 'name';
-        }
       }
 
-      let suggestions: Proposal[] | undefined;
-      if (!p && r.nome) {
-        suggestions = propostas
-          .map(cand => ({ cand, s: nameScore(r.nome, cand.contact_name || cand.deal_name || '') }))
-          .filter(x => x.s >= 0.3)
-          .sort((a, b) => b.s - a.s)
-          .slice(0, 3)
-          .map(x => x.cand);
-      }
-
-      return { ...r, proposal: p, quality: q, suggestions };
+      return { ...r, proposal: p, quality: q };
     });
   }, [rows, propostas, indexes]);
 
@@ -246,7 +225,7 @@ export function MatchSocioParceiroTab() {
       'Email (planilha)': r.email,
       'Telefone (planilha)': r.telefone,
       'Match': r.proposal ? 'Sim' : 'Não',
-      'Critério': r.quality === 'phone' ? 'Telefone' : r.quality === 'email' ? 'Email' : r.quality === 'name' ? 'Nome (sugestão)' : '',
+      'Critério': r.quality === 'phone' ? 'Telefone' : r.quality === 'email' ? 'Email' : '',
       'Contato CRM': r.proposal?.contact_name || r.proposal?.deal_name || '',
       'Email CRM': r.proposal?.contact_email || '',
       'Telefone CRM': r.proposal?.contact_phone || '',
@@ -254,9 +233,6 @@ export function MatchSocioParceiroTab() {
       'Closer': r.proposal?.closer_name || '',
       'Cota cadastrada': r.proposal?.consortium_card_id ? 'Sim' : 'Não',
       'Documentos pendentes': r.proposal?.documentos_pendentes ? 'Sim' : 'Não',
-      'Sugestões (nome)': !r.proposal && r.suggestions?.length
-        ? r.suggestions.map(s => s.contact_name || s.deal_name).filter(Boolean).join(' | ')
-        : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -270,7 +246,7 @@ export function MatchSocioParceiroTab() {
         <CardTitle className="text-base">Match sócio-parceiro no CRM Consórcio</CardTitle>
         <p className="text-xs text-muted-foreground">
           Carregue uma planilha com colunas <strong>Nome</strong>, <strong>Email</strong> e <strong>Telefone</strong>.
-          O sistema cruza com as propostas do CRM (telefone → email → sugestão por nome) e dá acesso direto ao checklist e documentos anexados.
+          O sistema cruza com as propostas do CRM apenas por telefone (últimos 9 dígitos) ou email e dá acesso direto ao checklist e documentos anexados.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -368,21 +344,6 @@ export function MatchSocioParceiroTab() {
                             {r.proposal.contact_email || ''} {r.proposal.contact_phone ? `· ${r.proposal.contact_phone}` : ''}
                           </span>
                         </div>
-                      ) : r.suggestions && r.suggestions.length > 0 ? (
-                        <div className="text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1 text-amber-700 mb-1">
-                            <AlertTriangle className="h-3 w-3" /> Sugestões:
-                          </div>
-                          {r.suggestions.map(s => (
-                            <button
-                              key={s.id}
-                              className="block text-left hover:underline text-primary"
-                              onClick={() => setViewTarget(s)}
-                            >
-                              • {s.contact_name || s.deal_name}
-                            </button>
-                          ))}
-                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -390,7 +351,6 @@ export function MatchSocioParceiroTab() {
                     <TableCell>
                       {r.quality === 'phone' && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Telefone</Badge>}
                       {r.quality === 'email' && <Badge className="bg-blue-100 text-blue-700 text-xs">Email</Badge>}
-                      {r.quality === 'name' && <Badge className="bg-amber-100 text-amber-800 text-xs">Nome (fuzzy)</Badge>}
                       {r.quality === 'none' && <Badge variant="outline" className="text-xs">Sem match</Badge>}
                     </TableCell>
                     <TableCell>
