@@ -406,7 +406,7 @@ function PropostasTab() {
             <SelectContent>
               <SelectItem value="all">Todos Status</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="aceita">Aceita</SelectItem>
+              <SelectItem value="aceita">Cadastrada</SelectItem>
               <SelectItem value="documento-pendente">Documento pendente</SelectItem>
             </SelectContent>
           </Select>
@@ -494,7 +494,7 @@ function PropostasTab() {
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">
                       <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
-                        {p.status}
+                        {p.status === 'aceita' ? 'Cadastrada' : p.status}
                       </Badge>
                       {p.documentos_pendentes && (
                         <Badge
