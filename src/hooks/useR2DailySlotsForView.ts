@@ -81,7 +81,7 @@ export function useR2DailySlotsForView(
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', startOfDay(startDate).toISOString())
         .lte('scheduled_at', endOfDay(endDate).toISOString())
-        .in('status', ['scheduled', 'rescheduled']);
+        .neq('status', 'canceled');
 
       if (closerIds.length > 0) {
         meetingsQuery.in('closer_id', closerIds);
