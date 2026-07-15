@@ -349,7 +349,7 @@ function PropostasTab() {
   }, [allPropostas]);
 
   const propostas = useMemo(() => {
-    let list = allPropostas.filter(p => !p.completa);
+    let list = allPropostas.filter(p => !p.completa && !p.cadastro_completo);
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'aceita') list = list.filter(p => p.status === 'aceita');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
