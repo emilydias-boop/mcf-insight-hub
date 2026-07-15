@@ -195,6 +195,22 @@ export function AcceptProposalModal({
     name: 'socios',
   });
 
+  // Validação: checklist preenchido + ao menos 1 documento anexado
+  const watched = form.watch();
+  const isFilled = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && v !== 0;
+  const checklistOk = tipoPessoa === 'pf'
+    ? ['nome_completo','rg','cpf','profissao','telefone','email','endereco_completo','endereco_cep','renda','patrimonio','pix']
+        .every((k) => isFilled((watched as any)[k]))
+    : ['razao_social','cnpj','natureza_juridica','inscricao_estadual','data_fundacao','telefone_comercial','email_comercial','endereco_comercial','endereco_comercial_cep','faturamento_mensal']
+        .every((k) => isFilled((watched as any)[k]))
+      && Array.isArray((watched as any).socios)
+      && (watched as any).socios.length > 0
+      && (watched as any).socios.every((s: any) => isFilled(s?.cpf));
+  const docsOk = tipoPessoa === 'pf'
+    ? pfDocuments.length > 0
+    : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
+  const canSubmit = checklistOk && docsOk;
+
   const handleCepLookup = useCallback(async (cep: string, prefix: string) => {
     const cleanCep = cep.replace(/\D/g, '');
     if (cleanCep.length !== 8) return;
