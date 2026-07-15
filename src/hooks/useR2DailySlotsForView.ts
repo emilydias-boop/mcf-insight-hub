@@ -82,42 +82,50 @@ export function useR2DailySlotsForView(
         weekdaySlotsByDay[slot.day_of_week].push(slot);
       }
 
-      // Build the result map for each date
+      // Build the result map for each date.
+      // IMPORTANT: the "daily slots override weekday slots" decision must be
+      // made PER CLOSER — not per date. Otherwise, as soon as any single
+      // closer has a r2_daily_slots row for the date (ex.: created implicitly
+      // by scheduling a lead), the other closers lose the weekday fallback
+      // and their fixed schedule visually disappears from the "Por Sócio"
+      // grid.
       for (const date of dates) {
         const dateStr = format(date, 'yyyy-MM-dd');
         result[dateStr] = {};
 
-        // Check if there are daily slots for this specific date
-        const dailySlotsForDate = dailySlotsByDate[dateStr];
+        const dailySlotsForDate = dailySlotsByDate[dateStr] || [];
+        const dayOfWeek = date.getDay();
+        const weekdaySlotsForDay = weekdaySlotsByDay[dayOfWeek] || [];
 
-        if (dailySlotsForDate && dailySlotsForDate.length > 0) {
-          // Use daily slots
-          for (const slot of dailySlotsForDate) {
-            const time = slot.start_time.slice(0, 5); // "HH:MM"
-            if (!result[dateStr][time]) {
-              result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
-            }
-            result[dateStr][time].closerIds.push(slot.closer_id);
-            result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
-          }
-        } else {
-          // Fallback to weekday slots
-          const dayOfWeek = date.getDay();
-          const weekdaySlotsForDay = weekdaySlotsByDay[dayOfWeek] || [];
-          
-          // Filter by R2 closers if provided
-          const relevantSlots = closerIds.length > 0
-            ? weekdaySlotsForDay.filter(s => closerIds.includes(s.closer_id))
-            : weekdaySlotsForDay;
+        // Which closers have explicit daily slots for this date?
+        const closersWithDailySlots = new Set(
+          dailySlotsForDate.map(s => s.closer_id)
+        );
 
-          for (const slot of relevantSlots) {
-            const time = slot.start_time.slice(0, 5);
-            if (!result[dateStr][time]) {
-              result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
-            }
-            result[dateStr][time].closerIds.push(slot.closer_id);
-            result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
+        // 1) Daily slots take precedence for the closers that defined them.
+        for (const slot of dailySlotsForDate) {
+          const time = slot.start_time.slice(0, 5); // "HH:MM"
+          if (!result[dateStr][time]) {
+            result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
           }
+          result[dateStr][time].closerIds.push(slot.closer_id);
+          result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
+        }
+
+        // 2) Weekday fallback ONLY for closers that don't have daily slots
+        //    on this date. Also respect the R2 closerIds filter when provided.
+        const relevantWeekdaySlots = (closerIds.length > 0
+          ? weekdaySlotsForDay.filter(s => closerIds.includes(s.closer_id))
+          : weekdaySlotsForDay
+        ).filter(s => !closersWithDailySlots.has(s.closer_id));
+
+        for (const slot of relevantWeekdaySlots) {
+          const time = slot.start_time.slice(0, 5);
+          if (!result[dateStr][time]) {
+            result[dateStr][time] = { time, closerIds: [], meetLinks: {} };
+          }
+          result[dateStr][time].closerIds.push(slot.closer_id);
+          result[dateStr][time].meetLinks[slot.closer_id] = slot.google_meet_link;
         }
       }
 
