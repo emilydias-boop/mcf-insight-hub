@@ -20,6 +20,7 @@ import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal'
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
+import { MatchSocioParceiroTab } from '@/components/consorcio/MatchSocioParceiroTab';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
@@ -44,6 +45,7 @@ export default function PosReuniao() {
           <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
+          <TabsTrigger value="match-socio">Match sócio-parceiro</TabsTrigger>
         </TabsList>
 
         <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
@@ -51,6 +53,7 @@ export default function PosReuniao() {
         <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
         <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
+        <TabsContent value="match-socio"><MatchSocioParceiroTab /></TabsContent>
       </Tabs>
     </div>
   );
