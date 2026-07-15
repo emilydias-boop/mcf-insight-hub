@@ -42,7 +42,7 @@ export default function PosReuniao() {
         <TabsList>
           <TabsTrigger value="realizadas">Reuniões Realizadas</TabsTrigger>
           <TabsTrigger value="propostas">Cartas Negociadas</TabsTrigger>
-          <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
+          <TabsTrigger value="concluidas">Concluídas - Operacional</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
           <TabsTrigger value="match-socio">Match sócio-parceiro</TabsTrigger>
@@ -697,7 +697,10 @@ function SemSucessoTab() {
 // ─── Concluídas Tab ──────────────────────────────────────────
 function ConcluidasTab() {
   const { data: allPropostas = [], isLoading } = useProposals();
-  const propostas = useMemo(() => allPropostas.filter(p => p.completa), [allPropostas]);
+  const propostas = useMemo(
+    () => allPropostas.filter(p => p.completa || p.cadastro_completo),
+    [allPropostas]
+  );
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
@@ -710,7 +713,7 @@ function ConcluidasTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Propostas Concluídas ({propostas.length})</CardTitle>
+        <CardTitle className="text-base">Concluídas - Operacional ({propostas.length})</CardTitle>
       </CardHeader>
       <CardContent>
         {propostas.length === 0 ? (
