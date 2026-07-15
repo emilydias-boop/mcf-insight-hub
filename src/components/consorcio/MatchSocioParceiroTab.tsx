@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, FileText, Download, Trash2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, Download, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { loadXLSX } from '@/lib/lazyExport';
 import { toast } from 'sonner';
 import { useProposals, type Proposal } from '@/hooks/useConsorcioPostMeeting';
@@ -18,38 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 interface UploadRow {
   nome: string;
   email: string;
-  telefone: string;
-}
 
-type MatchQuality = 'phone' | 'email' | 'name' | 'none';
-
-interface MatchResult extends UploadRow {
-  proposal: Proposal | null;
-  quality: MatchQuality;
-  suggestions?: Proposal[]; // used when quality === 'none'
-  score?: number; // for name matches
-}
-
-const onlyDigits = (s: string) => (s || '').toString().replace(/\D/g, '');
-
-const normalizeName = (s: string) =>
-  (s || '')
-    .toString()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-function nameScore(a: string, b: string): number {
-  const A = new Set(normalizeName(a).split(' ').filter(w => w.length >= 3));
-  const B = new Set(normalizeName(b).split(' ').filter(w => w.length >= 3));
-  if (!A.size || !B.size) return 0;
-  let inter = 0;
-  A.forEach(w => { if (B.has(w)) inter++; });
-  return inter / Math.min(A.size, B.size);
-}
 
 export function MatchSocioParceiroTab() {
   const { data: propostas = [], isLoading } = useProposals();
