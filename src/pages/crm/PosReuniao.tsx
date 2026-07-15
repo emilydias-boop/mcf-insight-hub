@@ -532,8 +532,14 @@ function PropostasTab() {
                     )}
                     {p.status === 'aceita' && !p.consortium_card_id && (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => setAcceptTarget(p)}>
-                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={p.cadastro_completo}
+                          title={p.cadastro_completo ? 'Cadastro já preenchido e documento anexado' : undefined}
+                          onClick={() => setAcceptTarget(p)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
                           <FileText className="h-3 w-3 mr-1" /> Ver Dados
@@ -549,7 +555,7 @@ function PropostasTab() {
                           disabled
                           title="Cota já cadastrada"
                         >
-                          <FileText className="h-3 w-3 mr-1" /> Cadastrar Cota
+                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
                           <FileText className="h-3 w-3 mr-1" /> Ver Dados

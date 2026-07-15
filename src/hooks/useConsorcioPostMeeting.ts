@@ -89,6 +89,7 @@ export interface Proposal {
   closer_name: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
+  cadastro_completo?: boolean;
 }
 
 export interface SemSucessoDeal {
@@ -250,14 +251,35 @@ export function useProposals() {
         .map(p => p.deal_id)
         .filter(Boolean) as string[];
       const dealsWithDocs = new Set<string>();
+      const pendingRegistrationsByDeal: Record<string, any[]> = {};
       if (dealIds.length > 0) {
         const { data: pendingRegs } = await supabase
           .from('consorcio_pending_registrations')
-          .select('id, deal_id')
+          .select(`
+            id,
+            deal_id,
+            tipo_pessoa,
+            nome_completo,
+            razao_social,
+            cpf,
+            cnpj,
+            telefone,
+            telefone_comercial,
+            email,
+            email_comercial,
+            endereco_completo,
+            endereco_comercial,
+            renda,
+            faturamento_mensal
+          `)
           .in('deal_id', dealIds);
         const pendingIdToDeal = new Map<string, string>();
         (pendingRegs || []).forEach(pr => {
           if (pr.id && pr.deal_id) pendingIdToDeal.set(pr.id, pr.deal_id);
+          if (pr.deal_id) {
+            if (!pendingRegistrationsByDeal[pr.deal_id]) pendingRegistrationsByDeal[pr.deal_id] = [];
+            pendingRegistrationsByDeal[pr.deal_id].push(pr);
+          }
         });
         const pendingIds = Array.from(pendingIdToDeal.keys());
         if (pendingIds.length > 0) {
@@ -273,6 +295,33 @@ export function useProposals() {
           });
         }
       }
+
+      // Helper: pending registration has checklist filled and documents attached
+      const hasCompletePendingRegistration = (dealId: string) => {
+        const regs = pendingRegistrationsByDeal[dealId] || [];
+        return regs.some(pr => {
+          const hasDocs = dealsWithDocs.has(dealId);
+          if (!hasDocs) return false;
+          if (pr.tipo_pessoa === 'pj') {
+            return !!(
+              pr.razao_social &&
+              pr.cnpj &&
+              pr.telefone_comercial &&
+              pr.email_comercial &&
+              pr.endereco_comercial &&
+              pr.faturamento_mensal
+            );
+          }
+          return !!(
+            pr.nome_completo &&
+            pr.cpf &&
+            pr.telefone &&
+            pr.email &&
+            pr.endereco_completo &&
+            pr.renda
+          );
+        });
+      };
 
       // Map owner_id (email) -> closer/profile name.
       // Não filtramos por bu porque o owner pode ser closer de outra BU
@@ -337,6 +386,10 @@ export function useProposals() {
           !!p.consortium_card_id &&
           ((p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) ||
             (p.deal_id && dealsWithDocs.has(p.deal_id))),
+        cadastro_completo:
+          p.status === 'aceita' &&
+          !!p.deal_id &&
+          hasCompletePendingRegistration(p.deal_id),
       })) as Proposal[];
     },
   });
