@@ -494,7 +494,7 @@ function PropostasTab() {
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">
                       <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
-                        {p.status}
+                        {p.status === 'aceita' ? 'Cadastrada' : p.status}
                       </Badge>
                       {p.documentos_pendentes && (
                         <Badge
