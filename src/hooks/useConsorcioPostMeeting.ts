@@ -393,6 +393,7 @@ export function useProposals() {
           if (!ownerId) return '';
           return closerNameByEmail[String(ownerId).toLowerCase()] || ownerId;
         })(),
+        owner_id: (p.crm_deals as any)?.owner_id || '',
         documentos_pendentes:
           p.status === 'aceita' &&
           !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&
