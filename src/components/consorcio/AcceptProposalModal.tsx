@@ -150,7 +150,7 @@ export function AcceptProposalModal({
     queryFn: async () => {
       const { data } = await supabase
         .from('consorcio_proposals')
-        .select('valor_credito, prazo_meses')
+        .select('valor_credito, prazo_meses, proposal_details')
         .eq('id', proposalId)
         .maybeSingle();
       return data;
@@ -285,6 +285,7 @@ export function AcceptProposalModal({
       parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
       valor_credito: proposal?.valor_credito ? Number(proposal.valor_credito) : undefined,
       prazo_meses: proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined,
+      observacoes: proposal?.proposal_details?.trim() || undefined,
       ...cleanData,
     });
 
