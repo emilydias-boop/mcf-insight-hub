@@ -145,14 +145,14 @@ export interface EnrichedPendingRegistration {
   total_destinado: number;
 }
 
-export function usePendingRegistrations() {
+export function usePendingRegistrations(statuses: string[] = ['aguardando_abertura']) {
   return useQuery({
-    queryKey: ['consorcio-pending-registrations'],
+    queryKey: ['consorcio-pending-registrations', statuses.slice().sort().join(',')],
     queryFn: async (): Promise<EnrichedPendingRegistration[]> => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
         .select(PENDING_REGISTRATION_LIST_SELECT)
-        .in('status', ['aguardando_abertura'])
+        .in('status', statuses)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
