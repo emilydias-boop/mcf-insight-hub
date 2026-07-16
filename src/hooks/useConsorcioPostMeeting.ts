@@ -47,6 +47,9 @@ export interface CompletedMeeting {
   region: string;
   renda: string;
   closer_notes?: string;
+  cadastro_completo?: boolean;
+  completa?: boolean;
+  has_proposal?: boolean;
 }
 
 export interface AllMeetingDeal {
@@ -131,18 +134,26 @@ export function useRealizadas() {
 
       if (error) throw error;
 
-      // Exclude deals that already have a proposal
+      // Fetch proposals + pending registration status to flag completed deals (kept in list, marked green)
       const dealIds = (data || []).map(d => d.id);
-      let proposalDealIds: string[] = [];
+      const proposalStatusByDeal: Record<string, { completa: boolean; cadastro_completo: boolean; has_proposal: boolean }> = {};
       if (dealIds.length > 0) {
         const { data: proposals } = await supabase
           .from('consorcio_proposals')
-          .select('deal_id')
+          .select('deal_id, completa, cadastro_completo')
           .in('deal_id', dealIds);
-        proposalDealIds = (proposals || []).map(p => p.deal_id).filter(Boolean) as string[];
+        (proposals || []).forEach((p: any) => {
+          if (!p.deal_id) return;
+          const prev = proposalStatusByDeal[p.deal_id];
+          proposalStatusByDeal[p.deal_id] = {
+            has_proposal: true,
+            completa: !!(prev?.completa || p.completa),
+            cadastro_completo: !!(prev?.cadastro_completo || p.cadastro_completo),
+          };
+        });
       }
 
-      const filteredDeals = (data || []).filter(d => !proposalDealIds.includes(d.id));
+      const filteredDeals = data || [];
 
       // Fetch meeting dates for these deals
       const filteredDealIds = filteredDeals.map(d => d.id);
@@ -182,6 +193,7 @@ export function useRealizadas() {
 
       return consorcioDeals.map(d => {
         const cf = (d.custom_fields as any) || {};
+        const status = proposalStatusByDeal[d.id];
         return {
           deal_id: d.id,
           deal_name: d.name || '',
@@ -197,6 +209,9 @@ export function useRealizadas() {
           meeting_date: meetingByDeal[d.id] || '',
           region: cf.estado || '',
           renda: cf.faixa_de_renda || '',
+          has_proposal: !!status?.has_proposal,
+          completa: !!status?.completa,
+          cadastro_completo: !!status?.cadastro_completo,
         };
       }) as CompletedMeeting[];
     },

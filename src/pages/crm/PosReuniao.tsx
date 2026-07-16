@@ -225,10 +225,25 @@ function RealizadasTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedData.map(r => (
-                    <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
+                  {paginatedData.map(r => {
+                    const isCadastrado = !!(r.cadastro_completo || r.completa);
+                    return (
+                    <TableRow
+                      key={r.deal_id}
+                      className={cn(
+                        isCadastrado
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/15 cursor-not-allowed'
+                          : 'cursor-pointer'
+                      )}
+                      onClick={() => { if (!isCadastrado) setSelectedDealId(r.deal_id); }}
+                    >
                       <TableCell className="font-medium">
-                        {r.contact_name || r.deal_name}
+                        <div className="flex items-center gap-2">
+                          <span>{r.contact_name || r.deal_name}</span>
+                          {isCadastrado && (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px]">Cadastrada</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
                       <TableCell>
@@ -248,15 +263,16 @@ function RealizadasTab() {
                       <TableCell className="text-sm">{r.renda || '—'}</TableCell>
                       <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
                       <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
-                        <Button size="sm" onClick={() => setProposalTarget(r)}>
+                        <Button size="sm" disabled={isCadastrado} onClick={() => setProposalTarget(r)}>
                           <Send className="h-3 w-3 mr-1" /> Lançar Carta
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(r)}>
+                        <Button size="sm" variant="destructive" disabled={isCadastrado} onClick={() => setSemSucessoTarget(r)}>
                           <XCircle className="h-3 w-3 mr-1" /> Sem Sucesso
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
