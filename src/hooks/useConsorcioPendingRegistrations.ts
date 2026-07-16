@@ -145,14 +145,14 @@ export interface EnrichedPendingRegistration {
   total_destinado: number;
 }
 
-export function usePendingRegistrations() {
+export function usePendingRegistrations(statuses: string[] = ['aguardando_abertura']) {
   return useQuery({
-    queryKey: ['consorcio-pending-registrations'],
+    queryKey: ['consorcio-pending-registrations', statuses.slice().sort().join(',')],
     queryFn: async (): Promise<EnrichedPendingRegistration[]> => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
         .select(PENDING_REGISTRATION_LIST_SELECT)
-        .in('status', ['aguardando_abertura'])
+        .in('status', statuses)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -537,6 +537,44 @@ export function useDeletePendingRegistration() {
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
+  });
+}
+
+/** Marcar cadastro pendente como "Cadastrada" (move para aba Cadastradas). */
+export function useMarkPendingAsCadastrada() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({ status: 'cadastrada' } as any)
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro movido para "Cadastradas"');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro ao marcar como cadastrada: ' + e.message),
+  });
+}
+
+/** Reverter "Cadastrada" para "Aguardando abertura". */
+export function useUnmarkPendingCadastrada() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({ status: 'aguardando_abertura' } as any)
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro devolvido para pendentes');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro: ' + e.message),
   });
 }
 
