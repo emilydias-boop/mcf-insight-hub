@@ -93,6 +93,7 @@ export interface Proposal {
   documentos_pendentes?: boolean;
   completa?: boolean;
   cadastro_completo?: boolean;
+  owner_id?: string;
 }
 
 export interface SemSucessoDeal {
