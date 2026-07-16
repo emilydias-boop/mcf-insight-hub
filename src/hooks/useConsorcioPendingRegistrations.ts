@@ -347,6 +347,7 @@ export interface CreatePendingRegistrationInput {
   parcelas_pagas_empresa?: number;
   valor_credito?: number;
   prazo_meses?: number;
+  observacoes?: string;
   // PF
   nome_completo?: string;
   rg?: string;
