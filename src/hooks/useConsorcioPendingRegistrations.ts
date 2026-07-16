@@ -540,6 +540,44 @@ export function useDeletePendingRegistration() {
   });
 }
 
+/** Marcar cadastro pendente como "Cadastrada" (move para aba Cadastradas). */
+export function useMarkPendingAsCadastrada() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({ status: 'cadastrada' } as any)
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro movido para "Cadastradas"');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro ao marcar como cadastrada: ' + e.message),
+  });
+}
+
+/** Reverter "Cadastrada" para "Aguardando abertura". */
+export function useUnmarkPendingCadastrada() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({ status: 'aguardando_abertura' } as any)
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Cadastro devolvido para pendentes');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+    },
+    onError: (e: any) => toast.error('Erro: ' + e.message),
+  });
+}
+
 /** Vincular um cadastro pendente a uma cota já existente (migra documentos). */
 export function useLinkPendingToCard() {
   const queryClient = useQueryClient();
