@@ -6,6 +6,7 @@ import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
 import { QuickDialerLauncher } from "@/components/crm/QuickDialerLauncher";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
+import { CloserPendingDocsAlert } from "@/components/closer/CloserPendingDocsAlert";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
 import { DialerLauncherProvider } from "@/contexts/DialerLauncherContext";
@@ -68,6 +69,7 @@ export function MainLayout() {
             </>
           )}
           <OverdueAlertOverlay />
+          <CloserPendingDocsAlert />
           <GlobalQualificationModal />
         </div>
         </DialerLauncherProvider>
