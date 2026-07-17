@@ -132,17 +132,6 @@ export function SdrSummaryTable({
               const bateuMeta = row.agendamentos >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
-              const taxaContrato = row.r1Realizada > 0 
-                ? ((row.contratos / row.r1Realizada) * 100)
-                : 0;
-              const taxaContratoFormatted = taxaContrato.toFixed(1);
-
-              const taxaContratoColorClass = taxaContrato >= 20 
-                ? 'text-green-400' 
-                : taxaContrato >= 10 
-                  ? 'text-amber-400' 
-                  : 'text-red-400';
-
               const contratosLiquidos = row.contratos - (row.reembolsos || 0);
               const taxaLiquida = row.r1Realizada > 0
                 ? (contratosLiquidos / row.r1Realizada) * 100
