@@ -48,8 +48,7 @@ export function SdrSummaryTable({
   const [searchParams] = useSearchParams();
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const contratoLabel = isConsorcio ? 'Propostas Fechadas' : 'Contrato PAGO';
-  const taxaLabel = isConsorcio ? 'Taxa Proposta' : 'Taxa Contrato';
-  const taxaLiquidaLabel = isConsorcio ? 'Taxa Proposta - Reembolso' : 'Taxa Contrato - Reembolso';
+  const taxaLiquidaLabel = isConsorcio ? 'Taxa Conv. Proposta' : 'Taxa Conv. Contrato';
 
   const handleRowClick = (sdrEmail: string) => {
     const params = new URLSearchParams(searchParams);
