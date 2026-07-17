@@ -28,6 +28,7 @@ import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { useSdrRefundsInPeriod } from "@/hooks/useSdrRefundsInPeriod";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
