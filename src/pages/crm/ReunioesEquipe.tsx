@@ -954,7 +954,7 @@ export default function ReunioesEquipe() {
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
             <SdrSummaryTable
-              data={filteredBySDR}
+              data={filteredBySDRWithRefunds}
               isLoading={isLoading}
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
