@@ -29,6 +29,7 @@ export interface SdrSummaryRow {
   semStatus?: number;        // invited/rescheduled/sem_sucesso (cap 2/lead)
   pendentes?: number;        // R1 Agendada - Realizadas - No-Shows (vindo do RPC)
   contratos: number;         // Contratos pagos no período
+  reembolsos?: number;       // Reembolsos atribuídos ao SDR do R1 mais recente
   isExSquad?: boolean;       // SDR pertencia ao squad no período mas hoje está em outro
   currentSquad?: string | null;
 }

@@ -28,6 +28,7 @@ import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { useSdrRefundsInPeriod } from "@/hooks/useSdrRefundsInPeriod";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -517,6 +518,7 @@ export default function ReunioesEquipe() {
   }, [allSdrsWithZeros, bySDR]);
 
   // Filter bySDR based on sdrFilter and datePreset
+  const { data: sdrRefundsMap } = useSdrRefundsInPeriod(start, end);
   const filteredBySDR = useMemo(() => {
     // Use merged data (all SDRs) for "today", otherwise use real data only
     const baseData = datePreset === "today" ? mergedBySDR : bySDR;
@@ -538,6 +540,15 @@ export default function ReunioesEquipe() {
     if (sdrFilter === "all") return restricted;
     return restricted.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
+
+  // Anexa reembolsos atribuídos a cada SDR (via R1 mais recente do deal reembolsado)
+  const filteredBySDRWithRefunds = useMemo(() => {
+    if (!sdrRefundsMap) return filteredBySDR;
+    return filteredBySDR.map((row) => ({
+      ...row,
+      reembolsos: sdrRefundsMap.get((row.sdrEmail || '').toLowerCase()) || 0,
+    }));
+  }, [filteredBySDR, sdrRefundsMap]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -943,7 +954,7 @@ export default function ReunioesEquipe() {
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
             <SdrSummaryTable
-              data={filteredBySDR}
+              data={filteredBySDRWithRefunds}
               isLoading={isLoading}
               disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}

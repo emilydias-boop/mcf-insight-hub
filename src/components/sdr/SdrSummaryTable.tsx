@@ -20,6 +20,7 @@ export interface SdrSummaryTotalsOverride {
   r1Realizada: number;
   noShows: number;
   contratos: number;
+  reembolsos?: number;
 }
 
 interface SdrSummaryTableProps {
@@ -79,8 +80,9 @@ export function SdrSummaryTable({
         r1Realizada: acc.r1Realizada + row.r1Realizada,
         noShows: acc.noShows + row.noShows,
         contratos: acc.contratos + row.contratos,
+        reembolsos: acc.reembolsos + (row.reembolsos || 0),
       }),
-      { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 }
+      { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0, reembolsos: 0 }
     );
 
     if (totaisOverride) {
@@ -90,6 +92,7 @@ export function SdrSummaryTable({
         r1Realizada: totaisOverride.r1Realizada,
         noShows: totaisOverride.noShows,
         contratos: totaisOverride.contratos,
+        reembolsos: computed.reembolsos,
       };
     }
     return computed;
@@ -132,6 +135,7 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
@@ -231,6 +235,11 @@ export function SdrSummaryTable({
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
                   </TableCell>
                   <TableCell className="text-center">
+                    <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                      {row.reembolsos || 0}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-xs text-muted-foreground font-medium">
                         #{taxaContratoRanking.get(row.sdrEmail)}
@@ -298,6 +307,11 @@ export function SdrSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contratos}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={`${(totals.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                  {totals.reembolsos || 0}
+                </span>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${
