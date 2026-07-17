@@ -49,17 +49,37 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
         .in('deal_id', ids)
         .eq('meeting_slot.meeting_type', 'r1');
 
-      const bookedByDeal = new Map<string, { email: string; ts: number }>();
+      // booked_by é UUID (auth.users.id) — precisamos resolver para email via profiles
+      const bookedByDeal = new Map<string, { userId: string; ts: number }>();
       (attendees as any[] || []).forEach((att) => {
-        const email = (att.booked_by || '').toLowerCase();
-        if (!email) return;
+        const userId = att.booked_by as string | null;
+        if (!userId) return;
         const ts = new Date(att.meeting_slot?.scheduled_at || 0).getTime();
         const prev = bookedByDeal.get(att.deal_id);
-        if (!prev || ts > prev.ts) bookedByDeal.set(att.deal_id, { email, ts });
+        if (!prev || ts > prev.ts) bookedByDeal.set(att.deal_id, { userId, ts });
+      });
+
+      // Resolver UUIDs -> email
+      const userIds = Array.from(new Set(Array.from(bookedByDeal.values()).map((v) => v.userId)));
+      const uuidToEmail = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', userIds);
+        (profs as any[] || []).forEach((p) => {
+          if (p.email) uuidToEmail.set(p.id, String(p.email).toLowerCase());
+        });
+      }
+
+      const resolvedByDeal = new Map<string, string>();
+      bookedByDeal.forEach((v, dealId) => {
+        const email = uuidToEmail.get(v.userId);
+        if (email) resolvedByDeal.set(dealId, email);
       });
 
       // 4) fallback: owner_id do deal para os que não tinham booked_by
-      const missing = ids.filter((id) => !bookedByDeal.has(id));
+      const missing = ids.filter((id) => !resolvedByDeal.has(id));
       if (missing.length > 0) {
         const { data: deals } = await supabase
           .from('crm_deals')
@@ -67,13 +87,13 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
           .in('id', missing);
         (deals as any[] || []).forEach((d) => {
           const email = (d.owner_id || '').toLowerCase();
-          if (email) bookedByDeal.set(d.id, { email, ts: 0 });
+          if (email) resolvedByDeal.set(d.id, email);
         });
       }
 
       // 5) agregar por SDR
       const byEmail = new Map<string, number>();
-      bookedByDeal.forEach(({ email }) => {
+      resolvedByDeal.forEach((email) => {
         byEmail.set(email, (byEmail.get(email) || 0) + 1);
       });
       return byEmail;
