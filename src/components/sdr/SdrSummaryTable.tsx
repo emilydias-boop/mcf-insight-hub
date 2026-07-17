@@ -289,15 +289,6 @@ export function SdrSummaryTable({
                 </span>
               </TableCell>
               <TableCell className="text-center">
-                <span className={`font-medium ${
-                  totalTaxaContrato >= 20 ? 'text-green-400' 
-                    : totalTaxaContrato >= 10 ? 'text-amber-400' 
-                    : 'text-red-400'
-                }`}>
-                  {totalTaxaContrato.toFixed(1)}%
-                </span>
-              </TableCell>
-              <TableCell className="text-center">
                 {(() => {
                   const totalLiquida = totals.r1Realizada > 0
                     ? ((totals.contratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
