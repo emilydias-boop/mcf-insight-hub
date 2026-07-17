@@ -55,22 +55,6 @@ export function SdrSummaryTable({
     navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
   };
 
-  const taxaContratoRanking = useMemo(() => {
-    const withTaxa = data.map(row => ({
-      email: row.sdrEmail,
-      taxa: row.r1Realizada > 0 ? (row.contratos / row.r1Realizada) * 100 : 0
-    }));
-    
-    const sorted = [...withTaxa].sort((a, b) => b.taxa - a.taxa);
-    
-    const rankMap = new Map<string, number>();
-    sorted.forEach((item, index) => {
-      rankMap.set(item.email, index + 1);
-    });
-    
-    return rankMap;
-  }, [data]);
-
   // Calculate totals
   const totals = useMemo(() => {
     const computed = data.reduce(
