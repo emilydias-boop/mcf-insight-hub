@@ -223,14 +223,6 @@ export function SdrSummaryTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        #{taxaContratoRanking.get(row.sdrEmail)}
-                      </span>
-                      <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <span className={`font-medium ${taxaLiquidaColorClass}`}>{taxaLiquida.toFixed(1)}%</span>
                   </TableCell>
                   {!disableNavigation && (
