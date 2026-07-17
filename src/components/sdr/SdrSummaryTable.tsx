@@ -48,29 +48,12 @@ export function SdrSummaryTable({
   const [searchParams] = useSearchParams();
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const contratoLabel = isConsorcio ? 'Propostas Fechadas' : 'Contrato PAGO';
-  const taxaLabel = isConsorcio ? 'Taxa Proposta' : 'Taxa Contrato';
-  const taxaLiquidaLabel = isConsorcio ? 'Taxa Proposta - Reembolso' : 'Taxa Contrato - Reembolso';
+  const taxaLiquidaLabel = isConsorcio ? 'Taxa Conv. Proposta' : 'Taxa Conv. Contrato';
 
   const handleRowClick = (sdrEmail: string) => {
     const params = new URLSearchParams(searchParams);
     navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
   };
-
-  const taxaContratoRanking = useMemo(() => {
-    const withTaxa = data.map(row => ({
-      email: row.sdrEmail,
-      taxa: row.r1Realizada > 0 ? (row.contratos / row.r1Realizada) * 100 : 0
-    }));
-    
-    const sorted = [...withTaxa].sort((a, b) => b.taxa - a.taxa);
-    
-    const rankMap = new Map<string, number>();
-    sorted.forEach((item, index) => {
-      rankMap.set(item.email, index + 1);
-    });
-    
-    return rankMap;
-  }, [data]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -99,10 +82,7 @@ export function SdrSummaryTable({
     return computed;
   }, [data, totaisOverride]);
 
-  const totalTaxaContrato = totals.r1Realizada > 0 
-    ? ((totals.contratos / totals.r1Realizada) * 100) : 0;
-
-  const totalTaxaNoShow = totals.r1Agendada > 0 
+  const totalTaxaNoShow = totals.r1Agendada > 0
     ? ((totals.noShows / totals.r1Agendada) * 100) : 0;
 
   if (isLoading) {
@@ -137,7 +117,6 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">{taxaLabel}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLiquidaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
@@ -149,17 +128,6 @@ export function SdrSummaryTable({
               const metaPeriodo = Math.round(metaDiaria * diasEfetivos);
               const bateuMeta = row.agendamentos >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
-
-              const taxaContrato = row.r1Realizada > 0 
-                ? ((row.contratos / row.r1Realizada) * 100)
-                : 0;
-              const taxaContratoFormatted = taxaContrato.toFixed(1);
-
-              const taxaContratoColorClass = taxaContrato >= 20 
-                ? 'text-green-400' 
-                : taxaContrato >= 10 
-                  ? 'text-amber-400' 
-                  : 'text-red-400';
 
               const contratosLiquidos = row.contratos - (row.reembolsos || 0);
               const taxaLiquida = row.r1Realizada > 0
@@ -252,14 +220,6 @@ export function SdrSummaryTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        #{taxaContratoRanking.get(row.sdrEmail)}
-                      </span>
-                      <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <span className={`font-medium ${taxaLiquidaColorClass}`}>{taxaLiquida.toFixed(1)}%</span>
                   </TableCell>
                   {!disableNavigation && (
@@ -326,15 +286,6 @@ export function SdrSummaryTable({
               <TableCell className="text-center">
                 <span className={`${(totals.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                   {totals.reembolsos || 0}
-                </span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className={`font-medium ${
-                  totalTaxaContrato >= 20 ? 'text-green-400' 
-                    : totalTaxaContrato >= 10 ? 'text-amber-400' 
-                    : 'text-red-400'
-                }`}>
-                  {totalTaxaContrato.toFixed(1)}%
                 </span>
               </TableCell>
               <TableCell className="text-center">
