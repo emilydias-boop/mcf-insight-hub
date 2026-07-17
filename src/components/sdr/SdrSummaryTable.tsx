@@ -49,6 +49,7 @@ export function SdrSummaryTable({
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const contratoLabel = isConsorcio ? 'Propostas Fechadas' : 'Contrato PAGO';
   const taxaLabel = isConsorcio ? 'Taxa Proposta' : 'Taxa Contrato';
+  const taxaLiquidaLabel = isConsorcio ? 'Taxa Proposta - Reembolso' : 'Taxa Contrato - Reembolso';
 
   const handleRowClick = (sdrEmail: string) => {
     const params = new URLSearchParams(searchParams);
@@ -137,6 +138,7 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLabel}</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{taxaLiquidaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
@@ -157,6 +159,16 @@ export function SdrSummaryTable({
                 ? 'text-green-400' 
                 : taxaContrato >= 10 
                   ? 'text-amber-400' 
+                  : 'text-red-400';
+
+              const contratosLiquidos = row.contratos - (row.reembolsos || 0);
+              const taxaLiquida = row.r1Realizada > 0
+                ? (contratosLiquidos / row.r1Realizada) * 100
+                : 0;
+              const taxaLiquidaColorClass = taxaLiquida >= 20
+                ? 'text-green-400'
+                : taxaLiquida >= 10
+                  ? 'text-amber-400'
                   : 'text-red-400';
 
               return (
@@ -247,6 +259,9 @@ export function SdrSummaryTable({
                       <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
                     </div>
                   </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${taxaLiquidaColorClass}`}>{taxaLiquida.toFixed(1)}%</span>
+                  </TableCell>
                   {!disableNavigation && (
                     <TableCell>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -321,6 +336,17 @@ export function SdrSummaryTable({
                 }`}>
                   {totalTaxaContrato.toFixed(1)}%
                 </span>
+              </TableCell>
+              <TableCell className="text-center">
+                {(() => {
+                  const totalLiquida = totals.r1Realizada > 0
+                    ? ((totals.contratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
+                    : 0;
+                  const cls = totalLiquida >= 20 ? 'text-green-400'
+                    : totalLiquida >= 10 ? 'text-amber-400'
+                    : 'text-red-400';
+                  return <span className={`font-medium ${cls}`}>{totalLiquida.toFixed(1)}%</span>;
+                })()}
               </TableCell>
               {!disableNavigation && <TableCell />}
             </TableRow>
