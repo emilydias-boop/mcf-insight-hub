@@ -136,7 +136,6 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">{taxaLabel}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLiquidaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
