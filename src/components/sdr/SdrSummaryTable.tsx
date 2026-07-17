@@ -82,10 +82,7 @@ export function SdrSummaryTable({
     return computed;
   }, [data, totaisOverride]);
 
-  const totalTaxaContrato = totals.r1Realizada > 0 
-    ? ((totals.contratos / totals.r1Realizada) * 100) : 0;
-
-  const totalTaxaNoShow = totals.r1Agendada > 0 
+  const totalTaxaNoShow = totals.r1Agendada > 0
     ? ((totals.noShows / totals.r1Agendada) * 100) : 0;
 
   if (isLoading) {
