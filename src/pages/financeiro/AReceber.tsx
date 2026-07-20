@@ -234,7 +234,7 @@ export default function AReceber() {
         <CardContent className="pt-4 overflow-x-auto">
           {isLoading ? (
             <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
-          ) : (titulos ?? []).length === 0 ? (
+          ) : titulosFiltrados.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Wallet className="w-12 h-12 mx-auto mb-3 opacity-30" />
               Nenhum título encontrado com os filtros atuais.
@@ -258,7 +258,7 @@ export default function AReceber() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(titulos ?? []).map(t => {
+                {titulosFiltrados.map(t => {
                   const precisaLancar = t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0;
                   return (
                     <TableRow
