@@ -232,6 +232,9 @@ export function KanbanCobranca() {
   const updateStage = useUpdateCobrancaStage();
   const baixar = useMarkArParcelaPaga();
 
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
   const tituloIds = useMemo(() => (titulos ?? []).map(t => t.id), [titulos]);
 
   const { data: parcelas, isLoading: loadingParcelas } = useQuery({
@@ -282,6 +285,21 @@ export function KanbanCobranca() {
     return buckets;
   }, [titulos, parcelas]);
 
+  const totalsFiltered = useMemo(() => {
+    const totals: Record<ArCobrancaStage, number> = { mes: 0, atraso: 0, judicial: 0 };
+    const counts: Record<ArCobrancaStage, number> = { mes: 0, atraso: 0, judicial: 0 };
+    (Object.keys(byStage) as ArCobrancaStage[]).forEach(k => {
+      byStage[k].forEach(item => {
+        const dv = item.parcela.data_vencimento || '';
+        if (dateFrom && dv < dateFrom) return;
+        if (dateTo && dv > dateTo) return;
+        totals[k] += Number(item.parcela.valor) || 0;
+        counts[k] += 1;
+      });
+    });
+    return { totals, counts };
+  }, [byStage, dateFrom, dateTo]);
+
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const stage = result.destination.droppableId as ArCobrancaStage;
@@ -318,6 +336,60 @@ export function KanbanCobranca() {
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
+      <div className="space-y-4 mb-4">
+        <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card p-3">
+          <div>
+            <Label className="text-xs">Vencimento de</Label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="mt-1 block rounded-md border bg-background px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">até</Label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="mt-1 block rounded-md border bg-background px-3 py-1.5 text-sm"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); }}>
+              Limpar
+            </Button>
+          )}
+          <div className="ml-auto text-xs text-muted-foreground">
+            Totais consideram vencimento no período selecionado
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {STAGES.map(s => {
+            const Icon = s.icon;
+            const color =
+              s.id === 'mes' ? 'text-blue-600' :
+              s.id === 'atraso' ? 'text-amber-600' : 'text-red-600';
+            return (
+              <Card key={s.id} className={`border-t-4 ${s.accent}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <Icon className={`w-4 h-4 ${color}`} />
+                      {s.title}
+                    </div>
+                    <Badge variant="secondary">{totalsFiltered.counts[s.id]}</Badge>
+                  </div>
+                  <div className={`mt-2 text-2xl font-bold ${color}`}>
+                    {brl(totalsFiltered.totals[s.id])}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {STAGES.map(stage => {
           const list = byStage[stage.id];
