@@ -197,13 +197,15 @@ export default function AReceber() {
               {PRODUCT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={responsavel} onValueChange={setResponsavel}>
-            <SelectTrigger><SelectValue placeholder="Responsável" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os responsáveis</SelectItem>
-              {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Nº do título (ex.: 761226 ou 761226-2)"
+              value={numeroTitulo}
+              onChange={(e) => setNumeroTitulo(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Select value={cobrancaStage} onValueChange={setCobrancaStage}>
             <SelectTrigger><SelectValue placeholder="Stage cobrança" /></SelectTrigger>
             <SelectContent>
