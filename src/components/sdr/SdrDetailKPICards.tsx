@@ -14,7 +14,10 @@ interface SdrDetailKPICardsProps {
   metrics: MetricWithMeta[];
   isLoading?: boolean;
   onMetricClick?: (key: string) => void;
+  /** Cards extras renderizados ao final do grid (ex.: Reembolsos) */
+  extraCards?: React.ReactNode;
 }
+
 
 const formatDuration = (seconds: number): string => {
   if (seconds === 0) return "0s";
@@ -159,7 +162,7 @@ function KPICard({ metric, onClick }: { metric: MetricWithMeta; onClick?: () => 
   );
 }
 
-export function SdrDetailKPICards({ metrics, isLoading, onMetricClick }: SdrDetailKPICardsProps) {
+export function SdrDetailKPICards({ metrics, isLoading, onMetricClick, extraCards }: SdrDetailKPICardsProps) {
   if (isLoading || metrics.length === 0) {
     return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3">
@@ -181,6 +184,8 @@ export function SdrDetailKPICards({ metrics, isLoading, onMetricClick }: SdrDeta
           onClick={onMetricClick ? () => onMetricClick(metric.key) : undefined}
         />
       ))}
+      {extraCards}
     </div>
   );
 }
+
