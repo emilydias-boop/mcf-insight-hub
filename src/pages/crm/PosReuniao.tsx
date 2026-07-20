@@ -713,13 +713,32 @@ function SemSucessoTab() {
 // ─── Concluídas Tab ──────────────────────────────────────────
 function ConcluidasTab() {
   const { data: allPropostas = [], isLoading } = useProposals();
-  const propostas = useMemo(
+  const basePropostas = useMemo(
     () => allPropostas.filter(p => p.completa || p.cadastro_completo),
     [allPropostas]
   );
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [closerFilter, setCloserFilter] = useState('all');
+
+  const closerNames = useMemo(() => {
+    const names = [...new Set(basePropostas.map((p: any) => p.closer_name).filter(Boolean))];
+    return names.sort();
+  }, [basePropostas]);
+
+  const propostas = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return basePropostas.filter((p: any) => {
+      if (closerFilter !== 'all' && p.closer_name !== closerFilter) return false;
+      if (term) {
+        const contato = (p.contact_name || p.deal_name || '').toLowerCase();
+        if (!contato.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [basePropostas, searchTerm, closerFilter]);
 
   if (isLoading) return <LoadingState />;
 
@@ -732,6 +751,28 @@ function ConcluidasTab() {
         <CardTitle className="text-base">Concluídas - Operacional ({propostas.length})</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <Input
+            placeholder="Buscar contato..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-64"
+          />
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Closer" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Closers</SelectItem>
+              {closerNames.map(n => (
+                <SelectItem key={n} value={n as string}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(searchTerm || closerFilter !== 'all') && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(''); setCloserFilter('all'); }}>
+              Limpar
+            </Button>
+          )}
+        </div>
         {propostas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta concluída ainda.</p>
         ) : (
@@ -742,6 +783,7 @@ function ConcluidasTab() {
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
+                <TableHead>Closer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -757,6 +799,7 @@ function ConcluidasTab() {
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
+                  <TableCell className="text-sm">{(p as any).closer_name || '—'}</TableCell>
                   <TableCell>
                     <Badge className="bg-emerald-600 text-white text-xs">Check-list + Docs OK</Badge>
                   </TableCell>
