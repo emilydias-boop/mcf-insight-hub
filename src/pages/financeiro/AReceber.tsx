@@ -393,6 +393,102 @@ export default function AReceber() {
           )}
         </CardContent>
       </Card>
+
+      {selected.size > 0 && (() => {
+        const selList = titulosFiltrados.filter(t => selected.has(t.id));
+        const totalSaldo = selList.reduce((s, t) => s + Number(t.valor_pendente ?? t.valor_total ?? 0), 0);
+        return (
+          <div className="sticky bottom-4 z-30 mx-auto max-w-3xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-lime-500/40 bg-card/95 backdrop-blur px-4 py-3 shadow-lg">
+              <div className="text-sm">
+                <span className="font-semibold">{selected.size}</span> título(s) selecionado(s)
+                {' · '}
+                <span className="text-muted-foreground">Saldo:</span>{' '}
+                <span className="font-semibold text-amber-600">{brl(totalSaldo)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+                  Limpar
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-lime-600 hover:bg-lime-700 text-white"
+                  onClick={() => {
+                    setBaixaData(fmtDate(new Date(), 'yyyy-MM-dd'));
+                    setOpenBaixaLote(true);
+                  }}
+                >
+                  <CheckCheck className="w-4 h-4 mr-1" />
+                  Baixar totalmente
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <Dialog open={openBaixaLote} onOpenChange={setOpenBaixaLote}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Baixa em lote</DialogTitle>
+            <DialogDescription>
+              Todas as parcelas em aberto dos {selected.size} título(s) selecionado(s) serão marcadas como pagas
+              e os títulos ficarão como <b>Integral / Quitado</b>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Data do pagamento</Label>
+              <Input type="date" value={baixaData} onChange={(e) => setBaixaData(e.target.value)} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={baixaForma} onValueChange={setBaixaForma}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="boleto">Boleto</SelectItem>
+                  <SelectItem value="cartao">Cartão</SelectItem>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-md bg-muted/40 border p-3 text-xs text-muted-foreground max-h-40 overflow-auto">
+              {titulosFiltrados.filter(t => selected.has(t.id)).map(t => (
+                <div key={t.id} className="flex justify-between py-0.5">
+                  <span>{ticketNumber(t.id)} · {t.customer_name}</span>
+                  <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenBaixaLote(false)}>Cancelar</Button>
+            <Button
+              className="bg-lime-600 hover:bg-lime-700 text-white"
+              disabled={baixarLote.isPending || !baixaData}
+              onClick={async () => {
+                try {
+                  const res = await baixarLote.mutateAsync({
+                    tituloIds: Array.from(selected),
+                    data_pagamento: baixaData,
+                    forma_pagamento: baixaForma,
+                  });
+                  toast.success(`Baixados ${res.titulos} título(s) e ${res.parcelas} parcela(s).`);
+                  setSelected(new Set());
+                  setOpenBaixaLote(false);
+                } catch (e: any) {
+                  toast.error(e?.message || 'Erro ao baixar títulos em lote');
+                }
+              }}
+            >
+              {baixarLote.isPending ? 'Baixando…' : 'Confirmar baixa'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
         </TabsContent>
         <TabsContent value="kanban" className="mt-4">
           <KanbanCobranca />
