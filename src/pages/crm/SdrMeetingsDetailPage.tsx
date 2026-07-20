@@ -11,15 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { SdrDetailHeader } from "@/components/sdr/SdrDetailHeader";
 import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
-import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
-
-import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
-
-import { SdrCumulativeChart } from "@/components/sdr/SdrCumulativeChart";
-import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
-import { SdrDailyBreakdownTable } from "@/components/sdr/SdrDailyBreakdownTable";
+import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
@@ -179,10 +173,7 @@ export default function SdrMeetingsDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-5">
-          {/* Auto Summary */}
-          <SdrAutoSummary text={perfData.summaryText} isLoading={perfData.isLoading} />
-
-          {/* KPI Cards + Projection side by side */}
+          {/* KPI Cards + Projection + Reembolsos individuais */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
             <SdrDetailKPICards
               metrics={perfData.metrics}
@@ -191,20 +182,15 @@ export default function SdrMeetingsDetailPage() {
                 if (key === "contratos") setContractsOpen(true);
               }}
             />
-            <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+            <div className="space-y-5">
+              <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+              <PersonalRefundsCard
+                startDate={startDate}
+                endDate={endDate}
+                sdrEmail={sdrEmail}
+              />
+            </div>
           </div>
-
-          {/* Funnel + Daily chart side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
-            <SdrCumulativeChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
-          </div>
-
-          {/* Team Comparison */}
-          <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
-
-          {/* Daily Breakdown Table */}
-          <SdrDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
         </TabsContent>
 
         <TabsContent value="leads">
