@@ -478,38 +478,18 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Fonte ÚNICA de reembolso = webhooks automáticos das plataformas de
-      // pagamento (MCF PAY e Hubla). Registrado em deal_activities pelos edge
-      // functions mcf-pay-callback (activity_type='refund_mcf_pay') e
-      // hubla-webhook-handler (activity_type='refund_hubla').
-      // Lançamentos manuais (loss_marked com metadata.refunded_at) NÃO contam
-      // mais como reembolso para evitar interpretação incorreta.
-      const { data: refundActivities } = await supabase
-        .from('deal_activities')
-        .select('deal_id, metadata, created_at')
-        .in('activity_type', ['refund_mcf_pay', 'refund_hubla'])
-        .gte('created_at', start)
-        .lte('created_at', end);
-
-      const refundedDealIds = Array.from(
-        new Set(
-          (refundActivities || [])
-            .map((a: any) => a.deal_id as string)
-            .filter(Boolean)
-        )
-      );
-
-      // Fallback Hubla: transações reembolsadas no período com deal vinculado
-      // que talvez não tenham gerado deal_activities.
+      // Contabilizamos APENAS reembolsos do produto A000 - Contrato (via Hubla).
+      // Reembolsos de A010 (MCF Pay) não entram nesta métrica.
       const { data: hublaRefunds } = await supabase
         .from('hubla_transactions')
-        .select('linked_deal_id, updated_at')
+        .select('linked_deal_id, updated_at, product_name')
         .eq('sale_status', 'refunded')
         .not('linked_deal_id', 'is', null)
+        .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
         .gte('updated_at', start)
         .lte('updated_at', end);
 
-      const refundedDealIdSet = new Set<string>(refundedDealIds);
+      const refundedDealIdSet = new Set<string>();
       (hublaRefunds || []).forEach((r: any) => {
         if (r?.linked_deal_id) refundedDealIdSet.add(r.linked_deal_id as string);
       });

@@ -19,25 +19,18 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
       const start = format(startDate, 'yyyy-MM-dd') + 'T00:00:00';
       const end = format(endDate, 'yyyy-MM-dd') + 'T23:59:59';
 
-      // 1) deal_activities de reembolso no período
-      const { data: acts } = await supabase
-        .from('deal_activities')
-        .select('deal_id, created_at')
-        .in('activity_type', ['refund_mcf_pay', 'refund_hubla'])
-        .gte('created_at', start)
-        .lte('created_at', end);
-
-      // 2) fallback: hubla_transactions reembolsadas no período com deal vinculado
+      // Apenas reembolsos do produto A000 - Contrato (via Hubla).
+      // MCF Pay refunds (produtos A010) NÃO são contabilizados aqui.
       const { data: hubla } = await supabase
         .from('hubla_transactions')
-        .select('linked_deal_id, updated_at')
+        .select('linked_deal_id, updated_at, product_name')
         .eq('sale_status', 'refunded')
         .not('linked_deal_id', 'is', null)
+        .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
         .gte('updated_at', start)
         .lte('updated_at', end);
 
       const dealIds = new Set<string>();
-      (acts || []).forEach((a: any) => a.deal_id && dealIds.add(a.deal_id));
       (hubla || []).forEach((h: any) => h.linked_deal_id && dealIds.add(h.linked_deal_id));
       const ids = Array.from(dealIds);
       if (ids.length === 0) return new Map<string, number>();
