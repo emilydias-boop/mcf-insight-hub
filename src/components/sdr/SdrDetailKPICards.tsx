@@ -14,7 +14,10 @@ interface SdrDetailKPICardsProps {
   metrics: MetricWithMeta[];
   isLoading?: boolean;
   onMetricClick?: (key: string) => void;
+  /** Cards extras renderizados ao final do grid (ex.: Reembolsos) */
+  extraCards?: React.ReactNode;
 }
+
 
 const formatDuration = (seconds: number): string => {
   if (seconds === 0) return "0s";
