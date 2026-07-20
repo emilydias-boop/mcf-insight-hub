@@ -289,10 +289,10 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
 
-  // Metas da Equipe (SDRs, Closers e Closer Sombra da BU Incorporador)
+  // Painel Comercial individual (SDRs, Closers e Closer Sombra da BU Incorporador)
   {
-    title: "Metas da Equipe",
-    url: "/crm/reunioes-equipe",
+    title: "Painel Comercial",
+    url: "/crm/meu-painel-comercial",
     icon: BarChart3,
     resource: "crm",
     requiredRoles: ["sdr", "closer", "closer_sombra"],

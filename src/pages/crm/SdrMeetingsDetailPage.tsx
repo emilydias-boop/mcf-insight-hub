@@ -18,6 +18,7 @@ import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { SdrContractsListModal } from "@/components/sdr/SdrContractsListModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   useSdrPerformanceData,
@@ -33,6 +34,13 @@ export default function SdrMeetingsDetailPage() {
   const [searchParams] = useSearchParams();
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
+  const { user, role } = useAuth();
+
+  // Ownership guard: SDR/closer_sombra só podem ver o próprio painel
+  const isPrivilegedViewer = role === "admin" || role === "manager" || role === "coordenador";
+  const ownsThisView =
+    !!user?.email && !!sdrEmail && user.email.toLowerCase() === sdrEmail.toLowerCase();
+  const accessDenied = !!role && !isPrivilegedViewer && !ownsThisView;
 
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
@@ -139,6 +147,14 @@ export default function SdrMeetingsDetailPage() {
   if (!sdrEmail) {
     return (
       <div className="p-6 text-center text-muted-foreground">SDR não encontrado</div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Você só pode visualizar seu próprio Painel Comercial.
+      </div>
     );
   }
 
