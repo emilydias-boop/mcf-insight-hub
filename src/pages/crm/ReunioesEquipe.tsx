@@ -113,6 +113,11 @@ export default function ReunioesEquipe() {
   const [drillBucket, setDrillBucket] = useState<KpiBucket | null>(null);
   const [drillTitle, setDrillTitle] = useState<string>("");
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const { data: refundDetails, isLoading: refundDetailsLoading } = useRefundDetailsInPeriod(
+    // will be defined below after start/end computed; use lazy via useMemo
+    null,
+    null,
+  );
 
   // Sync state changes to URL
   const updateUrlParams = (
