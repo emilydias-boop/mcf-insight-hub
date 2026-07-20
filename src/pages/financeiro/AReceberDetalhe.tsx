@@ -562,6 +562,57 @@ export default function AReceberDetalhe() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal baixar entrada do título original */}
+      <Dialog open={openEntrada} onOpenChange={setOpenEntrada}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Baixar entrada do título</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              Registra o pagamento do título original como uma parcela de entrada quitada.
+              As demais parcelas continuam em aberto.
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Saldo restante</div>
+                <div className="font-semibold text-amber-600">{brl(saldoRestante)}</div>
+              </div>
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Já recebido</div>
+                <div className="font-semibold text-emerald-600">{brl(totals.pago)}</div>
+              </div>
+            </div>
+            {temEntradaRegistrada && (
+              <div className="text-xs text-amber-600">
+                Já existe uma entrada registrada para este título. Uma nova entrada será somada às demais.
+              </div>
+            )}
+            <div>
+              <Label>Valor pago</Label>
+              <Input type="number" step="0.01" value={entradaPagValor} onChange={e => setEntradaPagValor(e.target.value)} />
+            </div>
+            <div>
+              <Label>Data do pagamento</Label>
+              <Input type="date" value={entradaPagData} onChange={e => setEntradaPagData(e.target.value)} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={entradaPagForma} onValueChange={setEntradaPagForma}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenEntrada(false)}>Cancelar</Button>
+            <Button onClick={confirmarBaixarEntrada} disabled={createParcelas.isPending}>Confirmar baixa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Observações */}
       <Card>
         <CardHeader><CardTitle className="text-base">Observações</CardTitle></CardHeader>
