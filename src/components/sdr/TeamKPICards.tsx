@@ -209,12 +209,13 @@ export function TeamKPICards({
             <TooltipTrigger asChild>
               <Card
                 className={`bg-card border-border transition-colors ${
-                  card.bucket && onCardClick
+                  (card.bucket && onCardClick) || card.customOnClick
                     ? "cursor-pointer hover:border-primary/60 hover:bg-muted/30"
                     : "cursor-help hover:border-primary/30"
                 }`}
                 onClick={() => {
-                  if (card.bucket && onCardClick) onCardClick(card.bucket, card.title);
+                  if (card.customOnClick) card.customOnClick();
+                  else if (card.bucket && onCardClick) onCardClick(card.bucket, card.title);
                 }}
               >
                 <CardContent className="p-3">
@@ -242,7 +243,7 @@ export function TeamKPICards({
             <TooltipContent>
               <p className="whitespace-pre-line max-w-xs">
                 {card.tooltip}
-                {card.bucket && onCardClick ? "\n— clique para ver leads" : ""}
+                {(card.bucket && onCardClick) || card.customOnClick ? "\n— clique para ver detalhes" : ""}
               </p>
             </TooltipContent>
           </Tooltip>
