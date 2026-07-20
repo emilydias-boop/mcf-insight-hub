@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { SdrDetailHeader } from "@/components/sdr/SdrDetailHeader";
 import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
-import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
