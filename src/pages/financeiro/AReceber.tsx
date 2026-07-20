@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import {
@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
+import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
 import { ticketNumber } from '@/lib/arTicketNumber';
 
 const brl = (v: number) =>
@@ -155,6 +156,13 @@ export default function AReceber() {
           >
             <KanbanSquare className="w-5 h-5" />
             <span className="text-sm font-semibold">Esteira Cobrança</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="reconciliacao"
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
+          >
+            <Scale className="w-5 h-5" />
+            <span className="text-sm font-semibold">Reconciliação</span>
           </TabsTrigger>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
@@ -336,6 +344,9 @@ export default function AReceber() {
         </TabsContent>
         <TabsContent value="kanban" className="mt-4">
           <KanbanCobranca />
+        </TabsContent>
+        <TabsContent value="reconciliacao" className="mt-4">
+          <ReconciliacaoPanel />
         </TabsContent>
       </Tabs>
     </div>
