@@ -662,37 +662,10 @@ function PropostasTab() {
 
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
 
-        <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir proposta?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteTarget && (
-                  <>
-                    Você está excluindo a proposta de <strong>{deleteTarget.contact_name || deleteTarget.deal_name}</strong> no valor de{' '}
-                    <strong>{formatCurrency(deleteTarget.valor_credito || 0)}</strong>.
-                    <br /><br />
-                    O valor será <strong>abatido do realizado</strong> exibido no BI Consórcio.
-                    Esta ação não pode ser desfeita.
-                  </>
-                )}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async () => {
-                  if (!deleteTarget) return;
-                  await excluir.mutateAsync(deleteTarget.id);
-                  setDeleteTarget(null);
-                }}
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <DeletePropostaDialog
+          proposal={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+        />
 
         {editTarget && (
           <EditProposalModal
