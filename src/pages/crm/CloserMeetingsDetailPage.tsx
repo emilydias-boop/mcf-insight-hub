@@ -45,13 +45,7 @@ export default function CloserMeetingsDetailPage() {
     },
   });
   const ownsThisView = !!myCloserId && myCloserId === closerId;
-  if (!isPrivilegedViewer && !loadingOwn && !ownsThisView) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Você só pode visualizar seu próprio Painel Comercial.
-      </div>
-    );
-  }
+  const accessDenied = !isPrivilegedViewer && !loadingOwn && !ownsThisView;
 
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
