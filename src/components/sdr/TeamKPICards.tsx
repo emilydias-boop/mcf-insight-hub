@@ -37,6 +37,8 @@ interface TeamKPICardsProps {
   /** Médias por SDR e por Closer p/ breakdown nas taxas */
   taxaConversaoBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
+  onRefundClick?: () => void;
+  orphanRefundsCount?: number;
 }
 
 export function TeamKPICards({
@@ -51,6 +53,8 @@ export function TeamKPICards({
   isFutureWindow = true,
   taxaConversaoBreakdown,
   taxaNoShowBreakdown,
+  onRefundClick,
+  orphanRefundsCount = 0,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -77,6 +81,7 @@ export function TeamKPICards({
     tooltip: string;
     bucket?: KpiBucket;
     subline?: string;
+    customOnClick?: () => void;
   }> = [
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
@@ -161,7 +166,11 @@ export function TeamKPICards({
       icon: XCircle,
       color: "text-red-400",
       bgColor: "bg-red-400/10",
-      tooltip: "Contratos reembolsados no período (registrados via botão Reembolso). Já são abatidos da coluna Contrato Pago e do card Contratos.",
+      tooltip: orphanRefundsCount > 0
+        ? `Contratos reembolsados no período. ⚠ ${orphanRefundsCount} reembolso(s) órfão(s) sem deal vinculado — clique para verificar.`
+        : "Contratos reembolsados no período. Clique para ver clientes, SDRs e Closers atribuídos.",
+      subline: orphanRefundsCount > 0 ? `⚠ ${orphanRefundsCount} órfão(s)` : undefined,
+      customOnClick: onRefundClick,
     },
     {
       title: "Taxa Conversão",
@@ -200,12 +209,13 @@ export function TeamKPICards({
             <TooltipTrigger asChild>
               <Card
                 className={`bg-card border-border transition-colors ${
-                  card.bucket && onCardClick
+                  (card.bucket && onCardClick) || card.customOnClick
                     ? "cursor-pointer hover:border-primary/60 hover:bg-muted/30"
                     : "cursor-help hover:border-primary/30"
                 }`}
                 onClick={() => {
-                  if (card.bucket && onCardClick) onCardClick(card.bucket, card.title);
+                  if (card.customOnClick) card.customOnClick();
+                  else if (card.bucket && onCardClick) onCardClick(card.bucket, card.title);
                 }}
               >
                 <CardContent className="p-3">
@@ -233,7 +243,7 @@ export function TeamKPICards({
             <TooltipContent>
               <p className="whitespace-pre-line max-w-xs">
                 {card.tooltip}
-                {card.bucket && onCardClick ? "\n— clique para ver leads" : ""}
+                {(card.bucket && onCardClick) || card.customOnClick ? "\n— clique para ver detalhes" : ""}
               </p>
             </TooltipContent>
           </Tooltip>

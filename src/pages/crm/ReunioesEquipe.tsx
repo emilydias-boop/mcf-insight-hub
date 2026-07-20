@@ -29,6 +29,8 @@ import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTabl
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useSdrRefundsInPeriod } from "@/hooks/useSdrRefundsInPeriod";
+import { useRefundDetailsInPeriod } from "@/hooks/useRefundDetailsInPeriod";
+import { RefundDetailsDialog } from "@/components/sdr/RefundDetailsDialog";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -110,6 +112,7 @@ export default function ReunioesEquipe() {
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
   const [drillBucket, setDrillBucket] = useState<KpiBucket | null>(null);
   const [drillTitle, setDrillTitle] = useState<string>("");
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
 
   // Sync state changes to URL
   const updateUrlParams = (
@@ -164,6 +167,7 @@ export default function ReunioesEquipe() {
   };
 
   const { start, end } = getDateRange();
+  const { data: refundDetails, isLoading: refundDetailsLoading } = useRefundDetailsInPeriod(start, end);
 
   // Today's dates for day metrics
   const today = new Date();
@@ -915,6 +919,17 @@ export default function ReunioesEquipe() {
           setDrillBucket(bucket);
           setDrillTitle(title);
         }}
+        onRefundClick={() => setRefundDialogOpen(true)}
+        orphanRefundsCount={refundDetails?.orphans.length || 0}
+      />
+
+      <RefundDetailsDialog
+        open={refundDialogOpen}
+        onOpenChange={setRefundDialogOpen}
+        data={refundDetails}
+        isLoading={refundDetailsLoading}
+        startDate={start}
+        endDate={end}
       />
 
       <KpiDrillDownDialog
