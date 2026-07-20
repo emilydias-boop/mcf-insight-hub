@@ -112,6 +112,7 @@ export default function ReunioesEquipe() {
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
   const [drillBucket, setDrillBucket] = useState<KpiBucket | null>(null);
   const [drillTitle, setDrillTitle] = useState<string>("");
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
 
   // Sync state changes to URL
   const updateUrlParams = (
