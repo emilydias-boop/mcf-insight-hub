@@ -278,6 +278,21 @@ export default function AReceber() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    {(() => {
+                      const openIds = titulosFiltrados.filter(t => t.status === 'aberto').map(t => t.id);
+                      const allChecked = openIds.length > 0 && openIds.every(id => selected.has(id));
+                      const someChecked = openIds.some(id => selected.has(id));
+                      return (
+                        <Checkbox
+                          checked={allChecked ? true : someChecked ? 'indeterminate' : false}
+                          onCheckedChange={(v) => toggleAllVisible(openIds, !!v)}
+                          aria-label="Selecionar todos"
+                          disabled={openIds.length === 0}
+                        />
+                      );
+                    })()}
+                  </TableHead>
                   <TableHead className="w-[90px]">Nº</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Produto</TableHead>
@@ -295,12 +310,22 @@ export default function AReceber() {
               <TableBody>
                 {titulosFiltrados.map(t => {
                   const precisaLancar = t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0;
+                  const isOpen = t.status === 'aberto';
+                  const isSel = selected.has(t.id);
                   return (
                     <TableRow
                       key={t.id}
-                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}cursor-pointer hover:bg-muted/40`}
+                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}${isSel ? 'bg-lime-500/10 ' : ''}cursor-pointer hover:bg-muted/40`}
                       onDoubleClick={() => navigate(`/financeiro/a-receber/${t.id}`)}
                     >
+                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSel}
+                          onCheckedChange={() => toggleSelected(t.id)}
+                          disabled={!isOpen}
+                          aria-label={`Selecionar título ${ticketNumber(t.id)}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {ticketNumber(t.id)}
                       </TableCell>
