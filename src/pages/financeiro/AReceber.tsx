@@ -24,21 +24,10 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
+import { ticketNumber } from '@/lib/arTicketNumber';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-
-// Gera um identificador estável de 6 dígitos a partir do id do título:
-// 4 dígitos derivados do id + 2 dígitos do ano corrente.
-const yearSuffix = String(new Date().getFullYear()).slice(-2);
-function ticketNumber(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  }
-  const four = String(hash % 10000).padStart(4, '0');
-  return `${four}${yearSuffix}`;
-}
 
 const PRODUCT_OPTIONS = [
   { value: 'todos', label: 'Todos os produtos' },

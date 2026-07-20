@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useArTitulos, useUpdateCobrancaStage, useRegistrarCobrancaContato, useMarkArParcelaPaga } from '@/hooks/useAReceber';
 import type { ArCobrancaStage, ArTitulo, ArParcela } from '@/types/aReceber';
 import { AR_COBRANCA_STAGE_LABEL } from '@/types/aReceber';
+import { parcelaDocNumber } from '@/lib/arTicketNumber';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -177,6 +178,10 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Documento</span>
+        <span className="font-mono font-medium">{parcelaDocNumber(titulo.id, parcela.numero)}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">Parcela</span>
