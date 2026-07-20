@@ -109,10 +109,66 @@ export default function AReceberDetalhe() {
   const [renegQtd, setRenegQtd] = useState('3');
   const [renegPrimeiraVenc, setRenegPrimeiraVenc] = useState('');
 
+  // ==== Baixar título original como entrada (quando já existem parcelas)
+  const [openEntrada, setOpenEntrada] = useState(false);
+  const [entradaPagValor, setEntradaPagValor] = useState('');
+  const [entradaPagData, setEntradaPagData] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [entradaPagForma, setEntradaPagForma] = useState('pix');
+
   const saldoRestante = useMemo(() => {
     const total = Number(titulo?.valor_total || 0);
     return Math.max(0, +(total - totals.pago).toFixed(2));
   }, [titulo?.valor_total, totals.pago]);
+
+  const temEntradaRegistrada = useMemo(
+    () => (parcelas ?? []).some(p => p.tipo_parcela === 'entrada'),
+    [parcelas],
+  );
+
+  const abrirBaixarEntrada = () => {
+    setEntradaPagValor(saldoRestante > 0 ? String(saldoRestante.toFixed(2)) : '');
+    setEntradaPagData(format(new Date(), 'yyyy-MM-dd'));
+    setEntradaPagForma(titulo?.payment_method || 'pix');
+    setOpenEntrada(true);
+  };
+
+  const confirmarBaixarEntrada = async () => {
+    if (!id) return;
+    const valor = Number(entradaPagValor || 0);
+    if (valor <= 0) {
+      toast.error('Informe o valor da entrada paga');
+      return;
+    }
+    if (!entradaPagData) {
+      toast.error('Informe a data do pagamento');
+      return;
+    }
+    // Numero 0 para entrada do título original (não colide com parcelas existentes)
+    const existentes = parcelas ?? [];
+    const jaExisteZero = existentes.some(p => Number(p.numero) === 0);
+    const numero = jaExisteZero
+      ? Math.min(0, ...existentes.map(p => Number(p.numero) || 0)) - 1
+      : 0;
+    try {
+      await createParcelas.mutateAsync({
+        tituloId: id,
+        parcelas: [{
+          numero,
+          tipo_parcela: 'entrada',
+          valor,
+          valor_pago: valor,
+          data_vencimento: entradaPagData,
+          data_pagamento: entradaPagData,
+          forma_pagamento: entradaPagForma,
+          status: 'pago',
+        }],
+      });
+      toast.success('Entrada do título registrada como paga');
+      setOpenEntrada(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao baixar entrada');
+    }
+  };
 
   const abrirRenegociar = () => {
     setRenegQtd('3');
@@ -318,6 +374,11 @@ export default function AReceberDetalhe() {
             {canManage && (
               <Button size="sm" variant="outline" onClick={abrirRenegociar}>
                 <RefreshCw className="w-4 h-4 mr-1" /> Renegociar restantes
+              </Button>
+            )}
+            {canManage && (parcelas ?? []).length > 0 && saldoRestante > 0 && (
+              <Button size="sm" variant="outline" onClick={abrirBaixarEntrada}>
+                <Wallet className="w-4 h-4 mr-1" /> Baixar entrada
               </Button>
             )}
             <Dialog open={openLancar} onOpenChange={setOpenLancar}>
