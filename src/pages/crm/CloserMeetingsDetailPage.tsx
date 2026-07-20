@@ -19,6 +19,9 @@ import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
 
 import { useCloserPerformanceData } from "@/hooks/useCloserPerformanceData";
 import { ComparisonMode, MetaMode, computeCompDates } from "@/hooks/useSdrPerformanceData";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
@@ -26,6 +29,29 @@ export default function CloserMeetingsDetailPage() {
   const [searchParams] = useSearchParams();
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
+  const { user, role } = useAuth();
+
+  const isPrivilegedViewer = role === "admin" || role === "manager" || role === "coordenador";
+  const { data: myCloserId, isLoading: loadingOwn } = useQuery({
+    queryKey: ["my-closer-id", user?.email],
+    enabled: !isPrivilegedViewer && !!user?.email && role === "closer",
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("closers")
+        .select("id")
+        .ilike("email", user!.email!.toLowerCase())
+        .maybeSingle();
+      return data?.id ?? null;
+    },
+  });
+  const ownsThisView = !!myCloserId && myCloserId === closerId;
+  if (!isPrivilegedViewer && !loadingOwn && !ownsThisView) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Você só pode visualizar seu próprio Painel Comercial.
+      </div>
+    );
+  }
 
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
