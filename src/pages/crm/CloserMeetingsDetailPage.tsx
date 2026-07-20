@@ -16,10 +16,7 @@ import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
 import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
-import { SdrFunnelPanel } from "@/components/sdr/SdrFunnelPanel";
-import { CloserDailyChart } from "@/components/closer/CloserDailyChart";
-import { SdrTeamComparisonPanel } from "@/components/sdr/SdrTeamComparisonPanel";
-import { CloserDailyBreakdownTable } from "@/components/closer/CloserDailyBreakdownTable";
+import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
 
 import { useCloserPerformanceData } from "@/hooks/useCloserPerformanceData";
 import { ComparisonMode, MetaMode, computeCompDates } from "@/hooks/useSdrPerformanceData";
@@ -152,26 +149,18 @@ export default function CloserMeetingsDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-5">
-          {/* Auto Summary */}
-          <SdrAutoSummary text={perfData.summaryText} isLoading={perfData.isLoading} />
-
-          {/* KPI Cards + Projection side by side */}
+          {/* KPI Cards + Projection + Reembolsos individuais */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
             <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
-            <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+            <div className="space-y-5">
+              <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
+              <PersonalRefundsCard
+                startDate={startDate}
+                endDate={endDate}
+                closerName={perfData.closerInfo?.name}
+              />
+            </div>
           </div>
-
-          {/* Funnel + Daily chart side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <SdrFunnelPanel funnel={perfData.funnel} isLoading={perfData.isLoading} />
-            <CloserDailyChart dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
-          </div>
-
-          {/* Team Comparison */}
-          <SdrTeamComparisonPanel data={perfData.teamComparison} isLoading={perfData.isLoading} />
-
-          {/* Daily Breakdown Table */}
-          <CloserDailyBreakdownTable dailyRows={perfData.dailyRows} isLoading={perfData.isLoading} />
         </TabsContent>
 
         <TabsContent value="leads">
