@@ -72,9 +72,8 @@ function useReconciliacao() {
         const tx = txMap.get(t.hubla_transaction_id as string);
         const valorParcela = Number(tx?.product_price ?? 0);
         const nInst = Number(tx?.total_installments ?? 1);
-        const esperado = nInst > 1
-          ? Math.round(valorParcela * nInst * 100) / 100
-          : Math.round(valorParcela * 100) / 100;
+        // Valor esperado = product_price original do webhook Hubla (sem multiplicar por parcelas).
+        const esperado = Math.round(valorParcela * 100) / 100;
         const gravado = Math.round(Number(t.valor_total ?? 0) * 100) / 100;
         const dif = Math.round((esperado - gravado) * 100) / 100;
         return {
