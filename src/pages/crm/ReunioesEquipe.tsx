@@ -167,6 +167,7 @@ export default function ReunioesEquipe() {
   };
 
   const { start, end } = getDateRange();
+  const { data: refundDetails, isLoading: refundDetailsLoading } = useRefundDetailsInPeriod(start, end);
 
   // Today's dates for day metrics
   const today = new Date();
