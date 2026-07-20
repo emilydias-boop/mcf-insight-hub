@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, Plus, Check, Trash2, History, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Check, Trash2, History, RefreshCw, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,10 +109,66 @@ export default function AReceberDetalhe() {
   const [renegQtd, setRenegQtd] = useState('3');
   const [renegPrimeiraVenc, setRenegPrimeiraVenc] = useState('');
 
+  // ==== Baixar título original como entrada (quando já existem parcelas)
+  const [openEntrada, setOpenEntrada] = useState(false);
+  const [entradaPagValor, setEntradaPagValor] = useState('');
+  const [entradaPagData, setEntradaPagData] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [entradaPagForma, setEntradaPagForma] = useState('pix');
+
   const saldoRestante = useMemo(() => {
     const total = Number(titulo?.valor_total || 0);
     return Math.max(0, +(total - totals.pago).toFixed(2));
   }, [titulo?.valor_total, totals.pago]);
+
+  const temEntradaRegistrada = useMemo(
+    () => (parcelas ?? []).some(p => p.tipo_parcela === 'entrada'),
+    [parcelas],
+  );
+
+  const abrirBaixarEntrada = () => {
+    setEntradaPagValor(saldoRestante > 0 ? String(saldoRestante.toFixed(2)) : '');
+    setEntradaPagData(format(new Date(), 'yyyy-MM-dd'));
+    setEntradaPagForma(titulo?.payment_method || 'pix');
+    setOpenEntrada(true);
+  };
+
+  const confirmarBaixarEntrada = async () => {
+    if (!id) return;
+    const valor = Number(entradaPagValor || 0);
+    if (valor <= 0) {
+      toast.error('Informe o valor da entrada paga');
+      return;
+    }
+    if (!entradaPagData) {
+      toast.error('Informe a data do pagamento');
+      return;
+    }
+    // Numero 0 para entrada do título original (não colide com parcelas existentes)
+    const existentes = parcelas ?? [];
+    const jaExisteZero = existentes.some(p => Number(p.numero) === 0);
+    const numero = jaExisteZero
+      ? Math.min(0, ...existentes.map(p => Number(p.numero) || 0)) - 1
+      : 0;
+    try {
+      await createParcelas.mutateAsync({
+        tituloId: id,
+        parcelas: [{
+          numero,
+          tipo_parcela: 'entrada',
+          valor,
+          valor_pago: valor,
+          data_vencimento: entradaPagData,
+          data_pagamento: entradaPagData,
+          forma_pagamento: entradaPagForma,
+          status: 'pago',
+        }],
+      });
+      toast.success('Entrada do título registrada como paga');
+      setOpenEntrada(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao baixar entrada');
+    }
+  };
 
   const abrirRenegociar = () => {
     setRenegQtd('3');
@@ -320,6 +376,11 @@ export default function AReceberDetalhe() {
                 <RefreshCw className="w-4 h-4 mr-1" /> Renegociar restantes
               </Button>
             )}
+            {canManage && (parcelas ?? []).length > 0 && saldoRestante > 0 && (
+              <Button size="sm" variant="outline" onClick={abrirBaixarEntrada}>
+                <Wallet className="w-4 h-4 mr-1" /> Baixar entrada
+              </Button>
+            )}
             <Dialog open={openLancar} onOpenChange={setOpenLancar}>
               <DialogTrigger asChild>
                 <Button size="sm" onClick={abrirLancar}>
@@ -497,6 +558,57 @@ export default function AReceberDetalhe() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
             <Button onClick={confirmPay} disabled={markPaga.isPending}>Confirmar baixa</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal baixar entrada do título original */}
+      <Dialog open={openEntrada} onOpenChange={setOpenEntrada}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Baixar entrada do título</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              Registra o pagamento do título original como uma parcela de entrada quitada.
+              As demais parcelas continuam em aberto.
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Saldo restante</div>
+                <div className="font-semibold text-amber-600">{brl(saldoRestante)}</div>
+              </div>
+              <div className="rounded border p-2">
+                <div className="text-xs text-muted-foreground">Já recebido</div>
+                <div className="font-semibold text-emerald-600">{brl(totals.pago)}</div>
+              </div>
+            </div>
+            {temEntradaRegistrada && (
+              <div className="text-xs text-amber-600">
+                Já existe uma entrada registrada para este título. Uma nova entrada será somada às demais.
+              </div>
+            )}
+            <div>
+              <Label>Valor pago</Label>
+              <Input type="number" step="0.01" value={entradaPagValor} onChange={e => setEntradaPagValor(e.target.value)} />
+            </div>
+            <div>
+              <Label>Data do pagamento</Label>
+              <Input type="date" value={entradaPagData} onChange={e => setEntradaPagData(e.target.value)} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={entradaPagForma} onValueChange={setEntradaPagForma}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenEntrada(false)}>Cancelar</Button>
+            <Button onClick={confirmarBaixarEntrada} disabled={createParcelas.isPending}>Confirmar baixa</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
