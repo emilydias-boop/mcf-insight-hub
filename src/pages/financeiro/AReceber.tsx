@@ -90,14 +90,25 @@ export default function AReceber() {
   const { data: users } = useFinanceiroUsers();
   const updateTitulo = useUpdateArTitulo();
 
-  const kpis = useMemo(() => {
+  const titulosFiltrados = useMemo(() => {
     const list = titulos ?? [];
+    const q = numeroTitulo.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(t => {
+      const num = ticketNumber(t.id).toLowerCase();
+      // aceita "761226" ou "761226-2" (prefixo do documento da parcela)
+      return num.includes(q) || q.startsWith(num);
+    });
+  }, [titulos, numeroTitulo]);
+
+  const kpis = useMemo(() => {
+    const list = titulosFiltrados;
     const totalContratado = list.reduce((s, t) => s + Number(t.valor_total || 0), 0);
     const totalRecebido = list.reduce((s, t) => s + (t.valor_pago || 0), 0);
     const saldo = list.reduce((s, t) => s + (t.valor_pendente || 0), 0);
     const pendentesLancamento = list.filter(t => t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0).length;
     return { totalContratado, totalRecebido, saldo, pendentesLancamento, qtd: list.length };
-  }, [titulos]);
+  }, [titulosFiltrados]);
 
   const handleAssign = async (tituloId: string, userId: string) => {
     try {
