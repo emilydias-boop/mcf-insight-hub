@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import {
@@ -142,9 +142,21 @@ export default function AReceber() {
       </div>
 
       <Tabs defaultValue="listagem" className="w-full">
-        <TabsList>
-          <TabsTrigger value="listagem">Listagem</TabsTrigger>
-          <TabsTrigger value="kanban">Kanban Cobrança</TabsTrigger>
+        <TabsList className="h-auto gap-2 bg-transparent p-0">
+          <TabsTrigger
+            value="listagem"
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
+          >
+            <List className="w-5 h-5" />
+            <span className="text-sm font-semibold">Listagem</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="kanban"
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
+          >
+            <KanbanSquare className="w-5 h-5" />
+            <span className="text-sm font-semibold">Esteira Cobrança</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {/* KPIs */}
