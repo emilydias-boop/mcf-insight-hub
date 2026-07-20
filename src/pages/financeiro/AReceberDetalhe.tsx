@@ -24,6 +24,7 @@ import {
   type ArParcela,
 } from '@/types/aReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
+import { parcelaDocNumber } from '@/lib/arTicketNumber';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -377,6 +378,7 @@ export default function AReceberDetalhe() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Documento</TableHead>
                   <TableHead>#</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Vencimento</TableHead>
@@ -390,6 +392,7 @@ export default function AReceberDetalhe() {
               <TableBody>
                 {(parcelas ?? []).map(p => (
                   <TableRow key={p.id}>
+                    <TableCell className="font-mono text-xs">{parcelaDocNumber(titulo.id, p.numero)}</TableCell>
                     <TableCell>{p.numero}</TableCell>
                     <TableCell className="text-xs">{AR_PARCELA_TIPO_LABEL[p.tipo_parcela]}</TableCell>
                     <TableCell className="text-xs">{format(new Date(p.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
