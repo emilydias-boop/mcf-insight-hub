@@ -13,10 +13,12 @@ import { Label } from '@/components/ui/label';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle } from 'lucide-react';
+import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useArTitulos, useUpdateCobrancaStage, useRegistrarCobrancaContato } from '@/hooks/useAReceber';
-import type { ArCobrancaStage, ArTitulo } from '@/types/aReceber';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { useArTitulos, useUpdateCobrancaStage, useRegistrarCobrancaContato, useMarkArParcelaPaga } from '@/hooks/useAReceber';
+import type { ArCobrancaStage, ArTitulo, ArParcela } from '@/types/aReceber';
 import { AR_COBRANCA_STAGE_LABEL } from '@/types/aReceber';
 
 const brl = (v: number) =>
@@ -40,6 +42,13 @@ export function CobrancaStageBadge({ stage }: { stage: ArCobrancaStage }) {
     </Badge>
   );
 }
+
+type ParcelaCard = {
+  parcela: ArParcela;
+  titulo: ArTitulo;
+  stage: ArCobrancaStage;
+  diasAtraso: number;
+};
 
 function ContatoDialog({ titulo, onDone }: { titulo: ArTitulo; onDone: () => void }) {
   const [open, setOpen] = useState(false);
@@ -83,8 +92,62 @@ function ContatoDialog({ titulo, onDone }: { titulo: ArTitulo; onDone: () => voi
   );
 }
 
-function Card_({ titulo, onOpen, onJudicial }: { titulo: ArTitulo; onOpen: () => void; onJudicial: () => void }) {
-  const atrasoBadge = (titulo.dias_atraso ?? 0) > 0;
+function BaixarParcelaDialog({ item, onConfirm }: { item: ParcelaCard; onConfirm: (valor: number, data: string, forma: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [valor, setValor] = useState<string>(String(item.parcela.valor ?? 0));
+  const [data, setData] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [forma, setForma] = useState<string>(item.titulo.payment_method || 'pix');
+  const [loading, setLoading] = useState(false);
+  const submit = async () => {
+    setLoading(true);
+    try {
+      await onConfirm(Number(valor) || 0, data, forma);
+      setOpen(false);
+      toast.success('Parcela baixada');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
+          <CheckCircle2 className="w-4 h-4 mr-2" /> Baixar parcela
+        </DropdownMenuItem>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Baixar parcela {item.parcela.numero}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="text-sm text-muted-foreground">{item.titulo.customer_name}</div>
+          <div>
+            <Label>Valor pago</Label>
+            <input className="w-full mt-1 rounded-md border bg-background px-3 py-2 text-sm" type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} />
+          </div>
+          <div>
+            <Label>Data do pagamento</Label>
+            <input className="w-full mt-1 rounded-md border bg-background px-3 py-2 text-sm" type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          </div>
+          <div>
+            <Label>Forma de pagamento</Label>
+            <input className="w-full mt-1 rounded-md border bg-background px-3 py-2 text-sm" value={forma} onChange={(e) => setForma(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button onClick={submit} disabled={loading}>Confirmar baixa</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOpen: () => void; onJudicial: () => void; onBaixar: (valor: number, data: string, forma: string) => Promise<void> }) {
+  const { titulo, parcela, diasAtraso } = item;
+  const venc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
   return (
     <div className="rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-shadow space-y-2">
       <div className="flex items-start justify-between gap-2">
@@ -101,12 +164,13 @@ function Card_({ titulo, onOpen, onJudicial }: { titulo: ArTitulo; onOpen: () =>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BaixarParcelaDialog item={item} onConfirm={onBaixar} />
             <DropdownMenuItem onSelect={onOpen}>
               <ExternalLink className="w-4 h-4 mr-2" /> Abrir detalhes
             </DropdownMenuItem>
             <ContatoDialog titulo={titulo} onDone={() => {}} />
             <DropdownMenuSeparator />
-            {titulo.stage_effective !== 'judicial' && (
+            {item.stage !== 'judicial' && (
               <DropdownMenuItem onSelect={onJudicial} className="text-red-600">
                 <Gavel className="w-4 h-4 mr-2" /> Mover para judicial
               </DropdownMenuItem>
@@ -115,22 +179,26 @@ function Card_({ titulo, onOpen, onJudicial }: { titulo: ArTitulo; onOpen: () =>
         </DropdownMenu>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">Saldo</span>
-        <span className="font-semibold text-amber-600">{brl(titulo.valor_pendente || 0)}</span>
+        <span className="text-muted-foreground">Parcela</span>
+        <span className="font-medium">{parcela.numero}/{titulo.total_installments_hubla || parcela.numero}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">Próx. vencimento</span>
-        <span>{titulo.proxima_parcela ? format(new Date(titulo.proxima_parcela + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</span>
+        <span className="text-muted-foreground">Valor</span>
+        <span className="font-semibold text-amber-600">{brl(Number(parcela.valor) || 0)}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Vencimento</span>
+        <span>{venc}</span>
       </div>
       <div className="flex items-center gap-2 pt-1">
-        {atrasoBadge && (
+        {diasAtraso > 0 && (
           <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/30 text-[10px]">
-            {titulo.dias_atraso}d em atraso
+            {diasAtraso}d em atraso
           </Badge>
         )}
-        <Badge variant="outline" className="text-[10px]">
-          {titulo.parcelas_pagas}/{titulo.parcelas_total} parcelas
-        </Badge>
+        {parcela.tipo_parcela === 'entrada' && (
+          <Badge variant="outline" className="text-[10px]">Entrada</Badge>
+        )}
       </div>
     </div>
   );
@@ -140,24 +208,69 @@ export function KanbanCobranca() {
   const navigate = useNavigate();
   const { data: titulos, isLoading } = useArTitulos({ status: 'aberto' });
   const updateStage = useUpdateCobrancaStage();
+  const baixar = useMarkArParcelaPaga();
+
+  const tituloIds = useMemo(() => (titulos ?? []).map(t => t.id), [titulos]);
+
+  const { data: parcelas, isLoading: loadingParcelas } = useQuery({
+    queryKey: ['ar-parcelas-kanban', tituloIds],
+    enabled: tituloIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ar_parcelas' as any)
+        .select('*')
+        .in('titulo_id', tituloIds)
+        .neq('status', 'pago')
+        .neq('status', 'cancelado')
+        .order('data_vencimento', { ascending: true });
+      if (error) throw error;
+      return (data || []) as unknown as ArParcela[];
+    },
+  });
 
   const byStage = useMemo(() => {
-    const buckets: Record<ArCobrancaStage, ArTitulo[]> = { mes: [], atraso: [], judicial: [] };
-    (titulos ?? []).forEach(t => {
-      const s = (t.stage_effective || 'mes') as ArCobrancaStage;
-      buckets[s].push(t);
+    const buckets: Record<ArCobrancaStage, ParcelaCard[]> = { mes: [], atraso: [], judicial: [] };
+    const tituloMap = new Map<string, ArTitulo>((titulos ?? []).map(t => [t.id, t]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    (parcelas ?? []).forEach(p => {
+      const titulo = tituloMap.get(p.titulo_id);
+      if (!titulo) return;
+
+      const dv = p.data_vencimento ? new Date(p.data_vencimento + 'T00:00:00') : null;
+      const diasAtraso = dv && dv < today ? Math.floor((today.getTime() - dv.getTime()) / 86400000) : 0;
+
+      let stage: ArCobrancaStage;
+      // Título marcado judicial (manual) leva todas as parcelas em aberto para judicial
+      if (titulo.cobranca_stage === 'judicial') {
+        stage = 'judicial';
+      } else if (diasAtraso > 0) {
+        stage = 'atraso';
+      } else {
+        stage = 'mes';
+      }
+      buckets[stage].push({ parcela: p, titulo, stage, diasAtraso });
+    });
+
+    // ordena cada bucket por vencimento (atraso primeiro pelos mais antigos)
+    (Object.keys(buckets) as ArCobrancaStage[]).forEach(k => {
+      buckets[k].sort((a, b) => (a.parcela.data_vencimento || '').localeCompare(b.parcela.data_vencimento || ''));
     });
     return buckets;
-  }, [titulos]);
+  }, [titulos, parcelas]);
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const stage = result.destination.droppableId as ArCobrancaStage;
-    const tituloId = result.draggableId;
+    // draggableId = parcelaId; recuperar titulo_id do source bucket
+    const parcelaId = result.draggableId;
     const src = result.source.droppableId as ArCobrancaStage;
     if (stage === src) return;
+    const item = byStage[src].find(i => i.parcela.id === parcelaId);
+    if (!item) return;
     try {
-      await updateStage.mutateAsync({ tituloId, stage });
+      await updateStage.mutateAsync({ tituloId: item.titulo.id, stage });
       toast.success(`Movido para ${AR_COBRANCA_STAGE_LABEL[stage]}`);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao mover');
@@ -173,7 +286,7 @@ export function KanbanCobranca() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || loadingParcelas) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {STAGES.map(s => <Skeleton key={s.id} className="h-96" />)}
@@ -186,7 +299,7 @@ export function KanbanCobranca() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {STAGES.map(stage => {
           const list = byStage[stage.id];
-          const totalSaldo = list.reduce((s, t) => s + (t.valor_pendente || 0), 0);
+          const totalSaldo = list.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
           const Icon = stage.icon;
           return (
             <Card key={stage.id} className={`border-t-4 ${stage.accent}`}>
@@ -211,11 +324,11 @@ export function KanbanCobranca() {
                       {list.length === 0 && (
                         <div className="text-center text-xs text-muted-foreground py-8">
                           <Wallet className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                          Sem títulos
+                          Sem parcelas
                         </div>
                       )}
-                      {list.map((t, idx) => (
-                        <Draggable key={t.id} draggableId={t.id} index={idx}>
+                      {list.map((item, idx) => (
+                        <Draggable key={item.parcela.id} draggableId={item.parcela.id} index={idx}>
                           {(dp) => (
                             <div
                               ref={dp.innerRef}
@@ -223,9 +336,16 @@ export function KanbanCobranca() {
                               {...dp.dragHandleProps}
                             >
                               <Card_
-                                titulo={t}
-                                onOpen={() => navigate(`/financeiro/a-receber/${t.id}`)}
-                                onJudicial={() => moveToJudicial(t.id)}
+                                item={item}
+                                onOpen={() => navigate(`/financeiro/a-receber/${item.titulo.id}`)}
+                                onJudicial={() => moveToJudicial(item.titulo.id)}
+                                onBaixar={(valor, data, forma) => baixar.mutateAsync({
+                                  id: item.parcela.id,
+                                  tituloId: item.titulo.id,
+                                  valor_pago: valor,
+                                  data_pagamento: data,
+                                  forma_pagamento: forma,
+                                })}
                               />
                             </div>
                           )}
