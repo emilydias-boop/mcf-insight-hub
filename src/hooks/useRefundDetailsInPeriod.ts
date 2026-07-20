@@ -192,7 +192,7 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         const deal = dealMap.get(h.linked_deal_id);
         const latest = latestByDeal.get(h.linked_deal_id);
         const sdr = latest?.bookedBy ? sdrMap.get(latest.bookedBy) : null;
-        const sdrEmail = sdr?.email ?? (deal?.owner_id || '').toLowerCase() || null;
+        const sdrEmail = sdr?.email ?? ((deal?.owner_id || '').toLowerCase() || null);
         items.push({
           refund_at: h.updated_at,
           source: 'hubla',
@@ -211,7 +211,7 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         const deal = dealMap.get(dealId);
         const latest = latestByDeal.get(dealId);
         const sdr = latest?.bookedBy ? sdrMap.get(latest.bookedBy) : null;
-        const sdrEmail = sdr?.email ?? (deal?.owner_id || '').toLowerCase() || null;
+        const sdrEmail = sdr?.email ?? ((deal?.owner_id || '').toLowerCase() || null);
         items.push({
           refund_at: val.at,
           source: 'mcf_pay',
