@@ -81,6 +81,7 @@ export function TeamKPICards({
     tooltip: string;
     bucket?: KpiBucket;
     subline?: string;
+    customOnClick?: () => void;
   }> = [
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
@@ -169,6 +170,7 @@ export function TeamKPICards({
         ? `Contratos reembolsados no período. ⚠ ${orphanRefundsCount} reembolso(s) órfão(s) sem deal vinculado — clique para verificar.`
         : "Contratos reembolsados no período. Clique para ver clientes, SDRs e Closers atribuídos.",
       subline: orphanRefundsCount > 0 ? `⚠ ${orphanRefundsCount} órfão(s)` : undefined,
+      customOnClick: onRefundClick,
     },
     {
       title: "Taxa Conversão",
