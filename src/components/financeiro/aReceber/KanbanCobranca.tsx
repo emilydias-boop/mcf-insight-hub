@@ -146,11 +146,23 @@ function BaixarParcelaDialog({ item, onConfirm }: { item: ParcelaCard; onConfirm
   );
 }
 
+function isVencimentoNaSemanaCorrente(dataVencimento: string | null): boolean {
+  if (!dataVencimento) return false;
+  const venc = new Date(dataVencimento + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const limite = new Date(today);
+  limite.setDate(today.getDate() + 7);
+  limite.setHours(23, 59, 59, 999);
+  return venc >= today && venc <= limite;
+}
+
 function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOpen: () => void; onJudicial: () => void; onBaixar: (valor: number, data: string, forma: string) => Promise<void> }) {
   const { titulo, parcela, diasAtraso } = item;
   const venc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+  const venceEstaSemana = isVencimentoNaSemanaCorrente(parcela.data_vencimento);
   return (
-    <div className="rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-shadow space-y-2">
+    <div className={`rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-all space-y-2 ${venceEstaSemana ? 'ring-2 ring-lime-500 border-lime-500/70 bg-lime-500/5' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-medium text-sm truncate">{titulo.customer_name}</div>
@@ -193,9 +205,14 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">Vencimento</span>
-        <span>{venc}</span>
+        <span className={venceEstaSemana ? 'font-semibold text-lime-600' : ''}>{venc}</span>
       </div>
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex items-center gap-2 pt-1 flex-wrap">
+        {venceEstaSemana && (
+          <Badge variant="outline" className="bg-lime-500/15 text-lime-700 border-lime-500/40 text-[10px] animate-pulse">
+            Vence em até 7 dias
+          </Badge>
+        )}
         {diasAtraso > 0 && (
           <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/30 text-[10px]">
             {diasAtraso}d em atraso
