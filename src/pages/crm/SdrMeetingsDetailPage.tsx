@@ -150,6 +150,14 @@ export default function SdrMeetingsDetailPage() {
     );
   }
 
+  if (accessDenied) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        Você só pode visualizar seu próprio Painel Comercial.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 p-6">
       {/* Header */}
