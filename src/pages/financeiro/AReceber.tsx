@@ -10,9 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale } from 'lucide-react';
-import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck } from 'lucide-react';
+import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { format as fmtDate } from 'date-fns';
 import {
   AR_TITULO_STATUS_LABEL,
   AR_TITULO_TIPO_LABEL,
@@ -90,6 +94,29 @@ export default function AReceber() {
 
   const { data: users } = useFinanceiroUsers();
   const updateTitulo = useUpdateArTitulo();
+  const baixarLote = useBaixarTitulosLote();
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openBaixaLote, setOpenBaixaLote] = useState(false);
+  const [baixaData, setBaixaData] = useState(fmtDate(new Date(), 'yyyy-MM-dd'));
+  const [baixaForma, setBaixaForma] = useState('pix');
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllVisible = (ids: string[], checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) ids.forEach((id) => next.add(id));
+      else ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
 
   const titulosFiltrados = useMemo(() => {
     const list = titulos ?? [];
@@ -251,6 +278,21 @@ export default function AReceber() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    {(() => {
+                      const openIds = titulosFiltrados.filter(t => t.status === 'aberto').map(t => t.id);
+                      const allChecked = openIds.length > 0 && openIds.every(id => selected.has(id));
+                      const someChecked = openIds.some(id => selected.has(id));
+                      return (
+                        <Checkbox
+                          checked={allChecked ? true : someChecked ? 'indeterminate' : false}
+                          onCheckedChange={(v) => toggleAllVisible(openIds, !!v)}
+                          aria-label="Selecionar todos"
+                          disabled={openIds.length === 0}
+                        />
+                      );
+                    })()}
+                  </TableHead>
                   <TableHead className="w-[90px]">Nº</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Produto</TableHead>
@@ -268,12 +310,22 @@ export default function AReceber() {
               <TableBody>
                 {titulosFiltrados.map(t => {
                   const precisaLancar = t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0;
+                  const isOpen = t.status === 'aberto';
+                  const isSel = selected.has(t.id);
                   return (
                     <TableRow
                       key={t.id}
-                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}cursor-pointer hover:bg-muted/40`}
+                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}${isSel ? 'bg-lime-500/10 ' : ''}cursor-pointer hover:bg-muted/40`}
                       onDoubleClick={() => navigate(`/financeiro/a-receber/${t.id}`)}
                     >
+                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSel}
+                          onCheckedChange={() => toggleSelected(t.id)}
+                          disabled={!isOpen}
+                          aria-label={`Selecionar título ${ticketNumber(t.id)}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {ticketNumber(t.id)}
                       </TableCell>
@@ -341,6 +393,102 @@ export default function AReceber() {
           )}
         </CardContent>
       </Card>
+
+      {selected.size > 0 && (() => {
+        const selList = titulosFiltrados.filter(t => selected.has(t.id));
+        const totalSaldo = selList.reduce((s, t) => s + Number(t.valor_pendente ?? t.valor_total ?? 0), 0);
+        return (
+          <div className="sticky bottom-4 z-30 mx-auto max-w-3xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-lime-500/40 bg-card/95 backdrop-blur px-4 py-3 shadow-lg">
+              <div className="text-sm">
+                <span className="font-semibold">{selected.size}</span> título(s) selecionado(s)
+                {' · '}
+                <span className="text-muted-foreground">Saldo:</span>{' '}
+                <span className="font-semibold text-amber-600">{brl(totalSaldo)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+                  Limpar
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-lime-600 hover:bg-lime-700 text-white"
+                  onClick={() => {
+                    setBaixaData(fmtDate(new Date(), 'yyyy-MM-dd'));
+                    setOpenBaixaLote(true);
+                  }}
+                >
+                  <CheckCheck className="w-4 h-4 mr-1" />
+                  Baixar totalmente
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <Dialog open={openBaixaLote} onOpenChange={setOpenBaixaLote}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Baixa em lote</DialogTitle>
+            <DialogDescription>
+              Todas as parcelas em aberto dos {selected.size} título(s) selecionado(s) serão marcadas como pagas
+              e os títulos ficarão como <b>Integral / Quitado</b>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Data do pagamento</Label>
+              <Input type="date" value={baixaData} onChange={(e) => setBaixaData(e.target.value)} />
+            </div>
+            <div>
+              <Label>Forma de pagamento</Label>
+              <Select value={baixaForma} onValueChange={setBaixaForma}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="boleto">Boleto</SelectItem>
+                  <SelectItem value="cartao">Cartão</SelectItem>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-md bg-muted/40 border p-3 text-xs text-muted-foreground max-h-40 overflow-auto">
+              {titulosFiltrados.filter(t => selected.has(t.id)).map(t => (
+                <div key={t.id} className="flex justify-between py-0.5">
+                  <span>{ticketNumber(t.id)} · {t.customer_name}</span>
+                  <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenBaixaLote(false)}>Cancelar</Button>
+            <Button
+              className="bg-lime-600 hover:bg-lime-700 text-white"
+              disabled={baixarLote.isPending || !baixaData}
+              onClick={async () => {
+                try {
+                  const res = await baixarLote.mutateAsync({
+                    tituloIds: Array.from(selected),
+                    data_pagamento: baixaData,
+                    forma_pagamento: baixaForma,
+                  });
+                  toast.success(`Baixados ${res.titulos} título(s) e ${res.parcelas} parcela(s).`);
+                  setSelected(new Set());
+                  setOpenBaixaLote(false);
+                } catch (e: any) {
+                  toast.error(e?.message || 'Erro ao baixar títulos em lote');
+                }
+              }}
+            >
+              {baixarLote.isPending ? 'Baixando…' : 'Confirmar baixa'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
         </TabsContent>
         <TabsContent value="kanban" className="mt-4">
           <KanbanCobranca />

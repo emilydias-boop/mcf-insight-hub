@@ -251,6 +251,121 @@ export function useDeleteArParcela() {
   });
 }
 
+// ============ BAIXA EM LOTE ============
+export function useBaixarTitulosLote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tituloIds,
+      data_pagamento,
+      forma_pagamento,
+    }: {
+      tituloIds: string[];
+      data_pagamento: string;
+      forma_pagamento?: string;
+    }) => {
+      if (!tituloIds.length) return { titulos: 0, parcelas: 0 };
+
+      // 1) Buscar títulos alvo
+      const { data: titulos, error: e1 } = await supabase
+        .from('ar_titulos' as any)
+        .select('id, valor_total, status')
+        .in('id', tituloIds);
+      if (e1) throw e1;
+
+      // 2) Buscar parcelas em aberto desses títulos
+      const { data: parcelas, error: e2 } = await supabase
+        .from('ar_parcelas' as any)
+        .select('id, titulo_id, valor, status')
+        .in('titulo_id', tituloIds)
+        .not('status', 'in', '("pago","cancelado")');
+      if (e2) throw e2;
+
+      const parcelasList = (parcelas ?? []) as any[];
+      const parcelasByTitulo = new Map<string, any[]>();
+      parcelasList.forEach((p) => {
+        const arr = parcelasByTitulo.get(p.titulo_id) ?? [];
+        arr.push(p);
+        parcelasByTitulo.set(p.titulo_id, arr);
+      });
+
+      let totalParcelasBaixadas = 0;
+
+      for (const t of (titulos ?? []) as any[]) {
+        const lista = parcelasByTitulo.get(t.id) ?? [];
+        if (lista.length > 0) {
+          // Baixar todas as parcelas em aberto do título
+          for (const p of lista) {
+            const valor = Number(p.valor ?? 0);
+            const { error: eu } = await supabase
+              .from('ar_parcelas' as any)
+              .update({
+                status: 'pago',
+                valor_pago: valor,
+                data_pagamento,
+                forma_pagamento: forma_pagamento || null,
+              } as any)
+              .eq('id', p.id);
+            if (eu) throw eu;
+            await supabase.from('ar_historico' as any).insert({
+              titulo_id: t.id,
+              parcela_id: p.id,
+              tipo: 'baixa_lote',
+              descricao: `Baixa em lote (${forma_pagamento || 'sem forma'})`,
+              valor,
+            } as any);
+            totalParcelasBaixadas += 1;
+          }
+        } else {
+          // Sem parcelas: criar entrada integral quitando o título
+          const valor = Number(t.valor_total ?? 0);
+          if (valor > 0) {
+            const { data: novaParc, error: ei } = await supabase
+              .from('ar_parcelas' as any)
+              .insert({
+                titulo_id: t.id,
+                numero: 0,
+                tipo_parcela: 'entrada',
+                valor,
+                valor_pago: valor,
+                data_vencimento: data_pagamento,
+                data_pagamento,
+                forma_pagamento: forma_pagamento || null,
+                status: 'pago',
+              } as any)
+              .select()
+              .single();
+            if (ei) throw ei;
+            await supabase.from('ar_historico' as any).insert({
+              titulo_id: t.id,
+              parcela_id: (novaParc as any)?.id ?? null,
+              tipo: 'baixa_lote',
+              descricao: `Baixa integral em lote (${forma_pagamento || 'sem forma'})`,
+              valor,
+            } as any);
+            totalParcelasBaixadas += 1;
+          }
+        }
+
+        // Marcar título como quitado / integral
+        const { error: eut } = await supabase
+          .from('ar_titulos' as any)
+          .update({ status: 'quitado', tipo: 'integral' } as any)
+          .eq('id', t.id);
+        if (eut) throw eut;
+      }
+
+      return { titulos: (titulos ?? []).length, parcelas: totalParcelasBaixadas };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ar-titulos'] });
+      qc.invalidateQueries({ queryKey: ['ar-parcelas'] });
+      qc.invalidateQueries({ queryKey: ['ar-titulo'] });
+      qc.invalidateQueries({ queryKey: ['ar-historico'] });
+    },
+  });
+}
+
 // ============ COBRANÇA STAGE ============
 export function useUpdateCobrancaStage() {
   const qc = useQueryClient();
