@@ -13,7 +13,6 @@ import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
 import { CloserRevenueTab } from "@/components/closer/CloserRevenueTab";
 
 import { SdrPerformanceFilters } from "@/components/sdr/SdrPerformanceFilters";
-import { SdrAutoSummary } from "@/components/sdr/SdrAutoSummary";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrProjectionCard } from "@/components/sdr/SdrProjectionCard";
 import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
