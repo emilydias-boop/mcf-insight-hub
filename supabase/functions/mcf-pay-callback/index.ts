@@ -106,6 +106,46 @@ async function resolveDeal(data: any): Promise<ResolveResult> {
     }
   }
 
+  // Fallback: se ainda não achou nada mas temos email, tentar recuperar
+  // telefone/nome via hubla_transactions do mesmo cliente e refazer o match.
+  if (contactIds.size === 0 && email) {
+    const { data: hublaRows } = await supabase
+      .from("hubla_transactions")
+      .select("customer_phone, customer_name")
+      .ilike("customer_email", email)
+      .not("customer_phone", "is", null)
+      .limit(10);
+    const phonesTried = new Set<string>();
+    for (const row of hublaRows ?? []) {
+      const p9 = normalizePhone(row.customer_phone);
+      if (p9 && !phonesTried.has(p9)) {
+        phonesTried.add(p9);
+        const { data: byPhone } = await supabase
+          .from("crm_contacts")
+          .select("id, phone")
+          .ilike("phone", `%${p9}%`)
+          .limit(200);
+        for (const c of byPhone ?? []) {
+          if (normalizePhone(c.phone) === p9) contactIds.add(c.id);
+        }
+      }
+      if (contactIds.size === 0) {
+        const nm = normalizeName(row.customer_name);
+        if (nm && nm.length >= 5) {
+          const { data: byName } = await supabase
+            .from("crm_contacts")
+            .select("id, name")
+            .ilike("name", `%${row.customer_name}%`)
+            .limit(50);
+          for (const c of byName ?? []) {
+            if (normalizeName(c.name) === nm) contactIds.add(c.id);
+          }
+        }
+      }
+      if (contactIds.size > 0) break;
+    }
+  }
+
   if (contactIds.size === 0) {
     return { deal: null, strategy: "no_match" };
   }
