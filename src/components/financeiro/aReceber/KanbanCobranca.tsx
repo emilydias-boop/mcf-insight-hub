@@ -179,6 +179,10 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
         </DropdownMenu>
       </div>
       <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Documento</span>
+        <span className="font-mono font-medium">{parcelaDocNumber(titulo.id, parcela.numero)}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">Parcela</span>
         <span className="font-medium">{parcela.numero}/{titulo.total_installments_hubla || parcela.numero}</span>
       </div>
