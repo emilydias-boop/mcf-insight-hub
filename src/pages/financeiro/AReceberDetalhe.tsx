@@ -178,7 +178,10 @@ export default function AReceberDetalhe() {
   const abrirLancar = () => {
     if (!titulo) return;
     const total = Number(titulo.valor_total);
-    const qtd = Number(qtdParcelas || 1);
+    const totalHubla = Number(titulo.total_installments_hubla || 0);
+    const qtdSugerida = totalHubla > 1 ? totalHubla - 1 : 1;
+    setQtdParcelas(String(qtdSugerida));
+    const qtd = qtdSugerida;
     setEntradaValor('');
     setValorParcela(String((total / qtd).toFixed(2)));
     setPrimeiraVenc(format(new Date(new Date().setMonth(new Date().getMonth() + 1)), 'yyyy-MM-dd'));
