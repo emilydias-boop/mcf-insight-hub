@@ -4502,6 +4502,78 @@ export type Database = {
           },
         ]
       }
+      consorcio_proposals_deleted_log: {
+        Row: {
+          closer_email: string | null
+          closer_name: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          deal_id: string | null
+          deleted_by: string | null
+          deleted_by_email: string | null
+          deleted_by_name: string | null
+          deletion_reason: string
+          had_pending_registration: boolean
+          id: string
+          original_proposal_id: string
+          pending_registration_snapshot: Json | null
+          prazo_meses: number | null
+          proposal_created_at: string | null
+          proposal_details: string | null
+          status: string | null
+          tipo_produto: string | null
+          valor_credito: number | null
+        }
+        Insert: {
+          closer_email?: string | null
+          closer_name?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          deal_id?: string | null
+          deleted_by?: string | null
+          deleted_by_email?: string | null
+          deleted_by_name?: string | null
+          deletion_reason: string
+          had_pending_registration?: boolean
+          id?: string
+          original_proposal_id: string
+          pending_registration_snapshot?: Json | null
+          prazo_meses?: number | null
+          proposal_created_at?: string | null
+          proposal_details?: string | null
+          status?: string | null
+          tipo_produto?: string | null
+          valor_credito?: number | null
+        }
+        Update: {
+          closer_email?: string | null
+          closer_name?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          deal_id?: string | null
+          deleted_by?: string | null
+          deleted_by_email?: string | null
+          deleted_by_name?: string | null
+          deletion_reason?: string
+          had_pending_registration?: boolean
+          id?: string
+          original_proposal_id?: string
+          pending_registration_snapshot?: Json | null
+          prazo_meses?: number | null
+          proposal_created_at?: string | null
+          proposal_details?: string | null
+          status?: string | null
+          tipo_produto?: string | null
+          valor_credito?: number | null
+        }
+        Relationships: []
+      }
       consorcio_sorteio_history: {
         Row: {
           card_id: string

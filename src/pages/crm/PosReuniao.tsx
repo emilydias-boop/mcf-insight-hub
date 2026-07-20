@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,8 +25,13 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
   useRetomarContato, useTodasReunioes, useExcluirProposta,
+  useProposalHasPendingRegistration, useCartasExcluidas,
   type CompletedMeeting, type Proposal, type SemSucessoDeal, type AllMeetingDeal,
+  type DeletedProposalLog,
 } from '@/hooks/useConsorcioPostMeeting';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertTriangle, Info } from 'lucide-react';
 import { useMyCloser } from '@/hooks/useMyCloser';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -44,6 +49,7 @@ export default function PosReuniao() {
           <TabsTrigger value="propostas">Cartas Negociadas</TabsTrigger>
           <TabsTrigger value="concluidas">Concluídas - Operacional</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
+          <TabsTrigger value="excluidas">Cartas Excluídas</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
           <TabsTrigger value="match-socio">Match sócio-parceiro</TabsTrigger>
         </TabsList>
@@ -52,6 +58,7 @@ export default function PosReuniao() {
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
         <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
+        <TabsContent value="excluidas"><CartasExcluidasTab /></TabsContent>
         <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
         <TabsContent value="match-socio"><MatchSocioParceiroTab /></TabsContent>
       </Tabs>
@@ -655,37 +662,10 @@ function PropostasTab() {
 
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
 
-        <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir proposta?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteTarget && (
-                  <>
-                    Você está excluindo a proposta de <strong>{deleteTarget.contact_name || deleteTarget.deal_name}</strong> no valor de{' '}
-                    <strong>{formatCurrency(deleteTarget.valor_credito || 0)}</strong>.
-                    <br /><br />
-                    O valor será <strong>abatido do realizado</strong> exibido no BI Consórcio.
-                    Esta ação não pode ser desfeita.
-                  </>
-                )}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async () => {
-                  if (!deleteTarget) return;
-                  await excluir.mutateAsync(deleteTarget.id);
-                  setDeleteTarget(null);
-                }}
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <DeletePropostaDialog
+          proposal={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+        />
 
         {editTarget && (
           <EditProposalModal
@@ -1220,5 +1200,213 @@ function LoadingState() {
     <div className="flex items-center justify-center py-12">
       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
     </div>
+  );
+}
+
+// ─── Delete Proposta Dialog ─────────────────────────────────
+function DeletePropostaDialog({
+  proposal,
+  onClose,
+}: {
+  proposal: Proposal | null;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  const excluir = useExcluirProposta();
+  const { data: hasPending, isLoading: checkingPending } =
+    useProposalHasPendingRegistration(
+      proposal ? { id: proposal.id, deal_id: proposal.deal_id } : null,
+    );
+
+  React.useEffect(() => {
+    if (!proposal) setReason('');
+  }, [proposal]);
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  return (
+    <AlertDialog open={!!proposal} onOpenChange={o => !o && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Carta Negociada?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              {proposal && (
+                <p>
+                  Você está excluindo a carta de{' '}
+                  <strong>{proposal.contact_name || proposal.deal_name}</strong> no valor de{' '}
+                  <strong>{formatCurrency(proposal.valor_credito || 0)}</strong>.
+                </p>
+              )}
+              {checkingPending && (
+                <p className="text-xs text-muted-foreground">Verificando cadastro pendente…</p>
+              )}
+              {hasPending && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p className="text-sm">
+                    A carta já possui cadastro de cota em andamento. Favor informar ao time
+                    operacional para validar a exclusão/cancelamento. Ao confirmar, o cadastro
+                    pendente vinculado também será removido.
+                  </p>
+                </div>
+              )}
+              <p className="text-sm">
+                O valor será <strong>abatido do realizado</strong> exibido no BI Consórcio e a
+                carta será movida para <strong>Cartas Excluídas</strong>. Esta ação não pode ser
+                desfeita.
+              </p>
+              <div>
+                <label className="text-sm font-medium">
+                  Motivo da exclusão <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  placeholder="Descreva o motivo da exclusão/cancelamento…"
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={!reason.trim() || excluir.isPending}
+            onClick={async e => {
+              e.preventDefault();
+              if (!proposal || !reason.trim()) return;
+              try {
+                await excluir.mutateAsync({ proposal_id: proposal.id, reason });
+                onClose();
+              } catch {
+                /* toast já exibido */
+              }
+            }}
+          >
+            {excluir.isPending ? 'Excluindo…' : 'Excluir'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ─── Cartas Excluídas Tab ───────────────────────────────────
+function CartasExcluidasTab() {
+  const { data: logs, isLoading } = useCartasExcluidas();
+  const [search, setSearch] = useState('');
+
+  if (isLoading) return <LoadingState />;
+
+  const filtered = (logs || []).filter(l =>
+    !search.trim()
+      ? true
+      : (l.contact_name || '').toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const formatCurrency = (v: number | null) =>
+    v == null ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-base">Cartas Excluídas ({filtered.length})</CardTitle>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por contato..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 h-8"
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            Nenhuma carta excluída registrada.
+          </p>
+        ) : (
+          <TooltipProvider delayDuration={100}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Closer</TableHead>
+                  <TableHead>Valor Crédito</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Excluída em</TableHead>
+                  <TableHead>Excluída por</TableHead>
+                  <TableHead>Fluxo / Log</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((l: DeletedProposalLog) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">
+                      {l.contact_name || '—'}
+                      {l.had_pending_registration && (
+                        <Badge variant="outline" className="ml-2 text-[10px] border-amber-500/50 text-amber-700 dark:text-amber-300">
+                          tinha cadastro pendente
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">{l.closer_name || '—'}</TableCell>
+                    <TableCell>{formatCurrency(l.valor_credito)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs capitalize">
+                        {l.tipo_produto || '—'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {format(new Date(l.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {l.deleted_by_name || l.deleted_by_email || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Info className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-sm space-y-2">
+                          <div className="text-xs">
+                            <div><strong>Motivo:</strong> {l.deletion_reason}</div>
+                            <div><strong>Usuário:</strong> {l.deleted_by_name || l.deleted_by_email || '—'}</div>
+                            <div>
+                              <strong>Data/hora:</strong>{' '}
+                              {format(new Date(l.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+                            </div>
+                            <div>
+                              <strong>Cadastro pendente vinculado:</strong>{' '}
+                              {l.had_pending_registration ? 'Sim (removido junto)' : 'Não'}
+                            </div>
+                            {l.proposal_created_at && (
+                              <div>
+                                <strong>Carta criada em:</strong>{' '}
+                                {format(new Date(l.proposal_created_at), "dd/MM/yyyy", { locale: ptBR })}
+                              </div>
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TooltipProvider>
+        )}
+      </CardContent>
+    </Card>
   );
 }
