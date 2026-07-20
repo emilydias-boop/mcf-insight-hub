@@ -76,7 +76,7 @@ export default function AReceber() {
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
   const [product, setProduct] = useState<string>('todos');
-  const [responsavel, setResponsavel] = useState<string>('todos');
+  const [numeroTitulo, setNumeroTitulo] = useState<string>('');
   const [cobrancaStage, setCobrancaStage] = useState<string>('todos');
 
   const { data: titulos, isLoading } = useArTitulos({
@@ -84,7 +84,6 @@ export default function AReceber() {
     status: (status as any) === 'todos' ? undefined : (status as ArTituloStatus),
     tipo: tipo === 'todos' ? undefined : tipo,
     product_code: product === 'todos' ? undefined : product,
-    responsavel_id: responsavel === 'todos' ? undefined : responsavel,
     cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
   });
 
