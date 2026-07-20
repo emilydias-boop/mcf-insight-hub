@@ -4413,6 +4413,10 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           deal_id: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deletion_had_pending_registration: boolean | null
+          deletion_reason: string | null
           id: string
           motivo_recusa: string | null
           prazo_meses: number | null
@@ -4431,6 +4435,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deal_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_had_pending_registration?: boolean | null
+          deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
           prazo_meses?: number | null
@@ -4449,6 +4457,10 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           deal_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_had_pending_registration?: boolean | null
+          deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
           prazo_meses?: number | null
