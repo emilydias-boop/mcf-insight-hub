@@ -29,6 +29,8 @@ import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTabl
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useSdrRefundsInPeriod } from "@/hooks/useSdrRefundsInPeriod";
+import { useRefundDetailsInPeriod } from "@/hooks/useRefundDetailsInPeriod";
+import { RefundDetailsDialog } from "@/components/sdr/RefundDetailsDialog";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
