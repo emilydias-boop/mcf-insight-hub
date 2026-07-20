@@ -678,20 +678,196 @@ export { CONSORCIO_STAGE_IDS, CONSORCIO_ORIGIN_IDS };
 export function useExcluirProposta() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (proposal_id: string) => {
+    mutationFn: async (params: { proposal_id: string; reason: string }) => {
+      const { proposal_id, reason } = params;
+      if (!reason || !reason.trim()) throw new Error('Motivo da exclusão obrigatório.');
+
+      // 1. Buscar a proposta completa (com contato e closer via deal)
+      const { data: proposal, error: pErr } = await supabase
+        .from('consorcio_proposals')
+        .select(`
+          id, deal_id, valor_credito, prazo_meses, tipo_produto, status,
+          proposal_details, created_at,
+          crm_deals(owner_id, crm_contacts(name, phone, email))
+        `)
+        .eq('id', proposal_id)
+        .maybeSingle();
+      if (pErr) throw pErr;
+      if (!proposal) throw new Error('Carta negociada não encontrada.');
+
+      const contact = (proposal as any).crm_deals?.crm_contacts || {};
+      const ownerEmail = (proposal as any).crm_deals?.owner_id || null;
+
+      // 2. Resolver nome do closer via tabela closers (fallback: email do owner)
+      let closerName: string | null = null;
+      if (ownerEmail) {
+        const { data: closer } = await supabase
+          .from('closers')
+          .select('name')
+          .ilike('email', ownerEmail)
+          .maybeSingle();
+        closerName = closer?.name || ownerEmail;
+      }
+
+      // 3. Verificar se existe cadastro pendente vinculado (por proposal_id ou deal_id)
+      const { data: pendingRegs } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, status, storage_path:id')
+        .or(`proposal_id.eq.${proposal_id},deal_id.eq.${proposal.deal_id}`);
+      const activePendings = (pendingRegs || []).filter(
+        (p: any) => p.status !== 'excluida',
+      );
+
+      // 4. Snapshot dos cadastros pendentes (para o log)
+      let snapshot: any = null;
+      if (activePendings.length > 0) {
+        const ids = activePendings.map((p: any) => p.id);
+        const { data: fullRegs } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('*')
+          .in('id', ids);
+        snapshot = fullRegs;
+      }
+
+      // 5. Resolver usuário atual (para armazenar nome/email no log)
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id ?? null;
+      let userName: string | null = null;
+      let userEmail: string | null = authData?.user?.email ?? null;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, full_name, email')
+          .eq('id', userId)
+          .maybeSingle();
+        userName = (profile as any)?.name || (profile as any)?.full_name || null;
+        userEmail = userEmail || (profile as any)?.email || null;
+      }
+
+      // 6. Inserir no log de exclusões
+      const { error: logErr } = await supabase
+        .from('consorcio_proposals_deleted_log' as any)
+        .insert({
+          original_proposal_id: proposal_id,
+          deal_id: proposal.deal_id,
+          contact_name: contact.name ?? null,
+          contact_phone: contact.phone ?? null,
+          contact_email: contact.email ?? null,
+          closer_name: closerName,
+          closer_email: ownerEmail,
+          valor_credito: proposal.valor_credito,
+          prazo_meses: proposal.prazo_meses,
+          tipo_produto: proposal.tipo_produto,
+          status: proposal.status,
+          proposal_created_at: proposal.created_at,
+          proposal_details: proposal.proposal_details,
+          had_pending_registration: activePendings.length > 0,
+          pending_registration_snapshot: snapshot,
+          deleted_by: userId,
+          deleted_by_name: userName,
+          deleted_by_email: userEmail,
+          deletion_reason: reason.trim(),
+        });
+      if (logErr) throw logErr;
+
+      // 7. Excluir cadastros pendentes vinculados (docs + registros)
+      for (const p of activePendings) {
+        const { data: docs } = await supabase
+          .from('consortium_documents')
+          .select('id, storage_path')
+          .eq('pending_registration_id', p.id);
+        for (const d of docs || []) {
+          if ((d as any).storage_path) {
+            await supabase.storage
+              .from('consorcio-documents')
+              .remove([(d as any).storage_path]);
+          }
+        }
+        await supabase
+          .from('consortium_documents')
+          .delete()
+          .eq('pending_registration_id', p.id);
+        await supabase
+          .from('consorcio_pending_registrations')
+          .delete()
+          .eq('id', p.id);
+      }
+
+      // 8. Excluir a proposta
       const { error } = await supabase
         .from('consorcio_proposals')
         .delete()
         .eq('id', proposal_id);
       if (error) throw error;
+
+      return { hadPending: activePendings.length > 0 };
     },
     onSuccess: () => {
       toast.success('Proposta excluída — valor abatido do realizado.');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cartas-excluidas'] });
     },
     onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
+  });
+}
+
+// Verifica se uma Carta Negociada possui cadastro pendente vinculado
+export function useProposalHasPendingRegistration(proposal: { id: string; deal_id: string } | null) {
+  return useQuery({
+    queryKey: ['consorcio-proposal-has-pending', proposal?.id],
+    enabled: !!proposal,
+    staleTime: 30_000,
+    queryFn: async () => {
+      if (!proposal) return false;
+      const { data } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, status')
+        .or(`proposal_id.eq.${proposal.id},deal_id.eq.${proposal.deal_id}`);
+      return (data || []).some((r: any) => r.status !== 'excluida');
+    },
+  });
+}
+
+// Lista de Cartas Excluídas (log)
+export interface DeletedProposalLog {
+  id: string;
+  original_proposal_id: string;
+  deal_id: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  closer_name: string | null;
+  closer_email: string | null;
+  valor_credito: number | null;
+  prazo_meses: number | null;
+  tipo_produto: string | null;
+  status: string | null;
+  proposal_created_at: string | null;
+  proposal_details: string | null;
+  had_pending_registration: boolean;
+  pending_registration_snapshot: any;
+  deleted_by: string | null;
+  deleted_by_name: string | null;
+  deleted_by_email: string | null;
+  deletion_reason: string;
+  created_at: string;
+}
+
+export function useCartasExcluidas() {
+  return useQuery({
+    queryKey: ['consorcio-cartas-excluidas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consorcio_proposals_deleted_log' as any)
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as unknown as DeletedProposalLog[];
+    },
+    staleTime: 30_000,
   });
 }
 
