@@ -10,9 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale } from 'lucide-react';
-import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo } from '@/hooks/useAReceber';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck } from 'lucide-react';
+import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { format as fmtDate } from 'date-fns';
 import {
   AR_TITULO_STATUS_LABEL,
   AR_TITULO_TIPO_LABEL,
