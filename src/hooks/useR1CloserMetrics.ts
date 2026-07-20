@@ -478,20 +478,34 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       });
 
       // ========== REFUNDS BY REFUND DATE ==========
-      // Contabilizamos APENAS reembolsos do produto A000 - Contrato (via Hubla).
-      // Reembolsos de A010 (MCF Pay) não entram nesta métrica.
-      const { data: hublaRefunds } = await supabase
-        .from('hubla_transactions')
-        .select('linked_deal_id, updated_at, product_name')
-        .eq('sale_status', 'refunded')
-        .not('linked_deal_id', 'is', null)
-        .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
-        .gte('updated_at', start)
-        .lte('updated_at', end);
+      // Contabilizamos reembolsos do produto A000 - Contrato,
+      // independente do gateway (Hubla OU MCF Pay). Para MCF Pay,
+      // A000 é identificado pelo valor R$ 497 no payload.
+      const [{ data: hublaRefunds }, { data: mcfRefunds }] = await Promise.all([
+        supabase
+          .from('hubla_transactions')
+          .select('linked_deal_id, updated_at, product_name')
+          .eq('sale_status', 'refunded')
+          .not('linked_deal_id', 'is', null)
+          .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
+          .gte('updated_at', start)
+          .lte('updated_at', end),
+        supabase
+          .from('deal_activities')
+          .select('deal_id, metadata, created_at')
+          .eq('activity_type', 'refund_mcf_pay')
+          .gte('created_at', start)
+          .lte('created_at', end),
+      ]);
 
       const refundedDealIdSet = new Set<string>();
       (hublaRefunds || []).forEach((r: any) => {
         if (r?.linked_deal_id) refundedDealIdSet.add(r.linked_deal_id as string);
+      });
+      (mcfRefunds || []).forEach((r: any) => {
+        const amount = Number(r?.metadata?.amount);
+        // A000 - Contrato = R$497 via MCF Pay; A010 = R$47 (excluído)
+        if (r?.deal_id && amount === 497) refundedDealIdSet.add(r.deal_id as string);
       });
       const allRefundedDealIds = Array.from(refundedDealIdSet);
 
