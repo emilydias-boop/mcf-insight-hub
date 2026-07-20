@@ -37,6 +37,8 @@ interface TeamKPICardsProps {
   /** Médias por SDR e por Closer p/ breakdown nas taxas */
   taxaConversaoBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
+  onRefundClick?: () => void;
+  orphanRefundsCount?: number;
 }
 
 export function TeamKPICards({
@@ -51,6 +53,8 @@ export function TeamKPICards({
   isFutureWindow = true,
   taxaConversaoBreakdown,
   taxaNoShowBreakdown,
+  onRefundClick,
+  orphanRefundsCount = 0,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -161,7 +165,10 @@ export function TeamKPICards({
       icon: XCircle,
       color: "text-red-400",
       bgColor: "bg-red-400/10",
-      tooltip: "Contratos reembolsados no período (registrados via botão Reembolso). Já são abatidos da coluna Contrato Pago e do card Contratos.",
+      tooltip: orphanRefundsCount > 0
+        ? `Contratos reembolsados no período. ⚠ ${orphanRefundsCount} reembolso(s) órfão(s) sem deal vinculado — clique para verificar.`
+        : "Contratos reembolsados no período. Clique para ver clientes, SDRs e Closers atribuídos.",
+      subline: orphanRefundsCount > 0 ? `⚠ ${orphanRefundsCount} órfão(s)` : undefined,
     },
     {
       title: "Taxa Conversão",
