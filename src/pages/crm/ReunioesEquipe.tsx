@@ -918,6 +918,17 @@ export default function ReunioesEquipe() {
           setDrillBucket(bucket);
           setDrillTitle(title);
         }}
+        onRefundClick={() => setRefundDialogOpen(true)}
+        orphanRefundsCount={refundDetails?.orphans.length || 0}
+      />
+
+      <RefundDetailsDialog
+        open={refundDialogOpen}
+        onOpenChange={setRefundDialogOpen}
+        data={refundDetails}
+        isLoading={refundDetailsLoading}
+        startDate={start}
+        endDate={end}
       />
 
       <KpiDrillDownDialog
