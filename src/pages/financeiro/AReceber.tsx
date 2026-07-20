@@ -76,7 +76,7 @@ export default function AReceber() {
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
   const [product, setProduct] = useState<string>('todos');
-  const [responsavel, setResponsavel] = useState<string>('todos');
+  const [numeroTitulo, setNumeroTitulo] = useState<string>('');
   const [cobrancaStage, setCobrancaStage] = useState<string>('todos');
 
   const { data: titulos, isLoading } = useArTitulos({
@@ -84,21 +84,31 @@ export default function AReceber() {
     status: (status as any) === 'todos' ? undefined : (status as ArTituloStatus),
     tipo: tipo === 'todos' ? undefined : tipo,
     product_code: product === 'todos' ? undefined : product,
-    responsavel_id: responsavel === 'todos' ? undefined : responsavel,
     cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
   });
 
   const { data: users } = useFinanceiroUsers();
   const updateTitulo = useUpdateArTitulo();
 
-  const kpis = useMemo(() => {
+  const titulosFiltrados = useMemo(() => {
     const list = titulos ?? [];
+    const q = numeroTitulo.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(t => {
+      const num = ticketNumber(t.id).toLowerCase();
+      // aceita "761226" ou "761226-2" (prefixo do documento da parcela)
+      return num.includes(q) || q.startsWith(num);
+    });
+  }, [titulos, numeroTitulo]);
+
+  const kpis = useMemo(() => {
+    const list = titulosFiltrados;
     const totalContratado = list.reduce((s, t) => s + Number(t.valor_total || 0), 0);
     const totalRecebido = list.reduce((s, t) => s + (t.valor_pago || 0), 0);
     const saldo = list.reduce((s, t) => s + (t.valor_pendente || 0), 0);
     const pendentesLancamento = list.filter(t => t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0).length;
     return { totalContratado, totalRecebido, saldo, pendentesLancamento, qtd: list.length };
-  }, [titulos]);
+  }, [titulosFiltrados]);
 
   const handleAssign = async (tituloId: string, userId: string) => {
     try {
@@ -198,13 +208,15 @@ export default function AReceber() {
               {PRODUCT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={responsavel} onValueChange={setResponsavel}>
-            <SelectTrigger><SelectValue placeholder="Responsável" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os responsáveis</SelectItem>
-              {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Nº do título (ex.: 761226 ou 761226-2)"
+              value={numeroTitulo}
+              onChange={(e) => setNumeroTitulo(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Select value={cobrancaStage} onValueChange={setCobrancaStage}>
             <SelectTrigger><SelectValue placeholder="Stage cobrança" /></SelectTrigger>
             <SelectContent>
@@ -222,7 +234,7 @@ export default function AReceber() {
         <CardContent className="pt-4 overflow-x-auto">
           {isLoading ? (
             <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
-          ) : (titulos ?? []).length === 0 ? (
+          ) : titulosFiltrados.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Wallet className="w-12 h-12 mx-auto mb-3 opacity-30" />
               Nenhum título encontrado com os filtros atuais.
@@ -246,7 +258,7 @@ export default function AReceber() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(titulos ?? []).map(t => {
+                {titulosFiltrados.map(t => {
                   const precisaLancar = t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0;
                   return (
                     <TableRow
