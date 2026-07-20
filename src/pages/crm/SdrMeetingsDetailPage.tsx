@@ -181,16 +181,19 @@ export default function SdrMeetingsDetailPage() {
               onMetricClick={(key) => {
                 if (key === "contratos") setContractsOpen(true);
               }}
+              extraCards={
+                <PersonalRefundsCard
+                  startDate={startDate}
+                  endDate={endDate}
+                  sdrEmail={sdrEmail}
+                />
+              }
             />
             <div className="space-y-5">
               <SdrProjectionCard data={perfData.projection} isLoading={perfData.isLoading} />
-              <PersonalRefundsCard
-                startDate={startDate}
-                endDate={endDate}
-                sdrEmail={sdrEmail}
-              />
             </div>
           </div>
+
         </TabsContent>
 
         <TabsContent value="leads">
