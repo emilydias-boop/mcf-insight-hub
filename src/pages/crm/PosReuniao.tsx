@@ -25,8 +25,13 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useRealizadas, useProposals, useSemSucesso,
   useRetomarContato, useTodasReunioes, useExcluirProposta,
+  useProposalHasPendingRegistration, useCartasExcluidas,
   type CompletedMeeting, type Proposal, type SemSucessoDeal, type AllMeetingDeal,
+  type DeletedProposalLog,
 } from '@/hooks/useConsorcioPostMeeting';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertTriangle, Info } from 'lucide-react';
 import { useMyCloser } from '@/hooks/useMyCloser';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -44,6 +49,7 @@ export default function PosReuniao() {
           <TabsTrigger value="propostas">Cartas Negociadas</TabsTrigger>
           <TabsTrigger value="concluidas">Concluídas - Operacional</TabsTrigger>
           <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
+          <TabsTrigger value="excluidas">Cartas Excluídas</TabsTrigger>
           <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
           <TabsTrigger value="match-socio">Match sócio-parceiro</TabsTrigger>
         </TabsList>
@@ -52,6 +58,7 @@ export default function PosReuniao() {
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
         <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
+        <TabsContent value="excluidas"><CartasExcluidasTab /></TabsContent>
         <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
         <TabsContent value="match-socio"><MatchSocioParceiroTab /></TabsContent>
       </Tabs>
