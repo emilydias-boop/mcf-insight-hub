@@ -3189,6 +3189,22 @@ Deno.serve(async (req) => {
             });
           }
 
+          // 📘 GUIA CAIXA (item): lead em Inside Sales (Novo Lead)
+          if (productCategory === 'guia_caixa' && !isOffer && installment === 1) {
+            console.log(`📘 [GUIA CAIXA][item] Criando lead em Inside Sales: ${productName} (${transactionData.customer_email})`);
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: PIPELINE_INSIDE_SALES_ORIGIN,
+              productName: productName,
+              value: itemNetValue,
+              hublaId,
+              targetStageName: 'Novo Lead',
+              extraTags: ['Guia', 'Hubla'],
+            });
+          }
+
           // Detectar se é um pagamento de contrato (categoria 'contrato' OU produto A000 com valor ~R$ 497)
           // Isso cobre casos onde A000-Contrato é categorizado como 'incorporador' mas é realmente um contrato
           const itemPriceForContractCheck = isOffer ? itemPrice : grossValue;
