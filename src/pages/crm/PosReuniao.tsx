@@ -791,6 +791,26 @@ function ConcluidasTab() {
                         <FileText className="h-3 w-3 mr-1" /> Ver Documentos
                       </Button>
                     )}
+                    {p.consortium_card_id && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Reenviar webhook para o Make"
+                        onClick={async () => {
+                          const t = toast.loading('Reenviando webhook...');
+                          const res = await dispatchCartaCadastradaWebhook({
+                            cardId: p.consortium_card_id!,
+                            proposalId: p.id,
+                            force: true,
+                          });
+                          toast.dismiss(t);
+                          if (res.sent) toast.success('Webhook reenviado com sucesso');
+                          else toast.error('Falha ao reenviar webhook' + (res.error ? `: ${res.error}` : ''));
+                        }}
+                      >
+                        <Radio className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)} title="Editar valores da proposta">
                       <Pencil className="h-3 w-3" />
                     </Button>
