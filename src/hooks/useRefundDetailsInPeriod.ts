@@ -228,7 +228,20 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       items.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
       orphans.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
 
-      return { items, orphans };
+      // Dedupe by deal_id: o mesmo reembolso chega pelo MCF Pay e depois é
+      // replicado pela Hubla como sale_status=refunded. Mantemos o evento
+      // mais antigo (origem da devolução) para evitar contagem duplicada.
+      const byDeal = new Map<string, RefundItem>();
+      for (const it of items) {
+        const prev = byDeal.get(it.deal_id);
+        if (!prev || new Date(it.refund_at).getTime() < new Date(prev.refund_at).getTime()) {
+          byDeal.set(it.deal_id, it);
+        }
+      }
+      const deduped = Array.from(byDeal.values()).sort(
+        (a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime(),
+      );
+      return { items: deduped, orphans };
     },
   });
 }
