@@ -84,24 +84,31 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
 
       const enriched: ArTitulo[] = titulos.map(t => {
         const m = map.get(t.id);
+        // Credit card via Hubla é pago 100% no ato pela adquirente,
+        // independente do número de parcelas cobradas do cliente.
+        // Consideramos o título totalmente recebido nesses casos.
+        const isCreditCardHubla = (t.payment_method || '').toLowerCase() === 'credit_card';
         let stageEffective: ArCobrancaStage;
         if (t.cobranca_stage && t.cobranca_stage_manual) {
           stageEffective = t.cobranca_stage;
         } else if (t.cobranca_stage === 'judicial') {
           stageEffective = 'judicial';
-        } else if (m?.hasAtraso) {
+        } else if (!isCreditCardHubla && m?.hasAtraso) {
           stageEffective = 'atraso';
         } else {
           stageEffective = 'mes';
         }
+        const valorTotal = Number(t.valor_total) || 0;
+        const pagoCalc = isCreditCardHubla ? valorTotal : (m?.pago ?? 0);
+        const pendenteCalc = isCreditCardHubla ? 0 : (m?.pendente ?? valorTotal);
         return {
           ...t,
-          valor_pago: m?.pago ?? 0,
-          valor_pendente: m?.pendente ?? Number(t.valor_total),
-          parcelas_pagas: m?.qtdPagas ?? 0,
+          valor_pago: pagoCalc,
+          valor_pendente: pendenteCalc,
+          parcelas_pagas: isCreditCardHubla ? (m?.qtdTotal ?? 0) : (m?.qtdPagas ?? 0),
           parcelas_total: m?.qtdTotal ?? 0,
-          proxima_parcela: m?.proxima ?? null,
-          dias_atraso: m?.diasAtraso ?? 0,
+          proxima_parcela: isCreditCardHubla ? null : (m?.proxima ?? null),
+          dias_atraso: isCreditCardHubla ? 0 : (m?.diasAtraso ?? 0),
           stage_effective: stageEffective,
         };
       });
