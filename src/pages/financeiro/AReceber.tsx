@@ -171,14 +171,6 @@ export default function AReceber() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="border-rose-500/40 text-rose-600 hover:bg-rose-500/10"
-            onClick={() => setOpenReembolsos(true)}
-          >
-            <Undo2 className="w-4 h-4 mr-1" />
-            Reembolsos
-          </Button>
           {isAdmin && <ArGestoresDialog />}
         </div>
       </div>
@@ -206,6 +198,14 @@ export default function AReceber() {
             <Scale className="w-5 h-5" />
             <span className="text-sm font-semibold">Reconciliação</span>
           </TabsTrigger>
+          <button
+            type="button"
+            onClick={() => setOpenReembolsos(true)}
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-rose-600 hover:border-rose-500/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
+          >
+            <Undo2 className="w-5 h-5" />
+            <span className="text-sm font-semibold">Reembolsos</span>
+          </button>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {/* KPIs */}
