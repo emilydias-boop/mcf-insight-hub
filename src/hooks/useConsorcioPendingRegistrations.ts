@@ -9,6 +9,7 @@ import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { buildConsorcioBoasVindasEmail } from '@/lib/consorcioBoasVindasEmail';
+import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 
 export interface PendingRegistration {
   id: string;
@@ -549,11 +550,20 @@ export function useMarkPendingAsCadastrada() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (registrationId: string) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('consorcio_pending_registrations')
         .update({ status: 'cadastrada' } as any)
-        .eq('id', registrationId);
+        .eq('id', registrationId)
+        .select('id, consortium_card_id, proposal_id')
+        .maybeSingle();
       if (error) throw error;
+      if ((data as any)?.consortium_card_id) {
+        dispatchCartaCadastradaWebhook({
+          cardId: (data as any).consortium_card_id,
+          registrationId,
+          proposalId: (data as any).proposal_id ?? null,
+        }).catch(() => {});
+      }
     },
     onSuccess: () => {
       toast.success('Cadastro movido para "Cadastradas"');
@@ -594,14 +604,23 @@ export function useLinkPendingToCard() {
         .eq('pending_registration_id', params.registrationId);
 
       // 2. Marcar pendente como vinculado
-      const { error } = await supabase
+      const { data: linked, error } = await supabase
         .from('consorcio_pending_registrations')
         .update({
           status: 'vinculada',
           consortium_card_id: params.cardId,
         } as any)
-        .eq('id', params.registrationId);
+        .eq('id', params.registrationId)
+        .select('proposal_id')
+        .maybeSingle();
       if (error) throw error;
+
+      // 3. Disparar webhook (Concluídas - Operacional)
+      dispatchCartaCadastradaWebhook({
+        cardId: params.cardId,
+        registrationId: params.registrationId,
+        proposalId: (linked as any)?.proposal_id ?? null,
+      }).catch(() => {});
     },
     onSuccess: () => {
       toast.success('Cadastro vinculado à cota existente');
@@ -979,13 +998,11 @@ export function useOpenCota() {
       }
 
       // 8. Fire-and-forget webhook to Make (Concluídas - Operacional)
-      supabase.functions.invoke('consorcio-carta-cadastrada-webhook', {
-        body: {
-          card_id: card.id,
-          registration_id: registrationId,
-          proposal_id: registration.proposal_id ?? null,
-        },
-      }).catch((err) => console.warn('[carta-cadastrada-webhook] invoke failed', err));
+      dispatchCartaCadastradaWebhook({
+        cardId: card.id,
+        registrationId,
+        proposalId: registration.proposal_id ?? null,
+      }).catch(() => {});
 
       return card;
     },

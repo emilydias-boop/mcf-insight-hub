@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2, Pencil } from 'lucide-react';
+import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2, Pencil, Radio } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -37,6 +37,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
+import { toast } from 'sonner';
 
 export default function PosReuniao() {
   const [activeTab, setActiveTab] = useState('realizadas');
@@ -787,6 +789,26 @@ function ConcluidasTab() {
                     {p.consortium_card_id && (
                       <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
                         <FileText className="h-3 w-3 mr-1" /> Ver Documentos
+                      </Button>
+                    )}
+                    {p.consortium_card_id && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Reenviar webhook para o Make"
+                        onClick={async () => {
+                          const t = toast.loading('Reenviando webhook...');
+                          const res = await dispatchCartaCadastradaWebhook({
+                            cardId: p.consortium_card_id!,
+                            proposalId: p.id,
+                            force: true,
+                          });
+                          toast.dismiss(t);
+                          if (res.sent) toast.success('Webhook reenviado com sucesso');
+                          else toast.error('Falha ao reenviar webhook' + (res.error ? `: ${res.error}` : ''));
+                        }}
+                      >
+                        <Radio className="h-3 w-3" />
                       </Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)} title="Editar valores da proposta">

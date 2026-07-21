@@ -13,8 +13,8 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const { card_id, registration_id, proposal_id } = body ?? {};
-    if (!card_id || !registration_id) {
-      return new Response(JSON.stringify({ error: "card_id and registration_id required" }), {
+    if (!card_id) {
+      return new Response(JSON.stringify({ error: "card_id required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -25,9 +25,22 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Se registration_id não veio, tenta resolver pelo card_id
+    let resolvedRegId: string | null = registration_id ?? null;
+    if (!resolvedRegId) {
+      const { data: regByCard } = await supabase
+        .from("consorcio_pending_registrations")
+        .select("id")
+        .eq("consortium_card_id", card_id)
+        .maybeSingle();
+      resolvedRegId = regByCard?.id ?? null;
+    }
+
     const [cardRes, regRes, propRes] = await Promise.all([
       supabase.from("consortium_cards").select("*").eq("id", card_id).maybeSingle(),
-      supabase.from("consorcio_pending_registrations").select("*").eq("id", registration_id).maybeSingle(),
+      resolvedRegId
+        ? supabase.from("consorcio_pending_registrations").select("*").eq("id", resolvedRegId).maybeSingle()
+        : Promise.resolve({ data: null, error: null } as any),
       proposal_id
         ? supabase.from("consorcio_proposals").select("*").eq("id", proposal_id).maybeSingle()
         : Promise.resolve({ data: null, error: null } as any),

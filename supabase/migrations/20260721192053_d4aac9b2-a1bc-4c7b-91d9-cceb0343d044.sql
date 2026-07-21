@@ -1,0 +1,2 @@
+ALTER TABLE public.consorcio_pending_registrations
+ADD COLUMN IF NOT EXISTS webhook_carta_cadastrada_enviado_em timestamptz;
