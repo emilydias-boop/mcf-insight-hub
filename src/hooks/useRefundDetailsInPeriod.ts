@@ -46,16 +46,8 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       const start = format(startDate, 'yyyy-MM-dd') + 'T00:00:00';
       const end = format(endDate, 'yyyy-MM-dd') + 'T23:59:59';
 
-      // 1) Hubla refunds A000
-      const { data: hubla } = await supabase
-        .from('hubla_transactions')
-        .select('linked_deal_id, updated_at, product_name, customer_email, customer_name, customer_phone, product_price, hubla_id')
-        .eq('sale_status', 'refunded')
-        .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
-        .gte('updated_at', start)
-        .lte('updated_at', end);
-
-      // 2) MCF Pay refunds A000 (R$ 497)
+      // Fonte de verdade: MCF Pay. Hubla é replicação, então NÃO entra aqui
+      // para bater 1:1 com o Painel Comercial do MCF Pay.
       const { data: mcf } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
@@ -63,7 +55,7 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         .gte('created_at', start)
         .lte('created_at', end);
 
-      // 3) MCF Pay orphans (deal_not_found nos dispatch logs)
+      // MCF Pay orphans (deal_not_found nos dispatch logs)
       const { data: mcfOrphanLogs } = await supabase
         .from('mcf_pay_dispatch_logs')
         .select('created_at, payload, response, error_message')
@@ -76,43 +68,35 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       const orphans: OrphanRefund[] = [];
       const dealIds = new Set<string>();
 
-      (hubla || []).forEach((h: any) => {
-        if (h.linked_deal_id) {
-          dealIds.add(h.linked_deal_id);
-        } else {
-          orphans.push({
-            refund_at: h.updated_at,
-            source: 'hubla',
-            amount: h.product_price ?? null,
-            customer_name: h.customer_name ?? null,
-            customer_email: h.customer_email ?? null,
-            customer_phone: h.customer_phone ?? null,
-            reason: 'Hubla sem deal vinculado',
-            transaction_id: h.hubla_id ?? null,
-          });
-        }
-      });
-
+      // Dedup por transaction_id (retries do webhook) e por deal_id (mesmo
+      // deal reembolsado mais de uma vez no mesmo período fica com o evento
+      // mais recente por transação única).
+      const seenTx = new Set<string>();
       const mcfRefundsById = new Map<string, { at: string; amount: number | null }>();
       (mcf || []).forEach((r: any) => {
         const amount = Number(r?.metadata?.amount);
-        if (!r?.deal_id) return;
-        // A000 = R$497 via MCF Pay (A010 = R$47)
-        if (amount === 497) {
-          dealIds.add(r.deal_id);
+        const txId = r?.metadata?.transaction_id as string | undefined;
+        if (!r?.deal_id || amount !== 497) return; // A000 = R$497
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        dealIds.add(r.deal_id);
+        // mantém o primeiro (evento original — MCF Pay dispara antes)
+        if (!mcfRefundsById.has(r.deal_id)) {
           mcfRefundsById.set(r.deal_id, { at: r.created_at, amount });
         }
       });
 
       // Dedup MCF orphan logs by transaction_id (webhook retries)
-      const seenTx = new Set<string>();
+      const seenOrphanTx = new Set<string>();
       (mcfOrphanLogs || []).forEach((log: any) => {
         const event = log.payload?.event;
         if (event !== 'payment.refunded') return;
         const tried = log.response?.tried ?? {};
         const txId = tried.transaction_id ?? null;
-        if (txId && seenTx.has(txId)) return;
-        if (txId) seenTx.add(txId);
+        if (txId && seenOrphanTx.has(txId)) return;
+        if (txId) seenOrphanTx.add(txId);
         orphans.push({
           refund_at: log.created_at,
           source: 'mcf_pay',
@@ -186,26 +170,6 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         });
       }
 
-      // Emit Hubla items
-      (hubla || []).forEach((h: any) => {
-        if (!h.linked_deal_id) return;
-        const deal = dealMap.get(h.linked_deal_id);
-        const latest = latestByDeal.get(h.linked_deal_id);
-        const sdr = latest?.bookedBy ? sdrMap.get(latest.bookedBy) : null;
-        const sdrEmail = sdr?.email ?? ((deal?.owner_id || '').toLowerCase() || null);
-        items.push({
-          refund_at: h.updated_at,
-          source: 'hubla',
-          amount: h.product_price ?? null,
-          deal_id: h.linked_deal_id,
-          customer_name: deal?.contact?.name ?? h.customer_name ?? null,
-          customer_email: deal?.contact?.email ?? h.customer_email ?? null,
-          closer_name: latest?.closerId ? closerMap.get(latest.closerId) ?? null : null,
-          sdr_email: sdrEmail,
-          sdr_name: sdr?.name ?? sdrEmail ?? null,
-        });
-      });
-
       // Emit MCF Pay items
       mcfRefundsById.forEach((val, dealId) => {
         const deal = dealMap.get(dealId);
@@ -228,20 +192,7 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       items.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
       orphans.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
 
-      // Dedupe by deal_id: o mesmo reembolso chega pelo MCF Pay e depois é
-      // replicado pela Hubla como sale_status=refunded. Mantemos o evento
-      // mais antigo (origem da devolução) para evitar contagem duplicada.
-      const byDeal = new Map<string, RefundItem>();
-      for (const it of items) {
-        const prev = byDeal.get(it.deal_id);
-        if (!prev || new Date(it.refund_at).getTime() < new Date(prev.refund_at).getTime()) {
-          byDeal.set(it.deal_id, it);
-        }
-      }
-      const deduped = Array.from(byDeal.values()).sort(
-        (a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime(),
-      );
-      return { items: deduped, orphans };
+      return { items, orphans };
     },
   });
 }
