@@ -55,6 +55,16 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         .gte('created_at', start)
         .lte('created_at', end);
 
+      // Reembolsos A000 reconciliados manualmente (refund_hubla com
+      // source=manual_reconciliation_*). Preenchem casos em que o webhook
+      // MCF Pay não gerou refund_mcf_pay na época (ex.: Thompson).
+      const { data: manual } = await supabase
+        .from('deal_activities')
+        .select('deal_id, metadata, created_at')
+        .eq('activity_type', 'refund_hubla')
+        .gte('created_at', start)
+        .lte('created_at', end);
+
       // MCF Pay orphans (deal_not_found nos dispatch logs)
       const { data: mcfOrphanLogs } = await supabase
         .from('mcf_pay_dispatch_logs')
@@ -85,6 +95,20 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         // mantém o primeiro (evento original — MCF Pay dispara antes)
         if (!mcfRefundsById.has(r.deal_id)) {
           mcfRefundsById.set(r.deal_id, { at: r.created_at, amount });
+        }
+      });
+
+      (manual || []).forEach((r: any) => {
+        const src = String(r?.metadata?.source || '');
+        if (!r?.deal_id || !src.startsWith('manual_reconciliation')) return;
+        const txId = r?.metadata?.hubla_transaction_id as string | undefined;
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        dealIds.add(r.deal_id);
+        if (!mcfRefundsById.has(r.deal_id)) {
+          mcfRefundsById.set(r.deal_id, { at: r.created_at, amount: 497 });
         }
       });
 
