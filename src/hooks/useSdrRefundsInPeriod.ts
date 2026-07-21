@@ -41,6 +41,28 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
         }
         dealIds.add(r.deal_id as string);
       });
+
+      // Reembolsos reconciliados manualmente (webhook MCF Pay não gerou
+      // refund_mcf_pay na época — ex.: Thompson da Silva Nunes). Foram
+      // criados como refund_hubla com source=manual_reconciliation_* e
+      // representam exatamente as devoluções A000 do MCF Pay.
+      const { data: manual } = await supabase
+        .from('deal_activities')
+        .select('deal_id, metadata, created_at')
+        .eq('activity_type', 'refund_hubla')
+        .gte('created_at', start)
+        .lte('created_at', end);
+      (manual || []).forEach((r: any) => {
+        const src = String(r?.metadata?.source || '');
+        if (!r?.deal_id) return;
+        if (!src.startsWith('manual_reconciliation')) return;
+        const txId = r?.metadata?.hubla_transaction_id as string | undefined;
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        dealIds.add(r.deal_id as string);
+      });
       const ids = Array.from(dealIds);
       if (ids.length === 0) return new Map<string, number>();
 
