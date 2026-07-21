@@ -2993,6 +2993,22 @@ Deno.serve(async (req) => {
               hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
             });
           }
+
+          // 📘 GUIA CAIXA: infoproduto Hubla que alimenta Inside Sales (Novo Lead)
+          if (productCategory === 'guia_caixa' && installment === 1) {
+            console.log(`📘 [GUIA CAIXA] Criando lead em Inside Sales: ${productName} (${transactionData.customer_email})`);
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: PIPELINE_INSIDE_SALES_ORIGIN,
+              productName: productName,
+              value: netValue,
+              hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
+              targetStageName: 'Novo Lead',
+              extraTags: ['Guia', 'Hubla'],
+            });
+          }
           
           // 🎯 CORREÇÃO: Detectar contrato pago mesmo quando items.length === 0
           const isContratoPago = (
