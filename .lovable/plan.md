@@ -1,54 +1,41 @@
-## Diagnóstico (por que está indo para EA+Clube)
+## Objetivo
+Permitir que, na tela **Controle Consórcio → Cadastros Pendentes**, o usuário anexe (e remova) documentos tanto ao clicar em **Abrir** quanto na tela de **abertura de cota** (mesma modal `OpenCotaModal`, modos `open` e `view`).
 
-Os leads das telas (Adriano, Natália) **não entraram pelo webhook "Lead Guia"**. Eles são compras Hubla do produto **"Guia - Como Financiar 100% na CAIXA"** (`invoice.payment_succeeded`, categoria enviada pela Hubla como `clube_arremate`), processadas pelo `hubla-webhook-handler`.
+## Contexto atual
+- `OpenCotaModal` já lista documentos vinculados via `consortium_documents.pending_registration_id` (somente leitura, mostrados como links).
+- `useOpenCota` já migra automaticamente os documentos de `pending_registration_id` para `card_id` quando a cota é criada — não precisa mexer nesse fluxo.
+- Existe bucket `consorcio-documents` e padrão de upload já usado em `useConsorcioDocuments` (batch upload) e `UploadPendingDocumentsDialog`.
 
-A cadeia de roteamento hoje é:
+## Mudanças
 
-1. `supabase/functions/hubla-webhook-handler/index.ts`, função `mapProductCategory` (linhas 89-102):
-   - Regra genérica: se o nome contém **"CLUBE"** e **"ARREMATE"** → `clube_arremate`.
-   - O produto "Guia - Como Financiar 100% na CAIXA" **não** casa com essa regra por nome.
-   - Porém a Hubla já manda `product.category = "clube_arremate"` no payload (o próprio produto está cadastrado sob o Clube do Arremate na Hubla), então o handler herda essa categoria.
+### 1. Hook `src/hooks/useConsorcioDocuments.ts`
+- Adicionar variantes que aceitam `pendingRegistrationId` no lugar de `cardId`:
+  - `usePendingRegistrationDocuments(pendingRegistrationId)` — lista por `pending_registration_id`.
+  - `useBatchUploadPendingDocuments()` — mesmo fluxo do batch atual, mas grava `pending_registration_id` em vez de `card_id`, e usa prefixo de storage `pending/<pendingRegistrationId>/...`.
+  - `useDeletePendingDocument()` — remove arquivo do storage e a linha (invalidando a query `pending-reg-documents`).
+- Manter as funções atuais (`useConsorcioDocuments`, `useBatchUploadDocuments`, `useDeleteConsorcioDocument`) inalteradas para não quebrar o resto do app.
 
-2. Mapa `CATEGORY_TO_STAGE` (linha 2312): `clube_arremate` → `STAGE_CLUBE_ARREMATE` (`bf370a4f-…`), que é o stage inicial do pipeline **Efeito Alavanca + Clube**.
+### 2. Componente `src/components/consorcio/OpenCotaModal.tsx`
+- Substituir o bloco somente-leitura de "Documentos" (linhas ~482–501) por uma seção interativa:
+  - Lista de documentos existentes com link "Abrir" e botão de excluir (ícone lixeira). No modo `view` sem edição, mantém somente os links (sem excluir) — a edição libera o botão de excluir e o upload, seguindo o padrão `readOnly` já usado no modal.
+  - Bloco "Adicionar documentos": `<Input type="file" multiple />` + lista dos arquivos selecionados com `Select` de tipo (`TIPO_DOCUMENTO_OPTIONS`) e botão "Enviar", reaproveitando exatamente a UX de `UploadPendingDocumentsDialog`.
+  - Usar os novos hooks (`usePendingRegistrationDocuments`, `useBatchUploadPendingDocuments`, `useDeletePendingDocument`). A query antiga inline (`useQuery` em `consortium_documents`) é removida em favor do hook, mantendo a mesma `queryKey` `['pending-reg-documents', registrationId]` para invalidação consistente.
+- O botão de anexar/excluir fica disponível nos dois modos:
+  - **Modo `open`** (botão "Abrir" em Cadastros Pendentes): habilitado direto.
+  - **Modo `view`**: habilitado quando o usuário clicar em "Editar" (estado `isEditing` já existente).
 
-3. Lista `CONSORCIO_PRODUCT_CATEGORIES` inclui `clube_arremate`, então o deal recebe as auto-tags **`clube-arremate`, `Hubla`, `Consórcio`** e é vinculado ao pipeline de Consórcio (EA+Clube).
+### 3. Sem migração de banco
+- Coluna `consortium_documents.pending_registration_id` e as policies já existem (o modal já lê por essa coluna e `useOpenCota` já migra para `card_id`). Nenhuma mudança de schema/RLS.
 
-Resultado: toda compra do "Guia CAIXA" via Hubla vai para EA+Clube, mesmo sendo um infoproduto de topo de funil que deveria alimentar o Inside Sales.
+### 4. Sem alteração no fluxo de abertura da cota
+- Após "Abrir Cota", `useOpenCota` continua migrando os anexos para o `card_id` do consórcio criado, então os documentos anexados nessa tela aparecem normalmente no card final.
 
-## Correção proposta
+## Detalhes técnicos
+- Storage path para pendentes: `pending/<pendingRegistrationId>/<timestamp>-<rand>.<ext>` para separar visualmente dos anexos já vinculados a cartas.
+- URL: `createSignedUrl` com validade longa (1 ano), igual ao padrão atual do batch upload de cartas.
+- Invalidations após upload/delete: `['pending-reg-documents', registrationId]` e `['pending-registrations']` para atualizar contadores de KPI se existirem.
+- Toasts de sucesso/erro (`sonner`) no mesmo estilo dos outros hooks do arquivo.
 
-### 1. Roteamento (edge function `hubla-webhook-handler`)
-Adicionar exceção explícita em `mapProductCategory` **antes** da regra de Clube do Arremate:
-
-```
-if (name.includes('GUIA') && name.includes('CAIXA')) return 'guia_caixa';
-```
-
-E mapear a nova categoria:
-- `CATEGORY_TO_STAGE['guia_caixa']` → stage **Novo Lead** de `PIPELINE INSIDE SALES` (`cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`).
-- Remover `guia_caixa` do fluxo de Consórcio (não entra em `CONSORCIO_PRODUCT_CATEGORIES`).
-- Auto-tags aplicadas: `Guia`, `Hubla` (sem `Consórcio` / `clube-arremate`).
-
-### 2. Reprocesso histórico
-Migrar os deals já criados desse produto:
-
-```text
-UPDATE crm_deals
-SET origin_id = <INSIDE SALES>,
-    stage_id  = <Novo Lead>,
-    tags      = tags corrigidas (- clube-arremate, - Consórcio, + Guia)
-WHERE id IN (
-  SELECT linked_deal_id FROM hubla_transactions
-  WHERE product_name ILIKE '%Guia%CAIXA%' AND linked_deal_id IS NOT NULL
-);
-```
-
-Antes de rodar, faço um `SELECT` de conferência para você aprovar o volume/lista (aparente ~compras com esse produto entre 07/07 e 20/07).
-
-### 3. Validação
-- Reenviar 1 evento Hubla de teste pelo painel e conferir o deal criado (pipeline Inside Sales, stage Novo Lead, tags Guia + Hubla).
-- Conferir os deals reprocessados na tela `/crm/negocios` filtrando pela origem Inside Sales.
-
-## Fora do escopo
-- Webhook "Lead Guia" (`/webhook-lead-receiver/lead-guia`) permanece como está: já aponta para Inside Sales / Novo Lead.
-- Nenhuma outra categoria Hubla é alterada.
+## Fora de escopo
+- Não altera `PendingRegistrationsList`, `AddPendingRegistrationModal`, `ViewRegistrationDialog` ou o fluxo do CRM Pós-Reunião.
+- Não mexe em permissões/RLS existentes.
