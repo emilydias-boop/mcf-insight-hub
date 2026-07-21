@@ -548,6 +548,7 @@ export default function AReceber() {
           <ReconciliacaoPanel />
         </TabsContent>
       </Tabs>
+      <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
     </div>
   );
 }
