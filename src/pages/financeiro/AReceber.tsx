@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck, Undo2 } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,6 +29,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
 import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
+import { ReembolsosPanel } from '@/components/financeiro/aReceber/ReembolsosPanel';
+import { useReembolsoTotais } from '@/hooks/useArReembolsos';
 import { ticketNumber } from '@/lib/arTicketNumber';
 
 const brl = (v: number) =>
@@ -48,6 +50,7 @@ function StatusBadge({ status }: { status: ArTituloStatus }) {
     aberto: { className: 'bg-amber-500/15 text-amber-600 border-amber-500/30', icon: Clock },
     quitado: { className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: CheckCircle2 },
     cancelado: { className: 'bg-muted text-muted-foreground', icon: AlertCircle },
+    reembolsado: { className: 'bg-rose-500/15 text-rose-600 border-rose-500/30', icon: Undo2 },
   };
   const c = cfg[status];
   const Icon = c.icon;
@@ -100,6 +103,8 @@ export default function AReceber() {
   const [openBaixaLote, setOpenBaixaLote] = useState(false);
   const [baixaData, setBaixaData] = useState(fmtDate(new Date(), 'yyyy-MM-dd'));
   const [baixaForma, setBaixaForma] = useState('pix');
+  const [openReembolsos, setOpenReembolsos] = useState(false);
+  const { data: reembTotais } = useReembolsoTotais();
 
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
@@ -165,7 +170,17 @@ export default function AReceber() {
             Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009).
           </p>
         </div>
-        {isAdmin && <ArGestoresDialog />}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-rose-500/40 text-rose-600 hover:bg-rose-500/10"
+            onClick={() => setOpenReembolsos(true)}
+          >
+            <Undo2 className="w-4 h-4 mr-1" />
+            Reembolsos
+          </Button>
+          {isAdmin && <ArGestoresDialog />}
+        </div>
       </div>
 
       <Tabs defaultValue="listagem" className="w-full">
@@ -194,7 +209,7 @@ export default function AReceber() {
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Valor contratado</CardTitle></CardHeader>
           <CardContent className="text-lg font-bold">{brl(kpis.totalContratado)}</CardContent>
@@ -210,6 +225,34 @@ export default function AReceber() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Parcelados aguardando lançamento</CardTitle></CardHeader>
           <CardContent className="text-lg font-bold text-orange-600">{kpis.pendentesLancamento}</CardContent>
+        </Card>
+        <Card
+          className="cursor-pointer hover:bg-muted/40 border-rose-500/30"
+          onClick={() => setOpenReembolsos(true)}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+              <Undo2 className="w-3 h-3" /> Reembolsos a pagar
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold text-rose-600">{brl(reembTotais?.somaPendentes || 0)}</div>
+            <div className="text-[11px] text-muted-foreground">{reembTotais?.qtdPendentes ?? 0} pendente(s)</div>
+          </CardContent>
+        </Card>
+        <Card
+          className="cursor-pointer hover:bg-muted/40 border-emerald-500/30"
+          onClick={() => setOpenReembolsos(true)}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Reembolsos pagos no mês
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold text-emerald-600">{brl(reembTotais?.somaPagos || 0)}</div>
+            <div className="text-[11px] text-muted-foreground">{reembTotais?.qtdPagos ?? 0} pago(s)</div>
+          </CardContent>
         </Card>
       </div>
 
@@ -505,6 +548,7 @@ export default function AReceber() {
           <ReconciliacaoPanel />
         </TabsContent>
       </Tabs>
+      <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
     </div>
   );
 }

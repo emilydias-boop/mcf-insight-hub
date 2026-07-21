@@ -1,5 +1,5 @@
 export type ArTituloTipo = 'integral' | 'parcelado' | 'pendente_lancamento';
-export type ArTituloStatus = 'aberto' | 'quitado' | 'cancelado';
+export type ArTituloStatus = 'aberto' | 'quitado' | 'cancelado' | 'reembolsado';
 export type ArParcelaTipo = 'entrada' | 'parcela';
 export type ArParcelaStatus = 'pendente' | 'pago' | 'atrasado' | 'cancelado';
 export type ArCobrancaStage = 'mes' | 'atraso' | 'judicial';
@@ -80,6 +80,29 @@ export const AR_TITULO_TIPO_LABEL: Record<ArTituloTipo, string> = {
 export const AR_TITULO_STATUS_LABEL: Record<ArTituloStatus, string> = {
   aberto: 'Em aberto',
   quitado: 'Quitado',
+  cancelado: 'Cancelado',
+  reembolsado: 'Reembolsado',
+};
+
+export type ArReembolsoStatus = 'pendente' | 'pago' | 'cancelado';
+
+export interface ArReembolso {
+  id: string;
+  titulo_id: string;
+  valor: number;
+  motivo: string | null;
+  data_pedido: string;
+  data_prevista_pagamento: string | null;
+  data_pagamento: string | null;
+  status: ArReembolsoStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const AR_REEMBOLSO_STATUS_LABEL: Record<ArReembolsoStatus, string> = {
+  pendente: 'A pagar',
+  pago: 'Pago',
   cancelado: 'Cancelado',
 };
 
