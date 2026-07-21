@@ -3,7 +3,7 @@ import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FileText, ExternalLink } from 'lucide-react';
+import { Loader2, FileText, ExternalLink, Trash2, Upload } from 'lucide-react';
 import { formatarCep } from '@/lib/cepUtils';
 
 function formatCep(value: string): string {
@@ -57,6 +57,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { usePendingRegistration, useOpenCota, useUpdatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import {
+  usePendingRegistrationDocuments,
+  useBatchUploadPendingDocuments,
+  useDeletePendingDocument,
+} from '@/hooks/useConsorcioDocuments';
+import { TIPO_DOCUMENTO_OPTIONS, TipoDocumento } from '@/types/consorcio';
+import { toast } from 'sonner';
 import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, findProdutoForCredito, formatCurrency } from '@/lib/consorcioCalculos';
@@ -86,19 +93,28 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
-  // Fetch documents linked to this pending registration
-  const { data: documents = [] } = useQuery({
-    queryKey: ['pending-reg-documents', registrationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('consortium_documents')
-        .select('*')
-        .eq('pending_registration_id', registrationId);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!registrationId,
-  });
+  // Documents attached to the pending registration
+  const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
+  const uploadPendingDocs = useBatchUploadPendingDocuments();
+  const deletePendingDoc = useDeletePendingDocument();
+  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
+  const canEditDocs = !readOnly;
+
+  const addFilesToUpload = (files: FileList | null) => {
+    if (!files) return;
+    const newOnes = Array.from(files).map((f) => ({ file: f, tipo: 'outro' as TipoDocumento }));
+    setPendingFiles((prev) => [...prev, ...newOnes]);
+  };
+
+  const handleUploadPending = async () => {
+    if (pendingFiles.length === 0) {
+      toast.error('Selecione ao menos um arquivo');
+      return;
+    }
+    await uploadPendingDocs.mutateAsync({ pendingRegistrationId: registrationId, documents: pendingFiles });
+    toast.success('Documentos enviados com sucesso');
+    setPendingFiles([]);
+  };
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
