@@ -455,13 +455,21 @@ export default function AReceber() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-md bg-muted/40 border p-3 text-xs text-muted-foreground max-h-40 overflow-auto">
-              {titulosFiltrados.filter(t => selected.has(t.id)).map(t => (
-                <div key={t.id} className="flex justify-between py-0.5">
-                  <span>{ticketNumber(t.id)} · {t.customer_name}</span>
-                  <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
-                </div>
-              ))}
+            <div className="rounded-md bg-muted/40 border p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-foreground">Total a baixar</span>
+                <span className="font-bold text-amber-600">
+                  {brl(titulosFiltrados.filter(t => selected.has(t.id)).reduce((s, t) => s + Number(t.valor_pendente ?? t.valor_total ?? 0), 0))}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground max-h-40 overflow-auto border-t pt-2">
+                {titulosFiltrados.filter(t => selected.has(t.id)).map(t => (
+                  <div key={t.id} className="flex justify-between py-0.5">
+                    <span>{ticketNumber(t.id)} · {t.customer_name}</span>
+                    <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
