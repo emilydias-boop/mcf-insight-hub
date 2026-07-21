@@ -176,12 +176,12 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       if (bookedByIds.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, email, name, full_name')
+          .select('id, email, full_name')
           .in('id', bookedByIds);
         (profs as any[] || []).forEach((p) => {
           sdrMap.set(p.id, {
             email: p.email ? String(p.email).toLowerCase() : null,
-            name: p.name || p.full_name || p.email || null,
+            name: p.full_name || p.email || null,
           });
         });
       }
