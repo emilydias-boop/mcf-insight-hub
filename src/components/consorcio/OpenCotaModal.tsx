@@ -495,26 +495,111 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                   </>
                 )}
 
-                {documents.length > 0 && (
-                  <div className="mt-4">
-                    <span className="text-sm text-muted-foreground">Documentos:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Documentos ({documents.length})</span>
+                  </div>
+
+                  {documents.length > 0 && (
+                    <div className="space-y-2">
                       {documents.map((doc: any) => (
-                        <a
-                          key={doc.id}
-                          href={doc.storage_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          <FileText className="h-3 w-3" />
-                          {doc.nome_arquivo}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <div key={doc.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-medium truncate">{doc.nome_arquivo}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{String(doc.tipo || '').replace('_', ' ')}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {doc.storage_url && (
+                              <a
+                                href={doc.storage_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs text-primary hover:underline"
+                              >
+                                <FileText className="h-3 w-3" /> Abrir <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                            {canEditDocs && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() =>
+                                  deletePendingDoc.mutate({
+                                    documentId: doc.id,
+                                    storagePath: doc.storage_path,
+                                    pendingRegistrationId: registrationId,
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {canEditDocs && (
+                    <div className="space-y-2 rounded border border-dashed p-3">
+                      <Label className="text-xs text-muted-foreground">Anexar novos documentos</Label>
+                      <Input type="file" multiple onChange={(e) => addFilesToUpload(e.target.files)} />
+
+                      {pendingFiles.length > 0 && (
+                        <div className="space-y-2">
+                          {pendingFiles.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 rounded border p-2">
+                              <span className="flex-1 truncate text-sm">{item.file.name}</span>
+                              <Select
+                                value={item.tipo}
+                                onValueChange={(v) =>
+                                  setPendingFiles((prev) =>
+                                    prev.map((p, i) => (i === idx ? { ...p, tipo: v as TipoDocumento } : p))
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="w-48">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIPO_DOCUMENTO_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleUploadPending}
+                              disabled={uploadPendingDocs.isPending}
+                            >
+                              {uploadPendingDocs.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Enviar ({pendingFiles.length})
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
