@@ -400,6 +400,56 @@ export type Database = {
           },
         ]
       }
+      ar_reembolsos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_pagamento: string | null
+          data_pedido: string
+          data_prevista_pagamento: string | null
+          id: string
+          motivo: string | null
+          status: string
+          titulo_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_pedido?: string
+          data_prevista_pagamento?: string | null
+          id?: string
+          motivo?: string | null
+          status?: string
+          titulo_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_pedido?: string
+          data_prevista_pagamento?: string | null
+          id?: string
+          motivo?: string | null
+          status?: string
+          titulo_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ar_reembolsos_titulo_id_fkey"
+            columns: ["titulo_id"]
+            isOneToOne: false
+            referencedRelation: "ar_titulos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ar_titulos: {
         Row: {
           cobranca_stage: string | null
