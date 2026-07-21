@@ -90,6 +90,13 @@ function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName?.toUpperCase() || '';
   const code = productCode?.toUpperCase() || '';
   
+  // ===== PRIORIDADE 0: Guia CAIXA (infoproduto de topo → Inside Sales) =====
+  // Deve vir ANTES da regra de Clube do Arremate porque o produto está
+  // cadastrado sob Clube na Hubla, mas comercialmente é lead para Inside Sales.
+  if (name.includes('GUIA') && name.includes('CAIXA')) {
+    return 'guia_caixa';
+  }
+
   // ===== PRIORIDADE 1: Detectar produtos de consórcio =====
   // Contrato - Clube do Arremate (mais específico primeiro)
   if (name.includes('CONTRATO') && name.includes('CLUBE')) {
@@ -2986,6 +2993,22 @@ Deno.serve(async (req) => {
               hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
             });
           }
+
+          // 📘 GUIA CAIXA: infoproduto Hubla que alimenta Inside Sales (Novo Lead)
+          if (productCategory === 'guia_caixa' && installment === 1) {
+            console.log(`📘 [GUIA CAIXA] Criando lead em Inside Sales: ${productName} (${transactionData.customer_email})`);
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: PIPELINE_INSIDE_SALES_ORIGIN,
+              productName: productName,
+              value: netValue,
+              hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
+              targetStageName: 'Novo Lead',
+              extraTags: ['Guia', 'Hubla'],
+            });
+          }
           
           // 🎯 CORREÇÃO: Detectar contrato pago mesmo quando items.length === 0
           const isContratoPago = (
@@ -3163,6 +3186,22 @@ Deno.serve(async (req) => {
               productName: productName,
               value: itemNetValue,
               hublaId,
+            });
+          }
+
+          // 📘 GUIA CAIXA (item): lead em Inside Sales (Novo Lead)
+          if (productCategory === 'guia_caixa' && !isOffer && installment === 1) {
+            console.log(`📘 [GUIA CAIXA][item] Criando lead em Inside Sales: ${productName} (${transactionData.customer_email})`);
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: PIPELINE_INSIDE_SALES_ORIGIN,
+              productName: productName,
+              value: itemNetValue,
+              hublaId,
+              targetStageName: 'Novo Lead',
+              extraTags: ['Guia', 'Hubla'],
             });
           }
 

@@ -1,66 +1,54 @@
-# Kanban de Cobrança — /financeiro/a-receber
+## Diagnóstico (por que está indo para EA+Clube)
 
-Nova aba "Kanban Cobrança" na página A Receber, com pipeline visual de 3 colunas para gerenciar títulos em aberto. Cada título de `ar_titulos` fica em um stage; o grid atual passa a exibir um tag colorido indicando o stage.
+Os leads das telas (Adriano, Natália) **não entraram pelo webhook "Lead Guia"**. Eles são compras Hubla do produto **"Guia - Como Financiar 100% na CAIXA"** (`invoice.payment_succeeded`, categoria enviada pela Hubla como `clube_arremate`), processadas pelo `hubla-webhook-handler`.
 
-## Stages
+A cadeia de roteamento hoje é:
 
-1. **Cobrança do mês** — títulos com parcelas pendentes vencendo no mês vigente (ainda não vencidas ou vencidas hoje).
-2. **Cobrança em atraso** — títulos com ao menos uma parcela vencida (data_vencimento < hoje) e não paga.
-3. **Cobrança judicial** — movido manualmente pelos advogados/financeiro; permanece nesta coluna até baixa ou cancelamento.
+1. `supabase/functions/hubla-webhook-handler/index.ts`, função `mapProductCategory` (linhas 89-102):
+   - Regra genérica: se o nome contém **"CLUBE"** e **"ARREMATE"** → `clube_arremate`.
+   - O produto "Guia - Como Financiar 100% na CAIXA" **não** casa com essa regra por nome.
+   - Porém a Hubla já manda `product.category = "clube_arremate"` no payload (o próprio produto está cadastrado sob o Clube do Arremate na Hubla), então o handler herda essa categoria.
 
-Regra:
-- Stage 3 é sempre manual (persistido).
-- Stages 1 e 2 são calculados por data automaticamente, mas o usuário pode arrastar entre 1 e 2 (override manual persistido).
-- Títulos `quitado`/`cancelado` não aparecem no Kanban.
+2. Mapa `CATEGORY_TO_STAGE` (linha 2312): `clube_arremate` → `STAGE_CLUBE_ARREMATE` (`bf370a4f-…`), que é o stage inicial do pipeline **Efeito Alavanca + Clube**.
 
-## Persistência
+3. Lista `CONSORCIO_PRODUCT_CATEGORIES` inclui `clube_arremate`, então o deal recebe as auto-tags **`clube-arremate`, `Hubla`, `Consórcio`** e é vinculado ao pipeline de Consórcio (EA+Clube).
 
-Nova coluna em `ar_titulos`:
-- `cobranca_stage` text (`'mes' | 'atraso' | 'judicial'`) — nullable; quando null, stage é derivado por data.
-- `cobranca_stage_manual` boolean default false — indica se o usuário fixou manualmente (previne recomputo automático).
-- `cobranca_stage_updated_at` timestamptz.
+Resultado: toda compra do "Guia CAIXA" via Hubla vai para EA+Clube, mesmo sendo um infoproduto de topo de funil que deveria alimentar o Inside Sales.
 
-Função `public.compute_cobranca_stage(titulo_id uuid)` retorna o stage derivado (consulta `ar_parcelas`). Usada como fallback quando `cobranca_stage_manual = false`.
+## Correção proposta
 
-## UI
+### 1. Roteamento (edge function `hubla-webhook-handler`)
+Adicionar exceção explícita em `mapProductCategory` **antes** da regra de Clube do Arremate:
 
-**Aba nova** em `src/pages/AReceber.tsx` (ou wrapper equivalente): `Listagem` | `Kanban Cobrança`.
-
-**Componente** `src/components/financeiro/aReceber/KanbanCobranca.tsx`:
-- 3 colunas com contador e soma de valor_pendente.
-- Cards com: cliente, produto, valor pendente, próxima parcela vencendo, dias em atraso (badge vermelho quando aplicável), responsável.
-- Drag-and-drop entre colunas (dnd-kit já usado no projeto).
-- Ações no card:
-  - **Baixar parcela** — abre modal existente de baixa (reuso do fluxo do A Receber).
-  - **Registrar contato** — mini-dialog que insere linha em `ar_historico` (`tipo = 'contato_cobranca'`).
-  - **Mover para judicial** — atalho que seta stage=judicial e loga em `ar_historico`.
-  - **Abrir detalhes** — abre o drawer atual do título.
-
-**Grid A Receber**: nova coluna "Stage" com badge colorido (azul=mês, âmbar=atraso, vermelho=judicial). Filtro por stage na barra de filtros.
-
-## Hooks / dados
-
-- `useCobrancaKanban()` — busca todos os títulos `status='aberto'` com enriquecimento de parcelas + stage efetivo.
-- `useUpdateCobrancaStage()` — grava `cobranca_stage`, `cobranca_stage_manual=true`, `cobranca_stage_updated_at`, e registra `ar_historico` com `tipo='mudanca_stage'`.
-- `useRegisterCobrancaContato()` — insere em `ar_historico`.
-- Reuso: `useMarkArParcelaPaga`, `useArHistorico`.
-
-## Migração (schema)
-
-```sql
-ALTER TABLE public.ar_titulos
-  ADD COLUMN cobranca_stage text CHECK (cobranca_stage IN ('mes','atraso','judicial')),
-  ADD COLUMN cobranca_stage_manual boolean NOT NULL DEFAULT false,
-  ADD COLUMN cobranca_stage_updated_at timestamptz;
-
-CREATE INDEX idx_ar_titulos_cobranca_stage ON public.ar_titulos(cobranca_stage) WHERE status = 'aberto';
 ```
-Função SQL `compute_cobranca_stage` para derivação por data (usada em views/queries e no client).
+if (name.includes('GUIA') && name.includes('CAIXA')) return 'guia_caixa';
+```
 
-Sem novas tabelas → RLS/GRANTs existentes de `ar_titulos` cobrem os novos campos.
+E mapear a nova categoria:
+- `CATEGORY_TO_STAGE['guia_caixa']` → stage **Novo Lead** de `PIPELINE INSIDE SALES` (`cf4a369c-c4a6-4299-933d-5ae3dcc39d4b`).
+- Remover `guia_caixa` do fluxo de Consórcio (não entra em `CONSORCIO_PRODUCT_CATEGORIES`).
+- Auto-tags aplicadas: `Guia`, `Hubla` (sem `Consórcio` / `clube-arremate`).
 
-## Fora de escopo
+### 2. Reprocesso histórico
+Migrar os deals já criados desse produto:
 
-- Notificações automáticas por WhatsApp/email a partir do Kanban.
-- Régua de cobrança automatizada (será tratada em outro épico se necessário).
-- Alteração das regras de baixa financeira existentes.
+```text
+UPDATE crm_deals
+SET origin_id = <INSIDE SALES>,
+    stage_id  = <Novo Lead>,
+    tags      = tags corrigidas (- clube-arremate, - Consórcio, + Guia)
+WHERE id IN (
+  SELECT linked_deal_id FROM hubla_transactions
+  WHERE product_name ILIKE '%Guia%CAIXA%' AND linked_deal_id IS NOT NULL
+);
+```
+
+Antes de rodar, faço um `SELECT` de conferência para você aprovar o volume/lista (aparente ~compras com esse produto entre 07/07 e 20/07).
+
+### 3. Validação
+- Reenviar 1 evento Hubla de teste pelo painel e conferir o deal criado (pipeline Inside Sales, stage Novo Lead, tags Guia + Hubla).
+- Conferir os deals reprocessados na tela `/crm/negocios` filtrando pela origem Inside Sales.
+
+## Fora do escopo
+- Webhook "Lead Guia" (`/webhook-lead-receiver/lead-guia`) permanece como está: já aponta para Inside Sales / Novo Lead.
+- Nenhuma outra categoria Hubla é alterada.
