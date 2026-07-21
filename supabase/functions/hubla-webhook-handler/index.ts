@@ -90,6 +90,13 @@ function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName?.toUpperCase() || '';
   const code = productCode?.toUpperCase() || '';
   
+  // ===== PRIORIDADE 0: Guia CAIXA (infoproduto de topo → Inside Sales) =====
+  // Deve vir ANTES da regra de Clube do Arremate porque o produto está
+  // cadastrado sob Clube na Hubla, mas comercialmente é lead para Inside Sales.
+  if (name.includes('GUIA') && name.includes('CAIXA')) {
+    return 'guia_caixa';
+  }
+
   // ===== PRIORIDADE 1: Detectar produtos de consórcio =====
   // Contrato - Clube do Arremate (mais específico primeiro)
   if (name.includes('CONTRATO') && name.includes('CLUBE')) {
