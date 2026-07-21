@@ -19,30 +19,27 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
       const start = format(startDate, 'yyyy-MM-dd') + 'T00:00:00';
       const end = format(endDate, 'yyyy-MM-dd') + 'T23:59:59';
 
-      // Reembolsos do produto A000 - Contrato — Hubla + MCF Pay.
-      // MCF Pay: A000 identificado pelo valor R$497 no payload (A010 = R$47).
-      const [{ data: hubla }, { data: mcf }] = await Promise.all([
-        supabase
-          .from('hubla_transactions')
-          .select('linked_deal_id, updated_at, product_name')
-          .eq('sale_status', 'refunded')
-          .not('linked_deal_id', 'is', null)
-          .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
-          .gte('updated_at', start)
-          .lte('updated_at', end),
-        supabase
-          .from('deal_activities')
-          .select('deal_id, metadata, created_at')
-          .eq('activity_type', 'refund_mcf_pay')
-          .gte('created_at', start)
-          .lte('created_at', end),
-      ]);
+      // Fonte de verdade: MCF Pay (deal_activities.refund_mcf_pay). Hubla é
+      // replicação — não contar em separado para bater com o Painel do MCF Pay.
+      // Dedup por transaction_id (retries de webhook geram várias linhas).
+      const { data: mcf } = await supabase
+        .from('deal_activities')
+        .select('deal_id, metadata, created_at')
+        .eq('activity_type', 'refund_mcf_pay')
+        .gte('created_at', start)
+        .lte('created_at', end);
 
+      const seenTx = new Set<string>();
       const dealIds = new Set<string>();
-      (hubla || []).forEach((h: any) => h.linked_deal_id && dealIds.add(h.linked_deal_id));
       (mcf || []).forEach((r: any) => {
         const amount = Number(r?.metadata?.amount);
-        if (r?.deal_id && amount === 497) dealIds.add(r.deal_id as string);
+        const txId = r?.metadata?.transaction_id as string | undefined;
+        if (!r?.deal_id || amount !== 497) return; // A000 = R$497
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        dealIds.add(r.deal_id as string);
       });
       const ids = Array.from(dealIds);
       if (ids.length === 0) return new Map<string, number>();
