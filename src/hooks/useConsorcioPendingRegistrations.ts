@@ -978,6 +978,15 @@ export function useOpenCota() {
           .eq('id', registration.proposal_id);
       }
 
+      // 8. Fire-and-forget webhook to Make (Concluídas - Operacional)
+      supabase.functions.invoke('consorcio-carta-cadastrada-webhook', {
+        body: {
+          card_id: card.id,
+          registration_id: registrationId,
+          proposal_id: registration.proposal_id ?? null,
+        },
+      }).catch((err) => console.warn('[carta-cadastrada-webhook] invoke failed', err));
+
       return card;
     },
     onSuccess: () => {
