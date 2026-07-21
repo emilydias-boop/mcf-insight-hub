@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck, Undo2 } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -48,6 +48,7 @@ function StatusBadge({ status }: { status: ArTituloStatus }) {
     aberto: { className: 'bg-amber-500/15 text-amber-600 border-amber-500/30', icon: Clock },
     quitado: { className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', icon: CheckCircle2 },
     cancelado: { className: 'bg-muted text-muted-foreground', icon: AlertCircle },
+    reembolsado: { className: 'bg-rose-500/15 text-rose-600 border-rose-500/30', icon: Undo2 },
   };
   const c = cfg[status];
   const Icon = c.icon;
