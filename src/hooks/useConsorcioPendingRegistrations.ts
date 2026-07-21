@@ -479,6 +479,10 @@ export function useCreatePendingRegistration() {
                 htmlContent,
                 tags: ['consorcio_boas_vindas', 'pending_registration'],
                 dealId: input.deal_id,
+                cc: [
+                  { email: 'emily.dias@minhacasafinanciada.com', name: 'Emily Dias' },
+                  { email: 'antony.nicolas@minhacasafinanciada.com', name: 'Antony Nicolas' },
+                ],
               },
             });
             if (mailError) {
