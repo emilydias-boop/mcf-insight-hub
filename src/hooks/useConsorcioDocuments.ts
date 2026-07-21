@@ -195,3 +195,122 @@ export function useBatchUploadDocuments() {
     },
   });
 }
+
+// ==========================================================================
+// Variants for documents attached to a pending registration (Cadastros Pendentes)
+// These write pending_registration_id instead of card_id. When the cota is
+// created via useOpenCota, the migration step relinks them to the new card_id.
+// ==========================================================================
+
+export function usePendingRegistrationDocuments(pendingRegistrationId: string | null) {
+  return useQuery({
+    queryKey: ['pending-reg-documents', pendingRegistrationId],
+    queryFn: async () => {
+      if (!pendingRegistrationId) return [];
+      const { data, error } = await supabase
+        .from('consortium_documents')
+        .select('*')
+        .eq('pending_registration_id', pendingRegistrationId)
+        .order('uploaded_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as ConsorcioDocument[];
+    },
+    enabled: !!pendingRegistrationId,
+  });
+}
+
+export function useBatchUploadPendingDocuments() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      pendingRegistrationId,
+      documents,
+    }: {
+      pendingRegistrationId: string;
+      documents: Array<{ file: File; tipo: TipoDocumento }>;
+    }) => {
+      const results = [];
+
+      for (const doc of documents) {
+        const fileExt = doc.file.name.split('.').pop();
+        const fileName = `pending/${pendingRegistrationId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('consorcio-documents')
+          .upload(fileName, doc.file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          continue;
+        }
+
+        const { data: urlData } = await supabase.storage
+          .from('consorcio-documents')
+          .createSignedUrl(fileName, 60 * 60 * 24 * 365);
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const { data, error } = await supabase
+          .from('consortium_documents')
+          .insert({
+            pending_registration_id: pendingRegistrationId,
+            tipo: doc.tipo,
+            nome_arquivo: doc.file.name,
+            storage_path: fileName,
+            storage_url: urlData?.signedUrl || '',
+            uploaded_by: user?.id,
+          })
+          .select()
+          .single();
+
+        if (!error && data) results.push(data);
+      }
+
+      return results;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-reg-documents', variables.pendingRegistrationId] });
+      queryClient.invalidateQueries({ queryKey: ['pending-registrations'] });
+    },
+    onError: (error) => {
+      console.error('Error uploading pending documents:', error);
+      toast.error('Erro ao enviar documentos');
+    },
+  });
+}
+
+export function useDeletePendingDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      documentId,
+      storagePath,
+      pendingRegistrationId,
+    }: {
+      documentId: string;
+      storagePath?: string;
+      pendingRegistrationId: string;
+    }) => {
+      if (storagePath) {
+        await supabase.storage.from('consorcio-documents').remove([storagePath]);
+      }
+      const { error } = await supabase
+        .from('consortium_documents')
+        .delete()
+        .eq('id', documentId);
+      if (error) throw error;
+      return { pendingRegistrationId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-reg-documents', data.pendingRegistrationId] });
+      queryClient.invalidateQueries({ queryKey: ['pending-registrations'] });
+      toast.success('Documento removido');
+    },
+    onError: (error) => {
+      console.error('Error deleting pending document:', error);
+      toast.error('Erro ao remover documento');
+    },
+  });
+}

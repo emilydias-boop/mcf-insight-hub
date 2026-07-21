@@ -3,7 +3,7 @@ import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FileText, ExternalLink } from 'lucide-react';
+import { Loader2, FileText, ExternalLink, Trash2, Upload } from 'lucide-react';
 import { formatarCep } from '@/lib/cepUtils';
 
 function formatCep(value: string): string {
@@ -57,6 +57,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { usePendingRegistration, useOpenCota, useUpdatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import {
+  usePendingRegistrationDocuments,
+  useBatchUploadPendingDocuments,
+  useDeletePendingDocument,
+} from '@/hooks/useConsorcioDocuments';
+import { TIPO_DOCUMENTO_OPTIONS, TipoDocumento } from '@/types/consorcio';
+import { toast } from 'sonner';
 import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, findProdutoForCredito, formatCurrency } from '@/lib/consorcioCalculos';
@@ -86,19 +93,28 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
-  // Fetch documents linked to this pending registration
-  const { data: documents = [] } = useQuery({
-    queryKey: ['pending-reg-documents', registrationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('consortium_documents')
-        .select('*')
-        .eq('pending_registration_id', registrationId);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!registrationId,
-  });
+  // Documents attached to the pending registration
+  const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
+  const uploadPendingDocs = useBatchUploadPendingDocuments();
+  const deletePendingDoc = useDeletePendingDocument();
+  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
+  const canEditDocs = !readOnly;
+
+  const addFilesToUpload = (files: FileList | null) => {
+    if (!files) return;
+    const newOnes = Array.from(files).map((f) => ({ file: f, tipo: 'outro' as TipoDocumento }));
+    setPendingFiles((prev) => [...prev, ...newOnes]);
+  };
+
+  const handleUploadPending = async () => {
+    if (pendingFiles.length === 0) {
+      toast.error('Selecione ao menos um arquivo');
+      return;
+    }
+    await uploadPendingDocs.mutateAsync({ pendingRegistrationId: registrationId, documents: pendingFiles });
+    toast.success('Documentos enviados com sucesso');
+    setPendingFiles([]);
+  };
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
@@ -479,26 +495,111 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                   </>
                 )}
 
-                {documents.length > 0 && (
-                  <div className="mt-4">
-                    <span className="text-sm text-muted-foreground">Documentos:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Documentos ({documents.length})</span>
+                  </div>
+
+                  {documents.length > 0 && (
+                    <div className="space-y-2">
                       {documents.map((doc: any) => (
-                        <a
-                          key={doc.id}
-                          href={doc.storage_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          <FileText className="h-3 w-3" />
-                          {doc.nome_arquivo}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <div key={doc.id} className="flex items-center justify-between rounded border p-2 text-sm">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-medium truncate">{doc.nome_arquivo}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{String(doc.tipo || '').replace('_', ' ')}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {doc.storage_url && (
+                              <a
+                                href={doc.storage_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs text-primary hover:underline"
+                              >
+                                <FileText className="h-3 w-3" /> Abrir <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                            {canEditDocs && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() =>
+                                  deletePendingDoc.mutate({
+                                    documentId: doc.id,
+                                    storagePath: doc.storage_path,
+                                    pendingRegistrationId: registrationId,
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {canEditDocs && (
+                    <div className="space-y-2 rounded border border-dashed p-3">
+                      <Label className="text-xs text-muted-foreground">Anexar novos documentos</Label>
+                      <Input type="file" multiple onChange={(e) => addFilesToUpload(e.target.files)} />
+
+                      {pendingFiles.length > 0 && (
+                        <div className="space-y-2">
+                          {pendingFiles.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 rounded border p-2">
+                              <span className="flex-1 truncate text-sm">{item.file.name}</span>
+                              <Select
+                                value={item.tipo}
+                                onValueChange={(v) =>
+                                  setPendingFiles((prev) =>
+                                    prev.map((p, i) => (i === idx ? { ...p, tipo: v as TipoDocumento } : p))
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="w-48">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {TIPO_DOCUMENTO_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleUploadPending}
+                              disabled={uploadPendingDocs.isPending}
+                            >
+                              {uploadPendingDocs.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Enviar ({pendingFiles.length})
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
