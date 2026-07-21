@@ -4201,6 +4201,7 @@ export type Database = {
           vendedor_id: string | null
           vendedor_name: string | null
           vendedor_name_cota: string | null
+          webhook_carta_cadastrada_enviado_em: string | null
         }
         Insert: {
           aceite_date?: string | null
@@ -4262,6 +4263,7 @@ export type Database = {
           vendedor_id?: string | null
           vendedor_name?: string | null
           vendedor_name_cota?: string | null
+          webhook_carta_cadastrada_enviado_em?: string | null
         }
         Update: {
           aceite_date?: string | null
@@ -4323,6 +4325,7 @@ export type Database = {
           vendedor_id?: string | null
           vendedor_name?: string | null
           vendedor_name_cota?: string | null
+          webhook_carta_cadastrada_enviado_em?: string | null
         }
         Relationships: [
           {
