@@ -64,8 +64,14 @@ export default function AReceberDetalhe() {
     const list = parcelas ?? [];
     const pago = list.filter(p => p.status === 'pago').reduce((s, p) => s + Number(p.valor_pago ?? p.valor ?? 0), 0);
     const pendente = list.filter(p => p.status !== 'pago' && p.status !== 'cancelado').reduce((s, p) => s + Number(p.valor ?? 0), 0);
+    // Credit card via Hubla é pago 100% no ato; considera título totalmente recebido.
+    const isCreditCardHubla = (titulo?.payment_method || '').toLowerCase() === 'credit_card';
+    if (isCreditCardHubla) {
+      const total = Number(titulo?.valor_total || 0);
+      return { pago: total, pendente: 0, total };
+    }
     return { pago, pendente, total: pago + pendente };
-  }, [parcelas]);
+  }, [parcelas, titulo?.payment_method, titulo?.valor_total]);
 
   const naoLancado = titulo?.tipo === 'parcelado' && (parcelas ?? []).length === 0;
 
