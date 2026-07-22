@@ -146,6 +146,8 @@ export interface EnrichedPendingRegistration {
   cotas_existentes_count: number;
   parte_atual: number;
   total_destinado: number;
+  motivo_declinio?: string | null;
+  declinada_at?: string | null;
 }
 
 export function usePendingRegistrations(statuses: string[] = ['aguardando_abertura']) {
