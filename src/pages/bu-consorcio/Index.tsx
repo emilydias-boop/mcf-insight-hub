@@ -456,6 +456,7 @@ export default function ConsorcioPage() {
           <TabsTrigger value="cotas">Cotas</TabsTrigger>
           <TabsTrigger value="pendentes">Cadastros Pendentes</TabsTrigger>
           <TabsTrigger value="cadastradas">Cadastradas</TabsTrigger>
+         <TabsTrigger value="declinadas">Cartas Declinadas</TabsTrigger>
           <TabsTrigger value="contemplacao">Contemplação</TabsTrigger>
           <TabsTrigger value="grupos">Grupos</TabsTrigger>
           <TabsTrigger value="previsao">Previsão</TabsTrigger>
@@ -1018,6 +1019,10 @@ export default function ConsorcioPage() {
 
         <TabsContent value="cadastradas">
           <PendingRegistrationsList variant="cadastradas" />
+        </TabsContent>
+
+        <TabsContent value="declinadas">
+          <PendingRegistrationsList variant="declinadas" />
         </TabsContent>
 
         <TabsContent value="contemplacao">
