@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2 } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -26,11 +26,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   usePendingRegistrations,
   useDeletePendingRegistration,
   useMarkPendingAsCadastrada,
   useUnmarkPendingCadastrada,
+  useDeclinePendingRegistration,
+  useUndeclinePendingRegistration,
   type EnrichedPendingRegistration,
 } from '@/hooks/useConsorcioPendingRegistrations';
 import { OpenCotaModal } from './OpenCotaModal';
@@ -48,21 +53,28 @@ import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
 
 export interface PendingRegistrationsListProps {
-  variant?: 'pendentes' | 'cadastradas';
+  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
 }
 
 export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegistrationsListProps = {}) {
-  const statuses = variant === 'cadastradas' ? ['cadastrada'] : ['aguardando_abertura'];
+  const statuses =
+    variant === 'cadastradas' ? ['cadastrada']
+    : variant === 'declinadas' ? ['declinada']
+    : ['aguardando_abertura'];
   const { data: registrations = [], isLoading } = usePendingRegistrations(statuses);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
   const unmarkCadastrada = useUnmarkPendingCadastrada();
+  const declineMut = useDeclinePendingRegistration();
+  const undeclineMut = useUndeclinePendingRegistration();
 
   const filtered = useMemo(
     () => applyPendingFilters(registrations, filters),
@@ -131,7 +143,7 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'cadastradas' ? 'Cadastradas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'cadastradas' ? 'Cadastradas' : variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -167,6 +179,7 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
                   <TableHead className="text-center">Cotas existentes</TableHead>
                   <TableHead className="text-center">Destinada</TableHead>
                   <TableHead>Solicitado em</TableHead>
+                  {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -182,7 +195,9 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
                     onDelete={() => setDeleteTarget(reg)}
                     onMarkCadastrada={() => markCadastrada.mutate(reg.id)}
                     onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
-                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending}
+                    onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
+                    onUndecline={() => undeclineMut.mutate(reg.id)}
+                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
                   />
                 ))}
               </TableBody>
