@@ -191,11 +191,18 @@ export function useCreateArParcelas() {
         tipo: 'lancamento_parcelas',
         descricao: `Lançamento de ${parcelas.length} parcela(s)`,
       } as any);
+      // Se o lançamento incluiu parcelas já pagas suficientes para quitar o título,
+      // remove pendentes remanescentes e marca como quitado/integral.
+      const temPago = parcelas.some((p) => (p as any).status === 'pago');
+      if (temPago) {
+        await settleTituloIfFullyPaid(tituloId);
+      }
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['ar-parcelas', vars.tituloId] });
       qc.invalidateQueries({ queryKey: ['ar-titulos'] });
       qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
+      qc.invalidateQueries({ queryKey: ['ar-titulo', vars.tituloId] });
     },
   });
 }
