@@ -101,6 +101,8 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   created_at,
   vendedor_name,
   aceite_date,
+  motivo_declinio,
+  declinada_at,
   deal:crm_deals!deal_id(
     contact:crm_contacts!contact_id(name, email, phone),
     owner_id,
