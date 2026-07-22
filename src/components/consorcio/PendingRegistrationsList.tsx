@@ -287,6 +287,44 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
       </CardContent>
     </Card>
     <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    <Dialog open={!!declineTarget} onOpenChange={(o) => { if (!o) { setDeclineTarget(null); setDeclineReason(''); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Declinar carta</DialogTitle>
+          <DialogDescription>
+            O parceiro desistiu da aquisição desta carta. O valor da venda será abatido da meta e deduzido do saldo acumulado. O registro fica arquivado na aba <strong>Cartas Declinadas</strong> com o motivo informado.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label htmlFor="decline-reason">Motivo do declínio <span className="text-destructive">*</span></Label>
+          <Textarea
+            id="decline-reason"
+            rows={4}
+            placeholder="Descreva o motivo pelo qual o parceiro declinou desta carta..."
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setDeclineTarget(null); setDeclineReason(''); }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={!declineReason.trim() || declineMut.isPending}
+            onClick={async () => {
+              if (!declineTarget) return;
+              await declineMut.mutateAsync({ registrationId: declineTarget.id, motivo: declineReason.trim() });
+              setDeclineTarget(null);
+              setDeclineReason('');
+            }}
+          >
+            <Ban className="h-4 w-4 mr-1" />
+            Confirmar declínio
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
     </TooltipProvider>
   );
