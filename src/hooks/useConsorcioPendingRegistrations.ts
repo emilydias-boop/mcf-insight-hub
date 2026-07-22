@@ -317,6 +317,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           cotas_existentes_count: docKey ? cotasCountByDoc.get(docKey) || 0 : 0,
           parte_atual: parteAtual || 1,
           total_destinado: totalDestinado,
+          motivo_declinio: r.motivo_declinio ?? null,
+          declinada_at: r.declinada_at ?? null,
         };
       });
     },
