@@ -10,17 +10,17 @@ import { supabase } from '@/integrations/supabase/client';
  * - Marca a flag após sucesso.
  */
 export async function dispatchCartaCadastradaWebhook(params: {
-  cardId: string;
+  cardId?: string | null;
   registrationId?: string | null;
   proposalId?: string | null;
   force?: boolean;
 }): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
-  const { cardId, registrationId = null, proposalId = null, force = false } = params;
+  const { cardId = null, registrationId = null, proposalId = null, force = false } = params;
   try {
     let effectiveRegId = registrationId;
 
-    // Resolve pending registration via card_id se não fornecido
-    if (!effectiveRegId) {
+    // Resolve pending registration via card_id ou proposal_id se não fornecido
+    if (!effectiveRegId && cardId) {
       const { data: reg } = await supabase
         .from('consorcio_pending_registrations')
         .select('id, webhook_carta_cadastrada_enviado_em')
@@ -32,7 +32,21 @@ export async function dispatchCartaCadastradaWebhook(params: {
           return { sent: false, skipped: true };
         }
       }
-    } else if (!force) {
+    }
+    if (!effectiveRegId && proposalId) {
+      const { data: reg } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, webhook_carta_cadastrada_enviado_em')
+        .eq('proposal_id', proposalId)
+        .maybeSingle();
+      if (reg) {
+        effectiveRegId = reg.id;
+        if (!force && (reg as any).webhook_carta_cadastrada_enviado_em) {
+          return { sent: false, skipped: true };
+        }
+      }
+    }
+    if (effectiveRegId && !force) {
       const { data: reg } = await supabase
         .from('consorcio_pending_registrations')
         .select('webhook_carta_cadastrada_enviado_em')
