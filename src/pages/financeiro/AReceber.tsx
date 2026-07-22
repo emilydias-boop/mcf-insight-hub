@@ -559,6 +559,7 @@ export default function AReceber() {
         </TabsContent>
       </Tabs>
       <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
+      <CadastroManualDialog open={openCadastroManual} onOpenChange={setOpenCadastroManual} />
     </div>
   );
 }
