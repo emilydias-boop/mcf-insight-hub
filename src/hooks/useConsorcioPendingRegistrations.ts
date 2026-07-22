@@ -475,6 +475,15 @@ export function useCreatePendingRegistration() {
         console.error('[automation-dispatch] Falha:', dispatchErr);
       }
 
+      // 5. Disparar webhook Make (`consorcio.carta.cadastrada`) já no aceite
+      //    da proposta — sem depender do passo "Abrir cota" / consortium_card_id.
+      //    Idempotente via `webhook_carta_cadastrada_enviado_em`.
+      dispatchCartaCadastradaWebhook({
+        cardId: null,
+        registrationId: registration.id,
+        proposalId: input.proposal_id,
+      }).catch((err) => console.warn('[carta-cadastrada-webhook] Falha:', err));
+
       return registration;
     },
     onSuccess: () => {
