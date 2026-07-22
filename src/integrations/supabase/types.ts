@@ -1174,8 +1174,10 @@ export type Database = {
       }
       automation_flows: {
         Row: {
+          body_template: string | null
           business_hours_end: string | null
           business_hours_start: string | null
+          channel: string
           created_at: string | null
           created_by: string | null
           description: string | null
@@ -1186,12 +1188,17 @@ export type Database = {
           origin_id: string | null
           respect_business_hours: boolean | null
           stage_id: string | null
+          subject: string | null
+          trigger_event: string | null
           trigger_on: Database["public"]["Enums"]["automation_trigger"] | null
+          trigger_type: string
           updated_at: string | null
         }
         Insert: {
+          body_template?: string | null
           business_hours_end?: string | null
           business_hours_start?: string | null
+          channel?: string
           created_at?: string | null
           created_by?: string | null
           description?: string | null
@@ -1202,12 +1209,17 @@ export type Database = {
           origin_id?: string | null
           respect_business_hours?: boolean | null
           stage_id?: string | null
+          subject?: string | null
+          trigger_event?: string | null
           trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
+          trigger_type?: string
           updated_at?: string | null
         }
         Update: {
+          body_template?: string | null
           business_hours_end?: string | null
           business_hours_start?: string | null
+          channel?: string
           created_at?: string | null
           created_by?: string | null
           description?: string | null
@@ -1218,7 +1230,10 @@ export type Database = {
           origin_id?: string | null
           respect_business_hours?: boolean | null
           stage_id?: string | null
+          subject?: string | null
+          trigger_event?: string | null
           trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
+          trigger_type?: string
           updated_at?: string | null
         }
         Relationships: [
@@ -4143,7 +4158,9 @@ export type Database = {
       consorcio_pending_registrations: {
         Row: {
           aceite_date: string | null
+          boas_vindas_email_enviado_em: string | null
           boas_vindas_enviado_em: string | null
+          boas_vindas_whatsapp_enviado_em: string | null
           categoria: string | null
           cnpj: string | null
           condicao_pagamento: string | null
@@ -4208,7 +4225,9 @@ export type Database = {
         }
         Insert: {
           aceite_date?: string | null
+          boas_vindas_email_enviado_em?: string | null
           boas_vindas_enviado_em?: string | null
+          boas_vindas_whatsapp_enviado_em?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
@@ -4273,7 +4292,9 @@ export type Database = {
         }
         Update: {
           aceite_date?: string | null
+          boas_vindas_email_enviado_em?: string | null
           boas_vindas_enviado_em?: string | null
+          boas_vindas_whatsapp_enviado_em?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
