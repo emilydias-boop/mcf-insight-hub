@@ -191,11 +191,18 @@ export function useCreateArParcelas() {
         tipo: 'lancamento_parcelas',
         descricao: `Lançamento de ${parcelas.length} parcela(s)`,
       } as any);
+      // Se o lançamento incluiu parcelas já pagas suficientes para quitar o título,
+      // remove pendentes remanescentes e marca como quitado/integral.
+      const temPago = parcelas.some((p) => (p as any).status === 'pago');
+      if (temPago) {
+        await settleTituloIfFullyPaid(tituloId);
+      }
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['ar-parcelas', vars.tituloId] });
       qc.invalidateQueries({ queryKey: ['ar-titulos'] });
       qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
+      qc.invalidateQueries({ queryKey: ['ar-titulo', vars.tituloId] });
     },
   });
 }
@@ -233,6 +240,7 @@ export function useMarkArParcelaPaga() {
         descricao: `Parcela baixada (${forma_pagamento || 'sem forma'})`,
         valor: valor_pago,
       } as any);
+      await settleTituloIfFullyPaid(tituloId);
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['ar-parcelas', vars.tituloId] });
@@ -241,6 +249,63 @@ export function useMarkArParcelaPaga() {
       qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
     },
   });
+}
+
+/**
+ * Se a soma de valor_pago das parcelas pagas do título atinge/ultrapassa o valor_total,
+ * exclui as parcelas pendentes/atrasadas remanescentes e marca o título como quitado/integral.
+ * Evita cobranças futuras indevidas após uma baixa total.
+ */
+export async function settleTituloIfFullyPaid(tituloId: string): Promise<boolean> {
+  const { data: titulo } = await supabase
+    .from('ar_titulos' as any)
+    .select('id, valor_total, status')
+    .eq('id', tituloId)
+    .maybeSingle();
+  const t = titulo as any;
+  if (!t) return false;
+  const valorTotal = Number(t.valor_total || 0);
+  if (valorTotal <= 0) return false;
+
+  const { data: parcelas } = await supabase
+    .from('ar_parcelas' as any)
+    .select('id, valor, valor_pago, status')
+    .eq('titulo_id', tituloId);
+  const list = (parcelas as any[]) || [];
+  const pago = list
+    .filter((p) => p.status === 'pago')
+    .reduce((s, p) => s + Number(p.valor_pago ?? p.valor ?? 0), 0);
+
+  // Tolerância de 1 centavo
+  if (pago + 0.01 < valorTotal) return false;
+
+  const pendentes = list.filter(
+    (p) => p.status === 'pendente' || p.status === 'atrasado',
+  );
+  if (pendentes.length > 0) {
+    const ids = pendentes.map((p) => p.id);
+    const { error: eDel } = await supabase
+      .from('ar_parcelas' as any)
+      .delete()
+      .in('id', ids);
+    if (eDel) throw eDel;
+    await supabase.from('ar_historico' as any).insert({
+      titulo_id: tituloId,
+      parcela_id: null,
+      tipo: 'baixa_total_auto',
+      descricao: `Baixa total atingida — ${pendentes.length} parcela(s) pendente(s) removida(s) automaticamente`,
+      valor: null,
+      metadata: { removidas: ids },
+    } as any);
+  }
+
+  if (t.status !== 'quitado') {
+    await supabase
+      .from('ar_titulos' as any)
+      .update({ status: 'quitado', tipo: 'integral' } as any)
+      .eq('id', tituloId);
+  }
+  return true;
 }
 
 export function useDeleteArParcela() {
