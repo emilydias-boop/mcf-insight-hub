@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck, Undo2 } from 'lucide-react';
+import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck, Undo2, FilePlus2 } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,6 +30,7 @@ import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
 import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
 import { ReembolsosPanel } from '@/components/financeiro/aReceber/ReembolsosPanel';
+import { CadastroManualDialog } from '@/components/financeiro/aReceber/CadastroManualDialog';
 import { useReembolsoTotais } from '@/hooks/useArReembolsos';
 import { ticketNumber } from '@/lib/arTicketNumber';
 
@@ -104,6 +105,7 @@ export default function AReceber() {
   const [baixaData, setBaixaData] = useState(fmtDate(new Date(), 'yyyy-MM-dd'));
   const [baixaForma, setBaixaForma] = useState('pix');
   const [openReembolsos, setOpenReembolsos] = useState(false);
+  const [openCadastroManual, setOpenCadastroManual] = useState(false);
   const { data: reembTotais } = useReembolsoTotais();
 
   const toggleSelected = (id: string) => {
@@ -205,6 +207,14 @@ export default function AReceber() {
           >
             <Undo2 className="w-5 h-5" />
             <span className="text-sm font-semibold">Reembolsos</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenCadastroManual(true)}
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-primary hover:border-primary/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
+          >
+            <FilePlus2 className="w-5 h-5" />
+            <span className="text-sm font-semibold">Cadastro Manual</span>
           </button>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
