@@ -101,6 +101,8 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   created_at,
   vendedor_name,
   aceite_date,
+  motivo_declinio,
+  declinada_at,
   deal:crm_deals!deal_id(
     contact:crm_contacts!contact_id(name, email, phone),
     owner_id,
@@ -144,6 +146,8 @@ export interface EnrichedPendingRegistration {
   cotas_existentes_count: number;
   parte_atual: number;
   total_destinado: number;
+  motivo_declinio?: string | null;
+  declinada_at?: string | null;
 }
 
 export function usePendingRegistrations(statuses: string[] = ['aguardando_abertura']) {
@@ -313,6 +317,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           cotas_existentes_count: docKey ? cotasCountByDoc.get(docKey) || 0 : 0,
           parte_atual: parteAtual || 1,
           total_destinado: totalDestinado,
+          motivo_declinio: r.motivo_declinio ?? null,
+          declinada_at: r.declinada_at ?? null,
         };
       });
     },
@@ -589,6 +595,95 @@ export function useUnmarkPendingCadastrada() {
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro: ' + e.message),
+  });
+}
+
+/**
+ * Declinar um cadastro pendente: parceiro desistiu da aquisição.
+ * Move o cadastro para status='declinada' com motivo, e marca a proposta
+ * vinculada como 'recusada' para abater o valor do realizado / meta de venda.
+ */
+export function useDeclinePendingRegistration() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (params: { registrationId: string; motivo: string }) => {
+      const motivo = (params.motivo || '').trim();
+      if (!motivo) throw new Error('Informe o motivo do declínio.');
+
+      // 1. Buscar proposta vinculada (para abater da meta)
+      const { data: reg } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, proposal_id, deal_id')
+        .eq('id', params.registrationId)
+        .maybeSingle();
+
+      // 2. Abater da meta: proposta vinculada → status='recusada' (mesmo efeito do Sem Sucesso)
+      if ((reg as any)?.proposal_id) {
+        await supabase
+          .from('consorcio_proposals')
+          .update({ status: 'recusada', motivo_recusa: motivo } as any)
+          .eq('id', (reg as any).proposal_id);
+      }
+
+      // 3. Atualizar cadastro pendente para declinada
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({
+          status: 'declinada',
+          motivo_declinio: motivo,
+          declinada_at: new Date().toISOString(),
+          declinada_by: user?.id || null,
+        } as any)
+        .eq('id', params.registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Carta declinada — valor abatido da meta de venda.');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
+    },
+    onError: (e: any) => toast.error('Erro ao declinar carta: ' + e.message),
+  });
+}
+
+/** Reverter declínio: devolve o cadastro para 'aguardando_abertura' e reativa a proposta. */
+export function useUndeclinePendingRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (registrationId: string) => {
+      const { data: reg } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, proposal_id')
+        .eq('id', registrationId)
+        .maybeSingle();
+      if ((reg as any)?.proposal_id) {
+        await supabase
+          .from('consorcio_proposals')
+          .update({ status: 'aceita', motivo_recusa: null } as any)
+          .eq('id', (reg as any).proposal_id);
+      }
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update({
+          status: 'aguardando_abertura',
+          motivo_declinio: null,
+          declinada_at: null,
+          declinada_by: null,
+        } as any)
+        .eq('id', registrationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Declínio revertido — cadastro voltou para pendentes.');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
+    },
+    onError: (e: any) => toast.error('Erro ao reverter: ' + e.message),
   });
 }
 

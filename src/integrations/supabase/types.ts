@@ -4156,6 +4156,8 @@ export type Database = {
           data_contratacao: string | null
           data_fundacao: string | null
           deal_id: string | null
+          declinada_at: string | null
+          declinada_by: string | null
           dia_vencimento: number | null
           e_transferencia: boolean | null
           email: string | null
@@ -4171,6 +4173,7 @@ export type Database = {
           inclui_seguro: boolean | null
           inicio_segunda_parcela: string | null
           inscricao_estadual: string | null
+          motivo_declinio: string | null
           natureza_juridica: string | null
           nome_completo: string | null
           num_funcionarios: number | null
@@ -4218,6 +4221,8 @@ export type Database = {
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
+          declinada_at?: string | null
+          declinada_by?: string | null
           dia_vencimento?: number | null
           e_transferencia?: boolean | null
           email?: string | null
@@ -4233,6 +4238,7 @@ export type Database = {
           inclui_seguro?: boolean | null
           inicio_segunda_parcela?: string | null
           inscricao_estadual?: string | null
+          motivo_declinio?: string | null
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null
@@ -4280,6 +4286,8 @@ export type Database = {
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
+          declinada_at?: string | null
+          declinada_by?: string | null
           dia_vencimento?: number | null
           e_transferencia?: boolean | null
           email?: string | null
@@ -4295,6 +4303,7 @@ export type Database = {
           inclui_seguro?: boolean | null
           inicio_segunda_parcela?: string | null
           inscricao_estadual?: string | null
+          motivo_declinio?: string | null
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null

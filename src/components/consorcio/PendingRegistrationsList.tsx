@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2 } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -26,11 +26,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   usePendingRegistrations,
   useDeletePendingRegistration,
   useMarkPendingAsCadastrada,
   useUnmarkPendingCadastrada,
+  useDeclinePendingRegistration,
+  useUndeclinePendingRegistration,
   type EnrichedPendingRegistration,
 } from '@/hooks/useConsorcioPendingRegistrations';
 import { OpenCotaModal } from './OpenCotaModal';
@@ -48,21 +53,28 @@ import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
 
 export interface PendingRegistrationsListProps {
-  variant?: 'pendentes' | 'cadastradas';
+  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
 }
 
 export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegistrationsListProps = {}) {
-  const statuses = variant === 'cadastradas' ? ['cadastrada'] : ['aguardando_abertura'];
+  const statuses =
+    variant === 'cadastradas' ? ['cadastrada']
+    : variant === 'declinadas' ? ['declinada']
+    : ['aguardando_abertura'];
   const { data: registrations = [], isLoading } = usePendingRegistrations(statuses);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
   const unmarkCadastrada = useUnmarkPendingCadastrada();
+  const declineMut = useDeclinePendingRegistration();
+  const undeclineMut = useUndeclinePendingRegistration();
 
   const filtered = useMemo(
     () => applyPendingFilters(registrations, filters),
@@ -131,7 +143,7 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'cadastradas' ? 'Cadastradas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'cadastradas' ? 'Cadastradas' : variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -167,6 +179,7 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
                   <TableHead className="text-center">Cotas existentes</TableHead>
                   <TableHead className="text-center">Destinada</TableHead>
                   <TableHead>Solicitado em</TableHead>
+                  {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -182,7 +195,9 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
                     onDelete={() => setDeleteTarget(reg)}
                     onMarkCadastrada={() => markCadastrada.mutate(reg.id)}
                     onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
-                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending}
+                    onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
+                    onUndecline={() => undeclineMut.mutate(reg.id)}
+                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
                   />
                 ))}
               </TableBody>
@@ -272,6 +287,44 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
       </CardContent>
     </Card>
     <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    <Dialog open={!!declineTarget} onOpenChange={(o) => { if (!o) { setDeclineTarget(null); setDeclineReason(''); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Declinar carta</DialogTitle>
+          <DialogDescription>
+            O parceiro desistiu da aquisição desta carta. O valor da venda será abatido da meta e deduzido do saldo acumulado. O registro fica arquivado na aba <strong>Cartas Declinadas</strong> com o motivo informado.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label htmlFor="decline-reason">Motivo do declínio <span className="text-destructive">*</span></Label>
+          <Textarea
+            id="decline-reason"
+            rows={4}
+            placeholder="Descreva o motivo pelo qual o parceiro declinou desta carta..."
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setDeclineTarget(null); setDeclineReason(''); }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={!declineReason.trim() || declineMut.isPending}
+            onClick={async () => {
+              if (!declineTarget) return;
+              await declineMut.mutateAsync({ registrationId: declineTarget.id, motivo: declineReason.trim() });
+              setDeclineTarget(null);
+              setDeclineReason('');
+            }}
+          >
+            <Ban className="h-4 w-4 mr-1" />
+            Confirmar declínio
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
     </TooltipProvider>
   );
@@ -286,16 +339,20 @@ function RegistrationRow({
   onDelete,
   onMarkCadastrada,
   onUnmarkCadastrada,
+  onDecline,
+  onUndecline,
   isMarking,
 }: {
   reg: EnrichedPendingRegistration;
-  variant: 'pendentes' | 'cadastradas';
+  variant: 'pendentes' | 'cadastradas' | 'declinadas';
   onOpen: () => void;
   onView: () => void;
   onLink: () => void;
   onDelete: () => void;
   onMarkCadastrada: () => void;
   onUnmarkCadastrada: () => void;
+  onDecline: () => void;
+  onUndecline: () => void;
   isMarking: boolean;
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
@@ -367,12 +424,26 @@ function RegistrationRow({
           ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
           : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
       </TableCell>
+      {variant === 'declinadas' && (
+        <TableCell className="text-sm max-w-[280px]">
+          <div className="truncate" title={reg.motivo_declinio || ''}>
+            {reg.motivo_declinio || '—'}
+          </div>
+          {reg.declinada_at && (
+            <div className="text-[10px] text-muted-foreground">
+              {format(new Date(reg.declinada_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </div>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          <Button size="sm" onClick={onOpen}>
-            <FileEdit className="h-3 w-3 mr-1" /> Abrir
-          </Button>
-          {variant === 'pendentes' ? (
+          {variant !== 'declinadas' && (
+            <Button size="sm" onClick={onOpen}>
+              <FileEdit className="h-3 w-3 mr-1" /> Abrir
+            </Button>
+          )}
+          {variant === 'pendentes' && (
             <Button
               size="sm"
               variant="outline"
@@ -382,7 +453,8 @@ function RegistrationRow({
             >
               <CheckCircle2 className="h-3 w-3 mr-1" /> Cadastrada
             </Button>
-          ) : (
+          )}
+          {variant === 'cadastradas' && (
             <Button
               size="sm"
               variant="outline"
@@ -390,6 +462,16 @@ function RegistrationRow({
               disabled={isMarking}
             >
               <Undo2 className="h-3 w-3 mr-1" /> Devolver
+            </Button>
+          )}
+          {variant === 'declinadas' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onUndecline}
+              disabled={isMarking}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" /> Reverter declínio
             </Button>
           )}
           <DropdownMenu>
@@ -402,9 +484,22 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onLink}>
-                <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
-              </DropdownMenuItem>
+              {variant !== 'declinadas' && (
+                <DropdownMenuItem onClick={onLink}>
+                  <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
+                </DropdownMenuItem>
+              )}
+              {variant === 'pendentes' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={onDecline}
+                    className="text-amber-600 focus:text-amber-700"
+                  >
+                    <Ban className="h-4 w-4 mr-2" /> Declinar carta
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={onDelete}
