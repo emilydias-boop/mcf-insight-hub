@@ -8,7 +8,6 @@ import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
-import { buildConsorcioBoasVindasEmail } from '@/lib/consorcioBoasVindasEmail';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 
 export interface PendingRegistration {
@@ -466,44 +465,14 @@ export function useCreatePendingRegistration() {
         }
       }
 
-      // 4. Enviar email de boas-vindas (idempotente) — não bloqueia sucesso do cadastro
+      // 4. Disparar automações do evento "consorcio_carta_cadastrada"
+      //    (Email/WhatsApp configurados em Administração → Automações).
       try {
-        const emailDestino = (input.tipo_pessoa === 'pj' ? input.email_comercial : input.email) || null;
-        const nomeCliente = (input.tipo_pessoa === 'pj' ? input.razao_social : input.nome_completo) || 'Cliente';
-        if (emailDestino) {
-          const { data: current } = await supabase
-            .from('consorcio_pending_registrations')
-            .select('boas_vindas_enviado_em')
-            .eq('id', registration.id)
-            .single();
-          if (!(current as any)?.boas_vindas_enviado_em) {
-            const { subject, htmlContent } = buildConsorcioBoasVindasEmail({ nomeCliente });
-            const { error: mailError } = await supabase.functions.invoke('brevo-send', {
-              body: {
-                to: emailDestino,
-                name: nomeCliente,
-                subject,
-                htmlContent,
-                tags: ['consorcio_boas_vindas', 'pending_registration'],
-                dealId: input.deal_id,
-                cc: [
-                  { email: 'emily.dias@minhacasafinanciada.com', name: 'Emily Dias' },
-                  { email: 'antony.nicolas@minhacasafinanciada.com', name: 'Antony Nicolas' },
-                ],
-              },
-            });
-            if (mailError) {
-              console.error('[boas-vindas] Falha ao enviar email:', mailError);
-            } else {
-              await supabase
-                .from('consorcio_pending_registrations')
-                .update({ boas_vindas_enviado_em: new Date().toISOString() } as any)
-                .eq('id', registration.id);
-            }
-          }
-        }
-      } catch (mailErr) {
-        console.error('[boas-vindas] Exceção ao enviar email:', mailErr);
+        await supabase.functions.invoke('automation-event-dispatcher', {
+          body: { event: 'consorcio_carta_cadastrada', registration_id: registration.id },
+        });
+      } catch (dispatchErr) {
+        console.error('[automation-dispatch] Falha:', dispatchErr);
       }
 
       return registration;

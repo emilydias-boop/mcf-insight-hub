@@ -9,6 +9,11 @@ export interface AutomationFlow {
   stage_id?: string;
   origin_id?: string;
   trigger_on: 'enter' | 'exit';
+  trigger_type?: 'stage_change' | 'system_event';
+  trigger_event?: string | null;
+  channel?: 'email' | 'whatsapp' | 'both';
+  subject?: string | null;
+  body_template?: string | null;
   is_active: boolean;
   respect_business_hours: boolean;
   business_hours_start?: string;
@@ -154,6 +159,11 @@ export function useCreateFlow() {
           stage_id: flow.stage_id,
           origin_id: flow.origin_id,
           trigger_on: flow.trigger_on || 'enter',
+          trigger_type: flow.trigger_type || 'stage_change',
+          trigger_event: flow.trigger_event ?? null,
+          channel: flow.channel || 'email',
+          subject: flow.subject ?? null,
+          body_template: flow.body_template ?? null,
           is_active: flow.is_active ?? true,
           respect_business_hours: flow.respect_business_hours ?? true,
           business_hours_start: flow.business_hours_start || '09:00',
@@ -190,6 +200,11 @@ export function useUpdateFlow() {
           stage_id: updates.stage_id,
           origin_id: updates.origin_id,
           trigger_on: updates.trigger_on,
+          trigger_type: updates.trigger_type,
+          trigger_event: updates.trigger_event,
+          channel: updates.channel,
+          subject: updates.subject,
+          body_template: updates.body_template,
           is_active: updates.is_active,
           respect_business_hours: updates.respect_business_hours,
           business_hours_start: updates.business_hours_start,

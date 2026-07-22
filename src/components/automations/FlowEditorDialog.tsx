@@ -53,6 +53,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const [businessHoursStart, setBusinessHoursStart] = useState("09:00");
   const [businessHoursEnd, setBusinessHoursEnd] = useState("18:00");
   const [excludeWeekends, setExcludeWeekends] = useState(true);
+  const [triggerType, setTriggerType] = useState<'stage_change' | 'system_event'>('stage_change');
+  const [triggerEvent, setTriggerEvent] = useState<string>("");
+  const [channel, setChannel] = useState<'email' | 'whatsapp' | 'both'>('email');
+  const [subject, setSubject] = useState<string>("");
+  const [bodyTemplate, setBodyTemplate] = useState<string>("");
 
   // Get stages for selected origin (or group if no origin selected)
   const { data: stages } = useCRMStages(originId || groupId || undefined);
@@ -75,6 +80,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setBusinessHoursStart(flow.business_hours_start || "09:00");
       setBusinessHoursEnd(flow.business_hours_end || "18:00");
       setExcludeWeekends(flow.exclude_weekends);
+      setTriggerType((flow as any).trigger_type || 'stage_change');
+      setTriggerEvent((flow as any).trigger_event || "");
+      setChannel((flow as any).channel || 'email');
+      setSubject((flow as any).subject || "");
+      setBodyTemplate((flow as any).body_template || "");
       
       // Find the group for the selected origin
       if (flow.origin_id && origins) {
@@ -96,6 +106,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setBusinessHoursStart("09:00");
       setBusinessHoursEnd("18:00");
       setExcludeWeekends(true);
+      setTriggerType('stage_change');
+      setTriggerEvent("");
+      setChannel('email');
+      setSubject("");
+      setBodyTemplate("");
     }
   }, [flow, open, origins]);
 
@@ -110,6 +125,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       business_hours_start: businessHoursStart,
       business_hours_end: businessHoursEnd,
       exclude_weekends: excludeWeekends,
+      trigger_type: triggerType,
+      trigger_event: triggerType === 'system_event' ? (triggerEvent || null) : null,
+      channel,
+      subject: subject || null,
+      body_template: bodyTemplate || null,
     };
 
     if (isEditing && flowId) {
@@ -171,6 +191,34 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Tipo de Gatilho</Label>
+            <Select value={triggerType} onValueChange={(v) => setTriggerType(v as any)}>
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover z-50">
+                <SelectItem value="stage_change">Mudança de etapa (CRM)</SelectItem>
+                <SelectItem value="system_event">Evento do sistema</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {triggerType === 'system_event' ? (
+            <div className="space-y-2">
+              <Label>Evento do sistema *</Label>
+              <Select value={triggerEvent} onValueChange={setTriggerEvent}>
+                <SelectTrigger className="w-full sm:w-96">
+                  <SelectValue placeholder="Escolha o evento" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  <SelectItem value="consorcio_carta_cadastrada">
+                    Carta de Consórcio Cadastrada
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Grupo/Pipeline</Label>
@@ -242,7 +290,9 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
               </Select>
             </div>
           </div>
+          )}
 
+          {triggerType === 'stage_change' && (
           <div className="space-y-2">
             <Label>Disparar quando o lead...</Label>
             <Select value={triggerOn} onValueChange={(v) => setTriggerOn(v as 'enter' | 'exit')}>
@@ -255,9 +305,10 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Trigger Preview */}
-          {stageId && selectedStage && (
+          {triggerType === 'stage_change' && stageId && selectedStage && (
             <div className="rounded-lg border border-dashed bg-muted/30 p-4">
               <div className="flex items-center gap-3 text-sm">
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10">
@@ -287,6 +338,65 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
           )}
         </CardContent>
       </Card>
+
+      {/* Message / Channel — apenas para eventos do sistema */}
+      {triggerType === 'system_event' && (
+        <Card className="border bg-card/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <FileText className="h-4 w-4 text-primary" />
+              Mensagem
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Canal *</Label>
+              <Select value={channel} onValueChange={(v) => setChannel(v as any)}>
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  <SelectItem value="email">E-mail (Brevo)</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp (Twilio)</SelectItem>
+                  <SelectItem value="both">E-mail + WhatsApp</SelectItem>
+                </SelectContent>
+              </Select>
+              {(channel === 'whatsapp' || channel === 'both') && (
+                <p className="text-xs text-muted-foreground">
+                  Mensagens de texto livre no WhatsApp só são entregues dentro da janela de 24h após o último contato do cliente. Fora dela, é necessário um template HSM aprovado.
+                </p>
+              )}
+            </div>
+
+            {(channel === 'email' || channel === 'both') && (
+              <div className="space-y-2">
+                <Label htmlFor="subject">Assunto (e-mail)</Label>
+                <Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Ex: Parabéns pela sua nova Carta de Consórcio!"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="body_template">Corpo da mensagem</Label>
+              <Textarea
+                id="body_template"
+                value={bodyTemplate}
+                onChange={(e) => setBodyTemplate(e.target.value)}
+                rows={10}
+                placeholder="Use {{nome}}, {{email}}, {{telefone}} como placeholders."
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Placeholders disponíveis: <code>{'{{nome}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{telefone}}'}</code>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Business Hours Card */}
       <Card className="border bg-card/50">
