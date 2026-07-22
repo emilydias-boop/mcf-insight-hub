@@ -13,8 +13,8 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const { card_id, registration_id, proposal_id } = body ?? {};
-    if (!card_id) {
-      return new Response(JSON.stringify({ error: "card_id required" }), {
+    if (!card_id && !registration_id && !proposal_id) {
+      return new Response(JSON.stringify({ error: "card_id, registration_id or proposal_id required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -25,9 +25,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Se registration_id não veio, tenta resolver pelo card_id
+    // Resolver registration_id via card_id ou proposal_id se não vier
     let resolvedRegId: string | null = registration_id ?? null;
-    if (!resolvedRegId) {
+    if (!resolvedRegId && card_id) {
       const { data: regByCard } = await supabase
         .from("consorcio_pending_registrations")
         .select("id")
@@ -35,14 +35,35 @@ Deno.serve(async (req) => {
         .maybeSingle();
       resolvedRegId = regByCard?.id ?? null;
     }
+    if (!resolvedRegId && proposal_id) {
+      const { data: regByProp } = await supabase
+        .from("consorcio_pending_registrations")
+        .select("id")
+        .eq("proposal_id", proposal_id)
+        .maybeSingle();
+      resolvedRegId = regByProp?.id ?? null;
+    }
+
+    // Resolver proposal_id via registration se não veio
+    let resolvedPropId: string | null = proposal_id ?? null;
+    if (!resolvedPropId && resolvedRegId) {
+      const { data: propByReg } = await supabase
+        .from("consorcio_pending_registrations")
+        .select("proposal_id")
+        .eq("id", resolvedRegId)
+        .maybeSingle();
+      resolvedPropId = (propByReg as any)?.proposal_id ?? null;
+    }
 
     const [cardRes, regRes, propRes] = await Promise.all([
-      supabase.from("consortium_cards").select("*").eq("id", card_id).maybeSingle(),
+      card_id
+        ? supabase.from("consortium_cards").select("*").eq("id", card_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null } as any),
       resolvedRegId
         ? supabase.from("consorcio_pending_registrations").select("*").eq("id", resolvedRegId).maybeSingle()
         : Promise.resolve({ data: null, error: null } as any),
-      proposal_id
-        ? supabase.from("consorcio_proposals").select("*").eq("id", proposal_id).maybeSingle()
+      resolvedPropId
+        ? supabase.from("consorcio_proposals").select("*").eq("id", resolvedPropId).maybeSingle()
         : Promise.resolve({ data: null, error: null } as any),
     ]);
 
