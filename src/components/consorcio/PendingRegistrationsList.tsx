@@ -301,16 +301,20 @@ function RegistrationRow({
   onDelete,
   onMarkCadastrada,
   onUnmarkCadastrada,
+  onDecline,
+  onUndecline,
   isMarking,
 }: {
   reg: EnrichedPendingRegistration;
-  variant: 'pendentes' | 'cadastradas';
+  variant: 'pendentes' | 'cadastradas' | 'declinadas';
   onOpen: () => void;
   onView: () => void;
   onLink: () => void;
   onDelete: () => void;
   onMarkCadastrada: () => void;
   onUnmarkCadastrada: () => void;
+  onDecline: () => void;
+  onUndecline: () => void;
   isMarking: boolean;
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
@@ -382,12 +386,26 @@ function RegistrationRow({
           ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
           : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
       </TableCell>
+      {variant === 'declinadas' && (
+        <TableCell className="text-sm max-w-[280px]">
+          <div className="truncate" title={reg.motivo_declinio || ''}>
+            {reg.motivo_declinio || '—'}
+          </div>
+          {reg.declinada_at && (
+            <div className="text-[10px] text-muted-foreground">
+              {format(new Date(reg.declinada_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </div>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          <Button size="sm" onClick={onOpen}>
-            <FileEdit className="h-3 w-3 mr-1" /> Abrir
-          </Button>
-          {variant === 'pendentes' ? (
+          {variant !== 'declinadas' && (
+            <Button size="sm" onClick={onOpen}>
+              <FileEdit className="h-3 w-3 mr-1" /> Abrir
+            </Button>
+          )}
+          {variant === 'pendentes' && (
             <Button
               size="sm"
               variant="outline"
@@ -397,7 +415,8 @@ function RegistrationRow({
             >
               <CheckCircle2 className="h-3 w-3 mr-1" /> Cadastrada
             </Button>
-          ) : (
+          )}
+          {variant === 'cadastradas' && (
             <Button
               size="sm"
               variant="outline"
@@ -405,6 +424,16 @@ function RegistrationRow({
               disabled={isMarking}
             >
               <Undo2 className="h-3 w-3 mr-1" /> Devolver
+            </Button>
+          )}
+          {variant === 'declinadas' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onUndecline}
+              disabled={isMarking}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" /> Reverter declínio
             </Button>
           )}
           <DropdownMenu>
@@ -417,9 +446,22 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onLink}>
-                <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
-              </DropdownMenuItem>
+              {variant !== 'declinadas' && (
+                <DropdownMenuItem onClick={onLink}>
+                  <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
+                </DropdownMenuItem>
+              )}
+              {variant === 'pendentes' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={onDecline}
+                    className="text-amber-600 focus:text-amber-700"
+                  >
+                    <Ban className="h-4 w-4 mr-2" /> Declinar carta
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={onDelete}
