@@ -480,6 +480,7 @@ export function useEnviarProposta() {
       valor_credito: number;
       prazo_meses: number;
       tipo_produto: string;
+      origem_lead?: string;
     }) => {
       // 1. Create proposal
       const { error: propError } = await supabase
@@ -491,6 +492,7 @@ export function useEnviarProposta() {
           valor_credito: params.valor_credito,
           prazo_meses: params.prazo_meses,
           tipo_produto: params.tipo_produto,
+          origem_lead: params.origem_lead || null,
         });
       if (propError) throw propError;
 
