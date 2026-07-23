@@ -326,6 +326,31 @@ serve(async (req) => {
                 : `https://${linkRow.google_meet_link}`;
               linkSource = 'closer_meeting_links';
             }
+            // Fallback 2: mesma closer_id + day_of_week, start_time mais próximo em até ±30 min.
+            if (!meetingLink) {
+              const slotMinutes = Number(hh) * 60 + Number(mm);
+              const { data: sameDayRows } = await supabase
+                .from('closer_meeting_links')
+                .select('google_meet_link, start_time')
+                .eq('closer_id', meetingSlotActive.closer_id)
+                .eq('day_of_week', wd);
+              if (Array.isArray(sameDayRows) && sameDayRows.length > 0) {
+                let bestRow: { google_meet_link: string; start_time: string } | null = null;
+                let bestDiff = Number.POSITIVE_INFINITY;
+                for (const r of sameDayRows as any[]) {
+                  if (!r.google_meet_link || !r.start_time) continue;
+                  const [rh, rm] = String(r.start_time).split(':').map(Number);
+                  const diff = Math.abs((rh * 60 + rm) - slotMinutes);
+                  if (diff < bestDiff) { bestDiff = diff; bestRow = r; }
+                }
+                if (bestRow && bestDiff <= 30) {
+                  meetingLink = bestRow.google_meet_link.startsWith('http')
+                    ? bestRow.google_meet_link
+                    : `https://${bestRow.google_meet_link}`;
+                  linkSource = `closer_meeting_links_nearest(${bestDiff}min)`;
+                }
+              }
+            }
           } catch (e) {
             console.warn('[AUTOMATION-PROCESSOR] closer_meeting_links lookup failed:', (e as any)?.message);
           }
@@ -337,6 +362,26 @@ serve(async (req) => {
         if (!meetingLink && meetingSlotActive?.video_conference_link) {
           meetingLink = meetingSlotActive.video_conference_link;
           linkSource = 'meeting_slots.video_conference_link';
+        }
+        // Fallback 4: link default do closer (qualquer linha ativa em closer_meeting_links).
+        if (!meetingLink && meetingSlotActive?.closer_id) {
+          try {
+            const { data: anyRow } = await supabase
+              .from('closer_meeting_links')
+              .select('google_meet_link')
+              .eq('closer_id', meetingSlotActive.closer_id)
+              .not('google_meet_link', 'is', null)
+              .limit(1)
+              .maybeSingle();
+            if (anyRow?.google_meet_link) {
+              meetingLink = anyRow.google_meet_link.startsWith('http')
+                ? anyRow.google_meet_link
+                : `https://${anyRow.google_meet_link}`;
+              linkSource = 'closer_default';
+            }
+          } catch (e) {
+            console.warn('[AUTOMATION-PROCESSOR] closer default link lookup failed:', (e as any)?.message);
+          }
         }
         console.log(`[AUTOMATION-PROCESSOR] deal=${item.deal_id} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
 
