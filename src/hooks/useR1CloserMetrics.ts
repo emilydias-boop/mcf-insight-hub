@@ -547,11 +547,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       const dealsForFallback = allRefundedDealIds.filter((id) => !r1ByDeal.has(id));
       const dealContractPaid = new Map<string, string | null>();
       if (dealsForFallback.length > 0) {
-        const rows = await batchedIn<{ id: string; contract_paid_at: string | null }>(
+        const rows = await batchedIn<any>(
           (chunk) => supabase
             .from('crm_deals')
-            .select('id, contract_paid_at')
-            .in('id', chunk),
+            .select('id, contract_paid_at' as any)
+            .in('id', chunk) as any,
           dealsForFallback
         );
         rows.forEach((d: any) => dealContractPaid.set(d.id, d.contract_paid_at ?? null));
