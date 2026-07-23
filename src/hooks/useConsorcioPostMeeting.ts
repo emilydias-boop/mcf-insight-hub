@@ -83,6 +83,7 @@ export interface Proposal {
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: string;
+  origem_lead?: string | null;
   status: string;
   aceite_date: string | null;
   motivo_recusa: string | null;
