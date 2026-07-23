@@ -138,28 +138,22 @@ serve(async (req) => {
           /\breuniao\s+0?[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
           /^agendamento$/.test(stageNameRaw);
         // Carrega o próximo meeting_slot ATIVO do deal para resolver {{data_hora}}, {{closer}} e {{link}}.
+        // A agenda atual vincula leads principalmente por meeting_slot_attendees, não por meeting_slots.deal_id.
         let meetingSlotActive: any = null;
         let meetingCloser: any = null;
+        let meetingSlotSource = 'none';
         if (isMeetingAnchored) {
-          const { data: slots } = await supabase
-            .from('meeting_slots')
-            .select('id, scheduled_at, status, meeting_link, video_conference_link, closer_id, meeting_type')
-            .eq('deal_id', item.deal_id)
-            .order('scheduled_at', { ascending: false })
-            .limit(5);
-          const lastSlot = Array.isArray(slots) && slots.length > 0 ? slots[0] : null;
-          const status = (lastSlot?.status || '').toLowerCase();
+          const resolvedSlot = await resolveMeetingSlotForAutomation(supabase, item.deal_id, item.contact_id || deal.contact_id);
+          meetingSlotActive = resolvedSlot.slot;
+          meetingSlotSource = resolvedSlot.source;
+
+          const status = (meetingSlotActive?.status || '').toLowerCase();
           if (['cancelled', 'no_show', 'rescheduled'].includes(status)) {
             console.log(`[AUTOMATION-PROCESSOR] Meeting no longer active (${status}) for deal ${item.deal_id}, skipping`);
             await markAsSkipped(supabase, item.id, `meeting_no_longer_active:${status}`);
             results.skipped++;
             continue;
           }
-          // Prefere slot futuro/ativo (scheduled/confirmed) sobre o último por data.
-          meetingSlotActive =
-            (Array.isArray(slots) ? slots : []).find((s: any) =>
-              ['scheduled', 'confirmed', 'pending', 'invited'].includes((s.status || '').toLowerCase())
-            ) || lastSlot;
           if (meetingSlotActive?.closer_id) {
             const { data: closerRow } = await supabase
               .from('closers')
@@ -383,13 +377,16 @@ serve(async (req) => {
             console.warn('[AUTOMATION-PROCESSOR] closer default link lookup failed:', (e as any)?.message);
           }
         }
-        console.log(`[AUTOMATION-PROCESSOR] deal=${item.deal_id} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
+        console.log(`[AUTOMATION-PROCESSOR] deal=${item.deal_id} meeting_slot_source=${meetingSlotSource} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
 
         // Se o template usa {{link}} ou {{meeting_link}} e não temos link real → não envia.
         const templateUsesLink = /\{\{\s*(link|meeting_link)\s*\}\}/i.test(templateText);
         if (isMeetingAnchored && templateUsesLink && !meetingLink) {
           console.warn(`[AUTOMATION-PROCESSOR] Deal ${item.deal_id} sem link da agenda do closer — pulando`);
-          await markAsSkipped(supabase, item.id, 'meeting_link_unresolved');
+          const reason = meetingSlotActive
+            ? 'meeting_link_unresolved:no_link_for_slot'
+            : 'meeting_link_unresolved:no_active_slot_found';
+          await markAsSkipped(supabase, item.id, reason);
           results.skipped++;
           continue;
         }
@@ -529,6 +526,80 @@ serve(async (req) => {
     );
   }
 });
+
+async function resolveMeetingSlotForAutomation(supabase: any, dealId: string, contactId?: string | null) {
+  const attendeeSlots = await fetchSlotsFromAttendees(supabase, dealId);
+  const attendeeSlot = pickBestSlot(attendeeSlots);
+  if (attendeeSlot) return { slot: attendeeSlot, source: 'meeting_slot_attendees.deal_id' };
+
+  const directDealSlots = await fetchMeetingSlots(supabase, 'deal_id', dealId);
+  const directDealSlot = pickBestSlot(directDealSlots);
+  if (directDealSlot) return { slot: directDealSlot, source: 'meeting_slots.deal_id' };
+
+  if (contactId) {
+    const contactSlots = await fetchMeetingSlots(supabase, 'contact_id', contactId);
+    const contactSlot = pickBestSlot(contactSlots);
+    if (contactSlot) return { slot: contactSlot, source: 'meeting_slots.contact_id' };
+  }
+
+  return { slot: null, source: 'none' };
+}
+
+async function fetchSlotsFromAttendees(supabase: any, dealId: string) {
+  const { data, error } = await supabase
+    .from('meeting_slot_attendees')
+    .select(`
+      meeting_slots:meeting_slot_id (
+        id,
+        scheduled_at,
+        status,
+        meeting_link,
+        video_conference_link,
+        closer_id,
+        meeting_type
+      )
+    `)
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.warn('[AUTOMATION-PROCESSOR] attendee meeting slot lookup failed:', error.message);
+    return [];
+  }
+
+  return (Array.isArray(data) ? data : [])
+    .map((row: any) => Array.isArray(row.meeting_slots) ? row.meeting_slots[0] : row.meeting_slots)
+    .filter(Boolean);
+}
+
+async function fetchMeetingSlots(supabase: any, column: 'deal_id' | 'contact_id', value: string) {
+  const { data, error } = await supabase
+    .from('meeting_slots')
+    .select('id, scheduled_at, status, meeting_link, video_conference_link, closer_id, meeting_type')
+    .eq(column, value)
+    .order('scheduled_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.warn(`[AUTOMATION-PROCESSOR] meeting_slots lookup by ${column} failed:`, error.message);
+    return [];
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+function pickBestSlot(slots: any[]) {
+  const cleanSlots = (Array.isArray(slots) ? slots : [])
+    .filter(Boolean)
+    .sort((a: any, b: any) => new Date(b.scheduled_at || 0).getTime() - new Date(a.scheduled_at || 0).getTime());
+
+  const activeSlot = cleanSlots.find((slot: any) =>
+    ['scheduled', 'confirmed', 'pending', 'invited'].includes((slot.status || '').toLowerCase())
+  );
+
+  return activeSlot || cleanSlots[0] || null;
+}
 
 async function markAsSkipped(supabase: any, itemId: string, reason: string) {
   await supabase
