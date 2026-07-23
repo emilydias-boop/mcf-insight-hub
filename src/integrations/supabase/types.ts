@@ -13836,6 +13836,15 @@ export type Database = {
         }
         Relationships: []
       }
+      v_automation_confirmacao_r1_health: {
+        Row: {
+          day: string | null
+          qtd: number | null
+          reason: string | null
+          status: Database["public"]["Enums"]["automation_status"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _actor_name: { Args: { _uid: string }; Returns: string }
