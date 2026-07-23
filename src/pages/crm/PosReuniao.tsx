@@ -1440,3 +1440,61 @@ function CartasExcluidasTab() {
     </Card>
   );
 }
+
+// ─── Total Crédito Summary (integral + por closer) ───────────
+function TotalCreditoSummary({
+  propostas,
+  title,
+  className,
+}: {
+  propostas: Array<{ valor_credito?: number | null; closer_name?: string | null }>;
+  title: string;
+  className?: string;
+}) {
+  const { total, porCloser } = useMemo(() => {
+    let total = 0;
+    const map = new Map<string, number>();
+    for (const p of propostas) {
+      const v = Number(p.valor_credito) || 0;
+      total += v;
+      const key = p.closer_name || '— Sem Closer';
+      map.set(key, (map.get(key) || 0) + v);
+    }
+    const porCloser = Array.from(map.entries())
+      .map(([name, valor]) => ({ name, valor }))
+      .sort((a, b) => b.valor - a.valor);
+    return { total, porCloser };
+  }, [propostas]);
+
+  const fmt = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
+  return (
+    <Card className={cn('bg-muted/30', className)}>
+      <CardContent className="p-4">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="min-w-[220px]">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
+            <p className="text-2xl font-bold text-primary">{fmt(total)}</p>
+            <p className="text-xs text-muted-foreground">{propostas.length} cartas</p>
+          </div>
+          <div className="flex-1 min-w-[300px]">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Por Closer</p>
+            {porCloser.length === 0 ? (
+              <p className="text-sm text-muted-foreground">—</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {porCloser.map(c => (
+                  <div key={c.name} className="rounded-md border bg-background px-3 py-1.5">
+                    <p className="text-[11px] text-muted-foreground leading-tight">{c.name}</p>
+                    <p className="text-sm font-semibold leading-tight">{fmt(c.valor)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
