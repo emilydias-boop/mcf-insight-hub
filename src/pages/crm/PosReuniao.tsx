@@ -680,6 +680,7 @@ function PropostasTab() {
             initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
             initialTipoProduto={editTarget.tipo_produto || ''}
             initialDetails={editTarget.proposal_details || ''}
+            initialOrigemLead={(editTarget as any).origem_lead || ''}
           />
         )}
       </CardContent>
