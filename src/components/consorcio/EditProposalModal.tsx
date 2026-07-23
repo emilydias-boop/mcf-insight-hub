@@ -19,6 +19,7 @@ interface EditProposalModalProps {
   initialPrazoMeses: number;
   initialTipoProduto: string;
   initialDetails: string;
+  initialOrigemLead?: string;
 }
 
 const formatBRL = (raw: string) => {
@@ -42,12 +43,13 @@ const parseBRL = (formatted: string): number => {
 
 export function EditProposalModal({
   open, onOpenChange, proposalId, contactName, dealName,
-  initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails,
+  initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead,
 }: EditProposalModalProps) {
   const [valorCredito, setValorCredito] = useState('');
   const [prazoMeses, setPrazoMeses] = useState('');
   const [tipoProduto, setTipoProduto] = useState('');
   const [details, setDetails] = useState('');
+  const [origemLead, setOrigemLead] = useState('');
   const editar = useEditarProposta();
 
   useEffect(() => {
@@ -56,8 +58,9 @@ export function EditProposalModal({
       setPrazoMeses(initialPrazoMeses ? String(initialPrazoMeses) : '');
       setTipoProduto(initialTipoProduto || '');
       setDetails(initialDetails || '');
+      setOrigemLead(initialOrigemLead || '');
     }
-  }, [open, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails]);
+  }, [open, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead]);
 
   const valorNumerico = parseBRL(valorCredito);
 
@@ -69,6 +72,7 @@ export function EditProposalModal({
       prazo_meses: Number(prazoMeses),
       tipo_produto: tipoProduto,
       proposal_details: details,
+      origem_lead: origemLead.trim() || undefined,
     }, {
       onSuccess: () => onOpenChange(false),
     });
@@ -111,6 +115,15 @@ export function EditProposalModal({
           <div>
             <Label>Detalhes da Proposta</Label>
             <Textarea value={details} onChange={e => setDetails(e.target.value)} rows={3} />
+          </div>
+          <div>
+            <Label>Origem do Lead</Label>
+            <Input
+              type="text"
+              value={origemLead}
+              onChange={e => setOrigemLead(e.target.value)}
+              placeholder="Ex: Indicação, Instagram, Parceiro João..."
+            />
           </div>
         </div>
         <DialogFooter>

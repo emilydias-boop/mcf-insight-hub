@@ -4512,6 +4512,7 @@ export type Database = {
           deletion_reason: string | null
           id: string
           motivo_recusa: string | null
+          origem_lead: string | null
           prazo_meses: number | null
           proposal_date: string | null
           proposal_details: string | null
@@ -4534,6 +4535,7 @@ export type Database = {
           deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
+          origem_lead?: string | null
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null
@@ -4556,6 +4558,7 @@ export type Database = {
           deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
+          origem_lead?: string | null
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null

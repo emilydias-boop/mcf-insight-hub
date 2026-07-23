@@ -23,6 +23,7 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
   const [valorCredito, setValorCredito] = useState('');
   const [prazoMeses, setPrazoMeses] = useState('');
   const [tipoProduto, setTipoProduto] = useState('');
+  const [origemLead, setOrigemLead] = useState('');
   const enviarProposta = useEnviarProposta();
 
   // Formata valor em BRL (1.000.000,00) enquanto o usuário digita.
@@ -54,10 +55,11 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
       valor_credito: valorNumerico,
       prazo_meses: Number(prazoMeses),
       tipo_produto: tipoProduto,
+      origem_lead: origemLead.trim() || undefined,
     }, {
       onSuccess: () => {
         onOpenChange(false);
-        setDetails(''); setValorCredito(''); setPrazoMeses(''); setTipoProduto('');
+        setDetails(''); setValorCredito(''); setPrazoMeses(''); setTipoProduto(''); setOrigemLead('');
       },
     });
   };
@@ -99,6 +101,15 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
           <div>
             <Label>Detalhes da Proposta</Label>
             <Textarea value={details} onChange={e => setDetails(e.target.value)} placeholder="Descrição da proposta..." rows={3} />
+          </div>
+          <div>
+            <Label>Origem do Lead</Label>
+            <Input
+              type="text"
+              value={origemLead}
+              onChange={e => setOrigemLead(e.target.value)}
+              placeholder="Ex: Indicação, Instagram, Parceiro João..."
+            />
           </div>
         </div>
         <DialogFooter>

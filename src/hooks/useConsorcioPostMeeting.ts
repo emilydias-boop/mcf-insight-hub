@@ -83,6 +83,7 @@ export interface Proposal {
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: string;
+  origem_lead?: string | null;
   status: string;
   aceite_date: string | null;
   motivo_recusa: string | null;
@@ -234,6 +235,7 @@ export function useProposals() {
           valor_credito,
           prazo_meses,
           tipo_produto,
+          origem_lead,
           status,
           aceite_date,
           motivo_recusa,
@@ -382,6 +384,7 @@ export function useProposals() {
         valor_credito: p.valor_credito || 0,
         prazo_meses: p.prazo_meses || 0,
         tipo_produto: p.tipo_produto || '',
+        origem_lead: (p as any).origem_lead || '',
         status: p.status || 'pendente',
         aceite_date: p.aceite_date,
         motivo_recusa: p.motivo_recusa,
@@ -477,6 +480,7 @@ export function useEnviarProposta() {
       valor_credito: number;
       prazo_meses: number;
       tipo_produto: string;
+      origem_lead?: string;
     }) => {
       // 1. Create proposal
       const { error: propError } = await supabase
@@ -488,6 +492,7 @@ export function useEnviarProposta() {
           valor_credito: params.valor_credito,
           prazo_meses: params.prazo_meses,
           tipo_produto: params.tipo_produto,
+          origem_lead: params.origem_lead || null,
         });
       if (propError) throw propError;
 
@@ -881,6 +886,7 @@ export function useEditarProposta() {
       prazo_meses: number;
       tipo_produto: string;
       proposal_details?: string;
+      origem_lead?: string;
     }) => {
       const { error } = await supabase
         .from('consorcio_proposals')
@@ -889,6 +895,7 @@ export function useEditarProposta() {
           prazo_meses: params.prazo_meses,
           tipo_produto: params.tipo_produto,
           proposal_details: params.proposal_details ?? '',
+          origem_lead: params.origem_lead ?? null,
         })
         .eq('id', params.proposal_id);
       if (error) throw error;
