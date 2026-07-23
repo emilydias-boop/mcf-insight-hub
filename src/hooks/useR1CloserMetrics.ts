@@ -477,43 +477,54 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
       });
 
-      // ========== REFUNDS BY REFUND DATE ==========
-      // Contabilizamos reembolsos do produto A000 - Contrato,
-      // independente do gateway (Hubla OU MCF Pay). Para MCF Pay,
-      // A000 é identificado pelo valor R$ 497 no payload.
-      const [{ data: hublaRefunds }, { data: mcfRefunds }] = await Promise.all([
-        supabase
-          .from('hubla_transactions')
-          .select('linked_deal_id, updated_at, product_name')
-          .eq('sale_status', 'refunded')
-          .not('linked_deal_id', 'is', null)
-          .or('product_name.ilike.%A000%,product_name.ilike.%000 - Contrato%')
-          .gte('updated_at', start)
-          .lte('updated_at', end),
+      // ========== REFUNDS ANCHORED BY R1 DATE ==========
+      // Reembolsos A000 (MCF Pay + reconciliações manuais Hubla) são
+      // contabilizados no dia da R1 que originou o contrato — não no dia
+      // em que o reembolso foi processado. Sem R1, usa contract_paid_at
+      // como fallback (marca "outside"). Sem âncora, não conta.
+      const startMs = new Date(start).getTime();
+      const endMs = new Date(end).getTime();
+
+      const [{ data: mcfRefunds }, { data: manualHublaRefunds }] = await Promise.all([
         supabase
           .from('deal_activities')
           .select('deal_id, metadata, created_at')
-          .eq('activity_type', 'refund_mcf_pay')
-          .gte('created_at', start)
-          .lte('created_at', end),
+          .eq('activity_type', 'refund_mcf_pay'),
+        supabase
+          .from('deal_activities')
+          .select('deal_id, metadata, created_at')
+          .eq('activity_type', 'refund_hubla'),
       ]);
 
+      const seenTx = new Set<string>();
       const refundedDealIdSet = new Set<string>();
-      (hublaRefunds || []).forEach((r: any) => {
-        if (r?.linked_deal_id) refundedDealIdSet.add(r.linked_deal_id as string);
-      });
       (mcfRefunds || []).forEach((r: any) => {
         const amount = Number(r?.metadata?.amount);
-        // A000 - Contrato = R$497 via MCF Pay; A010 = R$47 (excluído)
-        if (r?.deal_id && amount === 497) refundedDealIdSet.add(r.deal_id as string);
+        const txId = r?.metadata?.transaction_id as string | undefined;
+        if (!r?.deal_id || amount !== 497) return; // A000 = R$497
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        refundedDealIdSet.add(r.deal_id as string);
+      });
+      (manualHublaRefunds || []).forEach((r: any) => {
+        const src = String(r?.metadata?.source || '');
+        if (!r?.deal_id || !src.startsWith('manual_reconciliation')) return;
+        const txId = r?.metadata?.hubla_transaction_id as string | undefined;
+        if (txId) {
+          if (seenTx.has(txId)) return;
+          seenTx.add(txId);
+        }
+        refundedDealIdSet.add(r.deal_id as string);
       });
       const allRefundedDealIds = Array.from(refundedDealIdSet);
 
       const refundAttendees = allRefundedDealIds.length > 0
-        ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
+        ? await batchedIn<{ deal_id: string; meeting_slot: { closer_id: string; scheduled_at: string } }>(
             (chunk) => supabase
               .from('meeting_slot_attendees')
-              .select('deal_id, contract_paid_at, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
+              .select('deal_id, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
               .in('deal_id', chunk)
               .eq('meeting_slot.meeting_type', 'r1')
               .eq('is_partner', false),
@@ -521,20 +532,48 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           )
         : [];
 
-      // 1 refund por deal — escolher R1 mais recente para atribuir o closer.
-      const refundByCloser = new Map<string, number>();
-      const refundByDeal = new Map<string, { closerId: string; ts: number }>();
+      // R1 mais recente por deal → âncora + closer
+      const r1ByDeal = new Map<string, { closerId: string; ts: number }>();
       refundAttendees.forEach((att: any) => {
         const slot = att.meeting_slot;
         const closerId = slot?.closer_id;
         if (!closerId || !att.deal_id) return;
         const ts = new Date(slot.scheduled_at).getTime();
-        const prev = refundByDeal.get(att.deal_id);
-        if (!prev || ts > prev.ts) refundByDeal.set(att.deal_id, { closerId, ts });
+        const prev = r1ByDeal.get(att.deal_id);
+        if (!prev || ts > prev.ts) r1ByDeal.set(att.deal_id, { closerId, ts });
       });
-      refundByDeal.forEach(({ closerId }) => {
+
+      // Fallback: contract_paid_at do deal
+      const dealsForFallback = allRefundedDealIds.filter((id) => !r1ByDeal.has(id));
+      const dealContractPaid = new Map<string, string | null>();
+      if (dealsForFallback.length > 0) {
+        const rows = await batchedIn<any>(
+          (chunk) => supabase
+            .from('crm_deals')
+            .select('id, contract_paid_at' as any)
+            .in('id', chunk) as any,
+          dealsForFallback
+        );
+        rows.forEach((d: any) => dealContractPaid.set(d.id, d.contract_paid_at ?? null));
+      }
+
+      const refundByCloser = new Map<string, number>();
+      for (const dealId of allRefundedDealIds) {
+        const r1 = r1ByDeal.get(dealId);
+        let anchorMs: number | null = null;
+        let closerId: string | null = null;
+        if (r1) {
+          anchorMs = r1.ts;
+          closerId = r1.closerId;
+        } else {
+          const cpa = dealContractPaid.get(dealId);
+          if (cpa) anchorMs = new Date(cpa).getTime();
+          // sem R1 conhecida → não temos closer para atribuir
+        }
+        if (anchorMs == null || anchorMs < startMs || anchorMs > endMs) continue;
+        if (!closerId) continue;
         refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
-      });
+      }
 
       // Calculate metrics for each R1 closer
       const metricsMap = new Map<string, R1CloserMetric>();
