@@ -68,6 +68,8 @@ import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions, useConsorcioVendedorOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, findProdutoForCredito, formatCurrency } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
+import { useConsorcioDuplicateCheck } from '@/hooks/useConsorcioDuplicateCheck';
+import { DuplicateWarningBanner } from './DuplicateWarningBanner';
 import { CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS, PrazoParcelas, CondicaoPagamento } from '@/types/consorcioProdutos';
 import { CATEGORIA_OPTIONS, ORIGEM_OPTIONS } from '@/types/consorcio';
 import { supabase } from '@/integrations/supabase/client';
@@ -209,6 +211,21 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const incluiSeguro = form.watch('inclui_seguro');
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
+
+  // Duplicate check on client fields (CPF, nome, e-mail, telefone) for PF/PJ
+  const clienteCpf = form.watch('cliente_cpf');
+  const clienteNome = form.watch('cliente_nome');
+  const clienteEmail = form.watch('cliente_email');
+  const clienteTelefone = form.watch('cliente_telefone');
+  const { data: duplicateMatches = [], isLoading: dupLoading } = useConsorcioDuplicateCheck({
+    cpf: clienteCpf,
+    cnpj: registration?.tipo_pessoa === 'pj' ? registration?.cnpj : null,
+    email: clienteEmail || (registration?.tipo_pessoa === 'pj' ? registration?.email_comercial : null),
+    telefone: clienteTelefone || (registration?.tipo_pessoa === 'pj' ? registration?.telefone_comercial : null),
+    nome: clienteNome || (registration?.tipo_pessoa === 'pj' ? registration?.razao_social : null),
+    excludeRegistrationId: registrationId,
+    enabled: open,
+  });
 
   // Auto-detect product
   const produtoDetectado = useMemo(() => {
@@ -361,6 +378,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
           <Form {...form}>
             <fieldset disabled={readOnly} className="contents">
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
             {/* Editable client data */}
             <Card>
               <CardHeader className="pb-3">
