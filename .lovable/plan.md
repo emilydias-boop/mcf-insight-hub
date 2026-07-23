@@ -1,38 +1,82 @@
-## Problema
+# Boas-vindas R2 via Template Oficial (Meta-approved) no Twilio
 
-O card KPI **REEMBOLSOS** em `/crm/reunioes-equipe` ainda mostra `7` para hoje (22/07) porque ele lê de um hook diferente dos que já foram re-ancorados na R1.
+## Contexto
+Hoje o `automation-event-dispatcher` envia a mensagem de Boas-vindas R2 como texto livre via Twilio (`Body=...`). Isso só funciona dentro da janela de 24h de sessão. Como o disparo ocorre logo após o Contrato Pago — e frequentemente fora dessa janela — o envio precisa usar um **template HSM aprovado pela Meta**, referenciado no Twilio por **ContentSid + ContentVariables**, com botão CTA "Agendar R2".
 
-- Já corrigidos (âncora = data da R1): `useSdrRefundsInPeriod`, `useRefundDetailsInPeriod` — usados no dialog de detalhes e na tabela de SDRs.
-- **Não corrigido**: `useR1CloserMetrics.ts` (linhas 480-537) — filtra reembolsos por `updated_at` (Hubla) e `created_at` (MCF Pay) dentro do período. É de onde saem `closerMetrics.reembolsos`, que `ReunioesEquipe.tsx` soma em `totalReembolsos` do card, e também alimenta a coluna "Reembolsos" e o cálculo `contrato_pago - reembolsos` da tabela de Closers.
+## Passo 1 — Cadastro do template no Twilio (manual, feito por você)
 
-Consequência: o card e a tabela de Closers continuam contando pela data do reembolso; só o dialog e a tabela de SDRs já respeitam a nova regra. Daí o `7` de hoje.
+No **Twilio Content Editor** (Console → Messaging → Content Template Builder), criar:
 
-## O que fazer
+- **Nome (friendly name):** `boas_vindas_r2_contrato_pago`
+- **Idioma:** `pt_BR` ("Portugues BR")
+- **Categoria Meta:** `MARKETING` (é uma mensagem de próximos passos comerciais fora da janela; se a Meta reprovar como MARKETING, resubmeter como `UTILITY` argumentando que é follow-up transacional pós-compra).
+- **Tipo de conteúdo Twilio:** `twilio/call-to-action` (permite corpo + botão URL) — ou `twilio/quick-reply` se quisermos futuramente botões de resposta; para este caso o CTA URL é o correto.
+- **Corpo (com 1 variável):**
 
-Re-ancorar reembolsos em `useR1CloserMetrics.ts` no dia da R1 que originou o contrato, com a mesma hierarquia dos outros hooks:
+```
+Olá, {{1}}! 🎉
 
-1. **R1 mais recente do deal** (`meeting_slots.scheduled_at` onde `meeting_type='r1'` e `is_partner=false`) → âncora + `closer_id` já vem do slot.
-2. **Fallback**: `contract_paid_at` do deal (marca "outside"; ainda atribui ao closer da R1 mais recente se existir, senão não conta pra nenhum closer).
-3. Sem âncora (nem R1 nem `contract_paid_at`): não contabiliza no período.
+Parabéns pela decisão — seu contrato foi confirmado e você agora faz parte da Seleção MCF.
 
-### Passos técnicos
+SEUS PRÓXIMOS PASSOS — O que fazer agora:
 
-Em `src/hooks/useR1CloserMetrics.ts`:
+1) Acesse o conteúdo na MCF Pay
+Lá estão os detalhes do contrato e a explicação completa do nosso modelo de negócio (Acesso no seu email).
 
-- Remover os filtros `.gte('updated_at', start).lte('updated_at', end)` (Hubla) e `.gte('created_at', start).lte('created_at', end)` (MCF Pay) da busca de reembolsos. Buscar reembolsos A000 sem cap de data (ou só `>= start` de segurança), pois a R1 âncora pode ser antiga.
-- Manter deduplicação por `deal_id` (1 reembolso por deal) e por `transaction_id` quando disponível.
-- Incluir também `refund_hubla` com `metadata.source LIKE 'manual_reconciliation%'` (paridade com `useSdrRefundsInPeriod`).
-- Para cada `deal_id` reembolsado:
-  - Buscar R1 mais recente (já é feito hoje via `refundAttendees`).
-  - Buscar `contract_paid_at` do deal para o fallback (novo — hoje só usa o do attendee).
-  - Calcular `anchorMs`: `r1.scheduled_at` > `deal.contract_paid_at`.
-  - Se `anchorMs` estiver **dentro do período** (`start..end`), incrementar `refundByCloser[closerId]`; senão, pular.
-- Manter `refundByCloser` como saída para preservar o cálculo `contrato_pago = contratos + manuais - reembolsos` e a coluna "Reembolsos" da tabela de Closers já ancorada corretamente.
+2) Agende sua reunião de seleção
+O passo que garante sua vaga. É a reunião com um sócio da MCF — sem ela, você não avança.
 
-Sem mudança em UI, migrations ou outros hooks.
+3) Entre no grupo dos selecionados
+No mesmo contato acima você recebe informações sobre a abertura das vagas e a reunião com a equipe.
 
-### Validação
+Qualquer dúvida, é só chamar por aqui. Nos vemos na R2! 🚀
+```
 
-- Preset **Hoje** (22/07): card **REEMBOLSOS** deve refletir apenas reembolsos cuja R1 (ou `contract_paid_at` fallback) caiu em 22/07. Deve bater com o `items.length` do dialog aberto pelo card.
-- Preset **Mês**: total do card = total do dialog para o mesmo período.
-- Coluna "Reembolsos" na tabela de Closers e cálculo de "Contratos Líquidos" seguem a mesma âncora.
+- **Botão CTA (Call To Action):**
+  - Tipo: `URL`
+  - Rótulo: `Agendar R2`
+  - URL: `https://hi.switchy.io/x9NB` (estática, sem variável — evita reprovação Meta por URL dinâmica)
+
+- **Submeter para aprovação WhatsApp/Meta** direto pelo Content Editor.
+- Após aprovado, copiar o **Content SID** (formato `HX...`).
+
+## Passo 2 — Guardar o Content SID como secret
+
+Adicionar via `add_secret`:
+- `TWILIO_CONTENT_SID_BOAS_VINDAS_R2` = `HX...` (o SID aprovado)
+
+Assim conseguimos trocar/versionar o template sem redeploy de código.
+
+## Passo 3 — Ajuste no edge function `automation-event-dispatcher`
+
+Trocar o envio de WhatsApp da action `whatsapp_boas_vindas_r2` para usar Content API do Twilio:
+
+- Substituir o body `Body=...` (freeform) por:
+  - `ContentSid=<TWILIO_CONTENT_SID_BOAS_VINDAS_R2>`
+  - `ContentVariables={"1":"<primeiro nome do lead>"}` (JSON string url-encoded)
+- Manter `From=whatsapp:<TWILIO_WHATSAPP_FROM>` e `To=whatsapp:<E.164 do lead>`.
+- Manter idempotência atual (`boas_vindas_r2_whatsapp_enviado_em`) e o log em `automation_run_logs`.
+- Se `TWILIO_CONTENT_SID_BOAS_VINDAS_R2` não estiver configurado, retornar erro claro e não cair no envio freeform (para não vazarmos mensagem fora de template).
+- Se o Twilio devolver erro `63016` (freeform fora da janela) ou `63051` (template não aprovado), logar detalhado para diagnóstico.
+
+## Passo 4 — Ajuste no card "Boas-vindas R2 (Contrato Pago)" em Administração → Automações
+
+Em `FlowEditorDialog.tsx` (step do WhatsApp), quando a action for `whatsapp_boas_vindas_r2`:
+- Exibir badge "Template Meta aprovado" com o nome `boas_vindas_r2_contrato_pago`.
+- Mostrar o corpo em modo somente-leitura (fonte da verdade agora é o Content Editor no Twilio).
+- Mostrar o botão CTA `Agendar R2 → https://hi.switchy.io/x9NB`.
+- Manter apenas o toggle ativo/inativo e a variável `{{1}} = primeiro_nome`.
+
+## Passo 5 — Documentação / Memory
+
+Registrar em memory que disparos WhatsApp fora da janela de 24h devem sempre usar Twilio Content Template aprovado pela Meta (ContentSid + ContentVariables), nunca `Body` freeform.
+
+## Detalhes técnicos
+
+- Arquivos afetados:
+  - `supabase/functions/automation-event-dispatcher/index.ts` — trocar payload Twilio para `ContentSid`/`ContentVariables`.
+  - `src/components/admin/automacoes/FlowEditorDialog.tsx` — UI somente-leitura do template.
+  - Novo secret: `TWILIO_CONTENT_SID_BOAS_VINDAS_R2`.
+- Sem migração de schema.
+- Idempotência e trigger `trg_notify_attendee_contract_paid` permanecem.
+- Após o template ser aprovado pela Meta, o mesmo fluxo passa a funcionar 24/7, inclusive fora da janela de sessão.
