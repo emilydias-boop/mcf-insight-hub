@@ -1451,19 +1451,25 @@ function TotalCreditoSummary({
   title: string;
   className?: string;
 }) {
+  const MIN_MONTH = '2026-07';
   const [mesFilter, setMesFilter] = useState<string>('all');
+
+  const propostasAposMin = useMemo(
+    () => propostas.filter(p => !p.created_at || p.created_at.slice(0, 7) >= MIN_MONTH),
+    [propostas]
+  );
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
-    for (const p of propostas) {
+    for (const p of propostasAposMin) {
       if (p.created_at) set.add(p.created_at.slice(0, 7));
     }
     return Array.from(set).sort().reverse();
-  }, [propostas]);
+  }, [propostasAposMin]);
 
   const filtered = useMemo(
-    () => (mesFilter === 'all' ? propostas : propostas.filter(p => (p.created_at || '').slice(0, 7) === mesFilter)),
-    [propostas, mesFilter],
+    () => (mesFilter === 'all' ? propostasAposMin : propostasAposMin.filter(p => (p.created_at || '').slice(0, 7) === mesFilter)),
+    [propostasAposMin, mesFilter],
   );
 
   const { total, porCloser, porMes } = useMemo(() => {
