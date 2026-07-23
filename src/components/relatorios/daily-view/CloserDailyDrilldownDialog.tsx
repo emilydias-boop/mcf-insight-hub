@@ -17,6 +17,7 @@ function classifyTag(tags: string[] | null | undefined): { label: string; cls: s
   if (all.some((t) => t.includes('A010'))) return { label: 'A010', cls: 'bg-primary/20 text-primary ring-1 ring-primary/40' };
   if (all.some((t) => t.includes('ANAMNESE'))) return { label: 'ANAMNESE', cls: 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' };
   if (all.some((t) => t.includes('PLANILHA'))) return { label: 'PLANILHA', cls: 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40' };
+  if (all.some((t) => t === 'GUIA')) return { label: 'GUIA', cls: 'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/40' };
   return { label: 'OUTROS', cls: 'bg-muted text-muted-foreground ring-1 ring-border' };
 }
 
