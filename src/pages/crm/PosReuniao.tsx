@@ -853,6 +853,7 @@ function ConcluidasTab() {
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
       </CardContent>
     </Card>
+    </>
   );
 }
 
