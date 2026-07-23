@@ -886,6 +886,7 @@ export function useEditarProposta() {
       prazo_meses: number;
       tipo_produto: string;
       proposal_details?: string;
+      origem_lead?: string;
     }) => {
       const { error } = await supabase
         .from('consorcio_proposals')
@@ -894,6 +895,7 @@ export function useEditarProposta() {
           prazo_meses: params.prazo_meses,
           tipo_produto: params.tipo_produto,
           proposal_details: params.proposal_details ?? '',
+          origem_lead: params.origem_lead ?? null,
         })
         .eq('id', params.proposal_id);
       if (error) throw error;
