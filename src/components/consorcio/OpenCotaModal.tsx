@@ -378,6 +378,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
           <Form {...form}>
             <fieldset disabled={readOnly} className="contents">
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
             {/* Editable client data */}
             <Card>
               <CardHeader className="pb-3">
