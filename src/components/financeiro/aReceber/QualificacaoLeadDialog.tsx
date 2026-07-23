@@ -92,8 +92,33 @@ export function QualificacaoLeadDialog({ email, phone, customerName }: Props) {
             Nenhum negócio localizado para esse cliente no CRM (busca por e-mail e telefone).
           </p>
         )}
-        {dealId && <QualificationHistorySection dealId={dealId} />}
+        {dealId && (
+          <>
+            <QualificationHistorySection dealId={dealId} />
+            <EmptyQualifNotice dealId={dealId} />
+          </>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EmptyQualifNotice({ dealId }: { dealId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['ar-qualif-count', dealId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('deal_activities')
+        .select('id', { count: 'exact', head: true })
+        .eq('deal_id', dealId)
+        .in('activity_type', ['qualification_note', 'ai_call_summary']);
+      return count ?? 0;
+    },
+  });
+  if (isLoading || (data ?? 0) > 0) return null;
+  return (
+    <p className="text-sm text-muted-foreground">
+      Negócio localizado, mas ainda sem nota de qualificação registrada pelo SDR/IA.
+    </p>
   );
 }
