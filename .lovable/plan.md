@@ -1,26 +1,78 @@
-## Objetivo
+## Automação: WhatsApp "Boas-vindas R2" ao marcar Contrato Pago (R1)
 
-Disparar o webhook `consorcio-carta-cadastrada-webhook` (e a automação de boas-vindas por e-mail) no momento em que a proposta chega em **Concluídas - Operacional** (status `aceita`), sem depender do passo operacional "Abrir cota" / `consortium_card_id`.
+### Objetivo
+Disparar automaticamente uma mensagem no WhatsApp para o lead assim que ele for marcado como **Contrato Pago** na Agenda R1, com o texto aprovado abaixo, via Twilio, controlado pelo módulo **Administração → Automações**.
 
-Hoje o gatilho só roda quando existe `consortium_card_id`, então cartas como a do Mário Lucas ficam visíveis na aba mas nunca disparam a comunicação — exatamente o comportamento que você quer corrigir.
+### Mensagem final aprovada
+```
+Olá, {{nome}}! 🎉
 
-## Mudanças
+Parabéns pela decisão — seu contrato foi confirmado e você agora faz parte da Seleção MCF.
 
-1. **Novo gatilho no fluxo de "aceitar proposta"** (`src/pages/crm/PosReuniao.tsx` / hook correspondente que muda `status → aceita`):
-   - Após persistir o status `aceita`, chamar o `consorcio-carta-cadastrada-webhook` usando os dados da própria `consorcio_proposals` + `crm_deals` (nome, email, telefone, closer, produto, valor).
-   - Passar `consortium_card_id = null` quando ainda não existir — o edge function já foi usado dessa forma no reenvio manual do Pedro.
+SEUS PRÓXIMOS PASSOS — O que fazer agora:
 
-2. **Idempotência**: adicionar coluna `webhook_carta_enviado_em timestamptz` em `consorcio_proposals`. O disparo só ocorre se estiver `null`; após sucesso, é preenchida. Isso evita duplicidade se a proposta for reaceita ou se depois a carta for aberta em Controle Consórcio.
+1) Acesse o conteúdo na MCF Pay
+Lá estão os detalhes do contrato e a explicação completa do nosso modelo de negócio (Acesso no seu email).
 
-3. **Automação de boas-vindas (e-mail)**: acionar o `automation-event-dispatcher` com o evento `consorcio.carta.cadastrada` no mesmo ponto, respeitando o `boas_vindas_email_enviado_em` já existente em `consorcio_pending_registrations` (ou criar coluna equivalente em `consorcio_proposals` se o registro pendente ainda não existir).
+2) Agende sua reunião de seleção
+O passo que garante sua vaga. É a reunião com um sócio da MCF — sem ela, você não avança.
+👉 Agende sua R2 aqui: https://hi.switchy.io/x9NB
 
-4. **Fluxo "Abrir cota" continua funcionando**: quando a cota for finalmente aberta e o `consortium_card_id` for gerado, o webhook **não** dispara de novo (já marcado como enviado). Apenas atualiza o card no Make, se necessário, via um segundo evento opcional `consorcio.carta.aberta` — fora do escopo aqui, só menciono para deixar claro que não haverá duplicidade.
+3) Entre no grupo dos selecionados
+No mesmo contato acima você recebe informações sobre a abertura das vagas e a reunião com a equipe.
 
-5. **Backfill do Mário Lucas**: após deploy, disparar manualmente o webhook para a proposta dele (mesmo esquema do Pedro) e marcar `webhook_carta_enviado_em`.
+Qualquer dúvida, é só chamar por aqui. Nos vemos na R2! 🚀
+```
+(Placeholder `{{nome}}` = primeiro nome do contato do deal.)
 
-## Detalhes técnicos
+### Escopo do gatilho
+- Evento: `attendee_contract_paid` — disparado sempre que um `meeting_slot_attendees` do tipo R1 passa a ter `contract_paid_at IS NOT NULL` (marcação manual do Closer OU vinculação de contrato Hubla/MCF Pay via `useLinkContractToAttendee`).
+- Vale para **todas as BUs** (mesmo padrão dos outros disparos do módulo).
+- Excluir sócios (`is_partner = true`) e produtos parceria/renovação (A001–A009, R001) — mesmas regras já usadas no restante do sistema.
 
-- Migração: `ALTER TABLE public.consorcio_proposals ADD COLUMN webhook_carta_enviado_em timestamptz;`
-- Ponto de disparo: hook que faz `update consorcio_proposals set status='aceita'` (provavelmente `useAceitarProposta` / equivalente em `PosReuniao.tsx`). Chamar via `supabase.functions.invoke('consorcio-carta-cadastrada-webhook', { body: { proposal_id } })`.
-- Edge function `consorcio-carta-cadastrada-webhook`: ajustar para aceitar `proposal_id` sozinho (carregar dados da proposta + deal) quando `consortium_card_id` não vier. Idempotência via `webhook_carta_enviado_em`.
-- Sem mudanças na UI da aba "Concluídas - Operacional".
+### Idempotência
+- Novo campo `boas_vindas_r2_whatsapp_enviado_em timestamptz` em `meeting_slot_attendees`.
+- Dispara apenas quando o campo estiver nulo; ao enviar com sucesso, preenche com `now()`.
+- Se o attendee for remarcado/despago e voltar a ficar pago, **não reenvia** (respeita histórico).
+
+### Componentes técnicos
+
+1. **Migração DB**
+   - Adiciona `boas_vindas_r2_whatsapp_enviado_em` em `meeting_slot_attendees`.
+   - Registra o novo evento na tabela `automation_flows` como opção de `system_event` (`attendee_contract_paid`).
+
+2. **Front — Administração → Automações**
+   - `src/components/automations/FlowEditorDialog.tsx`: adiciona `attendee_contract_paid` na lista de gatilhos de sistema, com o template padrão da mensagem acima pré-preenchido e o canal `whatsapp`.
+   - Permite ao admin editar texto/link/ativar/desativar como já faz com "Boas-vindas Consórcio" e "Confirmação R1".
+
+3. **Edge function `automation-event-dispatcher`** (já existe)
+   - Adiciona handler para `attendee_contract_paid`:
+     - Recebe `attendee_id`.
+     - Busca attendee + deal + contact (nome, telefone E.164).
+     - Aplica exclusões (sócio, produtos parceria).
+     - Checa idempotência (`boas_vindas_r2_whatsapp_enviado_em IS NULL`).
+     - Renderiza template do fluxo ativo, substitui `{{nome}}`.
+     - Chama Twilio via connector gateway (`/Messages.json`, `From = whatsapp:<numero>`, `To = whatsapp:<telefone>`).
+     - Em sucesso: preenche timestamp e grava log em `automation_logs`.
+     - Em falha: grava log com erro e retorna 200 (não bloqueia).
+
+4. **Ponto de disparo (backend)**
+   - Novo trigger PL/pgSQL em `meeting_slot_attendees` (`AFTER UPDATE OF contract_paid_at`) que, quando o valor transita de NULL → NOT NULL, chama `pg_net` (mesmo padrão dos webhooks existentes) para invocar `automation-event-dispatcher` com `{ event: 'attendee_contract_paid', attendee_id }`.
+   - Isso cobre os dois caminhos: marcação manual do Closer e `useLinkContractToAttendee` (Hubla / MCF Pay), sem precisar mexer no front.
+
+5. **Conector Twilio**
+   - Requer conexão Twilio via `standard_connectors--connect` com um número WhatsApp habilitado (Business/Sandbox).
+   - Após conectar, o secret `TWILIO_API_KEY` fica disponível para a edge function.
+   - Guardar o número de origem em `automation_settings` (chave `whatsapp_from_number`) para o admin poder ajustar sem redeploy.
+
+### Fora de escopo
+- Não altera fluxo do Consórcio (boas-vindas do cadastro de carta).
+- Não altera métricas, payouts, no-show, nem stages de deal.
+- Não envia SMS — apenas WhatsApp.
+
+### Passos de implementação
+1. Migração: coluna de idempotência + trigger `pg_net`.
+2. Handler novo em `automation-event-dispatcher` + template default seed.
+3. UI do FlowEditor com o novo evento pré-carregado.
+4. Verificar/solicitar conexão Twilio e número WhatsApp de origem.
+5. Teste ponta a ponta: marcar um attendee como Contrato Pago em ambiente controlado, conferir log em `automation_logs` e recebimento no WhatsApp.
