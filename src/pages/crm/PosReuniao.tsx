@@ -729,7 +729,9 @@ function ConcluidasTab() {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
   return (
-    <Card>
+    <>
+      <TotalCreditoSummary propostas={propostas} title="Crédito Contratado — Concluídas" />
+      <Card>
       <CardHeader>
         <CardTitle className="text-base">Concluídas - Operacional ({propostas.length})</CardTitle>
       </CardHeader>
