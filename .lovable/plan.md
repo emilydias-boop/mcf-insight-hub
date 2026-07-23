@@ -1,33 +1,54 @@
-# Adicionar canal "GUIA" no Funil por Canal
+## Diagnóstico
 
-## Contexto
+O template **"Confirmação Reunião Agendada — MCF Capital"** (SID `HXf11ce9f7418afceda35d113ae94ca22f`, aprovado) **não está vinculado a nenhum fluxo** em `automation_flows`. Quem dispara hoje é o fluxo **"Confirmação R1 Agendada — (Incorporador)"** (`a8d14cba…`), que ainda usa `content` em texto livre (`template_id` = NULL).
 
-O webhook Hubla já cria leads do produto **Guia CAIXA** em Inside Sales com a tag `Guia` (ver `hubla-webhook-handler`, prioridade 0). Hoje esses leads caem em **OUTROS** no relatório `/bu-incorporador/relatorios` porque o classificador em `useChannelFunnelReport.ts` não reconhece a tag.
+Nos últimos 7 dias, esse fluxo produziu:
 
-Objetivo: criar uma nova linha **GUIA** na tabela (Canal × Entradas / R1 Agend. / R1 Realiz. / No-Show / Contrato Pago) para acompanhar o desempenho desse novo canal em cada estágio.
+| status | motivo | qtd |
+|---|---|---|
+| cancelled | `meeting_link_unresolved` | **157** |
+| sent | — | 97 |
+| cancelled | outros (owner desligado, remarcada) | 2 |
 
-## Mudanças
+Ou seja, ~62% dos agendamentos são silenciosamente cancelados. A regra em `automation-processor` (linhas 301–350) exige que exista uma linha em `closer_meeting_links` com `closer_id + day_of_week + start_time` **exatos** (BRT). Se o horário do slot não bate com o cadastro do closer, ou o link ainda não foi cadastrado, o processador cai para `meeting_slots.meeting_link` / `video_conference_link` — que estão vazios nos casos que falharam — e cancela.
 
-### 1. `src/hooks/useChannelFunnelReport.ts`
-- Adicionar `GUIA: 'GUIA'` ao mapa de canais e ao tipo `ChannelKey`.
-- Adicionar constante `GUIA_TAGS = ['GUIA']` (match exato após normalização, mesmo padrão de PLANILHA/ANAMNESE).
-- No `classifyLead`, inserir a regra **antes** de PLANILHA e depois de ANAMNESE/ANAMNESE_INCOMPLETA:
-  - Se `hasGuiaTag` e não é buyer A010/A017 → retorna `GUIA`.
-  - Um lead que também comprou A010/A017 permanece nesses canais (compra prevalece sobre tag de origem).
-- Incluir `'GUIA'` em `FUNNEL_CHANNELS` (linha 888) e no objeto de detalhes `blankDetails` (linha 960) para que a linha seja renderizada mesmo com zero.
+Exemplos reais de hoje (deals cancelados):
+- Julio, Qua 21:00 — cadastro do Julio só vai até 20:30 na quarta.
+- Leticia, Qua 14:30 — não existe linha de 14:30 no cadastro dela.
+- William, Qua 21:00 — cadastro dele termina 18:00.
 
-### 2. `src/components/relatorios/AcquisitionReportPanel.tsx` (e demais painéis que listam canais)
-- Adicionar `GUIA` na ordem de exibição da tabela (entre `ANAMNESE` e `PLANILHA`, ou onde fizer sentido visual).
-- Se houver ícone/cor por canal, adicionar um estilo próprio (ex.: laranja) para GUIA.
+## O que vou fazer
 
-### 3. Drilldowns
-- `FunnelCellDrillModal.tsx`, `SdrDailyDrilldownDialog.tsx`, `CloserDailyDrilldownDialog.tsx`: se filtram por canal, incluir `GUIA` na lista.
+### 1. Migrar o fluxo para o template aprovado da Meta (destrava o >24h e alinha o texto)
+- Setar `automation_flows.template_id = 6ce02063-d194-4338-b48c-11cc331aafdb` no fluxo "Confirmação R1 Agendada — (Incorporador)".
+- Ajustar o `automation-processor` para, quando o fluxo tem `template_id`, enviar via Twilio Content API (`ContentSid` + `ContentVariables`) em vez do `body` livre — mesmo caminho que o "Boas-vindas R2" já usa.
 
-## Fora de escopo
-- Não alterar o webhook Hubla (tag `Guia` já está sendo aplicada).
-- Não mexer em Painel Comercial / metas SDR.
-- Backfill: leads Guia antigos que já estão com a tag `Guia` passam a aparecer automaticamente na linha GUIA a partir do momento em que o classificador mudar — não é necessário migration.
+### 2. Reduzir cancelamentos por link
+Adicionar fallbacks antes de cancelar, na ordem:
+1. `closer_meeting_links` casando por `closer_id + day_of_week + start_time` (atual).
+2. **Novo:** `closer_meeting_links` do mesmo `closer_id + day_of_week` mais próximo no tempo (±30 min) — cobre desalinhamentos de grade tipo Julio 21:00 vs 20:30.
+3. `meeting_slots.meeting_link` / `video_conference_link` (atual).
+4. **Novo:** link default do closer (primeira linha ativa em `closer_meeting_links` para o closer) como último recurso, marcando `link_source=closer_default`.
+5. Só cancelar se **nada** for encontrado. E, quando o template tiver variável `{{link}}`/botão dinâmico, permitir enviar sem link se a variável for opcional — o template atual "Confirmação Reunião Agendada — MCF Capital" precisa ser inspecionado para confirmar quais variáveis são obrigatórias.
 
-## Perguntas rápidas
-1. A ordem correta na tabela é **A010 → OUTROS → ANAMNESE → GUIA → PLANILHA → A017 → ANAMNESE INCOMPLETA**, ou você prefere GUIA logo abaixo de A010?
-2. Um lead com tag `Guia` que também comprou A010 deve contar em **A010** (regra atual, compra prevalece) ou em **GUIA**?
+### 3. Observabilidade
+- Adicionar log `[AUTOMATION-PROCESSOR] link_fallback=<source>` para cada envio.
+- Criar uma view leve `v_automation_confirmacao_r1_health` com contagem de `sent` / `cancelled` por motivo nos últimos 7 dias, para monitorar depois do fix.
+
+### 4. Reprocessar backlog do dia (opcional, sob confirmação)
+Recolocar em `pending` os itens cancelados hoje por `meeting_link_unresolved` cujo `meeting_slot.scheduled_at` ainda é futuro, para que o novo processador tente novamente.
+
+## Perguntas para você
+
+1. **Confirmação da causa:** ok se eu adotar os fallbacks 2 e 4 acima (horário aproximado ±30 min e link default do closer)? Ou você prefere que o processador **nunca** envie um link diferente do slot exato e a solução seja apenas cadastrar os horários faltantes em `closer_meeting_links` (Julio 21:00, Leticia 14:30, William 21:00 etc.)?
+2. **Reprocessar backlog** dos 157 cancelados de hoje/ontem, ou deixar só para os próximos agendamentos?
+3. **Variáveis do template aprovado:** posso ler o conteúdo do SID `HXf11ce9f7418afceda35d113ae94ca22f` via Twilio para mapear `{{1}}`, `{{2}}`… nas variáveis do processador (`nome`, `data_hora`, `closer`, `link`), certo?
+
+## Detalhes técnicos
+
+Arquivos afetados:
+- `supabase/functions/automation-processor/index.ts` — fallback de link + envio por `ContentSid` quando `flow.template_id` existir.
+- Migração: `UPDATE automation_flows SET template_id = '…' WHERE id = 'a8d14cba…'`.
+- Nova view SQL: `v_automation_confirmacao_r1_health`.
+
+Sem mudanças de UI. Nenhum outro fluxo é afetado (o Boas-vindas R2 já usa `ContentSid`).
