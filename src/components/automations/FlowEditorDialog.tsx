@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Save, Zap, ArrowRight, Clock, Calendar, FileText } from "lucide-react";
 import { useAutomationFlow, useCreateFlow, useUpdateFlow, useFlowSteps, AutomationFlow } from "@/hooks/useAutomationFlows";
 import { useCRMStages, useCRMOrigins } from "@/hooks/useCRMData";
+import { useAutomationTemplates } from "@/hooks/useAutomationTemplates";
 import { FlowStepList } from "./FlowStepList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -58,6 +59,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const [channel, setChannel] = useState<'email' | 'whatsapp' | 'both'>('email');
   const [subject, setSubject] = useState<string>("");
   const [bodyTemplate, setBodyTemplate] = useState<string>("");
+  const [templateId, setTemplateId] = useState<string>("");
+
+  // Templates WhatsApp (para eventos do sistema com canal WhatsApp / Both)
+  const { data: waTemplates } = useAutomationTemplates('whatsapp');
+  const selectedTemplate = waTemplates?.find((t) => t.id === templateId);
 
   // Get stages for selected origin (or group if no origin selected)
   const { data: stages } = useCRMStages(originId || groupId || undefined);
@@ -85,6 +91,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setChannel((flow as any).channel || 'email');
       setSubject((flow as any).subject || "");
       setBodyTemplate((flow as any).body_template || "");
+      setTemplateId((flow as any).template_id || "");
       
       // Find the group for the selected origin
       if (flow.origin_id && origins) {
@@ -111,6 +118,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setChannel('email');
       setSubject("");
       setBodyTemplate("");
+      setTemplateId("");
     }
   }, [flow, open, origins]);
 
@@ -130,6 +138,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       channel,
       subject: subject || null,
       body_template: bodyTemplate || null,
+      template_id: templateId || null,
     };
 
     if (isEditing && flowId) {
