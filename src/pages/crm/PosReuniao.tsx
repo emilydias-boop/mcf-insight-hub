@@ -767,6 +767,7 @@ function ConcluidasTab() {
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
                 <TableHead>Closer</TableHead>
+                <TableHead>Origem do Lead</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -783,6 +784,7 @@ function ConcluidasTab() {
                   <TableCell>{p.prazo_meses} meses</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
                   <TableCell className="text-sm">{(p as any).closer_name || '—'}</TableCell>
+                  <TableCell className="text-sm">{(p as any).origem_lead || '—'}</TableCell>
                   <TableCell>
                     <Badge className="bg-emerald-600 text-white text-xs">Check-list + Docs OK</Badge>
                   </TableCell>
@@ -842,6 +844,7 @@ function ConcluidasTab() {
             initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
             initialTipoProduto={editTarget.tipo_produto || ''}
             initialDetails={editTarget.proposal_details || ''}
+            initialOrigemLead={(editTarget as any).origem_lead || ''}
           />
         )}
 
