@@ -215,6 +215,9 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                   <SelectItem value="consorcio_carta_cadastrada">
                     Carta de Consórcio Cadastrada
                   </SelectItem>
+                  <SelectItem value="attendee_contract_paid">
+                    Contrato Pago (Agenda R1)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
