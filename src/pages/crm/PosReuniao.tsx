@@ -463,6 +463,7 @@ function PropostasTab() {
         </Button>
       </CardHeader>
       <CardContent>
+        <TotalCreditoSummary propostas={propostas} title="Crédito Contratado — Cartas Negociadas" className="mb-4" />
         {propostas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>
         ) : (
