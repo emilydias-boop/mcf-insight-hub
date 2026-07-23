@@ -12,6 +12,10 @@ export interface RefundItem {
   closer_name: string | null;
   sdr_email: string | null;
   sdr_name: string | null;
+  /** Data usada para posicionar o reembolso no período do Painel Comercial. */
+  anchor_date: string;
+  anchor_source: 'r1' | 'contract_paid' | 'refund';
+  is_outside: boolean;
 }
 
 export interface OrphanRefund {
@@ -38,40 +42,38 @@ export interface RefundDetails {
  */
 export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date | null) {
   return useQuery<RefundDetails>({
-    queryKey: ['refund-details-in-period', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['refund-details-in-period-r1anchor', startDate?.toISOString(), endDate?.toISOString()],
     enabled: !!startDate && !!endDate,
     staleTime: 60_000,
     queryFn: async () => {
       if (!startDate || !endDate) return { items: [], orphans: [] };
-      const start = format(startDate, 'yyyy-MM-dd') + 'T00:00:00';
-      const end = format(endDate, 'yyyy-MM-dd') + 'T23:59:59';
+      const startISO = format(startDate, 'yyyy-MM-dd') + 'T00:00:00';
+      const endISO = format(endDate, 'yyyy-MM-dd') + 'T23:59:59';
+      const startMs = new Date(startISO).getTime();
+      const endMs = new Date(endISO).getTime();
 
-      // Fonte de verdade: MCF Pay. Hubla é replicação, então NÃO entra aqui
-      // para bater 1:1 com o Painel Comercial do MCF Pay.
+      // Reembolsos com created_at >= start (sem cap superior): a R1 ancorada
+      // no período pode ter reembolso emitido depois do endDate.
       const { data: mcf } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
         .eq('activity_type', 'refund_mcf_pay')
-        .gte('created_at', start)
-        .lte('created_at', end);
+        .gte('created_at', startISO);
 
-      // Reembolsos A000 reconciliados manualmente (refund_hubla com
-      // source=manual_reconciliation_*). Preenchem casos em que o webhook
-      // MCF Pay não gerou refund_mcf_pay na época (ex.: Thompson).
       const { data: manual } = await supabase
         .from('deal_activities')
         .select('deal_id, metadata, created_at')
         .eq('activity_type', 'refund_hubla')
-        .gte('created_at', start)
-        .lte('created_at', end);
+        .gte('created_at', startISO);
 
-      // MCF Pay orphans (deal_not_found nos dispatch logs)
+      // MCF Pay orphans (deal_not_found nos dispatch logs) — permanecem
+      // ancorados na data do reembolso (não têm deal para resolver R1).
       const { data: mcfOrphanLogs } = await supabase
         .from('mcf_pay_dispatch_logs')
         .select('created_at, payload, response, error_message')
         .eq('error_message', 'deal_not_found')
-        .gte('created_at', start)
-        .lte('created_at', end)
+        .gte('created_at', startISO)
+        .lte('created_at', endISO)
         .order('created_at', { ascending: false });
 
       const items: RefundItem[] = [];
@@ -138,10 +140,10 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         return { items, orphans };
       }
 
-      // Fetch deals + contacts
+      // Fetch deals + contacts + contract_paid_at (fallback de âncora)
       const { data: deals } = await supabase
         .from('crm_deals')
-        .select('id, owner_id, contact:crm_contacts(name, email)')
+        .select('id, owner_id, contract_paid_at, contact:crm_contacts(name, email)')
         .in('id', dealIdArr);
       const dealMap = new Map<string, any>();
       (deals as any[] || []).forEach((d) => dealMap.set(d.id, d));
@@ -157,6 +159,7 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
       (attendees as any[] || []).forEach((att) => {
         const slot = att.meeting_slot;
         const ts = new Date(slot?.scheduled_at || 0).getTime();
+        if (!ts) return;
         const prev = latestByDeal.get(att.deal_id);
         if (!prev || ts > prev.ts) {
           latestByDeal.set(att.deal_id, {
@@ -200,6 +203,25 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         const latest = latestByDeal.get(dealId);
         const sdr = latest?.bookedBy ? sdrMap.get(latest.bookedBy) : null;
         const sdrEmail = sdr?.email ?? ((deal?.owner_id || '').toLowerCase() || null);
+
+        // Resolver âncora: R1 > contract_paid_at > data do reembolso
+        let anchorMs: number | null = null;
+        let anchorSource: 'r1' | 'contract_paid' | 'refund' = 'refund';
+        let anchorISO: string = val.at;
+        if (latest?.ts) {
+          anchorMs = latest.ts;
+          anchorSource = 'r1';
+          anchorISO = new Date(latest.ts).toISOString();
+        } else if (deal?.contract_paid_at) {
+          anchorMs = new Date(deal.contract_paid_at).getTime();
+          anchorSource = 'contract_paid';
+          anchorISO = deal.contract_paid_at;
+        } else {
+          anchorMs = new Date(val.at).getTime();
+        }
+
+        if (anchorMs == null || anchorMs < startMs || anchorMs > endMs) return;
+
         items.push({
           refund_at: val.at,
           source: 'mcf_pay',
@@ -210,10 +232,13 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
           closer_name: latest?.closerId ? closerMap.get(latest.closerId) ?? null : null,
           sdr_email: sdrEmail,
           sdr_name: sdr?.name ?? sdrEmail ?? null,
+          anchor_date: anchorISO,
+          anchor_source: anchorSource,
+          is_outside: anchorSource !== 'r1',
         });
       });
 
-      items.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
+      items.sort((a, b) => new Date(b.anchor_date).getTime() - new Date(a.anchor_date).getTime());
       orphans.sort((a, b) => new Date(b.refund_at).getTime() - new Date(a.refund_at).getTime());
 
       return { items, orphans };

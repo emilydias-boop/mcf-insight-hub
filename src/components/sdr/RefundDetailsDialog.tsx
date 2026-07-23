@@ -33,8 +33,11 @@ export function RefundDetailsDialog({ open, onOpenChange, data, isLoading, start
         <DialogHeader>
           <DialogTitle>Reembolsos — A000 Contrato</DialogTitle>
           <DialogDescription>
-            Período: {format(startDate, 'dd/MM/yyyy')} até {format(endDate, 'dd/MM/yyyy')} · {items.length} atribuídos · {orphans.length} órfãos
+            Período (âncora R1): {format(startDate, 'dd/MM/yyyy')} até {format(endDate, 'dd/MM/yyyy')} · {items.length} atribuídos · {orphans.length} órfãos
           </DialogDescription>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Cada reembolso é contabilizado no dia da R1 que originou o contrato. Sem R1, cai em <span className="font-medium">Contrato Pago</span> e recebe a tag <span className="font-medium">Outside</span>.
+          </p>
         </DialogHeader>
 
         <ScrollArea className="max-h-[70vh] pr-2">
@@ -50,7 +53,8 @@ export function RefundDetailsDialog({ open, onOpenChange, data, isLoading, start
                 <table className="w-full text-xs">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left px-2 py-1.5">Data</th>
+                      <th className="text-left px-2 py-1.5">Data (R1)</th>
+                      <th className="text-left px-2 py-1.5">Reembolso</th>
                       <th className="text-left px-2 py-1.5">Cliente</th>
                       <th className="text-left px-2 py-1.5">SDR</th>
                       <th className="text-left px-2 py-1.5">Closer</th>
@@ -61,7 +65,15 @@ export function RefundDetailsDialog({ open, onOpenChange, data, isLoading, start
                   <tbody>
                     {items.map((r, i) => (
                       <tr key={`${r.deal_id}-${i}`} className="border-t hover:bg-muted/30">
-                        <td className="px-2 py-1.5 whitespace-nowrap">{fmtDate(r.refund_at)}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <div>{fmtDate(r.anchor_date)}</div>
+                          {r.is_outside && (
+                            <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-400 text-amber-600">
+                              Outside{r.anchor_source === 'contract_paid' ? ' · Contrato Pago' : ' · Sem âncora'}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">{fmtDate(r.refund_at)}</td>
                         <td className="px-2 py-1.5">
                           <div className="font-medium">{r.customer_name || '—'}</div>
                           {r.customer_email && (

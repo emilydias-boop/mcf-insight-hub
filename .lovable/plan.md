@@ -1,78 +1,47 @@
-## Automação: WhatsApp "Boas-vindas R2" ao marcar Contrato Pago (R1)
 
-### Objetivo
-Disparar automaticamente uma mensagem no WhatsApp para o lead assim que ele for marcado como **Contrato Pago** na Agenda R1, com o texto aprovado abaixo, via Twilio, controlado pelo módulo **Administração → Automações**.
+# Reembolsos ancorados na data da R1 — Painel Comercial
 
-### Mensagem final aprovada
-```
-Olá, {{nome}}! 🎉
+## Objetivo
+Hoje, no Painel Comercial (SDR + Closer + card pessoal), cada reembolso A000 - Contrato aparece **no dia em que o reembolso foi processado** (`refunded_at` do MCF Pay). Isso distorce a leitura do dia/semana: uma R1 feita em 10/07 que reembolsa em 22/07 "suja" o dia 22/07 e deixa o 10/07 com uma conversão irreal.
 
-Parabéns pela decisão — seu contrato foi confirmado e você agora faz parte da Seleção MCF.
+A mudança: cada reembolso passa a ser contabilizado **na data em que a R1 daquele deal foi realizada** — assim o abatimento volta para o dia da reunião que originou o contrato.
 
-SEUS PRÓXIMOS PASSOS — O que fazer agora:
+## Regras de âncora (confirmadas)
 
-1) Acesse o conteúdo na MCF Pay
-Lá estão os detalhes do contrato e a explicação completa do nosso modelo de negócio (Acesso no seu email).
+1. **Âncora principal**: `scheduled_at` da **R1 mais recente do deal** (meeting_type = 'r1', status ∈ 'completed'/'contract_paid', ordenado desc).
+2. **Sem R1 registrada (outside / A010 direto)**: cair na data do `contract_paid_at` do deal e **marcar visualmente como "Outside"** no detalhamento — para você saber que aquele reembolso não teve reunião.
+3. **Sem R1 e sem contract_paid**: cai no comportamento atual (data do reembolso), rotulado como "Sem âncora".
 
-2) Agende sua reunião de seleção
-O passo que garante sua vaga. É a reunião com um sócio da MCF — sem ela, você não avança.
-👉 Agende sua R2 aqui: https://hi.switchy.io/x9NB
+## Escopo (só Painel Comercial)
+Alteração vale **exclusivamente** nas visões de performance:
+- Card "Reembolsos" pessoal (SDR e Closer)
+- Colunas de reembolso nas tabelas de SDR/Closer
+- Cálculo de "Taxa Conv. Contrato" (Contrato Pago − Reembolsos ÷ R1 Realizada)
 
-3) Entre no grupo dos selecionados
-No mesmo contato acima você recebe informações sobre a abertura das vagas e a reunião com a equipe.
+**Não muda** em: Financeiro → A Receber → Reembolsos, painel do MCF Pay, extratos contábeis. Lá a verdade continua sendo a data real do reembolso.
 
-Qualquer dúvida, é só chamar por aqui. Nos vemos na R2! 🚀
-```
-(Placeholder `{{nome}}` = primeiro nome do contato do deal.)
+## Onde entra a mudança
 
-### Escopo do gatilho
-- Evento: `attendee_contract_paid` — disparado sempre que um `meeting_slot_attendees` do tipo R1 passa a ter `contract_paid_at IS NOT NULL` (marcação manual do Closer OU vinculação de contrato Hubla/MCF Pay via `useLinkContractToAttendee`).
-- Vale para **todas as BUs** (mesmo padrão dos outros disparos do módulo).
-- Excluir sócios (`is_partner = true`) e produtos parceria/renovação (A001–A009, R001) — mesmas regras já usadas no restante do sistema.
+- `src/hooks/useSdrRefundsInPeriod.ts` — hoje filtra `refund_mcf_pay.created_at` no intervalo do painel. Passa a: (a) buscar todos os `refund_mcf_pay` sem filtro de data, (b) para cada deal, resolver a data-âncora (R1 → contract_paid → refund), (c) filtrar pela âncora dentro do período do painel, (d) devolver o Map por SDR.
+- `src/hooks/useRefundDetailsInPeriod.ts` — mesma lógica, adicionando ao payload: `anchor_date`, `anchor_source` ('r1' | 'contract_paid' | 'refund') e `is_outside` (true quando anchor_source ≠ 'r1').
+- `src/hooks/useCloserRefundsInPeriod.ts` (equivalente para Closer, se existir; senão aplicar mesma lógica onde o card do Closer consome).
+- Modal de detalhamento (`RefundDetailsDialog.tsx` / equivalente do print anexo): adiciona coluna/tag **"Outside"** quando `anchor_source` ≠ 'r1' e ajusta o subtítulo do período para "Período (âncora R1)".
 
-### Idempotência
-- Novo campo `boas_vindas_r2_whatsapp_enviado_em timestamptz` em `meeting_slot_attendees`.
-- Dispara apenas quando o campo estiver nulo; ao enviar com sucesso, preenche com `now()`.
-- Se o attendee for remarcado/despago e voltar a ficar pago, **não reenvia** (respeita histórico).
+Nenhuma migration de banco: os dados de R1 e contract_paid já existem (`meeting_slot_attendees` + `meeting_slots` + `crm_deals.contract_paid_at`).
 
-### Componentes técnicos
+## Como ficaria na prática (exemplo)
 
-1. **Migração DB**
-   - Adiciona `boas_vindas_r2_whatsapp_enviado_em` em `meeting_slot_attendees`.
-   - Registra o novo evento na tabela `automation_flows` como opção de `system_event` (`attendee_contract_paid`).
+Reembolso do Luiz Felipe Santana em 22/07 às 18:25 → o app olha o deal do Luiz, encontra a R1 mais recente (ex.: 15/07), e o reembolso passa a contar como **15/07** nas telas de performance da SDR Caroline. Se o Luiz não tinha R1, cai em `contract_paid_at` (ex.: 20/07) marcado com tag **Outside**.
 
-2. **Front — Administração → Automações**
-   - `src/components/automations/FlowEditorDialog.tsx`: adiciona `attendee_contract_paid` na lista de gatilhos de sistema, com o template padrão da mensagem acima pré-preenchido e o canal `whatsapp`.
-   - Permite ao admin editar texto/link/ativar/desativar como já faz com "Boas-vindas Consórcio" e "Confirmação R1".
+## Detalhes técnicos
 
-3. **Edge function `automation-event-dispatcher`** (já existe)
-   - Adiciona handler para `attendee_contract_paid`:
-     - Recebe `attendee_id`.
-     - Busca attendee + deal + contact (nome, telefone E.164).
-     - Aplica exclusões (sócio, produtos parceria).
-     - Checa idempotência (`boas_vindas_r2_whatsapp_enviado_em IS NULL`).
-     - Renderiza template do fluxo ativo, substitui `{{nome}}`.
-     - Chama Twilio via connector gateway (`/Messages.json`, `From = whatsapp:<numero>`, `To = whatsapp:<telefone>`).
-     - Em sucesso: preenche timestamp e grava log em `automation_logs`.
-     - Em falha: grava log com erro e retorna 200 (não bloqueia).
+- Resolução da âncora feita em uma única query paralela ao carregamento dos reembolsos: `meeting_slot_attendees` com join em `meeting_slots` filtrando `meeting_type='r1'`, agrupado por `deal_id` pegando o `MAX(scheduled_at)` onde `status IN ('completed','contract_paid')`.
+- Fallback contract_paid: já vem em `crm_deals.contract_paid_at` no mesmo lote de deals que hoje é buscado no fallback do `booked_by`.
+- Cache: `queryKey` mantém `[startDate, endDate]` normal; a re-âncora acontece server-side no hook, então o React Query cacheia certo.
+- Dedup de `transaction_id` e inclusão dos `manual_reconciliation` continuam iguais (regra atual preservada).
 
-4. **Ponto de disparo (backend)**
-   - Novo trigger PL/pgSQL em `meeting_slot_attendees` (`AFTER UPDATE OF contract_paid_at`) que, quando o valor transita de NULL → NOT NULL, chama `pg_net` (mesmo padrão dos webhooks existentes) para invocar `automation-event-dispatcher` com `{ event: 'attendee_contract_paid', attendee_id }`.
-   - Isso cobre os dois caminhos: marcação manual do Closer e `useLinkContractToAttendee` (Hubla / MCF Pay), sem precisar mexer no front.
-
-5. **Conector Twilio**
-   - Requer conexão Twilio via `standard_connectors--connect` com um número WhatsApp habilitado (Business/Sandbox).
-   - Após conectar, o secret `TWILIO_API_KEY` fica disponível para a edge function.
-   - Guardar o número de origem em `automation_settings` (chave `whatsapp_from_number`) para o admin poder ajustar sem redeploy.
-
-### Fora de escopo
-- Não altera fluxo do Consórcio (boas-vindas do cadastro de carta).
-- Não altera métricas, payouts, no-show, nem stages de deal.
-- Não envia SMS — apenas WhatsApp.
-
-### Passos de implementação
-1. Migração: coluna de idempotência + trigger `pg_net`.
-2. Handler novo em `automation-event-dispatcher` + template default seed.
-3. UI do FlowEditor com o novo evento pré-carregado.
-4. Verificar/solicitar conexão Twilio e número WhatsApp de origem.
-5. Teste ponta a ponta: marcar um attendee como Contrato Pago em ambiente controlado, conferir log em `automation_logs` e recebimento no WhatsApp.
+## O que NÃO muda
+- Regra de exclusão de parceiros/renovações.
+- Atribuição por SDR (booked_by da R1 mais recente → fallback owner_id).
+- Origem dos dados: MCF Pay + reconciliações manuais (Hubla replicado continua fora).
+- Contabilidade / A Receber / Reembolsos em Financeiro.
