@@ -88,6 +88,13 @@ serve(async (req) => {
       results.processed++;
       
       try {
+        const claimed = await claimQueueItem(supabase, item.id);
+        if (!claimed) {
+          console.log(`[AUTOMATION-PROCESSOR] Item ${item.id} already claimed by another processor, skipping`);
+          results.skipped++;
+          continue;
+        }
+
         // Validate step and template exist
         const step = item.automation_steps as any;
         const flow = item.automation_flows as any;
@@ -526,6 +533,26 @@ serve(async (req) => {
     );
   }
 });
+
+async function claimQueueItem(supabase: any, itemId: string) {
+  const { data, error } = await supabase
+    .from('automation_queue')
+    .update({
+      status: 'processing',
+      last_attempt_at: new Date().toISOString(),
+    })
+    .eq('id', itemId)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`[AUTOMATION-PROCESSOR] Failed to claim item ${itemId}:`, error.message);
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
 
 async function resolveMeetingSlotForAutomation(supabase: any, dealId: string, contactId?: string | null) {
   const attendeeSlots = await fetchSlotsFromAttendees(supabase, dealId);
