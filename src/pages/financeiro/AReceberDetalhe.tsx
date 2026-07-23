@@ -25,6 +25,7 @@ import {
 } from '@/types/aReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
 import { parcelaDocNumber } from '@/lib/arTicketNumber';
+import { QualificacaoLeadDialog } from '@/components/financeiro/aReceber/QualificacaoLeadDialog';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -317,6 +318,13 @@ export default function AReceberDetalhe() {
       <Button variant="ghost" size="sm" onClick={() => navigate('/financeiro/a-receber')}>
         <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
       </Button>
+      <div className="flex justify-end">
+        <QualificacaoLeadDialog
+          email={titulo.customer_email}
+          phone={titulo.customer_phone}
+          customerName={titulo.customer_name}
+        />
+      </div>
 
       {/* Cabeçalho */}
       <Card>
