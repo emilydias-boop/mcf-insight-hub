@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Save, Zap, ArrowRight, Clock, Calendar, FileText } from "lucide-react";
 import { useAutomationFlow, useCreateFlow, useUpdateFlow, useFlowSteps, AutomationFlow } from "@/hooks/useAutomationFlows";
 import { useCRMStages, useCRMOrigins } from "@/hooks/useCRMData";
+import { useAutomationTemplates } from "@/hooks/useAutomationTemplates";
 import { FlowStepList } from "./FlowStepList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -58,6 +59,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const [channel, setChannel] = useState<'email' | 'whatsapp' | 'both'>('email');
   const [subject, setSubject] = useState<string>("");
   const [bodyTemplate, setBodyTemplate] = useState<string>("");
+  const [templateId, setTemplateId] = useState<string>("");
+
+  // Templates WhatsApp (para eventos do sistema com canal WhatsApp / Both)
+  const { data: waTemplates } = useAutomationTemplates('whatsapp');
+  const selectedTemplate = waTemplates?.find((t) => t.id === templateId);
 
   // Get stages for selected origin (or group if no origin selected)
   const { data: stages } = useCRMStages(originId || groupId || undefined);
@@ -85,6 +91,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setChannel((flow as any).channel || 'email');
       setSubject((flow as any).subject || "");
       setBodyTemplate((flow as any).body_template || "");
+      setTemplateId((flow as any).template_id || "");
       
       // Find the group for the selected origin
       if (flow.origin_id && origins) {
@@ -111,6 +118,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setChannel('email');
       setSubject("");
       setBodyTemplate("");
+      setTemplateId("");
     }
   }, [flow, open, origins]);
 
@@ -130,6 +138,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       channel,
       subject: subject || null,
       body_template: bodyTemplate || null,
+      template_id: templateId || null,
     };
 
     if (isEditing && flowId) {
@@ -370,6 +379,61 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                 </p>
               )}
             </div>
+
+            {/* Template Meta (WhatsApp) — obrigatório para disparos fora da janela de 24h */}
+            {(channel === 'whatsapp' || channel === 'both') && (
+              <div className="space-y-2">
+                <Label>Template WhatsApp (aprovado pela Meta)</Label>
+                <Select
+                  value={templateId || "__none__"}
+                  onValueChange={(v) => setTemplateId(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione um template aprovado" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="__none__">
+                      Nenhum (texto livre — só funciona dentro da janela de 24h)
+                    </SelectItem>
+                    {waTemplates?.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{t.name}</span>
+                          <Badge
+                            variant="outline"
+                            className={
+                              t.approval_status === 'approved'
+                                ? 'border-green-600 text-green-700'
+                                : t.approval_status === 'pending'
+                                ? 'border-amber-600 text-amber-700'
+                                : t.approval_status === 'rejected'
+                                ? 'border-red-600 text-red-700'
+                                : 'border-muted-foreground text-muted-foreground'
+                            }
+                          >
+                            {t.approval_status || 'draft'}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedTemplate && selectedTemplate.approval_status !== 'approved' && (
+                  <p className="text-xs text-amber-600">
+                    ⚠️ Este template ainda não está aprovado pela Meta. O disparo será pulado até a aprovação.
+                    Aprove/submeta em Automações → Templates.
+                  </p>
+                )}
+                {selectedTemplate?.approval_status === 'approved' && (
+                  <p className="text-xs text-green-700">
+                    ✓ Template Meta aprovado — SID <code>{selectedTemplate.twilio_template_sid}</code>. Envio funciona 24/7.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Crie/aprove novos templates em <strong>Automações → Templates</strong>.
+                </p>
+              </div>
+            )}
 
             {(channel === 'email' || channel === 'both') && (
               <div className="space-y-2">

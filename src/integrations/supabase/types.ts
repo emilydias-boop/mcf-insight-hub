@@ -1189,6 +1189,7 @@ export type Database = {
           respect_business_hours: boolean | null
           stage_id: string | null
           subject: string | null
+          template_id: string | null
           trigger_event: string | null
           trigger_on: Database["public"]["Enums"]["automation_trigger"] | null
           trigger_type: string
@@ -1210,6 +1211,7 @@ export type Database = {
           respect_business_hours?: boolean | null
           stage_id?: string | null
           subject?: string | null
+          template_id?: string | null
           trigger_event?: string | null
           trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
           trigger_type?: string
@@ -1231,6 +1233,7 @@ export type Database = {
           respect_business_hours?: boolean | null
           stage_id?: string | null
           subject?: string | null
+          template_id?: string | null
           trigger_event?: string | null
           trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
           trigger_type?: string
@@ -1249,6 +1252,13 @@ export type Database = {
             columns: ["stage_id"]
             isOneToOne: false
             referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flows_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "automation_templates"
             referencedColumns: ["id"]
           },
         ]

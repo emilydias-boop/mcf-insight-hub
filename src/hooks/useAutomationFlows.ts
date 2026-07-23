@@ -14,6 +14,7 @@ export interface AutomationFlow {
   channel?: 'email' | 'whatsapp' | 'both';
   subject?: string | null;
   body_template?: string | null;
+  template_id?: string | null;
   is_active: boolean;
   respect_business_hours: boolean;
   business_hours_start?: string;
@@ -26,6 +27,12 @@ export interface AutomationFlow {
   stage?: { id: string; name: string; color?: string };
   origin?: { id: string; name: string };
   steps_count?: number;
+  template?: {
+    id: string;
+    name: string;
+    approval_status?: string | null;
+    twilio_template_sid?: string | null;
+  };
 }
 
 export interface AutomationStep {
@@ -60,7 +67,8 @@ export function useAutomationFlows() {
         .select(`
           *,
           stage:crm_stages(id, stage_name, color),
-          origin:crm_origins(id, name)
+          origin:crm_origins(id, name),
+          template:automation_templates(id, name, approval_status, twilio_template_sid)
         `)
         .order("created_at", { ascending: false });
 
@@ -107,7 +115,8 @@ export function useAutomationFlow(id: string | null) {
         .select(`
           *,
           stage:crm_stages(id, stage_name, color),
-          origin:crm_origins(id, name)
+          origin:crm_origins(id, name),
+          template:automation_templates(id, name, approval_status, twilio_template_sid)
         `)
         .eq("id", id)
         .maybeSingle();
@@ -164,6 +173,7 @@ export function useCreateFlow() {
           channel: flow.channel || 'email',
           subject: flow.subject ?? null,
           body_template: flow.body_template ?? null,
+          template_id: flow.template_id ?? null,
           is_active: flow.is_active ?? true,
           respect_business_hours: flow.respect_business_hours ?? true,
           business_hours_start: flow.business_hours_start || '09:00',
@@ -205,6 +215,7 @@ export function useUpdateFlow() {
           channel: updates.channel,
           subject: updates.subject,
           body_template: updates.body_template,
+          template_id: updates.template_id ?? null,
           is_active: updates.is_active,
           respect_business_hours: updates.respect_business_hours,
           business_hours_start: updates.business_hours_start,

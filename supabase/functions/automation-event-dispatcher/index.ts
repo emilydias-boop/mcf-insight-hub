@@ -79,7 +79,10 @@ serve(async (req) => {
     // 1) Load flows
     const { data: flows, error: flowsErr } = await supabase
       .from('automation_flows')
-      .select('id, name, channel, subject, body_template, is_active, trigger_type, trigger_event')
+      .select(`
+        id, name, channel, subject, body_template, template_id, is_active, trigger_type, trigger_event,
+        template:automation_templates(id, name, approval_status, twilio_template_sid)
+      `)
       .eq('trigger_type', 'system_event')
       .eq('trigger_event', event)
       .eq('is_active', true);
@@ -223,12 +226,34 @@ serve(async (req) => {
           results.push({ flow: flow.name, channel: 'whatsapp', skipped: 'already_sent' });
         } else {
           try {
+            const tpl: any = (flow as any).template ?? null;
+            const payload: any = {
+              to: ctx.telefone,
+              dealId: regRow?.deal_id ?? attendeeRow?.deal_id,
+            };
+
+            if (tpl) {
+              if (tpl.approval_status !== 'approved' || !tpl.twilio_template_sid) {
+                results.push({
+                  flow: flow.name,
+                  channel: 'whatsapp',
+                  skipped: 'template_not_approved',
+                  template: tpl.name,
+                  approval_status: tpl.approval_status,
+                });
+                continue;
+              }
+              // Template Meta aprovado → envio fora da janela de 24h
+              payload.templateSid = tpl.twilio_template_sid;
+              // Variável {{1}} = primeiro nome
+              payload.contentVariables = JSON.stringify({ 1: ctx.nome });
+            } else {
+              // Sem template → texto livre (só entrega dentro da janela de 24h)
+              payload.body = bodyText;
+            }
+
             const { error: waErr } = await supabase.functions.invoke('twilio-whatsapp-send', {
-              body: {
-                to: ctx.telefone,
-                body: bodyText,
-                dealId: regRow?.deal_id ?? attendeeRow?.deal_id,
-              },
+              body: payload,
             });
             if (waErr) throw waErr;
             if (regRow) {
