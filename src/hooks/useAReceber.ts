@@ -19,7 +19,8 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
       let query = supabase
         .from('ar_titulos' as any)
         .select('*')
-        .order('sale_date', { ascending: false });
+        .order('sale_date', { ascending: false })
+        .limit(500);
 
       if (filters.status && filters.status !== 'todos') query = query.eq('status', filters.status);
       if (filters.tipo && filters.tipo !== 'todos') query = query.eq('tipo', filters.tipo);
