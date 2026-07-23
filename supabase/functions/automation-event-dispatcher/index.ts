@@ -23,6 +23,7 @@ const corsHeaders = {
 interface DispatchRequest {
   event: string;
   registration_id?: string;
+  attendee_id?: string;
   force?: boolean;
 }
 
@@ -64,7 +65,7 @@ serve(async (req) => {
     );
 
     const body: DispatchRequest = await req.json();
-    const { event, registration_id, force = false } = body;
+    const { event, registration_id, attendee_id, force = false } = body;
 
     if (!event) {
       return new Response(
@@ -73,7 +74,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[event-dispatcher] event=', event, 'reg=', registration_id, 'force=', force);
+    console.log('[event-dispatcher] event=', event, 'reg=', registration_id, 'attendee=', attendee_id, 'force=', force);
 
     // 1) Load flows
     const { data: flows, error: flowsErr } = await supabase
@@ -94,6 +95,7 @@ serve(async (req) => {
     // 2) Build context for consorcio_carta_cadastrada
     let ctx: Ctx = { nome: 'Cliente', email: null, telefone: null };
     let regRow: any = null;
+    let attendeeRow: any = null;
 
     if (event === 'consorcio_carta_cadastrada') {
       if (!registration_id) {
@@ -119,6 +121,47 @@ serve(async (req) => {
         nome: (reg.tipo_pessoa === 'pj' ? reg.razao_social : reg.nome_completo) || 'Cliente',
         email: (reg.tipo_pessoa === 'pj' ? reg.email_comercial : reg.email) || null,
         telefone: (reg.tipo_pessoa === 'pj' ? reg.telefone_comercial : reg.telefone) || reg.telefone || null,
+      };
+    } else if (event === 'attendee_contract_paid') {
+      if (!attendee_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'attendee_id required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const { data: att, error: attErr } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id, attendee_name, attendee_phone, is_partner, deal_id,
+          boas_vindas_r2_whatsapp_enviado_em,
+          deal:crm_deals!meeting_slot_attendees_deal_id_fkey(
+            id,
+            contact:crm_contacts(name, phone, email)
+          )
+        `)
+        .eq('id', attendee_id)
+        .maybeSingle();
+      if (attErr) throw attErr;
+      if (!att) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'attendee not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (att.is_partner) {
+        return new Response(
+          JSON.stringify({ success: true, dispatched: 0, message: 'partner attendee — skipped' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      attendeeRow = att;
+      const contact: any = (att as any).deal?.contact ?? null;
+      const rawName = (att.attendee_name || contact?.name || 'Cliente').trim();
+      const firstName = rawName.split(/\s+/)[0] || 'Cliente';
+      ctx = {
+        nome: firstName,
+        email: contact?.email || null,
+        telefone: att.attendee_phone || contact?.phone || null,
       };
     }
 
@@ -172,7 +215,10 @@ serve(async (req) => {
 
       // WHATSAPP
       if (wantWhats && ctx.telefone) {
-        const already = regRow?.boas_vindas_whatsapp_enviado_em && !force;
+        const already = !force && (
+          (event === 'attendee_contract_paid' && attendeeRow?.boas_vindas_r2_whatsapp_enviado_em) ||
+          (event !== 'attendee_contract_paid' && regRow?.boas_vindas_whatsapp_enviado_em)
+        );
         if (already) {
           results.push({ flow: flow.name, channel: 'whatsapp', skipped: 'already_sent' });
         } else {
@@ -181,7 +227,7 @@ serve(async (req) => {
               body: {
                 to: ctx.telefone,
                 body: bodyText,
-                dealId: regRow?.deal_id,
+                dealId: regRow?.deal_id ?? attendeeRow?.deal_id,
               },
             });
             if (waErr) throw waErr;
@@ -190,6 +236,12 @@ serve(async (req) => {
                 .from('consorcio_pending_registrations')
                 .update({ boas_vindas_whatsapp_enviado_em: new Date().toISOString() })
                 .eq('id', regRow.id);
+            }
+            if (attendeeRow) {
+              await supabase
+                .from('meeting_slot_attendees')
+                .update({ boas_vindas_r2_whatsapp_enviado_em: new Date().toISOString() })
+                .eq('id', attendeeRow.id);
             }
             results.push({ flow: flow.name, channel: 'whatsapp', sent: true });
           } catch (e: any) {

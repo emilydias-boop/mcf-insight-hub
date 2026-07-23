@@ -9236,6 +9236,7 @@ export type Database = {
           already_builds: boolean | null
           attendee_name: string | null
           attendee_phone: string | null
+          boas_vindas_r2_whatsapp_enviado_em: string | null
           booked_at: string | null
           booked_by: string | null
           calendly_invitee_uri: string | null
@@ -9275,6 +9276,7 @@ export type Database = {
           already_builds?: boolean | null
           attendee_name?: string | null
           attendee_phone?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
           booked_at?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
@@ -9314,6 +9316,7 @@ export type Database = {
           already_builds?: boolean | null
           attendee_name?: string | null
           attendee_phone?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
           booked_at?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
