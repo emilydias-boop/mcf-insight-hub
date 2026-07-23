@@ -1,20 +1,21 @@
-# Boas-vindas R2 via Template Oficial (Meta-approved) no Twilio
+# Boas-vindas R2 via Template Meta (usando o gestor de templates do próprio app)
 
-## Contexto
-Hoje o `automation-event-dispatcher` envia a mensagem de Boas-vindas R2 como texto livre via Twilio (`Body=...`). Isso só funciona dentro da janela de 24h de sessão. Como o disparo ocorre logo após o Contrato Pago — e frequentemente fora dessa janela — o envio precisa usar um **template HSM aprovado pela Meta**, referenciado no Twilio por **ContentSid + ContentVariables**, com botão CTA "Agendar R2".
+## Correção do plano anterior
+Você **não precisa** criar o template manualmente no Console do Twilio. O app já tem um gestor completo de templates HSM em **Administração → Automações → Templates** (`TemplateEditorDialog`, tabela `automation_templates`, edge function `twilio-content-manage`, hooks `useCreateTwilioContent` / `useSubmitTwilioContent` / `useSyncAllTwilioStatus`). Ele cria o template no Twilio, submete para aprovação Meta e guarda o `twilio_content_sid` no banco automaticamente. Vamos usar esse fluxo — sem secret manual, sem passo fora do app.
 
-## Passo 1 — Cadastro do template no Twilio (manual, feito por você)
+## Passo 1 — Criar o template dentro do app (você faz na UI, sem código)
 
-No **Twilio Content Editor** (Console → Messaging → Content Template Builder), criar:
+Em **Administração → Automações → Templates → Novo template**:
 
-- **Nome (friendly name):** `boas_vindas_r2_contrato_pago`
-- **Idioma:** `pt_BR` ("Portugues BR")
-- **Categoria Meta:** `MARKETING` (é uma mensagem de próximos passos comerciais fora da janela; se a Meta reprovar como MARKETING, resubmeter como `UTILITY` argumentando que é follow-up transacional pós-compra).
-- **Tipo de conteúdo Twilio:** `twilio/call-to-action` (permite corpo + botão URL) — ou `twilio/quick-reply` se quisermos futuramente botões de resposta; para este caso o CTA URL é o correto.
-- **Corpo (com 1 variável):**
+- Nome: `boas_vindas_r2_contrato_pago`
+- Idioma: `pt_BR`
+- Canal: WhatsApp
+- Categoria Meta: `MARKETING` (se reprovar, ressubmeter como `UTILITY`)
+- Variáveis: `nome` (a UI converte para `{{1}}` na Twilio)
+- Corpo:
 
 ```
-Olá, {{1}}! 🎉
+Olá, {{nome}}! 🎉
 
 Parabéns pela decisão — seu contrato foi confirmado e você agora faz parte da Seleção MCF.
 
@@ -32,51 +33,47 @@ No mesmo contato acima você recebe informações sobre a abertura das vagas e a
 Qualquer dúvida, é só chamar por aqui. Nos vemos na R2! 🚀
 ```
 
-- **Botão CTA (Call To Action):**
-  - Tipo: `URL`
+- Botão (Call to Action):
+  - Tipo: URL
   - Rótulo: `Agendar R2`
-  - URL: `https://hi.switchy.io/x9NB` (estática, sem variável — evita reprovação Meta por URL dinâmica)
+  - URL: `https://hi.switchy.io/x9NB` (estática — sem variável, evita reprovação Meta)
 
-- **Submeter para aprovação WhatsApp/Meta** direto pelo Content Editor.
-- Após aprovado, copiar o **Content SID** (formato `HX...`).
+- Clicar **Criar no Twilio** → salva `twilio_content_sid` no `automation_templates`.
+- Clicar **Enviar para aprovação Meta** → status vai para `pending`; o poller (`twilio-content-status-poll`) atualiza para `approved` quando a Meta aprovar.
 
-## Passo 2 — Guardar o Content SID como secret
+## Passo 2 — Ligar o flow "Boas-vindas R2 (Contrato Pago)" a esse template
 
-Adicionar via `add_secret`:
-- `TWILIO_CONTENT_SID_BOAS_VINDAS_R2` = `HX...` (o SID aprovado)
+Hoje `automation_flows` para `system_event` guarda `body_template` inline (texto livre). Para usar um HSM aprovado, o flow precisa referenciar o `automation_templates.id`.
 
-Assim conseguimos trocar/versionar o template sem redeploy de código.
+- **Migração**: adicionar coluna `template_id uuid null references automation_templates(id) on delete set null` em `automation_flows` (mais um índice). Nenhum backfill: flows existentes continuam funcionando com `body_template`.
+- **UI** (`FlowEditorDialog.tsx`): quando `trigger_type = 'system_event'` **e** o canal inclui WhatsApp, mostrar um seletor "Template WhatsApp (Meta-aprovado)" listando templates com `channel = 'whatsapp'`, exibindo o status de aprovação (`draft`/`pending`/`approved`/`rejected`). Bloquear salvar/ativar o flow se o template selecionado não estiver `approved` (com mensagem clara). Manter `body_template` como fallback opcional só para e-mail.
+- No card do flow (`FlowList`): badge "Template Meta: `boas_vindas_r2_contrato_pago` (aprovado)".
 
-## Passo 3 — Ajuste no edge function `automation-event-dispatcher`
+## Passo 3 — Dispatcher usa `ContentSid` quando há template linkado
 
-Trocar o envio de WhatsApp da action `whatsapp_boas_vindas_r2` para usar Content API do Twilio:
+Em `supabase/functions/automation-event-dispatcher/index.ts`:
 
-- Substituir o body `Body=...` (freeform) por:
-  - `ContentSid=<TWILIO_CONTENT_SID_BOAS_VINDAS_R2>`
-  - `ContentVariables={"1":"<primeiro nome do lead>"}` (JSON string url-encoded)
-- Manter `From=whatsapp:<TWILIO_WHATSAPP_FROM>` e `To=whatsapp:<E.164 do lead>`.
-- Manter idempotência atual (`boas_vindas_r2_whatsapp_enviado_em`) e o log em `automation_run_logs`.
-- Se `TWILIO_CONTENT_SID_BOAS_VINDAS_R2` não estiver configurado, retornar erro claro e não cair no envio freeform (para não vazarmos mensagem fora de template).
-- Se o Twilio devolver erro `63016` (freeform fora da janela) ou `63051` (template não aprovado), logar detalhado para diagnóstico.
+- Ao carregar o flow, incluir join com `automation_templates` (id, name, twilio_content_sid, approval_status, variables).
+- No ramo WhatsApp:
+  - Se o flow tem `template_id` e o template está `approved` com `twilio_content_sid`: chamar `twilio-whatsapp-send` com:
+    - `templateSid: template.twilio_content_sid`
+    - `contentVariables: { "1": ctx.nome }` (ordem = ordem de `template.variables`; hoje só temos `nome`)
+  - Se o template estiver linkado mas **não** aprovado: **não** cair no envio freeform — logar erro `template_not_approved` no `automation_run_logs` e pular.
+  - Se o flow não tem `template_id` (comportamento legado): manter envio freeform atual (só funciona dentro da janela 24h).
+- Manter idempotência (`boas_vindas_r2_whatsapp_enviado_em`) e o trigger `trg_notify_attendee_contract_paid`.
+- Logar códigos Twilio 63016 (fora da janela) e 63051 (template não aprovado) com detalhe.
 
-## Passo 4 — Ajuste no card "Boas-vindas R2 (Contrato Pago)" em Administração → Automações
+## Passo 4 — Memory
 
-Em `FlowEditorDialog.tsx` (step do WhatsApp), quando a action for `whatsapp_boas_vindas_r2`:
-- Exibir badge "Template Meta aprovado" com o nome `boas_vindas_r2_contrato_pago`.
-- Mostrar o corpo em modo somente-leitura (fonte da verdade agora é o Content Editor no Twilio).
-- Mostrar o botão CTA `Agendar R2 → https://hi.switchy.io/x9NB`.
-- Manter apenas o toggle ativo/inativo e a variável `{{1}} = primeiro_nome`.
-
-## Passo 5 — Documentação / Memory
-
-Registrar em memory que disparos WhatsApp fora da janela de 24h devem sempre usar Twilio Content Template aprovado pela Meta (ContentSid + ContentVariables), nunca `Body` freeform.
+Registrar regra: disparos WhatsApp fora da janela de 24h devem usar template `automation_templates` com `approval_status = 'approved'` e `twilio_content_sid`, referenciado pelo `automation_flows.template_id`. Envio freeform (`Body`) só é permitido para flows sem `template_id` e dentro da janela.
 
 ## Detalhes técnicos
 
-- Arquivos afetados:
-  - `supabase/functions/automation-event-dispatcher/index.ts` — trocar payload Twilio para `ContentSid`/`ContentVariables`.
-  - `src/components/admin/automacoes/FlowEditorDialog.tsx` — UI somente-leitura do template.
-  - Novo secret: `TWILIO_CONTENT_SID_BOAS_VINDAS_R2`.
-- Sem migração de schema.
-- Idempotência e trigger `trg_notify_attendee_contract_paid` permanecem.
-- Após o template ser aprovado pela Meta, o mesmo fluxo passa a funcionar 24/7, inclusive fora da janela de sessão.
+Arquivos afetados:
+- Nova migração: `automation_flows.template_id` (FK opcional para `automation_templates`).
+- `src/hooks/useAutomationFlows.ts` — incluir/gravar `template_id`, join com template.
+- `src/components/automations/FlowEditorDialog.tsx` — seletor de template WhatsApp para eventos do sistema, com status de aprovação.
+- `src/components/automations/FlowList.tsx` — badge do template no card.
+- `supabase/functions/automation-event-dispatcher/index.ts` — enviar via `templateSid`/`contentVariables` quando houver template linkado; nunca cair em freeform quando o template está definido mas não aprovado.
+
+Sem novo secret. Sem alteração no `twilio-whatsapp-send` (já suporta `templateSid` + `contentVariables`).
