@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_proposals ADD COLUMN IF NOT EXISTS origem_lead text;
