@@ -14,6 +14,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -234,6 +236,7 @@ export function KanbanCobranca() {
 
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [nameFilter, setNameFilter] = useState<string>('');
 
   const tituloIds = useMemo(() => (titulos ?? []).map(t => t.id), [titulos]);
 
@@ -258,10 +261,12 @@ export function KanbanCobranca() {
     const tituloMap = new Map<string, ArTitulo>((titulos ?? []).map(t => [t.id, t]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const q = nameFilter.trim().toLowerCase();
 
     (parcelas ?? []).forEach(p => {
       const titulo = tituloMap.get(p.titulo_id);
       if (!titulo) return;
+      if (q && !(titulo.customer_name || '').toLowerCase().includes(q)) return;
 
       const dv = p.data_vencimento ? new Date(p.data_vencimento + 'T00:00:00') : null;
       const diasAtraso = dv && dv < today ? Math.floor((today.getTime() - dv.getTime()) / 86400000) : 0;
@@ -283,7 +288,7 @@ export function KanbanCobranca() {
       buckets[k].sort((a, b) => (a.parcela.data_vencimento || '').localeCompare(b.parcela.data_vencimento || ''));
     });
     return buckets;
-  }, [titulos, parcelas]);
+  }, [titulos, parcelas, nameFilter]);
 
   const totalsFiltered = useMemo(() => {
     const totals: Record<ArCobrancaStage, number> = { mes: 0, atraso: 0, judicial: 0 };
@@ -338,6 +343,18 @@ export function KanbanCobranca() {
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="space-y-4 mb-4">
         <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card p-3">
+          <div className="flex-1 min-w-[220px] max-w-sm">
+            <Label className="text-xs">Buscar cliente</Label>
+            <div className="relative mt-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+                placeholder="Nome do cliente..."
+                className="pl-8 h-9"
+              />
+            </div>
+          </div>
           <div>
             <Label className="text-xs">Vencimento de</Label>
             <input
@@ -356,8 +373,8 @@ export function KanbanCobranca() {
               className="mt-1 block rounded-md border bg-background px-3 py-1.5 text-sm"
             />
           </div>
-          {(dateFrom || dateTo) && (
-            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); }}>
+          {(dateFrom || dateTo || nameFilter) && (
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setNameFilter(''); }}>
               Limpar
             </Button>
           )}
