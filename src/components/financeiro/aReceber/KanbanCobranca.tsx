@@ -527,6 +527,18 @@ export function KanbanCobranca() {
           const list = byStage[stage.id];
           const totalSaldo = list.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
           const Icon = stage.icon;
+          // Para judicial, agrupa parcelas por título (um card por cliente/título)
+          const judicialGroups: { titulo: ArTitulo; items: ParcelaCard[] }[] = [];
+          if (stage.id === 'judicial') {
+            const map = new Map<string, { titulo: ArTitulo; items: ParcelaCard[] }>();
+            list.forEach(item => {
+              const g = map.get(item.titulo.id);
+              if (g) g.items.push(item);
+              else map.set(item.titulo.id, { titulo: item.titulo, items: [item] });
+            });
+            judicialGroups.push(...Array.from(map.values()));
+          }
+          const displayCount = stage.id === 'judicial' ? judicialGroups.length : list.length;
           return (
             <Card key={stage.id} className={`border-t-4 ${stage.accent}`}>
               <CardContent className="p-3 space-y-3">
@@ -535,7 +547,7 @@ export function KanbanCobranca() {
                     <Icon className="w-4 h-4 text-muted-foreground" />
                     <div className="font-semibold text-sm">{stage.title}</div>
                   </div>
-                  <Badge variant="secondary">{list.length}</Badge>
+                  <Badge variant="secondary">{displayCount}</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Saldo: <span className="font-medium text-foreground">{brl(totalSaldo)}</span>
@@ -547,13 +559,13 @@ export function KanbanCobranca() {
                       {...provided.droppableProps}
                       className={`space-y-2 min-h-[200px] rounded-md p-1 transition-colors ${snapshot.isDraggingOver ? 'bg-muted/60' : ''}`}
                     >
-                      {list.length === 0 && (
+                      {displayCount === 0 && (
                         <div className="text-center text-xs text-muted-foreground py-8">
                           <Wallet className="w-6 h-6 mx-auto mb-2 opacity-30" />
                           Sem parcelas
                         </div>
                       )}
-                      {list.map((item, idx) => (
+                      {stage.id !== 'judicial' && list.map((item, idx) => (
                         <Draggable key={item.parcela.id} draggableId={item.parcela.id} index={idx}>
                           {(dp) => (
                             <div
@@ -568,6 +580,30 @@ export function KanbanCobranca() {
                                 onBaixar={(valor, data, forma) => baixar.mutateAsync({
                                   id: item.parcela.id,
                                   tituloId: item.titulo.id,
+                                  valor_pago: valor,
+                                  data_pagamento: data,
+                                  forma_pagamento: forma,
+                                })}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {stage.id === 'judicial' && judicialGroups.map((g, idx) => (
+                        <Draggable key={g.titulo.id} draggableId={`judicial-${g.titulo.id}`} index={idx}>
+                          {(dp) => (
+                            <div
+                              ref={dp.innerRef}
+                              {...dp.draggableProps}
+                              {...dp.dragHandleProps}
+                            >
+                              <JudicialGroupCard
+                                titulo={g.titulo}
+                                items={g.items}
+                                onOpen={() => navigate(`/financeiro/a-receber/${g.titulo.id}`)}
+                                onBaixar={(it, valor, data, forma) => baixar.mutateAsync({
+                                  id: it.parcela.id,
+                                  tituloId: it.titulo.id,
                                   valor_pago: valor,
                                   data_pagamento: data,
                                   forma_pagamento: forma,
