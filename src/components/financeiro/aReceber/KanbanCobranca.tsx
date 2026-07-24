@@ -230,7 +230,11 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
 
 export function KanbanCobranca() {
   const navigate = useNavigate();
-  const { data: titulos, isLoading } = useArTitulos({ status: 'aberto' });
+  // Buscamos todos os títulos (inclusive quitados) — os cards do Kanban são
+  // gerados a partir das parcelas em aberto, então títulos sem parcela pendente
+  // simplesmente não aparecem. Isso evita ocultar cobranças futuras quando o
+  // título foi marcado como quitado apenas com base na entrada.
+  const { data: titulos, isLoading } = useArTitulos({ status: 'todos' });
   const updateStage = useUpdateCobrancaStage();
   const baixar = useMarkArParcelaPaga();
 
