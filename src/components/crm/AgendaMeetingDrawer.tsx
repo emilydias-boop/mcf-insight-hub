@@ -921,6 +921,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
                   
+                  {/* Histórico de qualificação (Resumo IA da ligação ou questionário WhatsApp + print) */}
+                  <QualificationHistorySection dealId={selectedParticipant.dealId} />
+
                   {/* All Notes Section - unified view including scheduling notes */}
                   <div className="pt-2 border-t border-blue-500/20">
                     <AttendeeNotesSection
@@ -930,9 +933,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       canAddNotes={true}
                     />
                   </div>
-
-                  {/* Histórico de qualificação (Resumo IA da ligação ou questionário WhatsApp + print) */}
-                  <QualificationHistorySection dealId={selectedParticipant.dealId} />
 
                   {/* Notas do SDR sobre o lead (do deal) - show for participants linked to main contact */}
                   {sdrNotes && sdrNotes.length > 0 && (
