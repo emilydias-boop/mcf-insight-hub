@@ -228,6 +228,110 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
   );
 }
 
+function JudicialGroupCard({
+  titulo,
+  items,
+  onOpen,
+  onBaixar,
+}: {
+  titulo: ArTitulo;
+  items: ParcelaCard[];
+  onOpen: () => void;
+  onBaixar: (item: ParcelaCard, valor: number, data: string, forma: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(items.length <= 1);
+  const total = items.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
+  const maxAtraso = items.reduce((m, i) => Math.max(m, i.diasAtraso), 0);
+  return (
+    <div className="rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-all space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{titulo.customer_name}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {titulo.product_code} · {titulo.product_name}
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-6 w-6">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onOpen}>
+              <ExternalLink className="w-4 h-4 mr-2" /> Abrir detalhes
+            </DropdownMenuItem>
+            <ContatoDialog titulo={titulo} onDone={() => {}} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Parcelas em cobrança</span>
+        <span className="font-medium">{items.length}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Total em aberto</span>
+        <span className="font-semibold text-red-600 text-sm">{brl(total)}</span>
+      </div>
+      {maxAtraso > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1">
+          <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/30 text-[10px]">
+            Máx. {maxAtraso}d em atraso
+          </Badge>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full mt-1 flex items-center justify-center gap-1 text-[11px] text-muted-foreground hover:text-foreground border-t pt-2"
+      >
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {expanded ? 'Ocultar detalhes' : `Ver ${items.length} parcela${items.length > 1 ? 's' : ''}`}
+      </button>
+      {expanded && (
+        <div className="space-y-1.5 pt-1">
+          {items.map(it => {
+            const venc = it.parcela.data_vencimento
+              ? format(new Date(it.parcela.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+              : '—';
+            return (
+              <div key={it.parcela.id} className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono">{parcelaDocNumber(titulo.id, it.parcela.numero)}</span>
+                  <span className="font-semibold">{brl(Number(it.parcela.valor) || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>
+                    Parc. {it.parcela.numero}/{titulo.total_installments_hubla || it.parcela.numero} · venc. {venc}
+                  </span>
+                  {it.diasAtraso > 0 && (
+                    <span className="text-red-600 font-medium">{it.diasAtraso}d</span>
+                  )}
+                </div>
+                <div className="flex justify-end pt-0.5">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]">
+                        Ações
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <BaixarParcelaDialog
+                        item={it}
+                        onConfirm={(v, d, f) => onBaixar(it, v, d, f)}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function KanbanCobranca() {
   const navigate = useNavigate();
   // Buscamos todos os títulos (inclusive quitados) — os cards do Kanban são
