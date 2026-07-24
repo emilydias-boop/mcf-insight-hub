@@ -14,7 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -228,6 +228,110 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
   );
 }
 
+function JudicialGroupCard({
+  titulo,
+  items,
+  onOpen,
+  onBaixar,
+}: {
+  titulo: ArTitulo;
+  items: ParcelaCard[];
+  onOpen: () => void;
+  onBaixar: (item: ParcelaCard, valor: number, data: string, forma: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(items.length <= 1);
+  const total = items.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
+  const maxAtraso = items.reduce((m, i) => Math.max(m, i.diasAtraso), 0);
+  return (
+    <div className="rounded-md border bg-card p-3 shadow-sm hover:shadow-md transition-all space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{titulo.customer_name}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {titulo.product_code} · {titulo.product_name}
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" className="h-6 w-6">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={onOpen}>
+              <ExternalLink className="w-4 h-4 mr-2" /> Abrir detalhes
+            </DropdownMenuItem>
+            <ContatoDialog titulo={titulo} onDone={() => {}} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Parcelas em cobrança</span>
+        <span className="font-medium">{items.length}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Total em aberto</span>
+        <span className="font-semibold text-red-600 text-sm">{brl(total)}</span>
+      </div>
+      {maxAtraso > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1">
+          <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/30 text-[10px]">
+            Máx. {maxAtraso}d em atraso
+          </Badge>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        className="w-full mt-1 flex items-center justify-center gap-1 text-[11px] text-muted-foreground hover:text-foreground border-t pt-2"
+      >
+        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {expanded ? 'Ocultar detalhes' : `Ver ${items.length} parcela${items.length > 1 ? 's' : ''}`}
+      </button>
+      {expanded && (
+        <div className="space-y-1.5 pt-1">
+          {items.map(it => {
+            const venc = it.parcela.data_vencimento
+              ? format(new Date(it.parcela.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+              : '—';
+            return (
+              <div key={it.parcela.id} className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono">{parcelaDocNumber(titulo.id, it.parcela.numero)}</span>
+                  <span className="font-semibold">{brl(Number(it.parcela.valor) || 0)}</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>
+                    Parc. {it.parcela.numero}/{titulo.total_installments_hubla || it.parcela.numero} · venc. {venc}
+                  </span>
+                  {it.diasAtraso > 0 && (
+                    <span className="text-red-600 font-medium">{it.diasAtraso}d</span>
+                  )}
+                </div>
+                <div className="flex justify-end pt-0.5">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]">
+                        Ações
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <BaixarParcelaDialog
+                        item={it}
+                        onConfirm={(v, d, f) => onBaixar(it, v, d, f)}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function KanbanCobranca() {
   const navigate = useNavigate();
   // Buscamos todos os títulos (inclusive quitados) — os cards do Kanban são
@@ -265,6 +369,8 @@ export function KanbanCobranca() {
     const tituloMap = new Map<string, ArTitulo>((titulos ?? []).map(t => [t.id, t]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     const q = nameFilter.trim().toLowerCase();
 
     (parcelas ?? []).forEach(p => {
@@ -276,8 +382,13 @@ export function KanbanCobranca() {
       const diasAtraso = dv && dv < today ? Math.floor((today.getTime() - dv.getTime()) / 86400000) : 0;
 
       let stage: ArCobrancaStage;
-      // Título marcado judicial (manual) leva todas as parcelas em aberto para judicial
+      // Título marcado judicial (manual) leva apenas parcelas em aberto
+      // (em atraso ou vencendo no mês corrente) para a coluna judicial.
+      // Parcelas futuras além do mês corrente ficam ocultas.
       if (titulo.cobranca_stage === 'judicial') {
+        const vencidaOuNoMes =
+          diasAtraso > 0 || (dv && dv >= monthStart && dv <= monthEnd);
+        if (!vencidaOuNoMes) return;
         stage = 'judicial';
       } else if (diasAtraso > 0) {
         stage = 'atraso';
@@ -312,14 +423,19 @@ export function KanbanCobranca() {
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const stage = result.destination.droppableId as ArCobrancaStage;
-    // draggableId = parcelaId; recuperar titulo_id do source bucket
-    const parcelaId = result.draggableId;
     const src = result.source.droppableId as ArCobrancaStage;
     if (stage === src) return;
-    const item = byStage[src].find(i => i.parcela.id === parcelaId);
-    if (!item) return;
+    const draggableId = result.draggableId;
+    let tituloId: string | undefined;
+    if (draggableId.startsWith('judicial-')) {
+      tituloId = draggableId.replace('judicial-', '');
+    } else {
+      const item = byStage[src].find(i => i.parcela.id === draggableId);
+      tituloId = item?.titulo.id;
+    }
+    if (!tituloId) return;
     try {
-      await updateStage.mutateAsync({ tituloId: item.titulo.id, stage });
+      await updateStage.mutateAsync({ tituloId, stage });
       toast.success(`Movido para ${AR_COBRANCA_STAGE_LABEL[stage]}`);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao mover');
@@ -416,6 +532,18 @@ export function KanbanCobranca() {
           const list = byStage[stage.id];
           const totalSaldo = list.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
           const Icon = stage.icon;
+          // Para judicial, agrupa parcelas por título (um card por cliente/título)
+          const judicialGroups: { titulo: ArTitulo; items: ParcelaCard[] }[] = [];
+          if (stage.id === 'judicial') {
+            const map = new Map<string, { titulo: ArTitulo; items: ParcelaCard[] }>();
+            list.forEach(item => {
+              const g = map.get(item.titulo.id);
+              if (g) g.items.push(item);
+              else map.set(item.titulo.id, { titulo: item.titulo, items: [item] });
+            });
+            judicialGroups.push(...Array.from(map.values()));
+          }
+          const displayCount = stage.id === 'judicial' ? judicialGroups.length : list.length;
           return (
             <Card key={stage.id} className={`border-t-4 ${stage.accent}`}>
               <CardContent className="p-3 space-y-3">
@@ -424,7 +552,7 @@ export function KanbanCobranca() {
                     <Icon className="w-4 h-4 text-muted-foreground" />
                     <div className="font-semibold text-sm">{stage.title}</div>
                   </div>
-                  <Badge variant="secondary">{list.length}</Badge>
+                  <Badge variant="secondary">{displayCount}</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Saldo: <span className="font-medium text-foreground">{brl(totalSaldo)}</span>
@@ -436,13 +564,13 @@ export function KanbanCobranca() {
                       {...provided.droppableProps}
                       className={`space-y-2 min-h-[200px] rounded-md p-1 transition-colors ${snapshot.isDraggingOver ? 'bg-muted/60' : ''}`}
                     >
-                      {list.length === 0 && (
+                      {displayCount === 0 && (
                         <div className="text-center text-xs text-muted-foreground py-8">
                           <Wallet className="w-6 h-6 mx-auto mb-2 opacity-30" />
                           Sem parcelas
                         </div>
                       )}
-                      {list.map((item, idx) => (
+                      {stage.id !== 'judicial' && list.map((item, idx) => (
                         <Draggable key={item.parcela.id} draggableId={item.parcela.id} index={idx}>
                           {(dp) => (
                             <div
@@ -457,6 +585,30 @@ export function KanbanCobranca() {
                                 onBaixar={(valor, data, forma) => baixar.mutateAsync({
                                   id: item.parcela.id,
                                   tituloId: item.titulo.id,
+                                  valor_pago: valor,
+                                  data_pagamento: data,
+                                  forma_pagamento: forma,
+                                })}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {stage.id === 'judicial' && judicialGroups.map((g, idx) => (
+                        <Draggable key={g.titulo.id} draggableId={`judicial-${g.titulo.id}`} index={idx}>
+                          {(dp) => (
+                            <div
+                              ref={dp.innerRef}
+                              {...dp.draggableProps}
+                              {...dp.dragHandleProps}
+                            >
+                              <JudicialGroupCard
+                                titulo={g.titulo}
+                                items={g.items}
+                                onOpen={() => navigate(`/financeiro/a-receber/${g.titulo.id}`)}
+                                onBaixar={(it, valor, data, forma) => baixar.mutateAsync({
+                                  id: it.parcela.id,
+                                  tituloId: it.titulo.id,
                                   valor_pago: valor,
                                   data_pagamento: data,
                                   forma_pagamento: forma,
