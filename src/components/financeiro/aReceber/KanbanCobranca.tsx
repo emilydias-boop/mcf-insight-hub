@@ -423,14 +423,19 @@ export function KanbanCobranca() {
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     const stage = result.destination.droppableId as ArCobrancaStage;
-    // draggableId = parcelaId; recuperar titulo_id do source bucket
-    const parcelaId = result.draggableId;
     const src = result.source.droppableId as ArCobrancaStage;
     if (stage === src) return;
-    const item = byStage[src].find(i => i.parcela.id === parcelaId);
-    if (!item) return;
+    const draggableId = result.draggableId;
+    let tituloId: string | undefined;
+    if (draggableId.startsWith('judicial-')) {
+      tituloId = draggableId.replace('judicial-', '');
+    } else {
+      const item = byStage[src].find(i => i.parcela.id === draggableId);
+      tituloId = item?.titulo.id;
+    }
+    if (!tituloId) return;
     try {
-      await updateStage.mutateAsync({ tituloId: item.titulo.id, stage });
+      await updateStage.mutateAsync({ tituloId, stage });
       toast.success(`Movido para ${AR_COBRANCA_STAGE_LABEL[stage]}`);
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao mover');
