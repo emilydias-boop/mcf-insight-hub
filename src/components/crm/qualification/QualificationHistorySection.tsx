@@ -48,10 +48,27 @@ export function QualificationHistorySection({ dealId }: Props) {
     queryKey: ['qualification-history', dealId],
     queryFn: async () => {
       if (!dealId) return [];
+      // Look across sibling deals of the same contact so a qualification
+      // registered in an Incorporador deal shows up on the Consórcio deal too.
+      let dealIds: string[] = [dealId];
+      const { data: currentDeal } = await supabase
+        .from('crm_deals')
+        .select('contact_id')
+        .eq('id', dealId)
+        .maybeSingle();
+      if (currentDeal?.contact_id) {
+        const { data: related } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', currentDeal.contact_id);
+        if (related && related.length > 0) {
+          dealIds = Array.from(new Set(related.map((r: any) => r.id)));
+        }
+      }
       const { data, error } = await supabase
         .from('deal_activities')
         .select('*')
-        .eq('deal_id', dealId)
+        .in('deal_id', dealIds)
         .in('activity_type', ['qualification_note', 'ai_call_summary'])
         .order('created_at', { ascending: false })
         .limit(5);
