@@ -14,7 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -265,6 +265,8 @@ export function KanbanCobranca() {
     const tituloMap = new Map<string, ArTitulo>((titulos ?? []).map(t => [t.id, t]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     const q = nameFilter.trim().toLowerCase();
 
     (parcelas ?? []).forEach(p => {
@@ -276,8 +278,13 @@ export function KanbanCobranca() {
       const diasAtraso = dv && dv < today ? Math.floor((today.getTime() - dv.getTime()) / 86400000) : 0;
 
       let stage: ArCobrancaStage;
-      // Título marcado judicial (manual) leva todas as parcelas em aberto para judicial
+      // Título marcado judicial (manual) leva apenas parcelas em aberto
+      // (em atraso ou vencendo no mês corrente) para a coluna judicial.
+      // Parcelas futuras além do mês corrente ficam ocultas.
       if (titulo.cobranca_stage === 'judicial') {
+        const vencidaOuNoMes =
+          diasAtraso > 0 || (dv && dv >= monthStart && dv <= monthEnd);
+        if (!vencidaOuNoMes) return;
         stage = 'judicial';
       } else if (diasAtraso > 0) {
         stage = 'atraso';
