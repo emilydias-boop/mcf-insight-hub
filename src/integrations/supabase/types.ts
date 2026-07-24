@@ -13938,6 +13938,33 @@ export type Database = {
         Args: { _bu: string; _deal_id: string; _meeting_type?: string }
         Returns: Json
       }
+      export_all_contacts_page: {
+        Args: { p_limit: number; p_offset: number }
+        Returns: {
+          bu: string
+          clint_id: string
+          created_at: string
+          custom_fields: string
+          deal_created_at: string
+          deal_id: string
+          deal_stage_moved_at: string
+          email: string
+          etapa: string
+          etapa_color: string
+          id: string
+          is_archived: boolean
+          merged_at: string
+          merged_into_contact_id: string
+          name: string
+          notes: string
+          organization_name: string
+          origin_id: string
+          origin_name: string
+          phone: string
+          tags: string
+          updated_at: string
+        }[]
+      }
       find_or_create_crm_contact: {
         Args: {
           p_clint_id?: string
