@@ -8,6 +8,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
+  const url = new URL(req.url);
+  const startOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
+  const maxRows = parseInt(url.searchParams.get('max') ?? '30000', 10);
+  const includeHeader = url.searchParams.get('header') !== '0';
+
   const cols = [
     'id','clint_id','name','email','phone','origin_id','organization_name','tags','custom_fields',
     'created_at','updated_at','notes','merged_into_contact_id','merged_at','is_archived',
@@ -23,17 +28,19 @@ Deno.serve(async (req) => {
         if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
         return s;
       };
-      controller.enqueue(enc.encode(cols.join(',') + '\n'));
+      if (includeHeader) controller.enqueue(enc.encode(cols.join(',') + '\n'));
 
       const PAGE = 2000;
-      let from = 0;
-      while (true) {
+      let from = startOffset;
+      let emitted = 0;
+      while (emitted < maxRows) {
         const { data, error } = await admin.rpc('export_all_contacts_page', { p_offset: from, p_limit: PAGE });
         if (error) { controller.error(error); return; }
         if (!data || data.length === 0) break;
         for (const r of data as any[]) {
           controller.enqueue(enc.encode(cols.map(c => esc(r[c])).join(',') + '\n'));
         }
+        emitted += data.length;
         if (data.length < PAGE) break;
         from += PAGE;
       }
