@@ -52,6 +52,34 @@ interface QueueItem {
   attempts: number;
 }
 
+const CONSORCIO_ORIGINS = [
+  '7d7b1cb5-2a44-4552-9eff-c3b798646b78', // Efeito Alavanca + Clube
+  'ea7aac02-3a69-422a-9f6e-691c8a04f06a', // Cobrança Consorcio
+];
+
+const CONSORCIO_SDRS = [
+  { profile_id: '16828627-136e-42ef-9623-62dedfbc9d89', email: 'cleiton.lima@minhacasafinanciada.com' },
+  { profile_id: '411e4b5d-8183-4d6a-b841-88c71d50955f', email: 'ithaline.clara@minhacasafinanciada.com' },
+];
+
+async function pickConsorcioSdr(supabase: any, targetOriginId: string) {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const counts = await Promise.all(
+    CONSORCIO_SDRS.map(async (sdr) => {
+      const { count } = await supabase
+        .from('crm_deals')
+        .select('id', { count: 'exact', head: true })
+        .eq('origin_id', targetOriginId)
+        .eq('owner_profile_id', sdr.profile_id)
+        .gte('created_at', since);
+      return { sdr, count: count ?? 0 };
+    })
+  );
+
+  counts.sort((a, b) => a.count - b.count || a.sdr.email.localeCompare(b.sdr.email));
+  return counts[0].sdr;
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -290,6 +318,9 @@ async function processReplication(supabase: any, item: QueueItem) {
     }
 
     // 5. Create replicated deal
+    const preassignedConsorcioOwner = rule.auto_distribute && CONSORCIO_ORIGINS.includes(rule.target_origin_id)
+      ? await pickConsorcioSdr(supabase, rule.target_origin_id)
+      : null;
     const mergedTags: string[] = Array.isArray(deal.tags) ? [...deal.tags] : [];
     if (applyTag && !mergedTags.includes(applyTag)) mergedTags.push(applyTag);
     const newDeal = {
@@ -298,7 +329,8 @@ async function processReplication(supabase: any, item: QueueItem) {
       contact_id: deal.contact_id,
       origin_id: rule.target_origin_id,
       stage_id: rule.target_stage_id,
-      owner_id: deal.owner_id,
+      owner_id: preassignedConsorcioOwner?.email ?? deal.owner_id,
+      owner_profile_id: preassignedConsorcioOwner?.profile_id ?? null,
       custom_fields: rule.copy_custom_fields ? deal.custom_fields : null,
       tags: mergedTags,
       replicated_from_deal_id: deal.id,
@@ -319,41 +351,11 @@ async function processReplication(supabase: any, item: QueueItem) {
     }
 
     // 6. Auto-distribute if enabled
-    let assignedOwner: string | null = null;
+    let assignedOwner: string | null = preassignedConsorcioOwner?.email ?? null;
     if (rule.auto_distribute) {
       try {
-        // Consórcio origins: distribute exclusively between Cleiton and Ithaline
-        const CONSORCIO_ORIGINS = [
-          '7d7b1cb5-2a44-4552-9eff-c3b798646b78', // Efeito Alavanca + Clube
-          'ea7aac02-3a69-422a-9f6e-691c8a04f06a', // Cobrança Consorcio
-        ];
-        const CONSORCIO_SDRS = [
-          { profile_id: '16828627-136e-42ef-9623-62dedfbc9d89', email: 'cleiton.lima@minhacasafinanciada.com' },
-          { profile_id: '411e4b5d-8183-4d6a-b841-88c71d50955f', email: 'ithaline.clara@minhacasafinanciada.com' },
-        ];
-
         if (CONSORCIO_ORIGINS.includes(rule.target_origin_id)) {
-          // Least-load round-robin across the two SDRs (last 7 days on target origin)
-          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          const counts = await Promise.all(
-            CONSORCIO_SDRS.map(async (sdr) => {
-              const { count } = await supabase
-                .from('crm_deals')
-                .select('id', { count: 'exact', head: true })
-                .eq('origin_id', rule.target_origin_id)
-                .eq('owner_profile_id', sdr.profile_id)
-                .gte('created_at', since);
-              return { sdr, count: count ?? 0 };
-            })
-          );
-          counts.sort((a, b) => a.count - b.count);
-          const picked = counts[0].sdr;
-          assignedOwner = picked.email;
-          await supabase
-            .from('crm_deals')
-            .update({ owner_id: picked.email, owner_profile_id: picked.profile_id })
-            .eq('id', createdDeal.id);
-          console.log(`Auto-distributed consórcio deal ${createdDeal.id} to ${picked.email}`);
+          console.log(`Auto-distributed consórcio deal ${createdDeal.id} to ${assignedOwner}`);
         } else {
           const { data: nextOwner, error: ownerError } = await supabase
             .rpc('get_next_lead_owner', { p_origin_id: rule.target_origin_id });

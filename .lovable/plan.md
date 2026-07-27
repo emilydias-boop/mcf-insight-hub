@@ -1,21 +1,32 @@
-## Problema
+## Diagnóstico confirmado
 
-Os SDRs Cleiton e Ithaline não veem novos leads no Kanban do Consórcio porque `Negocios.tsx` (linha 295) filtra por `owner_profile_id = user.id` para cargo SDR. Novos leads replicados estão sendo criados com `owner_profile_id = NULL` (56 deals nos últimos dias na stage "NOVO LEAD ( FORM )"), então ficam invisíveis.
+- O filtro da tela do SDR busca apenas leads com `owner_profile_id = user.id`.
+- Hoje existem **15 leads novos** em `NOVO LEAD ( FORM )` da BU Consórcio.
+- Desses 15, **0 estão com Cleiton/Ithaline em `owner_profile_id`** e **15 estão com outros responsáveis**.
+- Exemplo do problema: alguns cards aparecem na sua visão com `owner_id` textual como Cleiton/Ithaline, mas o `owner_profile_id` gravado está em Bruno, Leticia, Ygor, Mayara etc. Como a tela do Cleiton filtra pelo UUID (`owner_profile_id`), eles não aparecem para ele.
+- Os leads não estão mais `NULL`; o problema atual é **owner_profile_id preenchido com SDR errado**.
 
-Permissão em `pipeline_permissions` já está OK; RLS de `crm_deals` é `USING (true)`. O problema é apenas atribuição.
+## Plano de correção
 
-## Correção
+1. **Corrigir os leads novos já criados hoje**
+   - Atualizar somente leads replicados para a origem Consórcio `Efeito Alavanca + Clube` na stage `NOVO LEAD ( FORM )` que não estão com Cleiton/Ithaline.
+   - Redistribuir em round-robin entre:
+     - Cleiton
+     - Ithaline
+   - Manter fora da alteração os leads antigos já trabalhados em outras stages.
 
-1. **Reatribuir apenas os deals com `owner_profile_id IS NULL`** nas duas stages "Novo Lead" do Consórcio, distribuindo round-robin entre Cleiton e Ithaline:
-   - Stage `b5af7d28-7a0f-4da5-a115-094489fbc07d` (NOVO LEAD ( FORM ) — Efeito Alavanca + Clube)
-   - Stage `550a86c1-8ab6-42a3-8744-93fd3f5336c2` (Novo Lead — Cobrança Consorcio)
-   - SDRs elegíveis: Cleiton (`16828627-136e-42ef-9623-62dedfbc9d89`) e Ithaline (`411e4b5d-8183-4d6a-b841-88c71d50955f`)
-   - Deals já atribuídos a outros SDRs (Ygor, Bruno, etc.) permanecem como estão
+2. **Corrigir a automação definitivamente**
+   - Ajustar `process-deal-replication` para, antes de inserir o novo lead, já escolher o responsável correto quando o destino for Consórcio.
+   - Inserir o lead já com:
+     - `owner_id = email do SDR escolhido`
+     - `owner_profile_id = UUID do SDR escolhido`
+   - Não depender de atualização posterior, evitando que o registro nasça com `owner_profile_id` herdado/incorreto.
 
-2. **Ajustar `supabase/functions/process-deal-replication/index.ts`** para que, ao criar novo deal nas origens do Consórcio (`7d7b1cb5-2a44-4552-9eff-c3b798646b78` e `ea7aac02-3a69-422a-9f6e-691c8a04f06a`), a distribuição seja feita via round-robin **exclusivamente** entre Cleiton e Ithaline, garantindo que `owner_profile_id` nunca fique NULL. Implementar como lookup direto no código da edge (contar deals na stage novo lead nos últimos 7 dias para cada um dos dois e atribuir ao com menor carga) — sem depender de `get_next_lead_owner`, que hoje está devolvendo NULL/SDRs de outros squads.
+3. **Manter regra exclusiva**
+   - Para essas automações de entrada no Consórcio, manter somente Cleiton + Ithaline como SDRs elegíveis.
+   - Não mexer em permissões, RLS ou layout.
 
-## Notas técnicas
-
-- Passo 1 é `supabase--insert` (UPDATE em `crm_deals`).
-- Passo 2 é edição da edge function (deploy automático após o build).
-- Nada muda em RLS, permissões ou UI.
+4. **Validar depois da correção**
+   - Conferir no banco se os leads de hoje ficaram distribuídos entre Cleiton/Ithaline.
+   - Conferir que não restam novos leads do Consórcio com `owner_profile_id` de SDRs de outra BU.
+   - Validar que a próxima replicação gravará o owner correto desde a criação.
