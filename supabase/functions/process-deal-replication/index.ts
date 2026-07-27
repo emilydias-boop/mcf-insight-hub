@@ -322,20 +322,59 @@ async function processReplication(supabase: any, item: QueueItem) {
     let assignedOwner: string | null = null;
     if (rule.auto_distribute) {
       try {
-        const { data: nextOwner, error: ownerError } = await supabase
-          .rpc('get_next_lead_owner', { p_origin_id: rule.target_origin_id });
-        
-        if (ownerError) {
-          console.warn(`Auto-distribute warning for rule ${rule.id}: ${ownerError.message}`);
-        } else if (nextOwner) {
-          assignedOwner = nextOwner;
+        // Consórcio origins: distribute exclusively between Cleiton and Ithaline
+        const CONSORCIO_ORIGINS = [
+          '7d7b1cb5-2a44-4552-9eff-c3b798646b78', // Efeito Alavanca + Clube
+          'ea7aac02-3a69-422a-9f6e-691c8a04f06a', // Cobrança Consorcio
+        ];
+        const CONSORCIO_SDRS = [
+          { profile_id: '16828627-136e-42ef-9623-62dedfbc9d89', email: 'cleiton.lima@minhacasafinanciada.com' },
+          { profile_id: '411e4b5d-8183-4d6a-b841-88c71d50955f', email: 'ithaline.clara@minhacasafinanciada.com' },
+        ];
+
+        if (CONSORCIO_ORIGINS.includes(rule.target_origin_id)) {
+          // Least-load round-robin across the two SDRs (last 7 days on target origin)
+          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const counts = await Promise.all(
+            CONSORCIO_SDRS.map(async (sdr) => {
+              const { count } = await supabase
+                .from('crm_deals')
+                .select('id', { count: 'exact', head: true })
+                .eq('origin_id', rule.target_origin_id)
+                .eq('owner_profile_id', sdr.profile_id)
+                .gte('created_at', since);
+              return { sdr, count: count ?? 0 };
+            })
+          );
+          counts.sort((a, b) => a.count - b.count);
+          const picked = counts[0].sdr;
+          assignedOwner = picked.email;
           await supabase
             .from('crm_deals')
-            .update({ owner_id: nextOwner })
+            .update({ owner_id: picked.email, owner_profile_id: picked.profile_id })
             .eq('id', createdDeal.id);
-          console.log(`Auto-distributed deal ${createdDeal.id} to ${nextOwner}`);
+          console.log(`Auto-distributed consórcio deal ${createdDeal.id} to ${picked.email}`);
         } else {
-          console.warn(`No owner available for auto-distribution in origin ${rule.target_origin_id}`);
+          const { data: nextOwner, error: ownerError } = await supabase
+            .rpc('get_next_lead_owner', { p_origin_id: rule.target_origin_id });
+
+          if (ownerError) {
+            console.warn(`Auto-distribute warning for rule ${rule.id}: ${ownerError.message}`);
+          } else if (nextOwner) {
+            assignedOwner = nextOwner;
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', nextOwner)
+              .maybeSingle();
+            await supabase
+              .from('crm_deals')
+              .update({ owner_id: nextOwner, owner_profile_id: prof?.id ?? null })
+              .eq('id', createdDeal.id);
+            console.log(`Auto-distributed deal ${createdDeal.id} to ${nextOwner}`);
+          } else {
+            console.warn(`No owner available for auto-distribution in origin ${rule.target_origin_id}`);
+          }
         }
       } catch (distError) {
         console.error(`Auto-distribute failed for deal ${createdDeal.id}:`, distError);
