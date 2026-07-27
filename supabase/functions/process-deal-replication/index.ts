@@ -7,10 +7,12 @@ const corsHeaders = {
 };
 
 interface MatchCondition {
-  type: 'product_name' | 'tags' | 'custom_field';
-  operator: 'contains' | 'equals' | 'includes_any' | 'includes_all';
-  values: string[];
+  type?: 'product_name' | 'tags' | 'custom_field' | 'not_contract_paid' | 'not_purchased_products';
+  operator?: 'contains' | 'equals' | 'includes_any' | 'includes_all';
+  values?: string[];
   field?: string;
+  apply_tag?: string;
+  all?: MatchCondition[];
 }
 
 interface ReplicationRule {
@@ -204,17 +206,83 @@ async function processReplication(supabase: any, item: QueueItem) {
 
   for (const rule of rules as ReplicationRule[]) {
     // 3. Check match condition
-    if (!matchesCondition(deal, rule.match_condition)) {
+    const ok = await matchesConditionAsync(supabase, deal, rule.match_condition);
+    if (!ok) {
       continue;
     }
 
-    // 4. Check if replication already exists
+    const applyTag = rule.match_condition?.apply_tag as string | undefined;
+
+    // 4a. Dedup by contact in target origin (add tag if exists)
+    let contactEmail: string | null = null;
+    let contactPhone: string | null = null;
+    if (deal.contact_id) {
+      const { data: c } = await supabase
+        .from('crm_contacts')
+        .select('email, phone')
+        .eq('id', deal.contact_id)
+        .maybeSingle();
+      contactEmail = (c?.email || '').toLowerCase().trim() || null;
+      contactPhone = c?.phone || null;
+    }
+    const phone9 = (contactPhone || '').replace(/\D/g, '').slice(-9);
+
+    let existingInTarget: any = null;
+    if (contactEmail || phone9) {
+      const { data: contactMatches } = await supabase
+        .from('crm_contacts')
+        .select('id, email, phone')
+        .or([
+          contactEmail ? `email.ilike.${contactEmail}` : '',
+          phone9 ? `phone.ilike.%${phone9}` : '',
+        ].filter(Boolean).join(','))
+        .limit(50);
+      const contactIds = (contactMatches || [])
+        .filter((x: any) => {
+          const e = (x.email || '').toLowerCase().trim();
+          const p9 = (x.phone || '').replace(/\D/g, '').slice(-9);
+          return (contactEmail && e === contactEmail) || (phone9 && p9 === phone9);
+        })
+        .map((x: any) => x.id);
+      if (contactIds.length > 0) {
+        const { data: dupDeals } = await supabase
+          .from('crm_deals')
+          .select('id, tags')
+          .in('contact_id', contactIds)
+          .eq('origin_id', rule.target_origin_id)
+          .limit(1);
+        existingInTarget = (dupDeals || [])[0] || null;
+      }
+    }
+
+    if (existingInTarget) {
+      if (applyTag) {
+        const currentTags: string[] = Array.isArray(existingInTarget.tags) ? existingInTarget.tags : [];
+        if (!currentTags.includes(applyTag)) {
+          await supabase
+            .from('crm_deals')
+            .update({ tags: [...currentTags, applyTag] })
+            .eq('id', existingInTarget.id);
+        }
+      }
+      await supabase.from('deal_replication_logs').insert({
+        rule_id: rule.id,
+        source_deal_id: deal.id,
+        target_deal_id: existingInTarget.id,
+        status: 'deduped',
+        metadata: { rule_name: rule.name, applied_tag: applyTag || null, reason: 'contact_exists_in_target_origin' }
+      });
+      replicationsCreated.push({ rule_id: rule.id, rule_name: rule.name, target_deal_id: existingInTarget.id, deduped: true });
+      continue;
+    }
+
+    // 4b. Check if replication already exists (source-based, prevents loops)
     const { data: existingReplica } = await supabase
       .from('crm_deals')
       .select('id')
       .eq('replicated_from_deal_id', deal.id)
       .eq('origin_id', rule.target_origin_id)
-      .single();
+      .maybeSingle();
 
     if (existingReplica) {
       console.log(`Replica already exists for deal ${deal.id} in origin ${rule.target_origin_id}`);
@@ -222,6 +290,8 @@ async function processReplication(supabase: any, item: QueueItem) {
     }
 
     // 5. Create replicated deal
+    const mergedTags: string[] = Array.isArray(deal.tags) ? [...deal.tags] : [];
+    if (applyTag && !mergedTags.includes(applyTag)) mergedTags.push(applyTag);
     const newDeal = {
       name: deal.name,
       value: deal.value,
@@ -230,7 +300,7 @@ async function processReplication(supabase: any, item: QueueItem) {
       stage_id: rule.target_stage_id,
       owner_id: deal.owner_id,
       custom_fields: rule.copy_custom_fields ? deal.custom_fields : null,
-      tags: deal.tags,
+      tags: mergedTags,
       replicated_from_deal_id: deal.id,
       replicated_at: new Date().toISOString(),
       data_source: 'replication',
@@ -333,10 +403,29 @@ async function processReplication(supabase: any, item: QueueItem) {
   };
 }
 
-function matchesCondition(deal: Deal, condition: MatchCondition | null): boolean {
+async function matchesConditionAsync(supabase: any, deal: Deal, condition: MatchCondition | null): Promise<boolean> {
   // If no condition, always match
   if (!condition || Object.keys(condition).length === 0) {
     return true;
+  }
+
+  // Compound AND
+  if (Array.isArray(condition.all) && condition.all.length > 0) {
+    for (const c of condition.all) {
+      const ok = await matchesConditionAsync(supabase, deal, c);
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  // Negative: exclude when contact bought "A000 - Contrato"
+  if (condition.type === 'not_contract_paid') {
+    return !(await contactBoughtProducts(supabase, deal, ['A000', 'CONTRATO']));
+  }
+  if (condition.type === 'not_purchased_products') {
+    const vals = condition.values || [];
+    if (vals.length === 0) return true;
+    return !(await contactBoughtProducts(supabase, deal, vals));
   }
 
   const { type, operator, values, field } = condition;
@@ -383,4 +472,33 @@ function matchesCondition(deal: Deal, condition: MatchCondition | null): boolean
     default:
       return true;
   }
+}
+
+async function contactBoughtProducts(supabase: any, deal: Deal, needles: string[]): Promise<boolean> {
+  if (!deal.contact_id) return false;
+  const { data: c } = await supabase
+    .from('crm_contacts')
+    .select('email, phone')
+    .eq('id', deal.contact_id)
+    .maybeSingle();
+  const email = (c?.email || '').toLowerCase().trim();
+  const phone9 = (c?.phone || '').replace(/\D/g, '').slice(-9);
+  if (!email && !phone9) return false;
+
+  const orParts: string[] = [];
+  if (email) orParts.push(`customer_email.ilike.${email}`);
+  if (phone9) orParts.push(`customer_phone.ilike.%${phone9}`);
+
+  const { data: tx } = await supabase
+    .from('hubla_transactions')
+    .select('product_name, sale_status')
+    .eq('sale_status', 'completed')
+    .or(orParts.join(','))
+    .limit(200);
+  if (!tx || tx.length === 0) return false;
+  const needleUpper = needles.map(n => n.toUpperCase());
+  return tx.some((t: any) => {
+    const pn = (t.product_name || '').toUpperCase();
+    return needleUpper.some(n => pn.includes(n));
+  });
 }
