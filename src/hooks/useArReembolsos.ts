@@ -103,6 +103,14 @@ export function useCriarReembolso() {
         .update({ status: 'reembolsado' } as any)
         .eq('id', input.titulo_id);
 
+      // 3.1) cancela parcelas em aberto/atrasadas para retirar o cliente
+      // da esteira de cobrança (não é mais devedor).
+      await supabase
+        .from('ar_parcelas' as any)
+        .update({ status: 'cancelado' } as any)
+        .eq('titulo_id', input.titulo_id)
+        .in('status', ['pendente', 'atrasado']);
+
       // 4) histórico
       await supabase.from('ar_historico' as any).insert({
         titulo_id: input.titulo_id,
