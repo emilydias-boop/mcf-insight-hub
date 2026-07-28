@@ -1,11 +1,20 @@
-## Causa
+Problema confirmado:
+- A transferência ainda falha por causa da coluna `origem_lead`: a edge function tenta gravar/ler `crm_deals.origem_lead`, mas essa coluna não existe no schema atual de `crm_deals`.
+- O André também está entrando como candidato de redistribuição porque o perfil `andre.duarte@...` está ativo, com role `sdr`, squad `incorporador consorcio`, e também é closer. Então ele pode ser escolhido pelo algoritmo atual.
 
-A edge `transfer-deals-to-bu` insere novos deals com `data_source: "bu_transfer"`, mas a coluna tem CHECK constraint que só permite `csv | webhook | manual | bubble | replication`. Todo insert falha e o log fica `[object Object]` porque o erro é PostgrestError, não Error.
+Plano de correção:
+1. Corrigir a edge function `transfer-deals-to-bu`
+   - Remover qualquer uso de `origem_lead` no select/update/insert.
+   - Manter rastreabilidade por `replicated_from_deal_id`, `replicated_at`, `data_source = 'replication'`, tags e activity `bu_transfer`.
 
-## Correção
+2. Travar a distribuição automática de Consórcio
+   - Para destino `consorcio`, permitir somente Cleiton e Ithaline como SDRs elegíveis.
+   - Excluir André e qualquer outro perfil com role/registro de closer da lista automática de Consórcio.
 
-1. Trocar `data_source: "bu_transfer"` por `"replication"` em `supabase/functions/transfer-deals-to-bu/index.ts` (mantém rastreabilidade via `replicated_from_deal_id` + activity `bu_transfer`).
-2. Melhorar log: `console.error(..., JSON.stringify(err))` para que futuros erros apareçam legíveis.
-3. Redeploy da função.
+3. Ajustar o dropdown manual do diálogo
+   - Na tela de transferência, esconder André da lista de SDR responsável quando a BU destino for Consórcio.
+   - Usar a mesma regra da edge function para evitar divergência entre UI e backend.
 
-Sem migração de banco, sem mudanças de UI.
+4. Republicar e validar
+   - Deploy da edge `transfer-deals-to-bu`.
+   - Testar uma chamada controlada para confirmar que não retorna mais erro `origem_lead` e que o SDR atribuído em Consórcio é Cleiton ou Ithaline.
