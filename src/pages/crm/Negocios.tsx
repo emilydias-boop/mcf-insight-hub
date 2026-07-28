@@ -11,6 +11,7 @@ import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { BulkTransferDialog } from '@/components/crm/BulkTransferDialog';
+import { BulkBUTransferDialog } from '@/components/crm/BulkBUTransferDialog';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { PipelineConfigModal } from '@/components/crm/PipelineConfigModal';
 import { CreatePipelineWizard } from '@/components/crm/wizard/CreatePipelineWizard';
@@ -93,6 +94,7 @@ const Negocios = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
+  const [buTransferDialogOpen, setBuTransferDialogOpen] = useState(false);
   const [addTagDialogOpen, setAddTagDialogOpen] = useState(false);
   const [distributeSdrsDialogOpen, setDistributeSdrsDialogOpen] = useState(false);
   const [setTemperatureDialogOpen, setSetTemperatureDialogOpen] = useState(false);
@@ -930,6 +932,7 @@ const Negocios = () => {
         isDeleting={bulkDelete.isPending}
         onMoveStage={() => setMoveStageDialogOpen(true)}
         onMovePipeline={() => setMovePipelineDialogOpen(true)}
+        onTransferToBU={() => setBuTransferDialogOpen(true)}
         onAddTag={() => setAddTagDialogOpen(true)}
         onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
         onSetTemperature={() => setSetTemperatureDialogOpen(true)}
@@ -972,6 +975,14 @@ const Negocios = () => {
       <BulkTransferDialog
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Dialog de transferência entre BUs */}
+      <BulkBUTransferDialog
+        open={buTransferDialogOpen}
+        onOpenChange={setBuTransferDialogOpen}
         selectedDealIds={Array.from(selectedDealIds)}
         onSuccess={handleClearSelection}
       />
