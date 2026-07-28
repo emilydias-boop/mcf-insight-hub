@@ -303,7 +303,6 @@ serve(async (req) => {
             owner_id: sdr?.email ?? null,
             owner_profile_id: sdr?.profile_id ?? null,
             tags: sourceTags,
-            origem_lead: deal.origem_lead ?? null,
             replicated_from_deal_id: deal.id,
             replicated_at: new Date().toISOString(),
             data_source: "replication",
