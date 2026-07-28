@@ -3,6 +3,9 @@ project_id = "rehcfgqvigfcekiipqkc"
 [functions.delete-user]
 verify_jwt = false
 
+[functions.transfer-deals-to-bu]
+verify_jwt = false
+
 [functions.nfse-download]
 verify_jwt = false
 

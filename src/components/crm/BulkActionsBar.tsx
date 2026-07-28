@@ -13,6 +13,7 @@ import {
   Download,
   Shuffle,
   Thermometer,
+  Building2,
 } from 'lucide-react';
 
 interface BulkActionsBarProps {
@@ -35,6 +36,7 @@ interface BulkActionsBarProps {
   onExportSelected?: () => void;
   onDistributeSdrs?: () => void;
   onSetTemperature?: () => void;
+  onTransferToBU?: () => void;
 }
 
 export const BulkActionsBar = ({
@@ -57,6 +59,7 @@ export const BulkActionsBar = ({
   onExportSelected,
   onDistributeSdrs,
   onSetTemperature,
+  onTransferToBU,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -137,6 +140,19 @@ export const BulkActionsBar = ({
               <FolderOutput className="h-4 w-4" />
             )}
             Mover Pipeline
+          </Button>
+        )}
+
+        {onTransferToBU && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onTransferToBU}
+            disabled={isTransferring || isDuplicating || isMovingStage || isMovingPipeline}
+            className="gap-2"
+          >
+            <Building2 className="h-4 w-4" />
+            Transferir para BU
           </Button>
         )}
 

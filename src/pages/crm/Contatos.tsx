@@ -18,6 +18,7 @@ import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
 import { SendToPipelineModal } from '@/components/crm/SendToPipelineModal';
 import { DuplicateToInsideDialog } from '@/components/crm/DuplicateToInsideDialog';
 import { BulkTransferDialog } from '@/components/crm/BulkTransferDialog';
+import { BulkBUTransferDialog } from '@/components/crm/BulkBUTransferDialog';
 import { BulkMoveStageDialog } from '@/components/crm/BulkMoveStageDialog';
 import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
@@ -56,6 +57,7 @@ const Contatos = () => {
   const [changeOwnerDialogOpen, setChangeOwnerDialogOpen] = useState(false);
   const [moveStageDialogOpen, setMoveStageDialogOpen] = useState(false);
   const [movePipelineDialogOpen, setMovePipelineDialogOpen] = useState(false);
+  const [buTransferDialogOpen, setBuTransferDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -479,11 +481,19 @@ const Contatos = () => {
             isChangingOwner={bulkTransfer.isPending}
             onMoveStage={!restrictedToTransfer && selectedDealIds.length > 0 && commonOriginId ? () => setMoveStageDialogOpen(true) : undefined}
             onMovePipeline={!restrictedToTransfer && selectedDealIds.length > 0 ? () => setMovePipelineDialogOpen(true) : undefined}
+            onTransferToBU={!restrictedToTransfer && selectedDealIds.length > 0 ? () => setBuTransferDialogOpen(true) : undefined}
           />
 
           <BulkTransferDialog
             open={changeOwnerDialogOpen}
             onOpenChange={setChangeOwnerDialogOpen}
+            selectedDealIds={selectedDealIds}
+            onSuccess={() => setSelectedIds(new Set())}
+          />
+
+          <BulkBUTransferDialog
+            open={buTransferDialogOpen}
+            onOpenChange={setBuTransferDialogOpen}
             selectedDealIds={selectedDealIds}
             onSuccess={() => setSelectedIds(new Set())}
           />
