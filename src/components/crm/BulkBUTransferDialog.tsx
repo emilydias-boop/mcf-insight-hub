@@ -21,6 +21,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useBUTransfer, BU_TRANSFER_OPTIONS, TargetBU } from "@/hooks/useBUTransfer";
 
+const CONSORCIO_TARGET_SDR_PROFILE_IDS = new Set([
+  "16828627-136e-42ef-9623-62dedfbc9d89", // Cleiton Anacleto Lima
+  "411e4b5d-8183-4d6a-b841-88c71d50955f", // Ithaline Clara dos Santos
+]);
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,12 +58,20 @@ export const BulkBUTransferDialog = ({
     },
   });
 
+  const availableSdrs = useMemo(
+    () =>
+      targetBU === "consorcio"
+        ? sdrs.filter((s) => CONSORCIO_TARGET_SDR_PROFILE_IDS.has(s.id))
+        : sdrs,
+    [sdrs, targetBU]
+  );
+
   const sortedSdrs = useMemo(
     () =>
-      [...sdrs].sort((a, b) =>
+      [...availableSdrs].sort((a, b) =>
         (a.full_name || a.email).localeCompare(b.full_name || b.email)
       ),
-    [sdrs]
+    [availableSdrs]
   );
 
   const handleConfirm = async () => {
@@ -92,7 +105,13 @@ export const BulkBUTransferDialog = ({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>BU destino</Label>
-            <Select value={targetBU} onValueChange={(v) => setTargetBU(v as TargetBU)}>
+            <Select
+              value={targetBU}
+              onValueChange={(v) => {
+                setTargetBU(v as TargetBU);
+                setSdrProfileId("auto");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione a BU destino" />
               </SelectTrigger>

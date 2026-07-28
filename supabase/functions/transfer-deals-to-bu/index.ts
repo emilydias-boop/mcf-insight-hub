@@ -20,6 +20,11 @@ const BU_TARGETS: Record<string, { origin_id: string; stage_id: string; label: s
   },
 };
 
+const CONSORCIO_TARGET_SDR_PROFILE_IDS = new Set([
+  "16828627-136e-42ef-9623-62dedfbc9d89", // Cleiton Anacleto Lima
+  "411e4b5d-8183-4d6a-b841-88c71d50955f", // Ithaline Clara dos Santos
+]);
+
 interface Body {
   deal_ids: string[];
   target_bu: string;
@@ -35,12 +40,19 @@ async function pickLeastLoadedSdr(
   targetBU: string
 ): Promise<{ profile_id: string; email: string; full_name: string | null } | null> {
   // SDRs cujo squad contém a BU destino e access_status = ativo
-  const { data: candidates } = await supabase
+  const { data: rawCandidates } = await supabase
     .from("profiles")
     .select("id, email, full_name, squad, access_status, user_roles!inner(role)")
     .eq("access_status", "ativo")
     .contains("squad", [targetBU])
     .eq("user_roles.role", "sdr");
+
+  const candidates =
+    targetBU === "consorcio"
+      ? (rawCandidates || []).filter((candidate: any) =>
+          CONSORCIO_TARGET_SDR_PROFILE_IDS.has(candidate.id)
+        )
+      : rawCandidates || [];
 
   if (!candidates || candidates.length === 0) return null;
 
@@ -97,7 +109,7 @@ async function findExistingDealInOrigin(
 
   const { data: deals } = await supabase
     .from("crm_deals")
-    .select("id, tags, origem_lead, stage_id, owner_id, owner_profile_id, name")
+    .select("id, tags, stage_id, owner_id, owner_profile_id, name")
     .in("contact_id", Array.from(contactIds))
     .eq("origin_id", targetOriginId)
     .is("archived_at", null)
@@ -139,6 +151,18 @@ serve(async (req) => {
       | { profile_id: string; email: string; full_name: string | null }
       | null = null;
     if (target_sdr_profile_id) {
+      if (target_bu === "consorcio" && !CONSORCIO_TARGET_SDR_PROFILE_IDS.has(target_sdr_profile_id)) {
+        return new Response(
+          JSON.stringify({
+            error: "SDR destino inválido para Consórcio. Use Cleiton ou Ithaline.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const { data: p } = await supabase
         .from("profiles")
         .select("id, email, full_name")
@@ -213,7 +237,6 @@ serve(async (req) => {
             tags: mergedTags,
             stage_id: target.stage_id, // move to Novo Lead (Form)
           };
-          if (deal.origem_lead) update.origem_lead = deal.origem_lead;
           if (sdr) {
             update.owner_id = sdr.email;
             update.owner_profile_id = sdr.profile_id;
@@ -280,7 +303,6 @@ serve(async (req) => {
             owner_id: sdr?.email ?? null,
             owner_profile_id: sdr?.profile_id ?? null,
             tags: sourceTags,
-            origem_lead: deal.origem_lead ?? null,
             replicated_from_deal_id: deal.id,
             replicated_at: new Date().toISOString(),
             data_source: "replication",
