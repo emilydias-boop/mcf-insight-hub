@@ -151,6 +151,18 @@ serve(async (req) => {
       | { profile_id: string; email: string; full_name: string | null }
       | null = null;
     if (target_sdr_profile_id) {
+      if (target_bu === "consorcio" && !CONSORCIO_TARGET_SDR_PROFILE_IDS.has(target_sdr_profile_id)) {
+        return new Response(
+          JSON.stringify({
+            error: "SDR destino inválido para Consórcio. Use Cleiton ou Ithaline.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const { data: p } = await supabase
         .from("profiles")
         .select("id, email, full_name")
@@ -225,7 +237,6 @@ serve(async (req) => {
             tags: mergedTags,
             stage_id: target.stage_id, // move to Novo Lead (Form)
           };
-          if (deal.origem_lead) update.origem_lead = deal.origem_lead;
           if (sdr) {
             update.owner_id = sdr.email;
             update.owner_profile_id = sdr.profile_id;
