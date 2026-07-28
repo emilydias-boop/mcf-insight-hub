@@ -283,7 +283,7 @@ serve(async (req) => {
             origem_lead: deal.origem_lead ?? null,
             replicated_from_deal_id: deal.id,
             replicated_at: new Date().toISOString(),
-            data_source: "bu_transfer",
+            data_source: "replication",
             clint_id: `bu-transfer-${deal.id}-${target.origin_id}`,
           };
 
@@ -341,7 +341,12 @@ serve(async (req) => {
         }
       } catch (err) {
         failed++;
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : typeof err === "object" && err !== null
+              ? JSON.stringify(err)
+              : String(err);
         console.error(`transfer-deals-to-bu error on ${deal_id}:`, msg);
         results.push({ deal_id, success: false, error: msg });
       }
