@@ -38,6 +38,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus, useUpdateInstallment } from "@/hooks/useConsorcio";
+import { DeleteCartaDialog } from "@/components/consorcio/DeleteCartaDialog";
 import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
 import { recalcularDatasAPartirDe } from "@/lib/businessDays";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,6 +108,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const payInstallment = usePayInstallment();
   const updateInstallment = useUpdateInstallment();
   const deleteCard = useDeleteConsorcioCard();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
   const queryClient = useQueryClient();
