@@ -38,6 +38,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus, useUpdateInstallment } from "@/hooks/useConsorcio";
+import { DeleteCartaDialog } from "@/components/consorcio/DeleteCartaDialog";
 import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
 import { recalcularDatasAPartirDe } from "@/lib/businessDays";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,6 +108,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const payInstallment = usePayInstallment();
   const updateInstallment = useUpdateInstallment();
   const deleteCard = useDeleteConsorcioCard();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
   const queryClient = useQueryClient();
@@ -148,9 +150,10 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     setPendingPayInstallment(null);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (motivo: string) => {
     if (cardId) {
-      await deleteCard.mutateAsync(cardId);
+      await deleteCard.mutateAsync({ cardId, motivo });
+      setDeleteOpen(false);
       onOpenChange(false);
     }
   };
@@ -763,27 +766,18 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                   {/* Actions */}
                   <div className="flex justify-between pt-4">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Excluir Carta
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir carta?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. A carta e todas as suas parcelas serão excluídas
-                            permanentemente.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <>
+                      <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir Carta
+                      </Button>
+                      <DeleteCartaDialog
+                        open={deleteOpen}
+                        onOpenChange={setDeleteOpen}
+                        onConfirm={handleDelete}
+                        isDeleting={deleteCard.isPending}
+                      />
+                    </>
 
                     <Button variant="outline" onClick={() => setEditFormOpen(true)}>
                       <Edit className="h-4 w-4 mr-2" />

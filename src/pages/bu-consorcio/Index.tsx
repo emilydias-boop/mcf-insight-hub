@@ -42,6 +42,7 @@ import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions'
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
+import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
 import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
@@ -159,6 +160,7 @@ export default function ConsorcioPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [configOpen, setConfigOpen] = useState(false);
@@ -263,8 +265,9 @@ export default function ConsorcioPage() {
     setFormOpen(true);
   };
 
-  const handleDeleteCard = async (cardId: string) => {
-    await deleteCard.mutateAsync(cardId);
+  const handleDeleteCard = async (cardId: string, motivo: string) => {
+    await deleteCard.mutateAsync({ cardId, motivo });
+    setDeletingCardId(null);
   };
 
   const handleDuplicateCard = (card: ConsorcioCard) => {
@@ -874,32 +877,18 @@ export default function ConsorcioPage() {
                           >
                             <Copy className="h-4 w-4" />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir carta?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta ação não pode ser desfeita. A carta e todas as suas parcelas serão excluídas permanentemente.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteCard(card.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Excluir carta"
+                            className="text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingCardId(card.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1004,6 +993,13 @@ export default function ConsorcioPage() {
         cardId={selectedCardId} 
         open={drawerOpen} 
         onOpenChange={setDrawerOpen} 
+      />
+
+      <DeleteCartaDialog
+        open={!!deletingCardId}
+        onOpenChange={(v) => !v && setDeletingCardId(null)}
+        isDeleting={deleteCard.isPending}
+        onConfirm={(motivo) => deletingCardId && handleDeleteCard(deletingCardId, motivo)}
       />
 
       {/* Config Modal */}

@@ -89,6 +89,10 @@ export interface Proposal {
   motivo_recusa: string | null;
   consortium_card_id: string | null;
   origin_id: string;
+  carta_excluida?: boolean;
+  carta_excluida_em?: string | null;
+  carta_excluida_por_nome?: string | null;
+  carta_excluida_motivo?: string | null;
   created_at: string;
   closer_name: string;
   documentos_pendentes?: boolean;
@@ -240,6 +244,10 @@ export function useProposals() {
           aceite_date,
           motivo_recusa,
           consortium_card_id,
+          carta_excluida,
+          carta_excluida_em,
+          carta_excluida_por_nome,
+          carta_excluida_motivo,
           created_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
@@ -389,6 +397,10 @@ export function useProposals() {
         aceite_date: p.aceite_date,
         motivo_recusa: p.motivo_recusa,
         consortium_card_id: p.consortium_card_id,
+        carta_excluida: (p as any).carta_excluida || false,
+        carta_excluida_em: (p as any).carta_excluida_em || null,
+        carta_excluida_por_nome: (p as any).carta_excluida_por_nome || null,
+        carta_excluida_motivo: (p as any).carta_excluida_motivo || null,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
         closer_name: (() => {
