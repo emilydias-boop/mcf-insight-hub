@@ -545,7 +545,42 @@ export function useDeleteConsorcioCard() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (cardId: string) => {
+    mutationFn: async (input: string | { cardId: string; motivo: string }) => {
+      const cardId = typeof input === 'string' ? input : input.cardId;
+      const motivo = typeof input === 'string' ? '' : (input.motivo || '').trim();
+
+      if (motivo.length < 15) {
+        throw new Error('A justificativa deve ter ao menos 15 caracteres.');
+      }
+
+      // Identifica o usuário que está excluindo (para registro na proposta)
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id ?? null;
+      let userName: string | null = null;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', userId)
+          .maybeSingle();
+        userName = (profile as any)?.full_name ?? null;
+      }
+
+      // Sinaliza nas propostas negociadas vinculadas que a carta foi excluída
+      const { error: propError } = await supabase
+        .from('consorcio_proposals')
+        .update({
+          carta_excluida: true,
+          carta_excluida_em: new Date().toISOString(),
+          carta_excluida_por: userId,
+          carta_excluida_por_nome: userName,
+          carta_excluida_motivo: motivo,
+        } as any)
+        .eq('consortium_card_id', cardId);
+
+      if (propError) throw propError;
+
+      // O vínculo (consortium_card_id) é desfeito automaticamente via ON DELETE SET NULL
       const { error } = await supabase
         .from('consortium_cards')
         .delete()
@@ -556,11 +591,12 @@ export function useDeleteConsorcioCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       toast.success('Carta excluída com sucesso!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erro ao excluir carta:', error);
-      toast.error('Erro ao excluir carta');
+      toast.error(`Erro ao excluir carta: ${error?.message || 'Erro desconhecido'}`);
     },
   });
 }
