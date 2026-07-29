@@ -4837,7 +4837,7 @@ export type Database = {
           after_value: Json | null
           before_value: Json | null
           boleto_id: string | null
-          card_id: string
+          card_id: string | null
           created_at: string
           description: string
           document_id: string | null
@@ -4854,7 +4854,7 @@ export type Database = {
           after_value?: Json | null
           before_value?: Json | null
           boleto_id?: string | null
-          card_id: string
+          card_id?: string | null
           created_at?: string
           description: string
           document_id?: string | null
@@ -4871,7 +4871,7 @@ export type Database = {
           after_value?: Json | null
           before_value?: Json | null
           boleto_id?: string | null
-          card_id?: string
+          card_id?: string | null
           created_at?: string
           description?: string
           document_id?: string | null
