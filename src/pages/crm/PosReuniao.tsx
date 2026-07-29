@@ -548,6 +548,11 @@ function PropostasTab() {
                           Carta excluída
                         </Badge>
                       )}
+                      {(p as any).carta_excluida && (p as any).carta_excluida_motivo && (
+                        <span className="text-[11px] text-muted-foreground italic max-w-[220px] block">
+                          "{(p as any).carta_excluida_motivo}"
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{p.closer_name || '—'}</TableCell>
