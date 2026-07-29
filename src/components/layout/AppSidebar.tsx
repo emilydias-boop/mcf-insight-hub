@@ -196,6 +196,16 @@ const menuItems: MenuItem[] = [
 
 
   // BU - MARKETING (seção inteira removida do menu — rotas mantidas comentadas em App.tsx para rollback)
+  // BU - MCF SOLAR
+  {
+    title: "BU - MCF SOLAR",
+    icon: Building2,
+    requiredRoles: ["admin", "manager", "coordenador"],
+    items: [
+      { title: "CRM", url: "/solar/crm" },
+    ],
+  },
+
   // {
   //   title: "BU - Marketing",
   //   icon: Megaphone,
@@ -354,11 +364,12 @@ const BU_CRM_BASE_PATH: Partial<Record<BusinessUnit, string>> = {
   incorporador: '/crm',
   consorcio: '/consorcio/crm',
   marketing: '/bu-marketing',
+  solar: '/solar/crm',
 };
 
 // Helper para resolver o base path do CRM baseado nas BUs do usuário
 const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
-  const buPriority: BusinessUnit[] = ['consorcio', 'marketing'];
+  const buPriority: BusinessUnit[] = ['consorcio', 'solar', 'marketing'];
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {
