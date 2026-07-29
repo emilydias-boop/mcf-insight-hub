@@ -148,9 +148,10 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     setPendingPayInstallment(null);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (motivo: string) => {
     if (cardId) {
-      await deleteCard.mutateAsync(cardId);
+      await deleteCard.mutateAsync({ cardId, motivo });
+      setDeleteOpen(false);
       onOpenChange(false);
     }
   };
@@ -763,27 +764,18 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                   {/* Actions */}
                   <div className="flex justify-between pt-4">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Excluir Carta
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir carta?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. A carta e todas as suas parcelas serão excluídas
-                            permanentemente.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <>
+                      <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir Carta
+                      </Button>
+                      <DeleteCartaDialog
+                        open={deleteOpen}
+                        onOpenChange={setDeleteOpen}
+                        onConfirm={handleDelete}
+                        isDeleting={deleteCard.isPending}
+                      />
+                    </>
 
                     <Button variant="outline" onClick={() => setEditFormOpen(true)}>
                       <Edit className="h-4 w-4 mr-2" />
