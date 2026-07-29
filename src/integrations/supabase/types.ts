@@ -4502,6 +4502,11 @@ export type Database = {
           aceite_date: string | null
           aguardando_retorno: boolean
           aguardando_retorno_until: string | null
+          carta_excluida: boolean
+          carta_excluida_em: string | null
+          carta_excluida_motivo: string | null
+          carta_excluida_por: string | null
+          carta_excluida_por_nome: string | null
           consortium_card_id: string | null
           created_at: string | null
           created_by: string | null
@@ -4525,6 +4530,11 @@ export type Database = {
           aceite_date?: string | null
           aguardando_retorno?: boolean
           aguardando_retorno_until?: string | null
+          carta_excluida?: boolean
+          carta_excluida_em?: string | null
+          carta_excluida_motivo?: string | null
+          carta_excluida_por?: string | null
+          carta_excluida_por_nome?: string | null
           consortium_card_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -4548,6 +4558,11 @@ export type Database = {
           aceite_date?: string | null
           aguardando_retorno?: boolean
           aguardando_retorno_until?: string | null
+          carta_excluida?: boolean
+          carta_excluida_em?: string | null
+          carta_excluida_motivo?: string | null
+          carta_excluida_por?: string | null
+          carta_excluida_por_nome?: string | null
           consortium_card_id?: string | null
           created_at?: string | null
           created_by?: string | null
