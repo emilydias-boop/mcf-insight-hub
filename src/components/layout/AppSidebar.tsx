@@ -354,11 +354,12 @@ const BU_CRM_BASE_PATH: Partial<Record<BusinessUnit, string>> = {
   incorporador: '/crm',
   consorcio: '/consorcio/crm',
   marketing: '/bu-marketing',
+  solar: '/solar/crm',
 };
 
 // Helper para resolver o base path do CRM baseado nas BUs do usuário
 const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
-  const buPriority: BusinessUnit[] = ['consorcio', 'marketing'];
+  const buPriority: BusinessUnit[] = ['consorcio', 'solar', 'marketing'];
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {
