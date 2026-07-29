@@ -46,6 +46,10 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
     'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
   marketing: [],
+  solar: [
+    'visao-geral', 'contatos', 'negocios',
+    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
+  ],
 };
 
 interface BUCRMLayoutProps {
@@ -79,6 +83,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     projetos: 'Projetos',
     leilao: 'Leilão',
     marketing: 'Marketing',
+    solar: 'MCF Solar',
   };
   
   // Redirecionar para agenda se for role restrita
