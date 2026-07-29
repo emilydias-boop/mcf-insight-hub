@@ -539,6 +539,15 @@ function PropostasTab() {
                           Documento pendente
                         </Badge>
                       )}
+                      {(p as any).carta_excluida && (
+                        <Badge
+                          variant="destructive"
+                          className="text-xs cursor-help"
+                          title={`Carta excluída${(p as any).carta_excluida_em ? ' em ' + new Date((p as any).carta_excluida_em).toLocaleString('pt-BR') : ''}${(p as any).carta_excluida_por_nome ? ' por ' + (p as any).carta_excluida_por_nome : ''}\nJustificativa: ${(p as any).carta_excluida_motivo || '—'}`}
+                        >
+                          Carta excluída
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{p.closer_name || '—'}</TableCell>
