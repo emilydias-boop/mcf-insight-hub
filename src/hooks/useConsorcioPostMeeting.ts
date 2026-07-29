@@ -397,6 +397,10 @@ export function useProposals() {
         aceite_date: p.aceite_date,
         motivo_recusa: p.motivo_recusa,
         consortium_card_id: p.consortium_card_id,
+        carta_excluida: (p as any).carta_excluida || false,
+        carta_excluida_em: (p as any).carta_excluida_em || null,
+        carta_excluida_por_nome: (p as any).carta_excluida_por_nome || null,
+        carta_excluida_motivo: (p as any).carta_excluida_motivo || null,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
         closer_name: (() => {
