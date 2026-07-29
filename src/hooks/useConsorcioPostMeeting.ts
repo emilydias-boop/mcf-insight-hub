@@ -89,6 +89,10 @@ export interface Proposal {
   motivo_recusa: string | null;
   consortium_card_id: string | null;
   origin_id: string;
+  carta_excluida?: boolean;
+  carta_excluida_em?: string | null;
+  carta_excluida_por_nome?: string | null;
+  carta_excluida_motivo?: string | null;
   created_at: string;
   closer_name: string;
   documentos_pendentes?: boolean;
