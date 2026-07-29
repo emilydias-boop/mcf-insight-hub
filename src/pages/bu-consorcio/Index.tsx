@@ -42,6 +42,7 @@ import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions'
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
+import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
 import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
@@ -159,6 +160,7 @@ export default function ConsorcioPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [configOpen, setConfigOpen] = useState(false);
@@ -991,6 +993,13 @@ export default function ConsorcioPage() {
         cardId={selectedCardId} 
         open={drawerOpen} 
         onOpenChange={setDrawerOpen} 
+      />
+
+      <DeleteCartaDialog
+        open={!!deletingCardId}
+        onOpenChange={(v) => !v && setDeletingCardId(null)}
+        isDeleting={deleteCard.isPending}
+        onConfirm={(motivo) => deletingCardId && handleDeleteCard(deletingCardId, motivo)}
       />
 
       {/* Config Modal */}
