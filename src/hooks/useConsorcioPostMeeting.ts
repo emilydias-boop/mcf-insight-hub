@@ -244,6 +244,10 @@ export function useProposals() {
           aceite_date,
           motivo_recusa,
           consortium_card_id,
+          carta_excluida,
+          carta_excluida_em,
+          carta_excluida_por_nome,
+          carta_excluida_motivo,
           created_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
