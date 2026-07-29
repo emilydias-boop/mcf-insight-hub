@@ -19,6 +19,7 @@ const BU_OPTIONS: { value: BusinessUnit; label: string; short: string }[] = [
   { value: 'projetos', label: 'BU - Projetos', short: 'Projetos' },
   { value: 'leilao', label: 'BU - Leilão', short: 'Leilão' },
   { value: 'marketing', label: 'BU - Marketing', short: 'Marketing' },
+  { value: 'solar', label: 'BU - MCF Solar', short: 'Solar' },
 ];
 
 interface OriginItem {
