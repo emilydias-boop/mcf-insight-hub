@@ -196,6 +196,16 @@ const menuItems: MenuItem[] = [
 
 
   // BU - MARKETING (seção inteira removida do menu — rotas mantidas comentadas em App.tsx para rollback)
+  // BU - MCF SOLAR
+  {
+    title: "BU - MCF SOLAR",
+    icon: Building2,
+    requiredRoles: ["admin", "manager", "coordenador"],
+    items: [
+      { title: "CRM", url: "/solar/crm" },
+    ],
+  },
+
   // {
   //   title: "BU - Marketing",
   //   icon: Megaphone,
