@@ -263,8 +263,9 @@ export default function ConsorcioPage() {
     setFormOpen(true);
   };
 
-  const handleDeleteCard = async (cardId: string) => {
-    await deleteCard.mutateAsync(cardId);
+  const handleDeleteCard = async (cardId: string, motivo: string) => {
+    await deleteCard.mutateAsync({ cardId, motivo });
+    setDeletingCardId(null);
   };
 
   const handleDuplicateCard = (card: ConsorcioCard) => {
@@ -874,32 +875,18 @@ export default function ConsorcioPage() {
                           >
                             <Copy className="h-4 w-4" />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir carta?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta ação não pode ser desfeita. A carta e todas as suas parcelas serão excluídas permanentemente.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteCard(card.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Excluir carta"
+                            className="text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingCardId(card.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
