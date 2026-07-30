@@ -401,7 +401,12 @@ export default function ReunioesEquipe() {
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
   // Fetch Closer metrics for the selected period
-  const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
+  const {
+    data: closerMetrics,
+    isLoading: closerLoading,
+    error: closerError,
+    refetch: refetchCloserMetrics,
+  } = useR1CloserMetrics(start, end);
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
   // — usado para a média individual entre Closers nos cards de Taxa.
