@@ -541,13 +541,8 @@ export function useMarkPendingAsCadastrada() {
         .select('id, consortium_card_id, proposal_id')
         .maybeSingle();
       if (error) throw error;
-      if ((data as any)?.consortium_card_id) {
-        dispatchCartaCadastradaWebhook({
-          cardId: (data as any).consortium_card_id,
-          registrationId,
-          proposalId: (data as any).proposal_id ?? null,
-        }).catch(() => {});
-      }
+      // Webhook do Make NÃO é disparado aqui: o gatilho único é o cadastro
+      // dos dados da cota pelo Closer em "Cartas Negociadas".
     },
     onSuccess: () => {
       toast.success('Cadastro movido para "Cadastradas"');
