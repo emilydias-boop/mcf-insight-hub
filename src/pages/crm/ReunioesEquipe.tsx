@@ -973,6 +973,22 @@ export default function ReunioesEquipe() {
           </Tabs>
         </CardHeader>
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
+          {((activeTab === "sdrs" && teamError) || (activeTab === "closers" && closerError)) && (
+            <div className="mx-3 sm:mx-0 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs sm:text-sm text-destructive flex items-center justify-between gap-3">
+              <span>Não foi possível carregar os números desta aba.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  refetch();
+                  refetchCloserMetrics();
+                }}
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Tentar novamente
+              </Button>
+            </div>
+          )}
           {activeTab === "sdrs" ? (
             <SdrSummaryTable
               data={filteredBySDRWithRefunds}
