@@ -85,78 +85,80 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   };
   
   return (
-    <div className="rounded-lg border border-border bg-secondary/30 p-2">
-      <div className="flex items-center justify-between mb-1.5">
-        <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Contato</h3>
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contato</h3>
         <Button
           size="icon"
           variant="ghost"
-          className="h-5 w-5 text-muted-foreground hover:text-primary"
+          className="h-6 w-6 text-muted-foreground hover:text-primary"
           onClick={() => setShowEditDialog(true)}
         >
-          <Pencil className="h-3 w-3" />
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
       </div>
-      
-      {/* Layout inline compacto */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        {/* Nome */}
-        {contact?.name && (
-          <span className="font-medium text-foreground">{contact.name}</span>
-        )}
-        
+
+      {/* Nome em destaque */}
+      {contact?.name && (
+        <div className="text-base font-semibold text-foreground leading-tight mb-2">
+          {contact.name}
+        </div>
+      )}
+
+      {/* Layout inline com fonte maior */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         {/* Email clicável */}
         {contact?.email && (
-          <a 
-            href={`mailto:${contact.email}`} 
-            className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+          <a
+            href={`mailto:${contact.email}`}
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
           >
-            <Mail className="h-3 w-3" />
-            <span className="truncate max-w-[180px]">{contact.email}</span>
+            <Mail className="h-4 w-4 text-primary/80" />
+            <span className="truncate max-w-[220px] font-medium">{contact.email}</span>
           </a>
         )}
-        
+
         {/* Telefone editável */}
-        <div className="flex items-center gap-1">
-          <Phone className="h-3 w-3 text-muted-foreground" />
+        <div className="flex items-center gap-1.5">
+          <Phone className="h-4 w-4 text-primary/80" />
           {editingPhone ? (
             <div className="flex items-center gap-1">
               <Input
                 value={phoneValue}
                 onChange={(e) => setPhoneValue(e.target.value)}
                 placeholder="+5511999990001"
-                className="h-6 w-32 text-xs bg-background"
+                className="h-7 w-36 text-sm bg-background"
               />
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-5 w-5 text-primary hover:text-primary/80"
+                className="h-6 w-6 text-primary hover:text-primary/80"
                 onClick={handleSavePhone}
                 disabled={updateContact.isPending}
               >
-                <Check className="h-3 w-3" />
+                <Check className="h-3.5 w-3.5" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-5 w-5 text-destructive hover:text-destructive/80"
+                className="h-6 w-6 text-destructive hover:text-destructive/80"
                 onClick={handleCancelEditPhone}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </Button>
             </div>
           ) : (
             <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">
+              <span className="text-foreground font-medium">
                 {displayPhone || 'Sem telefone'}
               </span>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-5 w-5"
+                className="h-6 w-6"
                 onClick={handleStartEditPhone}
               >
-                <Edit2 className="h-2.5 w-2.5" />
+                <Edit2 className="h-3 w-3" />
               </Button>
             </div>
           )}
