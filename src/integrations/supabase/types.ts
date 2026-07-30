@@ -14407,6 +14407,23 @@ export type Database = {
           product_name: string
         }[]
       }
+      get_outside_offer_backfill_pending: {
+        Args: { p_since?: string }
+        Returns: {
+          contact_id: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          deal_id: string
+          first_sale_date: string
+          motivo: string
+          offer_label: string
+          origin_name: string
+          owner_id: string
+          stage_name: string
+          tags: string[]
+        }[]
+      }
       get_pendentes_audit_incorporador: {
         Args: { p_end: string; p_start: string }
         Returns: Json
