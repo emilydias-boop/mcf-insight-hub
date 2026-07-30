@@ -78,10 +78,18 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       // Também incluir closers ativos da BU como agendadores válidos
       // Caso: Thaynar Tavares (closer) agenda reuniões diretamente → contrato deve ser contado
-      const closerEmails = new Set((closers || []).map(c => c.email.toLowerCase()));
+      // E-mail não é obrigatório nos cadastros legados. Um único closer/SDR sem
+      // e-mail não pode interromper o cálculo inteiro e zerar a aba de Closers.
+      const closerEmails = new Set(
+        (closers || [])
+          .map(c => c.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email))
+      );
 
       const validSdrEmails = new Set([
-        ...(sdrs || []).map(s => s.email.toLowerCase()),
+        ...(sdrs || [])
+          .map(s => s.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email)),
         ...closerEmails,
       ]);
 
@@ -391,7 +399,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           : [];
 
         const outsideContactEmailMap = new Map<string, string>();
-        outsideContacts.forEach(c => outsideContactEmailMap.set(c.id, c.email.toLowerCase()));
+        outsideContacts.forEach(c => {
+          const email = c.email?.trim().toLowerCase();
+          if (email) outsideContactEmailMap.set(c.id, email);
+        });
 
         const outsideDeals = outsideContacts.length > 0
           ? await batchedIn<{ id: string; contact_id: string }>(
