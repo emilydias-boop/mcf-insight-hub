@@ -71,42 +71,71 @@ Deno.serve(async (req) => {
     const reg = regRes.data ?? {};
     const proposal = propRes.data ?? null;
 
+    // Hierarquia de dados: registration (cadastro feito pelo Closer) → proposal → card
+    const pick = (...vals: any[]) => {
+      for (const v of vals) {
+        if (v !== undefined && v !== null && v !== "") return v;
+      }
+      return null;
+    };
+
+    const titular = pick(reg.nome_completo, reg.razao_social, card.nome_completo, card.razao_social);
+    const contato = pick(reg.email, reg.email_comercial, reg.telefone, reg.telefone_comercial, card.email, card.telefone);
+    const valorCredito = pick(reg.valor_credito, proposal?.valor_credito, card.valor_credito);
+
+    // Guarda: não enviar payload incompleto (evita eventos "vazios" no Make)
+    if (!titular || !contato || !valorCredito) {
+      const reason = !titular ? "titular ausente" : !contato ? "contato ausente" : "valor_credito ausente";
+      console.log("[carta-cadastrada-webhook] skipped:", reason, { registration_id: resolvedRegId, card_id: card_id ?? null });
+      return new Response(JSON.stringify({ success: false, skipped: true, reason }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     const payload = {
       event: "consorcio.carta.cadastrada",
       occurred_at: new Date().toISOString(),
       lead: {
-        nome_completo: reg.nome_completo ?? card.nome_completo ?? null,
-        email: reg.email ?? card.email ?? null,
-        telefone: reg.telefone ?? card.telefone ?? null,
-        cpf: reg.cpf ?? card.cpf ?? null,
-        tipo_pessoa: reg.tipo_pessoa ?? card.tipo_pessoa ?? null,
-        razao_social: reg.razao_social ?? card.razao_social ?? null,
-        cnpj: reg.cnpj ?? card.cnpj ?? null,
+        nome_completo: pick(reg.nome_completo, card.nome_completo),
+        email: pick(reg.email, reg.email_comercial, card.email),
+        telefone: pick(reg.telefone, reg.telefone_comercial, card.telefone),
+        cpf: pick(reg.cpf, card.cpf),
+        tipo_pessoa: pick(reg.tipo_pessoa, card.tipo_pessoa),
+        razao_social: pick(reg.razao_social, card.razao_social),
+        cnpj: pick(reg.cnpj, card.cnpj),
       },
       carta: {
-        card_id: card.id,
-        valor_credito: card.valor_credito ?? null,
-        tipo_produto: card.tipo_produto ?? null,
-        produto_codigo: card.produto_embracon ?? null,
-        categoria: card.categoria ?? null,
-        grupo: card.grupo ?? null,
-        cota: card.cota ?? null,
-        prazo_meses: card.prazo_meses ?? null,
-        data_contratacao: card.data_contratacao ?? null,
-        dia_vencimento: card.dia_vencimento ?? null,
-        condicao_pagamento: card.condicao_pagamento ?? null,
-        inclui_seguro: card.inclui_seguro_vida ?? null,
-        vendedor_name: card.vendedor_name ?? null,
-        origem: card.origem ?? null,
-        origem_detalhe: card.origem_detalhe ?? null,
-        e_transferencia: card.e_transferencia ?? null,
-        valor_comissao: card.valor_comissao ?? null,
-        observacoes: card.observacoes ?? null,
+        card_id: card.id ?? null,
+        valor_credito: valorCredito,
+        tipo_produto: pick(reg.tipo_produto, proposal?.tipo_produto, card.tipo_produto),
+        produto_codigo: pick(reg.produto_codigo, card.produto_embracon),
+        categoria: pick(reg.categoria, card.categoria),
+        grupo: pick(reg.grupo, card.grupo),
+        cota: pick(reg.cota, card.cota),
+        prazo_meses: pick(reg.prazo_meses, proposal?.prazo_meses, card.prazo_meses),
+        data_contratacao: pick(reg.data_contratacao, card.data_contratacao),
+        dia_vencimento: pick(reg.dia_vencimento, card.dia_vencimento),
+        condicao_pagamento: pick(reg.condicao_pagamento, card.condicao_pagamento),
+        inclui_seguro: reg.inclui_seguro ?? card.inclui_seguro_vida ?? null,
+        empresa_paga_parcelas: pick(reg.empresa_paga_parcelas),
+        tipo_contrato: pick(reg.tipo_contrato),
+        parcelas_pagas_empresa: reg.parcelas_pagas_empresa ?? null,
+        inicio_segunda_parcela: pick(reg.inicio_segunda_parcela),
+        vendedor_name: pick(reg.vendedor_name_cota, reg.vendedor_name, card.vendedor_name),
+        origem: pick(reg.origem, card.origem),
+        origem_detalhe: pick(reg.origem_detalhe, card.origem_detalhe),
+        origem_lead: pick(proposal?.origem_lead),
+        e_transferencia: reg.e_transferencia ?? card.e_transferencia ?? null,
+        transferido_de: pick(reg.transferido_de, (card as any).transferido_de),
+        valor_comissao: reg.valor_comissao ?? card.valor_comissao ?? null,
+        observacoes: pick(reg.observacoes, card.observacoes),
       },
       proposta: proposal,
       registration: {
-        id: reg.id,
-        status: reg.status,
+        id: reg.id ?? null,
+        status: reg.status ?? null,
+        aceite_date: reg.aceite_date ?? null,
       },
     };
 
