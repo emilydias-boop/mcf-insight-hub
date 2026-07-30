@@ -683,12 +683,9 @@ export function useLinkPendingToCard() {
         .maybeSingle();
       if (error) throw error;
 
-      // 3. Disparar webhook (Concluídas - Operacional)
-      dispatchCartaCadastradaWebhook({
-        cardId: params.cardId,
-        registrationId: params.registrationId,
-        proposalId: (linked as any)?.proposal_id ?? null,
-      }).catch(() => {});
+      // 3. Webhook do Make NÃO é disparado aqui (gatilho único no cadastro
+      //    dos dados da cota em "Cartas Negociadas").
+      void linked;
     },
     onSuccess: () => {
       toast.success('Cadastro vinculado à cota existente');
@@ -1065,12 +1062,8 @@ export function useOpenCota() {
           .eq('id', registration.proposal_id);
       }
 
-      // 8. Fire-and-forget webhook to Make (Concluídas - Operacional)
-      dispatchCartaCadastradaWebhook({
-        cardId: card.id,
-        registrationId,
-        proposalId: registration.proposal_id ?? null,
-      }).catch(() => {});
+      // 8. Webhook do Make NÃO é disparado aqui (gatilho único no cadastro
+      //    dos dados da cota em "Cartas Negociadas").
 
       return card;
     },
