@@ -1375,6 +1375,7 @@ interface AutoMarkData {
 }
 
 // Ofertas que qualificam um pagamento como "Outside" (alinhado com src/hooks/outsideOfferConstants.ts)
+// Fallback estático — a fonte de verdade é a tabela public.outside_offers
 const OUTSIDE_OFFER_NAMES = [
   'Contrato - Curso R$ 97,00',
   'Contrato Perfil A - Vitrine A010',
@@ -1385,6 +1386,38 @@ function isOutsideOffer(offerName: string | null | undefined): boolean {
   if (!offerName) return false;
   const normalized = offerName.toLowerCase().trim();
   return OUTSIDE_OFFER_NAMES.some(n => n.toLowerCase() === normalized);
+}
+
+// Consulta a tabela configurável de ofertas Outside (nome OU offer_id).
+// Em caso de erro/tabela vazia, cai no fallback estático por nome.
+async function isOutsideOfferDb(
+  supabase: any,
+  offerName: string | null | undefined,
+  offerId?: string | null,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('outside_offers')
+      .select('offer_name, offer_id')
+      .eq('is_active', true);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      const normalizedName = (offerName || '').toLowerCase().trim();
+      const normalizedId = (offerId || '').trim();
+      return data.some((row: any) => {
+        const rowName = (row.offer_name || '').toLowerCase().trim();
+        const rowId = (row.offer_id || '').trim();
+        if (rowName && normalizedName && rowName === normalizedName) return true;
+        if (rowId && normalizedId && rowId === normalizedId) return true;
+        return false;
+      });
+    }
+  } catch (e) {
+    console.error('⚠️ [OUTSIDE] Falha ao ler outside_offers, usando fallback estático:', (e as Error).message);
+  }
+  return isOutsideOffer(offerName);
 }
 
 // Normalizar nome para match fuzzy
