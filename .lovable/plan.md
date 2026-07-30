@@ -1,32 +1,31 @@
-## Objetivo
+## Diagnóstico (verificado no código)
 
-Corrigir os deals do lançamento 29/07 (oferta `nPPUxJUzDl5mfa31XpIU`) que não receberam a tag **Outside** nem a etapa **Contrato Pago**, incluindo `adrianodamasio71@gmail.com` e `flavio.leandro@icloud.com`, e deixar uma rotina reaproveitável para que sobras assim sejam corrigidas sem intervenção manual.
+O webhook `https://hook.us1.make.com/pk492b4dfi83s1u4k566i98mg34k8xto` é chamado pela edge function `consorcio-carta-cadastrada-webhook`, que hoje é disparada em **4 pontos diferentes** (`src/hooks/useConsorcioPendingRegistrations.ts`):
 
-## O que foi verificado
+1. `useCreatePendingRegistration` — quando o Closer conclui "Inserir Dados" em **Cartas Negociadas** (linha ~481);
+2. `useMarkPendingAsCadastrada` — ao mover para "Cadastradas" (linha ~545);
+3. `useLinkPendingToCard` — ao vincular a uma cota existente (linha ~692);
+4. `useOpenCota` — no passo "Abrir cota" (linha ~1074).
 
-- Adriano Damazio: contato existe, **sem deal algum**. Sem R1, sem produto de parceiro.
-- Flavio Leandro: deal em PIPELINE INSIDE SALES em **"Sem Interesse"**, tags `[ANAMNESE]`, sem Outside. Sem R1. A compra "Sócio MCF" (2025) não desqualifica.
-- Ambos compraram antes do deploy da correção do fluxo Outside — o webhook atual já trataria os dois casos corretamente.
-- Restam ainda 3 outros compradores do mesmo lançamento em situação parecida (`eng.geffersonfirmino@gmail.com`, `pcamposn@gmail.com` — deals localizáveis por sufixo de telefone — e `rzatto@uol.com.br`, em outra etapa).
+Mais o botão manual "Reenviar webhook" em `src/pages/crm/PosReuniao.tsx` (~linha 821).
+
+**Por que chega vazio:** o payload da edge function monta o bloco `carta` a partir da tabela `consortium_cards`. No disparo nº 1 (o único que acontece em Cartas Negociadas) ainda **não existe card** — `card_id` vai `null` e todo o bloco `carta` sai vazio (grupo, cota, produto, vencimento, data de contratação etc.). Além disso, esse disparo grava a flag `webhook_carta_cadastrada_enviado_em`, que torna os disparos seguintes (nº 2/3/4, que teriam os dados completos) **silenciosamente ignorados**. Os envios "com todos os dados" são os casos em que a flag não existia (registros antigos) ou o reenvio manual foi usado.
 
 ## O que será feito
 
-1. **Correção de Flavio Leandro**
-   - Adicionar tag `Outside` (mantendo `ANAMNESE`), mover para a etapa **Contrato Pago** da Inside Sales, registrar `contract_paid_at` com a data da venda (29/07) e vincular as transações Hubla ao deal (`linked_deal_id`).
-   - Registrar atividade no deal explicando a correção retroativa.
+**Gatilho único:** manter apenas o disparo no momento em que o Closer conclui o cadastro dos dados da cota em **Cartas Negociadas** (`useCreatePendingRegistration`). Remover os disparos automáticos de "Cadastradas", "Vincular cota" e "Abrir cota". O botão manual "Reenviar webhook" continua existindo (com `force`).
 
-2. **Correção de Adriano Damazio**
-   - Criar deal em PIPELINE INSIDE SALES para o contato existente, etapa **Contrato Pago**, tags `Outside` + `Hubla`, distribuído via `get_next_lead_owner`, vincular as transações Hubla e registrar atividade.
+**Payload sempre completo:** alterar a edge function para montar o bloco `carta` a partir do **cadastro pendente** (`consorcio_pending_registrations`, que já contém valor de crédito, prazo, produto, condição de pagamento, vencimento, vendedor, origem, parcelas pagas pela empresa, observações etc.), usando a proposta como fallback (`valor_credito`, `prazo_meses`, `tipo_produto`, `origem_lead`) e o `consortium_cards` apenas como enriquecimento opcional (grupo/cota, quando já existir). Assim o Make recebe o mesmo formato de campos em todos os envios, com `null` só onde o dado realmente não foi informado.
 
-3. **Sweep dos demais compradores do lançamento**
-   - Rodar a mesma reconciliação para os outros compradores de ofertas ativas em `outside_offers` desde 25/07 que não tenham tag Outside, respeitando as regras de desqualificação (R1 existente, produtos de parceiro A001–A009/INCORPORADOR/ANTICRISE, contratos CLS) e a deduplicação por e-mail e por sufixo de 9 dígitos do telefone.
-   - Casos com deal em pipeline diferente da Inside Sales (ex.: Rodrigo/`rzatto@uol.com.br`) serão listados para conferência antes de qualquer alteração, para não mover lead de BU sem intenção.
-
-4. **Rotina de conferência reaproveitável**
-   - Criar uma função no banco que devolve os compradores de ofertas Outside sem tag/etapa correspondente, para permitir uma checagem periódica rápida quando novas ofertas de lançamento forem criadas.
+**Guarda contra envio incompleto:** se o cadastro pendente não tiver os campos mínimos (titular, contato e valor de crédito), a função responde `skipped` sem chamar o Make, e a flag de envio não é gravada — permitindo reenvio depois.
 
 ## Detalhes técnicos
 
-- Nenhuma mudança de regra de negócio: o webhook `hubla-webhook-handler` já resolve ofertas via `outside_offers` (nome ou `offer_id`) e já cria/distribui deal quando não há R1. Aqui é apenas recuperação de dados anteriores ao deploy.
-- A etapa de destino é resolvida por `ilike '%Contrato Pago%'` na origin `PIPELINE INSIDE SALES` (match exato de nome, sem `LEAD GRATUITO`).
-- Toda alteração de deal gera linha em `deal_activities` com `trigger: 'outside_backfill_lancamento_2907'` para auditoria.
+- `supabase/functions/consorcio-carta-cadastrada-webhook/index.ts`: reescrever a montagem do payload com hierarquia `registration → proposal → card`; adicionar validação mínima e resposta `{ success:false, skipped:true, reason }`; manter `event: "consorcio.carta.cadastrada"` e a estrutura `lead / carta / proposta / registration` para não quebrar o cenário no Make.
+- `src/hooks/useConsorcioPendingRegistrations.ts`: remover as 3 chamadas extras a `dispatchCartaCadastradaWebhook` (linhas ~545, ~692, ~1074), mantendo a de criação.
+- `src/lib/consorcioCartaWebhook.ts`: só gravar `webhook_carta_cadastrada_enviado_em` quando a resposta indicar envio real (não em `skipped`).
+- Nenhuma mudança de schema é necessária.
+
+## Validação
+
+Chamar a edge function via curl com o `registration_id` de uma carta recém-cadastrada e conferir no log que todos os campos do bloco `carta` vêm preenchidos; depois um teste com registro incompleto para confirmar o `skipped`.
