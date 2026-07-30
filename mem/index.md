@@ -24,3 +24,4 @@
 - [A010 30d window in Negocios](mem://business-logic/a010-channel-30d-window-negocios) — Filtro Canal A010 e badge A010 do Kanban em /crm/negocios usam janela de 30 dias (mesma regra do R1/R2).
 - [Qualificação obrigatória](mem://business-logic/qualification-mandatory-rule) — Agendar R1 exige resumo IA da ligação OU questionário de 6 perguntas (≥15 chars) + print do WhatsApp.
 - [Qualification BU Scope](mem://business-logic/qualification-bu-scope) — Qualificação obrigatória pré-R1 só na BU Incorporador MCF; Consórcio bypassa.
+- [Ofertas Outside Configuráveis](mem://business-logic/outside-offers-configurable) — Tabela public.outside_offers (nome ou offer_id) é a fonte de verdade do Outside.
