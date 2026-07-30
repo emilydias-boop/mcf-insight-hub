@@ -1605,7 +1605,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       // Sem attendee R1 + offer_name de Outside = lead Outside legítimo.
       // - Deal SEM owner → distribui automaticamente para SDR
       // - Deal COM owner → move para "Contrato Pago" + tag Outside + notifica SDR
-      const offerIsOutside = isOutsideOffer(data.offerName);
+      const offerIsOutside = await isOutsideOfferDb(supabase, data.offerName, data.offerId);
       if (emailLower && offerIsOutside) {
         try {
           console.log(`🔄 [AUTO-PAGO][OUTSIDE] Oferta Outside detectada ("${data.offerName}"). Buscando deal para email: ${emailLower}`);
