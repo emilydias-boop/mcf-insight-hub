@@ -159,18 +159,18 @@ Deno.serve(async (req) => {
     payload.origem_lead = payload.carta.origem_lead;
 
     // Remove qualquer `undefined` (JSON.stringify dropa chaves e confunde o Make)
-    const body = JSON.stringify(payload, (_k, v) => (v === undefined ? null : v));
+    const rawBody = JSON.stringify(payload, (_k, v) => (v === undefined ? null : v));
     console.log("[carta-cadastrada-webhook] enviando", {
       registration_id: reg.id ?? null,
       card_id: card.id ?? null,
-      bytes: body.length,
+      bytes: rawBody.length,
     });
-    console.log("[carta-cadastrada-webhook] payload", body.slice(0, 4000));
+    console.log("[carta-cadastrada-webhook] payload", rawBody.slice(0, 4000));
 
     const resp = await fetch(MAKE_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body,
+      body: rawBody,
       signal: AbortSignal.timeout(10000),
     });
     const respText = await resp.text();
