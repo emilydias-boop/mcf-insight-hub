@@ -1638,12 +1638,34 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                 const phoneSuffixLocal = phoneDigitsLocal.slice(-9);
                 const { data: byPhoneContact } = await supabase
                   .from('crm_contacts')
-                  .select('id, name, phone')
+                  .select('id, name, phone, email, custom_fields')
                   .ilike('phone', `%${phoneSuffixLocal}`)
                   .eq('is_archived', false)
                   .limit(1)
                   .maybeSingle();
-                if (byPhoneContact?.id) outsideContact = byPhoneContact;
+                if (byPhoneContact?.id) {
+                  outsideContact = byPhoneContact;
+                  console.log(`📞 [AUTO-PAGO][OUTSIDE] Contato encontrado por TELEFONE (${phoneSuffixLocal}): ${byPhoneContact.id} — evitando duplicata por e-mail diferente`);
+
+                  // Anexar o e-mail da compra sem sobrescrever o e-mail principal existente
+                  const existingEmail = (byPhoneContact.email || '').toLowerCase().trim();
+                  if (emailLower && existingEmail !== emailLower) {
+                    const cf = (byPhoneContact.custom_fields && typeof byPhoneContact.custom_fields === 'object')
+                      ? { ...byPhoneContact.custom_fields }
+                      : {};
+                    const alt: string[] = Array.isArray((cf as any).emails_alternativos)
+                      ? (cf as any).emails_alternativos
+                      : [];
+                    if (!alt.includes(emailLower)) alt.push(emailLower);
+                    (cf as any).emails_alternativos = alt;
+
+                    const updatePayload: Record<string, unknown> = { custom_fields: cf };
+                    if (!existingEmail) updatePayload.email = emailLower;
+
+                    await supabase.from('crm_contacts').update(updatePayload).eq('id', byPhoneContact.id);
+                    console.log(`✉️ [AUTO-PAGO][OUTSIDE] E-mail da compra "${emailLower}" anexado ao contato ${byPhoneContact.id}`);
+                  }
+                }
               }
             }
             if (!outsideContact?.id) {
