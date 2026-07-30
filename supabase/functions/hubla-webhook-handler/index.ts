@@ -1374,6 +1374,7 @@ interface AutoMarkData {
   offerName?: string | null;
 }
 
+
 // Ofertas que qualificam um pagamento como "Outside" (alinhado com src/hooks/outsideOfferConstants.ts)
 // Fallback estático — a fonte de verdade é a tabela public.outside_offers
 const OUTSIDE_OFFER_NAMES = [
