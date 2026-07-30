@@ -1372,9 +1372,11 @@ interface AutoMarkData {
   saleDate: string;
   transactionHublaId?: string | null;
   offerName?: string | null;
+  offerId?: string | null;
 }
 
 // Ofertas que qualificam um pagamento como "Outside" (alinhado com src/hooks/outsideOfferConstants.ts)
+// Fallback estático — a fonte de verdade é a tabela public.outside_offers
 const OUTSIDE_OFFER_NAMES = [
   'Contrato - Curso R$ 97,00',
   'Contrato Perfil A - Vitrine A010',
@@ -1385,6 +1387,38 @@ function isOutsideOffer(offerName: string | null | undefined): boolean {
   if (!offerName) return false;
   const normalized = offerName.toLowerCase().trim();
   return OUTSIDE_OFFER_NAMES.some(n => n.toLowerCase() === normalized);
+}
+
+// Consulta a tabela configurável de ofertas Outside (nome OU offer_id).
+// Em caso de erro/tabela vazia, cai no fallback estático por nome.
+async function isOutsideOfferDb(
+  supabase: any,
+  offerName: string | null | undefined,
+  offerId?: string | null,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('outside_offers')
+      .select('offer_name, offer_id')
+      .eq('is_active', true);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      const normalizedName = (offerName || '').toLowerCase().trim();
+      const normalizedId = (offerId || '').trim();
+      return data.some((row: any) => {
+        const rowName = (row.offer_name || '').toLowerCase().trim();
+        const rowId = (row.offer_id || '').trim();
+        if (rowName && normalizedName && rowName === normalizedName) return true;
+        if (rowId && normalizedId && rowId === normalizedId) return true;
+        return false;
+      });
+    }
+  } catch (e) {
+    console.error('⚠️ [OUTSIDE] Falha ao ler outside_offers, usando fallback estático:', (e as Error).message);
+  }
+  return isOutsideOffer(offerName);
 }
 
 // Normalizar nome para match fuzzy
@@ -1456,12 +1490,12 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     }
 
     if (!attendeesRaw?.length) {
-      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 encontrado nos últimos 14 dias');
-      return;
+      // Não retornamos aqui: sem R1 no período, o fluxo Outside abaixo ainda precisa rodar
+      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 encontrado nos últimos 14 dias — seguindo para checagem Outside');
     }
 
     // CORREÇÃO 2: Ordenar em JavaScript (mais confiável que ordenação nested do Supabase)
-    const attendees = [...attendeesRaw].sort((a: any, b: any) => {
+    const attendees = [...(attendeesRaw || [])].sort((a: any, b: any) => {
       const dateA = new Date(a.meeting_slots?.scheduled_at || 0).getTime();
       const dateB = new Date(b.meeting_slots?.scheduled_at || 0).getTime();
       return dateB - dateA; // Mais recente primeiro
@@ -1571,7 +1605,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       // Sem attendee R1 + offer_name de Outside = lead Outside legítimo.
       // - Deal SEM owner → distribui automaticamente para SDR
       // - Deal COM owner → move para "Contrato Pago" + tag Outside + notifica SDR
-      const offerIsOutside = isOutsideOffer(data.offerName);
+      const offerIsOutside = await isOutsideOfferDb(supabase, data.offerName, data.offerId);
       if (emailLower && offerIsOutside) {
         try {
           console.log(`🔄 [AUTO-PAGO][OUTSIDE] Oferta Outside detectada ("${data.offerName}"). Buscando deal para email: ${emailLower}`);
@@ -1604,12 +1638,34 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                 const phoneSuffixLocal = phoneDigitsLocal.slice(-9);
                 const { data: byPhoneContact } = await supabase
                   .from('crm_contacts')
-                  .select('id, name, phone')
+                  .select('id, name, phone, email, custom_fields')
                   .ilike('phone', `%${phoneSuffixLocal}`)
                   .eq('is_archived', false)
                   .limit(1)
                   .maybeSingle();
-                if (byPhoneContact?.id) outsideContact = byPhoneContact;
+                if (byPhoneContact?.id) {
+                  outsideContact = byPhoneContact;
+                  console.log(`📞 [AUTO-PAGO][OUTSIDE] Contato encontrado por TELEFONE (${phoneSuffixLocal}): ${byPhoneContact.id} — evitando duplicata por e-mail diferente`);
+
+                  // Anexar o e-mail da compra sem sobrescrever o e-mail principal existente
+                  const existingEmail = (byPhoneContact.email || '').toLowerCase().trim();
+                  if (emailLower && existingEmail !== emailLower) {
+                    const cf = (byPhoneContact.custom_fields && typeof byPhoneContact.custom_fields === 'object')
+                      ? { ...byPhoneContact.custom_fields }
+                      : {};
+                    const alt: string[] = Array.isArray((cf as any).emails_alternativos)
+                      ? (cf as any).emails_alternativos
+                      : [];
+                    if (!alt.includes(emailLower)) alt.push(emailLower);
+                    (cf as any).emails_alternativos = alt;
+
+                    const updatePayload: Record<string, unknown> = { custom_fields: cf };
+                    if (!existingEmail) updatePayload.email = emailLower;
+
+                    await supabase.from('crm_contacts').update(updatePayload).eq('id', byPhoneContact.id);
+                    console.log(`✉️ [AUTO-PAGO][OUTSIDE] E-mail da compra "${emailLower}" anexado ao contato ${byPhoneContact.id}`);
+                  }
+                }
               }
             }
             if (!outsideContact?.id) {
@@ -3027,6 +3083,7 @@ Deno.serve(async (req) => {
               saleDate: saleDate,
               transactionHublaId: transactionData.hubla_id,
               offerName: transactionData.offer_name,
+              offerId: transactionData.offer_id,
             });
           }
           
@@ -3226,6 +3283,7 @@ Deno.serve(async (req) => {
               saleDate: saleDate,
               transactionHublaId: hublaId,
               offerName: transactionData.offer_name,
+              offerId: transactionData.offer_id,
             });
           }
           

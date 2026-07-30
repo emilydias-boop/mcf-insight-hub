@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { isOutsideOffer } from './outsideOfferConstants';
+import { buildOutsideOfferMatcher } from './outsideOfferConstants';
 
 interface OutsideInfo {
   isOutside: boolean;
@@ -47,6 +47,13 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
 
       if (!emails.length) return {};
 
+      // Ofertas Outside configuráveis (tabela outside_offers, com fallback estático)
+      const { data: outsideOffers } = await supabase
+        .from('outside_offers')
+        .select('offer_name, offer_id')
+        .eq('is_active', true);
+      const isOutsideOffer = buildOutsideOfferMatcher(outsideOffers);
+
       // Fetch contracts WITH offer_name, plus CLS/partner checks in parallel
       const [contracts, clsContracts, partnerTransactions] = await Promise.all([
         // Outside-eligible contracts
@@ -54,10 +61,11 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
           customer_email: string | null;
           sale_date: string;
           offer_name: string | null;
+          offer_id: string | null;
         }>(
           (chunk) => supabase
             .from('hubla_transactions')
-            .select('customer_email, sale_date, offer_name')
+            .select('customer_email, sale_date, offer_name, offer_id')
             .in('customer_email', chunk)
             .in('product_category', ['contrato', 'incorporador'])
             .ilike('product_name', '%contrato%')
@@ -102,7 +110,7 @@ export const useOutsideDetectionBatch = (attendees: AttendeeForCheck[]) => {
 
         // Find earliest outside-eligible contract
         const outsideContract = contracts.find(
-          c => c.customer_email?.toLowerCase().trim() === email && isOutsideOffer(c.offer_name)
+          c => c.customer_email?.toLowerCase().trim() === email && isOutsideOffer(c.offer_name, c.offer_id)
         );
 
         if (outsideContract) {

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, format, addHours } from "date-fns";
 import { useSdrsFromSquad } from "./useSdrsFromSquad";
-import { isOutsideOffer } from "./outsideOfferConstants";
+import { buildOutsideOfferMatcher } from "./outsideOfferConstants";
 
 export interface SdrOutsideMetrics {
   totalOutside: number;
@@ -34,10 +34,17 @@ export function useSdrOutsideMetrics(
       const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
       const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
+      // 0. Ofertas Outside configuráveis (tabela outside_offers, com fallback estático)
+      const { data: outsideOffers } = await supabase
+        .from('outside_offers')
+        .select('offer_name, offer_id')
+        .eq('is_active', true);
+      const isOutsideOffer = buildOutsideOfferMatcher(outsideOffers);
+
       // 1. Fetch contract transactions with sale_date in the period (include offer_name)
       const { data: periodContracts } = await supabase
         .from('hubla_transactions')
-        .select('customer_email, sale_date, offer_name')
+        .select('customer_email, sale_date, offer_name, offer_id')
         .in('product_category', ['contrato', 'incorporador'])
         .ilike('product_name', '%contrato%')
         .eq('sale_status', 'completed')
@@ -48,7 +55,7 @@ export function useSdrOutsideMetrics(
       // 2. Filter only outside-eligible offers and build map
       const periodContractByEmail = new Map<string, Date>();
       periodContracts?.forEach(c => {
-        if (!isOutsideOffer(c.offer_name)) return; // ONLY outside offers
+        if (!isOutsideOffer(c.offer_name, c.offer_id)) return; // ONLY outside offers
         const email = c.customer_email?.toLowerCase();
         if (email) {
           const date = new Date(c.sale_date);

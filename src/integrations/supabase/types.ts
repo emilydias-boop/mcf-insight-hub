@@ -10105,6 +10105,36 @@ export type Database = {
           },
         ]
       }
+      outside_offers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          offer_id: string | null
+          offer_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          offer_id?: string | null
+          offer_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          offer_id?: string | null
+          offer_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       partner_returns: {
         Row: {
           blocked: boolean
