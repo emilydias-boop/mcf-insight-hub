@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       event: "consorcio.carta.cadastrada",
       occurred_at: new Date().toISOString(),
       lead: {
@@ -139,14 +139,57 @@ Deno.serve(async (req) => {
       },
     };
 
+    // Versão achatada (chaves de topo) — o Make mapeia campos de primeiro nível
+    // com muito mais facilidade do que objetos aninhados.
+    payload.registration_id = reg.id ?? null;
+    payload.card_id = card.id ?? null;
+    payload.proposal_id = resolvedPropId;
+    payload.nome_completo = payload.lead.nome_completo ?? payload.lead.razao_social ?? null;
+    payload.email = payload.lead.email;
+    payload.telefone = payload.lead.telefone;
+    payload.cpf = payload.lead.cpf;
+    payload.cnpj = payload.lead.cnpj;
+    payload.tipo_pessoa = payload.lead.tipo_pessoa;
+    payload.valor_credito = payload.carta.valor_credito;
+    payload.grupo = payload.carta.grupo;
+    payload.cota = payload.carta.cota;
+    payload.produto = payload.carta.produto_codigo ?? payload.carta.tipo_produto;
+    payload.prazo_meses = payload.carta.prazo_meses;
+    payload.vendedor = payload.carta.vendedor_name;
+    payload.origem_lead = payload.carta.origem_lead;
+
+    // Remove qualquer `undefined` (JSON.stringify dropa chaves e confunde o Make)
+    const body = JSON.stringify(payload, (_k, v) => (v === undefined ? null : v));
+    console.log("[carta-cadastrada-webhook] enviando", {
+      registration_id: reg.id ?? null,
+      card_id: card.id ?? null,
+      bytes: body.length,
+    });
+    console.log("[carta-cadastrada-webhook] payload", body.slice(0, 4000));
+
     const resp = await fetch(MAKE_WEBHOOK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body,
       signal: AbortSignal.timeout(10000),
     });
     const respText = await resp.text();
-    console.log("[carta-cadastrada-webhook] status", resp.status, respText.slice(0, 500));
+    console.log("[carta-cadastrada-webhook] resposta Make", resp.status, respText.slice(0, 500));
+
+    // Auditoria persistente (não depende da janela curta de logs)
+    try {
+      await supabase.from("bu_webhook_logs").insert({
+        bu_type: "consorcio",
+        event_type: "consorcio.carta.cadastrada",
+        payload,
+        status: resp.ok ? "sent" : "failed",
+        error_message: resp.ok ? null : `HTTP ${resp.status}: ${respText.slice(0, 500)}`,
+        record_id: reg.id ?? null,
+        processed_at: new Date().toISOString(),
+      } as any);
+    } catch (logErr) {
+      console.warn("[carta-cadastrada-webhook] falha ao gravar log", logErr);
+    }
 
     return new Response(JSON.stringify({ success: resp.ok, status: resp.status }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
