@@ -16,7 +16,8 @@ interface AttendeeForCheck {
 async function batchedInOutside<T>(
   queryFn: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: any }>,
   items: string[],
-  batchSize = 200
+  // 60 evita URLs longas demais (HTTP 414) nas consultas .in()
+  batchSize = 60
 ): Promise<T[]> {
   if (items.length === 0) return [];
   const chunks: string[][] = [];
