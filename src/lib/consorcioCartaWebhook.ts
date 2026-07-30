@@ -75,7 +75,11 @@ export async function dispatchCartaCadastradaWebhook(params: {
       console.warn('[carta-cadastrada-webhook] skipped', (data as any)?.reason);
       return { sent: false, skipped: true, error: (data as any)?.reason };
     }
-    const ok = (data as any)?.success !== false;
+    const ok = (data as any)?.success === true;
+    if (!ok) {
+      console.warn('[carta-cadastrada-webhook] envio não confirmado pelo Make', data);
+      return { sent: false, error: `status ${(data as any)?.status ?? 'desconhecido'}` };
+    }
     if (ok && effectiveRegId) {
       await supabase
         .from('consorcio_pending_registrations')
