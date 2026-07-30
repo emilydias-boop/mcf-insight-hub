@@ -18,11 +18,27 @@ async function batchedIn<T>(
   for (let i = 0; i < items.length; i += batchSize) {
     chunks.push(items.slice(i, i + batchSize));
   }
-  const results = await Promise.all(chunks.map(chunk => queryFn(chunk)));
+
+  // Se o gateway rejeitar um lote (URL/proxy/timeout), divide apenas aquele
+  // trecho e tenta novamente. Assim uma falha transitória não apaga toda a
+  // tabela, e nenhum registro é descartado silenciosamente.
+  const runChunk = async (chunk: string[]): Promise<T[]> => {
+    const result = await queryFn(chunk);
+    if (!result.error) return result.data || [];
+    if (chunk.length === 1) throw result.error;
+
+    const middle = Math.ceil(chunk.length / 2);
+    const [left, right] = await Promise.all([
+      runChunk(chunk.slice(0, middle)),
+      runChunk(chunk.slice(middle)),
+    ]);
+    return [...left, ...right];
+  };
+
+  const results = await Promise.all(chunks.map(runChunk));
   const allData: T[] = [];
   for (const r of results) {
-    if (r.error) throw r.error;
-    if (r.data) allData.push(...r.data);
+    allData.push(...r);
   }
   return allData;
 }
@@ -78,10 +94,18 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       // Também incluir closers ativos da BU como agendadores válidos
       // Caso: Thaynar Tavares (closer) agenda reuniões diretamente → contrato deve ser contado
-      const closerEmails = new Set((closers || []).map(c => c.email.toLowerCase()));
+      // E-mail não é obrigatório nos cadastros legados. Um único closer/SDR sem
+      // e-mail não pode interromper o cálculo inteiro e zerar a aba de Closers.
+      const closerEmails = new Set(
+        (closers || [])
+          .map(c => c.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email))
+      );
 
       const validSdrEmails = new Set([
-        ...(sdrs || []).map(s => s.email.toLowerCase()),
+        ...(sdrs || [])
+          .map(s => s.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email)),
         ...closerEmails,
       ]);
 
@@ -391,7 +415,10 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           : [];
 
         const outsideContactEmailMap = new Map<string, string>();
-        outsideContacts.forEach(c => outsideContactEmailMap.set(c.id, c.email.toLowerCase()));
+        outsideContacts.forEach(c => {
+          const email = c.email?.trim().toLowerCase();
+          if (email) outsideContactEmailMap.set(c.id, email);
+        });
 
         const outsideDeals = outsideContacts.length > 0
           ? await batchedIn<{ id: string; contact_id: string }>(
