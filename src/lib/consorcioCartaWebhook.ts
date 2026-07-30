@@ -71,6 +71,10 @@ export async function dispatchCartaCadastradaWebhook(params: {
       console.warn('[carta-cadastrada-webhook] invoke error', error);
       return { sent: false, error: error.message };
     }
+    if ((data as any)?.skipped) {
+      console.warn('[carta-cadastrada-webhook] skipped', (data as any)?.reason);
+      return { sent: false, skipped: true, error: (data as any)?.reason };
+    }
     const ok = (data as any)?.success !== false;
     if (ok && effectiveRegId) {
       await supabase
