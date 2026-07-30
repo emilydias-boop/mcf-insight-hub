@@ -1490,12 +1490,12 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     }
 
     if (!attendeesRaw?.length) {
-      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 encontrado nos últimos 14 dias');
-      return;
+      // Não retornamos aqui: sem R1 no período, o fluxo Outside abaixo ainda precisa rodar
+      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 encontrado nos últimos 14 dias — seguindo para checagem Outside');
     }
 
     // CORREÇÃO 2: Ordenar em JavaScript (mais confiável que ordenação nested do Supabase)
-    const attendees = [...attendeesRaw].sort((a: any, b: any) => {
+    const attendees = [...(attendeesRaw || [])].sort((a: any, b: any) => {
       const dateA = new Date(a.meeting_slots?.scheduled_at || 0).getTime();
       const dateB = new Date(b.meeting_slots?.scheduled_at || 0).getTime();
       return dateB - dateA; // Mais recente primeiro
