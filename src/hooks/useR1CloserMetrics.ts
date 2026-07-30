@@ -18,11 +18,27 @@ async function batchedIn<T>(
   for (let i = 0; i < items.length; i += batchSize) {
     chunks.push(items.slice(i, i + batchSize));
   }
-  const results = await Promise.all(chunks.map(chunk => queryFn(chunk)));
+
+  // Se o gateway rejeitar um lote (URL/proxy/timeout), divide apenas aquele
+  // trecho e tenta novamente. Assim uma falha transitória não apaga toda a
+  // tabela, e nenhum registro é descartado silenciosamente.
+  const runChunk = async (chunk: string[]): Promise<T[]> => {
+    const result = await queryFn(chunk);
+    if (!result.error) return result.data || [];
+    if (chunk.length === 1) throw result.error;
+
+    const middle = Math.ceil(chunk.length / 2);
+    const [left, right] = await Promise.all([
+      runChunk(chunk.slice(0, middle)),
+      runChunk(chunk.slice(middle)),
+    ]);
+    return [...left, ...right];
+  };
+
+  const results = await Promise.all(chunks.map(runChunk));
   const allData: T[] = [];
   for (const r of results) {
-    if (r.error) throw r.error;
-    if (r.data) allData.push(...r.data);
+    allData.push(...r);
   }
   return allData;
 }
