@@ -9,7 +9,9 @@ import { startOfDay, endOfDay, format, subHours, addHours } from "date-fns";
 async function batchedIn<T>(
   queryFn: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: any }>,
   items: string[],
-  batchSize = 200
+  // 60 mantém a URL bem abaixo do limite de ~8KB do gateway (evita HTTP 414,
+  // que fazia as tabelas de SDRs/Closers voltarem vazias)
+  batchSize = 60
 ): Promise<T[]> {
   if (items.length === 0) return [];
   const chunks: string[][] = [];
