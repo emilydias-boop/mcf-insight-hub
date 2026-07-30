@@ -23,9 +23,24 @@ async function batchedIn<T>(
   // trecho e tenta novamente. Assim uma falha transitória não apaga toda a
   // tabela, e nenhum registro é descartado silenciosamente.
   const runChunk = async (chunk: string[]): Promise<T[]> => {
-    const result = await queryFn(chunk);
+    let result: { data: T[] | null; error: any };
+    try {
+      result = await queryFn(chunk);
+    } catch (error) {
+      result = { data: null, error };
+    }
     if (!result.error) return result.data || [];
-    if (chunk.length === 1) throw result.error;
+    if (chunk.length === 1) {
+      // Consultas auxiliares (perfil, contato, transação e reembolso) não podem
+      // derrubar a métrica principal. Antes, um único registro inválido fazia o
+      // React Query descartar TODOS os Closers, embora as demais requisições
+      // tivessem retornado 200. Mantemos os dados válidos e isolamos só o item.
+      console.error('[useR1CloserMetrics] Registro auxiliar ignorado após falha isolada', {
+        item: chunk[0],
+        error: result.error,
+      });
+      return [];
+    }
 
     const middle = Math.ceil(chunk.length / 2);
     const [left, right] = await Promise.all([
@@ -152,7 +167,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       const profileEmailMap = new Map<string, string>();
       profiles?.forEach(p => {
-        if (p.email) profileEmailMap.set(p.id, p.email.toLowerCase());
+        const email = p.email?.trim().toLowerCase();
+        if (email) profileEmailMap.set(p.id, email);
       });
 
       // Fetch R2 meetings to count R2 agendadas per closer
@@ -211,7 +227,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       const allProfileEmailMap = new Map<string, string>();
       allProfiles?.forEach(p => {
-        if (p.email) allProfileEmailMap.set(p.id, p.email.toLowerCase());
+        const email = p.email?.trim().toLowerCase();
+        if (email) allProfileEmailMap.set(p.id, email);
       });
 
       // Build a map of deal_id -> R1 closer_id using ALL R1 meetings (not date-filtered)
@@ -351,9 +368,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
         deals?.forEach(deal => {
           const contact = deal.contact as { id: string; email: string | null } | null;
-          if (contact?.email) {
-            dealEmailMap.set(deal.id, contact.email.toLowerCase());
-          }
+          const email = contact?.email?.trim().toLowerCase();
+          if (email) dealEmailMap.set(deal.id, email);
         });
 
         const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
@@ -372,7 +388,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         );
 
         contracts?.forEach(c => {
-          const email = c.customer_email?.toLowerCase();
+          const email = c.customer_email?.trim().toLowerCase();
           if (email) {
             const date = new Date(c.sale_date);
             if (!emailContractDate.has(email) || date < emailContractDate.get(email)!) {
@@ -396,7 +412,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         outsidePeriodContracts?.forEach(c => {
           // Skip recurring transactions — only first-purchase (Novo) counts
           if (!firstTransactionIds.has((c as any).id)) return;
-          const email = c.customer_email?.toLowerCase();
+          const email = c.customer_email?.trim().toLowerCase();
           if (email) {
             const date = new Date(c.sale_date);
             if (!periodContractByEmail.has(email) || date < periodContractByEmail.get(email)!) {
