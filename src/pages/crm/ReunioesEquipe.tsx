@@ -190,6 +190,7 @@ export default function ReunioesEquipe() {
     allMeetings,
     allMeetingsRaw,
     isLoading,
+    error: teamError,
     refetch,
   } = useTeamMeetingsData({
     startDate: start,
