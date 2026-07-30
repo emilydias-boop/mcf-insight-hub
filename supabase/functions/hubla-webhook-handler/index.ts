@@ -3083,6 +3083,7 @@ Deno.serve(async (req) => {
               saleDate: saleDate,
               transactionHublaId: transactionData.hubla_id,
               offerName: transactionData.offer_name,
+              offerId: transactionData.offer_id,
             });
           }
           
@@ -3282,6 +3283,7 @@ Deno.serve(async (req) => {
               saleDate: saleDate,
               transactionHublaId: hublaId,
               offerName: transactionData.offer_name,
+              offerId: transactionData.offer_id,
             });
           }
           
