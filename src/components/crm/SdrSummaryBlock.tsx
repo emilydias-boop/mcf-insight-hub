@@ -85,9 +85,9 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   };
   
   return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Contato</h3>
+    <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Contato</h3>
         <Button
           size="icon"
           variant="ghost"
@@ -100,34 +100,34 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
 
       {/* Nome em destaque */}
       {contact?.name && (
-        <div className="text-base font-semibold text-foreground leading-tight mb-2">
+        <div className="text-2xl md:text-3xl font-bold text-foreground leading-tight mb-3 break-words">
           {contact.name}
         </div>
       )}
 
       {/* Layout inline com fonte maior */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-lg">
         {/* Email clicável */}
         {contact?.email && (
           <a
             href={`mailto:${contact.email}`}
-            className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
+            className="flex items-center gap-2 text-foreground/90 hover:text-primary transition-colors"
           >
-            <Mail className="h-4 w-4 text-primary/80" />
-            <span className="truncate max-w-[220px] font-medium">{contact.email}</span>
+            <Mail className="h-5 w-5 text-primary" />
+            <span className="truncate max-w-[320px] font-semibold">{contact.email}</span>
           </a>
         )}
 
         {/* Telefone editável */}
-        <div className="flex items-center gap-1.5">
-          <Phone className="h-4 w-4 text-primary/80" />
+        <div className="flex items-center gap-2">
+          <Phone className="h-5 w-5 text-primary" />
           {editingPhone ? (
             <div className="flex items-center gap-1">
               <Input
                 value={phoneValue}
                 onChange={(e) => setPhoneValue(e.target.value)}
                 placeholder="+5511999990001"
-                className="h-7 w-36 text-sm bg-background"
+                className="h-9 w-44 text-base bg-background"
               />
               <Button
                 size="icon"
@@ -149,7 +149,7 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
             </div>
           ) : (
             <div className="flex items-center gap-1">
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-semibold text-lg">
                 {displayPhone || 'Sem telefone'}
               </span>
               <Button
