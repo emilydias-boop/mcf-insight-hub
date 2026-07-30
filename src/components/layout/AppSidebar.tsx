@@ -404,6 +404,13 @@ export function AppSidebar() {
   // === ITENS DINÂMICOS PARA SDR/CLOSER ===
   // Estes itens precisam de URLs dinâmicas baseadas na BU do usuário
   const crmBasePath = getCRMBasePath(myBUs);
+  // BUs do usuário que possuem CRM próprio (para exibir uma entrada por BU)
+  const BU_CRM_LABEL: Partial<Record<BusinessUnit, string>> = {
+    incorporador: 'Inside',
+    consorcio: 'Consórcio',
+    solar: 'Solar',
+  };
+  const crmBUs = (['incorporador', 'consorcio', 'solar'] as BusinessUnit[]).filter(bu => myBUs.includes(bu));
   const isSdrAndCloser = (allRoles as string[]).includes('sdr') && (allRoles as string[]).includes('closer');
   const shouldSplitInsideAndConsorcio = isSdrAndCloser && hasBU(myBUs, 'incorporador') && hasBU(myBUs, 'consorcio');
   
@@ -438,6 +445,27 @@ export function AppSidebar() {
           requiredRoles: ["closer", "closer_sombra"],
         },
       ]
+    : crmBUs.length > 1
+    ? crmBUs.flatMap((bu): MenuItem[] => {
+        const base = BU_CRM_BASE_PATH[bu] || '/crm';
+        const label = BU_CRM_LABEL[bu] || '';
+        return [
+          {
+            title: `Agenda ${label}`,
+            url: `${base}/agenda`,
+            icon: Calendar,
+            resource: "crm",
+            requiredRoles: ["sdr", "closer", "closer_sombra"],
+          },
+          {
+            title: `Negócios ${label}`,
+            url: `${base}/negocios`,
+            icon: Briefcase,
+            resource: "crm",
+            requiredRoles: ["sdr", "closer"],
+          },
+        ];
+      })
     : [
         // Agenda (SDR, Closer e Closer Sombra) - URL dinâmica por BU
         {
