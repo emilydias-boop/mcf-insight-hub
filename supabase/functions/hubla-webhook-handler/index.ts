@@ -1372,6 +1372,7 @@ interface AutoMarkData {
   saleDate: string;
   transactionHublaId?: string | null;
   offerName?: string | null;
+  offerId?: string | null;
 }
 
 // Ofertas que qualificam um pagamento como "Outside" (alinhado com src/hooks/outsideOfferConstants.ts)
