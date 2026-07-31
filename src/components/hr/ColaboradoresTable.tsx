@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal, Eye, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Employee } from '@/types/hr';
 import { EMPLOYEE_STATUS_LABELS, NFSE_STATUS_LABELS } from '@/types/hr';
+import { useProfilesSquadMap } from '@/hooks/useProfilesSquadMap';
+import { useBuCatalog } from '@/hooks/useBuCatalog';
 
 type SortField = 'nome_completo' | 'cargo' | 'data_admissao' | 'status' | 'tipo_contrato';
 type SortDir = 'asc' | 'desc';
@@ -28,6 +31,42 @@ interface Props {
 export default function ColaboradoresTable({ employees, isLoading, nfseStatusMap, allEmployees, hasFilters, onRowClick, onEdit, onDelete }: Props) {
   const [sortField, setSortField] = useState<SortField>('nome_completo');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const profileIds = useMemo(
+    () => employees.map(e => e.profile_id).filter(Boolean) as string[],
+    [employees]
+  );
+  const { data: squadMap } = useProfilesSquadMap(profileIds);
+  const { data: buCatalog } = useBuCatalog();
+
+  const buLabel = (code: string) => buCatalog?.find(b => b.code === code)?.label || code;
+
+  const SquadCell = ({ emp }: { emp: Employee }) => {
+    const base = emp.squad || emp.departamento || '-';
+    const profileSquad = emp.profile_id ? squadMap?.[emp.profile_id] ?? [] : [];
+    const extra = profileSquad.length - 1;
+    if (extra < 1) return <>{base}</>;
+    return (
+      <span className="inline-flex items-center">
+        {base}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="secondary" className="ml-1 text-xs cursor-help">
+                +{extra} BU{extra > 1 ? 's' : ''}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs font-medium mb-1">BUs de atuação</p>
+              <ul className="text-xs space-y-0.5">
+                {profileSquad.map(code => <li key={code}>{buLabel(code)}</li>)}
+              </ul>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </span>
+    );
+  };
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -108,7 +147,7 @@ export default function ColaboradoresTable({ employees, isLoading, nfseStatusMap
                   <TableCell className="font-medium">{emp.nome_completo}</TableCell>
                   <TableCell>{emp.cargo || '-'}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{emp.tipo_contrato || '-'}</Badge></TableCell>
-                  <TableCell>{emp.squad || emp.departamento || '-'}</TableCell>
+                  <TableCell><SquadCell emp={emp} /></TableCell>
                   <TableCell className="text-sm">
                     {emp.data_admissao ? format(new Date(emp.data_admissao), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
                   </TableCell>
