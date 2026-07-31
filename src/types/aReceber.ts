@@ -37,6 +37,11 @@ export interface ArTitulo {
   cobranca_stage?: ArCobrancaStage | null;
   cobranca_stage_manual?: boolean;
   cobranca_stage_updated_at?: string | null;
+  // responsável / registro da cobrança
+  cobranca_responsavel_id?: string | null;
+  cobranca_ultima_data?: string | null;
+  cobranca_ultima_nota?: string | null;
+  cobranca_ultimo_registro_em?: string | null;
   // enriched (kanban)
   stage_effective?: ArCobrancaStage;
   proxima_parcela?: string | null;
