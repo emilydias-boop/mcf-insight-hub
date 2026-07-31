@@ -490,6 +490,46 @@ export function useRegistrarCobrancaContato() {
 }
 
 // ============ HISTÓRICO ============
+/**
+ * Define/atualiza o responsável pela cobrança do título e registra
+ * data + nota da cobrança realizada (também gravado no histórico).
+ */
+export function useRegistrarCobrancaResponsavel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tituloId, responsavel_id, data_cobranca, nota,
+    }: {
+      tituloId: string;
+      responsavel_id: string | null;
+      data_cobranca?: string | null;
+      nota?: string | null;
+    }) => {
+      const patch: Record<string, any> = { cobranca_responsavel_id: responsavel_id };
+      if (data_cobranca !== undefined) patch.cobranca_ultima_data = data_cobranca || null;
+      if (nota !== undefined) patch.cobranca_ultima_nota = nota?.trim() || null;
+      if ((data_cobranca && data_cobranca.length > 0) || (nota && nota.trim())) {
+        patch.cobranca_ultimo_registro_em = new Date().toISOString();
+      }
+      const { error } = await supabase.from('ar_titulos' as any).update(patch as any).eq('id', tituloId);
+      if (error) throw error;
+
+      if (nota && nota.trim()) {
+        await supabase.from('ar_historico' as any).insert({
+          titulo_id: tituloId,
+          tipo: 'contato_cobranca',
+          descricao: `${data_cobranca ? `[${data_cobranca}] ` : ''}${nota.trim()}`,
+        } as any);
+      }
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['ar-titulos'] });
+      qc.invalidateQueries({ queryKey: ['ar-titulo', vars.tituloId] });
+      qc.invalidateQueries({ queryKey: ['ar-historico', vars.tituloId] });
+    },
+  });
+}
+
 export function useArHistorico(tituloId: string | null) {
   return useQuery({
     queryKey: ['ar-historico', tituloId],
