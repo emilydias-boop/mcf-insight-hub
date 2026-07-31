@@ -26,6 +26,10 @@ import {
 import { useCanManageAr } from '@/hooks/useArGestores';
 import { parcelaDocNumber } from '@/lib/arTicketNumber';
 import { QualificacaoLeadDialog } from '@/components/financeiro/aReceber/QualificacaoLeadDialog';
+import {
+  CobrancaResponsavelDialog,
+  CobrancaResponsavelInfo,
+} from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -54,6 +58,7 @@ export default function AReceberDetalhe() {
   const { data: titulo } = useArTitulo(id ?? null);
   const { data: parcelas } = useArParcelas(id ?? null);
   const { data: historico } = useArHistorico(id ?? null);
+  const [openCobranca, setOpenCobranca] = useState(false);
 
   const createParcelas = useCreateArParcelas();
   const markPaga = useMarkArParcelaPaga();
@@ -374,6 +379,20 @@ export default function AReceberDetalhe() {
           <div><div className="text-muted-foreground text-xs">Forma Hubla</div>{titulo.payment_method || '—'} ({titulo.total_installments_hubla}x)</div>
         </CardContent>
       </Card>
+
+      {/* Responsável pela cobrança */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Cobrança</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setOpenCobranca(true)}>
+            Responsável / nota de cobrança
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <CobrancaResponsavelInfo titulo={titulo} />
+        </CardContent>
+      </Card>
+      <CobrancaResponsavelDialog titulo={titulo} open={openCobranca} onOpenChange={setOpenCobranca} />
 
       {/* Parcelas */}
       <Card>
