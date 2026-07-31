@@ -28,6 +28,11 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ArGestoresDialog } from '@/components/financeiro/ArGestoresDialog';
 import { KanbanCobranca, CobrancaStageBadge } from '@/components/financeiro/aReceber/KanbanCobranca';
+import {
+  CobrancaResponsavelDialog,
+  CobrancaResponsavelInfo,
+  CobrancaResponsavelFilter,
+} from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
 import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
 import { ReembolsosPanel } from '@/components/financeiro/aReceber/ReembolsosPanel';
 import { CadastroManualDialog } from '@/components/financeiro/aReceber/CadastroManualDialog';
@@ -87,6 +92,8 @@ export default function AReceber() {
   const [product, setProduct] = useState<string>('todos');
   const [numeroTitulo, setNumeroTitulo] = useState<string>('');
   const [cobrancaStage, setCobrancaStage] = useState<string>('todos');
+  const [cobrancaResp, setCobrancaResp] = useState<string>('todos');
+  const [cobrancaTitulo, setCobrancaTitulo] = useState<ArTitulo | null>(null);
 
   const { data: titulos, isLoading } = useArTitulos({
     search: search || undefined,
@@ -94,6 +101,7 @@ export default function AReceber() {
     tipo: tipo === 'todos' ? undefined : tipo,
     product_code: product === 'todos' ? undefined : product,
     cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
+    cobranca_responsavel_id: cobrancaResp === 'todos' ? undefined : cobrancaResp,
   });
 
   const { data: users } = useFinanceiroUsers();
@@ -314,6 +322,7 @@ export default function AReceber() {
               <SelectItem value="judicial">Cobrança judicial</SelectItem>
             </SelectContent>
           </Select>
+          <CobrancaResponsavelFilter value={cobrancaResp} onChange={setCobrancaResp} />
         </CardContent>
       </Card>
 
@@ -363,6 +372,7 @@ export default function AReceber() {
                   <TableHead>Parcelas</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cobrança</TableHead>
+                  <TableHead>Resp. cobrança</TableHead>
                   <TableHead>Responsável</TableHead>
                 </TableRow>
               </TableHeader>
@@ -431,6 +441,19 @@ export default function AReceber() {
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
+                      </TableCell>
+                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
+                        <div className="space-y-1">
+                          <CobrancaResponsavelInfo titulo={t} compact />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={(e) => { e.stopPropagation(); setCobrancaTitulo(t); }}
+                          >
+                            Cobrança
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell onDoubleClick={(e) => e.stopPropagation()}>
                         <Select
