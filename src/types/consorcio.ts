@@ -1,5 +1,5 @@
 export type TipoPessoa = 'pf' | 'pj';
-export type ConsorcioStatus = 'ativo' | 'inativo' | 'cancelado' | 'contemplado';
+export type ConsorcioStatus = 'ativo' | 'inativo' | 'cancelado' | 'contemplado' | 'descontemplado';
 export type TipoProduto = 'select' | 'parcelinha';
 export type TipoContrato = 'normal' | 'intercalado' | 'intercalado_impar';
 export type OrigemConsorcio = string;
@@ -273,6 +273,7 @@ export const STATUS_OPTIONS = [
   { value: 'inativo', label: 'Inativo', color: 'bg-gray-500' },
   { value: 'cancelado', label: 'Cancelado', color: 'bg-red-500' },
   { value: 'contemplado', label: 'Contemplado', color: 'bg-blue-500' },
+  { value: 'descontemplado', label: 'Descontemplado', color: 'bg-orange-500' },
 ] as const;
 
 export const TIPO_DOCUMENTO_OPTIONS = [
