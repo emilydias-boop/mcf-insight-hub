@@ -452,9 +452,13 @@ export type Database = {
       }
       ar_titulos: {
         Row: {
+          cobranca_responsavel_id: string | null
           cobranca_stage: string | null
           cobranca_stage_manual: boolean
           cobranca_stage_updated_at: string | null
+          cobranca_ultima_data: string | null
+          cobranca_ultima_nota: string | null
+          cobranca_ultimo_registro_em: string | null
           created_at: string
           created_by: string | null
           customer_document: string | null
@@ -477,9 +481,13 @@ export type Database = {
           valor_total: number
         }
         Insert: {
+          cobranca_responsavel_id?: string | null
           cobranca_stage?: string | null
           cobranca_stage_manual?: boolean
           cobranca_stage_updated_at?: string | null
+          cobranca_ultima_data?: string | null
+          cobranca_ultima_nota?: string | null
+          cobranca_ultimo_registro_em?: string | null
           created_at?: string
           created_by?: string | null
           customer_document?: string | null
@@ -502,9 +510,13 @@ export type Database = {
           valor_total?: number
         }
         Update: {
+          cobranca_responsavel_id?: string | null
           cobranca_stage?: string | null
           cobranca_stage_manual?: boolean
           cobranca_stage_updated_at?: string | null
+          cobranca_ultima_data?: string | null
+          cobranca_ultima_nota?: string | null
+          cobranca_ultimo_registro_em?: string | null
           created_at?: string
           created_by?: string | null
           customer_document?: string | null
