@@ -1,0 +1,2 @@
+ALTER TABLE public.consortium_cards DROP CONSTRAINT consortium_cards_status_check;
+ALTER TABLE public.consortium_cards ADD CONSTRAINT consortium_cards_status_check CHECK (status = ANY (ARRAY['ativo'::text,'inativo'::text,'cancelado'::text,'contemplado'::text,'descontemplado'::text]));
