@@ -14,6 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Wallet, PhoneCall, Gavel, ExternalLink, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { UserRoundCheck } from 'lucide-react';
 import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -23,6 +24,11 @@ import { useArTitulos, useUpdateCobrancaStage, useRegistrarCobrancaContato, useM
 import type { ArCobrancaStage, ArTitulo, ArParcela } from '@/types/aReceber';
 import { AR_COBRANCA_STAGE_LABEL } from '@/types/aReceber';
 import { parcelaDocNumber } from '@/lib/arTicketNumber';
+import {
+  CobrancaResponsavelDialog,
+  CobrancaResponsavelInfo,
+  CobrancaResponsavelFilter,
+} from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -159,7 +165,15 @@ function isVencimentoNaSemanaCorrente(dataVencimento: string | null): boolean {
   return venc >= today && venc <= limite;
 }
 
-function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOpen: () => void; onJudicial: () => void; onBaixar: (valor: number, data: string, forma: string) => Promise<void> }) {
+function CobrancaResponsavelMenuItem({ onSelect }: { onSelect: () => void }) {
+  return (
+    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onSelect(); }}>
+      <UserRoundCheck className="w-4 h-4 mr-2" /> Responsável / nota de cobrança
+    </DropdownMenuItem>
+  );
+}
+
+function Card_({ item, onOpen, onJudicial, onBaixar, onCobranca }: { item: ParcelaCard; onOpen: () => void; onJudicial: () => void; onBaixar: (valor: number, data: string, forma: string) => Promise<void>; onCobranca: () => void }) {
   const { titulo, parcela, diasAtraso } = item;
   const venc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
   const venceEstaSemana = isVencimentoNaSemanaCorrente(parcela.data_vencimento);
@@ -184,6 +198,7 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
               <ExternalLink className="w-4 h-4 mr-2" /> Abrir detalhes
             </DropdownMenuItem>
             <ContatoDialog titulo={titulo} onDone={() => {}} />
+            <CobrancaResponsavelMenuItem onSelect={onCobranca} />
             <DropdownMenuSeparator />
             {item.stage !== 'judicial' && (
               <DropdownMenuItem onSelect={onJudicial} className="text-red-600">
@@ -224,6 +239,9 @@ function Card_({ item, onOpen, onJudicial, onBaixar }: { item: ParcelaCard; onOp
           <Badge variant="outline" className="text-[10px]">Entrada</Badge>
         )}
       </div>
+      <div className="border-t pt-2">
+        <CobrancaResponsavelInfo titulo={titulo} compact />
+      </div>
     </div>
   );
 }
@@ -233,11 +251,13 @@ function JudicialGroupCard({
   items,
   onOpen,
   onBaixar,
+  onCobranca,
 }: {
   titulo: ArTitulo;
   items: ParcelaCard[];
   onOpen: () => void;
   onBaixar: (item: ParcelaCard, valor: number, data: string, forma: string) => Promise<void>;
+  onCobranca: () => void;
 }) {
   const [expanded, setExpanded] = useState(items.length <= 1);
   const total = items.reduce((s, i) => s + (Number(i.parcela.valor) || 0), 0);
@@ -262,6 +282,7 @@ function JudicialGroupCard({
               <ExternalLink className="w-4 h-4 mr-2" /> Abrir detalhes
             </DropdownMenuItem>
             <ContatoDialog titulo={titulo} onDone={() => {}} />
+            <CobrancaResponsavelMenuItem onSelect={onCobranca} />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -280,6 +301,9 @@ function JudicialGroupCard({
           </Badge>
         </div>
       )}
+      <div className="border-t pt-2">
+        <CobrancaResponsavelInfo titulo={titulo} compact />
+      </div>
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
