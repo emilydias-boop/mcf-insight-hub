@@ -79,6 +79,16 @@ export function StatusEditDropdown({
       return;
     }
 
+    if (newStatus === 'descontemplado') {
+      setConfirmDialog({
+        open: true,
+        status: newStatus,
+        title: 'Marcar como Descontemplado',
+        description: 'Tem certeza que deseja marcar esta cota como descontemplada? A contemplação anterior deixará de ser considerada como válida.',
+      });
+      return;
+    }
+
     onStatusChange(newStatus);
   };
 
