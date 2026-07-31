@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Employee } from '@/types/hr';
 import { useAvailableProfiles, useLinkedProfile, AvailableProfile } from '@/hooks/useAvailableProfiles';
+import { useBuCatalog, useUpdateProfileSquad } from '@/hooks/useBuCatalog';
 import { useEmployeeMutations } from '@/hooks/useEmployees';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   AlertDialog, 
@@ -30,6 +33,37 @@ export default function ProfileLinkSection({ employee, editing, onProfileChange 
   const { data: linkedProfile, isLoading: loadingLinked } = useLinkedProfile(employee.profile_id);
   const { updateEmployee } = useEmployeeMutations();
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const { data: buCatalog, isLoading: loadingBus } = useBuCatalog();
+  const updateSquad = useUpdateProfileSquad();
+  const [selectedBus, setSelectedBus] = useState<string[]>([]);
+  const [squadError, setSquadError] = useState<string | null>(null);
+
+  const linkedSquad = linkedProfile?.squad ?? [];
+
+  useEffect(() => {
+    setSelectedBus(Array.isArray(linkedSquad) ? linkedSquad : []);
+    setSquadError(null);
+  }, [linkedProfile?.id, JSON.stringify(linkedSquad)]);
+
+  const buLabel = (code: string) =>
+    buCatalog?.find((b) => b.code === code)?.label || code;
+
+  const toggleBu = (code: string, checked: boolean) => {
+    setSquadError(null);
+    setSelectedBus((prev) =>
+      checked ? [...new Set([...prev, code])] : prev.filter((c) => c !== code)
+    );
+  };
+
+  const handleSaveSquad = () => {
+    if (!linkedProfile) return;
+    if (selectedBus.length === 0) {
+      setSquadError('Selecione pelo menos 1 BU de atuação.');
+      toast.error('Selecione pelo menos 1 BU de atuação.');
+      return;
+    }
+    updateSquad.mutate({ profileId: linkedProfile.id, squad: selectedBus });
+  };
 
   const handleLink = () => {
     if (!selectedProfileId) return;
@@ -80,15 +114,19 @@ export default function ProfileLinkSection({ employee, editing, onProfileChange 
                 <Mail className="h-3 w-3" />
                 {linkedProfile.email}
               </div>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {linkedProfile.role && (
                   <Badge className={getRoleBadgeColor(linkedProfile.role)}>
                     <Shield className="h-3 w-3 mr-1" />
                     {linkedProfile.role}
                   </Badge>
                 )}
-                {linkedProfile.squad && (
-                  <Badge variant="outline">{linkedProfile.squad}</Badge>
+                {Array.isArray(linkedSquad) && linkedSquad.length > 0 ? (
+                  linkedSquad.map((code) => (
+                    <Badge key={code} variant="outline">{buLabel(code)}</Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">Nenhuma BU definida</span>
                 )}
               </div>
             </div>
@@ -122,6 +160,35 @@ export default function ProfileLinkSection({ employee, editing, onProfileChange 
               </AlertDialog>
             )}
           </div>
+
+          {editing && (
+            <div className="pt-3 border-t space-y-3">
+              <p className="text-sm font-medium">BUs de atuação</p>
+              {loadingBus ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-5 w-36" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {buCatalog?.map((bu) => (
+                    <label key={bu.code} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={selectedBus.includes(bu.code)}
+                        onCheckedChange={(checked) => toggleBu(bu.code, checked === true)}
+                      />
+                      {bu.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {squadError && <p className="text-sm text-destructive">{squadError}</p>}
+              <Button size="sm" onClick={handleSaveSquad} disabled={updateSquad.isPending || loadingBus}>
+                Salvar BUs
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
