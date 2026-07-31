@@ -33,6 +33,7 @@ const BIConsorcioPublic = lazy(() => import("./pages/public/BIConsorcioPublic"))
 const BIIncorporadorPublic = lazy(() => import("./pages/public/BIIncorporadorPublic"));
 const TVLauncher = lazy(() => import("./pages/public/TVLauncher"));
 const BITVRotativo = lazy(() => import("./pages/public/BITVRotativo"));
+const TVEquipeGeral = lazy(() => import("./pages/public/TVEquipeGeral"));
 const CheckinInbox = lazy(() => import("./pages/checkin/CheckinInbox"));
 const CustomerRoom = lazy(() => import("./pages/checkin/CustomerRoom"));
 const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoAccess"));
@@ -181,6 +182,7 @@ const App = () => (
             <Route path="/bi/incorporador" element={<BIIncorporadorPublic />} />
             <Route path="/bi/tv" element={<BITVRotativo />} />
             <Route path="/tv" element={<TVLauncher />} />
+            <Route path="/tv/equipe-geral" element={<TVEquipeGeral />} />
             <Route path="/checkin/sala/:token" element={<CustomerRoom />} />
             
             {/* Protected routes */}

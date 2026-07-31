@@ -14722,6 +14722,7 @@ export type Database = {
           was_in_squad_during_period: boolean
         }[]
       }
+      get_team_dashboard_public: { Args: { _token: string }; Returns: Json }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
       get_user_role: {
