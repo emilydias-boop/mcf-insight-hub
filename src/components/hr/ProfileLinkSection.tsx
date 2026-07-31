@@ -21,6 +21,7 @@ import {
   AlertDialogTrigger 
 } from '@/components/ui/alert-dialog';
 import { UserCheck, UserX, Link2, Unlink, Mail, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ProfileLinkSectionProps {
   employee: Employee;
