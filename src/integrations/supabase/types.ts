@@ -2094,6 +2094,33 @@ export type Database = {
           },
         ]
       }
+      bu_catalog: {
+        Row: {
+          code: string
+          created_at: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bu_origin_mapping: {
         Row: {
           bu: string
