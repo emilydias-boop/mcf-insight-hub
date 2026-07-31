@@ -588,6 +588,13 @@ export default function AReceber() {
         </TabsContent>
       </Tabs>
       <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
+      {cobrancaTitulo && (
+        <CobrancaResponsavelDialog
+          titulo={cobrancaTitulo}
+          open={!!cobrancaTitulo}
+          onOpenChange={(v) => { if (!v) setCobrancaTitulo(null); }}
+        />
+      )}
       <CadastroManualDialog open={openCadastroManual} onOpenChange={setOpenCadastroManual} />
     </div>
   );
