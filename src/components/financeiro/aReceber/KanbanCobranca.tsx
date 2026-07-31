@@ -369,6 +369,8 @@ export function KanbanCobranca() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [nameFilter, setNameFilter] = useState<string>('');
+  const [respFilter, setRespFilter] = useState<string>('todos');
+  const [cobrancaTitulo, setCobrancaTitulo] = useState<ArTitulo | null>(null);
 
   const tituloIds = useMemo(() => (titulos ?? []).map(t => t.id), [titulos]);
 
@@ -401,6 +403,11 @@ export function KanbanCobranca() {
       const titulo = tituloMap.get(p.titulo_id);
       if (!titulo) return;
       if (q && !(titulo.customer_name || '').toLowerCase().includes(q)) return;
+      if (respFilter !== 'todos') {
+        if (respFilter === 'none') {
+          if (titulo.cobranca_responsavel_id) return;
+        } else if (titulo.cobranca_responsavel_id !== respFilter) return;
+      }
 
       const dv = p.data_vencimento ? new Date(p.data_vencimento + 'T00:00:00') : null;
       const diasAtraso = dv && dv < today ? Math.floor((today.getTime() - dv.getTime()) / 86400000) : 0;
@@ -427,7 +434,7 @@ export function KanbanCobranca() {
       buckets[k].sort((a, b) => (a.parcela.data_vencimento || '').localeCompare(b.parcela.data_vencimento || ''));
     });
     return buckets;
-  }, [titulos, parcelas, nameFilter]);
+  }, [titulos, parcelas, nameFilter, respFilter]);
 
   const totalsFiltered = useMemo(() => {
     const totals: Record<ArCobrancaStage, number> = { mes: 0, atraso: 0, judicial: 0 };
@@ -517,8 +524,12 @@ export function KanbanCobranca() {
               className="mt-1 block rounded-md border bg-background px-3 py-1.5 text-sm"
             />
           </div>
-          {(dateFrom || dateTo || nameFilter) && (
-            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setNameFilter(''); }}>
+          <div className="min-w-[200px]">
+            <Label className="text-xs">Resp. cobrança</Label>
+            <CobrancaResponsavelFilter value={respFilter} onChange={setRespFilter} className="mt-1 h-9" />
+          </div>
+          {(dateFrom || dateTo || nameFilter || respFilter !== 'todos') && (
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setNameFilter(''); setRespFilter('todos'); }}>
               Limpar
             </Button>
           )}
@@ -606,6 +617,7 @@ export function KanbanCobranca() {
                                 item={item}
                                 onOpen={() => navigate(`/financeiro/a-receber/${item.titulo.id}`)}
                                 onJudicial={() => moveToJudicial(item.titulo.id)}
+                                onCobranca={() => setCobrancaTitulo(item.titulo)}
                                 onBaixar={(valor, data, forma) => baixar.mutateAsync({
                                   id: item.parcela.id,
                                   tituloId: item.titulo.id,
@@ -630,6 +642,7 @@ export function KanbanCobranca() {
                                 titulo={g.titulo}
                                 items={g.items}
                                 onOpen={() => navigate(`/financeiro/a-receber/${g.titulo.id}`)}
+                                onCobranca={() => setCobrancaTitulo(g.titulo)}
                                 onBaixar={(it, valor, data, forma) => baixar.mutateAsync({
                                   id: it.parcela.id,
                                   tituloId: it.titulo.id,
@@ -651,6 +664,13 @@ export function KanbanCobranca() {
           );
         })}
       </div>
+      {cobrancaTitulo && (
+        <CobrancaResponsavelDialog
+          titulo={cobrancaTitulo}
+          open={!!cobrancaTitulo}
+          onOpenChange={(v) => { if (!v) setCobrancaTitulo(null); }}
+        />
+      )}
     </DragDropContext>
   );
 }
