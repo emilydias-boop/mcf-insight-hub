@@ -9,6 +9,7 @@ export interface ArTitulosFilters {
   product_code?: string;
   search?: string;
   responsavel_id?: string;
+  cobranca_responsavel_id?: string;
   cobranca_stage?: ArCobrancaStage | 'todos';
 }
 
@@ -26,6 +27,10 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
       if (filters.tipo && filters.tipo !== 'todos') query = query.eq('tipo', filters.tipo);
       if (filters.product_code && filters.product_code !== 'todos') query = query.eq('product_code', filters.product_code);
       if (filters.responsavel_id) query = query.eq('responsavel_id', filters.responsavel_id);
+      if (filters.cobranca_responsavel_id) {
+        if (filters.cobranca_responsavel_id === 'none') query = query.is('cobranca_responsavel_id', null);
+        else query = query.eq('cobranca_responsavel_id', filters.cobranca_responsavel_id);
+      }
       if (filters.search) {
         const s = filters.search.trim();
         query = query.or(`customer_name.ilike.%${s}%,customer_email.ilike.%${s}%,customer_document.ilike.%${s}%`);
