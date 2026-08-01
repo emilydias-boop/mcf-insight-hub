@@ -12495,6 +12495,42 @@ export type Database = {
         }
         Relationships: []
       }
+      team_target_weekday_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          day_of_week: number
+          id: string
+          month_start: string
+          target_name: string
+          target_type: string
+          target_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          day_of_week: number
+          id?: string
+          month_start: string
+          target_name: string
+          target_type: string
+          target_value?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          day_of_week?: number
+          id?: string
+          month_start?: string
+          target_name?: string
+          target_type?: string
+          target_value?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       team_targets: {
         Row: {
           created_at: string | null
