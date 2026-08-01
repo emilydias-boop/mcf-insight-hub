@@ -371,13 +371,32 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     });
     
     setValues(newValues);
-    toast.success(`Metas recalculadas com base no agendamento: ${agendamento}`);
+
+    // Cascata independente para cada dia da semana, a partir do Agendamento do dia
+    const agendamentoDiaKey = `${buPrefix}agendamento_dia`;
+    setWeekdayValues(prev => {
+      const next: WeekdayTargetMap = { ...prev };
+      WEEKDAY_ORDER.forEach(dow => {
+        const dowAgendamento = prev[agendamentoDiaKey]?.[dow] ?? agendamento;
+        const cascade = calculateDayCascade(dowAgendamento, buPrefix);
+        Object.entries(cascade).forEach(([dayType, val]) => {
+          next[dayType] = { ...(next[dayType] || {}), [dow]: val };
+        });
+      });
+      return next;
+    });
+
+    toast.success(`Metas recalculadas com base no agendamento de cada dia da semana`);
   };
 
   const handleSave = async () => {
     await upsertMutation.mutateAsync({ 
       targets: values,
       targetMonth: selectedMonth
+    });
+    await upsertWeekdayMutation.mutateAsync({
+      targetMonth: selectedMonth,
+      overrides: weekdayValues,
     });
     onOpenChange(false);
   };
