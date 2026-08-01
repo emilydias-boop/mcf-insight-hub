@@ -595,32 +595,32 @@ export default function ConsorcioPainelEquipe() {
       // Agenda metrics (shared across pipelines)
       {
         label: 'Agendamento',
-        day: { value: dayValues.agendamento, target: getTargetValue('agendamento_dia') },
+        day: { value: dayValues.agendamento, target: getDayTargetValue('agendamento_dia') },
         week: { value: weekValues.agendamento, target: getTargetValue('agendamento_semana') },
         month: { value: monthValues.agendamento, target: getTargetValue('agendamento_mes') },
       },
       {
         label: 'R1 Agendada',
-        day: { value: dayValues.r1Agendada, target: getTargetValue('r1_agendada_dia') },
+        day: { value: dayValues.r1Agendada, target: getDayTargetValue('r1_agendada_dia') },
         week: { value: weekValues.r1Agendada, target: getTargetValue('r1_agendada_semana') },
         month: { value: monthValues.r1Agendada, target: getTargetValue('r1_agendada_mes') },
       },
       {
         label: 'R1 Realizada',
-        day: { value: dayValues.r1Realizada, target: getTargetValue('r1_realizada_dia') },
+        day: { value: dayValues.r1Realizada, target: getDayTargetValue('r1_realizada_dia') },
         week: { value: weekValues.r1Realizada, target: getTargetValue('r1_realizada_semana') },
         month: { value: monthValues.r1Realizada, target: getTargetValue('r1_realizada_mes') },
       },
       {
         label: 'No-Show',
-        day: { value: dayValues.noShow, target: getTargetValue('noshow_dia') },
+        day: { value: dayValues.noShow, target: getDayTargetValue('noshow_dia') },
         week: { value: weekValues.noShow, target: getTargetValue('noshow_semana') },
         month: { value: monthValues.noShow, target: getTargetValue('noshow_mes') },
       },
       // Proposta Enviada (standalone)
       {
         label: 'Proposta Enviada',
-        day: { value: pm.day.propostaEnviada, target: getTargetValue('proposta_enviada_dia') },
+        day: { value: pm.day.propostaEnviada, target: getDayTargetValue('proposta_enviada_dia') },
         week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
         month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
       },
@@ -633,7 +633,7 @@ export default function ConsorcioPainelEquipe() {
         month: { value: prod.month, target: 0 },
       })),
     ];
-  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, produtosFechados]);
+  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, consorcioWeekdayOverrides, todayDow, produtosFechados]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
