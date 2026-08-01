@@ -25,6 +25,13 @@ import {
   useSdrTeamTargetsForYear 
 } from "@/hooks/useSdrTeamTargets";
 import { getDiasUteisMes, getDiasUteisSemana } from "@/lib/businessDays";
+import {
+  useSdrWeekdayTargets,
+  useUpsertSdrWeekdayTargets,
+  WeekdayTargetMap,
+  WEEKDAY_ORDER,
+  WEEKDAY_LABELS,
+} from "@/hooks/useSdrWeekdayTargets";
 
 interface TeamGoalsEditModalProps {
   open: boolean;
@@ -135,7 +142,9 @@ const calculateConsorcioDayCascade = (agendamento: number, prefix: string): Reco
 export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPrefix = 'sdr_' }: TeamGoalsEditModalProps) {
   const [values, setValues] = useState<Record<SdrTargetType, number>>({} as Record<SdrTargetType, number>);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [weekdayValues, setWeekdayValues] = useState<WeekdayTargetMap>({});
   const upsertMutation = useUpsertSdrTargets();
+  const upsertWeekdayMutation = useUpsertSdrWeekdayTargets();
   
   const selectedYear = selectedMonth.getFullYear();
 
@@ -158,6 +167,9 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
   
   // Fetch all targets for the year (for annual sum)
   const { data: yearTargets } = useSdrTeamTargetsForYear(selectedYear, buPrefix);
+
+  // Overrides por dia da semana do mês selecionado
+  const { data: weekdayOverrides } = useSdrWeekdayTargets(selectedMonth, buPrefix);
 
   // Calculate business days for selected month
   const diasUteisSemana = getDiasUteisSemana(selectedMonth);
