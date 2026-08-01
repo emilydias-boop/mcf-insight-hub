@@ -447,7 +447,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-6 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-6 py-4">
             {/* Day targets */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
