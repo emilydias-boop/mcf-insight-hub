@@ -254,8 +254,10 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     const dayTypes = dynamicConfigs.filter(c => c.period === 'day').map(c => c.type as string);
     const initial: WeekdayTargetMap = {};
 
+    const targetsToUse = monthTargets || existingTargets;
+
     dayTypes.forEach(dayType => {
-      const fallback = (values as Record<string, number>)[dayType] ?? 0;
+      const fallback = targetsToUse.find(t => t.target_type === dayType)?.target_value ?? 0;
       initial[dayType] = {};
       WEEKDAY_ORDER.forEach(dow => {
         const override = weekdayOverrides?.[dayType]?.[dow];
@@ -264,7 +266,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     });
 
     setWeekdayValues(initial);
-  }, [open, weekdayOverrides, values, dynamicConfigs]);
+  }, [open, weekdayOverrides, monthTargets, existingTargets, dynamicConfigs]);
 
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
