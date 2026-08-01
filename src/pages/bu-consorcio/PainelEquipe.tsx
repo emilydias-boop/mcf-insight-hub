@@ -27,6 +27,7 @@ import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/
 import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
 import { useConsorcioProdutosFechadosMetrics } from "@/hooks/useConsorcioProdutosFechadosMetrics";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
+import { useSdrWeekdayTargets, resolveWeekdayTarget } from "@/hooks/useSdrWeekdayTargets";
 import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
