@@ -5,6 +5,7 @@ import { Target, Settings2 } from "lucide-react";
 import { GoalsMatrixTable } from "./GoalsMatrixTable";
 import { TeamGoalsEditModal } from "./TeamGoalsEditModal";
 import { useSdrTeamTargets, SdrTargetType } from "@/hooks/useSdrTeamTargets";
+import { useSdrWeekdayTargets, resolveWeekdayTarget } from "@/hooks/useSdrWeekdayTargets";
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -30,6 +31,8 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const { role } = useAuth();
   const { data: targets, isLoading } = useSdrTeamTargets(buPrefix);
+  const { data: weekdayOverrides } = useSdrWeekdayTargets(new Date(), buPrefix);
+  const todayDow = new Date().getDay();
 
   // Roles allowed to edit
   const canEdit = role && ['admin', 'manager', 'coordenador'].includes(role);
@@ -41,17 +44,23 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 
     return target?.target_value ?? 0;
   };
 
+  // Meta do dia: usa override do dia da semana de hoje, com fallback no valor único
+  const getDayTargetValue = (suffix: string): number => {
+    const targetType = `${buPrefix}${suffix}`;
+    return resolveWeekdayTarget(weekdayOverrides, targetType, todayDow, getTargetValue(suffix));
+  };
+
   // Day targets
   const dayTargets = useMemo(() => ({
-    agendamento: getTargetValue('agendamento_dia'),
-    r1Agendada: getTargetValue('r1_agendada_dia'),
+    agendamento: getDayTargetValue('agendamento_dia'),
+    r1Agendada: getDayTargetValue('r1_agendada_dia'),
     r1Realizada: Math.round(dayValues.r1Agendada * 0.7),
     noShow: Math.round(dayValues.r1Agendada * 0.3),
     contrato: Math.round(dayValues.r1Agendada * 0.7 * 0.3),
-    r2Agendada: getTargetValue('r2_agendada_dia'),
+    r2Agendada: getDayTargetValue('r2_agendada_dia'),
     r2Realizada: Math.round(dayValues.r2Agendada * 0.7),
     vendaRealizada: Math.round(dayValues.r2Agendada * 0.3),
-  }), [targets, buPrefix, dayValues]);
+  }), [targets, weekdayOverrides, todayDow, buPrefix, dayValues]);
 
   // Week targets
   const weekTargets = useMemo(() => ({
