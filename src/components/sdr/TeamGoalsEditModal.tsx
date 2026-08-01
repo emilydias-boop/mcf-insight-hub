@@ -25,6 +25,13 @@ import {
   useSdrTeamTargetsForYear 
 } from "@/hooks/useSdrTeamTargets";
 import { getDiasUteisMes, getDiasUteisSemana } from "@/lib/businessDays";
+import {
+  useSdrWeekdayTargets,
+  useUpsertSdrWeekdayTargets,
+  WeekdayTargetMap,
+  WEEKDAY_ORDER,
+  WEEKDAY_LABELS,
+} from "@/hooks/useSdrWeekdayTargets";
 
 interface TeamGoalsEditModalProps {
   open: boolean;
@@ -135,7 +142,9 @@ const calculateConsorcioDayCascade = (agendamento: number, prefix: string): Reco
 export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPrefix = 'sdr_' }: TeamGoalsEditModalProps) {
   const [values, setValues] = useState<Record<SdrTargetType, number>>({} as Record<SdrTargetType, number>);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [weekdayValues, setWeekdayValues] = useState<WeekdayTargetMap>({});
   const upsertMutation = useUpsertSdrTargets();
+  const upsertWeekdayMutation = useUpsertSdrWeekdayTargets();
   
   const selectedYear = selectedMonth.getFullYear();
 
@@ -158,6 +167,9 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
   
   // Fetch all targets for the year (for annual sum)
   const { data: yearTargets } = useSdrTeamTargetsForYear(selectedYear, buPrefix);
+
+  // Overrides por dia da semana do mês selecionado
+  const { data: weekdayOverrides } = useSdrWeekdayTargets(selectedMonth, buPrefix);
 
   // Calculate business days for selected month
   const diasUteisSemana = getDiasUteisSemana(selectedMonth);
@@ -235,10 +247,52 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     setValues(initial as Record<SdrTargetType, number>);
   }, [monthTargets, existingTargets, open, diasUteisSemana, diasUteisMes, dynamicConfigs, buPrefix, dynamicDayToWeek, dynamicDayToMonth]);
 
+  // Inicializa metas por dia da semana: override quando existir, senão o valor único do dia
+  useEffect(() => {
+    if (!open) return;
+
+    const dayTypes = dynamicConfigs.filter(c => c.period === 'day').map(c => c.type as string);
+    const initial: WeekdayTargetMap = {};
+
+    const targetsToUse = monthTargets || existingTargets;
+
+    dayTypes.forEach(dayType => {
+      const fallback = targetsToUse.find(t => t.target_type === dayType)?.target_value ?? 0;
+      initial[dayType] = {};
+      WEEKDAY_ORDER.forEach(dow => {
+        const override = weekdayOverrides?.[dayType]?.[dow];
+        initial[dayType][dow] = override === undefined || override === null ? fallback : override;
+      });
+    });
+
+    setWeekdayValues(initial);
+  }, [open, weekdayOverrides, monthTargets, existingTargets, dynamicConfigs]);
+
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
     const numValue = parseInt(value) || 0;
     setValues(prev => ({ ...prev, [type]: Math.max(0, numValue) }));
+  };
+
+  // Handler para campos de dia da semana (cascata quando é o Agendamento)
+  const handleWeekdayChange = (type: string, dayOfWeek: number, value: string) => {
+    const numValue = Math.max(0, parseInt(value) || 0);
+    const agendamentoDiaType = `${buPrefix}agendamento_dia`;
+
+    setWeekdayValues(prev => {
+      const next: WeekdayTargetMap = { ...prev };
+
+      if (type === agendamentoDiaType) {
+        const cascade = calculateDayCascade(numValue, buPrefix);
+        Object.entries(cascade).forEach(([dayType, val]) => {
+          next[dayType] = { ...(next[dayType] || {}), [dayOfWeek]: val };
+        });
+      } else {
+        next[type] = { ...(next[type] || {}), [dayOfWeek]: numValue };
+      }
+
+      return next;
+    });
   };
 
   // Handler para campos de dia (auto-calcula semana e mês, e cascata se for agendamento)
@@ -317,13 +371,32 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     });
     
     setValues(newValues);
-    toast.success(`Metas recalculadas com base no agendamento: ${agendamento}`);
+
+    // Cascata independente para cada dia da semana, a partir do Agendamento do dia
+    const agendamentoDiaKey = `${buPrefix}agendamento_dia`;
+    setWeekdayValues(prev => {
+      const next: WeekdayTargetMap = { ...prev };
+      WEEKDAY_ORDER.forEach(dow => {
+        const dowAgendamento = prev[agendamentoDiaKey]?.[dow] ?? agendamento;
+        const cascade = calculateDayCascade(dowAgendamento, buPrefix);
+        Object.entries(cascade).forEach(([dayType, val]) => {
+          next[dayType] = { ...(next[dayType] || {}), [dow]: val };
+        });
+      });
+      return next;
+    });
+
+    toast.success(`Metas recalculadas com base no agendamento de cada dia da semana`);
   };
 
   const handleSave = async () => {
     await upsertMutation.mutateAsync({ 
       targets: values,
       targetMonth: selectedMonth
+    });
+    await upsertWeekdayMutation.mutateAsync({
+      targetMonth: selectedMonth,
+      overrides: weekdayValues,
     });
     onOpenChange(false);
   };
@@ -374,26 +447,32 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-6 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-6 py-4">
             {/* Day targets */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Metas do Dia
               </h3>
-              <p className="text-xs text-muted-foreground -mt-2">Entrada manual</p>
+              <p className="text-xs text-muted-foreground -mt-2">Entrada manual por dia da semana</p>
               {dayConfigs.map(config => (
                 <div key={config.type} className="space-y-1">
-                  <Label htmlFor={config.type} className="text-sm">
-                    {config.label}
-                  </Label>
-                  <Input
-                    id={config.type}
-                    type="number"
-                    min={0}
-                    value={values[config.type] ?? 0}
-                    onChange={(e) => handleDayChange(config.type, e.target.value)}
-                    className="h-9"
-                  />
+                  <Label className="text-sm">{config.label}</Label>
+                  <div className="grid grid-cols-7 gap-1">
+                    {WEEKDAY_ORDER.map(dow => (
+                      <div key={dow} className="space-y-0.5">
+                        <span className="block text-[10px] text-center text-muted-foreground">
+                          {WEEKDAY_LABELS[dow]}
+                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={weekdayValues[config.type]?.[dow] ?? 0}
+                          onChange={(e) => handleWeekdayChange(config.type, dow, e.target.value)}
+                          className="h-8 px-1 text-center text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

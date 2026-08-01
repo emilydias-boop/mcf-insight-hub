@@ -27,6 +27,7 @@ import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/
 import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
 import { useConsorcioProdutosFechadosMetrics } from "@/hooks/useConsorcioProdutosFechadosMetrics";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
+import { useSdrWeekdayTargets, resolveWeekdayTarget } from "@/hooks/useSdrWeekdayTargets";
 import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -423,6 +424,8 @@ export default function ConsorcioPainelEquipe() {
 
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
+  const { data: consorcioWeekdayOverrides } = useSdrWeekdayTargets(new Date(), BU_PREFIX);
+  const todayDow = new Date().getDay();
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
 
   // Helper to get target value by suffix
@@ -430,6 +433,12 @@ export default function ConsorcioPainelEquipe() {
     const targetType = `${BU_PREFIX}${suffix}`;
     const target = consorcioTargets?.find(t => t.target_type === targetType);
     return target?.target_value ?? 0;
+  };
+
+  // Meta do dia: override do dia da semana de hoje, com fallback no valor único
+  const getDayTargetValue = (suffix: string): number => {
+    const targetType = `${BU_PREFIX}${suffix}`;
+    return resolveWeekdayTarget(consorcioWeekdayOverrides, targetType, todayDow, getTargetValue(suffix));
   };
 
   // Helper to check if a meeting matches the selected pipeline
@@ -586,32 +595,32 @@ export default function ConsorcioPainelEquipe() {
       // Agenda metrics (shared across pipelines)
       {
         label: 'Agendamento',
-        day: { value: dayValues.agendamento, target: getTargetValue('agendamento_dia') },
+        day: { value: dayValues.agendamento, target: getDayTargetValue('agendamento_dia') },
         week: { value: weekValues.agendamento, target: getTargetValue('agendamento_semana') },
         month: { value: monthValues.agendamento, target: getTargetValue('agendamento_mes') },
       },
       {
         label: 'R1 Agendada',
-        day: { value: dayValues.r1Agendada, target: getTargetValue('r1_agendada_dia') },
+        day: { value: dayValues.r1Agendada, target: getDayTargetValue('r1_agendada_dia') },
         week: { value: weekValues.r1Agendada, target: getTargetValue('r1_agendada_semana') },
         month: { value: monthValues.r1Agendada, target: getTargetValue('r1_agendada_mes') },
       },
       {
         label: 'R1 Realizada',
-        day: { value: dayValues.r1Realizada, target: getTargetValue('r1_realizada_dia') },
+        day: { value: dayValues.r1Realizada, target: getDayTargetValue('r1_realizada_dia') },
         week: { value: weekValues.r1Realizada, target: getTargetValue('r1_realizada_semana') },
         month: { value: monthValues.r1Realizada, target: getTargetValue('r1_realizada_mes') },
       },
       {
         label: 'No-Show',
-        day: { value: dayValues.noShow, target: getTargetValue('noshow_dia') },
+        day: { value: dayValues.noShow, target: getDayTargetValue('noshow_dia') },
         week: { value: weekValues.noShow, target: getTargetValue('noshow_semana') },
         month: { value: monthValues.noShow, target: getTargetValue('noshow_mes') },
       },
       // Proposta Enviada (standalone)
       {
         label: 'Proposta Enviada',
-        day: { value: pm.day.propostaEnviada, target: getTargetValue('proposta_enviada_dia') },
+        day: { value: pm.day.propostaEnviada, target: getDayTargetValue('proposta_enviada_dia') },
         week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
         month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
       },
@@ -624,7 +633,7 @@ export default function ConsorcioPainelEquipe() {
         month: { value: prod.month, target: 0 },
       })),
     ];
-  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, produtosFechados]);
+  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, consorcioWeekdayOverrides, todayDow, produtosFechados]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
