@@ -453,20 +453,26 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Metas do Dia
               </h3>
-              <p className="text-xs text-muted-foreground -mt-2">Entrada manual</p>
+              <p className="text-xs text-muted-foreground -mt-2">Entrada manual por dia da semana</p>
               {dayConfigs.map(config => (
                 <div key={config.type} className="space-y-1">
-                  <Label htmlFor={config.type} className="text-sm">
-                    {config.label}
-                  </Label>
-                  <Input
-                    id={config.type}
-                    type="number"
-                    min={0}
-                    value={values[config.type] ?? 0}
-                    onChange={(e) => handleDayChange(config.type, e.target.value)}
-                    className="h-9"
-                  />
+                  <Label className="text-sm">{config.label}</Label>
+                  <div className="grid grid-cols-7 gap-1">
+                    {WEEKDAY_ORDER.map(dow => (
+                      <div key={dow} className="space-y-0.5">
+                        <span className="block text-[10px] text-center text-muted-foreground">
+                          {WEEKDAY_LABELS[dow]}
+                        </span>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={weekdayValues[config.type]?.[dow] ?? 0}
+                          onChange={(e) => handleWeekdayChange(config.type, dow, e.target.value)}
+                          className="h-8 px-1 text-center text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
