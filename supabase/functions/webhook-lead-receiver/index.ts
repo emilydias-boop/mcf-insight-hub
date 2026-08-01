@@ -108,6 +108,30 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('[WEBHOOK-RECEIVER] Payload recebido:', JSON.stringify(payload, null, 2));
 
+    // 3.1 Normalize Hubla invoice.payment_succeeded nested payer/user into root fields
+    // These endpoints (lead-guia, a017-construir-para-alugar) have required_fields=['name','email']
+    // and field_mapping={}; buyer data arrives inside event.invoice.payer or event.user.
+    if (payload?.type === 'invoice.payment_succeeded' && payload?.event) {
+      const payer = payload.event?.invoice?.payer ?? {};
+      const user = payload.event?.user ?? {};
+
+      const fillIfEmpty = (key: string, value: any) => {
+        if (value === undefined || value === null || value === '') return;
+        if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
+          payload[key] = value;
+        }
+      };
+
+      const firstName = (payer.firstName ?? user.firstName ?? '').toString().trim();
+      const lastName = (payer.lastName ?? user.lastName ?? '').toString().trim();
+      const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || firstName || null;
+
+      fillIfEmpty('name', fullName);
+      fillIfEmpty('email', payer.email ?? user.email);
+      fillIfEmpty('phone', payer.phone ?? user.phone);
+      fillIfEmpty('cpf', payer.document ?? user.document);
+    }
+
     // Painel de movimentações: derivar event_type pelo slug e logar
     wlPayloadSnapshot = payload;
     const slugLower = slug.toLowerCase();
