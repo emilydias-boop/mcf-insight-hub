@@ -424,6 +424,8 @@ export default function ConsorcioPainelEquipe() {
 
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
+  const { data: consorcioWeekdayOverrides } = useSdrWeekdayTargets(new Date(), BU_PREFIX);
+  const todayDow = new Date().getDay();
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
 
   // Helper to get target value by suffix
@@ -431,6 +433,12 @@ export default function ConsorcioPainelEquipe() {
     const targetType = `${BU_PREFIX}${suffix}`;
     const target = consorcioTargets?.find(t => t.target_type === targetType);
     return target?.target_value ?? 0;
+  };
+
+  // Meta do dia: override do dia da semana de hoje, com fallback no valor único
+  const getDayTargetValue = (suffix: string): number => {
+    const targetType = `${BU_PREFIX}${suffix}`;
+    return resolveWeekdayTarget(consorcioWeekdayOverrides, targetType, todayDow, getTargetValue(suffix));
   };
 
   // Helper to check if a meeting matches the selected pipeline
