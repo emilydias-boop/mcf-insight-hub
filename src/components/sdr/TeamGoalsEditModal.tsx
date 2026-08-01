@@ -247,10 +247,50 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets, buPref
     setValues(initial as Record<SdrTargetType, number>);
   }, [monthTargets, existingTargets, open, diasUteisSemana, diasUteisMes, dynamicConfigs, buPrefix, dynamicDayToWeek, dynamicDayToMonth]);
 
+  // Inicializa metas por dia da semana: override quando existir, senão o valor único do dia
+  useEffect(() => {
+    if (!open) return;
+
+    const dayTypes = dynamicConfigs.filter(c => c.period === 'day').map(c => c.type as string);
+    const initial: WeekdayTargetMap = {};
+
+    dayTypes.forEach(dayType => {
+      const fallback = (values as Record<string, number>)[dayType] ?? 0;
+      initial[dayType] = {};
+      WEEKDAY_ORDER.forEach(dow => {
+        const override = weekdayOverrides?.[dayType]?.[dow];
+        initial[dayType][dow] = override === undefined || override === null ? fallback : override;
+      });
+    });
+
+    setWeekdayValues(initial);
+  }, [open, weekdayOverrides, values, dynamicConfigs]);
+
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
     const numValue = parseInt(value) || 0;
     setValues(prev => ({ ...prev, [type]: Math.max(0, numValue) }));
+  };
+
+  // Handler para campos de dia da semana (cascata quando é o Agendamento)
+  const handleWeekdayChange = (type: string, dayOfWeek: number, value: string) => {
+    const numValue = Math.max(0, parseInt(value) || 0);
+    const agendamentoDiaType = `${buPrefix}agendamento_dia`;
+
+    setWeekdayValues(prev => {
+      const next: WeekdayTargetMap = { ...prev };
+
+      if (type === agendamentoDiaType) {
+        const cascade = calculateDayCascade(numValue, buPrefix);
+        Object.entries(cascade).forEach(([dayType, val]) => {
+          next[dayType] = { ...(next[dayType] || {}), [dayOfWeek]: val };
+        });
+      } else {
+        next[type] = { ...(next[type] || {}), [dayOfWeek]: numValue };
+      }
+
+      return next;
+    });
   };
 
   // Handler para campos de dia (auto-calcula semana e mês, e cascata se for agendamento)
