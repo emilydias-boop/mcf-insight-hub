@@ -6,6 +6,61 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-source-tag, x-webhook-key',
 };
 
+// --- Reentrada de lead: mover stage de negócio já existente (Inside Sales / BU Incorporador) ---
+const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
+const STAGE_NOVO_LEAD = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
+const STAGE_ANAMNESE = 'e6fab26d-f16d-4b00-900f-ca915cbfe9d9';
+const STAGE_CONTRATO_PAGO = '062927f5-b7a3-496a-9d47-eb03b3d69b10';
+const STAGE_VENDA_REALIZADA = '3a2776e2-a536-4a2a-bb7b-a2f53c8941df';
+
+const REENTRY_STAGE_BY_SLUG: Record<string, string> = {
+  'a010-kiwify': STAGE_NOVO_LEAD,
+  'lead-guia': STAGE_NOVO_LEAD,
+  'planilha': STAGE_NOVO_LEAD,
+  'anamnese-ytb': STAGE_ANAMNESE,
+  'anamnese-ytb-live': STAGE_ANAMNESE,
+  'anamnese-manychat': STAGE_ANAMNESE,
+  'ananmnese-live-insta': STAGE_ANAMNESE,
+  'clientdata-inside': STAGE_ANAMNESE,
+  'anamnese-mcf': STAGE_ANAMNESE,
+};
+
+/**
+ * Proteção contra regressão de cliente já pago.
+ * Máximo 2 queries, com curto-circuito.
+ * Retorna null quando pode mover, ou o motivo do bloqueio.
+ */
+async function getReentryBlockReason(
+  supabase: any,
+  dealId: string,
+  currentStageId: string | null,
+): Promise<string | null> {
+  if (currentStageId === STAGE_CONTRATO_PAGO || currentStageId === STAGE_VENDA_REALIZADA) {
+    return 'deal_in_paid_stage';
+  }
+
+  const { data: paidTx } = await supabase
+    .from('hubla_transactions')
+    .select('id')
+    .eq('linked_deal_id', dealId)
+    .eq('sale_status', 'completed')
+    .or('product_name.ilike.%A000%,product_category.eq.contrato')
+    .limit(1);
+
+  if (paidTx && paidTx.length > 0) return 'contract_payment_linked';
+
+  const { data: paidAttendee } = await supabase
+    .from('meeting_slot_attendees')
+    .select('id')
+    .eq('deal_id', dealId)
+    .not('contract_paid_at', 'is', null)
+    .limit(1);
+
+  if (paidAttendee && paidAttendee.length > 0) return 'attendee_contract_paid';
+
+  return null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
