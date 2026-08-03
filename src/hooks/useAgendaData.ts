@@ -171,6 +171,7 @@ export function useAgendaMeetings(
             name,
             tags,
             data_source,
+            owner_id,
             origin:crm_origins(name),
             contact:crm_contacts(id, name, phone, email)
           ),
@@ -190,7 +191,7 @@ export function useAgendaMeetings(
             already_builds,
             contract_paid_at,
             contact:crm_contacts(id, name, phone, email),
-            deal:crm_deals(id, name, tags, data_source, origin:crm_origins(name)),
+            deal:crm_deals(id, name, tags, data_source, owner_id, origin:crm_origins(name)),
             parent_attendee:meeting_slot_attendees!parent_attendee_id(
               id,
               attendee_name,
