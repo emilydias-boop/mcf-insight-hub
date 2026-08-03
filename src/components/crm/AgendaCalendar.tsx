@@ -988,7 +988,11 @@ export function AgendaCalendar({
 
         {/* Legend */}
         <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-4">
-          {legendItems.map(({ name, color }) => (
+          {legendItems.length === 0 ? (
+            <span className="text-xs text-muted-foreground">
+              Nenhum closer configurado para esta agenda
+            </span>
+          ) : legendItems.map(({ name, color }) => (
             <div key={name} className="flex items-center gap-2 text-xs">
               <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }} />
               <span className="font-medium">{name}</span>
@@ -1982,7 +1986,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
 
         {/* Legend */}
         <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-3">
-          {legendItems.map(({ name, color }) => (
+          {legendItems.length === 0 ? (
+            <span className="text-xs text-muted-foreground">
+              Nenhum closer configurado para esta agenda
+            </span>
+          ) : legendItems.map(({ name, color }) => (
             <div key={name} className="flex items-center gap-1.5 text-xs">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
               <span>{name}</span>
