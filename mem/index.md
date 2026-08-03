@@ -25,3 +25,4 @@
 - [Qualificação obrigatória](mem://business-logic/qualification-mandatory-rule) — Agendar R1 exige resumo IA da ligação OU questionário de 6 perguntas (≥15 chars) + print do WhatsApp.
 - [Qualification BU Scope](mem://business-logic/qualification-bu-scope) — Qualificação obrigatória pré-R1 só na BU Incorporador MCF; Consórcio bypassa.
 - [Ofertas Outside Configuráveis](mem://business-logic/outside-offers-configurable) — Tabela public.outside_offers (nome ou offer_id) é a fonte de verdade do Outside.
+- [Webhook Lead Reentry](mem://features/webhook-lead-reentry-stage-move) — Reentrada move deal existente p/ Novo Lead ou Anamnese Completa, com 3 travas de cliente pago.
