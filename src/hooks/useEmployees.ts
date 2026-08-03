@@ -136,11 +136,23 @@ export function useEmployeeNfse(employeeId: string | null, ano?: number) {
 export function useEmployeeMutations() {
   const queryClient = useQueryClient();
 
+  // Normaliza campos de data: string vazia -> null (evita "invalid input syntax for type date")
+  const DATE_FIELDS = ['data_admissao', 'data_nascimento', 'data_demissao'] as const;
+  const normalizeDates = <T extends Record<string, any>>(data: T): T => {
+    const out: Record<string, any> = { ...data };
+    for (const field of DATE_FIELDS) {
+      if (field in out && typeof out[field] === 'string' && out[field].trim() === '') {
+        out[field] = null;
+      }
+    }
+    return out as T;
+  };
+
   const createEmployee = useMutation({
     mutationFn: async (data: Partial<Employee>) => {
       const { data: result, error } = await supabase
         .from('employees')
-        .insert(data as any)
+        .insert(normalizeDates(data) as any)
         .select()
         .single();
       
@@ -172,7 +184,7 @@ export function useEmployeeMutations() {
       // 2. Executar update
       const { data: result, error } = await supabase
         .from('employees')
-        .update(data)
+        .update(normalizeDates(data))
         .eq('id', id)
         .select()
         .single();
