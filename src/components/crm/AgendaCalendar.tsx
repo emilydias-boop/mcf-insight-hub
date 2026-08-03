@@ -797,10 +797,11 @@ export function AgendaCalendar({
   };
 
   const legendItems = useMemo(() => {
-    const items = closers.length > 0
-      ? closers.filter(c => c.is_active).map(c => ({ name: c.name, color: c.color || DEFAULT_COLORS[c.name] || '#6B7280' }))
-      : Object.entries(DEFAULT_COLORS).map(([name, color]) => ({ name, color }));
-    return items;
+    // Sem fallback de nomes fixos: se não há closers, a legenda fica vazia e a UI
+    // mostra um estado vazio explícito (evita mascarar bugs de filtro/vínculo).
+    return closers
+      .filter(c => c.is_active)
+      .map(c => ({ name: c.name, color: c.color || DEFAULT_COLORS[c.name] || '#6B7280' }));
   }, [closers]);
 
   // Calculate how many slots a meeting occupies
