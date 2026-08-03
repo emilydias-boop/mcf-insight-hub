@@ -178,6 +178,7 @@ export const SQUAD_OPTIONS = [
   'Financeiro',
   'Operações',
   'RH',
+  'Solar',
   'Outro',
 ];
 
@@ -193,6 +194,7 @@ export const DEPARTAMENTO_OPTIONS = [
   'BU - Consórcio',
   'BU - Crédito',
   'BU - Seguros',
+  'BU - Solar',
   'Financeiro',
   'Marketing',
   'Operações',
