@@ -42,7 +42,7 @@ export const useHublaA000Contracts = (filters: HublaA000Filters) => {
           installment_number,
           installments_quantity
         `)
-        .eq('sale_status', 'paid')
+        .eq('sale_status', 'completed')
         .gte('sale_date', startISO)
         .lte('sale_date', endISO)
         .or('product_name.ilike.%a000%,product_name.ilike.%contrato%')
