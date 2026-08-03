@@ -30,6 +30,12 @@ export interface MeetingAttendee {
   deal?: {
     id: string;
     name: string;
+    owner_id?: string | null;
+    owner_profile?: {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    } | null;
   };
   booked_by_profile?: {
     id: string;
@@ -69,6 +75,12 @@ export interface MeetingSlot {
     name: string;
     tags?: any;
     data_source?: string | null;
+    owner_id?: string | null;
+    owner_profile?: {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    } | null;
     origin?: { name: string | null } | null;
     contact?: {
       id: string;
