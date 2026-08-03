@@ -181,6 +181,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeeStatus: meeting.status,
           isReschedule: false,
           channel,
+          sdrName: resolveSdrName(null, meeting),
         });
       }
     }
