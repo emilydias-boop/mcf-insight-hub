@@ -244,11 +244,46 @@ export function useAgendaMeetings(
       }
 
       // Map profiles to meetings and attendees
-      const meetingsWithProfiles = meetings?.map(m => ({
+      // Resolve deal owners (owner_id stores the responsible user's email)
+      const ownerEmails = [
+        ...new Set(
+          (meetings || []).flatMap((m: any) => [
+            m.deal?.owner_id,
+            ...(m.attendees || []).map((a: any) => a.deal?.owner_id),
+          ]).filter(Boolean) as string[]
+        ),
+      ];
+
+      let ownersMap: Record<string, { id: string; full_name: string | null; email: string | null }> = {};
+      if (ownerEmails.length > 0) {
+        const { data: owners } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('email', ownerEmails);
+
+        if (owners) {
+          ownersMap = owners.reduce((acc, p) => {
+            if (p.email) acc[p.email.toLowerCase()] = p;
+            return acc;
+          }, {} as Record<string, { id: string; full_name: string | null; email: string | null }>);
+        }
+      }
+
+      const withOwner = (deal: any) =>
+        deal
+          ? {
+              ...deal,
+              owner_profile: deal.owner_id ? ownersMap[String(deal.owner_id).toLowerCase()] ?? null : null,
+            }
+          : deal;
+
+      const meetingsWithProfiles = meetings?.map((m: any) => ({
         ...m,
+        deal: withOwner(m.deal),
         booked_by_profile: m.booked_by ? profilesMap[m.booked_by] : undefined,
         attendees: (m.attendees || []).map((a: any) => ({
           ...a,
+          deal: withOwner(a.deal),
           booked_by_profile: a.booked_by ? profilesMap[a.booked_by] : undefined,
         })),
       })) || [];
