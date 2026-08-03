@@ -903,17 +903,65 @@ serve(async (req) => {
       
       await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
 
-      // Adicionar auto_tags ao deal existente (se houver)
+      // --- Reentrada: mover stage do deal existente (se aplicável) ---
+      const oldStageIdReentry: string | null = existingDeal.stage_id ?? null;
+      const targetStageId =
+        endpoint.origin_id === INSIDE_SALES_ORIGIN_ID ? (REENTRY_STAGE_BY_SLUG[slug] || null) : null;
+
+      let stageMoved = false;
+      let stageMoveSkipped: string | null = null;
+      let newStageIdReentry: string | null = oldStageIdReentry;
+
+      if (targetStageId && targetStageId !== oldStageIdReentry) {
+        const blockReason = await getReentryBlockReason(supabase, existingDeal.id, oldStageIdReentry);
+        if (blockReason) {
+          stageMoveSkipped = blockReason;
+          console.log('[WEBHOOK-RECEIVER] ⛔ Movimentação de stage bloqueada:', blockReason, existingDeal.id);
+        } else {
+          stageMoved = true;
+          newStageIdReentry = targetStageId;
+        }
+      } else if (targetStageId) {
+        stageMoveSkipped = 'already_in_target_stage';
+      }
+
+      // Atualiza tags e/ou stage num único write
+      const dealUpdate: Record<string, unknown> = {};
       if (autoTags.length > 0) {
         const newTags = [...new Set([...currentTags, ...autoTags])];
-        
         if (newTags.length !== currentTags.length) {
-          await supabase
-            .from('crm_deals')
-            .update({ tags: newTags })
-            .eq('id', existingDeal.id);
+          dealUpdate.tags = newTags;
           console.log('[WEBHOOK-RECEIVER] Tags adicionadas ao deal existente:', newTags);
         }
+      }
+      if (stageMoved) {
+        dealUpdate.stage_id = targetStageId;
+        dealUpdate.stage_moved_at = new Date().toISOString();
+      }
+
+      if (Object.keys(dealUpdate).length > 0) {
+        await supabase
+          .from('crm_deals')
+          .update(dealUpdate)
+          .eq('id', existingDeal.id);
+      }
+
+      if (stageMoved) {
+        await supabase
+          .from('deal_activities')
+          .insert({
+            deal_id: existingDeal.id,
+            activity_type: 'stage_change',
+            description: `Reentrada via webhook ${slug} → ${targetStageId === STAGE_NOVO_LEAD ? 'Novo Lead' : 'Anamnese Completa'}`,
+            metadata: {
+              from_stage_id: oldStageIdReentry,
+              to_stage_id: targetStageId,
+              trigger: 'webhook_reentry',
+              slug,
+              webhook_endpoint: endpoint.name,
+            },
+          });
+        console.log('[WEBHOOK-RECEIVER] ✅ Stage movida por reentrada:', oldStageIdReentry, '→', targetStageId);
       }
 
       await updateEndpointMetrics(supabase, endpoint.id);
@@ -924,7 +972,10 @@ serve(async (req) => {
           action: 'updated_profile', 
           reason: 'deal_already_exists',
           deal_id: existingDeal.id,
-          contact_id: contactId
+          contact_id: contactId,
+          stage_moved: stageMoved,
+          new_stage_id: newStageIdReentry,
+          stage_move_skipped: stageMoveSkipped
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
