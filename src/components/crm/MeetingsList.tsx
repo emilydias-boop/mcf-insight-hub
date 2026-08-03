@@ -61,6 +61,23 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/**
+ * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
+ * booked_by do attendee > booked_by do slot > dono do negócio (owner_id).
+ */
+function resolveSdrName(att: any, meeting: any): string | null {
+  const fromProfile = (p: any) => p?.full_name || p?.email || null;
+  return (
+    fromProfile(att?.booked_by_profile) ||
+    fromProfile(meeting?.booked_by_profile) ||
+    fromProfile(att?.deal?.owner_profile) ||
+    fromProfile(meeting?.deal?.owner_profile) ||
+    att?.deal?.owner_id ||
+    meeting?.deal?.owner_id ||
+    null
+  );
+}
+
 interface AttendeeRow {
   meetingId: string;
   meetingStatus: string;
