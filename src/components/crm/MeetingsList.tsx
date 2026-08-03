@@ -73,6 +73,7 @@ interface AttendeeRow {
   attendeeStatus: string;
   isReschedule: boolean;
   channel: SimpleChannel;
+  sdrName: string | null;
 }
 
 export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '', channelFilter }: MeetingsListProps) {
