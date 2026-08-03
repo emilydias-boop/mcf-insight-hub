@@ -11,6 +11,7 @@ interface CreateUserRequest {
   role: string;
   squad?: string | null;
   cargo_id?: string;
+  employee_id?: string;
 }
 
 Deno.serve(async (req) => {
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { email, full_name, role, squad, cargo_id }: CreateUserRequest = await req.json();
+    const { email, full_name, role, squad, cargo_id, employee_id }: CreateUserRequest = await req.json();
 
     // Validate required fields
     if (!email || !full_name || !role) {
@@ -154,40 +155,57 @@ Deno.serve(async (req) => {
 
     // Link employee to cargo if cargo_id provided
     if (cargo_id) {
-      // First check if employee exists, if not create one
-      const { data: existingEmployee } = await supabaseAdmin
-        .from("employees")
-        .select("id")
-        .eq("user_id", newUser.user.id)
-        .maybeSingle();
-
-      if (existingEmployee) {
+      if (employee_id) {
+        // Update the employee created by the client dialog
+        const updateData: Record<string, any> = { user_id: newUser.user.id };
+        updateData.cargo_catalogo_id = cargo_id;
+        if (squad) {
+          updateData.squad = squad;
+        }
         const { error: empUpdateError } = await supabaseAdmin
           .from("employees")
-          .update({ cargo_catalogo_id: cargo_id })
-          .eq("id", existingEmployee.id);
-        
+          .update(updateData)
+          .eq("id", employee_id);
+
         if (empUpdateError) {
-          console.error("Error updating employee cargo:", empUpdateError);
+          console.error("Error updating existing employee:", empUpdateError);
         }
       } else {
-        // Create employee record linked to cargo
-        const employeeData: Record<string, any> = {
-            user_id: newUser.user.id,
-            nome_completo: full_name,
-            email_pessoal: email,
-            cargo_catalogo_id: cargo_id,
-        };
-        // Set squad on employee so the trigger syncs everything
-        if (squad) {
-          employeeData.squad = squad;
-        }
-        const { error: empCreateError } = await supabaseAdmin
+        // Fallback: check if employee exists by user_id, if not create one
+        const { data: existingEmployee } = await supabaseAdmin
           .from("employees")
-          .insert(employeeData);
-        
-        if (empCreateError) {
-          console.error("Error creating employee:", empCreateError);
+          .select("id")
+          .eq("user_id", newUser.user.id)
+          .maybeSingle();
+
+        if (existingEmployee) {
+          const { error: empUpdateError } = await supabaseAdmin
+            .from("employees")
+            .update({ cargo_catalogo_id: cargo_id })
+            .eq("id", existingEmployee.id);
+          
+          if (empUpdateError) {
+            console.error("Error updating employee cargo:", empUpdateError);
+          }
+        } else {
+          // Create employee record linked to cargo
+          const employeeData: Record<string, any> = {
+              user_id: newUser.user.id,
+              nome_completo: full_name,
+              email_pessoal: email,
+              cargo_catalogo_id: cargo_id,
+          };
+          // Set squad on employee so the trigger syncs everything
+          if (squad) {
+            employeeData.squad = squad;
+          }
+          const { error: empCreateError } = await supabaseAdmin
+            .from("employees")
+            .insert(employeeData);
+          
+          if (empCreateError) {
+            console.error("Error creating employee:", empCreateError);
+          }
         }
       }
     }

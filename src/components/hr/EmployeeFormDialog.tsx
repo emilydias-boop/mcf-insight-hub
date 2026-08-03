@@ -71,6 +71,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
             role: roleSistema,
             squad: squadGuess,
             cargo_id: formData.cargo_catalogo_id,
+            employee_id: employee.id,
           },
         });
         if (fnError) {
