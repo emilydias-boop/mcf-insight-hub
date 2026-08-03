@@ -61,6 +61,23 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/**
+ * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
+ * booked_by do attendee > booked_by do slot > dono do negócio (owner_id).
+ */
+function resolveSdrName(att: any, meeting: any): string | null {
+  const fromProfile = (p: any) => p?.full_name || p?.email || null;
+  return (
+    fromProfile(att?.booked_by_profile) ||
+    fromProfile(meeting?.booked_by_profile) ||
+    fromProfile(att?.deal?.owner_profile) ||
+    fromProfile(meeting?.deal?.owner_profile) ||
+    att?.deal?.owner_id ||
+    meeting?.deal?.owner_id ||
+    null
+  );
+}
+
 interface AttendeeRow {
   meetingId: string;
   meetingStatus: string;
@@ -73,6 +90,7 @@ interface AttendeeRow {
   attendeeStatus: string;
   isReschedule: boolean;
   channel: SimpleChannel;
+  sdrName: string | null;
 }
 
 export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '', channelFilter }: MeetingsListProps) {
@@ -129,6 +147,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
             channel,
+            sdrName: resolveSdrName(att, meeting),
           });
         }
       } else {
@@ -162,6 +181,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeeStatus: meeting.status,
           isReschedule: false,
           channel,
+          sdrName: resolveSdrName(null, meeting),
         });
       }
     }
@@ -218,6 +238,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             <TableHead>Data/Hora</TableHead>
             <TableHead>Lead</TableHead>
             <TableHead>Canal</TableHead>
+            <TableHead>SDR</TableHead>
             <TableHead>Closer</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -270,6 +291,11 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                   >
                     {row.channel}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
+                    {row.sdrName || '-'}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="font-medium">{row.closerName || '-'}</span>
