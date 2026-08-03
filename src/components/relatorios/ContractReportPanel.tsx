@@ -106,7 +106,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   }, [role, closers]);
   
   // Fetch Agenda data (contract_paid)
-  const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds);
+  const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds, bu);
   
   // Fetch Hubla A000 data
   const { data: hublaData = [], isLoading: loadingHubla } = useHublaA000Contracts({

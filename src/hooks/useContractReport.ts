@@ -178,11 +178,13 @@ export const useContractReport = (
       );
       
       // Fetch unlinked Hubla A000 transactions (contracts without meetings)
+      // Uma transação só é "não vinculada" quando NÃO tem attendee E NÃO tem deal vinculado
       const { data: unlinkedHubla } = await supabase
         .from('hubla_transactions')
-        .select('id, sale_date, customer_name, customer_email, customer_phone, product_name, net_value, source, linked_attendee_id')
+        .select('id, sale_date, customer_name, customer_email, customer_phone, product_name, net_value, source, linked_attendee_id, linked_deal_id')
         .eq('product_category', 'contrato')
         .is('linked_attendee_id', null)
+        .is('linked_deal_id', null)
         .gte('sale_date', startISO)
         .lte('sale_date', endISO)
         .order('sale_date', { ascending: false });
@@ -330,8 +332,15 @@ export const useContractReport = (
         };
       });
       
+      // Deals já representados pelas linhas de agenda do período (reforço anti-duplicidade)
+      const agendaDealIds = new Set(
+        filteredData.map((row: any) => row.deal_id).filter(Boolean)
+      );
+
       // Transform unlinked Hubla transactions (direct purchases without meetings)
-      const unlinkedRows: ContractReportRow[] = (unlinkedHubla || []).map((h: any) => ({
+      const unlinkedRows: ContractReportRow[] = (unlinkedHubla || [])
+        .filter((h: any) => !h.linked_deal_id || !agendaDealIds.has(h.linked_deal_id))
+        .map((h: any) => ({
         id: `hubla-${h.id}`,
         dealId: null,
         closerName: 'Compra Direta',
