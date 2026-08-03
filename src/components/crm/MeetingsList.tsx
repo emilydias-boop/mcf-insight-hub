@@ -238,6 +238,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             <TableHead>Data/Hora</TableHead>
             <TableHead>Lead</TableHead>
             <TableHead>Canal</TableHead>
+            <TableHead>SDR</TableHead>
             <TableHead>Closer</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -290,6 +291,11 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                   >
                     {row.channel}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
+                    {row.sdrName || '-'}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="font-medium">{row.closerName || '-'}</span>
