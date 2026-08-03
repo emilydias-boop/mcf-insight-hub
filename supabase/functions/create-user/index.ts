@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
           else if (area.includes("consorcio") || area.includes("consórcio")) sdrSquad = "consorcio";
           else if (area.includes("credito") || area.includes("crédito")) sdrSquad = "credito";
           else if (area.includes("leilao") || area.includes("leilão")) sdrSquad = "leilao";
+          else if (area.includes("solar")) sdrSquad = "solar";
 
           if (cargoData.role_sistema && cargoData.role_sistema.toLowerCase().includes("closer")) {
             sdrRoleType = "closer";

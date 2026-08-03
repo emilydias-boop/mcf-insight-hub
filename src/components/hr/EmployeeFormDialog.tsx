@@ -61,6 +61,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
           if (a.includes('inside') || a.includes('incorporador')) return 'incorporador';
           if (a.includes('crédito') || a.includes('credito')) return 'credito';
           if (a.includes('leilão') || a.includes('leilao')) return 'leilao';
+          if (a.includes('solar')) return 'solar';
           return null;
         })();
         const { error: fnError } = await supabase.functions.invoke('create-user', {
