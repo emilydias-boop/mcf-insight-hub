@@ -1,36 +1,45 @@
-## O que os dados mostram
+# Causa do duplicado "Compra Direta" em Relatórios > Contratos
 
-- No código existe **um único** ponto de envio para `hook.us1.make.com/pk492b4dfi83s1u4k566i98mg34k8xto`: a edge function `consorcio-carta-cadastrada-webhook`. Não há trigger, cron, pg_net nem `outbound_webhook_configs` apontando para essa URL (verificado no banco).
-- A execução vazia que você citou (30/07 18:39:17) casa com o cadastro **MILTON BRUNO DE SOUZA CRISTIANO** (`dde0e5a4…`), marcado como enviado às 18:39:36. Esse registro tem titular, e-mail, telefone e crédito de R$ 1.000.000 preenchidos — ou seja, o app tinha dados para enviar, e mesmo assim o Make registrou o body vazio.
-- Conclusão provável (ainda **não confirmada**): o body sai preenchido do app, mas o Make não o interpreta — cenário típico quando a *data structure* do webhook foi determinada a partir de uma requisição antiga/vazia, ou quando o Make ignora JSON aninhado que não bate com a estrutura salva. Confirmar isso é o primeiro passo do plano, não uma premissa.
+## O que foi confirmado no banco
 
-## Passo 1 — Provar de que lado está o vazio
+Os dois pagamentos citados estão vinculados a deals, mas continuam **sem** `linked_attendee_id`:
 
-Instrumentar a edge function para registrar exatamente o que sai e o que o Make responde:
-- log do `JSON.stringify(payload).length` e do payload completo antes do `fetch`;
-- log do status HTTP e do corpo de resposta do Make;
-- persistir esse envio em `bu_webhook_logs` (tabela já existente) com payload e resposta, para auditoria posterior sem depender da janela curta de logs.
+| Pagamento | linked_deal_id | linked_attendee_id |
+|---|---|---|
+| Lucas Gomes (025a16e0…) | 16464855… | null |
+| Ruydney Brumana (b0a260fb…) | 868299fe… | null |
 
-Depois, disparar um "Reenviar webhook" em um cadastro conhecido e comparar: se o log mostra payload completo e o Make continua exibindo vazio, o problema é 100% da configuração do cenário no Make.
+Ambos os deals já têm attendee com `status = 'contract_paid'` e `contract_paid_at` de 03/08 — ou seja, a linha "normal" do relatório existe e está correta.
 
-## Passo 2 — Tornar o payload à prova de Make
+Em agosto: 8 transações `product_category = 'contrato'` sem `linked_attendee_id`, sendo 5 delas já com `linked_deal_id` preenchido.
 
-Independente do resultado, ajustar o envio para o formato que o Make aceita com mais segurança:
-- manter o JSON atual, mas **adicionar uma versão achatada** (chaves de primeiro nível: `nome_completo`, `email`, `telefone`, `cpf`, `valor_credito`, `grupo`, `cota`, `produto`, `prazo_meses`, `vendedor`, `origem_lead`, `card_id`, `registration_id`), já que webhooks do Make mapeiam campos de topo com muito mais facilidade que objetos aninhados;
-- garantir `Content-Type: application/json` e nenhum campo `undefined` no corpo;
-- em caso de resposta não-2xx ou corpo de resposta inesperado do Make, **não** marcar `webhook_carta_cadastrada_enviado_em`, para permitir reenvio.
+## Causa exata
 
-## Passo 3 — Ação do seu lado no Make (necessária)
+A tela é `src/components/relatorios/ContractReportPanel.tsx`, alimentada por `src/hooks/useContractReport.ts`.
 
-Se o Passo 1 confirmar que o payload sai completo:
-1. Abrir o módulo Webhook no cenário do Make → **Redetermine data structure**;
-2. Reenviar uma carta pelo botão "Reenviar webhook" no painel Concluídas – Operacional enquanto o Make estiver aguardando;
-3. Salvar a nova estrutura e remapear os campos nos módulos seguintes.
+Além da consulta principal em `meeting_slot_attendees`, o hook faz uma segunda consulta "solta":
 
-Sem isso, mesmo com o payload correto o cenário continuará exibindo execuções em branco.
+```text
+.from('hubla_transactions')
+.eq('product_category', 'contrato')
+.is('linked_attendee_id', null)     <-- aqui
+```
 
-## Detalhes técnicos
+Cada linha retornada vira uma linha com `closerName: 'Compra Direta'`, `originName: 'Compra Direta'`, `currentStage: 'N/A'`, `sdrName: 'N/A'`.
 
-- Arquivo a alterar: `supabase/functions/consorcio-carta-cadastrada-webhook/index.ts` (logging + payload achatado + não marcar flag em falha).
-- Arquivo a alterar: `src/lib/consorcioCartaWebhook.ts` (só gravar a flag quando a função retornar `success: true` com status 2xx do Make).
-- Nenhuma mudança de schema; gravação de auditoria reaproveita `bu_webhook_logs`.
+O filtro é por **`linked_attendee_id`**, não por `linked_deal_id`. A correção no banco preencheu apenas `linked_deal_id`, então essas transações continuam sendo tratadas como "não vinculadas" e continuam gerando a segunda linha duplicada. Não é cache do React Query nem range de datas — é o campo errado na condição.
+
+Detalhes secundários:
+
+- A tela chama `useContractReport(filters, allowedCloserIds)` **sem** passar `bu`. Com `bu` preenchido o hook já descartaria as linhas "Compra Direta" (`buOriginIds ? meetingRows : [...]`).
+- O outro caminho de duplicidade do painel (`useHublaA000Contracts` → `hublaPending`, closer "Sem atribuição") não afeta estes casos: aquele hook filtra `sale_status = 'paid'` e os registros MCF Pay estão `completed`. Isso também explica por que a coluna **Valor** fica vazia na linha da Agenda (`netValue: null`).
+- Há `staleTime` de 10 min + `placeholderData`, mas isso só atrasaria a atualização; não explica o sintoma após reload.
+
+## Correção proposta (para aprovar)
+
+1. Em `useContractReport.ts`, considerar vinculada a transação com **`linked_attendee_id` OU `linked_deal_id`**: exigir ambos nulos (`.is('linked_attendee_id', null).is('linked_deal_id', null)`) na consulta de não vinculadas.
+2. Reforço: descartar da lista de não vinculadas qualquer transação cujo `linked_deal_id` já apareça entre os deals das linhas de agenda do período.
+3. Passar `bu` para `useContractReport` no `ContractReportPanel`, para o relatório da BU respeitar o escopo de pipelines.
+4. Opcional (confirmar): preencher a coluna **Valor** das linhas de agenda com o `net_value` do pagamento vinculado, em vez de deixar vazio.
+
+Nada foi alterado até aqui.
