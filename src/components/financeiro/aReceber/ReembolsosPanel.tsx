@@ -19,6 +19,8 @@ import {
   useMarcarReembolsoPago,
   useCancelarReembolso,
 } from '@/hooks/useArReembolsos';
+import type { ArReembolsoWithTitulo } from '@/hooks/useArReembolsos';
+import { EditarReembolsoDialog } from './EditarReembolsoDialog';
 import { AR_REEMBOLSO_STATUS_LABEL, type ArReembolsoStatus } from '@/types/aReceber';
 import { ticketNumber } from '@/lib/arTicketNumber';
 
@@ -111,11 +113,24 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
   const [pagoDialog, setPagoDialog] = useState<{ id: string; valor: number } | null>(null);
   const [dataEfetiva, setDataEfetiva] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
+  const [listSearch, setListSearch] = useState('');
+
+  const reembolsosFiltrados = useMemo(() => {
+    const q = listSearch.trim().toLowerCase();
+    if (!q) return reembolsos || [];
+    return (reembolsos || []).filter((r) => {
+      const t = r.titulo;
+      return [t?.customer_name, t?.customer_email, t?.customer_document, t?.product_code]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [reembolsos, listSearch]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Undo2 className="w-5 h-5 text-rose-600" />
             Reembolsos — baixa sem numerário
@@ -127,14 +142,18 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as any)}
+          className="flex-1 min-h-0 flex flex-col"
+        >
           <TabsList>
             <TabsTrigger value="novo">Novo reembolso</TabsTrigger>
             <TabsTrigger value="lista">Reembolsos ({reembolsos?.length ?? 0})</TabsTrigger>
           </TabsList>
 
           {/* NOVO */}
-          <TabsContent value="novo" className="space-y-4 mt-3">
+          <TabsContent value="novo" className="space-y-4 mt-3 flex-1 min-h-0 overflow-y-auto">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -146,7 +165,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
             </div>
 
             <Card>
-              <CardContent className="pt-4 max-h-64 overflow-y-auto">
+              <CardContent className="pt-4 max-h-[45vh] overflow-y-auto">
                 {loadingTit ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : (titulos || []).length === 0 ? (
@@ -272,14 +291,23 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
           </TabsContent>
 
           {/* LISTA */}
-          <TabsContent value="lista" className="mt-3">
-            <Card>
-              <CardContent className="pt-4 overflow-x-auto">
+          <TabsContent value="lista" className="mt-3 flex-1 min-h-0 flex flex-col gap-3">
+            <div className="relative max-w-md shrink-0">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Filtrar por nome do contato, e-mail, CPF ou produto…"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Card className="flex-1 min-h-0 flex flex-col">
+              <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
                 {loadingList ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
-                ) : (reembolsos || []).length === 0 ? (
+                ) : reembolsosFiltrados.length === 0 ? (
                   <div className="text-center text-sm text-muted-foreground py-6">
-                    Nenhum reembolso registrado.
+                    {listSearch ? 'Nenhum reembolso encontrado para esse filtro.' : 'Nenhum reembolso registrado.'}
                   </div>
                 ) : (
                   <Table>
@@ -296,7 +324,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(reembolsos || []).map((r) => (
+                      {reembolsosFiltrados.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell>
                             <div className="font-medium text-sm">
@@ -331,8 +359,14 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                             <StatusBadge status={r.status} />
                           </TableCell>
                           <TableCell className="text-right">
-                            {r.status === 'pendente' && (
-                              <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-2">
+                              {r.status !== 'cancelado' && (
+                                <Button size="sm" variant="outline" onClick={() => setEditando(r)}>
+                                  Editar
+                                </Button>
+                              )}
+                              {r.status === 'pendente' && (
+                                <>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -360,8 +394,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                                 >
                                   Cancelar
                                 </Button>
-                              </div>
-                            )}
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -372,6 +407,11 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <EditarReembolsoDialog
+          reembolso={editando}
+          onOpenChange={(v) => !v && setEditando(null)}
+        />
 
         {/* MARCAR COMO PAGO */}
         <Dialog open={!!pagoDialog} onOpenChange={(v) => !v && setPagoDialog(null)}>

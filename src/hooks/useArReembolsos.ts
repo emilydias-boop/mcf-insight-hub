@@ -187,6 +187,152 @@ export function useCancelarReembolso() {
   });
 }
 
+export interface ArReembolsoEditInput {
+  id: string;
+  titulo_id: string;
+  original: {
+    valor: number;
+    data_pedido: string;
+    data_prevista_pagamento: string | null;
+    data_pagamento: string | null;
+    motivo: string | null;
+  };
+  next: {
+    valor: number;
+    data_pedido: string;
+    data_prevista_pagamento: string | null;
+    data_pagamento: string | null;
+    motivo: string | null;
+  };
+  justificativa?: string;
+}
+
+const SENSITIVE_FIELDS = ['valor', 'data_pagamento'] as const;
+
+export function diffReembolso(
+  original: ArReembolsoEditInput['original'],
+  next: ArReembolsoEditInput['next'],
+) {
+  const changed: string[] = [];
+  (Object.keys(next) as (keyof typeof next)[]).forEach((k) => {
+    const a = original[k] ?? null;
+    const b = next[k] ?? null;
+    if (k === 'valor') {
+      if (Number(a || 0).toFixed(2) !== Number(b || 0).toFixed(2)) changed.push(k);
+    } else if ((a || '') !== (b || '')) {
+      changed.push(k);
+    }
+  });
+  const sensitiveChanged = changed.filter((c) =>
+    (SENSITIVE_FIELDS as readonly string[]).includes(c),
+  );
+  return { changed, sensitiveChanged };
+}
+
+/**
+ * Edita um reembolso existente.
+ * Campos sensíveis (valor, data de pagamento efetivo) exigem justificativa
+ * e geram registro em audit_logs + ar_historico.
+ */
+export function useEditarReembolso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ArReembolsoEditInput) => {
+      const { changed, sensitiveChanged } = diffReembolso(input.original, input.next);
+      if (changed.length === 0) return null;
+      if (sensitiveChanged.length > 0 && (input.justificativa || '').trim().length < 15) {
+        throw new Error('Justificativa obrigatória (mínimo 15 caracteres) para alterar campos sensíveis.');
+      }
+
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id ?? null;
+
+      const { data: updated, error } = await supabase
+        .from('ar_reembolsos' as any)
+        .update({
+          valor: input.next.valor,
+          data_pedido: input.next.data_pedido,
+          data_prevista_pagamento: input.next.data_prevista_pagamento || null,
+          data_pagamento: input.next.data_pagamento || null,
+          motivo: input.next.motivo || null,
+        } as any)
+        .eq('id', input.id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      const oldData: Record<string, unknown> = {};
+      const newData: Record<string, unknown> = {};
+      changed.forEach((k) => {
+        oldData[k] = (input.original as any)[k] ?? null;
+        newData[k] = (input.next as any)[k] ?? null;
+      });
+      newData.justificativa = input.justificativa?.trim() || null;
+
+      await supabase.from('audit_logs' as any).insert({
+        user_id: userId,
+        action: sensitiveChanged.length > 0 ? 'update_sensitive' : 'update',
+        table_name: 'ar_reembolsos',
+        record_id: input.id,
+        old_data: oldData,
+        new_data: newData,
+      } as any);
+
+      const label: Record<string, string> = {
+        valor: 'valor',
+        data_pedido: 'data do pedido',
+        data_prevista_pagamento: 'data prevista de pagamento',
+        data_pagamento: 'data de pagamento',
+        motivo: 'motivo',
+      };
+      const desc = `Reembolso editado — campos: ${changed.map((c) => label[c] || c).join(', ')}${
+        sensitiveChanged.length > 0 ? ` | justificativa: ${input.justificativa?.trim()}` : ''
+      }`;
+
+      await supabase.from('ar_historico' as any).insert({
+        titulo_id: input.titulo_id,
+        tipo: 'reembolso_editado',
+        descricao: desc,
+        valor: input.next.valor,
+        metadata: {
+          reembolso_id: input.id,
+          changed,
+          sensitive: sensitiveChanged,
+          old: oldData,
+          new: newData,
+        },
+      } as any);
+
+      return updated as any;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ar-reembolsos'] });
+      qc.invalidateQueries({ queryKey: ['ar-reembolsos-totais'] });
+      qc.invalidateQueries({ queryKey: ['ar-titulos'] });
+      qc.invalidateQueries({ queryKey: ['ar-historico'] });
+      qc.invalidateQueries({ queryKey: ['ar-reembolso-audit'] });
+    },
+  });
+}
+
+/** Histórico de alterações de um reembolso (audit_logs). */
+export function useArReembolsoAuditoria(reembolsoId: string | null) {
+  return useQuery({
+    queryKey: ['ar-reembolso-audit', reembolsoId],
+    enabled: !!reembolsoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('audit_logs' as any)
+        .select('*')
+        .eq('table_name', 'ar_reembolsos')
+        .eq('record_id', reembolsoId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
+}
+
 /** Totais do mês corrente para os cards no topo da listagem. */
 export function useReembolsoTotais() {
   return useQuery({
