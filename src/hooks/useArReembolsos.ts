@@ -333,34 +333,6 @@ export function useArReembolsoAuditoria(reembolsoId: string | null) {
   });
 }
 
-function __unused_useCancelarReembolsoLegacy() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
-      const { data: reemb, error } = await supabase
-        .from('ar_reembolsos' as any)
-        .update({ status: 'cancelado' } as any)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      const r = reemb as any;
-      await supabase.from('ar_historico' as any).insert({
-        titulo_id: r.titulo_id,
-        tipo: 'reembolso_cancelado',
-        descricao: 'Reembolso cancelado',
-        valor: Number(r.valor || 0),
-        metadata: { reembolso_id: r.id },
-      } as any);
-      return r;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ar-reembolsos'] });
-      qc.invalidateQueries({ queryKey: ['ar-historico'] });
-    },
-  });
-}
-
 /** Totais do mês corrente para os cards no topo da listagem. */
 export function useReembolsoTotais() {
   return useQuery({
