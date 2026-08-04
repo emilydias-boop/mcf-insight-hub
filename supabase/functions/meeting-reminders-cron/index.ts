@@ -20,6 +20,9 @@ const OFFSETS: Record<string, number> = {
 
 const WINDOW_MINUTES = 5; // ±5 min tolerance
 
+// Content SID (Twilio) do template "Lembrete Reunião R1 — MCF Capital"
+const WHATSAPP_REMINDER_TEMPLATE_SID = 'HX007cedb0ed56087bae3609dc10474710';
+
 function formatPtBR(date: Date): { date: string; time: string } {
   const fmt = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo',
