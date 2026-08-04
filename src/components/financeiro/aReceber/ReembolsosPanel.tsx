@@ -21,6 +21,7 @@ import {
 } from '@/hooks/useArReembolsos';
 import type { ArReembolsoWithTitulo } from '@/hooks/useArReembolsos';
 import { EditarReembolsoDialog } from './EditarReembolsoDialog';
+import { ExcluirReembolsoDialog } from './ExcluirReembolsoDialog';
 import { AR_REEMBOLSO_STATUS_LABEL, type ArReembolsoStatus } from '@/types/aReceber';
 import { ticketNumber } from '@/lib/arTicketNumber';
 
@@ -114,6 +115,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [pagoDialog, setPagoDialog] = useState<{ id: string; valor: number } | null>(null);
   const [dataEfetiva, setDataEfetiva] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
+  const [excluindo, setExcluindo] = useState<ArReembolsoWithTitulo | null>(null);
   const [listSearch, setListSearch] = useState('');
 
   const reembolsosFiltrados = useMemo(() => {
@@ -365,6 +367,16 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                                   Editar
                                 </Button>
                               )}
+                              {r.status === 'cancelado' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => setExcluindo(r)}
+                                >
+                                  Excluir
+                                </Button>
+                              )}
                               {r.status === 'pendente' && (
                                 <>
                                 <Button
@@ -411,6 +423,11 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
         <EditarReembolsoDialog
           reembolso={editando}
           onOpenChange={(v) => !v && setEditando(null)}
+        />
+
+        <ExcluirReembolsoDialog
+          reembolso={excluindo}
+          onOpenChange={(v) => !v && setExcluindo(null)}
         />
 
         {/* MARCAR COMO PAGO */}
