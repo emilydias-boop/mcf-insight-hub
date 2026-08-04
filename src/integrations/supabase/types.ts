@@ -9242,6 +9242,7 @@ export type Database = {
         Row: {
           ac_contact_id: string | null
           attendee_id: string
+          channel: string
           contact_email: string
           error_message: string | null
           id: string
@@ -9256,6 +9257,7 @@ export type Database = {
         Insert: {
           ac_contact_id?: string | null
           attendee_id: string
+          channel?: string
           contact_email: string
           error_message?: string | null
           id?: string
@@ -9270,6 +9272,7 @@ export type Database = {
         Update: {
           ac_contact_id?: string | null
           attendee_id?: string
+          channel?: string
           contact_email?: string
           error_message?: string | null
           id?: string
