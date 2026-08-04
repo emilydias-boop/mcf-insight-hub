@@ -316,6 +316,69 @@ export function useEditarReembolso() {
 }
 
 /** Histórico de alterações de um reembolso (audit_logs). */
+export function useExcluirReembolso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      reembolso,
+      justificativa,
+    }: {
+      reembolso: ArReembolso;
+      justificativa: string;
+    }) => {
+      const motivo = (justificativa || '').trim();
+      if (motivo.length < 15) {
+        throw new Error('Justificativa obrigatória (mínimo 15 caracteres) para excluir o reembolso.');
+      }
+      if (reembolso.status !== 'cancelado') {
+        throw new Error('Somente reembolsos cancelados/revertidos podem ser excluídos.');
+      }
+
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id ?? null;
+
+      // 1) auditoria antes da exclusão (snapshot completo)
+      await supabase.from('audit_logs' as any).insert({
+        user_id: userId,
+        action: 'delete',
+        table_name: 'ar_reembolsos',
+        record_id: reembolso.id,
+        old_data: reembolso as any,
+        new_data: { justificativa: motivo },
+      } as any);
+
+      // 2) histórico do título
+      await supabase.from('ar_historico' as any).insert({
+        titulo_id: reembolso.titulo_id,
+        tipo: 'reembolso_excluido',
+        descricao: `Reembolso cancelado excluído — justificativa: ${motivo}`,
+        valor: Number(reembolso.valor || 0),
+        metadata: {
+          reembolso_id: reembolso.id,
+          justificativa: motivo,
+          snapshot: reembolso as any,
+        },
+      } as any);
+
+      // 3) exclusão definitiva
+      const { error } = await supabase
+        .from('ar_reembolsos' as any)
+        .delete()
+        .eq('id', reembolso.id);
+      if (error) throw error;
+
+      return true;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ar-reembolsos'] });
+      qc.invalidateQueries({ queryKey: ['ar-reembolsos-totais'] });
+      qc.invalidateQueries({ queryKey: ['ar-historico'] });
+      qc.invalidateQueries({ queryKey: ['ar-reembolso-audit'] });
+    },
+  });
+}
+
+/** Histórico de alterações de um reembolso (audit_logs). */
 export function useArReembolsoAuditoria(reembolsoId: string | null) {
   return useQuery({
     queryKey: ['ar-reembolso-audit', reembolsoId],
