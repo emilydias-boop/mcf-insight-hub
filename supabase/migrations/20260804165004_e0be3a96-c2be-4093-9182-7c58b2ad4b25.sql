@@ -1,0 +1,1 @@
+ALTER TABLE public.meeting_reminders_log ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'email';

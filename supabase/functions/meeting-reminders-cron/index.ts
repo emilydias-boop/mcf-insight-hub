@@ -20,6 +20,9 @@ const OFFSETS: Record<string, number> = {
 
 const WINDOW_MINUTES = 5; // ±5 min tolerance
 
+// Content SID (Twilio) do template "Lembrete Reunião R1 — MCF Capital"
+const WHATSAPP_REMINDER_TEMPLATE_SID = 'HX007cedb0ed56087bae3609dc10474710';
+
 function formatPtBR(date: Date): { date: string; time: string } {
   const fmt = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo',
@@ -150,15 +153,24 @@ serve(async (req) => {
 
           summary.processed++;
 
-          // Dedupe check
-          const { data: existing } = await supabase
+          // Dedupe check per channel
+          const { data: existingEmail } = await supabase
             .from('meeting_reminders_log')
             .select('id')
             .eq('attendee_id', attendee.id)
             .eq('offset_key', offsetKey)
+            .eq('channel', 'email')
             .maybeSingle();
 
-          if (existing) {
+          const { data: existingWa } = await supabase
+            .from('meeting_reminders_log')
+            .select('id')
+            .eq('attendee_id', attendee.id)
+            .eq('offset_key', offsetKey)
+            .eq('channel', 'whatsapp')
+            .maybeSingle();
+
+          if (existingEmail && existingWa) {
             summary.skipped++;
             continue;
           }
@@ -172,33 +184,41 @@ serve(async (req) => {
             scheduled_at: slot.scheduled_at,
           };
 
-          // No email
-          if (!contact?.email) {
+          if (!existingEmail && !contact?.email) {
             await supabase.from('meeting_reminders_log').insert({
               ...baseLog,
-              contact_email: contact?.email || 'unknown',
+              channel: 'email',
+              contact_email: 'unknown',
               status: 'skipped',
               skip_reason: 'no_email',
             });
             summary.skipped++;
+          }
+
+          if (!contact) {
             continue;
           }
 
-          // Blacklist check
+          // Blacklist check (por email ou contato)
+          const blacklistFilter = contact.email
+            ? `email.eq.${contact.email},contact_id.eq.${contact.id}`
+            : `contact_id.eq.${contact.id}`;
           const { data: blacklisted } = await supabase
             .from('automation_blacklist')
             .select('id')
-            .or(`email.eq.${contact.email},contact_id.eq.${contact.id}`)
+            .or(blacklistFilter)
             .limit(1)
             .maybeSingle();
 
           if (blacklisted) {
-            await supabase.from('meeting_reminders_log').insert({
-              ...baseLog,
-              contact_email: contact.email,
-              status: 'skipped',
-              skip_reason: 'blacklisted',
-            });
+            const rows: any[] = [];
+            if (!existingEmail && contact.email) {
+              rows.push({ ...baseLog, channel: 'email', contact_email: contact.email, status: 'skipped', skip_reason: 'blacklisted' });
+            }
+            if (!existingWa) {
+              rows.push({ ...baseLog, channel: 'whatsapp', contact_email: contact.email || 'unknown', status: 'skipped', skip_reason: 'blacklisted' });
+            }
+            if (rows.length > 0) await supabase.from('meeting_reminders_log').insert(rows);
             summary.skipped++;
             continue;
           }
@@ -240,12 +260,14 @@ serve(async (req) => {
           console.log(`[MEETING-REMINDERS-CRON] slot=${slot.id} offset=${offsetKey} link_source=${linkSource} link=${meetingLink || '(empty)'}`);
 
           if (!meetingLink) {
-            await supabase.from('meeting_reminders_log').insert({
-              ...baseLog,
-              contact_email: contact.email,
-              status: 'skipped',
-              skip_reason: 'no_link',
-            });
+            const rows: any[] = [];
+            if (!existingEmail && contact.email) {
+              rows.push({ ...baseLog, channel: 'email', contact_email: contact.email, status: 'skipped', skip_reason: 'no_link' });
+            }
+            if (!existingWa) {
+              rows.push({ ...baseLog, channel: 'whatsapp', contact_email: contact.email || 'unknown', status: 'skipped', skip_reason: 'no_link' });
+            }
+            if (rows.length > 0) await supabase.from('meeting_reminders_log').insert(rows);
             summary.skipped++;
             continue;
           }
@@ -276,7 +298,8 @@ serve(async (req) => {
 
           const { date: meetingDate, time: meetingTime } = formatPtBR(slotDate);
 
-          // Invoke activecampaign-send
+          // ===== Canal E-MAIL (ActiveCampaign) =====
+          if (!existingEmail && contact.email) {
           try {
             const acRes = await supabase.functions.invoke('activecampaign-send', {
               body: {
@@ -301,6 +324,7 @@ serve(async (req) => {
             if (acRes.error || !acRes.data?.success) {
               await supabase.from('meeting_reminders_log').insert({
                 ...baseLog,
+                channel: 'email',
                 contact_email: contact.email,
                 status: 'failed',
                 error_message: acRes.error?.message || JSON.stringify(acRes.data || {}),
@@ -309,6 +333,7 @@ serve(async (req) => {
             } else {
               await supabase.from('meeting_reminders_log').insert({
                 ...baseLog,
+                channel: 'email',
                 contact_email: contact.email,
                 status: 'sent',
                 ac_contact_id: String(acRes.data.contactId || ''),
@@ -318,11 +343,73 @@ serve(async (req) => {
           } catch (e: any) {
             await supabase.from('meeting_reminders_log').insert({
               ...baseLog,
+              channel: 'email',
               contact_email: contact.email,
               status: 'failed',
               error_message: e.message,
             });
             summary.failed++;
+          }
+          }
+
+          // ===== Canal WHATSAPP (Twilio) =====
+          if (!existingWa) {
+            const waBase = { ...baseLog, channel: 'whatsapp', contact_email: contact.email || 'unknown' };
+
+            if (!contact.phone) {
+              await supabase.from('meeting_reminders_log').insert({
+                ...waBase,
+                status: 'skipped',
+                skip_reason: 'no_phone',
+              });
+              summary.skipped++;
+            } else {
+              try {
+                const waRes = await supabase.functions.invoke('twilio-whatsapp-send', {
+                  body: {
+                    to: contact.phone,
+                    templateSid: WHATSAPP_REMINDER_TEMPLATE_SID,
+                    contentVariables: {
+                      '1': contact.name || deal.name || 'Lead',
+                      '2': `${meetingDate} às ${meetingTime}`,
+                      '3': closerName,
+                      '4': meetingLink,
+                    },
+                    dealId: deal.id,
+                  },
+                });
+
+                if (waRes.error || !waRes.data?.success) {
+                  let detailed = waRes.error?.message || JSON.stringify(waRes.data || {});
+                  try {
+                    const resp = (waRes.error as any)?.context?.response ?? (waRes.error as any)?.context;
+                    if (resp && typeof resp.text === 'function') {
+                      const txt = await resp.text();
+                      if (txt) detailed = `${detailed} | body=${txt.slice(0, 500)}`;
+                    }
+                  } catch (_) { /* ignore */ }
+                  await supabase.from('meeting_reminders_log').insert({
+                    ...waBase,
+                    status: 'failed',
+                    error_message: detailed,
+                  });
+                  summary.failed++;
+                } else {
+                  await supabase.from('meeting_reminders_log').insert({
+                    ...waBase,
+                    status: 'sent',
+                  });
+                  summary.sent++;
+                }
+              } catch (e: any) {
+                await supabase.from('meeting_reminders_log').insert({
+                  ...waBase,
+                  status: 'failed',
+                  error_message: e.message,
+                });
+                summary.failed++;
+              }
+            }
           }
         }
       }
