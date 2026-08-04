@@ -543,6 +543,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       const seenTx = new Set<string>();
       const refundedDealIdSet = new Set<string>();
+      // último created_at de refund por deal (para comparar com contract_paid_at)
+      const lastRefundAtByDeal = new Map<string, number>();
+      const trackRefundAt = (dealId: string, createdAt: any) => {
+        const ms = createdAt ? new Date(createdAt).getTime() : NaN;
+        if (!Number.isFinite(ms)) return;
+        const prev = lastRefundAtByDeal.get(dealId);
+        if (prev == null || ms > prev) lastRefundAtByDeal.set(dealId, ms);
+      };
       (mcfRefunds || []).forEach((r: any) => {
         const amount = Number(r?.metadata?.amount);
         const txId = r?.metadata?.transaction_id as string | undefined;
@@ -552,6 +560,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           seenTx.add(txId);
         }
         refundedDealIdSet.add(r.deal_id as string);
+        trackRefundAt(r.deal_id as string, r.created_at);
       });
       (manualHublaRefunds || []).forEach((r: any) => {
         const src = String(r?.metadata?.source || '');
@@ -562,14 +571,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           seenTx.add(txId);
         }
         refundedDealIdSet.add(r.deal_id as string);
+        trackRefundAt(r.deal_id as string, r.created_at);
       });
       const allRefundedDealIds = Array.from(refundedDealIdSet);
 
       const refundAttendees = allRefundedDealIds.length > 0
-        ? await batchedIn<{ deal_id: string; meeting_slot: { closer_id: string; scheduled_at: string } }>(
+        ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
             (chunk) => supabase
               .from('meeting_slot_attendees')
-              .select('deal_id, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
+              .select('deal_id, contract_paid_at, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
               .in('deal_id', chunk)
               .eq('meeting_slot.meeting_type', 'r1')
               .eq('is_partner', false),
@@ -579,6 +589,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       // R1 mais recente por deal → âncora + closer
       const r1ByDeal = new Map<string, { closerId: string; ts: number }>();
+      // contract_paid_at mais recente por deal (nos attendees de R1)
+      const lastPaidAtByDeal = new Map<string, number>();
       refundAttendees.forEach((att: any) => {
         const slot = att.meeting_slot;
         const closerId = slot?.closer_id;
@@ -586,6 +598,13 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         const ts = new Date(slot.scheduled_at).getTime();
         const prev = r1ByDeal.get(att.deal_id);
         if (!prev || ts > prev.ts) r1ByDeal.set(att.deal_id, { closerId, ts });
+        if (att.contract_paid_at) {
+          const paidMs = new Date(att.contract_paid_at).getTime();
+          if (Number.isFinite(paidMs)) {
+            const prevPaid = lastPaidAtByDeal.get(att.deal_id);
+            if (prevPaid == null || paidMs > prevPaid) lastPaidAtByDeal.set(att.deal_id, paidMs);
+          }
+        }
       });
 
       // Fallback: contract_paid_at do deal
@@ -617,6 +636,16 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         }
         if (anchorMs == null || anchorMs < startMs || anchorMs > endMs) continue;
         if (!closerId) continue;
+
+        // Só conta como reembolsado se o reembolso ocorreu DEPOIS do pagamento
+        // que está sendo contabilizado (reembolso anterior a um pagamento
+        // posterior bem-sucedido não deve cancelar o contrato).
+        const paidMs = lastPaidAtByDeal.get(dealId)
+          ?? (dealContractPaid.get(dealId) ? new Date(dealContractPaid.get(dealId) as string).getTime() : undefined);
+        const refundMs = lastRefundAtByDeal.get(dealId);
+        if (paidMs == null || !Number.isFinite(paidMs)) continue;
+        if (refundMs == null || refundMs < paidMs) continue;
+
         refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
       }
 
