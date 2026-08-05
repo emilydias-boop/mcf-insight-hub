@@ -36,7 +36,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
-import { useDealsIcpSegments, type IcpSegmentFilterValue } from "@/hooks/useDealsIcpSegments";
+import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { usePendentesDrilldown } from "@/hooks/usePendentesDrilldown";
@@ -107,8 +107,6 @@ export default function ReunioesEquipe() {
   const initialEnd = parseYmdLocal(searchParams.get("end")) ?? initialStart;
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-  // Filtro de Segmento ICP (aditivo — 'all' preserva o comportamento atual)
-  const [segmentFilter, setSegmentFilter] = useState<IcpSegmentFilterValue>('all');
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
@@ -391,7 +389,17 @@ export default function ReunioesEquipe() {
     isLoading: closerLoading,
     error: closerError,
     refetch: refetchCloserMetrics,
-  } = useR1CloserMetrics(start, end, 'incorporador', segmentFilter);
+  } = useR1CloserMetrics(start, end, 'incorporador');
+
+  // Segmentação ICP exibida lado a lado (Lead A / Lead B) — sempre visível.
+  const { data: closerMetricsA } = useR1CloserMetrics(start, end, 'incorporador', 'A');
+  const { data: closerMetricsB } = useR1CloserMetrics(start, end, 'incorporador', 'B');
+  const { data: sdrMetricsA } = useSdrMetricsFromAgenda(
+    start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'A',
+  );
+  const { data: sdrMetricsB } = useSdrMetricsFromAgenda(
+    start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'B',
+  );
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
   // — usado para a média individual entre Closers nos cards de Taxa.
@@ -537,36 +545,58 @@ export default function ReunioesEquipe() {
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
 
   // Anexa reembolsos atribuídos a cada SDR (via R1 mais recente do deal reembolsado)
-  // Segmento ICP: mapeia deal_id → icp_segment das reuniões do período
-  const segmentEnabled = segmentFilter !== 'all';
-  const { data: dealSegmentMap } = useDealsIcpSegments(
-    useMemo(() => (allMeetingsRaw || []).map((m: any) => m.deal_id).filter(Boolean), [allMeetingsRaw]),
-    segmentEnabled,
-  );
-  const sdrEmailsInSegment = useMemo(() => {
-    if (!segmentEnabled || !dealSegmentMap) return null;
-    const emails = new Set<string>();
-    (allMeetingsRaw || []).forEach((m: any) => {
-      if (!m.deal_id) return;
-      if (dealSegmentMap.get(m.deal_id) !== segmentFilter) return;
-      const owner = (m.current_owner || '').toLowerCase();
-      const inter = (m.intermediador || '').toLowerCase();
-      if (owner) emails.add(owner);
-      if (inter) emails.add(inter);
-    });
-    return emails;
-  }, [segmentEnabled, dealSegmentMap, allMeetingsRaw, segmentFilter]);
-
   const filteredBySDRWithRefunds = useMemo(() => {
-    const base = sdrEmailsInSegment
-      ? filteredBySDR.filter((row) => sdrEmailsInSegment.has((row.sdrEmail || '').toLowerCase()))
-      : filteredBySDR;
+    const base = filteredBySDR;
     if (!sdrRefundsMap) return base;
     return base.map((row) => ({
       ...row,
       reembolsos: sdrRefundsMap.get((row.sdrEmail || '').toLowerCase()) || 0,
     }));
-  }, [filteredBySDR, sdrRefundsMap, sdrEmailsInSegment]);
+  }, [filteredBySDR, sdrRefundsMap]);
+
+  // Mapas por SDR (email lower) para as sub-linhas Lead A / Lead B
+  const buildSdrSegmentMap = (metrics?: { metrics: any[] }) => {
+    const map = new Map<string, {
+      agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number;
+    }>();
+    (metrics?.metrics || []).forEach((m: any) => {
+      if (!m.sdr_email) return;
+      map.set(String(m.sdr_email).toLowerCase(), {
+        agendamentos: m.agendamentos || 0,
+        r1Agendada: m.r1_agendada || 0,
+        r1Realizada: m.r1_realizada || 0,
+        noShows: m.no_shows || 0,
+        contratos: m.contratos || 0,
+      });
+    });
+    return map;
+  };
+  const sdrSegmentAMap = useMemo(() => buildSdrSegmentMap(sdrMetricsA), [sdrMetricsA]);
+  const sdrSegmentBMap = useMemo(() => buildSdrSegmentMap(sdrMetricsB), [sdrMetricsB]);
+
+  // Totais por segmento para os KPI cards
+  const segmentTotals = useMemo(() => {
+    const sumSdr = (map: Map<string, any>) => {
+      const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
+      const allowed = new Set(filteredBySDR.map((r) => (r.sdrEmail || '').toLowerCase()));
+      map.forEach((v, email) => {
+        if (allowed.size > 0 && !allowed.has(email)) return;
+        acc.agendamentos += v.agendamentos;
+        acc.r1Agendada += v.r1Agendada;
+        acc.r1Realizada += v.r1Realizada;
+        acc.noShows += v.noShows;
+      });
+      return acc;
+    };
+    const sumCloserContratos = (rows?: any[]) =>
+      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0) + (c.outside || 0), 0);
+    const a = sumSdr(sdrSegmentAMap);
+    const b = sumSdr(sdrSegmentBMap);
+    return {
+      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
+      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
+    };
+  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -871,18 +901,6 @@ export default function ReunioesEquipe() {
               </SelectContent>
             </Select>
 
-            {/* Filtro de Segmento ICP (Lead A / Lead B) */}
-            <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as IcpSegmentFilterValue)}>
-              <SelectTrigger className="w-full sm:w-[170px]">
-                <SelectValue placeholder="Segmento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Segmento: Todos</SelectItem>
-                <SelectItem value="A">Lead A</SelectItem>
-                <SelectItem value="B">Lead B</SelectItem>
-              </SelectContent>
-            </Select>
-
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
@@ -934,6 +952,7 @@ export default function ReunioesEquipe() {
         }}
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
+        segmentTotals={segmentTotals}
       />
 
       <RefundDetailsDialog
@@ -1011,12 +1030,16 @@ export default function ReunioesEquipe() {
                 noShows: enrichedKPIs.totalNoShows,
                 contratos: enrichedKPIs.totalContratos,
               }}
+              segmentAMap={sdrSegmentAMap}
+              segmentBMap={sdrSegmentBMap}
             />
           ) : (
             <CloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
               totalContratosFromKPI={contractsFromClosers.total}
+              segmentAData={closerMetricsA}
+              segmentBData={closerMetricsB}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
