@@ -7,9 +7,28 @@ export interface R2MeetingSlotsKPIs {
   r2Realizadas: number;   // R2 meetings completed
 }
 
-export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
+async function filterDealIdsBySegment(dealIds: string[], seg: string): Promise<Set<string>> {
+  const allowed = new Set<string>();
+  const ids = Array.from(new Set(dealIds.filter(Boolean)));
+  const CHUNK = 200;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const { data, error } = await (supabase.from('crm_deals') as any)
+      .select('id, icp_segment')
+      .in('id', chunk);
+    if (error) throw error;
+    (data || []).forEach((row: any) => {
+      const v = (row.icp_segment ?? '').toString().trim().toUpperCase();
+      if (v === seg) allowed.add(row.id);
+    });
+  }
+  return allowed;
+}
+
+export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date, segment?: string) {
+  const seg = segment && segment !== 'all' ? segment.toUpperCase() : null;
   return useQuery({
-    queryKey: ["r2-meeting-slots-kpis", startDate.toISOString(), endDate.toISOString()],
+    queryKey: ["r2-meeting-slots-kpis", startDate.toISOString(), endDate.toISOString(), seg],
     queryFn: async (): Promise<R2MeetingSlotsKPIs> => {
       // Corrigir fuso horário BRT (UTC-3): somar 3h para alinhar com useR1CloserMetrics
       const BRT_OFFSET_HOURS = 3;
@@ -23,6 +42,7 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
         .select(`
           status,
           is_partner,
+          deal_id,
           meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
         `)
         .eq("meeting_slot.meeting_type", "r2")
@@ -35,7 +55,16 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
       }
 
       // Filter out partners from metrics
-      const attendees = (data || []).filter((a) => !a.is_partner);
+      let attendees = (data || []).filter((a) => !a.is_partner);
+
+      // Filtro opcional por segmento ICP (via deal_id → crm_deals.icp_segment)
+      if (seg) {
+        const allowed = await filterDealIdsBySegment(
+          attendees.map((a: any) => a.deal_id).filter(Boolean),
+          seg,
+        );
+        attendees = attendees.filter((a: any) => a.deal_id && allowed.has(a.deal_id));
+      }
 
       // R2 Agendadas: ALL attendees scheduled for the period (excludes only cancelled)
       const r2Agendadas = attendees.filter(
