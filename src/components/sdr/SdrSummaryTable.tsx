@@ -177,8 +177,8 @@ export function SdrSummaryTable({
                   : 'text-red-400';
 
               return (
+                <Fragment key={row.sdrEmail}>
                 <TableRow
-                  key={row.sdrEmail}
                   className={disableNavigation ? "transition-colors" : "cursor-pointer transition-colors hover:bg-muted/30"}
                   onClick={disableNavigation ? undefined : () => handleRowClick(row.sdrEmail)}
                 >
@@ -265,6 +265,17 @@ export function SdrSummaryTable({
                     </TableCell>
                   )}
                 </TableRow>
+                {showSegments && renderSegmentRow(
+                  row.sdrEmail,
+                  'Lead A',
+                  segmentAMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
+                )}
+                {showSegments && renderSegmentRow(
+                  row.sdrEmail,
+                  'Lead B',
+                  segmentBMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
+                )}
+                </Fragment>
               );
             })}
 
