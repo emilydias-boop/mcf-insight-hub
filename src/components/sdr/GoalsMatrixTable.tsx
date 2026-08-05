@@ -75,12 +75,14 @@ export function GoalsMatrixTable({
     }));
   }, [dayValues, weekValues, monthValues, dayTargets, weekTargets, monthTargets]);
 
-  const subRows = useMemo(() => {
+  const segments = useMemo(() => {
     const list: { label: string; values: { day: MetricValues; week: MetricValues; month: MetricValues } }[] = [];
     if (segmentAValues) list.push({ label: "Lead A", values: segmentAValues });
     if (segmentBValues) list.push({ label: "Lead B", values: segmentBValues });
     return list;
   }, [segmentAValues, segmentBValues]);
+
+  const splitBySegment = segments.length > 0;
 
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-card">
@@ -112,7 +114,35 @@ export function GoalsMatrixTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row, index) => (
+            {splitBySegment
+              ? rows.flatMap((row, index) =>
+                  segments.map((seg) => (
+                    <TableRow
+                      key={`${row.label}-${seg.label}`}
+                      className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                    >
+                      <TableCell className="font-medium text-sm text-foreground sticky left-0 z-10 bg-inherit whitespace-nowrap">
+                        {row.label} · {seg.label}
+                      </TableCell>
+                      <TableCell className="text-center px-3 py-2.5">
+                        <div className="flex justify-center">
+                          <MetricProgressCell value={seg.values.day[row.key]} target={row.day.target} compact />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center px-3 py-2.5">
+                        <div className="flex justify-center">
+                          <MetricProgressCell value={seg.values.week[row.key]} target={row.week.target} compact />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center px-3 py-2.5">
+                        <div className="flex justify-center">
+                          <MetricProgressCell value={seg.values.month[row.key]} target={row.month.target} compact />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )),
+                )
+              : rows.map((row, index) => (
               <Fragment key={row.label}>
               <TableRow 
                 key={row.label} 
@@ -149,27 +179,6 @@ export function GoalsMatrixTable({
                   </div>
                 </TableCell>
               </TableRow>
-              {subRows.map((sub) => (
-                <TableRow
-                  key={`${row.label}-${sub.label}`}
-                  className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
-                >
-                  <TableCell className="sticky left-0 z-10 bg-inherit py-1.5">
-                    <span className="pl-3 text-xs text-muted-foreground whitespace-nowrap">
-                      ↳ {sub.label}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
-                    {sub.values.day[row.key]}
-                  </TableCell>
-                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
-                    {sub.values.week[row.key]}
-                  </TableCell>
-                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
-                    {sub.values.month[row.key]}
-                  </TableCell>
-                </TableRow>
-              ))}
               </Fragment>
             ))}
           </TableBody>

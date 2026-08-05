@@ -80,31 +80,19 @@ export function CloserSummaryTable({
   const segAMap = byId(segmentAData);
   const segBMap = byId(segmentBData);
 
-  const renderSegmentRow = (closerId: string, label: string, row?: R1CloserMetric) => {
-    const v = {
-      r1_agendada: row?.r1_agendada ?? 0,
-      outside: row?.outside ?? 0,
-      r1_realizada: row?.r1_realizada ?? 0,
-      noshow: row?.noshow ?? 0,
-      contrato_pago: row?.contrato_pago ?? 0,
-      r2_agendada: row?.r2_agendada ?? 0,
-      reembolsos: row?.reembolsos ?? 0,
-    };
-    return (
-      <TableRow key={`${closerId}-${label}`} className="bg-muted/10 hover:bg-muted/20">
-        <TableCell className="py-1 pl-8 text-xs text-muted-foreground">↳ {label}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-blue-400/80">{v.r1_agendada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-orange-400/80">{v.outside}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-green-400/80">{v.r1_realizada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-red-400/80">{v.noshow}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-        <TableCell className="py-1 text-center text-xs text-amber-400/80">{v.contrato_pago}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-purple-400/80">{v.r2_agendada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">{v.reembolsos}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      </TableRow>
-    );
-  };
+  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'r2_agendada';
+  const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
+    { key: 'r1_agendada', label: 'R1 Agendada', cls: 'text-blue-400' },
+    { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
+    { key: 'r1_realizada', label: 'R1 Realizada', cls: 'text-green-400' },
+    { key: 'noshow', label: 'No-show', cls: 'text-red-400' },
+    { key: 'contrato_pago', label: 'Contrato Pago', cls: 'text-amber-400' },
+    { key: 'r2_agendada', label: 'R2 Agendada', cls: 'text-purple-400' },
+  ];
+  const segValue = (map: Map<string, R1CloserMetric>, closerId: string, key: SegKey) =>
+    (map.get(closerId)?.[key] as number | undefined) ?? 0;
+  const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
+    (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
@@ -113,13 +101,18 @@ export function CloserSummaryTable({
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
+              {showSegments
+                ? SEG_COLS.flatMap((c) => [`${c.label} A`, `${c.label} B`]).map((h) => (
+                    <TableHead key={h} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                      {h}
+                    </TableHead>
+                  ))
+                : SEG_COLS.map((c) => (
+                    <TableHead key={c.key} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                      {c.label}
+                    </TableHead>
+                  ))}
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
             </TableRow>
@@ -161,30 +154,22 @@ export function CloserSummaryTable({
                   <TableCell className="font-medium">
                     <span className="text-foreground">{row.closer_name}</span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
-                      {row.r1_agendada}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-orange-400 font-medium">{row.outside}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-green-400 font-medium">{row.r1_realizada}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-red-400">{row.noshow}</span>
-                  </TableCell>
+                  {showSegments
+                    ? SEG_COLS.flatMap((c) => [
+                        <TableCell key={`${c.key}-a`} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{segValue(segAMap, row.closer_id, c.key)}</span>
+                        </TableCell>,
+                        <TableCell key={`${c.key}-b`} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{segValue(segBMap, row.closer_id, c.key)}</span>
+                        </TableCell>,
+                      ])
+                    : SEG_COLS.map((c) => (
+                        <TableCell key={c.key} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{(row[c.key] as number) || 0}</span>
+                        </TableCell>
+                      ))}
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaNoShowColorClass}`}>{taxaNoShowFormatted}%</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                      {row.r2_agendada}
-                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
@@ -195,8 +180,6 @@ export function CloserSummaryTable({
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
                   </TableCell>
                 </TableRow>
-                {showSegments && renderSegmentRow(row.closer_id, 'Lead A', segAMap.get(row.closer_id))}
-                {showSegments && renderSegmentRow(row.closer_id, 'Lead B', segBMap.get(row.closer_id))}
                 </Fragment>
               );
             })}
@@ -204,20 +187,20 @@ export function CloserSummaryTable({
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">Total</TableCell>
-              <TableCell className="text-center">
-                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
-                  {totals.r1_agendada}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-orange-400">{totals.outside}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-green-400">{totals.r1_realizada}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-red-400">{totals.noshow}</span>
-              </TableCell>
+              {showSegments
+                ? SEG_COLS.flatMap((c) => [
+                    <TableCell key={`t-${c.key}-a`} className="text-center">
+                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
+                    </TableCell>,
+                    <TableCell key={`t-${c.key}-b`} className="text-center">
+                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
+                    </TableCell>,
+                  ])
+                : SEG_COLS.map((c) => (
+                    <TableCell key={`t-${c.key}`} className="text-center">
+                      <span className={c.cls}>{segTotal(data, c.key)}</span>
+                    </TableCell>
+                  ))}
               <TableCell className="text-center">
                 <span className={`font-medium ${
                   totalTaxaNoShow <= 20 
@@ -228,14 +211,6 @@ export function CloserSummaryTable({
                 }`}>
                   {totalTaxaNoShow.toFixed(1)}%
                 </span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contrato_pago}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                  {totals.r2_agendada}
-                </Badge>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${totals.reembolsos > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>

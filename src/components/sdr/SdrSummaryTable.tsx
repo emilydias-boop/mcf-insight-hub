@@ -102,25 +102,23 @@ export function SdrSummaryTable({
   const emptySeg: SdrSegmentMetricValues = {
     agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0,
   };
+  const getSeg = (map: Map<string, SdrSegmentMetricValues> | undefined, email: string) =>
+    map?.get(email.toLowerCase()) ?? emptySeg;
 
-  const renderSegmentRow = (
-    email: string,
-    label: string,
-    vals: SdrSegmentMetricValues,
-  ) => (
-    <TableRow key={`${email}-${label}`} className="bg-muted/10 hover:bg-muted/20">
-      <TableCell className="py-1 pl-8 text-xs text-muted-foreground">↳ {label}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      <TableCell className="py-1 text-center text-xs text-emerald-400/80">{vals.agendamentos}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-blue-400/80">{vals.r1Agendada}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-green-400/80">{vals.r1Realizada}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-red-400/80">{vals.noShows}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-amber-400/80">{vals.contratos}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      {!disableNavigation && <TableCell className="py-1" />}
-    </TableRow>
-  );
+  const sumSeg = (map?: Map<string, SdrSegmentMetricValues>): SdrSegmentMetricValues =>
+    data.reduce((acc, row) => {
+      const v = getSeg(map, row.sdrEmail);
+      return {
+        agendamentos: acc.agendamentos + v.agendamentos,
+        r1Agendada: acc.r1Agendada + v.r1Agendada,
+        r1Realizada: acc.r1Realizada + v.r1Realizada,
+        noShows: acc.noShows + v.noShows,
+        contratos: acc.contratos + v.contratos,
+      };
+    }, { ...emptySeg });
+
+  const totalsSegA = sumSeg(segmentAMap);
+  const totalsSegB = sumSeg(segmentBMap);
 
   if (isLoading) {
     return (
@@ -148,11 +146,20 @@ export function SdrSummaryTable({
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">SDR</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Meta</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Agendamento</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
+              {(showSegments
+                ? [
+                    'Agendamento A', 'Agendamento B',
+                    'R1 Agendada A', 'R1 Agendada B',
+                    'R1 Realizada A', 'R1 Realizada B',
+                    'No-show A', 'No-show B',
+                    `${contratoLabel} A`, `${contratoLabel} B`,
+                  ]
+                : ['Agendamento', 'R1 Agendada', 'R1 Realizada', 'No-show', contratoLabel]
+              ).map((h) => (
+                <TableHead key={h} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                  {h}
+                </TableHead>
+              ))}
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLiquidaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
@@ -219,6 +226,49 @@ export function SdrSummaryTable({
                       )}
                     </div>
                   </TableCell>
+                  {showSegments ? (
+                    <>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          {getSeg(segmentAMap, row.sdrEmail).agendamentos}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          {getSeg(segmentBMap, row.sdrEmail).agendamentos}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                          {getSeg(segmentAMap, row.sdrEmail).r1Agendada}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                          {getSeg(segmentBMap, row.sdrEmail).r1Agendada}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-green-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).r1Realizada}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-green-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).r1Realizada}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-red-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).noShows}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-red-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).noShows}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-amber-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).contratos}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-amber-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).contratos}</span>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                       {row.agendamentos}
@@ -251,6 +301,8 @@ export function SdrSummaryTable({
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
                   </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-center">
                     <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                       {row.reembolsos || 0}
@@ -265,16 +317,6 @@ export function SdrSummaryTable({
                     </TableCell>
                   )}
                 </TableRow>
-                {showSegments && renderSegmentRow(
-                  row.sdrEmail,
-                  'Lead A',
-                  segmentAMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
-                )}
-                {showSegments && renderSegmentRow(
-                  row.sdrEmail,
-                  'Lead B',
-                  segmentBMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
-                )}
                 </Fragment>
               );
             })}
@@ -301,6 +343,37 @@ export function SdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center text-muted-foreground">—</TableCell>
+              {showSegments ? (
+                <>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      {totalsSegA.agendamentos}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      {totalsSegB.agendamentos}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                      {totalsSegA.r1Agendada}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                      {totalsSegB.r1Agendada}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center"><span className="text-green-400">{totalsSegA.r1Realizada}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-green-400">{totalsSegB.r1Realizada}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-red-400">{totalsSegA.noShows}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-red-400">{totalsSegB.noShows}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos}</span></TableCell>
+                </>
+              ) : (
+                <>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                   {totals.agendamentos}
@@ -331,6 +404,8 @@ export function SdrSummaryTable({
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contratos}</span>
               </TableCell>
+                </>
+              )}
               <TableCell className="text-center">
                 <span className={`${(totals.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                   {totals.reembolsos || 0}
