@@ -690,27 +690,36 @@ export default function ReunioesEquipe() {
     enabled: drillBucket === "pendentes",
   });
   
+  const dayContratos = useMemo(
+    () => (dayCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
+    [dayCloserMetrics],
+  );
+  const weekContratos = useMemo(
+    () => (weekCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
+    [weekCloserMetrics],
+  );
+
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
     r1Agendada: dayKPIs?.totalR1Agendada || 0,
     r1Realizada: dayKPIs?.totalRealizadas || 0,
     noShow: dayKPIs?.totalNoShows || 0,
-    contrato: dayKPIs?.totalContratos || 0,
+    contrato: dayContratos,
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs, dayContratos]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0,
     r1Agendada: weekKPIs?.totalR1Agendada || 0,
     r1Realizada: weekKPIs?.totalRealizadas || 0,
     noShow: weekKPIs?.totalNoShows || 0,
-    contrato: weekKPIs?.totalContratos || 0,
+    contrato: weekContratos,
     r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs, weekContratos]);
 
   const monthValues = useMemo(() => ({
     agendamento: monthKPIs?.totalAgendamentos || 0,
