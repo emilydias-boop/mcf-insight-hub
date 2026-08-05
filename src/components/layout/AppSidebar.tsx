@@ -299,10 +299,10 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
 
-  // Painel Comercial individual (SDRs, Closers e Closer Sombra da BU Incorporador)
+  // Painel Comercial (SDRs, Closers e Closer Sombra da BU Incorporador)
   {
     title: "Painel Comercial",
-    url: "/crm/meu-painel-comercial",
+    url: "/crm/reunioes-equipe",
     icon: BarChart3,
     resource: "crm",
     requiredRoles: ["sdr", "closer", "closer_sombra"],
