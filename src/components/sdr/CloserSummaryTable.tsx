@@ -153,8 +153,8 @@ export function CloserSummaryTable({
                   : 'text-red-400';
 
               return (
+                <Fragment key={row.closer_id}>
                 <TableRow
-                  key={row.closer_id}
                   className={onCloserClick ? "cursor-pointer transition-colors hover:bg-muted/30" : "transition-colors"}
                   onClick={onCloserClick ? () => onCloserClick(row.closer_id) : undefined}
                 >
@@ -195,6 +195,9 @@ export function CloserSummaryTable({
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
                   </TableCell>
                 </TableRow>
+                {showSegments && renderSegmentRow(row.closer_id, 'Lead A', segAMap.get(row.closer_id))}
+                {showSegments && renderSegmentRow(row.closer_id, 'Lead B', segBMap.get(row.closer_id))}
+                </Fragment>
               );
             })}
             
