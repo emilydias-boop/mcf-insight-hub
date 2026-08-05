@@ -35,6 +35,7 @@ import { RefundDetailsDialog } from "@/components/sdr/RefundDetailsDialog";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useDealsIcpSegments, type IcpSegmentFilterValue } from "@/hooks/useDealsIcpSegments";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { usePendentesDrilldown } from "@/hooks/usePendentesDrilldown";
@@ -105,6 +106,8 @@ export default function ReunioesEquipe() {
   const initialEnd = parseYmdLocal(searchParams.get("end")) ?? initialStart;
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
+  // Filtro de Segmento ICP (aditivo — 'all' preserva o comportamento atual)
+  const [segmentFilter, setSegmentFilter] = useState<IcpSegmentFilterValue>('all');
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
@@ -406,7 +409,7 @@ export default function ReunioesEquipe() {
     isLoading: closerLoading,
     error: closerError,
     refetch: refetchCloserMetrics,
-  } = useR1CloserMetrics(start, end);
+  } = useR1CloserMetrics(start, end, 'incorporador', segmentFilter);
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
   // — usado para a média individual entre Closers nos cards de Taxa.
@@ -552,13 +555,36 @@ export default function ReunioesEquipe() {
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
 
   // Anexa reembolsos atribuídos a cada SDR (via R1 mais recente do deal reembolsado)
+  // Segmento ICP: mapeia deal_id → icp_segment das reuniões do período
+  const segmentEnabled = segmentFilter !== 'all';
+  const { data: dealSegmentMap } = useDealsIcpSegments(
+    useMemo(() => (allMeetingsRaw || []).map((m: any) => m.deal_id).filter(Boolean), [allMeetingsRaw]),
+    segmentEnabled,
+  );
+  const sdrEmailsInSegment = useMemo(() => {
+    if (!segmentEnabled || !dealSegmentMap) return null;
+    const emails = new Set<string>();
+    (allMeetingsRaw || []).forEach((m: any) => {
+      if (!m.deal_id) return;
+      if (dealSegmentMap.get(m.deal_id) !== segmentFilter) return;
+      const owner = (m.current_owner || '').toLowerCase();
+      const inter = (m.intermediador || '').toLowerCase();
+      if (owner) emails.add(owner);
+      if (inter) emails.add(inter);
+    });
+    return emails;
+  }, [segmentEnabled, dealSegmentMap, allMeetingsRaw, segmentFilter]);
+
   const filteredBySDRWithRefunds = useMemo(() => {
-    if (!sdrRefundsMap) return filteredBySDR;
-    return filteredBySDR.map((row) => ({
+    const base = sdrEmailsInSegment
+      ? filteredBySDR.filter((row) => sdrEmailsInSegment.has((row.sdrEmail || '').toLowerCase()))
+      : filteredBySDR;
+    if (!sdrRefundsMap) return base;
+    return base.map((row) => ({
       ...row,
       reembolsos: sdrRefundsMap.get((row.sdrEmail || '').toLowerCase()) || 0,
     }));
-  }, [filteredBySDR, sdrRefundsMap]);
+  }, [filteredBySDR, sdrRefundsMap, sdrEmailsInSegment]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -876,6 +902,18 @@ export default function ReunioesEquipe() {
               </SelectContent>
             </Select>
 
+            {/* Filtro de Segmento ICP (Lead A / Lead B) */}
+            <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as IcpSegmentFilterValue)}>
+              <SelectTrigger className="w-full sm:w-[170px]">
+                <SelectValue placeholder="Segmento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Segmento: Todos</SelectItem>
+                <SelectItem value="A">Lead A</SelectItem>
+                <SelectItem value="B">Lead B</SelectItem>
+              </SelectContent>
+            </Select>
+
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
@@ -959,7 +997,7 @@ export default function ReunioesEquipe() {
                 <Users className="h-3 w-3 sm:h-4 sm:w-4" />
                 SDRs
                 <span className="text-[10px] sm:text-xs text-muted-foreground">
-                  ({filteredBySDR.length})
+                  ({filteredBySDRWithRefunds.length})
                 </span>
               </TabsTrigger>
               <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">

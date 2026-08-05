@@ -195,6 +195,7 @@ interface DealMeta {
   data_source: string | null;
   r1_closer_email: string | null;
   r2_closer_email: string | null;
+  icp_segment: 'A' | 'B' | null;
 }
 
 export interface ChannelFunnelFilters {
@@ -204,6 +205,7 @@ export interface ChannelFunnelFilters {
   channel?: string;       // 'all' or raw channel key
   origin?: string;        // 'all' or origin label/id
   originId?: string;      // resolved origin_id (preferred)
+  segment?: string;       // 'all' | 'A' | 'B' (segmento ICP — crm_deals.icp_segment)
 }
 
 export function useChannelFunnelReport(
@@ -563,7 +565,7 @@ export function useChannelFunnelReport(
         const chunk = allInvolvedDealIds.slice(i, i + chunkSize);
         const { data, error } = await supabase
           .from('crm_deals')
-          .select('id, origin_id, tags, created_at, contact_id, data_source, r1_closer_email, r2_closer_email, crm_contacts!contact_id(email, name, phone)')
+          .select('id, origin_id, tags, icp_segment, created_at, contact_id, data_source, r1_closer_email, r2_closer_email, crm_contacts!contact_id(email, name, phone)')
           .in('id', chunk);
         if (error) { console.warn('[funnel] dealMeta error', error); continue; }
         deals.push(...(data || []));
@@ -635,6 +637,10 @@ export function useChannelFunnelReport(
           data_source: d.data_source || null,
           r1_closer_email: (d.r1_closer_email || '').toLowerCase() || null,
           r2_closer_email: (d.r2_closer_email || '').toLowerCase() || null,
+          icp_segment: (() => {
+            const v = (d.icp_segment ?? '').toString().trim().toUpperCase();
+            return v === 'A' || v === 'B' ? (v as 'A' | 'B') : null;
+          })(),
         });
       }
       return m;
@@ -898,12 +904,14 @@ export function useChannelFunnelReport(
     const fCloserDeals = closerDealIds; // Set<string> | null — null = sem filtro
     const fChannel = (filters?.channel && filters.channel !== 'all') ? filters.channel : null;
     const fOriginId = filters?.originId || null;
+    const fSegment = (filters?.segment && filters.segment !== 'all') ? filters.segment.toUpperCase() : null;
 
     const dealPassesFilter = (dealId: string | null | undefined): boolean => {
-      if (!dealId) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!dealId) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId && !fSegment;
       if (fCloserDeals && !fCloserDeals.has(dealId)) return false;
       const meta = dealMeta.get(dealId);
-      if (!meta) return !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!meta) return !fSearch && !fSource && !fChannel && !fOriginId && !fSegment;
+      if (fSegment && meta.icp_segment !== fSegment) return false;
       if (fOriginId && meta.origin_id !== fOriginId) return false;
       if (fSource && (meta.data_source || '').toLowerCase() !== fSource) return false;
       if (fChannel && meta.channel !== fChannel) return false;
@@ -920,7 +928,7 @@ export function useChannelFunnelReport(
     };
 
     const emailPassesFilter = (email: string | null | undefined): boolean => {
-      if (!email) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId;
+      if (!email) return !fCloserDeals && !fSearch && !fSource && !fChannel && !fOriginId && !fSegment;
       // Tenta achar o deal correspondente para reaproveitar dealPassesFilter
       let foundDealId: string | null = null;
       dealMeta.forEach((m, id) => {
@@ -931,7 +939,7 @@ export function useChannelFunnelReport(
       // Sem deal: aplica só os filtros que não dependem de meta
       const ch = extraEmailChannels.get(email) || 'OUTROS';
       if (fChannel && ch !== fChannel) return false;
-      if (fCloserDeals || fSource || fOriginId) return false;
+      if (fCloserDeals || fSource || fOriginId || fSegment) return false;
       if (fSearch) {
         if (!email.toLowerCase().includes(fSearch)) return false;
       }
@@ -1159,7 +1167,7 @@ export function useChannelFunnelReport(
     });
 
     return { rows: finalRows, totals: tot, details: det };
-  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, a017InWindow, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId]);
+  }, [cohort, carrinhoRows, vendasFinal, dealMeta, emailToChannel, extraEmailChannels, contactInfo, entradasDeals, allowedSdrEmails, contratoPagoAligned, closerDealIds, a017InWindow, filters?.search, filters?.source, filters?.closerId, filters?.channel, filters?.originId, filters?.segment]);
 
   return {
     rows,
