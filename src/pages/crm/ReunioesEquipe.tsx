@@ -997,7 +997,7 @@ export default function ReunioesEquipe() {
                 <Users className="h-3 w-3 sm:h-4 sm:w-4" />
                 SDRs
                 <span className="text-[10px] sm:text-xs text-muted-foreground">
-                  ({filteredBySDR.length})
+                  ({filteredBySDRWithRefunds.length})
                 </span>
               </TabsTrigger>
               <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
