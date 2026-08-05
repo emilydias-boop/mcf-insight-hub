@@ -1,60 +1,38 @@
-# Mapeamento técnico — Segmento Lead A / Lead B (BU Incorporador)
+# Filtro de Segmento na tabela "Metas da Equipe"
 
-Levantamento apenas (nenhum arquivo de produto alterado). Abaixo o que existe hoje, onde cabe o filtro por segmento e o custo de cada opção.
+## O que alimenta essa tabela hoje
 
-## 1. Painel Comercial / Reuniões Equipe
+A tabela MÉTRICA / DIA / SEMANA / MÊS é o componente `src/components/sdr/GoalsMatrixTable.tsx`, renderizado dentro de `src/components/sdr/TeamGoalsPanel.tsx`. Ela é puramente apresentacional: recebe `dayValues` / `weekValues` / `monthValues` (realizado) e as metas (`useSdrTeamTargets` + `useSdrWeekdayTargets`).
 
-Rota: `/crm/reunioes-equipe` (arquivo `src/pages/crm/ReunioesEquipe.tsx`, 1039 linhas).
+Os valores realizados são montados em `src/pages/crm/ReunioesEquipe.tsx` (linhas ~685-716), a partir de 3 blocos de hooks — um por janela (dia, semana, mês):
 
-Fontes de número de cada bloco:
+| Linha da tabela | Fonte | Tem `deal_id`? |
+| --- | --- | --- |
+| Agendamento, R1 Agendada, R1 Realizada, No-Show, Contrato Pago | `useTeamMeetingsData` → RPC `get_sdr_metrics_from_agenda` (agregada por SDR) | Não. A RPC devolve só contagens por e-mail de SDR |
+| Contrato Pago (coluna Mês) | `contractsFromClosers` (`useR1CloserMetrics`) | Sim — já é segment-aware (feito no turno anterior) |
+| R2 Agendada, R2 Realizada | `useR2MeetingSlotsKPIs` (query direta em `meeting_slot_attendees`) | A tabela tem `deal_id`, mas o select atual não o traz |
+| Vendas Realizadas | `useR2VendasKPIs` (query direta em `deal_activities`) | A tabela tem `deal_id`, mas o select atual não o traz |
 
-| Bloco | Hook | Origem real |
-|---|---|---|
-| KPIs de topo (Agendamentos, R1 Agendada, R1 Realizada, No-Show, Contrato, Reembolsos) | `useTeamMeetingsData` → `useSdrMetricsFromAgenda` | RPC `get_sdr_metrics_from_agenda(start,end,sdr_email_filter,bu_filter)` → retorna **JSON já agregado** |
-| Tabela por SDR (`SdrSummaryTable`) | mesmo RPC + `useSdrMeetingsFromAgenda` | RPC `get_sdr_meetings_from_agenda_aligned` → linhas por attendee (tem `deal_id`, **não tem tags**) |
-| Tabela por Closer + KPI CONTRATOS | `useR1CloserMetrics` | consultas diretas em `meeting_slots`, `meeting_slot_attendees`, `hubla_transactions`, `deal_activities`, `crm_deals` |
-| R2 Agendada / R2 Realizada / Venda | `useR2MeetingSlotsKPIs`, `useR2VendasKPIs` | consultas em `meeting_slots` / vendas |
+Conclusão: **não é 100% SQL agregado**. Só as 4 primeiras linhas (Agendamento / R1 Agendada / R1 Realizada / No-Show) vêm de uma RPC agregada sem `deal_id`. Todo o resto é query client-side e pode ser filtrado por `icp_segment` sem mexer no banco.
 
-Consequência: os KPIs de topo e a tabela de SDR vêm de um agregado do banco que **não conhece tags**. A tabela de Closer e as linhas de reunião trabalham em nível de registro (com `deal_id` em mãos), então aceitam segmentação no cliente.
+Vale notar que `useTeamMeetingsData` também retorna `allMeetingsRaw` (via `useSdrMeetingsFromAgenda`), e essas linhas **têm `deal_id`** — é exatamente o que já usamos para filtrar a tabela por SDR. Isso abre um caminho sem migração.
 
-Ponto natural para adicionar o segmento, sem tocar nos totais atuais:
-- Um seletor "Segmento: Todos | Lead A | Lead B" no header do painel, funcionando como **filtro aditivo de camada de apresentação**: com "Todos" nada muda (números idênticos aos de hoje); ao escolher Lead A/B, recalcula os KPIs a partir das linhas de attendee (`get_sdr_meetings_from_agenda_aligned` + attendees do `useR1CloserMetrics`) cruzadas com um mapa `deal_id → segmento`.
-- Alternativa mais barata visualmente: manter os totais como estão e mostrar, ao lado de cada KPI, uma quebra "A / B" apenas informativa, sem alterar o número principal.
+## Abordagem proposta (sem mexer no banco)
 
-## 2. Relatórios da BU Incorporador que mostram o mesmo funil
+1. **R2 Agendada / R2 Realizada** — incluir `deal_id` no select de `useR2MeetingSlotsKPIs`, aceitar um parâmetro `segment` e filtrar os attendees pelos deals cujo `icp_segment` casa (lote via `useDealsIcpSegments`).
+2. **Vendas Realizadas** — mesmo padrão em `useR2VendasKPIs`: incluir `deal_id` no select e filtrar por segmento.
+3. **Contrato Pago** — coluna Mês já vem de `useR1CloserMetrics` com segmento; para Dia e Semana, passar `segment` aos hooks `useR1CloserMetrics` das respectivas janelas (ou reaproveitar o mesmo caminho já usado no card) em vez do valor da RPC, para manter coerência.
+4. **Agendamento / R1 Agendada / R1 Realizada / No-Show** — derivar os 4 números a partir do `allMeetingsRaw` de cada janela (dia/semana/mês), aplicando as mesmas regras já usadas na página (dedup por deal+dia, cap de no-show por lead, recorte de SDRs válidas do squad) **apenas quando o filtro for Lead A/Lead B**. Com "Todos", os valores continuam vindo da RPC exatamente como hoje — zero mudança de número.
+5. Passar `segment` de `ReunioesEquipe.tsx` para `TeamGoalsPanel` (prop opcional) só para exibir um rótulo discreto de qual segmento está aplicado; as metas configuradas continuam as mesmas (não existem metas por segmento).
 
-Rota: `/bu-incorporador/relatorios` → `src/pages/bu-incorporador/Relatorios.tsx` → `src/components/relatorios/BUReportCenter.tsx`, com os relatórios: `daily_view, contracts, sales, carrinho, acquisition, investigation, nao_comprou, controle_diego, carrinho_analysis`.
+## Alternativa (mais fiel, exige migração)
 
-Painéis que exibem o funil Agendamento → R1 Agendada → R1 Realizada → No-Show → Contrato Pago → R2 Agendada:
+Adicionar um parâmetro `segment_filter text default null` na RPC `get_sdr_metrics_from_agenda` (join com `crm_deals.icp_segment`). Vantagem: os 4 primeiros números continuam calculados pela mesma lógica canônica do SQL, sem risco de divergência com o cálculo client-side. Desvantagem: mexe numa função crítica usada por várias telas (Painel Comercial, Minhas Reuniões, TV) — faria com assinatura nova e `default null` para não afetar nenhum chamador atual.
 
-| Tela | Arquivo | Hook / fonte |
-|---|---|---|
-| Aquisição (funil por canal) | `src/components/relatorios/AcquisitionReportPanel.tsx` + `ChannelFunnelTable.tsx` + `funnelMetricsConfig.ts` | `src/hooks/useChannelFunnelReport.ts` (queries diretas, **já lê `crm_deals.tags`**) |
-| Visão Diária | `src/components/relatorios/DailyViewPanel.tsx` | RPC `get_daily_view_incorporador` (JSON agregado, sem tags) |
-| Performance (SDR/Closer) | `src/components/relatorios/PerformanceReportPanel.tsx` | reaproveita `SdrSummaryTable` / métricas de agenda |
-| Investigação | `src/components/relatorios/InvestigationReportPanel.tsx` | `useInvestigationReport` |
-| Carrinho / Carrinho Analysis | `CarrinhoReportPanel.tsx`, `CarrinhoAnalysisReportPanel.tsx` | `useCarrinhoAnalysisReport` |
-| Pós-venda | `PostSaleFunnelPanel.tsx` | tracking pós-contrato |
+## Recomendação
 
-Fora de Relatórios, mas com o mesmo funil:
-- `/crm/movimentacoes-estagio` → `src/pages/crm/MovimentacoesEstagio.tsx` + `BUFunnelComplete.tsx` / `useBUFunnelComplete.ts` (**já lê e filtra por `crm_deals.tags`**)
-- `/crm/overview` → `FunilDashboard.tsx`
-- `/{bu}/crm/agenda/metricas` → `src/pages/crm/AgendaMetricas.tsx`
+Fazer a alternativa com migração para as 4 linhas da RPC (parâmetro opcional, comportamento idêntico quando null) e o filtro client-side para R2/Vendas. Isso evita reimplementar em TypeScript as regras de dedup/cap que já vivem no SQL — que é justamente onde divergências de número costumam aparecer nessa tela.
 
-## 3. Disponibilidade de `crm_deals.tags`
+## Garantia de não-regressão
 
-- **Barato (tags já na query):** `useChannelFunnelReport` e `useBUFunnelComplete` já selecionam `id, tags, origin_id, ...` de `crm_deals` — dá para derivar o segmento sem nenhuma query nova.
-- **Custo baixo (1 query extra):** painel comercial e demais painéis que trabalham por attendee já têm `deal_id`; basta um `select id, tags from crm_deals in (deal_ids)` em lote (padrão `batchedIn` já usado em `useR1CloserMetrics`) e um `Map<deal_id, 'Lead A'|'Lead B'>`.
-- **Caro / exige SQL:** o que vem de RPC agregado (`get_sdr_metrics_from_agenda`, `get_daily_view_incorporador`, `get_channel_funnel_metrics`) não expõe tags nem `deal_id`; segmentar ali exige novo parâmetro na função do banco ou recalcular no cliente a partir das linhas de attendee.
-
-## Observações dos dados atuais (verificado no banco)
-
-- Deals com tag Lead A/Lead B: **9.484 no total**; dentro das duas origens Incorporador informadas (`e3c04f21…`, `7431cf4a…`): **251 Lead A / 85 Lead B**. Ou seja, a maior parte das tags está em deals de outras origens — vale confirmar se o trigger deveria ser restrito à BU Incorporador ou se essas outras origens também são Incorporador.
-- `crm_deals.lead_income_estimate` está **NULL em 100% das linhas** (0 registros preenchidos, inclusive fora da BU). Portanto qualquer UI que dependa do valor de renda ainda não teria dado; a segmentação hoje só é confiável via tag.
-
-## Próximo passo sugerido
-
-Escolher o escopo da fase 1 entre:
-1. Só painel comercial (`/crm/reunioes-equipe`) com seletor de segmento; ou
-2. Só relatório de Aquisição (funil por canal), que é o de menor custo técnico por já ter as tags em mãos; ou
-3. Os dois, com um helper compartilhado `resolveLeadSegment(tags)` reaproveitado do que já existe no Kanban e na Agenda.
+Com "Segmento: Todos" (padrão) nenhum parâmetro novo é enviado e nenhum filtro é aplicado: todos os números da tabela ficam byte-a-byte iguais aos de hoje.
