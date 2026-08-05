@@ -14693,6 +14693,7 @@ export type Database = {
           bu_filter?: string
           end_date: string
           sdr_email_filter?: string
+          segment_filter?: string
           start_date: string
         }
         Returns: Json
