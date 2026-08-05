@@ -25,9 +25,11 @@ interface TeamGoalsPanelProps {
   weekValues: MetricValues;
   monthValues: MetricValues;
   buPrefix?: string; // e.g. 'consorcio_sdr_' for consórcio, default 'sdr_'
+  segmentAValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
+  segmentBValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
 }
 
-export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 'sdr_' }: TeamGoalsPanelProps) {
+export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 'sdr_', segmentAValues, segmentBValues }: TeamGoalsPanelProps) {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const { role } = useAuth();
   const { data: targets, isLoading } = useSdrTeamTargets(buPrefix);
@@ -126,6 +128,8 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues, buPrefix = 
             dayTargets={dayTargets}
             weekTargets={weekTargets}
             monthTargets={monthTargets}
+            segmentAValues={segmentAValues}
+            segmentBValues={segmentBValues}
           />
         </CardContent>
       </Card>

@@ -35,6 +35,7 @@ import { RefundDetailsDialog } from "@/components/sdr/RefundDetailsDialog";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
 import { useDealsIcpSegments, type IcpSegmentFilterValue } from "@/hooks/useDealsIcpSegments";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
@@ -201,19 +202,6 @@ export default function ReunioesEquipe() {
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
   });
 
-  // Fetch day data for goals panel
-  const { teamKPIs: dayKPIs } = useTeamMeetingsData({
-    startDate: dayStart,
-    endDate: dayEnd,
-    segment: segmentFilter,
-  });
-
-  // Fetch week data for goals panel
-  const { teamKPIs: weekKPIs } = useTeamMeetingsData({
-    startDate: weekStartDate,
-    endDate: weekEndDate,
-    segment: segmentFilter,
-  });
 
 
   // Fetch all SDRs for meta_diaria (fallback)
@@ -381,35 +369,21 @@ export default function ReunioesEquipe() {
     return map;
   }, [employeeAdmissaoData, activeSdrsList, start, end]);
 
-  // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
-  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd, segmentFilter);
-
-  // Fetch R2 agenda KPIs for the week
-  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate, segmentFilter);
-
-  // Fetch Vendas KPIs for today
-  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd, segmentFilter);
-
-  // Fetch Vendas KPIs for the week
-  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate, segmentFilter);
-
-  // Fetch month data for goals panel
-  const { teamKPIs: monthKPIs } = useTeamMeetingsData({
-    startDate: monthStartDate,
-    endDate: monthEndDate,
-    segment: segmentFilter,
-  });
-
-  // Fetch R2 agenda KPIs for the month
-  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate, segmentFilter);
-
-  // Fetch Vendas KPIs for the month
-  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate, segmentFilter);
-
-  // Contrato Pago (Dia/Semana) da tabela de Metas: usa o mesmo caminho do Mês
-  // (useR1CloserMetrics, com segmento) para respeitar o filtro de Segmento.
-  const { data: dayCloserMetrics } = useR1CloserMetrics(dayStart, dayEnd, 'incorporador', segmentFilter);
-  const { data: weekCloserMetrics } = useR1CloserMetrics(weekStartDate, weekEndDate, 'incorporador', segmentFilter);
+  // Tabela MÉTRICA/DIA/SEMANA/MÊS: total + sub-linhas Lead A / Lead B, sempre lado a lado.
+  // O seletor de Segmento da página NÃO afeta esta tabela (vale só para as tabelas por SDR/Closer).
+  const goalsMatrixDates = {
+    dayStart,
+    dayEnd,
+    weekStart: weekStartDate,
+    weekEnd: weekEndDate,
+    monthStart: monthStartDate,
+    monthEnd: monthEndDate,
+    periodStart: start,
+    periodEnd: end,
+  };
+  const goalsTotal = useGoalsMatrixValues({ segment: 'all', ...goalsMatrixDates });
+  const goalsSegmentA = useGoalsMatrixValues({ segment: 'A', ...goalsMatrixDates });
+  const goalsSegmentB = useGoalsMatrixValues({ segment: 'B', ...goalsMatrixDates });
 
   // Fetch Closer metrics for the selected period
   const {
@@ -690,47 +664,19 @@ export default function ReunioesEquipe() {
     enabled: drillBucket === "pendentes",
   });
   
-  const dayContratos = useMemo(
-    () => (dayCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
-    [dayCloserMetrics],
-  );
-  const weekContratos = useMemo(
-    () => (weekCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
-    [weekCloserMetrics],
-  );
-
-  const dayValues = useMemo(() => ({
-    agendamento: dayKPIs?.totalAgendamentos || 0,
-    r1Agendada: dayKPIs?.totalR1Agendada || 0,
-    r1Realizada: dayKPIs?.totalRealizadas || 0,
-    noShow: dayKPIs?.totalNoShows || 0,
-    contrato: dayContratos,
-    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs, dayContratos]);
-
-  const weekValues = useMemo(() => ({
-    agendamento: weekKPIs?.totalAgendamentos || 0,
-    r1Agendada: weekKPIs?.totalR1Agendada || 0,
-    r1Realizada: weekKPIs?.totalRealizadas || 0,
-    noShow: weekKPIs?.totalNoShows || 0,
-    contrato: weekContratos,
-    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs, weekContratos]);
-
-  const monthValues = useMemo(() => ({
-    agendamento: monthKPIs?.totalAgendamentos || 0,
-    r1Agendada: monthKPIs?.totalR1Agendada || 0,
-    r1Realizada: monthKPIs?.totalRealizadas || 0,
-    noShow: monthKPIs?.totalNoShows || 0,
-    contrato: contractsFromClosers.total,
-    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, contractsFromClosers]);
+  const dayValues = goalsTotal.dayValues;
+  const weekValues = goalsTotal.weekValues;
+  const monthValues = goalsTotal.monthValues;
+  const segmentAValues = {
+    day: goalsSegmentA.dayValues,
+    week: goalsSegmentA.weekValues,
+    month: goalsSegmentA.monthValues,
+  };
+  const segmentBValues = {
+    day: goalsSegmentB.dayValues,
+    week: goalsSegmentB.weekValues,
+    month: goalsSegmentB.monthValues,
+  };
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
@@ -827,7 +773,13 @@ export default function ReunioesEquipe() {
       />
 
       {/* Goals Panel */}
-      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
+      <TeamGoalsPanel
+        dayValues={dayValues}
+        weekValues={weekValues}
+        monthValues={monthValues}
+        segmentAValues={segmentAValues}
+        segmentBValues={segmentBValues}
+      />
 
       {/* Trava de fechamento mensal */}
       <MonthLockBanner anoMes={toAnoMes(start)} />

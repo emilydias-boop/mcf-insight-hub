@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Calendar, CalendarDays, CalendarRange } from "lucide-react";
 import { MetricProgressCell } from "./MetricProgressCell";
 import {
@@ -39,6 +39,9 @@ interface GoalsMatrixTableProps {
   dayTargets: MetricTargets;
   weekTargets: MetricTargets;
   monthTargets: MetricTargets;
+  /** Sub-linhas por segmento ICP (opcional, apenas realizado — sem meta própria) */
+  segmentAValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
+  segmentBValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
 }
 
 const METRIC_LABELS: { key: keyof MetricValues; label: string }[] = [
@@ -59,15 +62,25 @@ export function GoalsMatrixTable({
   dayTargets,
   weekTargets,
   monthTargets,
+  segmentAValues,
+  segmentBValues,
 }: GoalsMatrixTableProps) {
   const rows = useMemo(() => {
     return METRIC_LABELS.map(({ key, label }) => ({
       label,
+      key,
       day: { value: dayValues[key], target: dayTargets[key] },
       week: { value: weekValues[key], target: weekTargets[key] },
       month: { value: monthValues[key], target: monthTargets[key] },
     }));
   }, [dayValues, weekValues, monthValues, dayTargets, weekTargets, monthTargets]);
+
+  const subRows = useMemo(() => {
+    const list: { label: string; values: { day: MetricValues; week: MetricValues; month: MetricValues } }[] = [];
+    if (segmentAValues) list.push({ label: "Lead A", values: segmentAValues });
+    if (segmentBValues) list.push({ label: "Lead B", values: segmentBValues });
+    return list;
+  }, [segmentAValues, segmentBValues]);
 
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-card">
@@ -100,6 +113,7 @@ export function GoalsMatrixTable({
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
+              <Fragment key={row.label}>
               <TableRow 
                 key={row.label} 
                 className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
@@ -135,6 +149,28 @@ export function GoalsMatrixTable({
                   </div>
                 </TableCell>
               </TableRow>
+              {subRows.map((sub) => (
+                <TableRow
+                  key={`${row.label}-${sub.label}`}
+                  className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                >
+                  <TableCell className="sticky left-0 z-10 bg-inherit py-1.5">
+                    <span className="pl-3 text-xs text-muted-foreground whitespace-nowrap">
+                      ↳ {sub.label}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.day[row.key]}
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.week[row.key]}
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.month[row.key]}
+                  </TableCell>
+                </TableRow>
+              ))}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
