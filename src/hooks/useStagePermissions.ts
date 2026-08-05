@@ -150,17 +150,32 @@ export const useStagePermissions = () => {
   
   const isLoading = permissionsLoading || stagesLoading;
   
+  // Combina as permissões de TODAS as roles do usuário para o mesmo stage,
+  // escolhendo sempre a mais permissiva (OR lógico em cada flag).
+  // Evita que um usuário com role dupla (ex: sdr + closer) perca acesso
+  // por causa da ordem de retorno do banco.
+  const mergePermissions = (matches: StagePermission[]): StagePermission | undefined => {
+    if (matches.length === 0) return undefined;
+    return matches.reduce((acc, p) => ({
+      ...acc,
+      can_view: acc.can_view || p.can_view,
+      can_edit: acc.can_edit || p.can_edit,
+      can_move_from: acc.can_move_from || p.can_move_from,
+      can_move_to: acc.can_move_to || p.can_move_to,
+    }));
+  };
+
   // Função auxiliar para encontrar permissão (por UUID direto ou por nome normalizado)
   const findPermission = (stageId: string): StagePermission | undefined => {
-    // Primeiro tenta pelo ID direto
-    let permission = permissions.find(p => p.stage_id === stageId);
+    // Primeiro tenta pelo ID direto (agregando todas as roles)
+    let permission = mergePermissions(permissions.filter(p => p.stage_id === stageId));
     
     // Fallback: busca pelo nome normalizado
     if (!permission && stagesMap) {
       const stageName = stagesMap[stageId];
       if (stageName) {
         const normalizedId = normalizeStageId(stageName);
-        permission = permissions.find(p => p.stage_id === normalizedId);
+        permission = mergePermissions(permissions.filter(p => p.stage_id === normalizedId));
       }
     }
     
@@ -168,9 +183,10 @@ export const useStagePermissions = () => {
   };
   
   const getVisibleStages = () => {
-    return permissions
-      .filter(p => p.can_view)
-      .map(p => p.stage_id);
+    // Um stage é visível se QUALQUER role do usuário puder vê-lo
+    const visible = new Set<string>();
+    permissions.forEach(p => { if (p.can_view) visible.add(p.stage_id); });
+    return Array.from(visible);
   };
   
   const canViewStage = (stageId: string) => {
