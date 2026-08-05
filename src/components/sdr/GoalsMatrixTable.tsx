@@ -76,9 +76,14 @@ export function GoalsMatrixTable({
   }, [dayValues, weekValues, monthValues, dayTargets, weekTargets, monthTargets]);
 
   const segments = useMemo(() => {
-    const list: { label: string; values: { day: MetricValues; week: MetricValues; month: MetricValues } }[] = [];
-    if (segmentAValues) list.push({ label: "Lead A", values: segmentAValues });
-    if (segmentBValues) list.push({ label: "Lead B", values: segmentBValues });
+    const list: {
+      label: string;
+      countsForTarget: boolean;
+      values: { day: MetricValues; week: MetricValues; month: MetricValues };
+    }[] = [];
+    // Regra de negócio: só Lead A conta para meta. Lead B mostra apenas o realizado.
+    if (segmentAValues) list.push({ label: "Lead A", countsForTarget: true, values: segmentAValues });
+    if (segmentBValues) list.push({ label: "Lead B", countsForTarget: false, values: segmentBValues });
     return list;
   }, [segmentAValues, segmentBValues]);
 
@@ -126,17 +131,29 @@ export function GoalsMatrixTable({
                       </TableCell>
                       <TableCell className="text-center px-3 py-2.5">
                         <div className="flex justify-center">
-                          <MetricProgressCell value={seg.values.day[row.key]} target={row.day.target} compact />
+                          {seg.countsForTarget ? (
+                            <MetricProgressCell value={seg.values.day[row.key]} target={row.day.target} compact />
+                          ) : (
+                            <span className="text-sm font-semibold text-foreground">{seg.values.day[row.key]}</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center px-3 py-2.5">
                         <div className="flex justify-center">
-                          <MetricProgressCell value={seg.values.week[row.key]} target={row.week.target} compact />
+                          {seg.countsForTarget ? (
+                            <MetricProgressCell value={seg.values.week[row.key]} target={row.week.target} compact />
+                          ) : (
+                            <span className="text-sm font-semibold text-foreground">{seg.values.week[row.key]}</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center px-3 py-2.5">
                         <div className="flex justify-center">
-                          <MetricProgressCell value={seg.values.month[row.key]} target={row.month.target} compact />
+                          {seg.countsForTarget ? (
+                            <MetricProgressCell value={seg.values.month[row.key]} target={row.month.target} compact />
+                          ) : (
+                            <span className="text-sm font-semibold text-foreground">{seg.values.month[row.key]}</span>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
