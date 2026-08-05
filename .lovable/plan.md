@@ -1,38 +1,46 @@
-# Filtro de Segmento na tabela "Metas da Equipe"
+# Diagnóstico: "não consigo adicionar nota" — Jessica Martins (closer)
 
-## O que alimenta essa tabela hoje
+Deal investigado: "Benigno Rocha dos Santos Junior - A010" (`cf4b922a-...`), stage "Reunião 02 Realizada", BU Incorporador.
 
-A tabela MÉTRICA / DIA / SEMANA / MÊS é o componente `src/components/sdr/GoalsMatrixTable.tsx`, renderizado dentro de `src/components/sdr/TeamGoalsPanel.tsx`. Ela é puramente apresentacional: recebe `dayValues` / `weekValues` / `monthValues` (realizado) e as metas (`useSdrTeamTargets` + `useSdrWeekdayTargets`).
+## Resumo do que foi confirmado
 
-Os valores realizados são montados em `src/pages/crm/ReunioesEquipe.tsx` (linhas ~685-716), a partir de 3 blocos de hooks — um por janela (dia, semana, mês):
+**Não existe nenhuma regra que bloqueie nota por causa de stage de R2.** Nenhum componente ou hook de nota consulta stage, `r2_closer_email`, `owner_id` ou role antes de gravar. As policies de RLS confirmadas no banco também não têm essa restrição.
 
-| Linha da tabela | Fonte | Tem `deal_id`? |
-| --- | --- | --- |
-| Agendamento, R1 Agendada, R1 Realizada, No-Show, Contrato Pago | `useTeamMeetingsData` → RPC `get_sdr_metrics_from_agenda` (agregada por SDR) | Não. A RPC devolve só contagens por e-mail de SDR |
-| Contrato Pago (coluna Mês) | `contractsFromClosers` (`useR1CloserMetrics`) | Sim — já é segment-aware (feito no turno anterior) |
-| R2 Agendada, R2 Realizada | `useR2MeetingSlotsKPIs` (query direta em `meeting_slot_attendees`) | A tabela tem `deal_id`, mas o select atual não o traz |
-| Vendas Realizadas | `useR2VendasKPIs` (query direta em `deal_activities`) | A tabela tem `deal_id`, mas o select atual não o traz |
+O que existe de verdade, e é a explicação mais provável do relato dela, é uma **regra de permissão por role nos stages de R2 combinada com o fato de a Jessica ter DUAS roles (`closer` + `sdr`)**. Nos stages `r2_agendada` / `r2_realizada` / `r1_realizada`, a role `sdr` tem `can_edit = false`, `can_move_from = false`; a role `closer` tem tudo `true`. O hook que resolve isso (`useStagePermissions`) carrega as linhas das duas roles e usa a **primeira** que casar, sem priorizar `closer` — então, dependendo da ordem retornada pelo banco, ela pode cair na linha de `sdr` e ficar sem permissão de editar/mover o negócio nesses stages. É isso que produz a sensação de "o sistema entende que ele está na R2 e não me deixa".
 
-Conclusão: **não é 100% SQL agregado**. Só as 4 primeiras linhas (Agendamento / R1 Agendada / R1 Realizada / No-Show) vêm de uma RPC agregada sem `deal_id`. Todo o resto é query client-side e pode ser filtrado por `icp_segment` sem mexer no banco.
+## Mapeamento técnico
 
-Vale notar que `useTeamMeetingsData` também retorna `allMeetingsRaw` (via `useSdrMeetingsFromAgenda`), e essas linhas **têm `deal_id`** — é exatamente o que já usamos para filtrar a tabela por SDR. Isso abre um caminho sem migração.
+### Onde se adiciona nota (dois caminhos independentes)
 
-## Abordagem proposta (sem mexer no banco)
+1. **Aba "Notas" do negócio** (Kanban → drawer do negócio)
+   - UI: `src/components/crm/DealNotesTab.tsx` (textarea + botão "Adicionar Nota"), renderizada em `DealDetailsDrawer.tsx:262` sem nenhuma condição de stage/role.
+   - Hook: `useAddDealNote` (`src/hooks/useNextAction.ts:101`) → grava em `deal_activities` com `activity_type: 'note'`.
+   - Erros: sucesso "Nota adicionada"; falha `Erro ao adicionar nota: <mensagem do Supabase>`.
 
-1. **R2 Agendada / R2 Realizada** — incluir `deal_id` no select de `useR2MeetingSlotsKPIs`, aceitar um parâmetro `segment` e filtrar os attendees pelos deals cujo `icp_segment` casa (lote via `useDealsIcpSegments`).
-2. **Vendas Realizadas** — mesmo padrão em `useR2VendasKPIs`: incluir `deal_id` no select e filtrar por segmento.
-3. **Contrato Pago** — coluna Mês já vem de `useR1CloserMetrics` com segmento; para Dia e Semana, passar `segment` aos hooks `useR1CloserMetrics` das respectivas janelas (ou reaproveitar o mesmo caminho já usado no card) em vez do valor da RPC, para manter coerência.
-4. **Agendamento / R1 Agendada / R1 Realizada / No-Show** — derivar os 4 números a partir do `allMeetingsRaw` de cada janela (dia/semana/mês), aplicando as mesmas regras já usadas na página (dedup por deal+dia, cap de no-show por lead, recorte de SDRs válidas do squad) **apenas quando o filtro for Lead A/Lead B**. Com "Todos", os valores continuam vindo da RPC exatamente como hoje — zero mudança de número.
-5. Passar `segment` de `ReunioesEquipe.tsx` para `TeamGoalsPanel` (prop opcional) só para exibir um rótulo discreto de qual segmento está aplicado; as metas configuradas continuam as mesmas (não existem metas por segmento).
+2. **Aba "Notas" do drawer da Agenda R2** (e o equivalente na Agenda R1)
+   - UI: `src/components/crm/r2-drawer/R2NotesTab.tsx` (dentro de `R2MeetingDetailDrawer.tsx:604/614`); na Agenda R1 é `AttendeeNotesSection.tsx` (`AgendaMeetingDrawer.tsx:929`, `canAddNotes={true}`).
+   - Hook: `useAddAttendeeNote` (`src/hooks/useAttendeeNotes.ts:102`) → grava em `attendee_notes` com `note_type: 'r2'` (ou `general` na R1), sempre com `created_by = auth.uid()`.
+   - Erros: "Digite uma nota" (texto vazio), "Erro ao adicionar nota" (genérico, sem detalhe do banco), "Nota adicionada!".
+   - Observação: o formulário só aparece se existir `attendee.id`. Para esse lead existe attendee de R2 (slot 05/08 17:30, closer Jessica Martins, status `completed`), então o formulário deveria aparecer na Agenda R2.
 
-## Alternativa (mais fiel, exige migração)
+### RLS (verificado no banco, não só nas migrations)
+- `attendee_notes`: INSERT `with_check (auth.uid() = created_by)`; SELECT `true`; UPDATE/DELETE só do autor.
+- `deal_activities`: INSERT `auth.uid() IS NOT NULL AND (user_id IS NULL OR user_id = auth.uid())`; SELECT `true`.
+- Nenhuma policy olha stage, dono do deal ou closer da R2. Um closer que não é dono do negócio consegue inserir nota nos dois caminhos.
 
-Adicionar um parâmetro `segment_filter text default null` na RPC `get_sdr_metrics_from_agenda` (join com `crm_deals.icp_segment`). Vantagem: os 4 primeiros números continuam calculados pela mesma lógica canônica do SQL, sem risco de divergência com o cálculo client-side. Desvantagem: mexe numa função crítica usada por várias telas (Painel Comercial, Minhas Reuniões, TV) — faria com assinatura nova e `default null` para não afetar nenhum chamador atual.
+### Onde o R2 realmente muda comportamento (mas não é nota)
+- `src/hooks/useStagePermissions.ts:15-27` — `CLOSER_ONLY_STAGE_PATTERNS` inclui "reunião 02 realizada": esconde colunas do Kanban para SDR.
+- `useStagePermissions.ts:154-168` — `findPermission` faz `permissions.find(...)` sobre as linhas de **todas** as roles do usuário, sem desempate por prioridade. Com `closer` + `sdr`, o resultado é indeterminado.
+- `stage_permissions` no banco: `sdr` em `r2_realizada` = `can_view true / can_edit false / can_move_from false / can_move_to false`; `closer` = tudo `true`.
+- `enforce_meeting_status_lock` (trigger) só bloqueia **mudança de status** de reunião em mês fechado, com a mensagem "Mês YYYY-MM está fechado…" — não afeta notas.
+- `trg_auto_move_em_contato_from_activity` só move o deal se ele estiver em stage de topo de funil; em stage de R2 não faz nada.
 
-## Recomendação
+## Próximo passo que eu preciso de você
 
-Fazer a alternativa com migração para as 4 linhas da RPC (parâmetro opcional, comportamento idêntico quando null) e o filtro client-side para R2/Vendas. Isso evita reimplementar em TypeScript as regras de dedup/cap que já vivem no SQL — que é justamente onde divergências de número costumam aparecer nessa tela.
+Para fechar a causa raiz com certeza, preciso saber **de qual tela** a Jessica tentou e **qual texto exato** apareceu:
 
-## Garantia de não-regressão
+- Kanban → abrir o negócio → aba "Notas" (mensagem esperada em falha: "Erro ao adicionar nota: …")
+- Agenda R2 → abrir a reunião → aba "Notas" → "Adicionar Nota" (mensagem esperada: "Erro ao adicionar nota")
+- ou nenhuma mensagem: o botão/textarea simplesmente não aparece (aí o problema é a reunião não estar visível/o negócio não estar visível no Kanban, não o insert).
 
-Com "Segmento: Todos" (padrão) nenhum parâmetro novo é enviado e nenhum filtro é aplicado: todos os números da tabela ficam byte-a-byte iguais aos de hoje.
+Com isso eu confirmo se o caso é (a) o bug de dupla role em `useStagePermissions`, (b) visibilidade da reunião concluída na Agenda R2, ou (c) erro real de insert.
