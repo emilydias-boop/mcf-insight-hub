@@ -78,6 +78,13 @@ export function TeamKPICards({
   const pendentesTooltip = pendentesBreakdown
     ? `Reuniões marcadas para o período que não viraram Realizada nem No-Show:\n• Futuras (ainda vão acontecer): ${pendentesBreakdown.futuras}\n• Vencidas s/ desfecho (já passaram e ninguém atualizou): ${pendentesBreakdown.vencidas}\n• Remanejados/Restituídos: ${pendentesBreakdown.canceladas}\nClique para destrinchar.`
     : "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.";
+  const segLineFor = (
+    key: 'agendamentos' | 'r1Agendada' | 'r1Realizada' | 'noShows' | 'contratos',
+  ): string | undefined =>
+    segmentTotals
+      ? `A: ${segmentTotals.a[key] ?? 0} · B: ${segmentTotals.b[key] ?? 0}`
+      : undefined;
+
   const cards: Array<{
     title: string;
     value: string | number;
@@ -90,7 +97,6 @@ export function TeamKPICards({
     segLine?: string;
     customOnClick?: () => void;
   }> = [
-    ...[],
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
       title: "Pendentes Hoje",
@@ -108,6 +114,7 @@ export function TeamKPICards({
       bgColor: "bg-blue-500/10",
       tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
+      segLine: segLineFor('agendamentos'),
     },
     {
       title: "R1 Agendada",
@@ -117,6 +124,7 @@ export function TeamKPICards({
       bgColor: "bg-cyan-500/10",
       tooltip: "Reuniões marcadas PARA o período (scheduled_at). Inclui datas futuras dentro do range — visão de planejamento.",
       bucket: "r1_agendada" as KpiBucket,
+      segLine: segLineFor('r1Agendada'),
     },
     {
       title: "R1 Realizada",
@@ -126,6 +134,7 @@ export function TeamKPICards({
       bgColor: "bg-green-500/10",
       tooltip: "Reuniões efetivamente realizadas no período. Fato consumado — não inclui reuniões futuras.",
       bucket: "realizada" as KpiBucket,
+      segLine: segLineFor('r1Realizada'),
     },
     {
       title: "No-Shows",
@@ -135,6 +144,7 @@ export function TeamKPICards({
       bgColor: "bg-red-500/10",
       tooltip: "No-shows ocorridos (cap de 1/lead antes de 28/04, cap de 2/lead a partir de 28/04). Fato consumado — não inclui futuro.",
       bucket: "no_show" as KpiBucket,
+      segLine: segLineFor('noShows'),
     },
     // Card unificado: Pendentes / Sem Desfecho
     ...(pendentesTotal > 0 ? [{
@@ -159,6 +169,7 @@ export function TeamKPICards({
         ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
         : "Total comercial da tabela Closers: Contrato Pago + Outside. Não depende apenas de atribuição ao SDR.",
       bucket: "contratos" as KpiBucket,
+      segLine: segLineFor('contratos'),
     },
     ...(isConsorcio ? [] : [{
       title: "Outside",
@@ -241,6 +252,11 @@ export function TeamKPICards({
                       {card.subline && !isLoading && (
                         <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5">
                           {card.subline}
+                        </p>
+                      )}
+                      {card.segLine && !isLoading && (
+                        <p className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
+                          {card.segLine}
                         </p>
                       )}
                     </div>
