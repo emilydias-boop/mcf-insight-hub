@@ -343,6 +343,37 @@ export function SdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center text-muted-foreground">—</TableCell>
+              {showSegments ? (
+                <>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      {totalsSegA.agendamentos}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      {totalsSegB.agendamentos}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                      {totalsSegA.r1Agendada}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                      {totalsSegB.r1Agendada}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center"><span className="text-green-400">{totalsSegA.r1Realizada}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-green-400">{totalsSegB.r1Realizada}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-red-400">{totalsSegA.noShows}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-red-400">{totalsSegB.noShows}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos}</span></TableCell>
+                </>
+              ) : (
+                <>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                   {totals.agendamentos}
@@ -373,6 +404,8 @@ export function SdrSummaryTable({
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contratos}</span>
               </TableCell>
+                </>
+              )}
               <TableCell className="text-center">
                 <span className={`${(totals.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                   {totals.reembolsos || 0}
