@@ -101,13 +101,18 @@ export function CloserSummaryTable({
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
+              {showSegments
+                ? SEG_COLS.flatMap((c) => [`${c.label} A`, `${c.label} B`]).map((h) => (
+                    <TableHead key={h} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                      {h}
+                    </TableHead>
+                  ))
+                : SEG_COLS.map((c) => (
+                    <TableHead key={c.key} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                      {c.label}
+                    </TableHead>
+                  ))}
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
             </TableRow>
