@@ -901,18 +901,6 @@ export default function ReunioesEquipe() {
               </SelectContent>
             </Select>
 
-            {/* Filtro de Segmento ICP (Lead A / Lead B) */}
-            <Select value={segmentFilter} onValueChange={(v) => setSegmentFilter(v as IcpSegmentFilterValue)}>
-              <SelectTrigger className="w-full sm:w-[170px]">
-                <SelectValue placeholder="Segmento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Segmento: Todos</SelectItem>
-                <SelectItem value="A">Lead A</SelectItem>
-                <SelectItem value="B">Lead B</SelectItem>
-              </SelectContent>
-            </Select>
-
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
