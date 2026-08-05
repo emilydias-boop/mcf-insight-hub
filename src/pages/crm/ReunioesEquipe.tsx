@@ -382,28 +382,34 @@ export default function ReunioesEquipe() {
   }, [employeeAdmissaoData, activeSdrsList, start, end]);
 
   // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
-  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
+  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd, segmentFilter);
 
   // Fetch R2 agenda KPIs for the week
-  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
+  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate, segmentFilter);
 
   // Fetch Vendas KPIs for today
-  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
+  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd, segmentFilter);
 
   // Fetch Vendas KPIs for the week
-  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
+  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate, segmentFilter);
 
   // Fetch month data for goals panel
   const { teamKPIs: monthKPIs } = useTeamMeetingsData({
     startDate: monthStartDate,
     endDate: monthEndDate,
+    segment: segmentFilter,
   });
 
   // Fetch R2 agenda KPIs for the month
-  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate, segmentFilter);
 
   // Fetch Vendas KPIs for the month
-  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate, segmentFilter);
+
+  // Contrato Pago (Dia/Semana) da tabela de Metas: usa o mesmo caminho do Mês
+  // (useR1CloserMetrics, com segmento) para respeitar o filtro de Segmento.
+  const { data: dayCloserMetrics } = useR1CloserMetrics(dayStart, dayEnd, 'incorporador', segmentFilter);
+  const { data: weekCloserMetrics } = useR1CloserMetrics(weekStartDate, weekEndDate, 'incorporador', segmentFilter);
 
   // Fetch Closer metrics for the selected period
   const {
