@@ -375,6 +375,9 @@ export const DealKanbanCard = ({
               const name = typeof tag === 'string' ? tag : tag.name;
               const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
               if (primary && name?.toLowerCase() === primary.toLowerCase()) return false;
+              // Lead A/B tem badge dedicado abaixo — evita duplicidade
+              const n = (name || '').trim().toLowerCase();
+              if (n === 'lead a' || n === 'lead b') return false;
               return name?.toLowerCase() !== 'base clint';
             })
             .slice(0, 2)
