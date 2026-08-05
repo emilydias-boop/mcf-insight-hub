@@ -39,6 +39,9 @@ interface GoalsMatrixTableProps {
   dayTargets: MetricTargets;
   weekTargets: MetricTargets;
   monthTargets: MetricTargets;
+  /** Sub-linhas por segmento ICP (opcional, apenas realizado — sem meta própria) */
+  segmentAValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
+  segmentBValues?: { day: MetricValues; week: MetricValues; month: MetricValues };
 }
 
 const METRIC_LABELS: { key: keyof MetricValues; label: string }[] = [
@@ -59,15 +62,25 @@ export function GoalsMatrixTable({
   dayTargets,
   weekTargets,
   monthTargets,
+  segmentAValues,
+  segmentBValues,
 }: GoalsMatrixTableProps) {
   const rows = useMemo(() => {
     return METRIC_LABELS.map(({ key, label }) => ({
       label,
+      key,
       day: { value: dayValues[key], target: dayTargets[key] },
       week: { value: weekValues[key], target: weekTargets[key] },
       month: { value: monthValues[key], target: monthTargets[key] },
     }));
   }, [dayValues, weekValues, monthValues, dayTargets, weekTargets, monthTargets]);
+
+  const subRows = useMemo(() => {
+    const list: { label: string; values: { day: MetricValues; week: MetricValues; month: MetricValues } }[] = [];
+    if (segmentAValues) list.push({ label: "Lead A", values: segmentAValues });
+    if (segmentBValues) list.push({ label: "Lead B", values: segmentBValues });
+    return list;
+  }, [segmentAValues, segmentBValues]);
 
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-card">
