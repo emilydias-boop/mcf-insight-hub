@@ -205,12 +205,14 @@ export default function ReunioesEquipe() {
   const { teamKPIs: dayKPIs } = useTeamMeetingsData({
     startDate: dayStart,
     endDate: dayEnd,
+    segment: segmentFilter,
   });
 
   // Fetch week data for goals panel
   const { teamKPIs: weekKPIs } = useTeamMeetingsData({
     startDate: weekStartDate,
     endDate: weekEndDate,
+    segment: segmentFilter,
   });
 
 
