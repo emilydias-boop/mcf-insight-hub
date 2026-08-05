@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { Calendar, CalendarDays, CalendarRange } from "lucide-react";
 import { MetricProgressCell } from "./MetricProgressCell";
 import {
@@ -113,7 +113,7 @@ export function GoalsMatrixTable({
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
-              <>
+              <Fragment key={row.label}>
               <TableRow 
                 key={row.label} 
                 className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
@@ -170,7 +170,7 @@ export function GoalsMatrixTable({
                   </TableCell>
                 </TableRow>
               ))}
-              </>
+              </Fragment>
             ))}
           </TableBody>
         </Table>
