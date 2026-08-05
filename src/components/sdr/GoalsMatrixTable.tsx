@@ -113,6 +113,7 @@ export function GoalsMatrixTable({
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
+              <>
               <TableRow 
                 key={row.label} 
                 className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
@@ -148,6 +149,28 @@ export function GoalsMatrixTable({
                   </div>
                 </TableCell>
               </TableRow>
+              {subRows.map((sub) => (
+                <TableRow
+                  key={`${row.label}-${sub.label}`}
+                  className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                >
+                  <TableCell className="sticky left-0 z-10 bg-inherit py-1.5">
+                    <span className="pl-3 text-xs text-muted-foreground whitespace-nowrap">
+                      ↳ {sub.label}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.day[row.key]}
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.week[row.key]}
+                  </TableCell>
+                  <TableCell className="text-center px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
+                    {sub.values.month[row.key]}
+                  </TableCell>
+                </TableRow>
+              ))}
+              </>
             ))}
           </TableBody>
         </Table>
