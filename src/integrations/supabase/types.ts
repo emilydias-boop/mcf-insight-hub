@@ -14893,6 +14893,16 @@ export type Database = {
         Args: { p_attendee_id: string }
         Returns: undefined
       }
+      tv_incorporador_seg_sums: {
+        Args: { _end: string; _seg: string; _start: string }
+        Returns: {
+          agendamento: number
+          contratos: number
+          no_shows: number
+          r1_agendada: number
+          r1_realizada: number
+        }[]
+      }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {

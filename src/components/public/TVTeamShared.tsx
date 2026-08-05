@@ -17,10 +17,12 @@ export function formatDataHoje(iso?: string) {
 }
 
 export function TVMetricCard({
-  titulo, metric, accent, invertGoal, format,
+  titulo, metric, metricB, accent, invertGoal, format,
 }: {
   titulo: string;
   metric?: Metric;
+  /** Lead B: exibido apenas como número realizado, sem meta/barra/%. */
+  metricB?: Metric;
   accent: string;
   invertGoal?: boolean;
   format?: (v: number) => string;
@@ -43,6 +45,11 @@ export function TVMetricCard({
       }}
     >
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-xs font-bold">{titulo}</div>
+      {metricB ? (
+        <div className="mt-1 text-[10px] xl:text-xs font-black tracking-widest" style={{ color: `${accent}cc` }}>
+          LEAD A
+        </div>
+      ) : null}
       <div className="mt-2 flex items-baseline gap-2 flex-wrap">
         <span className="text-4xl xl:text-6xl font-black leading-none" style={{ color }}>
           {fmt(atual)}
@@ -77,6 +84,15 @@ export function TVMetricCard({
       ) : (
         <div className="mt-3 text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
       )}
+      {metricB ? (
+        <div className="mt-3 xl:mt-4 pt-3 border-t flex items-baseline gap-2" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
+          <span className="text-[10px] xl:text-xs font-black tracking-widest text-white/45">LEAD B</span>
+          <span className="text-2xl xl:text-4xl font-black leading-none text-white/75">
+            {fmt(Number(metricB.atual ?? 0))}
+          </span>
+          <span className="text-[10px] xl:text-xs font-semibold text-white/30">sem meta</span>
+        </div>
+      ) : null}
     </div>
   );
 }

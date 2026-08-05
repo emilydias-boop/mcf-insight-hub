@@ -4,23 +4,29 @@ import { TVMetricCard, TVShell, TVMsg, TVSection, Metric } from "@/components/pu
 
 const TOKEN = "e03633d2-f881-4b6d-a5dd-a928e6b7da0c";
 
-interface Block {
+interface SegBlock {
   agendamento: Metric;
   r1_realizada: Metric;
   no_show: Metric;
   contrato_pago: Metric;
+}
+interface Block extends SegBlock {
+  a?: SegBlock;
+  b?: SegBlock;
 }
 interface Payload { today: string; updated_at: string; dia: Block; mes: Block; error?: string }
 
 const ACCENT = "#ff7a00";
 
 function Grid({ b }: { b?: Block }) {
+  const a = b?.a ?? b;
+  const seg = b?.b;
   return (
     <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4 xl:gap-6">
-      <TVMetricCard titulo="Agendamento" metric={b?.agendamento} accent={ACCENT} />
-      <TVMetricCard titulo="R1 Realizada" metric={b?.r1_realizada} accent="#38bdf8" />
-      <TVMetricCard titulo="No-show" metric={b?.no_show} accent="#ef4444" invertGoal />
-      <TVMetricCard titulo="Contrato Pago" metric={b?.contrato_pago} accent="#bfff00" />
+      <TVMetricCard titulo="Agendamento" metric={a?.agendamento} metricB={seg?.agendamento} accent={ACCENT} />
+      <TVMetricCard titulo="R1 Realizada" metric={a?.r1_realizada} metricB={seg?.r1_realizada} accent="#38bdf8" />
+      <TVMetricCard titulo="No-show" metric={a?.no_show} metricB={seg?.no_show} accent="#ef4444" invertGoal />
+      <TVMetricCard titulo="Contrato Pago" metric={a?.contrato_pago} metricB={seg?.contrato_pago} accent="#bfff00" />
     </div>
   );
 }
