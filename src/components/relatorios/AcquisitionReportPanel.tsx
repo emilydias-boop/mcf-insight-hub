@@ -30,6 +30,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
   const [selectedCloser, setSelectedCloser] = useState('all');
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [selectedOrigin, setSelectedOrigin] = useState('all');
+  const [selectedSegment, setSelectedSegment] = useState('all');
 
   const {
     kpis, byCloser, bySDR, byChannel, byOutside, byOrigin,
@@ -47,6 +48,7 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
         selectedChannel === 'ANAMNESE' || selectedChannel === 'LIVE' || selectedChannel === 'ANAMNESE-INSTA' || selectedChannel === 'LANÇAMENTO'
           ? 'ANAMNESE'
           : 'OUTROS',
+      segment: selectedSegment,
     });
 
   // Apply local filters on classified data to recalculate if needed
@@ -214,6 +216,17 @@ export function AcquisitionReportPanel({ bu }: AcquisitionReportPanelProps) {
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   {originLabels.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[160px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Segmento</label>
+              <Select value={selectedSegment} onValueChange={setSelectedSegment}>
+                <SelectTrigger><SelectValue placeholder="Segmento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="A">Lead A</SelectItem>
+                  <SelectItem value="B">Lead B</SelectItem>
                 </SelectContent>
               </Select>
             </div>
