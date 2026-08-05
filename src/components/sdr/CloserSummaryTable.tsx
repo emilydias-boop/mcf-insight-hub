@@ -80,31 +80,19 @@ export function CloserSummaryTable({
   const segAMap = byId(segmentAData);
   const segBMap = byId(segmentBData);
 
-  const renderSegmentRow = (closerId: string, label: string, row?: R1CloserMetric) => {
-    const v = {
-      r1_agendada: row?.r1_agendada ?? 0,
-      outside: row?.outside ?? 0,
-      r1_realizada: row?.r1_realizada ?? 0,
-      noshow: row?.noshow ?? 0,
-      contrato_pago: row?.contrato_pago ?? 0,
-      r2_agendada: row?.r2_agendada ?? 0,
-      reembolsos: row?.reembolsos ?? 0,
-    };
-    return (
-      <TableRow key={`${closerId}-${label}`} className="bg-muted/10 hover:bg-muted/20">
-        <TableCell className="py-1 pl-8 text-xs text-muted-foreground">↳ {label}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-blue-400/80">{v.r1_agendada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-orange-400/80">{v.outside}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-green-400/80">{v.r1_realizada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-red-400/80">{v.noshow}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-        <TableCell className="py-1 text-center text-xs text-amber-400/80">{v.contrato_pago}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-purple-400/80">{v.r2_agendada}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">{v.reembolsos}</TableCell>
-        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      </TableRow>
-    );
-  };
+  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'r2_agendada';
+  const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
+    { key: 'r1_agendada', label: 'R1 Agendada', cls: 'text-blue-400' },
+    { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
+    { key: 'r1_realizada', label: 'R1 Realizada', cls: 'text-green-400' },
+    { key: 'noshow', label: 'No-show', cls: 'text-red-400' },
+    { key: 'contrato_pago', label: 'Contrato Pago', cls: 'text-amber-400' },
+    { key: 'r2_agendada', label: 'R2 Agendada', cls: 'text-purple-400' },
+  ];
+  const segValue = (map: Map<string, R1CloserMetric>, closerId: string, key: SegKey) =>
+    (map.get(closerId)?.[key] as number | undefined) ?? 0;
+  const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
+    (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
