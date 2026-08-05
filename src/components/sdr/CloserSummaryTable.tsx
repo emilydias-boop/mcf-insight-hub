@@ -187,20 +187,20 @@ export function CloserSummaryTable({
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">Total</TableCell>
-              <TableCell className="text-center">
-                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
-                  {totals.r1_agendada}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-orange-400">{totals.outside}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-green-400">{totals.r1_realizada}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-red-400">{totals.noshow}</span>
-              </TableCell>
+              {showSegments
+                ? SEG_COLS.flatMap((c) => [
+                    <TableCell key={`t-${c.key}-a`} className="text-center">
+                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
+                    </TableCell>,
+                    <TableCell key={`t-${c.key}-b`} className="text-center">
+                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
+                    </TableCell>,
+                  ])
+                : SEG_COLS.map((c) => (
+                    <TableCell key={`t-${c.key}`} className="text-center">
+                      <span className={c.cls}>{segTotal(data, c.key)}</span>
+                    </TableCell>
+                  ))}
               <TableCell className="text-center">
                 <span className={`font-medium ${
                   totalTaxaNoShow <= 20 
@@ -211,14 +211,6 @@ export function CloserSummaryTable({
                 }`}>
                   {totalTaxaNoShow.toFixed(1)}%
                 </span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contrato_pago}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                  {totals.r2_agendada}
-                </Badge>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${totals.reembolsos > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
