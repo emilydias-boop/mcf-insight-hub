@@ -102,25 +102,23 @@ export function SdrSummaryTable({
   const emptySeg: SdrSegmentMetricValues = {
     agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0,
   };
+  const getSeg = (map: Map<string, SdrSegmentMetricValues> | undefined, email: string) =>
+    map?.get(email.toLowerCase()) ?? emptySeg;
 
-  const renderSegmentRow = (
-    email: string,
-    label: string,
-    vals: SdrSegmentMetricValues,
-  ) => (
-    <TableRow key={`${email}-${label}`} className="bg-muted/10 hover:bg-muted/20">
-      <TableCell className="py-1 pl-8 text-xs text-muted-foreground">↳ {label}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      <TableCell className="py-1 text-center text-xs text-emerald-400/80">{vals.agendamentos}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-blue-400/80">{vals.r1Agendada}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-green-400/80">{vals.r1Realizada}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-red-400/80">{vals.noShows}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-amber-400/80">{vals.contratos}</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
-      {!disableNavigation && <TableCell className="py-1" />}
-    </TableRow>
-  );
+  const sumSeg = (map?: Map<string, SdrSegmentMetricValues>): SdrSegmentMetricValues =>
+    data.reduce((acc, row) => {
+      const v = getSeg(map, row.sdrEmail);
+      return {
+        agendamentos: acc.agendamentos + v.agendamentos,
+        r1Agendada: acc.r1Agendada + v.r1Agendada,
+        r1Realizada: acc.r1Realizada + v.r1Realizada,
+        noShows: acc.noShows + v.noShows,
+        contratos: acc.contratos + v.contratos,
+      };
+    }, { ...emptySeg });
+
+  const totalsSegA = sumSeg(segmentAMap);
+  const totalsSegB = sumSeg(segmentBMap);
 
   if (isLoading) {
     return (
