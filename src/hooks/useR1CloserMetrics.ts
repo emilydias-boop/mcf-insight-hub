@@ -84,10 +84,11 @@ export function useR1CloserMetrics(
     queryFn: async (): Promise<R1CloserMetric[]> => {
       // Filtro ICP (aditivo): com 'all' nada muda no comportamento existente.
       const segmentActive = segment === 'A' || segment === 'B';
+      let segmentAllowedContracts: Set<string> | null = null;
       const allowedDealIds = async (ids: string[]): Promise<Set<string>> => {
         if (!segmentActive || ids.length === 0) return new Set(ids);
         const rows = await batchedIn<{ id: string }>(
-          (chunk) => supabase.from('crm_deals').select('id').eq('icp_segment' as any, segment).in('id', chunk) as any,
+          (chunk) => (supabase.from('crm_deals') as any).select('id').eq('icp_segment', segment).in('id', chunk),
           ids
         );
         return new Set((rows || []).map((r) => r.id));
