@@ -170,7 +170,11 @@ export function SdrSummaryTable({
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
               const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
               const metaPeriodo = Math.round(metaDiaria * diasEfetivos);
-              const bateuMeta = row.agendamentos >= metaPeriodo;
+              // Regra: só Lead A conta para meta. Com segmentos ativos, comparar apenas o valor A.
+              const agendamentosParaMeta = showSegments
+                ? getSeg(segmentAMap, row.sdrEmail).agendamentos
+                : row.agendamentos;
+              const bateuMeta = agendamentosParaMeta >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const contratosLiquidos = row.contratos - (row.reembolsos || 0);
