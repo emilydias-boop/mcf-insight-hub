@@ -61,13 +61,13 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
-/** Segmento ICP (aditivo): tag "Lead A" / "Lead B" no deal. */
+/** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B'). */
 type LeadSegment = 'Lead A' | 'Lead B' | null;
 
-function resolveLeadSegment(tags: string[]): LeadSegment {
-  const norm = tags.map((t) => (t || '').trim().toUpperCase());
-  if (norm.includes('LEAD A')) return 'Lead A';
-  if (norm.includes('LEAD B')) return 'Lead B';
+function resolveLeadSegment(icpSegment: unknown): LeadSegment {
+  const v = (icpSegment ?? '').toString().trim().toUpperCase();
+  if (v === 'A') return 'Lead A';
+  if (v === 'B') return 'Lead B';
   return null;
 }
 
@@ -158,7 +158,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
             channel,
-            segment: resolveLeadSegment(tagsArr),
+            segment: resolveLeadSegment(dealForChannel?.icp_segment),
             sdrName: resolveSdrName(att, meeting),
           });
         }
@@ -193,7 +193,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeeStatus: meeting.status,
           isReschedule: false,
           channel,
-          segment: resolveLeadSegment(tagsArr),
+          segment: resolveLeadSegment(dealForChannel?.icp_segment),
           sdrName: resolveSdrName(null, meeting),
         });
       }
