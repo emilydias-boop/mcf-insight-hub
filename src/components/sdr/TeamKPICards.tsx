@@ -39,6 +39,11 @@ interface TeamKPICardsProps {
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   onRefundClick?: () => void;
   orphanRefundsCount?: number;
+  /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
+  segmentTotals?: {
+    a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
+    b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
+  } | null;
 }
 
 export function TeamKPICards({
@@ -55,6 +60,7 @@ export function TeamKPICards({
   taxaNoShowBreakdown,
   onRefundClick,
   orphanRefundsCount = 0,
+  segmentTotals = null,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -81,8 +87,10 @@ export function TeamKPICards({
     tooltip: string;
     bucket?: KpiBucket;
     subline?: string;
+    segLine?: string;
     customOnClick?: () => void;
   }> = [
+    ...[],
     // Card condicional: Pendentes Hoje (1ª posição)
     ...(isToday ? [{
       title: "Pendentes Hoje",
