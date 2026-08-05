@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -15,6 +16,9 @@ interface CloserSummaryTableProps {
   isLoading?: boolean;
   onCloserClick?: (closerId: string) => void;
   totalContratosFromKPI?: number;
+  /** Aditivo: quando informados, cada closer ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
+  segmentAData?: R1CloserMetric[];
+  segmentBData?: R1CloserMetric[];
 }
 
 export function CloserSummaryTable({ 
@@ -22,6 +26,8 @@ export function CloserSummaryTable({
   isLoading,
   onCloserClick,
   totalContratosFromKPI,
+  segmentAData,
+  segmentBData,
 }: CloserSummaryTableProps) {
   if (isLoading) {
     return (
@@ -64,6 +70,41 @@ export function CloserSummaryTable({
   const totalTaxaNoShow = totals.r1_agendada > 0 
     ? ((totals.noshow / totals.r1_agendada) * 100)
     : 0;
+
+  const showSegments = !!(segmentAData || segmentBData);
+  const byId = (rows?: R1CloserMetric[]) => {
+    const m = new Map<string, R1CloserMetric>();
+    (rows || []).forEach((r) => m.set(r.closer_id, r));
+    return m;
+  };
+  const segAMap = byId(segmentAData);
+  const segBMap = byId(segmentBData);
+
+  const renderSegmentRow = (closerId: string, label: string, row?: R1CloserMetric) => {
+    const v = {
+      r1_agendada: row?.r1_agendada ?? 0,
+      outside: row?.outside ?? 0,
+      r1_realizada: row?.r1_realizada ?? 0,
+      noshow: row?.noshow ?? 0,
+      contrato_pago: row?.contrato_pago ?? 0,
+      r2_agendada: row?.r2_agendada ?? 0,
+      reembolsos: row?.reembolsos ?? 0,
+    };
+    return (
+      <TableRow key={`${closerId}-${label}`} className="bg-muted/10 hover:bg-muted/20">
+        <TableCell className="py-1 pl-8 text-xs text-muted-foreground">↳ {label}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-blue-400/80">{v.r1_agendada}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-orange-400/80">{v.outside}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-green-400/80">{v.r1_realizada}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-red-400/80">{v.noshow}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
+        <TableCell className="py-1 text-center text-xs text-amber-400/80">{v.contrato_pago}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-purple-400/80">{v.r2_agendada}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-muted-foreground">{v.reembolsos}</TableCell>
+        <TableCell className="py-1 text-center text-xs text-muted-foreground">—</TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
