@@ -146,11 +146,20 @@ export function SdrSummaryTable({
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">SDR</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Meta</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Agendamento</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">{contratoLabel}</TableHead>
+              {(showSegments
+                ? [
+                    'Agendamento A', 'Agendamento B',
+                    'R1 Agendada A', 'R1 Agendada B',
+                    'R1 Realizada A', 'R1 Realizada B',
+                    'No-show A', 'No-show B',
+                    `${contratoLabel} A`, `${contratoLabel} B`,
+                  ]
+                : ['Agendamento', 'R1 Agendada', 'R1 Realizada', 'No-show', contratoLabel]
+              ).map((h) => (
+                <TableHead key={h} className="text-muted-foreground text-center font-medium whitespace-nowrap">
+                  {h}
+                </TableHead>
+              ))}
               <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">{taxaLiquidaLabel}</TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
