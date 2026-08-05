@@ -40,16 +40,17 @@ interface TeamMeetingsParams {
   sdrEmailFilter?: string; // Filter for a specific SDR
   originIdFilter?: string; // Filter by origin (for future use)
   squad?: string; // BU squad filter (default: 'incorporador')
+  segment?: string; // Segmento ICP opcional ('A' | 'B'); 'all'/undefined = sem filtro
 }
 
-export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador' }: TeamMeetingsParams) {
+export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador', segment }: TeamMeetingsParams) {
   // Fetch SDRs that belonged to this squad at any point during the period (uses sdr_squad_history)
   const sdrsInPeriodQuery = useSdrsForSquadInPeriod(squad, startDate, endDate);
   // Also fetch current squad members to support "today" preset (allSdrsWithZeros, etc.)
   const sdrsQuery = useSdrsFromSquad(squad);
 
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
-  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad);
+  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad, segment);
   const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter, buFilter: squad });
 
   // Build a metadata map keyed by lowercased email combining both sources.

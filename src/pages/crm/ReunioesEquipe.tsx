@@ -205,12 +205,14 @@ export default function ReunioesEquipe() {
   const { teamKPIs: dayKPIs } = useTeamMeetingsData({
     startDate: dayStart,
     endDate: dayEnd,
+    segment: segmentFilter,
   });
 
   // Fetch week data for goals panel
   const { teamKPIs: weekKPIs } = useTeamMeetingsData({
     startDate: weekStartDate,
     endDate: weekEndDate,
+    segment: segmentFilter,
   });
 
 
@@ -380,28 +382,34 @@ export default function ReunioesEquipe() {
   }, [employeeAdmissaoData, activeSdrsList, start, end]);
 
   // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
-  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
+  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd, segmentFilter);
 
   // Fetch R2 agenda KPIs for the week
-  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
+  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate, segmentFilter);
 
   // Fetch Vendas KPIs for today
-  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
+  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd, segmentFilter);
 
   // Fetch Vendas KPIs for the week
-  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
+  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate, segmentFilter);
 
   // Fetch month data for goals panel
   const { teamKPIs: monthKPIs } = useTeamMeetingsData({
     startDate: monthStartDate,
     endDate: monthEndDate,
+    segment: segmentFilter,
   });
 
   // Fetch R2 agenda KPIs for the month
-  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate, segmentFilter);
 
   // Fetch Vendas KPIs for the month
-  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
+  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate, segmentFilter);
+
+  // Contrato Pago (Dia/Semana) da tabela de Metas: usa o mesmo caminho do Mês
+  // (useR1CloserMetrics, com segmento) para respeitar o filtro de Segmento.
+  const { data: dayCloserMetrics } = useR1CloserMetrics(dayStart, dayEnd, 'incorporador', segmentFilter);
+  const { data: weekCloserMetrics } = useR1CloserMetrics(weekStartDate, weekEndDate, 'incorporador', segmentFilter);
 
   // Fetch Closer metrics for the selected period
   const {
@@ -682,27 +690,36 @@ export default function ReunioesEquipe() {
     enabled: drillBucket === "pendentes",
   });
   
+  const dayContratos = useMemo(
+    () => (dayCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
+    [dayCloserMetrics],
+  );
+  const weekContratos = useMemo(
+    () => (weekCloserMetrics?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0)) ?? 0,
+    [weekCloserMetrics],
+  );
+
   const dayValues = useMemo(() => ({
     agendamento: dayKPIs?.totalAgendamentos || 0,
     r1Agendada: dayKPIs?.totalR1Agendada || 0,
     r1Realizada: dayKPIs?.totalRealizadas || 0,
     noShow: dayKPIs?.totalNoShows || 0,
-    contrato: dayKPIs?.totalContratos || 0,
+    contrato: dayContratos,
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs, dayContratos]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0,
     r1Agendada: weekKPIs?.totalR1Agendada || 0,
     r1Realizada: weekKPIs?.totalRealizadas || 0,
     noShow: weekKPIs?.totalNoShows || 0,
-    contrato: weekKPIs?.totalContratos || 0,
+    contrato: weekContratos,
     r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs, weekContratos]);
 
   const monthValues = useMemo(() => ({
     agendamento: monthKPIs?.totalAgendamentos || 0,
