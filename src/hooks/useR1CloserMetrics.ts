@@ -71,10 +71,28 @@ export interface R1CloserMetric {
   reembolsos: number;
 }
 
-export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 'incorporador') {
+export type IcpSegmentFilter = 'all' | 'A' | 'B';
+
+export function useR1CloserMetrics(
+  startDate: Date,
+  endDate: Date,
+  bu: string = 'incorporador',
+  segment: IcpSegmentFilter = 'all'
+) {
   return useQuery({
-    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
+    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment],
     queryFn: async (): Promise<R1CloserMetric[]> => {
+      // Filtro ICP (aditivo): com 'all' nada muda no comportamento existente.
+      const segmentActive = segment === 'A' || segment === 'B';
+      const allowedDealIds = async (ids: string[]): Promise<Set<string>> => {
+        if (!segmentActive || ids.length === 0) return new Set(ids);
+        const rows = await batchedIn<{ id: string }>(
+          (chunk) => supabase.from('crm_deals').select('id').eq('icp_segment' as any, segment).in('id', chunk) as any,
+          ids
+        );
+        return new Set((rows || []).map((r) => r.id));
+      };
+
       // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
       // Ex: dia 05/03 BRT = 05/03 03:00 UTC → 06/03 02:59 UTC (janela 24h exata)
       const BRT_OFFSET_HOURS = 3;
@@ -273,6 +291,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           contract_paid_at,
           booked_by,
           is_partner,
+          deal_id,
           meeting_slot:meeting_slots!inner(
             closer_id,
             meeting_type,
@@ -297,6 +316,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
           contract_paid_at,
           booked_by,
           is_partner,
+          deal_id,
           meeting_slot:meeting_slots!inner(
             closer_id,
             meeting_type,
@@ -310,13 +330,45 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         .gte('meeting_slot.scheduled_at', start)
         .lte('meeting_slot.scheduled_at', end);
 
+      // ===== Aplicação do filtro de segmento ICP (só quando != 'all') =====
+      if (segmentActive) {
+        const ids = new Set<string>();
+        meetings?.forEach(m => m.meeting_slot_attendees?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); }));
+        r2Meetings?.forEach(m => m.meeting_slot_attendees?.forEach((a: any) => { if (a.deal_id) ids.add(a.deal_id); }));
+        (contractsByPaymentDate as any[] | null)?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); });
+        (contractsWithoutTimestamp as any[] | null)?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); });
+
+        const allowed = await allowedDealIds(Array.from(ids));
+        const keep = (dealId: string | null | undefined) => !!dealId && allowed.has(dealId);
+
+        meetings?.forEach((m: any) => {
+          m.meeting_slot_attendees = (m.meeting_slot_attendees || []).filter((a: any) => keep(a.deal_id));
+        });
+        r2Meetings?.forEach((m: any) => {
+          m.meeting_slot_attendees = (m.meeting_slot_attendees || []).filter((a: any) => keep(a.deal_id));
+        });
+        // Recalcula o mapa deal → closer R1 apenas com deals permitidos
+        Array.from(dealToR1Closer.keys()).forEach((dealId) => {
+          if (!keep(dealId)) dealToR1Closer.delete(dealId);
+        });
+        r2CountByCloser.clear();
+        r2Meetings?.forEach((meeting: any) => {
+          meeting.meeting_slot_attendees?.forEach((att: any) => {
+            const r1CloserId = att.deal_id ? dealToR1Closer.get(att.deal_id) : null;
+            if (r1CloserId) r2CountByCloser.set(r1CloserId, (r2CountByCloser.get(r1CloserId) || 0) + 1);
+          });
+        });
+        segmentAllowedContracts = allowed;
+      }
+
       // Mapear contratos pagos no período por closer
       // Usar Set para evitar duplicatas entre as duas queries
       const contractsByCloser = new Map<string, number>();
       const countedAttendeeIds = new Set<string>();
       
       // Processar contratos COM contract_paid_at (prioridade)
-      contractsByPaymentDate?.forEach(att => {
+      contractsByPaymentDate?.forEach((att: any) => {
+        if (segmentActive && !(att.deal_id && segmentAllowedContracts?.has(att.deal_id))) return;
         const closerId = (att.meeting_slot as any)?.closer_id;
         // Outside real (venda sem R1 vinculada) é detectado na Part B abaixo.
         // Pagar pouco antes do horário agendado NÃO é Outside — é antecipação.
@@ -328,7 +380,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
 
       // Processar contratos SEM contract_paid_at (fallback) - apenas se não foi contado ainda
       // Nota: fallback usa scheduled_at como data, então nunca é Outside por definição
-      contractsWithoutTimestamp?.forEach(att => {
+      contractsWithoutTimestamp?.forEach((att: any) => {
+        if (segmentActive && !(att.deal_id && segmentAllowedContracts?.has(att.deal_id))) return;
         const closerId = (att.meeting_slot as any)?.closer_id;
         if (closerId && !countedAttendeeIds.has(att.id)) {
           contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
@@ -344,7 +397,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
       const emailContractDate = new Map<string, Date>();
       const outsideByCloser = new Map<string, number>();
 
-      if (bu === 'incorporador') {
+      // Outside é detectado por e-mail (sem deal garantido) → não é segmentável hoje.
+      if (bu === 'incorporador' && !segmentActive) {
         // Fetch IDs of FIRST purchase per customer (Novo) — used to exclude
         // recurring transactions from the outside count. Recurring sales
         // (e.g. monthly Hubla recurrence) must NOT count as new contracts.
@@ -518,7 +572,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         .lte('contract_paid_at', end);
 
       const manualByCloser = new Map<string, number>();
-      (manualSales as any[] || []).forEach((sale: any) => {
+      // Atribuições manuais não têm deal vinculado → ignoradas quando há filtro de segmento.
+      (segmentActive ? [] : (manualSales as any[] || [])).forEach((sale: any) => {
         manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
       });
 
@@ -573,7 +628,11 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date, bu: string = 
         refundedDealIdSet.add(r.deal_id as string);
         trackRefundAt(r.deal_id as string, r.created_at);
       });
-      const allRefundedDealIds = Array.from(refundedDealIdSet);
+      let allRefundedDealIds = Array.from(refundedDealIdSet);
+      if (segmentActive) {
+        const allowedRefunds = await allowedDealIds(allRefundedDealIds);
+        allRefundedDealIds = allRefundedDealIds.filter((id) => allowedRefunds.has(id));
+      }
 
       const refundAttendees = allRefundedDealIds.length > 0
         ? await batchedIn<{ deal_id: string; contract_paid_at: string | null; meeting_slot: { closer_id: string; scheduled_at: string } }>(
