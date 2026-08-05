@@ -226,6 +226,49 @@ export function SdrSummaryTable({
                       )}
                     </div>
                   </TableCell>
+                  {showSegments ? (
+                    <>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          {getSeg(segmentAMap, row.sdrEmail).agendamentos}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          {getSeg(segmentBMap, row.sdrEmail).agendamentos}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                          {getSeg(segmentAMap, row.sdrEmail).r1Agendada}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                          {getSeg(segmentBMap, row.sdrEmail).r1Agendada}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-green-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).r1Realizada}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-green-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).r1Realizada}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-red-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).noShows}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-red-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).noShows}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-amber-400 font-medium">{getSeg(segmentAMap, row.sdrEmail).contratos}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-amber-400 font-medium">{getSeg(segmentBMap, row.sdrEmail).contratos}</span>
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
                       {row.agendamentos}
@@ -258,6 +301,8 @@ export function SdrSummaryTable({
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
                   </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-center">
                     <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                       {row.reembolsos || 0}
@@ -272,16 +317,6 @@ export function SdrSummaryTable({
                     </TableCell>
                   )}
                 </TableRow>
-                {showSegments && renderSegmentRow(
-                  row.sdrEmail,
-                  'Lead A',
-                  segmentAMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
-                )}
-                {showSegments && renderSegmentRow(
-                  row.sdrEmail,
-                  'Lead B',
-                  segmentBMap?.get(row.sdrEmail.toLowerCase()) ?? emptySeg,
-                )}
                 </Fragment>
               );
             })}
