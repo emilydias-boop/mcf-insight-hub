@@ -22,14 +22,18 @@ export const useSdrMetricsFromAgenda = (
   startDate: Date | null, 
   endDate: Date | null, 
   sdrEmailFilter?: string,
-  buFilter?: string
+  buFilter?: string,
+  /** Segmento ICP opcional ('A' | 'B'). Quando ausente, nada muda. */
+  segment?: string,
 ) => {
+  const seg = segment && segment !== 'all' ? segment.toUpperCase() : null;
   return useQuery({
     queryKey: ['sdr-metrics-agenda', 
       startDate ? format(startDate, 'yyyy-MM-dd') : null, 
       endDate ? format(endDate, 'yyyy-MM-dd') : null, 
       sdrEmailFilter,
-      buFilter
+      buFilter,
+      seg,
     ],
     queryFn: async (): Promise<MetricsResponse> => {
       if (!startDate || !endDate) {
@@ -52,7 +56,9 @@ export const useSdrMetricsFromAgenda = (
             start_date: start,
             end_date: end,
             sdr_email_filter: sdrEmailFilter || null,
-            bu_filter: buFilter || null
+            bu_filter: buFilter || null,
+            // Só envia o parâmetro novo quando há segmento selecionado
+            ...(seg ? { segment_filter: seg } : {}),
           });
 
       if (error) {
