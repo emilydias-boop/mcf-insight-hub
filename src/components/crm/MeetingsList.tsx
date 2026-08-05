@@ -193,6 +193,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeeStatus: meeting.status,
           isReschedule: false,
           channel,
+          segment: resolveLeadSegment(tagsArr),
           sdrName: resolveSdrName(null, meeting),
         });
       }
@@ -250,6 +251,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             <TableHead>Data/Hora</TableHead>
             <TableHead>Lead</TableHead>
             <TableHead>Canal</TableHead>
+            <TableHead>Segmento</TableHead>
             <TableHead>SDR</TableHead>
             <TableHead>Closer</TableHead>
             <TableHead>Status</TableHead>
@@ -303,6 +305,22 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                   >
                     {row.channel}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {row.segment ? (
+                    <Badge
+                      className={cn(
+                        'text-[11px] border-0 text-white',
+                        row.segment === 'Lead A'
+                          ? 'bg-green-600 hover:bg-green-600'
+                          : 'bg-amber-500 hover:bg-amber-500'
+                      )}
+                    >
+                      {row.segment}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
