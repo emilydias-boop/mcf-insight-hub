@@ -61,6 +61,16 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/** Segmento ICP (aditivo): tag "Lead A" / "Lead B" no deal. */
+type LeadSegment = 'Lead A' | 'Lead B' | null;
+
+function resolveLeadSegment(tags: string[]): LeadSegment {
+  const norm = tags.map((t) => (t || '').trim().toUpperCase());
+  if (norm.includes('LEAD A')) return 'Lead A';
+  if (norm.includes('LEAD B')) return 'Lead B';
+  return null;
+}
+
 /**
  * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
  * booked_by do attendee > booked_by do slot > dono do negócio (owner_id).
@@ -90,6 +100,7 @@ interface AttendeeRow {
   attendeeStatus: string;
   isReschedule: boolean;
   channel: SimpleChannel;
+  segment: LeadSegment;
   sdrName: string | null;
 }
 
