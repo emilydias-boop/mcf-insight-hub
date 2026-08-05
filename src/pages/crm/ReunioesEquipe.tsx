@@ -952,6 +952,7 @@ export default function ReunioesEquipe() {
         }}
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
+        segmentTotals={segmentTotals}
       />
 
       <RefundDetailsDialog
@@ -1029,12 +1030,16 @@ export default function ReunioesEquipe() {
                 noShows: enrichedKPIs.totalNoShows,
                 contratos: enrichedKPIs.totalContratos,
               }}
+              segmentAMap={sdrSegmentAMap}
+              segmentBMap={sdrSegmentBMap}
             />
           ) : (
             <CloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
               totalContratosFromKPI={contractsFromClosers.total}
+              segmentAData={closerMetricsA}
+              segmentBData={closerMetricsB}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
