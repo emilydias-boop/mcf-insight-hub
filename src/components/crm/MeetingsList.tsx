@@ -158,6 +158,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
             channel,
+            segment: resolveLeadSegment(tagsArr),
             sdrName: resolveSdrName(att, meeting),
           });
         }
