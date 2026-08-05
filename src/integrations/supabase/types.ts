@@ -6238,6 +6238,7 @@ export type Database = {
           data_source: string | null
           duplicate_of_deal_id: string | null
           expected_close_date: string | null
+          icp_segment: string | null
           id: string
           is_archived: boolean
           is_duplicate: boolean | null
@@ -6279,6 +6280,7 @@ export type Database = {
           data_source?: string | null
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
+          icp_segment?: string | null
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
@@ -6320,6 +6322,7 @@ export type Database = {
           data_source?: string | null
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
+          icp_segment?: string | null
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
