@@ -36,7 +36,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
-import { useDealsIcpSegments, type IcpSegmentFilterValue } from "@/hooks/useDealsIcpSegments";
+import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { usePendentesDrilldown } from "@/hooks/usePendentesDrilldown";
@@ -107,8 +107,6 @@ export default function ReunioesEquipe() {
   const initialEnd = parseYmdLocal(searchParams.get("end")) ?? initialStart;
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-  // Filtro de Segmento ICP (aditivo — 'all' preserva o comportamento atual)
-  const [segmentFilter, setSegmentFilter] = useState<IcpSegmentFilterValue>('all');
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
@@ -391,7 +389,17 @@ export default function ReunioesEquipe() {
     isLoading: closerLoading,
     error: closerError,
     refetch: refetchCloserMetrics,
-  } = useR1CloserMetrics(start, end, 'incorporador', segmentFilter);
+  } = useR1CloserMetrics(start, end, 'incorporador');
+
+  // Segmentação ICP exibida lado a lado (Lead A / Lead B) — sempre visível.
+  const { data: closerMetricsA } = useR1CloserMetrics(start, end, 'incorporador', 'A');
+  const { data: closerMetricsB } = useR1CloserMetrics(start, end, 'incorporador', 'B');
+  const { data: sdrMetricsA } = useSdrMetricsFromAgenda(
+    start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'A',
+  );
+  const { data: sdrMetricsB } = useSdrMetricsFromAgenda(
+    start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'B',
+  );
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
   // — usado para a média individual entre Closers nos cards de Taxa.
