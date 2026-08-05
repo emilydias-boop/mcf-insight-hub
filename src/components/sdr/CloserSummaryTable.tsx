@@ -154,30 +154,22 @@ export function CloserSummaryTable({
                   <TableCell className="font-medium">
                     <span className="text-foreground">{row.closer_name}</span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
-                      {row.r1_agendada}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-orange-400 font-medium">{row.outside}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-green-400 font-medium">{row.r1_realizada}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-red-400">{row.noshow}</span>
-                  </TableCell>
+                  {showSegments
+                    ? SEG_COLS.flatMap((c) => [
+                        <TableCell key={`${c.key}-a`} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{segValue(segAMap, row.closer_id, c.key)}</span>
+                        </TableCell>,
+                        <TableCell key={`${c.key}-b`} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{segValue(segBMap, row.closer_id, c.key)}</span>
+                        </TableCell>,
+                      ])
+                    : SEG_COLS.map((c) => (
+                        <TableCell key={c.key} className="text-center">
+                          <span className={`${c.cls} font-medium`}>{(row[c.key] as number) || 0}</span>
+                        </TableCell>
+                      ))}
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaNoShowColorClass}`}>{taxaNoShowFormatted}%</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                      {row.r2_agendada}
-                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
@@ -188,8 +180,6 @@ export function CloserSummaryTable({
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
                   </TableCell>
                 </TableRow>
-                {showSegments && renderSegmentRow(row.closer_id, 'Lead A', segAMap.get(row.closer_id))}
-                {showSegments && renderSegmentRow(row.closer_id, 'Lead B', segBMap.get(row.closer_id))}
                 </Fragment>
               );
             })}
