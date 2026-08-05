@@ -6244,6 +6244,7 @@ export type Database = {
           last_auto_dialer_call_at: string | null
           last_contact_at: string | null
           last_worked_at: string | null
+          lead_income_estimate: number | null
           lead_temperature: string | null
           merged_at: string | null
           merged_into_deal_id: string | null
@@ -6284,6 +6285,7 @@ export type Database = {
           last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          lead_income_estimate?: number | null
           lead_temperature?: string | null
           merged_at?: string | null
           merged_into_deal_id?: string | null
@@ -6324,6 +6326,7 @@ export type Database = {
           last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
+          lead_income_estimate?: number | null
           lead_temperature?: string | null
           merged_at?: string | null
           merged_into_deal_id?: string | null
@@ -14855,6 +14858,7 @@ export type Database = {
           telefone: string
         }[]
       }
+      parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       recalc_automation_queue_for_deal: {
         Args: {
           p_anchor_kind: string

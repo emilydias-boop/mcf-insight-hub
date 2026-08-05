@@ -375,6 +375,9 @@ export const DealKanbanCard = ({
               const name = typeof tag === 'string' ? tag : tag.name;
               const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
               if (primary && name?.toLowerCase() === primary.toLowerCase()) return false;
+              // Lead A/B tem badge dedicado abaixo — evita duplicidade
+              const n = (name || '').trim().toLowerCase();
+              if (n === 'lead a' || n === 'lead b') return false;
               return name?.toLowerCase() !== 'base clint';
             })
             .slice(0, 2)
@@ -388,6 +391,29 @@ export const DealKanbanCard = ({
                 {typeof tag === "string" ? tag : tag.name}
               </Badge>
             ))}
+          {(() => {
+            const names = (deal.tags || []).map((t: any) =>
+              ((typeof t === 'string' ? t : t?.name) || '').trim().toUpperCase()
+            );
+            const segment = names.includes('LEAD A')
+              ? 'Lead A'
+              : names.includes('LEAD B')
+                ? 'Lead B'
+                : null;
+            if (!segment) return null;
+            return (
+              <Badge
+                className={`text-[10px] px-1.5 py-0 border-0 text-white ${
+                  segment === 'Lead A'
+                    ? 'bg-green-600 hover:bg-green-600'
+                    : 'bg-amber-500 hover:bg-amber-500'
+                }`}
+                title={segment === 'Lead A' ? 'Dentro do ICP' : 'Fora do ICP'}
+              >
+                {segment}
+              </Badge>
+            );
+          })()}
           {outsideInfo?.isOutside && (
             <Tooltip>
               <TooltipTrigger asChild>

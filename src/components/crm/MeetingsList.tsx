@@ -61,6 +61,16 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/** Segmento ICP (aditivo): tag "Lead A" / "Lead B" no deal. */
+type LeadSegment = 'Lead A' | 'Lead B' | null;
+
+function resolveLeadSegment(tags: string[]): LeadSegment {
+  const norm = tags.map((t) => (t || '').trim().toUpperCase());
+  if (norm.includes('LEAD A')) return 'Lead A';
+  if (norm.includes('LEAD B')) return 'Lead B';
+  return null;
+}
+
 /**
  * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
  * booked_by do attendee > booked_by do slot > dono do negócio (owner_id).
@@ -90,6 +100,7 @@ interface AttendeeRow {
   attendeeStatus: string;
   isReschedule: boolean;
   channel: SimpleChannel;
+  segment: LeadSegment;
   sdrName: string | null;
 }
 
@@ -147,6 +158,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
             channel,
+            segment: resolveLeadSegment(tagsArr),
             sdrName: resolveSdrName(att, meeting),
           });
         }
@@ -181,6 +193,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeeStatus: meeting.status,
           isReschedule: false,
           channel,
+          segment: resolveLeadSegment(tagsArr),
           sdrName: resolveSdrName(null, meeting),
         });
       }
@@ -238,6 +251,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             <TableHead>Data/Hora</TableHead>
             <TableHead>Lead</TableHead>
             <TableHead>Canal</TableHead>
+            <TableHead>Segmento</TableHead>
             <TableHead>SDR</TableHead>
             <TableHead>Closer</TableHead>
             <TableHead>Status</TableHead>
@@ -291,6 +305,22 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                   >
                     {row.channel}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {row.segment ? (
+                    <Badge
+                      className={cn(
+                        'text-[11px] border-0 text-white',
+                        row.segment === 'Lead A'
+                          ? 'bg-green-600 hover:bg-green-600'
+                          : 'bg-amber-500 hover:bg-amber-500'
+                      )}
+                    >
+                      {row.segment}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
