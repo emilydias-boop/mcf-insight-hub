@@ -545,36 +545,58 @@ export default function ReunioesEquipe() {
   }, [datePreset, mergedBySDR, bySDR, sdrFilter, activeSdrsList]);
 
   // Anexa reembolsos atribuídos a cada SDR (via R1 mais recente do deal reembolsado)
-  // Segmento ICP: mapeia deal_id → icp_segment das reuniões do período
-  const segmentEnabled = segmentFilter !== 'all';
-  const { data: dealSegmentMap } = useDealsIcpSegments(
-    useMemo(() => (allMeetingsRaw || []).map((m: any) => m.deal_id).filter(Boolean), [allMeetingsRaw]),
-    segmentEnabled,
-  );
-  const sdrEmailsInSegment = useMemo(() => {
-    if (!segmentEnabled || !dealSegmentMap) return null;
-    const emails = new Set<string>();
-    (allMeetingsRaw || []).forEach((m: any) => {
-      if (!m.deal_id) return;
-      if (dealSegmentMap.get(m.deal_id) !== segmentFilter) return;
-      const owner = (m.current_owner || '').toLowerCase();
-      const inter = (m.intermediador || '').toLowerCase();
-      if (owner) emails.add(owner);
-      if (inter) emails.add(inter);
-    });
-    return emails;
-  }, [segmentEnabled, dealSegmentMap, allMeetingsRaw, segmentFilter]);
-
   const filteredBySDRWithRefunds = useMemo(() => {
-    const base = sdrEmailsInSegment
-      ? filteredBySDR.filter((row) => sdrEmailsInSegment.has((row.sdrEmail || '').toLowerCase()))
-      : filteredBySDR;
+    const base = filteredBySDR;
     if (!sdrRefundsMap) return base;
     return base.map((row) => ({
       ...row,
       reembolsos: sdrRefundsMap.get((row.sdrEmail || '').toLowerCase()) || 0,
     }));
-  }, [filteredBySDR, sdrRefundsMap, sdrEmailsInSegment]);
+  }, [filteredBySDR, sdrRefundsMap]);
+
+  // Mapas por SDR (email lower) para as sub-linhas Lead A / Lead B
+  const buildSdrSegmentMap = (metrics?: { metrics: any[] }) => {
+    const map = new Map<string, {
+      agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number;
+    }>();
+    (metrics?.metrics || []).forEach((m: any) => {
+      if (!m.sdr_email) return;
+      map.set(String(m.sdr_email).toLowerCase(), {
+        agendamentos: m.agendamentos || 0,
+        r1Agendada: m.r1_agendada || 0,
+        r1Realizada: m.r1_realizada || 0,
+        noShows: m.no_shows || 0,
+        contratos: m.contratos || 0,
+      });
+    });
+    return map;
+  };
+  const sdrSegmentAMap = useMemo(() => buildSdrSegmentMap(sdrMetricsA), [sdrMetricsA]);
+  const sdrSegmentBMap = useMemo(() => buildSdrSegmentMap(sdrMetricsB), [sdrMetricsB]);
+
+  // Totais por segmento para os KPI cards
+  const segmentTotals = useMemo(() => {
+    const sumSdr = (map: Map<string, any>) => {
+      const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
+      const allowed = new Set(filteredBySDR.map((r) => (r.sdrEmail || '').toLowerCase()));
+      map.forEach((v, email) => {
+        if (allowed.size > 0 && !allowed.has(email)) return;
+        acc.agendamentos += v.agendamentos;
+        acc.r1Agendada += v.r1Agendada;
+        acc.r1Realizada += v.r1Realizada;
+        acc.noShows += v.noShows;
+      });
+      return acc;
+    };
+    const sumCloserContratos = (rows?: any[]) =>
+      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0) + (c.outside || 0), 0);
+    const a = sumSdr(sdrSegmentAMap);
+    const b = sumSdr(sdrSegmentBMap);
+    return {
+      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
+      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
+    };
+  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
