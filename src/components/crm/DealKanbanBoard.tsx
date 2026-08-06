@@ -154,7 +154,6 @@ export const DealKanbanBoard = ({
     // Quando o escopo é um GRUPO, as colunas são deduplicadas por nome, mas os deals
     // das demais origens do grupo têm stage_id diferente com o MESMO nome de estágio.
     // Por isso casamos por stage_id OU por nome do estágio (normalizado).
-    const visibleStageNames = new Set(visibleStages.map((s: any) => norm(s.stage_name)));
     visibleStages.forEach((stage: any) => {
       const stageName = norm(stage.stage_name);
       const stageDeals = deals.filter(deal => {
