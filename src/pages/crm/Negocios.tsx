@@ -310,6 +310,14 @@ const Negocios = () => {
   // Usar o effectiveOriginId calculado para buscar deals
   // CORREÇÃO: Passar ownerProfileId para SDRs/Closers para filtrar no BACKEND
   // Isso elimina a race condition onde todos os deals ficavam visíveis momentaneamente
+  // CORREÇÃO 2: Closer não é dono dos deals (o SDR é). Para a role closer o corte
+  // no servidor passa a ser OR: sou dono OU sou closer da R1/R2.
+  const { data: myCloser } = useMyCloser(activeBU);
+  const isCloserRole = role === 'closer' || (allRoles || []).includes('closer');
+  const meetingCloserEmail = isRestrictedRole && isCloserRole
+    ? (myCloser?.email || userProfile?.email || undefined)
+    : undefined;
+  
   const { 
     data: dealsData, 
     isLoading, 
@@ -320,6 +328,8 @@ const Negocios = () => {
     limit: 10000,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
     ownerProfileId: isRestrictedRole ? user?.id : undefined,
+    // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
+    meetingCloserEmail,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
