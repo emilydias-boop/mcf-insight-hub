@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink, X, User, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
