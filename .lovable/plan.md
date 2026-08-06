@@ -1,58 +1,49 @@
-# Diagnóstico: filtro "Closer (R1/R2)" ainda mostra 1 negócio para Leticia
+# Diagnóstico: filtro "Closer da Reunião (R1/R2)" mostra 1 negócio para Leticia
 
-## 1. Como o Kanban carrega os deals
+## Conclusão (causa raiz encontrada)
 
-`Negocios.tsx:293` chama `useCRMDeals({ originId, searchTerm, limit: 10000, ownerProfileId })`.
+O filtro está correto. **A tela não está mostrando a PIPELINE INSIDE SALES** — está mostrando a pipeline **"PILOTO ANAMNESE / INDICAÇÃO"** (`7431cf4a-...`), e nela a Leticia tem **exatamente 1 negócio** como closer de reunião.
 
-`useCRMData.ts:420-432` monta **uma única query** para toda a pipeline:
+Distribuição real dos deals da Leticia (`r1_closer_email` ou `r2_closer_email`, ativos):
 
-```
-from crm_deals
-where is_duplicate = false and archived_at is null and is_archived = false
-  and origin_id in (...)
-order by stage_moved_at desc nulls last
-limit 10000
-```
+| Origem | Deals |
+|---|---|
+| PIPELINE INSIDE SALES (`e3c04f21`) | 550 |
+| Efeito Alavanca + Clube | 6 |
+| PILOTO ANAMNESE / INDICAÇÃO (`7431cf4a`) | **1** |
 
-Não há paginação por estágio no servidor. Todo o resto (owner, closer, tags, produto, datas) é filtrado **no cliente**, em `filteredDeals` (`Negocios.tsx:438+`), e o Kanban ainda renderiza só as primeiras 50 por coluna (`DealKanbanBoard.tsx:54`, com botão de carregar mais) — mas o **badge de contagem** usa o total do estágio, não as 50.
+O "1" que a Jessica vê casa exatamente com a origem PILOTO ANAMNESE. Não é coincidência com o filtro de Responsável.
 
-Ou seja: existe um teto global de 10.000 deals por pipeline, aplicado **antes** dos filtros.
+## Por que a tela cai nessa pipeline
 
-## 2. O teto explica o caso da Leticia? Não
+Em `Negocios.tsx`, o default do seletor "Funil" (linhas 216-271) e o cálculo de `effectiveOriginId` (157-212) têm dois problemas:
 
-Consultei o banco:
+1. `useBUPipelineMap` só usa o fallback `BU_DEFAULT_ORIGIN_MAP` quando **não existe nenhuma linha** em `bu_origin_mapping` para a BU. Para `incorporador` existem 2 linhas (`e3c04f21` e `7431cf4a`), ambas com `is_default = false` → `defaultOrigin = null` (useBUPipelineMap.ts:56).
+2. Quando `activeBU` é `null` (usuário sem `profiles.squad` preenchido, acessando `/crm/negocios` global), o default cai no passo 5: procura um **grupo** chamado "PIPELINE INSIDE SALES"/"Inside Sales" na lista de `crm_groups`. Nenhum grupo tem esse nome (os grupos são "Perpétuo - X1", "BU - MCF CAPITAL", ...), então usa `pipelines[0]` — um **grupo**.
+3. Com um grupo selecionado, `effectiveOriginId` vira `pipelineOrigins[0].id`, isto é, **apenas a primeira origem do grupo em ordem alfabética**. No grupo "Perpétuo - X1" a primeira é justamente **"PILOTO ANAMNESE /  INDICAÇÃO"** (P-I-L antes de P-I-P). A expansão de grupo → todas as origens filhas que existe em `useCRMDeals` (useCRMData.ts:398-418) nunca é acionada, porque o que chega no hook já é um `origin_id` único.
 
-- PIPELINE INSIDE SALES tem **21.548 deals visíveis** — bem acima do `limit: 10000`. O teto é real: ~11,5 mil deals dessa pipeline nunca chegam ao navegador.
-- Mas os deals da Leticia são recentes: dos **547** deals com `r1_closer_email = leticia.faustino@...` nessa pipeline, **547 estão dentro das 10.000 primeiras** por `stage_moved_at desc`. **0 ficam de fora.**
+O perfil "Jessica Bellini R2" (`3f1435b1-...`) não tem nenhuma linha em `user_roles` e o `squad` não define BU incorporador — ou seja, ela cai exatamente nesse caminho de `activeBU = null`.
 
-Distribuição por estágio (todos pertencentes à própria pipeline Inside Sales): Reunião 01 Realizada 380, Venda realizada 60, Reunião 02 Realizada 50, Contrato Pago 20, No-Show R2 10, Reunião 01 Agendada 10, No-Show 8, NOVO LEAD (FORM) 6, Sem Interesse 6, Em contato 3, R1 Realizada 1.
+## Itens perguntados
 
-## 3. O filtro compara o email certo? Sim
+1. **Outros filtros default**: não. `dateRange: undefined`, `dealStatus: 'all'`, `salesChannel: 'all'`, `temperature: 'all'`, `outsideFilter: 'all'`, tags/produtos vazios. Nenhum filtro implícito de período ou de "meus negócios" (o `ownerProfileId` no backend só se aplica a `sdr`/`closer` sem apoio R1 — não é o caso dela).
+2. **Pipeline default**: **não** é PIPELINE INSIDE SALES nesse cenário. É um grupo cuja primeira origem é PILOTO ANAMNESE.
+3. **Reprodução em navegador**: não foi possível autenticar — o projeto usa Supabase externo (`external_unmanaged`), sem sessão injetável. A reprodução foi feita por leitura de código + consulta ao banco, e o número 1 bate exatamente com a hipótese.
+4. **Build em produção**: **está atualizada**. O chunk publicado `https://mcfgestao.com/assets/Negocios-DwdYG4oN.js` contém o rótulo "Closer da Reunião (R1/R2)" (versão com ícone/tooltip). Não é ambiente velho.
 
-- Em `crm_deals` existe **um único valor** para ela: `leticia.faustino@minhacasafinanciada.com` (40 chars, sem espaços, todo minúsculo) em `r1_closer_email`, 554 linhas. Nenhuma linha em `r2_closer_email`.
-- Em `closers`, a opção ativa da BU incorporador é `73bf8108-...` / `Leticia Faustino C` / mesmo email — é esse email que vai como `value` do `<SelectItem>` (`useCloserFilterOptions.ts:37`).
-- A comparação em `Negocios.tsx:483-489` faz `toLowerCase()` nos dois lados e casa `r1 OR r2`. Bate exatamente.
+## Sem relação com o teto de 10.000
 
-Conclusão: a lógica do filtro novo está correta e os dados estão presentes no conjunto carregado.
+Dos 21.551 deals ativos de Inside Sales, os 550 da Leticia estão todos dentro das 10.000 mais recentes (checado). O teto não participa desse sintoma.
 
-## 4. Causa mais provável do "ainda 1 negócio"
+## O que eu proponho corrigir (depois da sua confirmação)
 
-O resultado **1 negócio** é exatamente o número de deals em que ela é **owner** (`owner_profile_id = e89664d6-...`), que foi o sintoma original. Isso aponta para um destes dois, ambos do lado do uso/entrega e não da lógica:
-
-1. **Dropdown errado**: os dois seletores ficam lado a lado e são parecidos. "Leticia Faustino C (CLOSER)" (com sufixo de role) é o filtro **Responsável**; o novo é "Leticia Faustino C" sem sufixo, sob o placeholder "Closer (R1/R2)". Se o filtro de Responsável continuou selecionado — sozinho ou junto com o novo (eles se combinam por AND) — o resultado cai para 1.
-2. **Bundle antigo**: teste feito antes do reload da aplicação com o código novo.
-
-## 5. O que proponho fazer (após sua confirmação)
-
-Não alterei nada. Ordem sugerida:
-
-1. **Confirmar em tela** (Playwright na preview) com o filtro novo aplicado e o de Responsável em "Todos", contando os deals por estágio — para provar se o problema é de uso ou de código.
-2. **Tornar os dois filtros inconfundíveis**: rótulo/ícone explícito ("Responsável (dono)" vs "Closer da reunião (R1/R2)") e um chip visível dos filtros ativos, para o caso 1 não se repetir.
-3. **Tratar o teto de 10.000** (bug latente, independente da Leticia): com 21,5 mil deals na Inside Sales, qualquer filtro por closer/owner de período mais antigo devolve números incompletos. Caminho: quando `closerEmail` estiver selecionado, empurrar o filtro para o servidor (`or(r1_closer_email.ilike...,r2_closer_email.ilike...)`) em vez de filtrar no cliente — assim o resultado não depende do recorte das 10.000 mais recentes.
+1. **Grupo selecionado deve carregar todas as origens do grupo**, não só a primeira: quando `selectedPipelineId` for um grupo, passar o próprio `group_id` para `useCRMDeals` (que já sabe expandir) em vez de colapsar em `pipelineOrigins[0]`.
+2. **Default confiável para a BU Incorporador**: usar `BU_DEFAULT_ORIGIN_MAP` como fallback também quando existem linhas em `bu_origin_mapping` sem `is_default` — ou simplesmente marcar `is_default = true` para `e3c04f21` em `bu_origin_mapping` (correção de 1 linha, sem código).
+3. **Deixar a pipeline ativa visível**: mostrar o nome da origem realmente em uso ao lado do seletor "Funil" (hoje o seletor pode exibir um grupo enquanto os dados vêm de uma única origem filha) — isso evita esse mesmo mal-entendido no futuro.
 
 ## Detalhes técnicos
 
-- Fetch: `src/hooks/useCRMData.ts:385-476` (`useCRMDeals`), sem paginação por estágio, `limit` default 5000 / 10000 no Kanban.
-- Filtro cliente: `src/pages/crm/Negocios.tsx:438-600`.
-- Render por coluna: `src/components/crm/DealKanbanBoard.tsx:54,272-275`.
-- Opções do closer: `src/hooks/useCloserFilterOptions.ts` (dedupe por email, `is_active = true`, filtrado por BU).
+- `src/pages/crm/Negocios.tsx:157-212` (`effectiveOriginId`), `216-271` (default do funil), `441-668` (filtros no cliente, `closerEmail` em 485-490).
+- `src/hooks/useBUPipelineMap.ts:56,73` (defaultOrigin do banco vs fallback).
+- `src/hooks/useCRMData.ts:398-418` (expansão grupo → origens filhas, não usada nesse fluxo).
+- `src/components/auth/NegociosAccessGuard.tsx:54-62` (`BU_DEFAULT_ORIGIN_MAP`).
