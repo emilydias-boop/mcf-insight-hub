@@ -38,7 +38,7 @@ import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, format } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
