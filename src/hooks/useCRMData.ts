@@ -378,6 +378,9 @@ interface DealFilters {
   contactId?: string;
   ownerId?: string;
   ownerProfileId?: string; // Filtro por owner_profile_id (UUID) - aplicado no backend
+  // Email do closer da reunião (r1/r2). Quando informado junto de ownerProfileId,
+  // o corte no servidor passa a ser OR: sou dono OU sou closer da R1/R2.
+  meetingCloserEmail?: string;
   searchTerm?: string;
   limit?: number;
 }
@@ -443,7 +446,16 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
       
       // NOVO: Filtro de owner no backend para SDRs/Closers
       if (filters.ownerProfileId) {
-        query = query.eq('owner_profile_id', filters.ownerProfileId);
+        if (filters.meetingCloserEmail) {
+          // Closer: dono do deal OU closer da reunião R1/R2
+          const email = filters.meetingCloserEmail.trim();
+          query = query.or(
+            `owner_profile_id.eq.${filters.ownerProfileId},r1_closer_email.ilike.${email},r2_closer_email.ilike.${email}`
+          );
+        } else {
+          // SDR (e closer sem email resolvido): comportamento original
+          query = query.eq('owner_profile_id', filters.ownerProfileId);
+        }
       }
       
       // Server-side search: two-step approach to avoid PostgREST limitation
