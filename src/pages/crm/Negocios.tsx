@@ -735,6 +735,142 @@ const Negocios = () => {
     return p?.display_name || p?.name || '';
   }, [selectedPipelineId, pipelines]);
   
+  // Chips de filtros ativos para exibir acima do Kanban
+  const activeFilterChips = useMemo(() => {
+    const chips: { key: string; label: string; value: string; icon?: React.ReactNode; onRemove: () => void }[] = [];
+    
+    if (filters.owner) {
+      const opt = ownerOptions?.find(o => o.value === filters.owner);
+      const label = opt?.label || filters.owner;
+      chips.push({
+        key: 'owner',
+        label: 'Dono',
+        value: label,
+        icon: <User className="h-3 w-3" />,
+        onRemove: () => setFilters(f => ({ ...f, owner: null })),
+      });
+    }
+    
+    if (filters.closerEmail) {
+      const opt = closerFilterOptions?.find(c => c.email === filters.closerEmail);
+      const label = opt?.label || filters.closerEmail;
+      chips.push({
+        key: 'closer',
+        label: 'Closer',
+        value: label,
+        icon: <CalendarDays className="h-3 w-3" />,
+        onRemove: () => setFilters(f => ({ ...f, closerEmail: null })),
+      });
+    }
+    
+    if (filters.dateRange?.from) {
+      const from = format(filters.dateRange.from, 'dd/MM/yyyy');
+      const to = filters.dateRange.to ? format(filters.dateRange.to, 'dd/MM/yyyy') : '';
+      chips.push({
+        key: 'dateRange',
+        label: 'Período',
+        value: to ? `${from} - ${to}` : from,
+        onRemove: () => setFilters(f => ({ ...f, dateRange: undefined })),
+      });
+    }
+    
+    if (filters.dealStatus !== 'all') {
+      const statusMap: Record<string, string> = { open: 'Abertos', won: 'Ganhos', lost: 'Perdidos' };
+      chips.push({
+        key: 'dealStatus',
+        label: 'Status',
+        value: statusMap[filters.dealStatus] || filters.dealStatus,
+        onRemove: () => setFilters(f => ({ ...f, dealStatus: 'all' })),
+      });
+    }
+    
+    if (filters.inactivityDays !== null) {
+      chips.push({
+        key: 'inactivity',
+        label: 'Inatividade',
+        value: `+ ${filters.inactivityDays} dia(s)`,
+        onRemove: () => setFilters(f => ({ ...f, inactivityDays: null })),
+      });
+    }
+    
+    if (filters.salesChannel !== 'all') {
+      const channelMap: Record<string, string> = { a010: 'A010', bio: 'BIO', live: 'LIVE' };
+      chips.push({
+        key: 'salesChannel',
+        label: 'Canal',
+        value: channelMap[filters.salesChannel] || filters.salesChannel,
+        onRemove: () => setFilters(f => ({ ...f, salesChannel: 'all' })),
+      });
+    }
+    
+    if (filters.attemptsRange) {
+      chips.push({
+        key: 'attempts',
+        label: 'Tentativas',
+        value: `${filters.attemptsRange.min}-${filters.attemptsRange.max}`,
+        onRemove: () => setFilters(f => ({ ...f, attemptsRange: null })),
+      });
+    }
+    
+    if (filters.selectedTags.length > 0) {
+      filters.selectedTags.forEach(tag => {
+        chips.push({
+          key: `tag-${tag}`,
+          label: 'Tag',
+          value: tag,
+          onRemove: () => setFilters(f => ({ ...f, selectedTags: f.selectedTags.filter(t => t !== tag) })),
+        });
+      });
+    }
+    
+    if (filters.productFilters.length > 0) {
+      filters.productFilters.forEach((rule, idx) => {
+        chips.push({
+          key: `product-${idx}`,
+          label: 'Produto',
+          value: rule.product,
+          onRemove: () => setFilters(f => ({ ...f, productFilters: f.productFilters.filter((_, i) => i !== idx) })),
+        });
+      });
+    }
+    
+    if (filters.activityPriority !== 'all') {
+      const priorityMap: Record<string, string> = { high: 'Alta', medium: 'Média', low: 'Baixa' };
+      chips.push({
+        key: 'priority',
+        label: 'Prioridade',
+        value: priorityMap[filters.activityPriority] || filters.activityPriority,
+        onRemove: () => setFilters(f => ({ ...f, activityPriority: 'all' })),
+      });
+    }
+    
+    if (filters.outsideFilter !== 'all') {
+      const outsideMap: Record<string, string> = {
+        outside_only: 'Outside',
+        outside_worked: 'Outside trabalhado',
+        outside_not_worked: 'Outside não trabalhado',
+        not_outside: 'Não outside',
+      };
+      chips.push({
+        key: 'outside',
+        label: 'Outside',
+        value: outsideMap[filters.outsideFilter] || filters.outsideFilter,
+        onRemove: () => setFilters(f => ({ ...f, outsideFilter: 'all' })),
+      });
+    }
+    
+    if (filters.temperature !== 'all') {
+      chips.push({
+        key: 'temperature',
+        label: 'Temperatura',
+        value: filters.temperature,
+        onRemove: () => setFilters(f => ({ ...f, temperature: 'all' })),
+      });
+    }
+    
+    return chips;
+  }, [filters, ownerOptions, closerFilterOptions]);
+  
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
       {/* Sidebar - hidden on mobile, hidden for SDRs */}
