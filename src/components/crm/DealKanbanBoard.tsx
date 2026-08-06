@@ -150,10 +150,21 @@ export const DealKanbanBoard = ({
   // Memoize deals por estágio COM ordenação aplicada
   const dealsByStage = useMemo(() => {
     const map: Record<string, typeof deals> = {};
+    const norm = (v?: string | null) => (v || '').trim().toLowerCase();
+    // Quando o escopo é um GRUPO, as colunas são deduplicadas por nome, mas os deals
+    // das demais origens do grupo têm stage_id diferente com o MESMO nome de estágio.
+    // Por isso casamos por stage_id OU por nome do estágio (normalizado).
     visibleStages.forEach((stage: any) => {
-      const stageDeals = deals.filter(deal => 
-        deal && deal.id && deal.name && deal.stage_id === stage.id
-      );
+      const stageName = norm(stage.stage_name);
+      const stageDeals = deals.filter(deal => {
+        if (!deal || !deal.id || !deal.name) return false;
+        if (deal.stage_id === stage.id) return true;
+        // Só usa o nome quando o stage_id do deal não pertence a nenhuma coluna visível,
+        // evitando duplicar cards entre colunas.
+        const dealStageName = norm((deal as any).stage);
+        if (!dealStageName || dealStageName !== stageName) return false;
+        return !visibleStages.some((s: any) => s.id === deal.stage_id);
+      });
       const sortOption = stageSorts[stage.id] || 'stage_newest'; // Default: recente na stage primeiro
       map[stage.id] = sortDeals(stageDeals, sortOption, activitySummaries);
     });

@@ -211,6 +211,28 @@ const Negocios = () => {
     return undefined;
   }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU, sdrOriginOverride]);
   
+  // Detecta se o `selectedPipelineId` é um GRUPO (funil com várias origens filhas).
+  // `useCRMOriginsByPipeline` devolve, para uma origem, uma lista com ela mesma;
+  // para um grupo, devolve as origens filhas (ids diferentes do id selecionado).
+  const selectedPipelineIsGroup = useMemo(() => {
+    if (!selectedPipelineId || !Array.isArray(pipelineOrigins) || pipelineOrigins.length === 0) {
+      return false;
+    }
+    if ('children' in (pipelineOrigins[0] as any)) return false; // árvore agrupada (sem pipeline selecionado)
+    return !(pipelineOrigins as any[]).some((o: any) => o.id === selectedPipelineId);
+  }, [selectedPipelineId, pipelineOrigins]);
+  
+  // Escopo usado para BUSCAR dados (deals, estágios, tags).
+  // Quando um grupo está selecionado e o usuário não escolheu uma sub-origem,
+  // passamos o próprio group_id — `useCRMDeals`/`useCRMStages`/`useUniqueDealTags`
+  // expandem o grupo para TODAS as origens filhas. Antes colapsávamos na primeira
+  // origem em ordem alfabética, o que escondia deals das demais origens do funil.
+  const dealsScopeId = useMemo(() => {
+    if (isSdr || selectedOriginId) return effectiveOriginId;
+    if (selectedPipelineIsGroup && selectedPipelineId) return selectedPipelineId;
+    return effectiveOriginId;
+  }, [isSdr, selectedOriginId, selectedPipelineIsGroup, selectedPipelineId, effectiveOriginId]);
+  
   // Definir pipeline padrão APENAS na primeira montagem
   // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
   useEffect(() => {
@@ -292,7 +314,7 @@ const Negocios = () => {
     isLoading, 
     error,
   } = useCRMDeals({
-    originId: effectiveOriginId,
+    originId: dealsScopeId,
     searchTerm: filters.search || undefined,
     limit: 10000,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
@@ -303,7 +325,7 @@ const Negocios = () => {
   const visibleStages = getVisibleStages();
   
   // Buscar stages da pipeline atual para detectar deals cross-pipeline
-  const { data: currentPipelineStages } = useCRMStages(effectiveOriginId);
+  const { data: currentPipelineStages } = useCRMStages(dealsScopeId);
   const currentStageIds = useMemo(() => {
     return new Set((currentPipelineStages || []).map((s: any) => s.id));
   }, [currentPipelineStages]);
@@ -318,8 +340,8 @@ const Negocios = () => {
   
   // Buscar tags únicas para o filtro
   const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
-    originId: effectiveOriginId,
-    enabled: !!effectiveOriginId,
+    originId: dealsScopeId,
+    enabled: !!dealsScopeId,
   });
   
   // Extrair deal IDs e stage IDs para buscar atividades em batch
@@ -1090,7 +1112,7 @@ const Negocios = () => {
                     ...deal,
                     stage: deal.crm_stages?.stage_name || 'Sem estágio',
                   }))}
-                  originId={effectiveOriginId}
+                  originId={dealsScopeId}
                   showLostDeals={filters.dealStatus === 'lost'}
                   selectedDealIds={selectedDealIds}
                   onSelectionChange={handleSelectionChange}
