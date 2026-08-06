@@ -220,14 +220,20 @@ export const DealFilters = ({
       </Select>
       
       {/* Filtro de Responsável - usa ownerOptions se fornecido, senão fallback */}
-      <Select
-        value={filters.owner || 'all'}
-        onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="Responsável" />
-        </SelectTrigger>
-        <SelectContent>
+      <TooltipProvider delayDuration={100}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Select
+              value={filters.owner || 'all'}
+              onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
+            >
+              <SelectTrigger className="w-[220px]">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Responsável (dono)" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
           <SelectItem value="all">Todos os responsáveis</SelectItem>
           <SelectItem value="__no_owner__">Sem dono</SelectItem>
           
