@@ -1,34 +1,58 @@
-# Investigação: filtro de Closer no Kanban de Negócios retorna 0 para Leticia Faustino C
+# Diagnóstico: filtro "Closer (R1/R2)" ainda mostra 1 negócio para Leticia
 
-## Onde fica o filtro
+## 1. Como o Kanban carrega os deals
 
-Não existe um filtro de "closer" no Kanban. O dropdown usado é o filtro de **Responsável (owner)**:
+`Negocios.tsx:293` chama `useCRMDeals({ originId, searchTerm, limit: 10000, ownerProfileId })`.
 
-- UI: `src/components/crm/DealFilters.tsx` (campo `filters.owner` em `DealFiltersState`).
-- Opções: `src/hooks/useDealOwnerOptions.ts` — monta a lista a partir de `profiles` + `user_roles`; o sufixo `(CLOSER)` vem de `roleLabel = role.toUpperCase()`, ou seja é só o rótulo da role do **profile**, não um vínculo com a tabela `closers`.
-- Aplicação: `src/pages/crm/Negocios.tsx:470-480` — comparação direta `deal.owner_profile_id !== filters.owner` (ou `deal.owner_id` para opções legadas `email:...`).
+`useCRMData.ts:420-432` monta **uma única query** para toda a pipeline:
 
-Ou seja, o filtro é por **propriedade do negócio** (`crm_deals.owner_profile_id`) e **nunca** por `r1_closer_email` / `r2_closer_email`. A atividade de closer (R1/R2 realizadas, contrato pago) vive nesses campos de e-mail e em `meeting_slots`, que esse filtro ignora.
+```
+from crm_deals
+where is_duplicate = false and archived_at is null and is_archived = false
+  and origin_id in (...)
+order by stage_moved_at desc nulls last
+limit 10000
+```
 
-## Por que a Leticia dá zero
+Não há paginação por estágio no servidor. Todo o resto (owner, closer, tags, produto, datas) é filtrado **no cliente**, em `filteredDeals` (`Negocios.tsx:438+`), e o Kanban ainda renderiza só as primeiras 50 por coluna (`DealKanbanBoard.tsx:54`, com botão de carregar mais) — mas o **badge de contagem** usa o total do estágio, não as 50.
 
-Existem **dois profiles duplicados** com o mesmo e-mail `leticia.faustino@minhacasafinanciada.com`:
+Ou seja: existe um teto global de 10.000 deals por pipeline, aplicado **antes** dos filtros.
 
-| profile_id | full_name | access_status | roles | deals com owner_profile_id |
-|---|---|---|---|---|
-| `9529ecc8-af6f-44a2-9f3a-7b375612befb` | Leticia Faustino | desativado | (nenhuma) | 78 |
-| `e89664d6-33ec-4a5b-bbf5-217a88dd3b18` | Leticia Faustino C | ativo | closer | 1 |
+## 2. O teto explica o caso da Leticia? Não
 
-- A opção "Leticia Faustino C (CLOSER)" é o profile ativo `e89664d6...`, dono de apenas **1** negócio (em "Reunião 02 Realizada"). Nos outros estágios o resultado é 0 — exatamente o sintoma.
-- Os 78 negócios em que ela é dona estão no profile antigo `9529ecc8...` (`desativado`, sem roles), que não é a opção rotulada como CLOSER.
-- A atividade real de closer são **552 negócios com `r1_closer_email = leticia.faustino@...`**: 381 em "Reunião 01 Realizada", 60 em "Venda realizada", 50 em "Reunião 02 Realizada", 19 em "Contrato Pago", 10 "No-Show R2" etc. Nenhum é capturado pelo filtro de owner.
-- Complemento: o registro em `closers` (`73bf8108-...`, BU incorporador, ativo) aponta para `employees.id = 8f3506fc-...` cujo `user_id` é **NULL** — não há vínculo `closers → employee → profile`.
+Consultei o banco:
 
-## Causa raiz (duas camadas)
+- PIPELINE INSIDE SALES tem **21.548 deals visíveis** — bem acima do `limit: 10000`. O teto é real: ~11,5 mil deals dessa pipeline nunca chegam ao navegador.
+- Mas os deals da Leticia são recentes: dos **547** deals com `r1_closer_email = leticia.faustino@...` nessa pipeline, **547 estão dentro das 10.000 primeiras** por `stage_moved_at desc`. **0 ficam de fora.**
 
-1. **Semântica**: o dropdown filtra dono do negócio, não closer da reunião. Para uma closer que atende leads pertencentes aos SDRs, o resultado tende naturalmente a zero.
-2. **Dados**: profile duplicado — o histórico de propriedade (78 deals) ficou no profile desativado, enquanto a opção visível é o profile novo (1 deal); e `employees.user_id` da closer está nulo.
+Distribuição por estágio (todos pertencentes à própria pipeline Inside Sales): Reunião 01 Realizada 380, Venda realizada 60, Reunião 02 Realizada 50, Contrato Pago 20, No-Show R2 10, Reunião 01 Agendada 10, No-Show 8, NOVO LEAD (FORM) 6, Sem Interesse 6, Em contato 3, R1 Realizada 1.
 
-## Nada foi alterado
+## 3. O filtro compara o email certo? Sim
 
-Este é apenas o mapeamento técnico pedido. Caminhos possíveis, se quiser seguir depois: (a) adicionar um filtro explícito "Closer (R1/R2)" casando `r1_closer_email`/`r2_closer_email`; (b) consolidar os profiles duplicados e preencher `employees.user_id`; (c) fazer o filtro de owner casar por e-mail, unificando duplicados.
+- Em `crm_deals` existe **um único valor** para ela: `leticia.faustino@minhacasafinanciada.com` (40 chars, sem espaços, todo minúsculo) em `r1_closer_email`, 554 linhas. Nenhuma linha em `r2_closer_email`.
+- Em `closers`, a opção ativa da BU incorporador é `73bf8108-...` / `Leticia Faustino C` / mesmo email — é esse email que vai como `value` do `<SelectItem>` (`useCloserFilterOptions.ts:37`).
+- A comparação em `Negocios.tsx:483-489` faz `toLowerCase()` nos dois lados e casa `r1 OR r2`. Bate exatamente.
+
+Conclusão: a lógica do filtro novo está correta e os dados estão presentes no conjunto carregado.
+
+## 4. Causa mais provável do "ainda 1 negócio"
+
+O resultado **1 negócio** é exatamente o número de deals em que ela é **owner** (`owner_profile_id = e89664d6-...`), que foi o sintoma original. Isso aponta para um destes dois, ambos do lado do uso/entrega e não da lógica:
+
+1. **Dropdown errado**: os dois seletores ficam lado a lado e são parecidos. "Leticia Faustino C (CLOSER)" (com sufixo de role) é o filtro **Responsável**; o novo é "Leticia Faustino C" sem sufixo, sob o placeholder "Closer (R1/R2)". Se o filtro de Responsável continuou selecionado — sozinho ou junto com o novo (eles se combinam por AND) — o resultado cai para 1.
+2. **Bundle antigo**: teste feito antes do reload da aplicação com o código novo.
+
+## 5. O que proponho fazer (após sua confirmação)
+
+Não alterei nada. Ordem sugerida:
+
+1. **Confirmar em tela** (Playwright na preview) com o filtro novo aplicado e o de Responsável em "Todos", contando os deals por estágio — para provar se o problema é de uso ou de código.
+2. **Tornar os dois filtros inconfundíveis**: rótulo/ícone explícito ("Responsável (dono)" vs "Closer da reunião (R1/R2)") e um chip visível dos filtros ativos, para o caso 1 não se repetir.
+3. **Tratar o teto de 10.000** (bug latente, independente da Leticia): com 21,5 mil deals na Inside Sales, qualquer filtro por closer/owner de período mais antigo devolve números incompletos. Caminho: quando `closerEmail` estiver selecionado, empurrar o filtro para o servidor (`or(r1_closer_email.ilike...,r2_closer_email.ilike...)`) em vez de filtrar no cliente — assim o resultado não depende do recorte das 10.000 mais recentes.
+
+## Detalhes técnicos
+
+- Fetch: `src/hooks/useCRMData.ts:385-476` (`useCRMDeals`), sem paginação por estágio, `limit` default 5000 / 10000 no Kanban.
+- Filtro cliente: `src/pages/crm/Negocios.tsx:438-600`.
+- Render por coluna: `src/components/crm/DealKanbanBoard.tsx:54,272-275`.
+- Opções do closer: `src/hooks/useCloserFilterOptions.ts` (dedupe por email, `is_active = true`, filtrado por BU).
