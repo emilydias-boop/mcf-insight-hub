@@ -72,6 +72,7 @@ const Negocios = () => {
     search: '',
     dateRange: undefined,
     owner: null,
+    closerEmail: null,
     dealStatus: 'all',
     inactivityDays: null,
     salesChannel: 'all',
@@ -478,6 +479,14 @@ const Negocios = () => {
         }
       }
       
+      // Filtro de Closer (R1/R2): casa r1_closer_email OU r2_closer_email
+      if (filters.closerEmail) {
+        const target = filters.closerEmail.toLowerCase();
+        const r1 = (deal.r1_closer_email || '').toLowerCase();
+        const r2 = (deal.r2_closer_email || '').toLowerCase();
+        if (r1 !== target && r2 !== target) return false;
+      }
+      
       // Filtro por status do negócio (baseado no estágio)
       if (filters.dealStatus !== 'all') {
         const stageName = deal.crm_stages?.stage_name;
@@ -680,6 +689,7 @@ const Negocios = () => {
       search: '',
       dateRange: undefined,
       owner: null,
+      closerEmail: null,
       dealStatus: 'all',
       inactivityDays: null,
       salesChannel: 'all',
@@ -853,6 +863,7 @@ const Negocios = () => {
         <DealFilters 
           filters={filters} 
           onChange={setFilters} 
+          activeBU={activeBU}
           onClear={clearFilters}
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}

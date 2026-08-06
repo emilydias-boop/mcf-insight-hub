@@ -23,6 +23,7 @@ import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 import { TagFilterPopover } from './TagFilterPopover';
+import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { ProductFilterPopover } from './ProductFilterPopover';
 import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
 import { TEMPERATURE_META, type LeadTemperature } from './LeadTemperatureSelector';
@@ -38,6 +39,8 @@ export interface DealFiltersState {
   search: string;
   dateRange: DateRange | undefined;
   owner: string | null;
+  /** Email do closer (R1 ou R2) selecionado — filtro independente do owner */
+  closerEmail: string | null;
   dealStatus: 'all' | 'open' | 'won' | 'lost';
   inactivityDays: number | null;
   salesChannel: SalesChannelFilter;
@@ -66,6 +69,8 @@ interface DealFiltersProps {
   availableProducts?: string[];
   /** Loading state para produtos */
   isLoadingProducts?: boolean;
+  /** BU ativa para restringir a lista de closers */
+  activeBU?: string | null;
 }
 
 export const DealFilters = ({ 
@@ -77,6 +82,7 @@ export const DealFilters = ({
   isLoadingTags = false,
   availableProducts = [],
   isLoadingProducts = false,
+  activeBU,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
@@ -142,10 +148,13 @@ export const DealFilters = ({
     }
   });
   
+  const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
+
   const activeFiltersCount = [
     filters.search,
     filters.dateRange?.from,
     filters.owner,
+    filters.closerEmail,
     filters.dealStatus !== 'all',
     filters.inactivityDays !== null,
     filters.salesChannel !== 'all',
@@ -273,6 +282,26 @@ export const DealFilters = ({
       </Select>
       
       {/* Filtro de Inatividade */}
+      {/* Filtro de Closer (R1/R2) — baseado em r1_closer_email / r2_closer_email */}
+      <Select
+        value={filters.closerEmail || 'all'}
+        onValueChange={(value) =>
+          onChange({ ...filters, closerEmail: value === 'all' ? null : value })
+        }
+      >
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Closer (R1/R2)" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os closers (R1/R2)</SelectItem>
+          {(closerFilterOptions || []).map((opt) => (
+            <SelectItem key={opt.email} value={opt.email}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
       <Select
         value={filters.inactivityDays?.toString() || 'all'}
         onValueChange={(value) => onChange({ 
