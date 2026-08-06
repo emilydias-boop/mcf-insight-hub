@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink, X, User, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -38,12 +38,13 @@ import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useSDROriginOverride } from '@/hooks/useSDROriginOverride';
-import { differenceInDays } from 'date-fns';
+import { differenceInDays, format } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 import { useOutsideDetectionForDeals } from '@/hooks/useOutsideDetectionForDeals';
 import { useProductFilterData } from '@/hooks/useProductFilterData';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
+import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
@@ -313,6 +314,7 @@ const Negocios = () => {
   
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
+  const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
   
   // Buscar tags únicas para o filtro
   const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
@@ -733,6 +735,142 @@ const Negocios = () => {
     return p?.display_name || p?.name || '';
   }, [selectedPipelineId, pipelines]);
   
+  // Chips de filtros ativos para exibir acima do Kanban
+  const activeFilterChips = useMemo(() => {
+    const chips: { key: string; label: string; value: string; icon?: React.ReactNode; onRemove: () => void }[] = [];
+    
+    if (filters.owner) {
+      const opt = ownerOptions?.find(o => o.value === filters.owner);
+      const label = opt?.label || filters.owner;
+      chips.push({
+        key: 'owner',
+        label: 'Dono',
+        value: label,
+        icon: <User className="h-3 w-3" />,
+        onRemove: () => setFilters(f => ({ ...f, owner: null })),
+      });
+    }
+    
+    if (filters.closerEmail) {
+      const opt = closerFilterOptions?.find(c => c.email === filters.closerEmail);
+      const label = opt?.label || filters.closerEmail;
+      chips.push({
+        key: 'closer',
+        label: 'Closer',
+        value: label,
+        icon: <CalendarDays className="h-3 w-3" />,
+        onRemove: () => setFilters(f => ({ ...f, closerEmail: null })),
+      });
+    }
+    
+    if (filters.dateRange?.from) {
+      const from = format(filters.dateRange.from, 'dd/MM/yyyy');
+      const to = filters.dateRange.to ? format(filters.dateRange.to, 'dd/MM/yyyy') : '';
+      chips.push({
+        key: 'dateRange',
+        label: 'Período',
+        value: to ? `${from} - ${to}` : from,
+        onRemove: () => setFilters(f => ({ ...f, dateRange: undefined })),
+      });
+    }
+    
+    if (filters.dealStatus !== 'all') {
+      const statusMap: Record<string, string> = { open: 'Abertos', won: 'Ganhos', lost: 'Perdidos' };
+      chips.push({
+        key: 'dealStatus',
+        label: 'Status',
+        value: statusMap[filters.dealStatus] || filters.dealStatus,
+        onRemove: () => setFilters(f => ({ ...f, dealStatus: 'all' })),
+      });
+    }
+    
+    if (filters.inactivityDays !== null) {
+      chips.push({
+        key: 'inactivity',
+        label: 'Inatividade',
+        value: `+ ${filters.inactivityDays} dia(s)`,
+        onRemove: () => setFilters(f => ({ ...f, inactivityDays: null })),
+      });
+    }
+    
+    if (filters.salesChannel !== 'all') {
+      const channelMap: Record<string, string> = { a010: 'A010', bio: 'BIO', live: 'LIVE' };
+      chips.push({
+        key: 'salesChannel',
+        label: 'Canal',
+        value: channelMap[filters.salesChannel] || filters.salesChannel,
+        onRemove: () => setFilters(f => ({ ...f, salesChannel: 'all' })),
+      });
+    }
+    
+    if (filters.attemptsRange) {
+      chips.push({
+        key: 'attempts',
+        label: 'Tentativas',
+        value: `${filters.attemptsRange.min}-${filters.attemptsRange.max}`,
+        onRemove: () => setFilters(f => ({ ...f, attemptsRange: null })),
+      });
+    }
+    
+    if (filters.selectedTags.length > 0) {
+      filters.selectedTags.forEach(tag => {
+        chips.push({
+          key: `tag-${tag}`,
+          label: 'Tag',
+          value: tag,
+          onRemove: () => setFilters(f => ({ ...f, selectedTags: f.selectedTags.filter(t => t !== tag) })),
+        });
+      });
+    }
+    
+    if (filters.productFilters.length > 0) {
+      filters.productFilters.forEach((rule, idx) => {
+        chips.push({
+          key: `product-${idx}`,
+          label: 'Produto',
+          value: rule.product,
+          onRemove: () => setFilters(f => ({ ...f, productFilters: f.productFilters.filter((_, i) => i !== idx) })),
+        });
+      });
+    }
+    
+    if (filters.activityPriority !== 'all') {
+      const priorityMap: Record<string, string> = { high: 'Alta', medium: 'Média', low: 'Baixa' };
+      chips.push({
+        key: 'priority',
+        label: 'Prioridade',
+        value: priorityMap[filters.activityPriority] || filters.activityPriority,
+        onRemove: () => setFilters(f => ({ ...f, activityPriority: 'all' })),
+      });
+    }
+    
+    if (filters.outsideFilter !== 'all') {
+      const outsideMap: Record<string, string> = {
+        outside_only: 'Outside',
+        outside_worked: 'Outside trabalhado',
+        outside_not_worked: 'Outside não trabalhado',
+        not_outside: 'Não outside',
+      };
+      chips.push({
+        key: 'outside',
+        label: 'Outside',
+        value: outsideMap[filters.outsideFilter] || filters.outsideFilter,
+        onRemove: () => setFilters(f => ({ ...f, outsideFilter: 'all' })),
+      });
+    }
+    
+    if (filters.temperature !== 'all') {
+      chips.push({
+        key: 'temperature',
+        label: 'Temperatura',
+        value: filters.temperature,
+        onRemove: () => setFilters(f => ({ ...f, temperature: 'all' })),
+      });
+    }
+    
+    return chips;
+  }, [filters, ownerOptions, closerFilterOptions]);
+  
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
       {/* Sidebar - hidden on mobile, hidden for SDRs */}
@@ -871,6 +1009,41 @@ const Negocios = () => {
           availableProducts={availableProducts}
           isLoadingProducts={isLoadingProducts}
         />
+        
+        {activeFilterChips.length > 0 && (
+          <div className="px-4 pt-2 pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground mr-1">Filtros ativos:</span>
+              {activeFilterChips.map(chip => (
+                <Badge
+                  key={chip.key}
+                  variant="secondary"
+                  className="flex items-center gap-1.5 pl-2 pr-1 py-1 text-xs"
+                >
+                  {chip.icon && <span className="text-muted-foreground">{chip.icon}</span>}
+                  <span className="font-medium">{chip.label}:</span>
+                  <span className="max-w-[180px] truncate">{chip.value}</span>
+                  <button
+                    type="button"
+                    onClick={chip.onRemove}
+                    className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    aria-label={`Remover filtro ${chip.label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Limpar todos
+              </Button>
+            </div>
+          </div>
+        )}
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
           {error ? (
