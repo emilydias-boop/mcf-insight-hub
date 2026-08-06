@@ -292,27 +292,44 @@ export const DealFilters = ({
           )}
         </SelectContent>
       </Select>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p>Filtro pelo <strong>dono do negócio</strong> (owner_profile_id).</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
-      {/* Filtro de Inatividade */}
       {/* Filtro de Closer (R1/R2) — baseado em r1_closer_email / r2_closer_email */}
-      <Select
-        value={filters.closerEmail || 'all'}
-        onValueChange={(value) =>
-          onChange({ ...filters, closerEmail: value === 'all' ? null : value })
-        }
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="Closer (R1/R2)" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os closers (R1/R2)</SelectItem>
-          {(closerFilterOptions || []).map((opt) => (
-            <SelectItem key={opt.email} value={opt.email}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <TooltipProvider delayDuration={100}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Select
+              value={filters.closerEmail || 'all'}
+              onValueChange={(value) =>
+                onChange({ ...filters, closerEmail: value === 'all' ? null : value })
+              }
+            >
+              <SelectTrigger className="w-[240px]">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Closer da Reunião (R1/R2)" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os closers (R1/R2)</SelectItem>
+                {(closerFilterOptions || []).map((opt) => (
+                  <SelectItem key={opt.email} value={opt.email}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p>Filtra pelo closer que realizou <strong>R1 ou R2</strong>, não pelo dono do negócio.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
       <Select
         value={filters.inactivityDays?.toString() || 'all'}
