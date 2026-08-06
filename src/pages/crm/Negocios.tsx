@@ -863,6 +863,7 @@ const Negocios = () => {
         <DealFilters 
           filters={filters} 
           onChange={setFilters} 
+          activeBU={activeBU}
           onClear={clearFilters}
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
