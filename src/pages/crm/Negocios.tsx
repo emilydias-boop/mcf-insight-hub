@@ -689,6 +689,7 @@ const Negocios = () => {
       search: '',
       dateRange: undefined,
       owner: null,
+      closerEmail: null,
       dealStatus: 'all',
       inactivityDays: null,
       salesChannel: 'all',
