@@ -1099,6 +1099,60 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                         <span className="text-xs">{selectedParticipant.status === 'completed' ? 'Realizada ✓' : 'Realizada'}</span>
                       </Button>
                     )}
+
+                    {/* Follow-up Closer - destaque imediato após marcar R1 Realizada */}
+                    {activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
+                      <div className="col-span-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={movingFollowup}
+                          className="w-full h-14 gap-2 bg-amber-600 text-white hover:bg-amber-700 focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+                          onClick={async () => {
+                            const dealId = (selectedParticipant as any).dealId as string;
+                            try {
+                              setMovingFollowup(true);
+                              const { data: deal, error: dErr } = await supabase
+                                .from('crm_deals')
+                                .select('id, stage_id')
+                                .eq('id', dealId)
+                                .maybeSingle();
+                              if (dErr) throw dErr;
+                              if (!deal) throw new Error('Negócio não encontrado');
+                              const fromStage = deal.stage_id;
+                              await updateDeal.mutateAsync({ id: dealId, stage_id: FOLLOWUP_CLOSER_STAGE_ID } as any);
+                              try {
+                                await createDealActivity.mutateAsync({
+                                  deal_id: dealId,
+                                  activity_type: 'stage_change',
+                                  description: 'Movido para Follow-up Closer',
+                                  metadata: {
+                                    source: 'agenda_drawer',
+                                    from_stage: fromStage,
+                                    to_stage: FOLLOWUP_CLOSER_STAGE_ID,
+                                    user_id: user?.id ?? null,
+                                  },
+                                } as any);
+                              } catch (actErr) {
+                                console.warn('[Follow-up] activity log failed', actErr);
+                              }
+                              toast.success('Movido para Follow-up Closer');
+                            } catch (e: any) {
+                              console.error('[Follow-up] failed', e);
+                              toast.error(e?.message || 'Falha ao mover para Follow-up');
+                            } finally {
+                              setMovingFollowup(false);
+                            }
+                          }}
+                        >
+                          <MessageSquareReply className="h-5 w-5" />
+                          <div className="flex flex-col items-start leading-tight">
+                            <span className="text-sm font-semibold">Mover para Follow-up Closer</span>
+                            <span className="text-[10px] font-normal opacity-90">Não fechou contrato ainda? Continue acompanhando o lead</span>
+                          </div>
+                        </Button>
+                      </div>
+                    )}
                     
                     {/* Badge Contrato Pago (somente exibição - marcado via automação) */}
                     {selectedParticipant.status === 'contract_paid' && (
@@ -1132,54 +1186,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </Button>
                     )}
 
-                    {/* Follow-up Closer - move deal stage to "Follow-up Closer" after R1 Realizada */}
-                    {activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={movingFollowup}
-                        className="flex-col h-14 gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/20"
-                        onClick={async () => {
-                          const dealId = (selectedParticipant as any).dealId as string;
-                          try {
-                            setMovingFollowup(true);
-                            const { data: deal, error: dErr } = await supabase
-                              .from('crm_deals')
-                              .select('id, stage_id')
-                              .eq('id', dealId)
-                              .maybeSingle();
-                            if (dErr) throw dErr;
-                            if (!deal) throw new Error('Negócio não encontrado');
-                            const fromStage = deal.stage_id;
-                            await updateDeal.mutateAsync({ id: dealId, stage_id: FOLLOWUP_CLOSER_STAGE_ID } as any);
-                            try {
-                              await createDealActivity.mutateAsync({
-                                deal_id: dealId,
-                                activity_type: 'stage_change',
-                                description: 'Movido para Follow-up Closer',
-                                metadata: {
-                                  source: 'agenda_drawer',
-                                  from_stage: fromStage,
-                                  to_stage: FOLLOWUP_CLOSER_STAGE_ID,
-                                  user_id: user?.id ?? null,
-                                },
-                              } as any);
-                            } catch (actErr) {
-                              console.warn('[Follow-up] activity log failed', actErr);
-                            }
-                            toast.success('Movido para Follow-up Closer');
-                          } catch (e: any) {
-                            console.error('[Follow-up] failed', e);
-                            toast.error(e?.message || 'Falha ao mover para Follow-up');
-                          } finally {
-                            setMovingFollowup(false);
-                          }
-                        }}
-                      >
-                        <MessageSquareReply className="h-4 w-4" />
-                        <span className="text-xs">Follow-up</span>
-                      </Button>
-                    )}
                   </div>
                 </div>
 
