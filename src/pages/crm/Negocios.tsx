@@ -1010,6 +1010,41 @@ const Negocios = () => {
           isLoadingProducts={isLoadingProducts}
         />
         
+        {activeFilterChips.length > 0 && (
+          <div className="px-4 pt-2 pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground mr-1">Filtros ativos:</span>
+              {activeFilterChips.map(chip => (
+                <Badge
+                  key={chip.key}
+                  variant="secondary"
+                  className="flex items-center gap-1.5 pl-2 pr-1 py-1 text-xs"
+                >
+                  {chip.icon && <span className="text-muted-foreground">{chip.icon}</span>}
+                  <span className="font-medium">{chip.label}:</span>
+                  <span className="max-w-[180px] truncate">{chip.value}</span>
+                  <button
+                    type="button"
+                    onClick={chip.onRemove}
+                    className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    aria-label={`Remover filtro ${chip.label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Limpar todos
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
           {error ? (
             <Alert variant="destructive">
