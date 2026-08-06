@@ -314,7 +314,7 @@ const Negocios = () => {
     isLoading, 
     error,
   } = useCRMDeals({
-    originId: effectiveOriginId,
+    originId: dealsScopeId,
     searchTerm: filters.search || undefined,
     limit: 10000,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
@@ -325,7 +325,7 @@ const Negocios = () => {
   const visibleStages = getVisibleStages();
   
   // Buscar stages da pipeline atual para detectar deals cross-pipeline
-  const { data: currentPipelineStages } = useCRMStages(effectiveOriginId);
+  const { data: currentPipelineStages } = useCRMStages(dealsScopeId);
   const currentStageIds = useMemo(() => {
     return new Set((currentPipelineStages || []).map((s: any) => s.id));
   }, [currentPipelineStages]);
@@ -340,8 +340,8 @@ const Negocios = () => {
   
   // Buscar tags únicas para o filtro
   const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
-    originId: effectiveOriginId,
-    enabled: !!effectiveOriginId,
+    originId: dealsScopeId,
+    enabled: !!dealsScopeId,
   });
   
   // Extrair deal IDs e stage IDs para buscar atividades em batch
@@ -1112,7 +1112,7 @@ const Negocios = () => {
                     ...deal,
                     stage: deal.crm_stages?.stage_name || 'Sem estágio',
                   }))}
-                  originId={effectiveOriginId}
+                  originId={dealsScopeId}
                   showLostDeals={filters.dealStatus === 'lost'}
                   selectedDealIds={selectedDealIds}
                   onSelectionChange={handleSelectionChange}
