@@ -314,6 +314,7 @@ const Negocios = () => {
   
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
+  const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
   
   // Buscar tags únicas para o filtro
   const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
