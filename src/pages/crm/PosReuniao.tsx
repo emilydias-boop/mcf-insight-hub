@@ -264,9 +264,7 @@ function RealizadasTab() {
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {r.meeting_date
                           ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : r.updated_at
-                            ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
-                            : '—'}
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-sm">{r.region || '—'}</TableCell>
                       <TableCell className="text-sm">{r.renda || '—'}</TableCell>
@@ -1026,7 +1024,7 @@ function TodasReunioesTab() {
       if (closerFilter !== 'all' && r.closer_name !== closerFilter) return false;
       if (stageFilter !== 'all' && r.stage_name !== stageFilter) return false;
       if (dateFrom || dateTo) {
-        const mDate = r.meeting_date ? new Date(r.meeting_date) : r.updated_at ? new Date(r.updated_at) : null;
+        const mDate = r.meeting_date ? new Date(r.meeting_date) : null;
         if (!mDate) return false;
         if (dateFrom && mDate < dateFrom) return false;
         if (dateTo) {
@@ -1180,9 +1178,7 @@ function TodasReunioesTab() {
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {r.meeting_date
                           ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : r.updated_at
-                            ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
-                            : '—'}
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-sm">{r.region || '—'}</TableCell>
                       <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
