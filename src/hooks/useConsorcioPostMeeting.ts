@@ -269,6 +269,7 @@ export function useRealizadas() {
           .in('stage_id', R1_REALIZADA_IDS)
           .in('origin_id', CONSORCIO_ORIGIN_IDS)
           .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -279,14 +280,19 @@ export function useRealizadas() {
         const proposals: any[] = [];
         for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
           const chunk = dealIds.slice(i, i + CHUNK_SIZE);
-          const rows = await fetchAllPages<any>((from, to) =>
-            supabase
-              .from('consorcio_proposals')
-              .select('deal_id, completa, cadastro_completo')
-              .in('deal_id', chunk)
-              .range(from, to)
-          );
-          proposals.push(...rows);
+          try {
+            const rows = await fetchAllPages<any>((from, to) =>
+              supabase
+                .from('consorcio_proposals')
+                .select('deal_id, completa, cadastro_completo')
+                .in('deal_id', chunk)
+                .order('id', { ascending: true })
+                .range(from, to)
+            );
+            proposals.push(...rows);
+          } catch (e) {
+            console.error('[PosReuniao] falha ao buscar propostas do lote:', e);
+          }
         }
         (proposals || []).forEach((p: any) => {
           if (!p.deal_id) return;
