@@ -31,6 +31,109 @@ const SEM_SUCESSO_IDS = [
   CONSORCIO_STAGE_IDS.EA_SEM_SUCESSO,
 ];
 
+// ---------------------------------------------------------------------------
+// Helpers robustos contra o limite de 1000 linhas do PostgREST
+// ---------------------------------------------------------------------------
+
+const PAGE_SIZE = 1000;
+const CHUNK_SIZE = 200;
+
+/** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
+async function fetchAllPages<T = any>(
+  build: (from: number, to: number) => any
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 0; ; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data || []) as T[];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return all;
+}
+
+export interface DealMeetingInfo {
+  date: string;
+  closer_notes: string;
+  notes: string;
+}
+
+/**
+ * Data REAL da reunião por deal.
+ * - Busca em lotes de 200 deal_ids (nunca estoura o limite de 1000 linhas)
+ * - Ignora reuniões canceladas
+ * - Prioriza meeting_type='r1' quando existir
+ * - Entre as opções válidas, usa o scheduled_at mais recente
+ */
+export async function fetchMeetingInfoByDeal(
+  dealIds: string[]
+): Promise<Record<string, DealMeetingInfo>> {
+  const result: Record<string, DealMeetingInfo> = {};
+  const unique = Array.from(new Set(dealIds.filter(Boolean)));
+  if (unique.length === 0) return result;
+
+  // rank: r1 não cancelada > outra não cancelada
+  const rankOf = (meetingType: string | null) =>
+    (meetingType || '').toLowerCase() === 'r1' ? 2 : 1;
+  const bestRank: Record<string, number> = {};
+
+  for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
+    const chunk = unique.slice(i, i + CHUNK_SIZE);
+    const rows = await fetchAllPages<any>((from, to) =>
+      supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
+        .in('deal_id', chunk)
+        .range(from, to)
+    );
+
+    rows.forEach((a: any) => {
+      const dealId = a.deal_id;
+      if (!dealId) return;
+      const slot = a.meeting_slots;
+      const scheduledAt: string | null = slot?.scheduled_at || null;
+      const slotStatus = (slot?.status || '').toLowerCase();
+      if (!scheduledAt) return;
+      if (slotStatus === 'cancelled' || slotStatus === 'canceled' || slotStatus === 'cancelada') return;
+
+      const rank = rankOf(slot?.meeting_type);
+      const currentRank = bestRank[dealId] ?? 0;
+      const current = result[dealId];
+
+      const better =
+        rank > currentRank ||
+        (rank === currentRank && (!current?.date || scheduledAt > current.date));
+
+      if (better) {
+        bestRank[dealId] = rank;
+        result[dealId] = {
+          date: scheduledAt,
+          closer_notes: a.closer_notes || '',
+          notes: a.notes || '',
+        };
+      } else if (current) {
+        // preserva notas quando existirem em outro attendee
+        if (!current.closer_notes && a.closer_notes) current.closer_notes = a.closer_notes;
+        if (!current.notes && a.notes) current.notes = a.notes;
+      }
+    });
+  }
+
+  return result;
+}
+
+/** Ordena desc pela data real da reunião; sem data vai para o fim. */
+function byMeetingDateDesc<T extends { meeting_date?: string }>(a: T, b: T) {
+  const da = a.meeting_date || '';
+  const db = b.meeting_date || '';
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return db.localeCompare(da);
+}
+
 export interface CompletedMeeting {
   deal_id: string;
   deal_name: string;
@@ -96,6 +199,7 @@ export interface Proposal {
   carta_excluida_motivo?: string | null;
   created_at: string;
   closer_name: string;
+  meeting_date?: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
   cadastro_completo?: boolean;
@@ -121,9 +225,10 @@ export function useRealizadas() {
   return useQuery({
     queryKey: ['consorcio-realizadas'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -137,20 +242,28 @@ export function useRealizadas() {
           crm_stages (stage_name),
           crm_origins (name)
         `)
-        .in('stage_id', R1_REALIZADA_IDS)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('stage_id', R1_REALIZADA_IDS)
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Fetch proposals + pending registration status to flag completed deals (kept in list, marked green)
       const dealIds = (data || []).map(d => d.id);
       const proposalStatusByDeal: Record<string, { completa: boolean; cadastro_completo: boolean; has_proposal: boolean }> = {};
       if (dealIds.length > 0) {
-        const { data: proposals } = await supabase
-          .from('consorcio_proposals')
-          .select('deal_id, completa, cadastro_completo')
-          .in('deal_id', dealIds);
+        const proposals: any[] = [];
+        for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
+          const chunk = dealIds.slice(i, i + CHUNK_SIZE);
+          const rows = await fetchAllPages<any>((from, to) =>
+            supabase
+              .from('consorcio_proposals')
+              .select('deal_id, completa, cadastro_completo')
+              .in('deal_id', chunk)
+              .range(from, to)
+          );
+          proposals.push(...rows);
+        }
         (proposals || []).forEach((p: any) => {
           if (!p.deal_id) return;
           const prev = proposalStatusByDeal[p.deal_id];
@@ -164,21 +277,8 @@ export function useRealizadas() {
 
       const filteredDeals = data || [];
 
-      // Fetch meeting dates for these deals
-      const filteredDealIds = filteredDeals.map(d => d.id);
-      let meetingByDeal: Record<string, string> = {};
-      if (filteredDealIds.length > 0) {
-        const { data: attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, meeting_slot_id, meeting_slots (scheduled_at)')
-          .in('deal_id', filteredDealIds);
-        (attendees || []).forEach(a => {
-          if (a.deal_id) {
-            const scheduledAt = (a.meeting_slots as any)?.scheduled_at;
-            if (scheduledAt) meetingByDeal[a.deal_id] = scheduledAt;
-          }
-        });
-      }
+      // Data real da reunião (em lotes, prioriza R1 não cancelada mais recente)
+      const meetingByDeal = await fetchMeetingInfoByDeal(filteredDeals.map(d => d.id));
 
       // Fetch ALL closers (qualquer BU, ativos e inativos) apenas para resolver o nome.
       // Nenhum negócio é escondido por não bater com um closer cadastrado.
@@ -222,14 +322,14 @@ export function useRealizadas() {
           stage_id: d.stage_id || '',
           stage_name: (d.crm_stages as any)?.stage_name || '',
           updated_at: d.updated_at || '',
-          meeting_date: meetingByDeal[d.id] || '',
+          meeting_date: meetingByDeal[d.id]?.date || '',
           region: cf.estado || '',
           renda: cf.faixa_de_renda || '',
           has_proposal: !!status?.has_proposal,
           completa: !!status?.completa,
           cadastro_completo: !!status?.cadastro_completo,
         };
-      }) as CompletedMeeting[];
+      }).sort(byMeetingDateDesc) as CompletedMeeting[];
     },
   });
 }
@@ -239,9 +339,10 @@ export function useProposals() {
   return useQuery({
     queryKey: ['consorcio-proposals'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('consorcio_proposals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('consorcio_proposals')
+          .select(`
           id,
           deal_id,
           proposal_date,
@@ -261,10 +362,10 @@ export function useProposals() {
           created_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
-        .in('status', ['pendente', 'aceita'])
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+          .in('status', ['pendente', 'aceita'])
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Check for pending documents on linked consortium cards
       const cardIds = (data || [])
@@ -390,6 +491,11 @@ export function useProposals() {
         }
       }
 
+      // Data real da reunião por deal (lotes de 200, prioriza R1 não cancelada)
+      const meetingByDeal = await fetchMeetingInfoByDeal(
+        (data || []).map((p: any) => p.deal_id).filter(Boolean)
+      );
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -413,6 +519,7 @@ export function useProposals() {
         carta_excluida_motivo: (p as any).carta_excluida_motivo || null,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
+        meeting_date: (p.deal_id && meetingByDeal[p.deal_id]?.date) || '',
         closer_name: (() => {
           const ownerId = (p.crm_deals as any)?.owner_id;
           if (!ownerId) return '';
@@ -432,7 +539,7 @@ export function useProposals() {
           p.status === 'aceita' &&
           !!p.deal_id &&
           hasCompletePendingRegistration(p.deal_id),
-      })) as Proposal[];
+      })).sort(byMeetingDateDesc) as Proposal[];
     },
   });
 }
@@ -937,9 +1044,10 @@ export function useTodasReunioes() {
   return useQuery({
     queryKey: ['consorcio-todas-reunioes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -951,10 +1059,10 @@ export function useTodasReunioes() {
           crm_stages (stage_name),
           crm_origins (name)
         `)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Fetch consorcio closers
       const { data: consorcioClosers } = await supabase
@@ -978,45 +1086,41 @@ export function useTodasReunioes() {
 
       const dealIds = consorcioDeals.map(d => d.id);
 
-      // Fetch meeting dates + closer_notes from attendees
-      let meetingByDeal: Record<string, { date: string; closer_notes: string; notes: string }> = {};
-      if (dealIds.length > 0) {
-        const { data: attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, closer_notes, notes, meeting_slot_id, meeting_slots (scheduled_at)')
-          .in('deal_id', dealIds);
-        (attendees || []).forEach((a: any) => {
-          if (a.deal_id) {
-            const scheduledAt = a.meeting_slots?.scheduled_at;
-            const existing = meetingByDeal[a.deal_id];
-            // Keep the latest one
-            if (!existing || (scheduledAt && scheduledAt > (existing.date || ''))) {
-              meetingByDeal[a.deal_id] = {
-                date: scheduledAt || existing?.date || '',
-                closer_notes: a.closer_notes || existing?.closer_notes || '',
-                notes: a.notes || existing?.notes || '',
-              };
-            }
-          }
-        });
-      }
+      // Data real da reunião + notas (em lotes, prioriza R1 não cancelada mais recente)
+      const meetingByDeal = await fetchMeetingInfoByDeal(dealIds);
 
       // Also fetch notes from attendee_notes table
       let attendeeNotesByDeal: Record<string, string[]> = {};
       if (dealIds.length > 0) {
-        const { data: allAttendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('id, deal_id')
-          .in('deal_id', dealIds);
-        
+        const allAttendees: any[] = [];
+        for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
+          const chunk = dealIds.slice(i, i + CHUNK_SIZE);
+          const rows = await fetchAllPages<any>((from, to) =>
+            supabase
+              .from('meeting_slot_attendees')
+              .select('id, deal_id')
+              .in('deal_id', chunk)
+              .range(from, to)
+          );
+          allAttendees.push(...rows);
+        }
+
         if (allAttendees && allAttendees.length > 0) {
           const attendeeIds = allAttendees.map(a => a.id);
-          const { data: notes } = await supabase
-            .from('attendee_notes')
-            .select('attendee_id, note')
-            .in('attendee_id', attendeeIds)
-            .order('created_at', { ascending: false });
-          
+          const notes: any[] = [];
+          for (let i = 0; i < attendeeIds.length; i += CHUNK_SIZE) {
+            const chunk = attendeeIds.slice(i, i + CHUNK_SIZE);
+            const rows = await fetchAllPages<any>((from, to) =>
+              supabase
+                .from('attendee_notes')
+                .select('attendee_id, note')
+                .in('attendee_id', chunk)
+                .order('created_at', { ascending: false })
+                .range(from, to)
+            );
+            notes.push(...rows);
+          }
+
           if (notes) {
             const attendeeIdToDeal: Record<string, string> = {};
             allAttendees.forEach(a => { if (a.deal_id) attendeeIdToDeal[a.id] = a.deal_id; });
@@ -1053,7 +1157,7 @@ export function useTodasReunioes() {
           closer_notes: meetingInfo?.closer_notes || '',
           attendee_notes: [meetingInfo?.notes, ...extraNotes].filter(Boolean).join(' | '),
         };
-      }) as AllMeetingDeal[];
+      }).sort(byMeetingDateDesc) as AllMeetingDeal[];
     },
   });
 }

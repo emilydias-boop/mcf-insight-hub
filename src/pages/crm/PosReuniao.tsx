@@ -264,9 +264,7 @@ function RealizadasTab() {
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {r.meeting_date
                           ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : r.updated_at
-                            ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
-                            : '—'}
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-sm">{r.region || '—'}</TableCell>
                       <TableCell className="text-sm">{r.renda || '—'}</TableCell>
@@ -485,6 +483,7 @@ function PropostasTab() {
               <TableRow>
                 <TableHead>Contato</TableHead>
                 <TableHead>Data Proposta</TableHead>
+                <TableHead>Data Reunião</TableHead>
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
@@ -524,6 +523,11 @@ function PropostasTab() {
                         )}
                       </div>
                     ) : '—'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {(p as any).meeting_date
+                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : '—'}
                   </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
@@ -793,6 +797,7 @@ function ConcluidasTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Contato</TableHead>
+                <TableHead>Data Reunião</TableHead>
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
@@ -810,6 +815,11 @@ function ConcluidasTab() {
                   onClick={() => setSelectedDealId(p.deal_id)}
                 >
                   <TableCell className="font-medium">{p.contact_name || p.deal_name}</TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {(p as any).meeting_date
+                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : '—'}
+                  </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
@@ -1026,7 +1036,7 @@ function TodasReunioesTab() {
       if (closerFilter !== 'all' && r.closer_name !== closerFilter) return false;
       if (stageFilter !== 'all' && r.stage_name !== stageFilter) return false;
       if (dateFrom || dateTo) {
-        const mDate = r.meeting_date ? new Date(r.meeting_date) : r.updated_at ? new Date(r.updated_at) : null;
+        const mDate = r.meeting_date ? new Date(r.meeting_date) : null;
         if (!mDate) return false;
         if (dateFrom && mDate < dateFrom) return false;
         if (dateTo) {
@@ -1180,9 +1190,7 @@ function TodasReunioesTab() {
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {r.meeting_date
                           ? format(new Date(r.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : r.updated_at
-                            ? format(new Date(r.updated_at), 'dd/MM/yyyy', { locale: ptBR })
-                            : '—'}
+                          : '—'}
                       </TableCell>
                       <TableCell className="text-sm">{r.region || '—'}</TableCell>
                       <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
