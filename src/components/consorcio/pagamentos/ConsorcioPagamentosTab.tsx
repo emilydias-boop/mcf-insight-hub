@@ -11,7 +11,6 @@ import { Download, MessageCircle, X, Loader2, Send, PhoneCall, Clock, PhoneOff, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
 import type { CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
-import { loadXLSX } from '@/lib/lazyExport';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -19,6 +18,31 @@ interface Props {
   selectedMonth: { start: string; end: string };
   tipoFilter?: 'cliente' | 'empresa';
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  paga: 'Paga',
+  vencendo: 'Vencendo',
+  atrasada: 'Atrasada',
+  pendente: 'Pendente',
+  previsto: 'Previsto',
+};
+
+const SITUACAO_LABELS: Record<string, string> = {
+  quitada: 'Quitada',
+  pendente: 'Pendente',
+  em_atraso: 'Em Atraso',
+  cancelada: 'Cancelada',
+};
+
+const csvCell = (value: unknown) => {
+  const s = value === null || value === undefined ? '' : String(value);
+  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const toIsoDate = (value?: string | null) => {
+  if (!value) return '';
+  return String(value).slice(0, 10);
+};
 
 export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
   const [filters, setFilters] = useState<PagamentosFiltersState>(defaultFilters);
@@ -50,25 +74,39 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
   };
 
   const handleExport = async () => {
-    const XLSX = await loadXLSX();
-    const rows = allData.map(r => ({
-      'Cliente': r.cliente_nome,
-      'Grupo': r.grupo,
-      'Cota': r.cota,
-      'Nº Parcela': r.numero_parcela,
-      'Tipo': r.tipo,
-      'Valor': Number(r.valor_parcela),
-      'Vencimento': r.data_vencimento,
-      'Pagamento': r.data_pagamento || '',
-      'Status': r.status_calculado,
-      'Situação Cota': r.situacao_cota,
-      'Responsável': r.vendedor_name || '',
-      'Origem': r.origem || '',
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Pagamentos');
-    XLSX.writeFile(wb, 'pagamentos_consorcio.xlsx');
+  const handleExport = () => {
+    if (!allData || allData.length === 0) {
+      toast.warning('Nenhuma parcela para exportar com os filtros atuais');
+      return;
+    }
+
+    const header = 'id_parcela;cliente;grupo;cota;numero_parcela;valor;vencimento;data_pagamento;status;situacao_cota';
+    const lines = allData.map(r => [
+      r.id,
+      r.cliente_nome,
+      r.grupo,
+      r.cota,
+      r.numero_parcela,
+      Number(r.valor_parcela ?? 0).toFixed(2),
+      toIsoDate(r.data_vencimento),
+      toIsoDate(r.data_pagamento),
+      STATUS_LABELS[r.status_calculado] ?? r.status_calculado ?? '',
+      SITUACAO_LABELS[r.situacao_cota] ?? r.situacao_cota ?? '',
+    ].map(csvCell).join(';'));
+
+    const csv = '\uFEFF' + [header, ...lines].join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const today = new Date();
+    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pagamentos_consorcio_${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`${allData.length} parcela(s) exportada(s)`);
   };
 
   const handleBulkWhatsApp = useCallback(async () => {
