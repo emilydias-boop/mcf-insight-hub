@@ -199,6 +199,7 @@ export interface Proposal {
   carta_excluida_motivo?: string | null;
   created_at: string;
   closer_name: string;
+  meeting_date?: string;
   documentos_pendentes?: boolean;
   completa?: boolean;
   cadastro_completo?: boolean;
