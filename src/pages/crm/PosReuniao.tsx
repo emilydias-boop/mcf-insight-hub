@@ -70,7 +70,7 @@ export default function PosReuniao() {
 
 // ─── Realizadas Tab ──────────────────────────────────────────
 function RealizadasTab() {
-  const { data: realizadas = [], isLoading } = useRealizadas();
+  const { data: realizadas = [], isLoading, isError, error } = useRealizadas();
   const [proposalTarget, setProposalTarget] = useState<CompletedMeeting | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<CompletedMeeting | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -124,6 +124,17 @@ function RealizadasTab() {
   const paginatedData = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   if (isLoading) return <LoadingState />;
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center space-y-1">
+          <p className="text-sm font-medium text-destructive">Erro ao carregar as reuniões realizadas.</p>
+          <p className="text-xs text-muted-foreground">{(error as any)?.message || 'Tente recarregar a página.'}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
