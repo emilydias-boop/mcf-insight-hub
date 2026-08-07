@@ -176,7 +176,10 @@ export default function ConsorcioPage() {
 
   // Calculate date range based on period
   const now = new Date();
-  const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const selectedMonth =
+    MONTH_OPTIONS.find((o) => o.value === monthOffset) ||
+    MONTH_OPTIONS.find((o) => o.value === '0') ||
+    MONTH_OPTIONS[0];
   const startDate = selectedMonth.start;
   const endDate = selectedMonth.end;
 
