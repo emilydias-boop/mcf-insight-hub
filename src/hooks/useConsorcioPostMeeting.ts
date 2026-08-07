@@ -1092,19 +1092,35 @@ export function useTodasReunioes() {
       // Also fetch notes from attendee_notes table
       let attendeeNotesByDeal: Record<string, string[]> = {};
       if (dealIds.length > 0) {
-        const { data: allAttendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('id, deal_id')
-          .in('deal_id', dealIds);
-        
+        const allAttendees: any[] = [];
+        for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
+          const chunk = dealIds.slice(i, i + CHUNK_SIZE);
+          const rows = await fetchAllPages<any>((from, to) =>
+            supabase
+              .from('meeting_slot_attendees')
+              .select('id, deal_id')
+              .in('deal_id', chunk)
+              .range(from, to)
+          );
+          allAttendees.push(...rows);
+        }
+
         if (allAttendees && allAttendees.length > 0) {
           const attendeeIds = allAttendees.map(a => a.id);
-          const { data: notes } = await supabase
-            .from('attendee_notes')
-            .select('attendee_id, note')
-            .in('attendee_id', attendeeIds)
-            .order('created_at', { ascending: false });
-          
+          const notes: any[] = [];
+          for (let i = 0; i < attendeeIds.length; i += CHUNK_SIZE) {
+            const chunk = attendeeIds.slice(i, i + CHUNK_SIZE);
+            const rows = await fetchAllPages<any>((from, to) =>
+              supabase
+                .from('attendee_notes')
+                .select('attendee_id, note')
+                .in('attendee_id', chunk)
+                .order('created_at', { ascending: false })
+                .range(from, to)
+            );
+            notes.push(...rows);
+          }
+
           if (notes) {
             const attendeeIdToDeal: Record<string, string> = {};
             allAttendees.forEach(a => { if (a.deal_id) attendeeIdToDeal[a.id] = a.deal_id; });
@@ -1141,7 +1157,7 @@ export function useTodasReunioes() {
           closer_notes: meetingInfo?.closer_notes || '',
           attendee_notes: [meetingInfo?.notes, ...extraNotes].filter(Boolean).join(' | '),
         };
-      }) as AllMeetingDeal[];
+      }).sort(byMeetingDateDesc) as AllMeetingDeal[];
     },
   });
 }
