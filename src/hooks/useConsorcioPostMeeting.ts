@@ -37,16 +37,32 @@ const SEM_SUCESSO_IDS = [
 
 const PAGE_SIZE = 1000;
 const CHUNK_SIZE = 200;
+const MAX_PAGES = 50; // guarda contra loop infinito
+
+/** PostgREST devolve 416/PGRST103 quando o offset passa do total — isso é "fim da lista", não erro. */
+function isRangeExhausted(error: any) {
+  const code = error?.code || '';
+  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return (
+    code === 'PGRST103' ||
+    code === '416' ||
+    msg.includes('range not satisfiable') ||
+    msg.includes('requested range')
+  );
+}
 
 /** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
 async function fetchAllPages<T = any>(
   build: (from: number, to: number) => any
 ): Promise<T[]> {
   const all: T[] = [];
-  for (let page = 0; ; page++) {
+  for (let page = 0; page < MAX_PAGES; page++) {
     const from = page * PAGE_SIZE;
     const { data, error } = await build(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+    if (error) {
+      if (isRangeExhausted(error)) break; // offset além do total: acabou
+      throw error;
+    }
     const rows = (data || []) as T[];
     all.push(...rows);
     if (rows.length < PAGE_SIZE) break;
@@ -81,13 +97,21 @@ export async function fetchMeetingInfoByDeal(
 
   for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
     const chunk = unique.slice(i, i + CHUNK_SIZE);
-    const rows = await fetchAllPages<any>((from, to) =>
-      supabase
-        .from('meeting_slot_attendees')
-        .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
-        .in('deal_id', chunk)
-        .range(from, to)
-    );
+    let rows: any[] = [];
+    try {
+      rows = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
+          .in('deal_id', chunk)
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
+    } catch (e) {
+      // Nunca deixar a data da reunião derrubar a listagem inteira
+      console.error('[PosReuniao] falha ao buscar data da reunião:', e);
+      continue;
+    }
 
     rows.forEach((a: any) => {
       const dealId = a.deal_id;
@@ -245,6 +269,7 @@ export function useRealizadas() {
           .in('stage_id', R1_REALIZADA_IDS)
           .in('origin_id', CONSORCIO_ORIGIN_IDS)
           .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -255,22 +280,30 @@ export function useRealizadas() {
         const proposals: any[] = [];
         for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
           const chunk = dealIds.slice(i, i + CHUNK_SIZE);
-          const rows = await fetchAllPages<any>((from, to) =>
-            supabase
-              .from('consorcio_proposals')
-              .select('deal_id, completa, cadastro_completo')
-              .in('deal_id', chunk)
-              .range(from, to)
-          );
-          proposals.push(...rows);
+          try {
+            const rows = await fetchAllPages<any>((from, to) =>
+              supabase
+                .from('consorcio_proposals')
+                .select('deal_id, status, consortium_card_id')
+                .in('deal_id', chunk)
+                .order('id', { ascending: true })
+                .range(from, to)
+            );
+            proposals.push(...rows);
+          } catch (e) {
+            console.error('[PosReuniao] falha ao buscar propostas do lote:', e);
+          }
         }
         (proposals || []).forEach((p: any) => {
           if (!p.deal_id) return;
           const prev = proposalStatusByDeal[p.deal_id];
+          // "completa"/"cadastro_completo" são DERIVADOS (não existem como colunas).
+          const aceita = p.status === 'aceita';
+          const completa = aceita && !!p.consortium_card_id;
           proposalStatusByDeal[p.deal_id] = {
             has_proposal: true,
-            completa: !!(prev?.completa || p.completa),
-            cadastro_completo: !!(prev?.cadastro_completo || p.cadastro_completo),
+            completa: !!(prev?.completa || completa),
+            cadastro_completo: !!(prev?.cadastro_completo || completa),
           };
         });
       }
@@ -364,6 +397,7 @@ export function useProposals() {
         `)
           .in('status', ['pendente', 'aceita'])
           .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -1061,6 +1095,7 @@ export function useTodasReunioes() {
         `)
           .in('origin_id', CONSORCIO_ORIGIN_IDS)
           .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -1100,6 +1135,7 @@ export function useTodasReunioes() {
               .from('meeting_slot_attendees')
               .select('id, deal_id')
               .in('deal_id', chunk)
+              .order('id', { ascending: true })
               .range(from, to)
           );
           allAttendees.push(...rows);
@@ -1116,6 +1152,7 @@ export function useTodasReunioes() {
                 .select('attendee_id, note')
                 .in('attendee_id', chunk)
                 .order('created_at', { ascending: false })
+                .order('id', { ascending: true })
                 .range(from, to)
             );
             notes.push(...rows);
