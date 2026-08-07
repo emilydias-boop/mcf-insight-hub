@@ -14,7 +14,7 @@ import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { MeetingTimeline } from "./MeetingTimeline";
 import { MovementHistorySection } from "./MovementHistorySection";
 import { useDealTimeline } from "@/hooks/useSdrMeetings";
-import { useUpdateAttendeeStatus } from "@/hooks/useAgendaData";
+import { useUpdateAttendeeAndSlotStatus } from "@/hooks/useAgendaData";
 import { MoveAttendeeModal } from "@/components/crm/MoveAttendeeModal";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -57,7 +57,9 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
   const queryClient = useQueryClient();
   
   const { data: timeline, isLoading: timelineLoading } = useDealTimeline(meeting?.deal_id || null);
-  const updateStatus = useUpdateAttendeeStatus();
+  // Usa o mesmo hook da Agenda para garantir que syncDealStageFromAgenda rode
+  // sempre que uma reunião é marcada como Realizada/No-Show/Contrato Pago.
+  const updateStatus = useUpdateAttendeeAndSlotStatus();
 
   // Notas do attendee (notes / closer_notes / r2_observations)
   const [notes, setNotes] = useState<{
@@ -113,7 +115,12 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
     try {
       await updateStatus.mutateAsync({
         attendeeId: meeting.attendee_id,
-        status: newStatus
+        status: newStatus,
+        meetingId: meeting.meeting_slot_id || undefined,
+        // O painel do SDR atua sobre o participante individual; não alteramos
+        // o status do slot para não afetar outros participantes da mesma reunião.
+        syncSlot: false,
+        meetingType: 'r1',
       });
       
       // Invalidate SDR queries to refresh data
