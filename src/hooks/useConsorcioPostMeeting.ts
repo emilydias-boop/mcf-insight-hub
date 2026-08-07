@@ -1085,28 +1085,8 @@ export function useTodasReunioes() {
 
       const dealIds = consorcioDeals.map(d => d.id);
 
-      // Fetch meeting dates + closer_notes from attendees
-      let meetingByDeal: Record<string, { date: string; closer_notes: string; notes: string }> = {};
-      if (dealIds.length > 0) {
-        const { data: attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, closer_notes, notes, meeting_slot_id, meeting_slots (scheduled_at)')
-          .in('deal_id', dealIds);
-        (attendees || []).forEach((a: any) => {
-          if (a.deal_id) {
-            const scheduledAt = a.meeting_slots?.scheduled_at;
-            const existing = meetingByDeal[a.deal_id];
-            // Keep the latest one
-            if (!existing || (scheduledAt && scheduledAt > (existing.date || ''))) {
-              meetingByDeal[a.deal_id] = {
-                date: scheduledAt || existing?.date || '',
-                closer_notes: a.closer_notes || existing?.closer_notes || '',
-                notes: a.notes || existing?.notes || '',
-              };
-            }
-          }
-        });
-      }
+      // Data real da reunião + notas (em lotes, prioriza R1 não cancelada mais recente)
+      const meetingByDeal = await fetchMeetingInfoByDeal(dealIds);
 
       // Also fetch notes from attendee_notes table
       let attendeeNotesByDeal: Record<string, string[]> = {};
