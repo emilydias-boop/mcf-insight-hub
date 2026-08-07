@@ -37,16 +37,32 @@ const SEM_SUCESSO_IDS = [
 
 const PAGE_SIZE = 1000;
 const CHUNK_SIZE = 200;
+const MAX_PAGES = 50; // guarda contra loop infinito
+
+/** PostgREST devolve 416/PGRST103 quando o offset passa do total — isso é "fim da lista", não erro. */
+function isRangeExhausted(error: any) {
+  const code = error?.code || '';
+  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return (
+    code === 'PGRST103' ||
+    code === '416' ||
+    msg.includes('range not satisfiable') ||
+    msg.includes('requested range')
+  );
+}
 
 /** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
 async function fetchAllPages<T = any>(
   build: (from: number, to: number) => any
 ): Promise<T[]> {
   const all: T[] = [];
-  for (let page = 0; ; page++) {
+  for (let page = 0; page < MAX_PAGES; page++) {
     const from = page * PAGE_SIZE;
     const { data, error } = await build(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
+    if (error) {
+      if (isRangeExhausted(error)) break; // offset além do total: acabou
+      throw error;
+    }
     const rows = (data || []) as T[];
     all.push(...rows);
     if (rows.length < PAGE_SIZE) break;
@@ -81,13 +97,21 @@ export async function fetchMeetingInfoByDeal(
 
   for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
     const chunk = unique.slice(i, i + CHUNK_SIZE);
-    const rows = await fetchAllPages<any>((from, to) =>
-      supabase
-        .from('meeting_slot_attendees')
-        .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
-        .in('deal_id', chunk)
-        .range(from, to)
-    );
+    let rows: any[] = [];
+    try {
+      rows = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('meeting_slot_attendees')
+          .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
+          .in('deal_id', chunk)
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
+    } catch (e) {
+      // Nunca deixar a data da reunião derrubar a listagem inteira
+      console.error('[PosReuniao] falha ao buscar data da reunião:', e);
+      continue;
+    }
 
     rows.forEach((a: any) => {
       const dealId = a.deal_id;
