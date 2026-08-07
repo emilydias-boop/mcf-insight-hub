@@ -2078,12 +2078,12 @@ export async function syncDealStageFromAgenda(
     if (!targetStageNames) return;
 
     // 3. Find matching stage in the same origin/pipeline
-    let targetStage: { id: string } | null = null;
+    let targetStage: { id: string; stage_order: number | null } | null = null;
     
     for (const stageName of targetStageNames) {
       const { data } = await supabase
         .from('crm_stages')
-        .select('id')
+        .select('id, stage_order')
         .eq('origin_id', deal.origin_id)
         .ilike('stage_name', stageName)
         .limit(1);
@@ -2109,10 +2109,32 @@ export async function syncDealStageFromAgenda(
     // 5. Skip if already in target stage AND no ownership transfer needed
     if (deal.stage_id === targetStage.id && !shouldTransferOwnership) return;
 
+    // 5b. Anti-regressão: nunca mover o deal PARA TRÁS no funil.
+    // Se o stage atual tem stage_order maior que o de destino (ex: Contrato Pago,
+    // Venda Realizada), mantemos o stage e apenas aplicamos transferências/logs.
+    let canMoveStage = deal.stage_id !== targetStage.id;
+    if (canMoveStage && deal.stage_id) {
+      const { data: currentStage } = await supabase
+        .from('crm_stages')
+        .select('stage_order')
+        .eq('id', deal.stage_id)
+        .maybeSingle();
+
+      const currentOrder = currentStage?.stage_order ?? null;
+      const targetOrder = targetStage.stage_order ?? null;
+
+      if (currentOrder !== null && targetOrder !== null && currentOrder > targetOrder) {
+        console.log(
+          `Anti-regressão: deal ${dealId} permanece no stage ${deal.stage_id} (ordem ${currentOrder}) — destino ${targetStage.id} (ordem ${targetOrder}) é anterior.`
+        );
+        canMoveStage = false;
+      }
+    }
+
     // 6. Build update object
     const updateData: Record<string, unknown> = {};
     
-    if (deal.stage_id !== targetStage.id) {
+    if (canMoveStage) {
       updateData.stage_id = targetStage.id;
     }
     
@@ -2187,7 +2209,7 @@ export async function syncDealStageFromAgenda(
           ? `Status atualizado via Agenda: ${agendaStatus}. Responsável transferido para Closer.`
           : `Status atualizado via Agenda: ${agendaStatus}`,
         from_stage: deal.stage_id,
-        to_stage: targetStage.id,
+        to_stage: canMoveStage ? targetStage.id : deal.stage_id,
         user_id: currentUser?.id,
         metadata: { 
           via: 'agenda_sync', 
