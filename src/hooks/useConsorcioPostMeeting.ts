@@ -394,6 +394,7 @@ export function useProposals() {
         `)
           .in('status', ['pendente', 'aceita'])
           .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -1091,6 +1092,7 @@ export function useTodasReunioes() {
         `)
           .in('origin_id', CONSORCIO_ORIGIN_IDS)
           .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
           .range(from, to)
       );
 
@@ -1146,6 +1148,7 @@ export function useTodasReunioes() {
                 .select('attendee_id, note')
                 .in('attendee_id', chunk)
                 .order('created_at', { ascending: false })
+                .order('id', { ascending: true })
                 .range(from, to)
             );
             notes.push(...rows);
