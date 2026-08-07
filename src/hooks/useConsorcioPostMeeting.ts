@@ -491,6 +491,11 @@ export function useProposals() {
         }
       }
 
+      // Data real da reunião por deal (lotes de 200, prioriza R1 não cancelada)
+      const meetingByDeal = await fetchMeetingInfoByDeal(
+        (data || []).map((p: any) => p.deal_id).filter(Boolean)
+      );
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -514,6 +519,7 @@ export function useProposals() {
         carta_excluida_motivo: (p as any).carta_excluida_motivo || null,
         origin_id: (p.crm_deals as any)?.origin_id || '',
         created_at: p.created_at || '',
+        meeting_date: (p.deal_id && meetingByDeal[p.deal_id]?.date) || '',
         closer_name: (() => {
           const ownerId = (p.crm_deals as any)?.owner_id;
           if (!ownerId) return '';
@@ -533,7 +539,7 @@ export function useProposals() {
           p.status === 'aceita' &&
           !!p.deal_id &&
           hasCompletePendingRegistration(p.deal_id),
-      })) as Proposal[];
+      })).sort(byMeetingDateDesc) as Proposal[];
     },
   });
 }
