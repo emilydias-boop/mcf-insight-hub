@@ -1132,6 +1132,7 @@ export function useTodasReunioes() {
               .from('meeting_slot_attendees')
               .select('id, deal_id')
               .in('deal_id', chunk)
+              .order('id', { ascending: true })
               .range(from, to)
           );
           allAttendees.push(...rows);
