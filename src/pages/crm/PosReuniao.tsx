@@ -483,6 +483,7 @@ function PropostasTab() {
               <TableRow>
                 <TableHead>Contato</TableHead>
                 <TableHead>Data Proposta</TableHead>
+                <TableHead>Data Reunião</TableHead>
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
@@ -522,6 +523,11 @@ function PropostasTab() {
                         )}
                       </div>
                     ) : '—'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {(p as any).meeting_date
+                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : '—'}
                   </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
@@ -791,6 +797,7 @@ function ConcluidasTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Contato</TableHead>
+                <TableHead>Data Reunião</TableHead>
                 <TableHead>Valor Crédito</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Produto</TableHead>
@@ -808,6 +815,11 @@ function ConcluidasTab() {
                   onClick={() => setSelectedDealId(p.deal_id)}
                 >
                   <TableCell className="font-medium">{p.contact_name || p.deal_name}</TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {(p as any).meeting_date
+                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : '—'}
+                  </TableCell>
                   <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
                   <TableCell>{p.prazo_meses} meses</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge></TableCell>
