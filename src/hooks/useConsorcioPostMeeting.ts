@@ -284,7 +284,7 @@ export function useRealizadas() {
             const rows = await fetchAllPages<any>((from, to) =>
               supabase
                 .from('consorcio_proposals')
-                .select('deal_id, completa, cadastro_completo')
+                .select('deal_id, status, consortium_card_id')
                 .in('deal_id', chunk)
                 .order('id', { ascending: true })
                 .range(from, to)
@@ -297,10 +297,13 @@ export function useRealizadas() {
         (proposals || []).forEach((p: any) => {
           if (!p.deal_id) return;
           const prev = proposalStatusByDeal[p.deal_id];
+          // "completa"/"cadastro_completo" são DERIVADOS (não existem como colunas).
+          const aceita = p.status === 'aceita';
+          const completa = aceita && !!p.consortium_card_id;
           proposalStatusByDeal[p.deal_id] = {
             has_proposal: true,
-            completa: !!(prev?.completa || p.completa),
-            cadastro_completo: !!(prev?.cadastro_completo || p.cadastro_completo),
+            completa: !!(prev?.completa || completa),
+            cadastro_completo: !!(prev?.cadastro_completo || completa),
           };
         });
       }
