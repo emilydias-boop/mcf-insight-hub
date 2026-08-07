@@ -73,7 +73,6 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
     setDrawerOpen(true);
   };
 
-  const handleExport = async () => {
   const handleExport = () => {
     if (!allData || allData.length === 0) {
       toast.warning('Nenhuma parcela para exportar com os filtros atuais');
