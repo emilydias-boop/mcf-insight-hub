@@ -1044,9 +1044,10 @@ export function useTodasReunioes() {
   return useQuery({
     queryKey: ['consorcio-todas-reunioes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -1058,10 +1059,10 @@ export function useTodasReunioes() {
           crm_stages (stage_name),
           crm_origins (name)
         `)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Fetch consorcio closers
       const { data: consorcioClosers } = await supabase
