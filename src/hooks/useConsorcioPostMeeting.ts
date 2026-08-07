@@ -31,6 +31,109 @@ const SEM_SUCESSO_IDS = [
   CONSORCIO_STAGE_IDS.EA_SEM_SUCESSO,
 ];
 
+// ---------------------------------------------------------------------------
+// Helpers robustos contra o limite de 1000 linhas do PostgREST
+// ---------------------------------------------------------------------------
+
+const PAGE_SIZE = 1000;
+const CHUNK_SIZE = 200;
+
+/** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
+async function fetchAllPages<T = any>(
+  build: (from: number, to: number) => any
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 0; ; page++) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await build(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = (data || []) as T[];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return all;
+}
+
+export interface DealMeetingInfo {
+  date: string;
+  closer_notes: string;
+  notes: string;
+}
+
+/**
+ * Data REAL da reunião por deal.
+ * - Busca em lotes de 200 deal_ids (nunca estoura o limite de 1000 linhas)
+ * - Ignora reuniões canceladas
+ * - Prioriza meeting_type='r1' quando existir
+ * - Entre as opções válidas, usa o scheduled_at mais recente
+ */
+export async function fetchMeetingInfoByDeal(
+  dealIds: string[]
+): Promise<Record<string, DealMeetingInfo>> {
+  const result: Record<string, DealMeetingInfo> = {};
+  const unique = Array.from(new Set(dealIds.filter(Boolean)));
+  if (unique.length === 0) return result;
+
+  // rank: r1 não cancelada > outra não cancelada
+  const rankOf = (meetingType: string | null) =>
+    (meetingType || '').toLowerCase() === 'r1' ? 2 : 1;
+  const bestRank: Record<string, number> = {};
+
+  for (let i = 0; i < unique.length; i += CHUNK_SIZE) {
+    const chunk = unique.slice(i, i + CHUNK_SIZE);
+    const rows = await fetchAllPages<any>((from, to) =>
+      supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id, closer_notes, notes, meeting_slots (scheduled_at, meeting_type, status)')
+        .in('deal_id', chunk)
+        .range(from, to)
+    );
+
+    rows.forEach((a: any) => {
+      const dealId = a.deal_id;
+      if (!dealId) return;
+      const slot = a.meeting_slots;
+      const scheduledAt: string | null = slot?.scheduled_at || null;
+      const slotStatus = (slot?.status || '').toLowerCase();
+      if (!scheduledAt) return;
+      if (slotStatus === 'cancelled' || slotStatus === 'canceled' || slotStatus === 'cancelada') return;
+
+      const rank = rankOf(slot?.meeting_type);
+      const currentRank = bestRank[dealId] ?? 0;
+      const current = result[dealId];
+
+      const better =
+        rank > currentRank ||
+        (rank === currentRank && (!current?.date || scheduledAt > current.date));
+
+      if (better) {
+        bestRank[dealId] = rank;
+        result[dealId] = {
+          date: scheduledAt,
+          closer_notes: a.closer_notes || '',
+          notes: a.notes || '',
+        };
+      } else if (current) {
+        // preserva notas quando existirem em outro attendee
+        if (!current.closer_notes && a.closer_notes) current.closer_notes = a.closer_notes;
+        if (!current.notes && a.notes) current.notes = a.notes;
+      }
+    });
+  }
+
+  return result;
+}
+
+/** Ordena desc pela data real da reunião; sem data vai para o fim. */
+function byMeetingDateDesc<T extends { meeting_date?: string }>(a: T, b: T) {
+  const da = a.meeting_date || '';
+  const db = b.meeting_date || '';
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return db.localeCompare(da);
+}
+
 export interface CompletedMeeting {
   deal_id: string;
   deal_name: string;
