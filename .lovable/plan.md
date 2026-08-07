@@ -1,61 +1,36 @@
-# Diagnóstico: por que o `is_default` no banco não mudou nada
+# Diagnóstico: reuniões "Realizadas" da Agenda que não chegam ao Pós-Reunião
 
-## 1. `useBUPipelineMap.ts:56` lê o `is_default`? Sim — mas seu update não muda nada na prática
+## Resumo
 
-A leitura está correta: `data.find(d => d.entity_type === 'origin' && d.is_default)?.entity_id` (linha 56). Confirmei no banco que a linha está gravada:
+Não é regra de negócio nem problema de nome de stage por origem. É um **caminho de código que atualiza o participante sem sincronizar o CRM**.
 
-| entity_id | is_default |
-|---|---|
-| `7431cf4a` (PILOTO ANAMNESE / INDICAÇÃO) | false |
-| `e3c04f21` (PIPELINE INSIDE SALES) | **true** (atualizada 06/08 17:59) |
+Existem duas telas que marcam "Realizada":
 
-Então agora `defaultOrigin = e3c04f21`, e `Negocios.tsx:227` usa isso como Prioridade 1.
+| Tela | Hook usado | Sincroniza stage? |
+|---|---|---|
+| Agenda R1 (`AgendaMeetingDrawer`) | `useUpdateAttendeeAndSlotStatus` | Sim — chama `syncDealStageFromAgenda` |
+| Painel do SDR (`SdrMeetingActionsDrawer`, botão "Realizada") | `useUpdateAttendeeStatus` | **Não** — só faz `update({ status })` no `meeting_slot_attendees` |
 
-**Só que o default já era esse antes.** Sem `is_default`, o fluxo caía no passo 4 (`Negocios.tsx:255`), que usa `BU_DEFAULT_ORIGIN_MAP['incorporador']` — e esse valor hardcoded **já é** `e3c04f21` (NegociosAccessGuard.tsx:56). Ou seja: a correção estava certa em intenção, mas era um no-op. **O default nunca foi a causa.** Minha hipótese anterior estava errada nesse ponto.
+`src/hooks/useAgendaData.ts:2007` (`useUpdateAttendeeStatus`) grava o status e pronto. `syncDealStageFromAgenda` só é chamada em `useUpdateAttendeeAndSlotStatus` (linha 2277). Quem marca Realizada pelo Painel do SDR / "Minhas Reuniões" (`src/components/sdr/SdrMeetingActionsDrawer.tsx:191`) deixa o deal parado no stage em que estava.
 
-## 2. `localStorage`/cache guardando o funil? Não
+## Por que o stage atual "NOVO LEAD ( FORM )" aparece tanto
 
-- `selectedPipelineId` é `useState<string | null>(null)` (Negocios.tsx:70), sem persistência.
-- Varredura em `src/`: o único `localStorage` relacionado a CRM é `crm-origin-favorites` (OriginsSidebar) — não influencia o funil selecionado.
-- Não existe `persistQueryClient` — o cache do React Query morre no reload.
+Não é a função recusando mover a partir desse stage — ela **não olha o stage atual** (só faz skip se já estiver no stage de destino). O grupo grande em "NOVO LEAD ( FORM )" é simplesmente onde os leads de Efeito Alavanca ficam quando alguém agenda a reunião direto do formulário sem passar por "R1 Agendada"; como a sincronização nunca roda nesse caminho, eles ficam ali.
 
-Logo, não há estado antigo sendo restaurado entre sessões.
+Evidência no banco (30 dias, `status='completed'` e stage sem "realizada"):
+- 22 em NOVO LEAD ( FORM ) — nenhum tem atividade `deal_activities` com `metadata.via = 'agenda_sync'` (`sync_logs = 0`), isto é, a função nunca rodou para eles.
+- Os poucos casos com `sync_logs > 0` são deals que foram sincronizados e depois voltaram de stage manualmente/por re-entrada — categoria diferente, menos urgente.
 
-## 3. O que realmente está segurando o valor errado
+## Resposta às perguntas
 
-O **seletor "Funil" é o ponto de falha**, por dois defeitos que se somam:
-
-**(a) O default nunca aparece selecionado no dropdown.** O default é um `origin_id` (`e3c04f21`), mas o `PipelineSelector` lista apenas `crm_groups`. Como o valor não casa com nenhum `<SelectItem>`, o campo aparece **vazio/placeholder** ("Selecione um funil"). O usuário naturalmente abre o dropdown e escolhe um funil — e é aí que quebra.
-
-**(b) Escolher um grupo colapsa a query em UMA única origem.** `effectiveOriginId` (Negocios.tsx:190-201) pega `pipelineOrigins[0].id` — a **primeira origem em ordem alfabética** do grupo. No grupo "Perpétuo - X1" (`a6f3cbfc`), a ordem por nome é:
-
-```text
-1. PILOTO ANAMNESE /  INDICAÇÃO   <-- vira a origem efetiva
-2. PIPELINE - EVENTO PRESENCIAL
-3. PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
-...
-   PIPELINE INSIDE SALES          <-- a que interessa, nunca é usada
-```
-
-E a Leticia tem **exatamente 1** negócio como closer em PILOTO ANAMNESE — o mesmo "1" que a Jessica vê. `useCRMDeals` até sabe expandir um `group_id` em todas as origens filhas (useCRMData.ts:398-406), mas nunca é acionado, porque o que chega já é um `origin_id` único.
-
-### O que descartei com verificação direta
-
-- **Dados**: 550 deals ativos da Leticia (`r1_closer_email`/`r2_closer_email`) em PIPELINE INSIDE SALES, todos com `stage_id` da própria origem, e todos dentro do `limit: 10000` (posições 9 a 7.916). Nada é cortado.
-- **E-mail do filtro**: só existe uma opção ativa em `closers` para ela (`leticia.faustino@minhacasafinanciada.com`); a outra linha ("Leticia", `leticia@...`) está inativa e não entra no dropdown. Todos os 550 deals usam o e-mail da opção ativa.
-- **Build em produção**: `assets/index-Don79DC5.js` → `Negocios-DwdYG4oN.js` contém o rótulo "Closer da Reunião (R1/R2)", os chips ("Limpar todos") e a comparação `r1_closer_email`/`r2_closer_email` com OR minificada. Ambiente está atualizado.
-- **Filtro de owner interferindo**: a Jéssica é `admin` + `closer`, e `admin` tem prioridade 1 (AuthContext.tsx:12), então `isRestrictedRole` é falso e nenhum `ownerProfileId` é aplicado no backend. (Se fosse aplicado, o resultado seria 0, não 1 — ela não é dona de nenhum deal da Leticia.)
-
-## Correções propostas (aguardando seu ok)
-
-1. **Grupo selecionado deve consultar todas as origens do grupo**: quando `selectedPipelineId` for um `group_id`, passar o próprio grupo para `useCRMDeals` (que já expande) em vez de colapsar em `pipelineOrigins[0]`.
-2. **Seletor "Funil" deve refletir a origem ativa**: incluir origens (não só grupos) nas opções, ou exibir ao lado o nome da origem realmente em uso, para o campo nunca aparecer vazio com um default aplicado por trás.
-3. Opcional: reverter/manter o `is_default` no banco — é inofensivo e redundante com `BU_DEFAULT_ORIGIN_MAP`.
+1. **Por que falha em "NOVO LEAD ( FORM )"?** Não falha por causa do stage. A função nunca é chamada nesse fluxo (hook sem sync). Não há guarda de stage de origem, nem erro de nome de stage.
+2. **É só Efeito Alavanca + Clube?** Não. Ocorre também em VDA (1 caso em NOVO LEAD) e em PIPELINE INSIDE SALES (9 casos). As duas origens de Consórcio têm stage de destino válido (`R1 Realizada` na EA, `REUNIÃO 1 REALIZADA` na VDA), então o lookup por nome funciona nas duas.
+3. **Caminho mais seguro de correção?** Não existe motivo de negócio para exigir passagem por "R1 Agendada" — reunião marcada como Realizada é o próprio evento que qualifica o Pós-Reunião. O correto é:
+   - Fazer o Painel do SDR usar o mesmo hook com sync (`useUpdateAttendeeAndSlotStatus`) em vez de `useUpdateAttendeeStatus`.
+   - Adicionar em `syncDealStageFromAgenda` a guarda anti-regressão por `stage_order` (nunca puxar para trás um deal já em stage mais avançado, ex.: Contrato Pago / Venda Realizada).
+   - Backfill pontual dos ~29 casos dos últimos 30 dias (mover para o "Realizada" da própria origem, respeitando a anti-regressão).
 
 ## Detalhes técnicos
 
-- `src/hooks/useBUPipelineMap.ts:43-59` (fallback só quando não há linhas; `is_default` lido em 56).
-- `src/pages/crm/Negocios.tsx:157-212` (`effectiveOriginId`), `216-271` (default), `485-490` (filtro closer).
-- `src/components/crm/PipelineSelector.tsx:91-109` (lista apenas grupos).
-- `src/hooks/useCRMOriginsByPipeline.ts:64-91` (`order('name')` → PILOTO primeiro).
-- `src/hooks/useCRMData.ts:398-418` (expansão grupo → origens, não acionada).
+- `syncDealStageFromAgenda`: `src/hooks/useAgendaData.ts:2034`. Mapeia status → lista de nomes de stage, busca `crm_stages` por `origin_id` + `ilike stage_name`, faz skip se já está no destino, transfere owner em `completed`/`contract_paid` e loga `deal_activities` com `metadata.via='agenda_sync'`.
+- Falhas silenciosas secundárias a considerar no fix: o `update` em `crm_deals` pode retornar 0 linhas sem erro se a RLS de UPDATE (`manager|admin|sdr|closer`) não cobrir a role do usuário (ex.: `coordenador`, `gr`) — vale verificar sucesso e avisar em vez de seguir em silêncio.
