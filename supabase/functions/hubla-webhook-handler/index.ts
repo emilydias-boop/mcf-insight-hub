@@ -2370,15 +2370,17 @@ const VIVER_ALUGUEL_ORIGIN_ID = '4e2b810a-6782-4ce9-9c0d-10d04c018636';
 const STAGE_CLUBE_ARREMATE = 'bf370a4f-1476-4933-8c70-01a38cfdb34f';
 const STAGE_RENOVACAO_HUBLA = '3e545cd2-4214-4510-9ec4-dfcc6eccede8';
 const STAGE_VIVER_ALUGUEL_NOVO_LEAD = '2c69bf1d-94d5-4b6d-928d-dcf12da2d78c';
+const STAGE_EFEITO_ALAVANCA_NOVO_LEAD = 'b5af7d28-7a0f-4da5-a115-094489fbc07d'; // NOVO LEAD ( FORM ) — origin Efeito Alavanca + Clube (7d7b1cb5-2a44-4552-9eff-c3b798646b78)
 
 const CONSORCIO_STAGE_MAP: Record<string, string> = {
   'clube_arremate': STAGE_CLUBE_ARREMATE,
   'contrato_clube_arremate': STAGE_CLUBE_ARREMATE,
   'renovacao': STAGE_RENOVACAO_HUBLA,
   'ob_construir_alugar': STAGE_VIVER_ALUGUEL_NOVO_LEAD,
+  'efeito_alavanca': STAGE_EFEITO_ALAVANCA_NOVO_LEAD,
 };
 
-const CONSORCIO_PRODUCT_CATEGORIES = ['clube_arremate', 'contrato_clube_arremate', 'renovacao', 'ob_construir_alugar'];
+const CONSORCIO_PRODUCT_CATEGORIES = ['clube_arremate', 'contrato_clube_arremate', 'renovacao', 'ob_construir_alugar', 'efeito_alavanca'];
 
 interface ConsorcioDealData {
   email: string | null;
