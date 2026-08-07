@@ -132,10 +132,12 @@ function calcularProximoVencimento(diaVencimento: number): Date {
   return nextDueDate;
 }
 
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
-  const date = subMonths(new Date(), i);
+// 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
+const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const offset = 12 - i; // +12 (futuro) ... -11 (passado)
+  const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
   return {
-    value: String(i),
+    value: String(-offset), // '0' = mês atual, positivo = passado, negativo = futuro
     label: format(date, 'MMMM yyyy', { locale: ptBR }),
     start: startOfMonth(date),
     end: endOfMonth(date),
