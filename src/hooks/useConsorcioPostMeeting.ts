@@ -224,9 +224,10 @@ export function useRealizadas() {
   return useQuery({
     queryKey: ['consorcio-realizadas'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -240,20 +241,28 @@ export function useRealizadas() {
           crm_stages (stage_name),
           crm_origins (name)
         `)
-        .in('stage_id', R1_REALIZADA_IDS)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('stage_id', R1_REALIZADA_IDS)
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Fetch proposals + pending registration status to flag completed deals (kept in list, marked green)
       const dealIds = (data || []).map(d => d.id);
       const proposalStatusByDeal: Record<string, { completa: boolean; cadastro_completo: boolean; has_proposal: boolean }> = {};
       if (dealIds.length > 0) {
-        const { data: proposals } = await supabase
-          .from('consorcio_proposals')
-          .select('deal_id, completa, cadastro_completo')
-          .in('deal_id', dealIds);
+        const proposals: any[] = [];
+        for (let i = 0; i < dealIds.length; i += CHUNK_SIZE) {
+          const chunk = dealIds.slice(i, i + CHUNK_SIZE);
+          const rows = await fetchAllPages<any>((from, to) =>
+            supabase
+              .from('consorcio_proposals')
+              .select('deal_id, completa, cadastro_completo')
+              .in('deal_id', chunk)
+              .range(from, to)
+          );
+          proposals.push(...rows);
+        }
         (proposals || []).forEach((p: any) => {
           if (!p.deal_id) return;
           const prev = proposalStatusByDeal[p.deal_id];
@@ -267,21 +276,8 @@ export function useRealizadas() {
 
       const filteredDeals = data || [];
 
-      // Fetch meeting dates for these deals
-      const filteredDealIds = filteredDeals.map(d => d.id);
-      let meetingByDeal: Record<string, string> = {};
-      if (filteredDealIds.length > 0) {
-        const { data: attendees } = await supabase
-          .from('meeting_slot_attendees')
-          .select('deal_id, meeting_slot_id, meeting_slots (scheduled_at)')
-          .in('deal_id', filteredDealIds);
-        (attendees || []).forEach(a => {
-          if (a.deal_id) {
-            const scheduledAt = (a.meeting_slots as any)?.scheduled_at;
-            if (scheduledAt) meetingByDeal[a.deal_id] = scheduledAt;
-          }
-        });
-      }
+      // Data real da reunião (em lotes, prioriza R1 não cancelada mais recente)
+      const meetingByDeal = await fetchMeetingInfoByDeal(filteredDeals.map(d => d.id));
 
       // Fetch ALL closers (qualquer BU, ativos e inativos) apenas para resolver o nome.
       // Nenhum negócio é escondido por não bater com um closer cadastrado.
@@ -325,14 +321,14 @@ export function useRealizadas() {
           stage_id: d.stage_id || '',
           stage_name: (d.crm_stages as any)?.stage_name || '',
           updated_at: d.updated_at || '',
-          meeting_date: meetingByDeal[d.id] || '',
+          meeting_date: meetingByDeal[d.id]?.date || '',
           region: cf.estado || '',
           renda: cf.faixa_de_renda || '',
           has_proposal: !!status?.has_proposal,
           completa: !!status?.completa,
           cadastro_completo: !!status?.cadastro_completo,
         };
-      }) as CompletedMeeting[];
+      }).sort(byMeetingDateDesc) as CompletedMeeting[];
     },
   });
 }
