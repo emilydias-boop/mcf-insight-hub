@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Select,
@@ -20,10 +20,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, User, Building2 } from 'lucide-react';
 
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
-  const date = subMonths(new Date(), i);
+// 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
+const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const offset = 12 - i; // +12 (futuro) ... -11 (passado)
+  const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
   return {
-    value: String(i),
+    value: String(-offset), // '0' = mês atual, positivo = passado, negativo = futuro
     label: format(date, 'MMMM yyyy', { locale: ptBR }),
     start: startOfMonth(date),
     end: endOfMonth(date),
@@ -33,7 +35,10 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 export default function ConsorcioPagamentosPage() {
   const [monthOffset, setMonthOffset] = useState<string>('0');
   const [reviewOpen, setReviewOpen] = useState(false);
-  const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const selectedMonth =
+    MONTH_OPTIONS.find((o) => o.value === monthOffset) ||
+    MONTH_OPTIONS.find((o) => o.value === '0') ||
+    MONTH_OPTIONS[0];
   const { data: reviewBoletos = [] } = useBoletosReview();
   const { data: consorcioAlerts = [], isLoading: loadingAlerts } = useConsorcioCobrancaAlerts();
 

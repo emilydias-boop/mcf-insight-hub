@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Plus, 
@@ -132,10 +132,12 @@ function calcularProximoVencimento(diaVencimento: number): Date {
   return nextDueDate;
 }
 
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
-  const date = subMonths(new Date(), i);
+// 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
+const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const offset = 12 - i; // +12 (futuro) ... -11 (passado)
+  const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
   return {
-    value: String(i),
+    value: String(-offset), // '0' = mês atual, positivo = passado, negativo = futuro
     label: format(date, 'MMMM yyyy', { locale: ptBR }),
     start: startOfMonth(date),
     end: endOfMonth(date),
@@ -174,7 +176,10 @@ export default function ConsorcioPage() {
 
   // Calculate date range based on period
   const now = new Date();
-  const selectedMonth = MONTH_OPTIONS[Number(monthOffset)] || MONTH_OPTIONS[0];
+  const selectedMonth =
+    MONTH_OPTIONS.find((o) => o.value === monthOffset) ||
+    MONTH_OPTIONS.find((o) => o.value === '0') ||
+    MONTH_OPTIONS[0];
   const startDate = selectedMonth.start;
   const endDate = selectedMonth.end;
 

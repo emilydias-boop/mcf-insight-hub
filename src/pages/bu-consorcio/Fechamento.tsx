@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { format, subMonths } from 'date-fns';
+import { format, subMonths, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,9 +34,10 @@ export default function ConsorcioFechamento() {
     roleType: 'sdr',
   });
 
-  // Gerar opções de meses (últimos 12 meses)
-  const mesesOptions = Array.from({ length: 12 }, (_, i) => {
-    const date = subMonths(new Date(), i);
+  // Gerar opções de meses (12 meses futuros + mês atual + 11 anteriores)
+  const mesesOptions = Array.from({ length: 24 }, (_, i) => {
+    const offset = 12 - i; // +12 (futuro) ... -11 (passado)
+    const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
     return {
       value: format(date, 'yyyy-MM'),
       label: format(date, "MMMM 'de' yyyy", { locale: ptBR }),
