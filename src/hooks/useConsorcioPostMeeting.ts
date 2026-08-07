@@ -339,9 +339,10 @@ export function useProposals() {
   return useQuery({
     queryKey: ['consorcio-proposals'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('consorcio_proposals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('consorcio_proposals')
+          .select(`
           id,
           deal_id,
           proposal_date,
@@ -361,10 +362,10 @@ export function useProposals() {
           created_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
-        .in('status', ['pendente', 'aceita'])
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+          .in('status', ['pendente', 'aceita'])
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      );
 
       // Check for pending documents on linked consortium cards
       const cardIds = (data || [])
