@@ -270,7 +270,20 @@ function RealizadasTab() {
                       </TableCell>
                       <TableCell className="text-sm">{r.region || '—'}</TableCell>
                       <TableCell className="text-sm">{r.renda || '—'}</TableCell>
-                      <TableCell className="text-sm">{r.closer_name || '—'}</TableCell>
+                      <TableCell className="text-sm">
+                        {r.closer_unknown ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="w-fit border-amber-500 text-amber-600">
+                              Closer não identificado
+                            </Badge>
+                            {r.closer_name && (
+                              <span className="text-xs text-muted-foreground">{r.closer_name}</span>
+                            )}
+                          </div>
+                        ) : (
+                          r.closer_name || '—'
+                        )}
+                      </TableCell>
                       <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
                         <Button size="sm" disabled={isCadastrado} onClick={() => setProposalTarget(r)}>
                           <Send className="h-3 w-3 mr-1" /> Lançar Carta

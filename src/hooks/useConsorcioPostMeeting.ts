@@ -50,6 +50,7 @@ export interface CompletedMeeting {
   cadastro_completo?: boolean;
   completa?: boolean;
   has_proposal?: boolean;
+  closer_unknown?: boolean;
 }
 
 export interface AllMeetingDeal {
@@ -129,6 +130,8 @@ export function useRealizadas() {
           stage_id,
           updated_at,
           owner_id,
+          r1_closer_email,
+          r2_closer_email,
           custom_fields,
           crm_contacts (name, phone, email),
           crm_stages (stage_name),
@@ -177,36 +180,43 @@ export function useRealizadas() {
         });
       }
 
-      // Fetch consorcio closers only
-      const { data: consorcioClosers } = await supabase
+      // Fetch ALL closers (qualquer BU, ativos e inativos) apenas para resolver o nome.
+      // Nenhum negócio é escondido por não bater com um closer cadastrado.
+      const { data: allClosers } = await supabase
         .from('closers')
-        .select('name, email')
-        .eq('bu', 'consorcio')
-        .eq('is_active', true);
+        .select('name, email, is_active, bu');
 
-      const closerEmailSet = new Set(
-        (consorcioClosers || []).map(c => c.email?.toLowerCase()).filter(Boolean)
-      );
       const closerNameByEmail: Record<string, string> = {};
-      (consorcioClosers || []).forEach(c => {
-        if (c.email) closerNameByEmail[c.email.toLowerCase()] = c.name;
+      (allClosers || []).forEach(c => {
+        const email = c.email?.toLowerCase();
+        if (email && !closerNameByEmail[email]) closerNameByEmail[email] = c.name;
       });
 
-      // Filter deals to only those owned by consorcio closers
-      const consorcioDeals = filteredDeals.filter(d =>
-        d.owner_id && closerEmailSet.has(d.owner_id.toLowerCase())
-      );
+      const resolveCloser = (d: any) => {
+        const candidates = [d.owner_id, d.r1_closer_email, d.r2_closer_email]
+          .map((e: string | null) => (e || '').trim().toLowerCase())
+          .filter(Boolean);
+        for (const email of candidates) {
+          if (closerNameByEmail[email]) {
+            return { name: closerNameByEmail[email], unknown: false };
+          }
+        }
+        // Sem match em closers: mostra o e-mail cru (se houver) e sinaliza
+        return { name: candidates[0] || '', unknown: true };
+      };
 
-      return consorcioDeals.map(d => {
+      return filteredDeals.map(d => {
         const cf = (d.custom_fields as any) || {};
         const status = proposalStatusByDeal[d.id];
+        const closer = resolveCloser(d);
         return {
           deal_id: d.id,
           deal_name: d.name || '',
           contact_name: (d.crm_contacts as any)?.name || '',
           contact_phone: (d.crm_contacts as any)?.phone || '',
           contact_email: (d.crm_contacts as any)?.email || '',
-          closer_name: (d.owner_id && closerNameByEmail[d.owner_id.toLowerCase()]) || d.owner_id || '',
+          closer_name: closer.name,
+          closer_unknown: closer.unknown,
           origin_name: (d.crm_origins as any)?.name || '',
           origin_id: d.origin_id || '',
           stage_id: d.stage_id || '',
