@@ -14844,6 +14844,10 @@ export type Database = {
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
       oi_is_venda_produto: { Args: { p_name: string }; Returns: boolean }
       operacional_incorporador: { Args: { p_days?: number }; Returns: Json }
+      operacional_incorporador_daily: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       orfaos_a010_2026: {
         Args: never
         Returns: {
