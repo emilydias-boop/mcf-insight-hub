@@ -14842,6 +14842,7 @@ export type Database = {
       }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
+      operacional_incorporador: { Args: { p_days?: number }; Returns: Json }
       orfaos_a010_2026: {
         Args: never
         Returns: {
