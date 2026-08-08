@@ -260,3 +260,6 @@ verify_jwt = false
 
 [functions.external-query]
 verify_jwt = false
+
+[functions.operacional-incorporador]
+verify_jwt = false
