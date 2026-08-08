@@ -17,6 +17,42 @@ Deno.serve(async (req) => {
   const key = url.searchParams.get('key') ?? ''
   if (key !== ACCESS_KEY) return json({ error: 'Unauthorized' }, 401)
 
+  const agg = url.searchParams.get('agg')
+  if (agg !== null) {
+    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily.' }, 400)
+    const from = url.searchParams.get('from') ?? ''
+    const to = url.searchParams.get('to') ?? ''
+    const re = /^\d{4}-\d{2}-\d{2}$/
+    if (!re.test(from) || !re.test(to)) {
+      return json({ error: 'Informe "from" e "to" no formato YYYY-MM-DD.' }, 400)
+    }
+    const fromMs = Date.parse(`${from}T00:00:00Z`)
+    const toMs = Date.parse(`${to}T00:00:00Z`)
+    if (Number.isNaN(fromMs) || Number.isNaN(toMs) || toMs < fromMs) {
+      return json({ error: 'Intervalo inválido: "to" deve ser maior ou igual a "from".' }, 400)
+    }
+    const diffDays = Math.round((toMs - fromMs) / 86400000)
+    if (diffDays > 44) {
+      return json({ error: 'Intervalo máximo de 45 dias por chamada.' }, 400)
+    }
+    try {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        { auth: { persistSession: false } },
+      )
+      const { data, error } = await supabase.rpc('operacional_incorporador_daily', { p_from: from, p_to: to })
+      if (error) {
+        console.error('rpc daily error', error)
+        return json({ error: 'Falha ao gerar agregado diário', details: error.message }, 500)
+      }
+      return json(data)
+    } catch (e) {
+      console.error('unexpected daily', e)
+      return json({ error: 'Erro inesperado', details: String(e) }, 500)
+    }
+  }
+
   const daysRaw = url.searchParams.get('days')
   let days = 60
   if (daysRaw !== null) {
