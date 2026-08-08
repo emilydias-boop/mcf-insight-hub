@@ -40,7 +40,14 @@ Deno.serve(async (req) => {
       return json({ error: 'Falha ao gerar relatório', details: error.message }, 500)
     }
 
-    return json(data)
+    // Reordenar as chaves do objeto raiz para que `resumo_do_dia` venha primeiro,
+    // seguido das demais (bu, leads). JSON.stringify respeita a ordem de inserção.
+    const payload =
+      data && typeof data === 'object' && !Array.isArray(data)
+        ? { resumo_do_dia: (data as Record<string, unknown>).resumo_do_dia, ...(data as Record<string, unknown>) }
+        : data
+
+    return json(payload)
   } catch (e) {
     console.error('unexpected', e)
     return json({ error: 'Erro inesperado', details: String(e) }, 500)
