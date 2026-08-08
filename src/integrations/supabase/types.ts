@@ -14842,7 +14842,16 @@ export type Database = {
       }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
+      oi_classify_origem: {
+        Args: {
+          p_contact_tags: string[]
+          p_deal_tags: string[]
+          p_product_name: string
+        }
+        Returns: string
+      }
       oi_is_venda_produto: { Args: { p_name: string }; Returns: boolean }
+      oi_norm_tags: { Args: { p_tags: string[] }; Returns: string[] }
       operacional_incorporador: { Args: { p_days?: number }; Returns: Json }
       operacional_incorporador_daily: {
         Args: { p_from: string; p_to: string }
