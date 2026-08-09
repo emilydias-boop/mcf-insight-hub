@@ -19,6 +19,7 @@ import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
+import { SonaxCallButton } from '@/components/crm/SonaxCallButton';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
 import { MatchSocioParceiroTab } from '@/components/consorcio/MatchSocioParceiroTab';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
@@ -265,7 +266,12 @@ function RealizadasTab() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <span>{r.contact_phone || '—'}</span>
+                          <SonaxCallButton phone={r.contact_phone} dealId={r.deal_id} />
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           <Badge variant="outline" className="text-xs w-fit">{r.origin_name}</Badge>
@@ -962,7 +968,12 @@ function _SemSucessoTabInner() {
                   <TableCell className="font-medium">
                     {d.contact_name || d.deal_name}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{d.contact_phone || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <span>{d.contact_phone || '—'}</span>
+                          <SonaxCallButton phone={d.contact_phone} dealId={d.deal_id} />
+                        </div>
+                      </TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{d.origin_name}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                     {d.motivo_recusa || '—'}
@@ -1191,7 +1202,12 @@ function TodasReunioesTab() {
                   {paginatedData.map(r => (
                     <TableRow key={r.deal_id} className="cursor-pointer" onClick={() => setSelectedDealId(r.deal_id)}>
                       <TableCell className="font-medium">{r.contact_name || r.deal_name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.contact_phone || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <span>{r.contact_phone || '—'}</span>
+                          <SonaxCallButton phone={r.contact_phone} dealId={r.deal_id} />
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           <Badge variant="outline" className="text-xs w-fit">{r.origin_name}</Badge>

@@ -12079,6 +12079,33 @@ export type Database = {
           },
         ]
       }
+      sdr_ramal_mapping: {
+        Row: {
+          active: boolean
+          created_at: string
+          ramal: string
+          sdr_email: string
+          sdr_name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          ramal: string
+          sdr_email: string
+          sdr_name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          ramal?: string
+          sdr_email?: string
+          sdr_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sdr_review_requests: {
         Row: {
           created_at: string | null
