@@ -9142,6 +9142,33 @@ export type Database = {
         }
         Relationships: []
       }
+      mcf_pay_commission_rates: {
+        Row: {
+          code: string
+          created_at: string
+          notes: string | null
+          rate: number
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          notes?: string | null
+          rate?: number
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          notes?: string | null
+          rate?: number
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mcf_pay_config: {
         Row: {
           created_at: string
