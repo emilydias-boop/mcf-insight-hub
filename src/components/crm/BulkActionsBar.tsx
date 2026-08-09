@@ -161,11 +161,6 @@ export const BulkActionsBar = ({
           </Button>
         )}
 
-        {onAddTag && (
-          <>
-          </>
-        )}
-
         {onSendToDialer && (
           <Button
             variant="secondary"
