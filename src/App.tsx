@@ -237,6 +237,7 @@ const App = () => (
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
@@ -255,6 +256,7 @@ const App = () => (
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
