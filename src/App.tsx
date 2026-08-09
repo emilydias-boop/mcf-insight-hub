@@ -323,6 +323,7 @@ const App = () => (
                 <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Contatos /></RoleGuard>} />
                 <Route path="negocios" element={<NegociosAccessGuard><Negocios /></NegociosAccessGuard>} />
                 <Route path="agenda" element={<Agenda />} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
