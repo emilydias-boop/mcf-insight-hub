@@ -453,6 +453,11 @@ export function useReviewApprovalRequest() {
                 "Falha ao criar R1 após aprovação",
             );
           }
+          // Cria o evento real no Google Calendar do closer (lead como convidado)
+          syncGoogleCalendar(
+            "create",
+            (data as any)?.slotId ?? (data as any)?.slot?.id ?? null,
+          );
           // Edge function já marcou o request como approved.
           return;
         }
