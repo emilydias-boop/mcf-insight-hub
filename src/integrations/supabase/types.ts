@@ -15045,6 +15045,8 @@ export type Database = {
         Returns: string
       }
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
+      mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
+      mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
