@@ -46,6 +46,7 @@ import { useProductFilterData } from '@/hooks/useProductFilterData';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { useMyCloser } from '@/hooks/useMyCloser';
+import { useSendDealsToDialer } from '@/hooks/useSonaxDialer';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
