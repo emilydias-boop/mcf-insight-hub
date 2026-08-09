@@ -92,6 +92,7 @@ const Negocios = () => {
   
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const sendToDialer = useSendDealsToDialer();
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
