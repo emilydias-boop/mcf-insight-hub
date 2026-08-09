@@ -1155,6 +1155,12 @@ const Negocios = () => {
         onAddTag={() => setAddTagDialogOpen(true)}
         onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
         onSetTemperature={() => setSetTemperatureDialogOpen(true)}
+        onSendToDialer={() =>
+          sendToDialer.mutate(Array.from(selectedDealIds), {
+            onSuccess: () => handleClearSelection(),
+          })
+        }
+        isSendingToDialer={sendToDialer.isPending}
         onExportSelected={() => {
           setExportSelectedOnly(true);
           setExportDialogOpen(true);
