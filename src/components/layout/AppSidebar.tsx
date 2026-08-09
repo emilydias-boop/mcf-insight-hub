@@ -483,6 +483,14 @@ export function AppSidebar() {
           resource: "crm",
           requiredRoles: ["sdr", "closer"],
         },
+        // Discador automático Sonax (SDR, Closer)
+        {
+          title: "Discador",
+          url: `${crmBasePath}/discador`,
+          icon: Phone,
+          resource: "crm",
+          requiredRoles: ["sdr", "closer"],
+        },
       ];
 
   const getRoleBadgeVariant = (userRole: AppRole | null, isLoading: boolean) => {
