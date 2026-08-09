@@ -14995,6 +14995,10 @@ export type Database = {
       oi_is_venda_produto: { Args: { p_name: string }; Returns: boolean }
       oi_norm_tags: { Args: { p_tags: string[] }; Returns: string[] }
       operacional_incorporador: { Args: { p_days?: number }; Returns: Json }
+      operacional_incorporador_comissoes: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       operacional_incorporador_daily: {
         Args: { p_from: string; p_to: string }
         Returns: Json
