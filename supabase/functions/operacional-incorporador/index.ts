@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Erro inesperado', details: String(e) }, 500)
       }
     }
-    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily ou agg=semana_resultado.' }, 400)
+    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily, agg=semana_resultado ou agg=comissoes.' }, 400)
     const from = url.searchParams.get('from') ?? ''
     const to = url.searchParams.get('to') ?? ''
     const re = /^\d{4}-\d{2}-\d{2}$/
