@@ -578,6 +578,45 @@ export type Database = {
         }
         Relationships: []
       }
+      asaas_caucao_recon_log: {
+        Row: {
+          cobranca_data: string | null
+          created_at: string
+          data_execucao: string
+          deal_id: string | null
+          detalhe: string | null
+          id: string
+          nome: string | null
+          resultado: string
+          transaction_id: string | null
+          valor: number | null
+        }
+        Insert: {
+          cobranca_data?: string | null
+          created_at?: string
+          data_execucao?: string
+          deal_id?: string | null
+          detalhe?: string | null
+          id?: string
+          nome?: string | null
+          resultado: string
+          transaction_id?: string | null
+          valor?: number | null
+        }
+        Update: {
+          cobranca_data?: string | null
+          created_at?: string
+          data_execucao?: string
+          deal_id?: string | null
+          detalhe?: string | null
+          id?: string
+          nome?: string | null
+          resultado?: string
+          transaction_id?: string | null
+          valor?: number | null
+        }
+        Relationships: []
+      }
       asset_assignment_items: {
         Row: {
           assignment_id: string
@@ -14163,6 +14202,7 @@ export type Database = {
       }
       ar_extract_product_code: { Args: { p_name: string }; Returns: string }
       ar_get_reference_price: { Args: { p_code: string }; Returns: number }
+      asaas_caucao_recon: { Args: { p_cobrancas: Json }; Returns: Json }
       assign_partner_to_gr: {
         Args: {
           p_bu?: string
@@ -15005,6 +15045,8 @@ export type Database = {
         Returns: string
       }
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
+      mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
+      mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
@@ -15020,6 +15062,7 @@ export type Database = {
         Returns: string
       }
       oi_is_venda_produto: { Args: { p_name: string }; Returns: boolean }
+      oi_norm_nome: { Args: { t: string }; Returns: string }
       oi_norm_tags: { Args: { p_tags: string[] }; Returns: string[] }
       operacional_incorporador: { Args: { p_days?: number }; Returns: Json }
       operacional_incorporador_comissoes: {
