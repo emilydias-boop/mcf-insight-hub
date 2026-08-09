@@ -19,7 +19,34 @@ Deno.serve(async (req) => {
 
   const agg = url.searchParams.get('agg')
   if (agg !== null) {
-    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily.' }, 400)
+    if (agg === 'semana_resultado') {
+      const inicio = url.searchParams.get('inicio') ?? ''
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio)) {
+        return json({ error: 'Informe "inicio" no formato YYYY-MM-DD (quarta-feira).' }, 400)
+      }
+      const ms = Date.parse(`${inicio}T12:00:00Z`)
+      if (Number.isNaN(ms)) return json({ error: 'Data "inicio" inválida.' }, 400)
+      if (new Date(ms).getUTCDay() !== 3) {
+        return json({ error: 'A data "inicio" deve ser uma quarta-feira.' }, 400)
+      }
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          { auth: { persistSession: false } },
+        )
+        const { data, error } = await supabase.rpc('operacional_incorporador_semana_resultado', { p_inicio: inicio })
+        if (error) {
+          console.error('rpc semana_resultado error', error)
+          return json({ error: 'Falha ao gerar semana de resultado', details: error.message }, 500)
+        }
+        return json(data)
+      } catch (e) {
+        console.error('unexpected semana_resultado', e)
+        return json({ error: 'Erro inesperado', details: String(e) }, 500)
+      }
+    }
+    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily ou agg=semana_resultado.' }, 400)
     const from = url.searchParams.get('from') ?? ''
     const to = url.searchParams.get('to') ?? ''
     const re = /^\d{4}-\d{2}-\d{2}$/
