@@ -14968,6 +14968,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      operacional_incorporador_semana_resultado: {
+        Args: { p_inicio: string }
+        Returns: Json
+      }
       orfaos_a010_2026: {
         Args: never
         Returns: {
