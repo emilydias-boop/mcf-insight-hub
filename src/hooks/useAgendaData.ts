@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
+import { syncGoogleCalendar } from '@/lib/googleCalendarSync';
 
 export interface MeetingAttendee {
   id: string;
