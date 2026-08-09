@@ -19,6 +19,38 @@ Deno.serve(async (req) => {
 
   const agg = url.searchParams.get('agg')
   if (agg !== null) {
+    if (agg === 'comissoes') {
+      const from = url.searchParams.get('from') ?? ''
+      const to = url.searchParams.get('to') ?? ''
+      const re = /^\d{4}-\d{2}-\d{2}$/
+      if (!re.test(from) || !re.test(to)) {
+        return json({ error: 'Informe "from" e "to" no formato YYYY-MM-DD.' }, 400)
+      }
+      const fMs = Date.parse(`${from}T00:00:00Z`)
+      const tMs = Date.parse(`${to}T00:00:00Z`)
+      if (Number.isNaN(fMs) || Number.isNaN(tMs) || tMs < fMs) {
+        return json({ error: 'Intervalo inválido: "to" deve ser maior ou igual a "from".' }, 400)
+      }
+      if (Math.round((tMs - fMs) / 86400000) > 365) {
+        return json({ error: 'Intervalo máximo de 366 dias por chamada.' }, 400)
+      }
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          { auth: { persistSession: false } },
+        )
+        const { data, error } = await supabase.rpc('operacional_incorporador_comissoes', { p_from: from, p_to: to })
+        if (error) {
+          console.error('rpc comissoes error', error)
+          return json({ error: 'Falha ao gerar comissões', details: error.message }, 500)
+        }
+        return json(data)
+      } catch (e) {
+        console.error('unexpected comissoes', e)
+        return json({ error: 'Erro inesperado', details: String(e) }, 500)
+      }
+    }
     if (agg === 'semana_resultado') {
       const inicio = url.searchParams.get('inicio') ?? ''
       if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio)) {
@@ -46,7 +78,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Erro inesperado', details: String(e) }, 500)
       }
     }
-    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily ou agg=semana_resultado.' }, 400)
+    if (agg !== 'daily') return json({ error: 'Parâmetro "agg" inválido: use agg=daily, agg=semana_resultado ou agg=comissoes.' }, 400)
     const from = url.searchParams.get('from') ?? ''
     const to = url.searchParams.get('to') ?? ''
     const re = /^\d{4}-\d{2}-\d{2}$/
