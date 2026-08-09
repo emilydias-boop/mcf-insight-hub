@@ -24,6 +24,7 @@ import { LeadProfileSection } from './LeadProfileSection';
 import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperatureSelector';
 import { LeadTagsManager } from './LeadTagsManager';
+import { SonaxCallButton } from './SonaxCallButton';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
@@ -150,6 +151,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   onChanged={() => refetchDeal()}
                 />
               </div>
+
+              {/* ===== CLICK-TO-CALL (Sonax) ===== */}
+              {contact?.phone && (
+                <div className="flex items-center justify-between gap-2 rounded-lg border p-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{contact.phone}</span>
+                  </div>
+                  <SonaxCallButton phone={contact.phone} dealId={deal.id} size="sm" />
+                </div>
+              )}
 
               {/* ===== TAGS DO LEAD ===== */}
               <LeadTagsManager
