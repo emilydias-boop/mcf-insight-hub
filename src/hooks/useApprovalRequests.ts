@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { syncGoogleCalendar } from "@/lib/googleCalendarSync";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
 
@@ -453,6 +454,11 @@ export function useReviewApprovalRequest() {
                 "Falha ao criar R1 após aprovação",
             );
           }
+          // Cria o evento real no Google Calendar do closer (lead como convidado)
+          syncGoogleCalendar(
+            "create",
+            (data as any)?.slotId ?? (data as any)?.slot?.id ?? null,
+          );
           // Edge function já marcou o request como approved.
           return;
         }

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { syncGoogleCalendar } from "@/lib/googleCalendarSync";
 
 interface BookMeetingWithCalendlyParams {
   closerId: string;
@@ -44,6 +45,11 @@ export function useBookMeetingWithCalendly() {
         throw new Error(data.error || "Failed to book meeting");
       }
 
+      syncGoogleCalendar(
+        "create",
+        (data as any)?.slotId ?? (data as any)?.slot?.id ?? null,
+      );
+
       return data as BookMeetingResult;
     },
     onSuccess: () => {
@@ -84,6 +90,9 @@ export function useAddLeadToMeeting() {
         .single();
 
       if (insertError) throw insertError;
+
+      // Atualiza o evento do closer para incluir o novo convidado
+      syncGoogleCalendar("update", meetingSlotId);
 
       return attendee;
     },
