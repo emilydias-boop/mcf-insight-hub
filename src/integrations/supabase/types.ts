@@ -8285,6 +8285,33 @@ export type Database = {
         }
         Relationships: []
       }
+      hubla_transaction_autolink_log: {
+        Row: {
+          attendee_id: string | null
+          created_at: string
+          criterio: string
+          deal_id: string
+          id: string
+          transacao_id: string
+        }
+        Insert: {
+          attendee_id?: string | null
+          created_at?: string
+          criterio: string
+          deal_id: string
+          id?: string
+          transacao_id: string
+        }
+        Update: {
+          attendee_id?: string | null
+          created_at?: string
+          criterio?: string
+          deal_id?: string
+          id?: string
+          transacao_id?: string
+        }
+        Relationships: []
+      }
       hubla_transactions: {
         Row: {
           count_in_dashboard: boolean | null
@@ -14131,6 +14158,10 @@ export type Database = {
           p_source: string
         }
         Returns: boolean
+      }
+      autolink_orphan_a000_transactions: {
+        Args: { p_limit?: number }
+        Returns: Json
       }
       build_consorcio_sale_webhook_payload: {
         Args: {
