@@ -14,7 +14,8 @@ import {
   ClipboardCheck,
   Inbox,
   History,
-  BarChart3
+  BarChart3,
+  Phone
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
@@ -26,12 +27,12 @@ import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   incorporador: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'meu-historico', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
+    'agenda', 'discador', 'meu-historico', 'agenda-r2', 'r2-carrinho', 'leads-limbo',
     'auditoria-agendamentos', 'meus-no-shows', 'configuracoes'
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'meu-historico', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
+    'agenda', 'discador', 'meu-historico', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios',
@@ -48,7 +49,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   marketing: [],
   solar: [
     'visao-geral', 'contatos', 'negocios',
-    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
+    'agenda', 'discador', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
 };
 
@@ -98,6 +99,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
     // { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle }, // Oculto até telefones disponíveis
     { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
+    { key: 'discador', to: `${basePath}/discador`, label: 'Discador', icon: Phone },
     { key: 'meu-historico', to: `${basePath}/meu-historico`, label: 'Meu Histórico', icon: History },
     { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
     { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
@@ -117,6 +119,9 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
   // Depois aplicar filtro de roles (sdr/closer)
   if (isAgendaOnly) {
     const allowedTabs: string[] = ['agenda', 'contatos'];
+    if (buVisibleTabs.includes('discador')) {
+      allowedTabs.push('discador');
+    }
     
     if (canViewR2 && buVisibleTabs.includes('agenda-r2')) {
       allowedTabs.push('agenda-r2');
