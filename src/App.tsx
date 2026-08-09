@@ -56,6 +56,7 @@ const CRM = lazy(() => import("./pages/CRM"));
 const CRMOverview = lazy(() => import("./pages/crm/Overview"));
 const Contatos = lazy(() => import("./pages/crm/Contatos"));
 const Negocios = lazy(() => import("./pages/crm/Negocios"));
+const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
 const Tags = lazy(() => import("./pages/crm/Tags"));
