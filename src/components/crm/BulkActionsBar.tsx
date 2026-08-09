@@ -14,6 +14,7 @@ import {
   Shuffle,
   Thermometer,
   Building2,
+  PhoneCall,
 } from 'lucide-react';
 
 interface BulkActionsBarProps {
@@ -37,6 +38,8 @@ interface BulkActionsBarProps {
   onDistributeSdrs?: () => void;
   onSetTemperature?: () => void;
   onTransferToBU?: () => void;
+  onSendToDialer?: () => void;
+  isSendingToDialer?: boolean;
 }
 
 export const BulkActionsBar = ({
@@ -60,6 +63,8 @@ export const BulkActionsBar = ({
   onDistributeSdrs,
   onSetTemperature,
   onTransferToBU,
+  onSendToDialer,
+  isSendingToDialer = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -153,6 +158,23 @@ export const BulkActionsBar = ({
           >
             <Building2 className="h-4 w-4" />
             Transferir para BU
+          </Button>
+        )}
+
+        {onSendToDialer && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSendToDialer}
+            disabled={isSendingToDialer || isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            {isSendingToDialer ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PhoneCall className="h-4 w-4" />
+            )}
+            Enviar para discador ({selectedCount})
           </Button>
         )}
 

@@ -46,6 +46,7 @@ import { useProductFilterData } from '@/hooks/useProductFilterData';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { useMyCloser } from '@/hooks/useMyCloser';
+import { useSendDealsToDialer } from '@/hooks/useSonaxDialer';
 import { OutsideDistributionButton } from '@/components/crm/OutsideDistributionButton';
 import { MovePartnersButton } from '@/components/crm/MovePartnersButton';
 import { SpreadsheetCompareDialog } from '@/components/crm/SpreadsheetCompareDialog';
@@ -91,6 +92,7 @@ const Negocios = () => {
   
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const sendToDialer = useSendDealsToDialer();
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -1153,6 +1155,12 @@ const Negocios = () => {
         onAddTag={() => setAddTagDialogOpen(true)}
         onDistributeSdrs={() => setDistributeSdrsDialogOpen(true)}
         onSetTemperature={() => setSetTemperatureDialogOpen(true)}
+        onSendToDialer={() =>
+          sendToDialer.mutate(Array.from(selectedDealIds), {
+            onSuccess: () => handleClearSelection(),
+          })
+        }
+        isSendingToDialer={sendToDialer.isPending}
         onExportSelected={() => {
           setExportSelectedOnly(true);
           setExportDialogOpen(true);

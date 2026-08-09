@@ -56,6 +56,7 @@ const CRM = lazy(() => import("./pages/CRM"));
 const CRMOverview = lazy(() => import("./pages/crm/Overview"));
 const Contatos = lazy(() => import("./pages/crm/Contatos"));
 const Negocios = lazy(() => import("./pages/crm/Negocios"));
+const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
 const Tags = lazy(() => import("./pages/crm/Tags"));
@@ -236,6 +237,7 @@ const App = () => (
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
@@ -254,6 +256,7 @@ const App = () => (
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
@@ -322,6 +325,7 @@ const App = () => (
                 <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Contatos /></RoleGuard>} />
                 <Route path="negocios" element={<NegociosAccessGuard><Negocios /></NegociosAccessGuard>} />
                 <Route path="agenda" element={<Agenda />} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />

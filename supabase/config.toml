@@ -266,3 +266,6 @@ verify_jwt = false
 
 [functions.sonax-click-to-call]
 verify_jwt = true
+
+[functions.sonax-campaign-proxy]
+verify_jwt = true
