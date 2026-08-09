@@ -12201,6 +12201,90 @@ export type Database = {
         }
         Relationships: []
       }
+      sonax_campaign_contacts: {
+        Row: {
+          added_by: string | null
+          campaign_id: string
+          contact_phone: string | null
+          created_at: string
+          deal_id: string | null
+          id: string
+          sonax_id_contato_campanha: string | null
+          status: string
+          tabulacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          added_by?: string | null
+          campaign_id: string
+          contact_phone?: string | null
+          created_at?: string
+          deal_id?: string | null
+          id?: string
+          sonax_id_contato_campanha?: string | null
+          status?: string
+          tabulacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          added_by?: string | null
+          campaign_id?: string
+          contact_phone?: string | null
+          created_at?: string
+          deal_id?: string | null
+          id?: string
+          sonax_id_contato_campanha?: string | null
+          status?: string
+          tabulacao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sonax_campaign_contacts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "sonax_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sonax_campaign_contacts_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sonax_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          sonax_campaign_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+          sonax_campaign_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+          sonax_campaign_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       squads: {
         Row: {
           ativo: boolean | null
