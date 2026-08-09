@@ -1561,11 +1561,22 @@ export function useCreateMeeting() {
         throw error;
       }
 
+      // Cria o evento real no Google Calendar do closer (com o lead como convidado).
+      // Feito aqui (e não no onSuccess) para não depender do ciclo de vida da mutation.
+      const createdSlotId =
+        (data as any)?.slotId ??
+        (data as any)?.slot?.id ??
+        (data as any)?.meeting_slot_id ??
+        (data as any)?.id ??
+        null;
+      if (!createdSlotId) {
+        console.warn('[create-meeting] slot id ausente no retorno — Google Calendar não sincronizado', data);
+      }
+      syncGoogleCalendar('create', createdSlotId);
+
       return { ...data, sendNotification };
     },
     onSuccess: (data) => {
-      // Cria o evento real no Google Calendar do closer (com o lead como convidado)
-      syncGoogleCalendar('create', (data as any)?.slotId ?? (data as any)?.meeting_slot_id);
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
