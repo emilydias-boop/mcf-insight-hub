@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { syncDealStageFromAgenda } from './useAgendaData';
+import { syncGoogleCalendar } from '@/lib/googleCalendarSync';
 
 // Re-export types from existing hooks
 export type { R2Meeting } from './useR2AgendaMeetings';
@@ -150,6 +151,9 @@ export function useRescheduleR2Meeting() {
           if (slotError) throw slotError;
           targetSlotId = newSlot.id;
         }
+
+        // Cria/atualiza o evento no Google Calendar do closer de destino
+        syncGoogleCalendar(existingSlot?.id ? 'update' : 'create', targetSlotId);
 
         // 3. Create NEW attendee linked to original via parent_attendee_id
         const { error: attendeeError } = await supabase
@@ -354,6 +358,9 @@ export function useCreateR2Meeting() {
         });
 
       if (attendeeError) throw attendeeError;
+
+      // Cria o evento real no Google Calendar do closer (lead como convidado)
+      syncGoogleCalendar('create', (slot as any)?.id);
 
       return slot;
     },
