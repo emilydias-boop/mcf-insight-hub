@@ -110,7 +110,12 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Token administrativo (testes/backfill manual) — dispensa sessão de usuário
+    const adminToken = Deno.env.get('GCAL_SYNC_ADMIN_TOKEN');
+    const providedAdminToken = req.headers.get('x-admin-token');
+    const isAdminCall = !!adminToken && providedAdminToken === adminToken;
+
+    if (!isAdminCall && !authHeader?.startsWith('Bearer ')) {
       return partialSuccess({ success: false, error: 'Unauthorized' }, 401);
     }
 
@@ -119,15 +124,17 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const authClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-    );
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(
-      authHeader.replace('Bearer ', ''),
-    );
-    if (claimsError || !claimsData?.claims) {
-      return partialSuccess({ success: false, error: 'Unauthorized' }, 401);
+    if (!isAdminCall) {
+      const authClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+      );
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(
+        authHeader!.replace('Bearer ', ''),
+      );
+      if (claimsError || !claimsData?.claims) {
+        return partialSuccess({ success: false, error: 'Unauthorized' }, 401);
+      }
     }
 
     const body = await req.json().catch(() => ({}));
