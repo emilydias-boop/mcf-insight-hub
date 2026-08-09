@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
+import { syncGoogleCalendar } from '@/lib/googleCalendarSync';
 
 export interface MeetingAttendee {
   id: string;
@@ -752,6 +753,9 @@ export function useCancelMeeting() {
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      // Remove o evento do Google Calendar (avisa o lead automaticamente)
+      syncGoogleCalendar('cancel', meetingId);
 
       // 2) Cancela os attendees do slot que ainda estavam ativos
       //    (invited/scheduled/pre_scheduled). Status finais como
@@ -1560,6 +1564,8 @@ export function useCreateMeeting() {
       return { ...data, sendNotification };
     },
     onSuccess: (data) => {
+      // Cria o evento real no Google Calendar do closer (com o lead como convidado)
+      syncGoogleCalendar('create', (data as any)?.slotId ?? (data as any)?.meeting_slot_id);
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
@@ -1908,6 +1914,9 @@ export function useRescheduleMeeting() {
 
       if (error) throw error;
 
+      // Atualiza o evento no Google Calendar do closer
+      syncGoogleCalendar('update', meetingId);
+
       // 3. Para cada attendee, atualizar a nota preservando histórico
       if (meeting?.attendees && rescheduleNote) {
         const oldDate = format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR });
@@ -1950,6 +1959,8 @@ export function useUpdateMeetingSchedule() {
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      syncGoogleCalendar('update', meetingId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
@@ -1971,6 +1982,9 @@ export function useDeleteMeeting() {
 
   return useMutation({
     mutationFn: async (meetingId: string) => {
+      // Cancela o evento no Google antes de apagar os registros
+      syncGoogleCalendar('cancel', meetingId);
+
       // Primeiro deletar os attendees relacionados
       await supabase
         .from('meeting_slot_attendees')
