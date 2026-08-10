@@ -125,7 +125,6 @@ export function SdrSummaryTable({
 
   const un = unassigned && unassigned.total > 0 ? unassigned : null;
   const totalContratos = totals.contratos + (un?.total ?? 0);
-  const colSpanBase = showSegments ? 10 : 5;
 
   if (isLoading) {
     return (
