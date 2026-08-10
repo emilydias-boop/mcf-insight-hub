@@ -614,10 +614,10 @@ export default function ReunioesEquipe() {
     const a = sumSdr(sdrSegmentAMap);
     const b = sumSdr(sdrSegmentBMap);
     return {
-      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
-      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
+      a: { ...a, contratos: sumCloserContratos(closerMetricsA) + unassignedCloser.a },
+      b: { ...b, contratos: sumCloserContratos(closerMetricsB) + unassignedCloser.b },
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR, unassignedCloser]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -638,17 +638,17 @@ export default function ReunioesEquipe() {
       totalRealizadas,
       totalNoShows,
       totalSemStatus,
-      totalContratos: contractsFromClosers.contratoPago,
+      totalContratos: contractsFromClosers.contratoPago + unassignedCloser.total,
       totalOutside: contractsFromClosers.outside,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
         : 0,
       taxaConversao: totalRealizadas > 0
-        ? (contractsFromClosers.total / totalRealizadas) * 100
+        ? ((contractsFromClosers.total + unassignedCloser.total) / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedCloser]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -1053,6 +1053,7 @@ export default function ReunioesEquipe() {
               }}
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}
+              unassigned={unassignedSdr}
             />
           ) : (
             <CloserSummaryTable
@@ -1061,6 +1062,7 @@ export default function ReunioesEquipe() {
               totalContratosFromKPI={contractsFromClosers.total}
               segmentAData={closerMetricsA}
               segmentBData={closerMetricsB}
+              unassigned={unassignedCloser}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
