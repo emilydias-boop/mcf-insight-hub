@@ -5,22 +5,14 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, UserPlus, MessageSquare, Plus, FileText, Pencil } from 'lucide-react';
+import { Trash2, UserPlus, MessageSquare, FileText, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Command, CommandInput, CommandList, CommandItem, CommandEmpty,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import {
-  useWaTemplates, useUpsertWaTemplate, useDeleteWaTemplate,
-  WaTemplate, WaTemplateVariable,
-} from '@/hooks/checkin/useWaTemplates';
+import { useCheckinTemplates } from '@/hooks/checkin/useCheckinTemplates';
+import { Link } from 'react-router-dom';
 
 type Profile = { id: string; full_name: string | null; email: string | null };
 
@@ -175,7 +167,7 @@ export default function McfAtendimentoAccess() {
             </code>
           </li>
           <li>Dentro da janela de 24h após o cliente enviar mensagem, o operador envia texto livre.</li>
-          <li>Fora da janela de 24h, o WhatsApp exige um <b>template HSM aprovado</b>. Cadastre-os abaixo.</li>
+          <li>Fora da janela de 24h, o WhatsApp exige um <b>template HSM aprovado pela Meta</b> — a lista abaixo vem de Administração → Automações.</li>
         </ol>
       </Card>
 
@@ -184,249 +176,60 @@ export default function McfAtendimentoAccess() {
   );
 }
 
-// ============ Templates HSM ============
+// ============ Templates HSM (somente leitura) ============
 
 function TemplatesSection() {
-  const { data: templates = [], isLoading } = useWaTemplates(false);
-  const remove = useDeleteWaTemplate();
-  const [editing, setEditing] = useState<WaTemplate | null>(null);
-  const [creating, setCreating] = useState(false);
+  const { data: templates = [], isLoading } = useCheckinTemplates();
 
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-emerald-600" />
-          <div className="font-medium">Templates aprovados (HSM) — {templates.length}</div>
-        </div>
-        <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-1.5" /> Novo template
-            </Button>
-          </DialogTrigger>
-          {creating && (
-            <TemplateFormDialog
-              onClose={() => setCreating(false)}
-              onSaved={() => setCreating(false)}
-            />
-          )}
-        </Dialog>
+      <div className="flex items-center gap-2 mb-3">
+        <FileText className="h-4 w-4 text-emerald-600" />
+        <div className="font-medium">Templates WhatsApp aprovados — {templates.length}</div>
       </div>
 
       <p className="text-xs text-muted-foreground mb-3">
-        Cadastre aqui os templates <b>já aprovados</b> pela Meta no Twilio Content Editor.
-        O operador vai selecioná-los quando a janela de 24h estiver fechada.
+        Lista sincronizada com os templates aprovados pela Meta via Twilio (Administração → Automações).
+        O operador escolhe um deles quando a janela de 24h está fechada.
       </p>
+
+      <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 mb-3">
+        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-amber-900">
+          <b>Limitação atual:</b> todos os templates aprovados hoje são de agenda/lembrete. Ainda não existe
+          um template genérico de <b>atendimento / primeiro contato</b> — ele precisa ser criado e submetido
+          à aprovação da Meta pela Twilio antes de poder ser usado aqui.
+        </div>
+      </div>
 
       {isLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">Carregando…</div>
       ) : templates.length === 0 ? (
         <div className="text-sm text-muted-foreground py-6 text-center">
-          Nenhum template cadastrado.
+          Nenhum template de WhatsApp aprovado.{' '}
+          <Link to="/admin/automacoes" className="underline">Gerenciar em Automações</Link>
         </div>
       ) : (
         <div className="divide-y">
           {templates.map((t) => (
-            <div key={t.id} className="py-2.5 flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium truncate">{t.name}</span>
-                  {!t.is_active && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
-                </div>
-                <div className="text-[11px] text-muted-foreground truncate">
-                  <code>{t.content_sid}</code>
-                  {t.variables?.length > 0 && ` · ${t.variables.length} variáveis`}
-                </div>
-                {t.body_preview && (
-                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {t.body_preview}
-                  </div>
+            <div key={t.id} className="py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="font-medium truncate">{t.name}</span>
+                {t.category && (
+                  <Badge variant="outline" className="text-[10px] uppercase">{t.category}</Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button size="icon" variant="ghost" onClick={() => setEditing(t)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => {
-                    if (confirm(`Remover template "${t.name}"?`)) remove.mutate(t.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+              <div className="text-[11px] text-muted-foreground truncate">
+                <code>{t.content_sid}</code>
+                {t.variables.length > 0 && ` · ${t.variables.length} variáveis`}
               </div>
+              {t.body_preview && (
+                <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.body_preview}</div>
+              )}
             </div>
           ))}
         </div>
       )}
-
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        {editing && (
-          <TemplateFormDialog
-            initial={editing}
-            onClose={() => setEditing(null)}
-            onSaved={() => setEditing(null)}
-          />
-        )}
-      </Dialog>
     </Card>
-  );
-}
-
-const SOURCE_OPTIONS: { value: NonNullable<WaTemplateVariable['source']>; label: string }[] = [
-  { value: 'customer_name', label: 'Nome do cliente' },
-  { value: 'product_name', label: 'Nome do produto' },
-  { value: 'purchase_date', label: 'Data da compra' },
-  { value: 'custom', label: 'Preencher manualmente' },
-];
-
-function TemplateFormDialog({
-  initial,
-  onClose,
-  onSaved,
-}: {
-  initial?: WaTemplate;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const upsert = useUpsertWaTemplate();
-  const [name, setName] = useState(initial?.name ?? '');
-  const [contentSid, setContentSid] = useState(initial?.content_sid ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
-  const [bodyPreview, setBodyPreview] = useState(initial?.body_preview ?? '');
-  const [isActive, setIsActive] = useState(initial?.is_active ?? true);
-  const [variables, setVariables] = useState<WaTemplateVariable[]>(
-    initial?.variables ?? [],
-  );
-
-  const addVar = () => {
-    const nextIndex = (variables.length > 0 ? variables[variables.length - 1].index : 0) + 1;
-    setVariables([...variables, { index: nextIndex, label: '', source: 'custom' }]);
-  };
-  const updateVar = (idx: number, patch: Partial<WaTemplateVariable>) => {
-    setVariables(variables.map((v, i) => (i === idx ? { ...v, ...patch } : v)));
-  };
-  const removeVar = (idx: number) => setVariables(variables.filter((_, i) => i !== idx));
-
-  const save = async () => {
-    if (!name.trim() || !contentSid.trim()) {
-      toast.error('Nome e Content SID são obrigatórios');
-      return;
-    }
-    await upsert.mutateAsync({
-      id: initial?.id,
-      name: name.trim(),
-      content_sid: contentSid.trim(),
-      description: description.trim() || null,
-      body_preview: bodyPreview.trim() || null,
-      is_active: isActive,
-      variables: variables
-        .filter((v) => v.label.trim())
-        .map((v) => ({ ...v, label: v.label.trim() })),
-    });
-    onSaved();
-  };
-
-  return (
-    <DialogContent className="max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>{initial ? 'Editar template' : 'Novo template'}</DialogTitle>
-      </DialogHeader>
-
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs">Nome interno *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="ex.: Boas-vindas pós-compra" />
-          </div>
-          <div>
-            <Label className="text-xs">Content SID (HX…) *</Label>
-            <Input value={contentSid} onChange={(e) => setContentSid(e.target.value)} placeholder="HXxxxxxxxxxxxxxxxx" />
-          </div>
-        </div>
-
-        <div>
-          <Label className="text-xs">Descrição</Label>
-          <Input value={description ?? ''} onChange={(e) => setDescription(e.target.value)} placeholder="Quando usar este template" />
-        </div>
-
-        <div>
-          <Label className="text-xs">Preview do corpo (com {`{{1}}, {{2}}…`})</Label>
-          <Textarea
-            value={bodyPreview ?? ''}
-            onChange={(e) => setBodyPreview(e.target.value)}
-            rows={3}
-            placeholder="Olá {{1}}, tudo bem? Aqui é da MCF sobre sua compra do {{2}}."
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Cópia fiel do template aprovado — usado só para pré-visualização e histórico.
-          </p>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <Label className="text-xs">Variáveis</Label>
-            <Button type="button" size="sm" variant="outline" onClick={addVar}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar
-            </Button>
-          </div>
-          {variables.length === 0 ? (
-            <div className="text-xs text-muted-foreground py-2">Sem variáveis.</div>
-          ) : (
-            <div className="space-y-2">
-              {variables.map((v, idx) => (
-                <div key={idx} className="grid grid-cols-[60px_1fr_1fr_auto] gap-2 items-end">
-                  <div>
-                    <Label className="text-[10px]">#</Label>
-                    <Input
-                      type="number"
-                      value={v.index}
-                      onChange={(e) => updateVar(idx, { index: Number(e.target.value) })}
-                      className="h-8"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Rótulo</Label>
-                    <Input
-                      value={v.label}
-                      onChange={(e) => updateVar(idx, { label: e.target.value })}
-                      className="h-8"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Origem</Label>
-                    <select
-                      value={v.source ?? 'custom'}
-                      onChange={(e) => updateVar(idx, { source: e.target.value as any })}
-                      className="h-8 w-full rounded-md border bg-background text-xs px-2"
-                    >
-                      {SOURCE_OPTIONS.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button size="icon" variant="ghost" onClick={() => removeVar(idx)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch checked={isActive} onCheckedChange={setIsActive} />
-          <Label className="text-xs">Ativo</Label>
-        </div>
-      </div>
-
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancelar</Button>
-        <Button onClick={save} disabled={upsert.isPending}>Salvar</Button>
-      </DialogFooter>
-    </DialogContent>
   );
 }
