@@ -3179,6 +3179,12 @@ Deno.serve(async (req) => {
               offerName: transactionData.offer_name,
               offerId: transactionData.offer_id,
             });
+            // Rede de segurança: se ainda ficou sem negócio vinculado, casa por e-mail/telefone
+            await linkTransactionToDealByIdentity(supabase, {
+              hublaId: transactionData.hubla_id,
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+            });
           }
           
           // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
@@ -3378,6 +3384,12 @@ Deno.serve(async (req) => {
               transactionHublaId: hublaId,
               offerName: transactionData.offer_name,
               offerId: transactionData.offer_id,
+            });
+            // Rede de segurança: se ainda ficou sem negócio vinculado, casa por e-mail/telefone
+            await linkTransactionToDealByIdentity(supabase, {
+              hublaId,
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
             });
           }
           
