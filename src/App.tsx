@@ -10,6 +10,7 @@ import { AppearanceProvider } from "./contexts/AppearanceContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
+import { McfAtendimentoGuard } from "./components/auth/McfAtendimentoGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { ArAccessGuard } from "./components/auth/ArAccessGuard";
 import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
@@ -200,7 +201,7 @@ const App = () => (
               }
             >
               <Route path="home" element={<Home />} />
-              <Route path="checkin" element={<CheckinInbox />} />
+              <Route path="checkin" element={<McfAtendimentoGuard><CheckinInbox /></McfAtendimentoGuard>} />
               <Route path="checkin/acesso" element={<RoleGuard allowedRoles={['admin', 'manager']}><McfAtendimentoAccess /></RoleGuard>} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
