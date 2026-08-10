@@ -362,32 +362,24 @@ export function useR1CloserMetrics(
         segmentAllowedContracts = allowed;
       }
 
-      // Mapear contratos pagos no período por closer
-      // Usar Set para evitar duplicatas entre as duas queries
-      const contractsByCloser = new Map<string, number>();
-      const countedAttendeeIds = new Set<string>();
-      
-      // Processar contratos COM contract_paid_at (prioridade)
-      contractsByPaymentDate?.forEach((att: any) => {
-        if (segmentActive && !(att.deal_id && segmentAllowedContracts?.has(att.deal_id))) return;
-        const closerId = (att.meeting_slot as any)?.closer_id;
-        // Outside real (venda sem R1 vinculada) é detectado na Part B abaixo.
-        // Pagar pouco antes do horário agendado NÃO é Outside — é antecipação.
-        if (closerId && !countedAttendeeIds.has(att.id)) {
-          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-          countedAttendeeIds.add(att.id);
-        }
+      // ========== RÉGUA DE CAUÇÃO (Contrato Pago) ==========
+      // Fonte única: RPC caucoes_efetivas.
+      //  - data = data da transação A000/Contrato real (fallback contract_paid_at manual);
+      //  - closer = closer da última R1 não cancelada do negócio;
+      //  - 1 caução por negócio (já deduplicado no banco).
+      const { data: caucoesRows, error: caucoesError } = await (supabase as any).rpc('caucoes_efetivas', {
+        p_from: format(startDate, 'yyyy-MM-dd'),
+        p_to: format(endDate, 'yyyy-MM-dd'),
+        p_bu: bu,
       });
+      if (caucoesError) throw caucoesError;
 
-      // Processar contratos SEM contract_paid_at (fallback) - apenas se não foi contado ainda
-      // Nota: fallback usa scheduled_at como data, então nunca é Outside por definição
-      contractsWithoutTimestamp?.forEach((att: any) => {
-        if (segmentActive && !(att.deal_id && segmentAllowedContracts?.has(att.deal_id))) return;
-        const closerId = (att.meeting_slot as any)?.closer_id;
-        if (closerId && !countedAttendeeIds.has(att.id)) {
-          contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
-          countedAttendeeIds.add(att.id);
-        }
+      const contractsByCloser = new Map<string, number>();
+      ((caucoesRows as any[]) || []).forEach((row: any) => {
+        if (segmentActive && String(row.segment || '').toUpperCase() !== segment) return;
+        const closerId = row.closer_id as string | null;
+        if (!closerId) return; // sem closer identificável → linha "Não atribuído"
+        contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
       });
 
       // ========== OUTSIDE DETECTION (attributed by SALE DATE) ==========

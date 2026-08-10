@@ -14253,6 +14253,26 @@ export type Database = {
         Returns: boolean
       }
       can_manage_ar: { Args: { _user_id: string }; Returns: boolean }
+      caucoes_efetivas: {
+        Args: { p_bu?: string; p_from: string; p_to: string }
+        Returns: {
+          attendee_id: string
+          closer_bu: string
+          closer_id: string
+          closer_name: string
+          contract_paid_at: string
+          deal_id: string
+          eff_date: string
+          fonte: string
+          lead_name: string
+          origin_id: string
+          sdr_email: string
+          sdr_id: string
+          sdr_name: string
+          segment: string
+          valor: number
+        }[]
+      }
       check_duplicate_contact_by_identity: {
         Args: { p_email?: string; p_phone?: string }
         Returns: {

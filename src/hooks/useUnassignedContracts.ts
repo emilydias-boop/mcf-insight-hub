@@ -4,7 +4,7 @@ import { startOfDay, endOfDay, format, addHours } from "date-fns";
 
 export interface UnassignedContractItem {
   deal_id: string | null;
-  source: 'attendee_r2_only' | 'attendee_sem_closer' | 'attendee_sem_sdr' | 'transacao_sem_reuniao';
+  source: 'caucao_sem_deal' | 'caucao_sem_r1' | 'caucao_sem_sdr' | 'transacao_sem_reuniao';
   segment: 'A' | 'B' | null;
   reference: string;
   /** Data do pagamento da caução/contrato (ISO). */
@@ -36,14 +36,15 @@ const EMPTY: UnassignedContracts = {
 };
 
 /**
- * Contratos/cauções pagos no período que a atribuição atual NÃO consegue
- * ligar a nenhum Closer (aba Closers) ou SDR (aba SDRs).
+ * Cauções do período (régua nova: data da transação A000/Contrato + closer da
+ * última R1 do negócio) que ainda NÃO conseguem ser atribuídas a um Closer
+ * (aba Closers) ou SDR (aba SDRs).
  *
  * Motivos cobertos:
- *  - attendee pago em slot de R2 (a atribuição só olha meeting_type = 'r1');
- *  - attendee pago em slot sem closer_id;
- *  - attendee de R1 pago sem booked_by (sem SDR) → só órfão na aba SDRs;
- *  - transação A000/Contrato paga sem attendee marcado como pago no período.
+ *  - caução sem negócio no CRM (sem deal → sem segmento/R1);
+ *  - caução de negócio sem nenhuma R1 registrada (closer não identificável);
+ *  - caução cuja R1 não tem SDR que agendou → só órfã na aba SDRs;
+ *  - transação A000/Contrato paga sem nenhuma caução marcada.
  */
 export function useUnassignedContracts(
   startDate: Date,
@@ -57,101 +58,56 @@ export function useUnassignedContracts(
       const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
       const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
-      const { data: rows, error } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          deal_id,
-          booked_by,
-          attendee_name,
-          contract_paid_at,
-          status,
-          is_partner,
-          meeting_slots!inner ( meeting_type, closer_id, closers ( bu, name ) ),
-          crm_deals ( icp_segment, value )
-        `)
-        .not('contract_paid_at', 'is', null)
-        .gte('contract_paid_at', start)
-        .lte('contract_paid_at', end)
-        .eq('is_partner', false)
-        .neq('status', 'cancelled');
-
+      // Régua nova: cauções efetivas do período (data da transação + closer da R1).
+      const { data: caucoes, error } = await (supabase as any).rpc('caucoes_efetivas', {
+        p_from: format(startDate, 'yyyy-MM-dd'),
+        p_to: format(endDate, 'yyyy-MM-dd'),
+        p_bu: bu,
+      });
       if (error) throw error;
 
-      const all = (rows || []) as any[];
-      const buOf = (r: any) => r.meeting_slots?.closers?.bu ?? null;
-      const inBu = (r: any) => {
-        const b = buOf(r);
-        return b === null || b === bu;
+      const rows = ((caucoes as any[]) || []);
+      const segOf = (s: any): 'A' | 'B' | null => {
+        const v = String(s || '').toUpperCase();
+        return v === 'A' || v === 'B' ? (v as 'A' | 'B') : null;
       };
-      const segOf = (r: any): 'A' | 'B' | null => {
-        const s = (r.crm_deals?.icp_segment || '').toUpperCase();
-        return s === 'A' || s === 'B' ? (s as 'A' | 'B') : null;
-      };
-
-      const scoped = all.filter(inBu);
-
-      // Nomes dos SDRs (booked_by) para sugestão de atribuição.
-      const bookedIds = Array.from(
-        new Set(scoped.map((r) => r.booked_by).filter(Boolean) as string[]),
-      );
-      const sdrNames = new Map<string, string>();
-      if (bookedIds.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', bookedIds);
-        (profs || []).forEach((p: any) => sdrNames.set(p.id, p.full_name));
-      }
-
-      // Atribuíveis a closer: R1 com closer_id preenchido.
-      const closerAttributed = scoped.filter(
-        (r) => r.meeting_slots?.meeting_type === 'r1' && !!r.meeting_slots?.closer_id,
-      );
-      const attributedDeals = new Set(
-        closerAttributed.map((r) => r.deal_id).filter(Boolean) as string[],
-      );
 
       const items: UnassignedContractItem[] = [];
       const sdrItems: UnassignedContractItem[] = [];
+      const attributedDeals = new Set(
+        rows.filter((r) => r.closer_id).map((r) => r.deal_id).filter(Boolean) as string[],
+      );
 
-      scoped.forEach((r) => {
-        const isR1 = r.meeting_slots?.meeting_type === 'r1';
-        const hasCloser = !!r.meeting_slots?.closer_id;
-        const alreadyCounted = !!r.deal_id && attributedDeals.has(r.deal_id);
-        const closerName = r.meeting_slots?.closers?.name || null;
-        const sdrName = r.booked_by ? sdrNames.get(r.booked_by) || null : null;
+      rows.forEach((r: any) => {
+        const base = {
+          deal_id: (r.deal_id as string | null) ?? null,
+          segment: segOf(r.segment),
+          reference: r.lead_name || r.attendee_id,
+          paid_at: r.eff_date ?? r.contract_paid_at ?? null,
+          value: r.valor ?? null,
+        };
 
-        if (!(isR1 && hasCloser)) {
-          if (alreadyCounted) return; // mesmo deal já contado por um R1 válido
+        if (!r.closer_id) {
           const item: UnassignedContractItem = {
-            deal_id: r.deal_id ?? null,
-            source: isR1 ? 'attendee_sem_closer' : 'attendee_r2_only',
-            segment: segOf(r),
-            reference: r.attendee_name || r.id,
-            paid_at: r.contract_paid_at ?? null,
-            value: r.crm_deals?.value ?? null,
-            reason: isR1
-              ? 'Caução marcada em reunião de R1 sem closer definido no slot'
-              : `Caução marcada em slot de R2${closerName ? ` (closer: ${closerName})` : ''} — a atribuição só considera R1`,
-            suggested: closerName || sdrName,
+            ...base,
+            source: r.deal_id ? 'caucao_sem_r1' : 'caucao_sem_deal',
+            reason: r.deal_id
+              ? 'Negócio sem nenhuma R1 registrada — não há closer para atribuir'
+              : 'Caução sem negócio vinculado no CRM (sem R1 e sem segmento)',
+            suggested: r.sdr_name || null,
           };
           items.push(item);
           sdrItems.push(item);
           return;
         }
 
-        // R1 com closer: entra na aba Closers, mas pode faltar SDR.
-        if (!r.booked_by) {
+        // Com closer: entra na aba Closers; pode faltar o SDR da R1.
+        if (!r.sdr_id) {
           sdrItems.push({
-            deal_id: r.deal_id ?? null,
-            source: 'attendee_sem_sdr',
-            segment: segOf(r),
-            reference: r.attendee_name || r.id,
-            paid_at: r.contract_paid_at ?? null,
-            value: r.crm_deals?.value ?? null,
-            reason: 'Reunião de R1 sem SDR que agendou (booked_by vazio)',
-            suggested: closerName,
+            ...base,
+            source: 'caucao_sem_sdr',
+            reason: 'R1 do negócio sem SDR que agendou (booked_by vazio)',
+            suggested: r.closer_name || null,
           });
         }
       });
@@ -165,7 +121,7 @@ export function useUnassignedContracts(
           .lte('sale_date', end)
           .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
 
-        const paidAttendeeIds = new Set(all.map((r) => r.id));
+        const paidAttendeeIds = new Set(rows.map((r: any) => r.attendee_id));
         const isContrato = (t: any) => {
           const name = (t.product_name || '').toUpperCase();
           const code = (t.product_code || '').toUpperCase();
@@ -180,6 +136,20 @@ export function useUnassignedContracts(
           if (t.linked_deal_id) orphanDealIds.push(t.linked_deal_id);
           return true;
         });
+
+        // Um deal já pode ter caução marcada fora da janela (a régua nova move a
+        // data para a transação). Nesse caso a transação não é órfã.
+        const coveredDeals = new Set<string>();
+        if (orphanDealIds.length > 0) {
+          const { data: paidElsewhere } = await supabase
+            .from('meeting_slot_attendees')
+            .select('deal_id')
+            .in('deal_id', Array.from(new Set(orphanDealIds)))
+            .not('contract_paid_at', 'is', null);
+          (paidElsewhere || []).forEach((a: any) => {
+            if (a.deal_id) coveredDeals.add(a.deal_id);
+          });
+        }
 
         // Segmento dos deals órfãos (quando existirem)
         const segByDeal = new Map<string, 'A' | 'B' | null>();
@@ -197,6 +167,7 @@ export function useUnassignedContracts(
         const seenDeal = new Set<string>();
         orphanTxs.forEach((t: any) => {
           if (t.linked_deal_id) {
+            if (coveredDeals.has(t.linked_deal_id)) return;
             if (seenDeal.has(t.linked_deal_id)) return;
             seenDeal.add(t.linked_deal_id);
           }
