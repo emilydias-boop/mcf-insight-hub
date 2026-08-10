@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
+import { SonaxCallButton } from './SonaxCallButton';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
@@ -218,20 +219,13 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
           </div>
         )}
         <>
-            {/* Botão Ligar */}
-            <Button
+            {/* Botão Ligar — click-to-call Sonax (Twilio desativado por bug de duração 0) */}
+            <SonaxCallButton
+              phone={hasPhone}
+              dealId={deal?.id}
               size="sm"
-              className="bg-primary hover:bg-primary/90 h-8"
-              onClick={handleCall}
-              disabled={isSearchingPhone || isInCallWithThisDeal}
-            >
-              {isSearchingPhone ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Phone className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              {isTestDeal ? 'Ligar' : 'Ligar'}
-            </Button>
+              className="h-8 bg-primary text-primary-foreground border-transparent hover:bg-primary/90 hover:text-primary-foreground"
+            />
             
             {/* Botão WhatsApp */}
             <Button
