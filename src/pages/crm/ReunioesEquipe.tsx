@@ -980,6 +980,12 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
+        contratosSemSegmento={Math.max(
+          0,
+          (enrichedKPIs.totalContratos || 0)
+            - (segmentTotals?.a.contratos || 0)
+            - (segmentTotals?.b.contratos || 0),
+        )}
       />
 
       <RefundDetailsDialog
