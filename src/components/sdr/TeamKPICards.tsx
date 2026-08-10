@@ -44,8 +44,6 @@ interface TeamKPICardsProps {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
     b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
   } | null;
-  /** Cauções contadas no total do card mas sem segmento ICP (sem deal/sem ICP). */
-  contratosSemSegmento?: number;
 }
 
 export function TeamKPICards({
@@ -63,7 +61,6 @@ export function TeamKPICards({
   onRefundClick,
   orphanRefundsCount = 0,
   segmentTotals = null,
-  contratosSemSegmento = 0,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -89,7 +86,6 @@ export function TeamKPICards({
       : undefined;
   const contratosSegLine = segmentTotals
     ? `A: ${segmentTotals.a.contratos ?? 0} · B: ${segmentTotals.b.contratos ?? 0}`
-      + (contratosSemSegmento > 0 ? ` · s/seg: ${contratosSemSegmento}` : '')
     : undefined;
 
   const cards: Array<{
