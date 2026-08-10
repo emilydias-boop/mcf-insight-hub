@@ -10,6 +10,7 @@ import { AppearanceProvider } from "./contexts/AppearanceContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
+import { McfAtendimentoGuard } from "./components/auth/McfAtendimentoGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { ArAccessGuard } from "./components/auth/ArAccessGuard";
 import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
