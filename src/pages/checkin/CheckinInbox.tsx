@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useCheckinRooms, CheckinRoom } from '@/hooks/checkin/useCheckinRooms';
 import { useCheckinMessages, useUpdateRoom } from '@/hooks/checkin/useCheckinMessages';
-import { useWaTemplates, WaTemplateVariable } from '@/hooks/checkin/useWaTemplates';
+import { useCheckinTemplates, CheckinTemplateVariable } from '@/hooks/checkin/useCheckinTemplates';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -243,7 +243,7 @@ function ConversationPane({ room }: { room: CheckinRoom }) {
   );
 }
 
-function resolveVarSource(v: WaTemplateVariable, room: CheckinRoom): string {
+function resolveVarSource(v: CheckinTemplateVariable, room: CheckinRoom): string {
   switch (v.source) {
     case 'customer_name':
       return room.customer_name ?? '';
@@ -254,7 +254,7 @@ function resolveVarSource(v: WaTemplateVariable, room: CheckinRoom): string {
         ? format(new Date(room.purchase_date), 'dd/MM/yyyy', { locale: ptBR })
         : '';
     default:
-      return v.default ?? '';
+      return '';
   }
 }
 
@@ -276,7 +276,7 @@ function Composer({
   const [text, setText] = useState('');
   const [tplId, setTplId] = useState<string>('');
   const [vars, setVars] = useState<Record<string, string>>({});
-  const { data: templates = [], isLoading: loadingTpls } = useWaTemplates(true);
+  const { data: templates = [], isLoading: loadingTpls } = useCheckinTemplates();
 
   const selectedTpl = useMemo(
     () => templates.find((t) => t.id === tplId) ?? null,
@@ -362,7 +362,7 @@ function Composer({
             <SelectContent>
               {templates.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">
-                  Nenhum template cadastrado. Configure em Configurações → MCF Atendimento.
+                  Nenhum template de WhatsApp aprovado disponível. Cadastre e submeta em Administração → Automações.
                 </div>
               )}
               {templates.map((t) => (
@@ -376,14 +376,14 @@ function Composer({
           <>
             {selectedTpl.body_preview && (
               <div className="text-xs bg-background rounded-md border p-3 whitespace-pre-wrap">
-                {previewWithVars(selectedTpl.body_preview, vars)}
+                {previewWithVars(selectedTpl.body_preview, selectedTpl.variables, vars)}
               </div>
             )}
             {(selectedTpl.variables ?? []).length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {selectedTpl.variables.map((v) => (
                   <div key={v.index}>
-                    <Label className="text-xs">{v.label} <span className="text-muted-foreground">{`{{${v.index}}}`}</span></Label>
+                    <Label className="text-xs">{v.label} <span className="text-muted-foreground">{`{{${v.name}}}`}</span></Label>
                     <Input
                       value={vars[String(v.index)] ?? ''}
                       onChange={(e) =>
@@ -408,10 +408,17 @@ function Composer({
   );
 }
 
-function previewWithVars(preview: string, vars: Record<string, string>): string {
+function previewWithVars(
+  preview: string,
+  variables: CheckinTemplateVariable[],
+  vars: Record<string, string>,
+): string {
   let out = preview;
-  for (const [k, v] of Object.entries(vars)) {
-    out = out.split(`{{${k}}}`).join(v || `{{${k}}}`);
+  for (const v of variables) {
+    const filled = vars[String(v.index)];
+    // O corpo salvo usa placeholders nomeados ({{nome}}); a Twilio usa posicionais ({{1}}).
+    out = out.split(`{{${v.name}}}`).join(filled || `{{${v.name}}}`);
+    out = out.split(`{{${v.index}}}`).join(filled || `{{${v.index}}}`);
   }
   return out;
 }
