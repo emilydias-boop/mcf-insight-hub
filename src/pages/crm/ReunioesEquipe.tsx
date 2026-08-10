@@ -35,6 +35,7 @@ import { RefundDetailsDialog } from "@/components/sdr/RefundDetailsDialog";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useUnassignedContracts } from "@/hooks/useUnassignedContracts";
 import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
 import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
@@ -428,6 +429,26 @@ export default function ReunioesEquipe() {
     const reembolsos = closerMetrics?.reduce((sum, c) => sum + (c.reembolsos || 0), 0) || 0;
     return { contratoPago, outside, reembolsos, total: contratoPago + outside };
   }, [closerMetrics]);
+
+  // Contratos/cauções pagos no período que a atribuição atual não consegue
+  // ligar a nenhum closer/SDR — exibidos na linha "Não atribuído".
+  const { data: unassignedContracts } = useUnassignedContracts(start, end, 'incorporador');
+  const unassignedCloser = useMemo(
+    () => ({
+      total: unassignedContracts?.total ?? 0,
+      a: unassignedContracts?.a ?? 0,
+      b: unassignedContracts?.b ?? 0,
+    }),
+    [unassignedContracts],
+  );
+  const unassignedSdr = useMemo(
+    () => ({
+      total: unassignedContracts?.sdrTotal ?? 0,
+      a: unassignedContracts?.sdrA ?? 0,
+      b: unassignedContracts?.sdrB ?? 0,
+    }),
+    [unassignedContracts],
+  );
 
   // Derive ALL R1 KPIs from closerMetrics (source of truth — same data as Closers table)
   const r1FromClosers = useMemo(() => {
