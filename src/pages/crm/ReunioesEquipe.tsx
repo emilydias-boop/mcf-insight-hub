@@ -36,6 +36,7 @@ import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useUnassignedContracts } from "@/hooks/useUnassignedContracts";
+import { UnassignedContractsDialog } from "@/components/sdr/UnassignedContractsDialog";
 import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
 import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
@@ -433,6 +434,9 @@ export default function ReunioesEquipe() {
   // Contratos/cauções pagos no período que a atribuição atual não consegue
   // ligar a nenhum closer/SDR — exibidos na linha "Não atribuído".
   const { data: unassignedContracts } = useUnassignedContracts(start, end, 'incorporador');
+  const [unassignedDialog, setUnassignedDialog] = useState<
+    { open: boolean; segment?: 'A' | 'B'; context: 'closers' | 'sdrs' }
+  >({ open: false, context: 'closers' });
   const unassignedCloser = useMemo(
     () => ({
       total: unassignedContracts?.total ?? 0,
@@ -1056,6 +1060,9 @@ export default function ReunioesEquipe() {
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}
               unassigned={unassignedSdr}
+              onUnassignedClick={(segment) =>
+                setUnassignedDialog({ open: true, segment, context: 'sdrs' })
+              }
             />
           ) : (
             <CloserSummaryTable
@@ -1065,6 +1072,9 @@ export default function ReunioesEquipe() {
               segmentAData={closerMetricsA}
               segmentBData={closerMetricsB}
               unassigned={unassignedCloser}
+              onUnassignedClick={(segment) =>
+                setUnassignedDialog({ open: true, segment, context: 'closers' })
+              }
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
@@ -1089,6 +1099,18 @@ export default function ReunioesEquipe() {
           originId={undefined}
         />
       )}
+
+      <UnassignedContractsDialog
+        open={unassignedDialog.open}
+        onOpenChange={(open) => setUnassignedDialog((prev) => ({ ...prev, open }))}
+        items={
+          unassignedDialog.context === 'sdrs'
+            ? unassignedContracts?.sdrItems ?? []
+            : unassignedContracts?.items ?? []
+        }
+        segment={unassignedDialog.segment}
+        context={unassignedDialog.context}
+      />
     </div>
   );
 }
