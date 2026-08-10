@@ -19,6 +19,8 @@ interface CloserSummaryTableProps {
   /** Aditivo: quando informados, cada closer ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
   segmentAData?: R1CloserMetric[];
   segmentBData?: R1CloserMetric[];
+  /** Contratos pagos no período que não puderam ser atribuídos a nenhum closer. */
+  unassigned?: { total: number; a: number; b: number };
 }
 
 export function CloserSummaryTable({ 
@@ -28,6 +30,7 @@ export function CloserSummaryTable({
   totalContratosFromKPI,
   segmentAData,
   segmentBData,
+  unassigned,
 }: CloserSummaryTableProps) {
   if (isLoading) {
     return (
@@ -62,8 +65,9 @@ export function CloserSummaryTable({
   );
 
   // Calculate total conversion rate (Contrato / Realizada)
+  const contratoPagoComOrfaos = totals.contrato_pago + (unassigned?.total ?? 0);
   const totalTaxaConversao = totals.r1_realizada > 0 
-    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
+    ? ((contratoPagoComOrfaos / totals.r1_realizada) * 100)
     : 0;
 
   // Calculate total no-show rate (No-Show / Agendada)
@@ -93,6 +97,10 @@ export function CloserSummaryTable({
     (map.get(closerId)?.[key] as number | undefined) ?? 0;
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
+
+  const un = unassigned && unassigned.total > 0 ? unassigned : null;
+  const unFor = (key: SegKey, seg?: 'a' | 'b') =>
+    key === 'contrato_pago' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
@@ -184,21 +192,45 @@ export function CloserSummaryTable({
               );
             })}
             
+            {/* Não atribuído: contratos pagos no período sem closer identificável */}
+            {un && (
+              <TableRow className="italic text-muted-foreground">
+                <TableCell className="font-normal">Não atribuído</TableCell>
+                {showSegments
+                  ? SEG_COLS.flatMap((c) => [
+                      <TableCell key={`un-${c.key}-a`} className="text-center">
+                        {c.key === 'contrato_pago' ? unFor(c.key, 'a') : '—'}
+                      </TableCell>,
+                      <TableCell key={`un-${c.key}-b`} className="text-center">
+                        {c.key === 'contrato_pago' ? unFor(c.key, 'b') : '—'}
+                      </TableCell>,
+                    ])
+                  : SEG_COLS.map((c) => (
+                      <TableCell key={`un-${c.key}`} className="text-center">
+                        {c.key === 'contrato_pago' ? unFor(c.key) : '—'}
+                      </TableCell>
+                    ))}
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+              </TableRow>
+            )}
+
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">Total</TableCell>
               {showSegments
                 ? SEG_COLS.flatMap((c) => [
                     <TableCell key={`t-${c.key}-a`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
+                      <span className={c.cls}>{segTotal(segmentAData, c.key) + unFor(c.key, 'a')}</span>
                     </TableCell>,
                     <TableCell key={`t-${c.key}-b`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
+                      <span className={c.cls}>{segTotal(segmentBData, c.key) + unFor(c.key, 'b')}</span>
                     </TableCell>,
                   ])
                 : SEG_COLS.map((c) => (
                     <TableCell key={`t-${c.key}`} className="text-center">
-                      <span className={c.cls}>{segTotal(data, c.key)}</span>
+                      <span className={c.cls}>{segTotal(data, c.key) + unFor(c.key)}</span>
                     </TableCell>
                   ))}
               <TableCell className="text-center">

@@ -43,6 +43,8 @@ interface SdrSummaryTableProps {
   /** Aditivo: quando informados, cada SDR ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
   segmentAMap?: Map<string, SdrSegmentMetricValues>;
   segmentBMap?: Map<string, SdrSegmentMetricValues>;
+  /** Contratos pagos no período que não puderam ser atribuídos a nenhum SDR. */
+  unassigned?: { total: number; a: number; b: number };
 }
 
 export function SdrSummaryTable({ 
@@ -56,6 +58,7 @@ export function SdrSummaryTable({
   bu,
   segmentAMap,
   segmentBMap,
+  unassigned,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -119,6 +122,9 @@ export function SdrSummaryTable({
 
   const totalsSegA = sumSeg(segmentAMap);
   const totalsSegB = sumSeg(segmentBMap);
+
+  const un = unassigned && unassigned.total > 0 ? unassigned : null;
+  const totalContratos = totals.contratos + (un?.total ?? 0);
 
   if (isLoading) {
     return (
@@ -325,6 +331,39 @@ export function SdrSummaryTable({
               );
             })}
 
+            {/* Não atribuído: contratos pagos no período sem SDR identificável */}
+            {un && (
+              <TableRow className="italic text-muted-foreground">
+                <TableCell className="font-normal">Não atribuído</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {showSegments ? (
+                  <>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">{un.a}</TableCell>
+                    <TableCell className="text-center">{un.b}</TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">{un.total}</TableCell>
+                  </>
+                )}
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            )}
+
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">
@@ -373,8 +412,8 @@ export function SdrSummaryTable({
                   <TableCell className="text-center"><span className="text-green-400">{totalsSegB.r1Realizada}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegA.noShows}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegB.noShows}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos + (un?.a ?? 0)}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos + (un?.b ?? 0)}</span></TableCell>
                 </>
               ) : (
                 <>
@@ -406,7 +445,7 @@ export function SdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contratos}</span>
+                <span className="text-amber-400">{totalContratos}</span>
               </TableCell>
                 </>
               )}
@@ -418,7 +457,7 @@ export function SdrSummaryTable({
               <TableCell className="text-center">
                 {(() => {
                   const totalLiquida = totals.r1Realizada > 0
-                    ? ((totals.contratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
+                    ? ((totalContratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
                     : 0;
                   const cls = totalLiquida >= 20 ? 'text-green-400'
                     : totalLiquida >= 10 ? 'text-amber-400'
