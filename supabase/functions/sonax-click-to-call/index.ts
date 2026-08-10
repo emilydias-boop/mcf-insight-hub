@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
   const sonaxToken = Deno.env.get('SONAX_TOKEN')
   if (!sonaxToken) return json({ error: 'sonax_token_ausente' }, 500)
 
-  const url = `https://api.sonax.net.br/a2billing_v2/admin/Public/sonax-click2call.php?numero=${encodeURIComponent(numero)}&ramal=${encodeURIComponent(mapping.ramal)}&token=${encodeURIComponent(sonaxToken)}`
+  const url = `https://api.sonax.net.br/sonax-click2call.php?numero=${encodeURIComponent(numero)}&ramal=${encodeURIComponent(mapping.ramal)}&token=${encodeURIComponent(sonaxToken)}`
 
   let sonaxStatus = 0
   let sonaxBody = ''
@@ -72,11 +72,15 @@ Deno.serve(async (req) => {
     const resp = await fetch(url, { method: 'GET' })
     sonaxStatus = resp.status
     sonaxBody = (await resp.text()).slice(0, 500)
+    console.log(`[click-to-call] numero=${numero} ramal=${mapping.ramal} status=${sonaxStatus} body=${sonaxBody}`)
   } catch (e) {
     return json({ error: 'falha_sonax', detail: String(e) }, 502)
   }
 
-  const ok = sonaxStatus >= 200 && sonaxStatus < 300
+  const bodyLower = sonaxBody.toLowerCase()
+  const sonaxRejected = /nao esta atendendo|não está atendendo|erro|invalid|token/.test(bodyLower)
+  const ok = sonaxStatus >= 200 && sonaxStatus < 300 && !sonaxRejected
+  if (!ok) console.error(`[click-to-call] FALHA numero=${numero} ramal=${mapping.ramal} status=${sonaxStatus} body=${sonaxBody}`)
 
   if (body.deal_id) {
     await admin.from('deal_activities').insert({
