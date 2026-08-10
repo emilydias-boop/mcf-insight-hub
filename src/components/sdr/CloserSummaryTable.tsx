@@ -67,10 +67,10 @@ export function CloserSummaryTable({
     { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0 }
   );
 
-  // Calculate total conversion rate (Contrato / Realizada)
-  const contratoPagoComOrfaos = totals.contrato_pago + (unassigned?.total ?? 0);
+  // Taxa de conversão considera apenas cauções com negócio no CRM (órfãos ficam
+  // fora de qualquer total/KPI — só aparecem na linha de diagnóstico).
   const totalTaxaConversao = totals.r1_realizada > 0 
-    ? ((contratoPagoComOrfaos / totals.r1_realizada) * 100)
+    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
   // Calculate total no-show rate (No-Show / Agendada)
