@@ -170,7 +170,7 @@ export function TeamKPICards({
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
-        : "Total de cauções do período (régua caucoes_efetivas): Contrato Pago da tabela de Closers + cauções não atribuídas. O subtítulo abre por segmento ICP; 's/seg' são cauções legítimas sem negócio/ICP identificado.",
+        : "Cauções do período com negócio no CRM (régua caucoes_efetivas), somando Lead A + Lead B. Transações sem negócio vinculado NÃO entram neste total — ficam apenas no diagnóstico 'Não atribuído' da tabela.",
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
     },
