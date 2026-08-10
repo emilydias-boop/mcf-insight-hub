@@ -21,6 +21,8 @@ interface CloserSummaryTableProps {
   segmentBData?: R1CloserMetric[];
   /** Contratos pagos no período que não puderam ser atribuídos a nenhum closer. */
   unassigned?: { total: number; a: number; b: number };
+  /** Abre o detalhamento dos contratos não atribuídos (opcionalmente por segmento). */
+  onUnassignedClick?: (segment?: 'A' | 'B') => void;
 }
 
 export function CloserSummaryTable({ 
@@ -31,6 +33,7 @@ export function CloserSummaryTable({
   segmentAData,
   segmentBData,
   unassigned,
+  onUnassignedClick,
 }: CloserSummaryTableProps) {
   if (isLoading) {
     return (
@@ -194,14 +197,33 @@ export function CloserSummaryTable({
             
             {/* Não atribuído: contratos pagos no período sem closer identificável */}
             {un && (
-              <TableRow className="italic text-muted-foreground">
-                <TableCell className="font-normal">Não atribuído</TableCell>
+              <TableRow
+                className={`italic text-muted-foreground ${onUnassignedClick ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+                onClick={onUnassignedClick ? () => onUnassignedClick() : undefined}
+              >
+                <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
                 {showSegments
                   ? SEG_COLS.flatMap((c) => [
-                      <TableCell key={`un-${c.key}-a`} className="text-center">
+                      <TableCell
+                        key={`un-${c.key}-a`}
+                        className="text-center"
+                        onClick={
+                          onUnassignedClick && c.key === 'contrato_pago'
+                            ? (e) => { e.stopPropagation(); onUnassignedClick('A'); }
+                            : undefined
+                        }
+                      >
                         {c.key === 'contrato_pago' ? unFor(c.key, 'a') : '—'}
                       </TableCell>,
-                      <TableCell key={`un-${c.key}-b`} className="text-center">
+                      <TableCell
+                        key={`un-${c.key}-b`}
+                        className="text-center"
+                        onClick={
+                          onUnassignedClick && c.key === 'contrato_pago'
+                            ? (e) => { e.stopPropagation(); onUnassignedClick('B'); }
+                            : undefined
+                        }
+                      >
                         {c.key === 'contrato_pago' ? unFor(c.key, 'b') : '—'}
                       </TableCell>,
                     ])
