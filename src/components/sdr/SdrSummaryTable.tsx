@@ -127,7 +127,7 @@ export function SdrSummaryTable({
   const totalsSegB = sumSeg(segmentBMap);
 
   const un = unassigned && unassigned.total > 0 ? unassigned : null;
-  const totalContratos = totals.contratos + (un?.total ?? 0);
+  const totalContratos = totals.contratos;
 
   if (isLoading) {
     return (
@@ -428,8 +428,8 @@ export function SdrSummaryTable({
                   <TableCell className="text-center"><span className="text-green-400">{totalsSegB.r1Realizada}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegA.noShows}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegB.noShows}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos + (un?.a ?? 0)}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos + (un?.b ?? 0)}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos}</span></TableCell>
                 </>
               ) : (
                 <>

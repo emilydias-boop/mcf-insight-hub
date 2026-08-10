@@ -67,10 +67,10 @@ export function CloserSummaryTable({
     { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0 }
   );
 
-  // Calculate total conversion rate (Contrato / Realizada)
-  const contratoPagoComOrfaos = totals.contrato_pago + (unassigned?.total ?? 0);
+  // Taxa de conversão considera apenas cauções com negócio no CRM (órfãos ficam
+  // fora de qualquer total/KPI — só aparecem na linha de diagnóstico).
   const totalTaxaConversao = totals.r1_realizada > 0 
-    ? ((contratoPagoComOrfaos / totals.r1_realizada) * 100)
+    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
   // Calculate total no-show rate (No-Show / Agendada)
@@ -244,15 +244,15 @@ export function CloserSummaryTable({
               {showSegments
                 ? SEG_COLS.flatMap((c) => [
                     <TableCell key={`t-${c.key}-a`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentAData, c.key) + unFor(c.key, 'a')}</span>
+                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
                     </TableCell>,
                     <TableCell key={`t-${c.key}-b`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentBData, c.key) + unFor(c.key, 'b')}</span>
+                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
                     </TableCell>,
                   ])
                 : SEG_COLS.map((c) => (
                     <TableCell key={`t-${c.key}`} className="text-center">
-                      <span className={c.cls}>{segTotal(data, c.key) + unFor(c.key)}</span>
+                      <span className={c.cls}>{segTotal(data, c.key)}</span>
                     </TableCell>
                   ))}
               <TableCell className="text-center">

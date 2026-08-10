@@ -620,10 +620,10 @@ export default function ReunioesEquipe() {
     const a = sumSdr(sdrSegmentAMap);
     const b = sumSdr(sdrSegmentBMap);
     return {
-      a: { ...a, contratos: sumCloserContratos(closerMetricsA) + unassignedCloser.a },
-      b: { ...b, contratos: sumCloserContratos(closerMetricsB) + unassignedCloser.b },
+      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
+      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR, unassignedCloser]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -644,17 +644,21 @@ export default function ReunioesEquipe() {
       totalRealizadas,
       totalNoShows,
       totalSemStatus,
-      totalContratos: contractsFromClosers.contratoPago + unassignedCloser.total,
+      // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
+      // órfãs sem deal NÃO entram em nenhum KPI/total.
+      totalContratos: segmentTotals
+        ? (segmentTotals.a.contratos || 0) + (segmentTotals.b.contratos || 0)
+        : contractsFromClosers.contratoPago,
       totalOutside: contractsFromClosers.outside,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
         : 0,
       taxaConversao: totalRealizadas > 0
-        ? ((contractsFromClosers.total + unassignedCloser.total) / totalRealizadas) * 100
+        ? (contractsFromClosers.total / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedCloser]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -980,12 +984,6 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
-        contratosSemSegmento={Math.max(
-          0,
-          (enrichedKPIs.totalContratos || 0)
-            - (segmentTotals?.a.contratos || 0)
-            - (segmentTotals?.b.contratos || 0),
-        )}
       />
 
       <RefundDetailsDialog
@@ -1061,9 +1059,7 @@ export default function ReunioesEquipe() {
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
-                // O total da tabela soma a linha "Não atribuído" (unassignedSdr),
-                // então o override recebe apenas a parte atribuível a SDRs.
-                contratos: Math.max(0, enrichedKPIs.totalContratos - unassignedSdr.total),
+                contratos: enrichedKPIs.totalContratos,
               }}
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}
