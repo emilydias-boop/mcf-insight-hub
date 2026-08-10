@@ -388,6 +388,7 @@ export function AppSidebar() {
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBUs = [] } = useMyBU();
   const { canManage: canManageAr } = useCanManageAr();
+  const { hasAccess: hasMcfAtendimento } = useMcfAtendimentoAccess();
   const { state, toggleSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -512,6 +513,8 @@ export function AppSidebar() {
 
   // Filtragem de menu items
   const filteredMenuItems = allMenuItems.filter((item) => {
+    // MCF - Atendimento: apenas quem tem acesso ao módulo
+    if (item.url === '/checkin') return hasMcfAtendimento;
     // À Receber: admin OU gestor delegado
     const isArItem = item.items?.some(s => s.url?.startsWith('/financeiro/a-receber'));
     if (isArItem && canManageAr) return true;
