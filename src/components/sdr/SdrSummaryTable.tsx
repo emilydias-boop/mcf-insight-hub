@@ -413,8 +413,8 @@ export function SdrSummaryTable({
                   <TableCell className="text-center"><span className="text-green-400">{totalsSegB.r1Realizada}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegA.noShows}</span></TableCell>
                   <TableCell className="text-center"><span className="text-red-400">{totalsSegB.noShows}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos}</span></TableCell>
-                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegA.contratos + (un?.a ?? 0)}</span></TableCell>
+                  <TableCell className="text-center"><span className="text-amber-400">{totalsSegB.contratos + (un?.b ?? 0)}</span></TableCell>
                 </>
               ) : (
                 <>
@@ -446,7 +446,7 @@ export function SdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-amber-400">{totals.contratos}</span>
+                <span className="text-amber-400">{totalContratos}</span>
               </TableCell>
                 </>
               )}
@@ -458,7 +458,7 @@ export function SdrSummaryTable({
               <TableCell className="text-center">
                 {(() => {
                   const totalLiquida = totals.r1Realizada > 0
-                    ? ((totals.contratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
+                    ? ((totalContratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
                     : 0;
                   const cls = totalLiquida >= 20 ? 'text-green-400'
                     : totalLiquida >= 10 ? 'text-amber-400'
