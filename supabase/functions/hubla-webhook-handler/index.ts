@@ -1500,7 +1500,7 @@ async function linkTransactionToDealByIdentity(supabase: any, params: {
       .from('hubla_transactions')
       .update({
         linked_deal_id: dealId,
-        linked_method: criterio === 'email' ? 'auto' : 'auto_phone_match',
+        linked_method: 'auto',
         linked_at: new Date().toISOString(),
       })
       .eq('id', tx.id)
