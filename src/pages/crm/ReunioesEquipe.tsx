@@ -613,8 +613,10 @@ export default function ReunioesEquipe() {
       });
       return acc;
     };
+    // Consistência com o número grande do card "Contratos": só Contrato Pago
+    // (Outside tem card próprio).
     const sumCloserContratos = (rows?: any[]) =>
-      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0) + (c.outside || 0), 0);
+      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0), 0);
     const a = sumSdr(sdrSegmentAMap);
     const b = sumSdr(sdrSegmentBMap);
     return {
@@ -978,6 +980,12 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
+        contratosSemSegmento={Math.max(
+          0,
+          (enrichedKPIs.totalContratos || 0)
+            - (segmentTotals?.a.contratos || 0)
+            - (segmentTotals?.b.contratos || 0),
+        )}
       />
 
       <RefundDetailsDialog
