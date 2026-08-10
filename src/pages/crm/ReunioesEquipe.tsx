@@ -1049,7 +1049,9 @@ export default function ReunioesEquipe() {
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
-                contratos: enrichedKPIs.totalContratos,
+                // O total da tabela soma a linha "Não atribuído" (unassignedSdr),
+                // então o override recebe apenas a parte atribuível a SDRs.
+                contratos: Math.max(0, enrichedKPIs.totalContratos - unassignedSdr.total),
               }}
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}
