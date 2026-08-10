@@ -332,6 +332,39 @@ export function SdrSummaryTable({
               );
             })}
 
+            {/* Não atribuído: contratos pagos no período sem SDR identificável */}
+            {un && (
+              <TableRow className="italic text-muted-foreground">
+                <TableCell className="font-normal">Não atribuído</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {showSegments ? (
+                  <>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">{un.a}</TableCell>
+                    <TableCell className="text-center">{un.b}</TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                    <TableCell className="text-center">{un.total}</TableCell>
+                  </>
+                )}
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            )}
+
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">
