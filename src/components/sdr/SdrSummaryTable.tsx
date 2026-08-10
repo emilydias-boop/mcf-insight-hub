@@ -43,6 +43,8 @@ interface SdrSummaryTableProps {
   /** Aditivo: quando informados, cada SDR ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
   segmentAMap?: Map<string, SdrSegmentMetricValues>;
   segmentBMap?: Map<string, SdrSegmentMetricValues>;
+  /** Contratos pagos no período que não puderam ser atribuídos a nenhum SDR. */
+  unassigned?: { total: number; a: number; b: number };
 }
 
 export function SdrSummaryTable({ 
@@ -56,6 +58,7 @@ export function SdrSummaryTable({
   bu,
   segmentAMap,
   segmentBMap,
+  unassigned,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -119,6 +122,10 @@ export function SdrSummaryTable({
 
   const totalsSegA = sumSeg(segmentAMap);
   const totalsSegB = sumSeg(segmentBMap);
+
+  const un = unassigned && unassigned.total > 0 ? unassigned : null;
+  const totalContratos = totals.contratos + (un?.total ?? 0);
+  const colSpanBase = showSegments ? 10 : 5;
 
   if (isLoading) {
     return (
