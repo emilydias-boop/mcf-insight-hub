@@ -7,6 +7,14 @@ export interface UnassignedContractItem {
   source: 'attendee_r2_only' | 'attendee_sem_closer' | 'attendee_sem_sdr' | 'transacao_sem_reuniao';
   segment: 'A' | 'B' | null;
   reference: string;
+  /** Data do pagamento da caução/contrato (ISO). */
+  paid_at?: string | null;
+  /** Valor do negócio/transação quando disponível. */
+  value?: number | null;
+  /** Motivo legível da não atribuição. */
+  reason?: string;
+  /** Closer/SDR identificável no slot (sugestão de atribuição). */
+  suggested?: string | null;
 }
 
 export interface UnassignedContracts {
@@ -19,10 +27,12 @@ export interface UnassignedContracts {
   sdrA: number;
   sdrB: number;
   items: UnassignedContractItem[];
+  /** Mesma lista, na ótica da aba SDRs. */
+  sdrItems: UnassignedContractItem[];
 }
 
 const EMPTY: UnassignedContracts = {
-  total: 0, a: 0, b: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, items: [],
+  total: 0, a: 0, b: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, items: [], sdrItems: [],
 };
 
 /**
@@ -57,8 +67,8 @@ export function useUnassignedContracts(
           contract_paid_at,
           status,
           is_partner,
-          meeting_slots!inner ( meeting_type, closer_id, closers ( bu ) ),
-          crm_deals ( icp_segment )
+          meeting_slots!inner ( meeting_type, closer_id, closers ( bu, name ) ),
+          crm_deals ( icp_segment, value )
         `)
         .not('contract_paid_at', 'is', null)
         .gte('contract_paid_at', start)
@@ -81,6 +91,19 @@ export function useUnassignedContracts(
 
       const scoped = all.filter(inBu);
 
+      // Nomes dos SDRs (booked_by) para sugestão de atribuição.
+      const bookedIds = Array.from(
+        new Set(scoped.map((r) => r.booked_by).filter(Boolean) as string[]),
+      );
+      const sdrNames = new Map<string, string>();
+      if (bookedIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', bookedIds);
+        (profs || []).forEach((p: any) => sdrNames.set(p.id, p.full_name));
+      }
+
       // Atribuíveis a closer: R1 com closer_id preenchido.
       const closerAttributed = scoped.filter(
         (r) => r.meeting_slots?.meeting_type === 'r1' && !!r.meeting_slots?.closer_id,
@@ -96,6 +119,8 @@ export function useUnassignedContracts(
         const isR1 = r.meeting_slots?.meeting_type === 'r1';
         const hasCloser = !!r.meeting_slots?.closer_id;
         const alreadyCounted = !!r.deal_id && attributedDeals.has(r.deal_id);
+        const closerName = r.meeting_slots?.closers?.name || null;
+        const sdrName = r.booked_by ? sdrNames.get(r.booked_by) || null : null;
 
         if (!(isR1 && hasCloser)) {
           if (alreadyCounted) return; // mesmo deal já contado por um R1 válido
@@ -104,6 +129,12 @@ export function useUnassignedContracts(
             source: isR1 ? 'attendee_sem_closer' : 'attendee_r2_only',
             segment: segOf(r),
             reference: r.attendee_name || r.id,
+            paid_at: r.contract_paid_at ?? null,
+            value: r.crm_deals?.value ?? null,
+            reason: isR1
+              ? 'Caução marcada em reunião de R1 sem closer definido no slot'
+              : `Caução marcada em slot de R2${closerName ? ` (closer: ${closerName})` : ''} — a atribuição só considera R1`,
+            suggested: closerName || sdrName,
           };
           items.push(item);
           sdrItems.push(item);
@@ -117,6 +148,10 @@ export function useUnassignedContracts(
             source: 'attendee_sem_sdr',
             segment: segOf(r),
             reference: r.attendee_name || r.id,
+            paid_at: r.contract_paid_at ?? null,
+            value: r.crm_deals?.value ?? null,
+            reason: 'Reunião de R1 sem SDR que agendou (booked_by vazio)',
+            suggested: closerName,
           });
         }
       });
@@ -170,6 +205,12 @@ export function useUnassignedContracts(
             source: 'transacao_sem_reuniao',
             segment: t.linked_deal_id ? segByDeal.get(t.linked_deal_id) ?? null : null,
             reference: t.customer_name || t.id,
+            paid_at: t.sale_date ?? null,
+            value: null,
+            reason: t.linked_deal_id
+              ? 'Transação de contrato paga sem reunião/caução marcada no período'
+              : 'Transação de contrato paga sem negócio vinculado no CRM',
+            suggested: null,
           };
           items.push(item);
           sdrItems.push(item);
@@ -188,6 +229,7 @@ export function useUnassignedContracts(
         sdrA: count(sdrItems, 'A'),
         sdrB: count(sdrItems, 'B'),
         items,
+        sdrItems,
       };
     },
     staleTime: 60_000,
