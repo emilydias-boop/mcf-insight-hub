@@ -244,15 +244,15 @@ export function CloserSummaryTable({
               {showSegments
                 ? SEG_COLS.flatMap((c) => [
                     <TableCell key={`t-${c.key}-a`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentAData, c.key) + unFor(c.key, 'a')}</span>
+                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
                     </TableCell>,
                     <TableCell key={`t-${c.key}-b`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentBData, c.key) + unFor(c.key, 'b')}</span>
+                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
                     </TableCell>,
                   ])
                 : SEG_COLS.map((c) => (
                     <TableCell key={`t-${c.key}`} className="text-center">
-                      <span className={c.cls}>{segTotal(data, c.key) + unFor(c.key)}</span>
+                      <span className={c.cls}>{segTotal(data, c.key)}</span>
                     </TableCell>
                   ))}
               <TableCell className="text-center">
