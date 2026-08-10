@@ -1431,6 +1431,98 @@ function normalizeNameForMatch(name: string): string {
     .trim();
 }
 
+/**
+ * Fallback de vínculo transação → negócio (mesma regra do webhook MCF Pay):
+ * e-mail primeiro, telefone normalizado (sufixo 9 dígitos) como fallback.
+ * Usado quando o AUTO-PAGO não achou attendee R1 e a transação ficaria órfã
+ * (sem linked_deal_id), o que a tira dos relatórios de atribuição.
+ */
+async function linkTransactionToDealByIdentity(supabase: any, params: {
+  hublaId: string | null;
+  email: string | null;
+  phone: string | null;
+}): Promise<void> {
+  const { hublaId, email, phone } = params;
+  if (!hublaId) return;
+
+  try {
+    const { data: tx } = await supabase
+      .from('hubla_transactions')
+      .select('id, linked_deal_id')
+      .eq('hubla_id', hublaId)
+      .maybeSingle();
+
+    if (!tx || tx.linked_deal_id) return;
+
+    const emailLower = email?.toLowerCase().trim() || '';
+    const phoneSuffix = (phone || '').replace(/\D/g, '').slice(-9);
+
+    let dealId: string | null = null;
+    let criterio = '';
+
+    // Prioridade 1: e-mail exato
+    if (emailLower) {
+      const { data: byEmail } = await supabase
+        .from('crm_deals')
+        .select('id, origin_id, created_at, crm_contacts!inner(email)')
+        .ilike('crm_contacts.email', emailLower)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      const list = byEmail || [];
+      const preferred = list.find((d: any) => d.origin_id === INSIDE_SALES_ORIGIN_ID) || list[0];
+      if (preferred) { dealId = preferred.id; criterio = 'email'; }
+    }
+
+    // Prioridade 2: telefone (sufixo de 9 dígitos)
+    if (!dealId && phoneSuffix.length >= 9) {
+      const { data: byPhone } = await supabase
+        .from('crm_deals')
+        .select('id, origin_id, created_at, crm_contacts!inner(phone)')
+        .like('crm_contacts.phone', `%${phoneSuffix}`)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      const list = (byPhone || []).filter((d: any) => d.origin_id === INSIDE_SALES_ORIGIN_ID);
+      if (list.length === 1) {
+        dealId = list[0].id;
+        criterio = 'telefone';
+      } else if (list.length > 1) {
+        dealId = list[0].id; // mais recente no Inside Sales
+        criterio = 'telefone_desempate';
+      }
+    }
+
+    if (!dealId) {
+      console.log(`🔗 [AUTOLINK] Transação ${hublaId} segue órfã (sem match por e-mail/telefone)`);
+      return;
+    }
+
+    const { error: upErr } = await supabase
+      .from('hubla_transactions')
+      .update({
+        linked_deal_id: dealId,
+        linked_method: criterio === 'email' ? 'auto' : 'auto_phone_match',
+        linked_at: new Date().toISOString(),
+      })
+      .eq('id', tx.id)
+      .is('linked_deal_id', null);
+
+    if (upErr) {
+      console.error(`⚠️ [AUTOLINK] Erro ao vincular ${hublaId}:`, upErr.message);
+      return;
+    }
+
+    await supabase.from('hubla_transaction_autolink_log').insert({
+      transacao_id: tx.id,
+      deal_id: dealId,
+      criterio: `webhook_${criterio}`,
+    });
+
+    console.log(`🔗 [AUTOLINK] Transação ${hublaId} vinculada ao deal ${dealId} por ${criterio}`);
+  } catch (e) {
+    console.error('⚠️ [AUTOLINK] Exceção:', (e as Error).message);
+  }
+}
+
 async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
   if (!data.customerEmail && !data.customerPhone && !data.customerName && !data.customerDocument) {
     console.log('🎯 [AUTO-PAGO] Sem email, telefone, nome ou CPF para buscar reunião');
