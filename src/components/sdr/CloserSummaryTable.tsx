@@ -19,6 +19,8 @@ interface CloserSummaryTableProps {
   /** Aditivo: quando informados, cada closer ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
   segmentAData?: R1CloserMetric[];
   segmentBData?: R1CloserMetric[];
+  /** Contratos pagos no período que não puderam ser atribuídos a nenhum closer. */
+  unassigned?: { total: number; a: number; b: number };
 }
 
 export function CloserSummaryTable({ 
@@ -28,6 +30,7 @@ export function CloserSummaryTable({
   totalContratosFromKPI,
   segmentAData,
   segmentBData,
+  unassigned,
 }: CloserSummaryTableProps) {
   if (isLoading) {
     return (
@@ -93,6 +96,10 @@ export function CloserSummaryTable({
     (map.get(closerId)?.[key] as number | undefined) ?? 0;
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
+
+  const un = unassigned && unassigned.total > 0 ? unassigned : null;
+  const unFor = (key: SegKey, seg?: 'a' | 'b') =>
+    key === 'contrato_pago' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
