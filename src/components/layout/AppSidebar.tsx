@@ -44,6 +44,7 @@ import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
 import { usePendingApprovalsCount } from "@/hooks/useApprovalRequests";
 import { useNoShowPendingReviewsCount } from "@/hooks/useNoShowReviews";
 import { useCanManageAr } from "@/hooks/useArGestores";
+import { useMcfAtendimentoAccess } from "@/hooks/useMcfAtendimentoAccess";
 
 function PendingApprovalsBadge() {
   const { data: count = 0 } = usePendingApprovalsCount();
