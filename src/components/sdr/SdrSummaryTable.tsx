@@ -45,6 +45,8 @@ interface SdrSummaryTableProps {
   segmentBMap?: Map<string, SdrSegmentMetricValues>;
   /** Contratos pagos no período que não puderam ser atribuídos a nenhum SDR. */
   unassigned?: { total: number; a: number; b: number };
+  /** Abre o detalhamento dos contratos não atribuídos (opcionalmente por segmento). */
+  onUnassignedClick?: (segment?: 'A' | 'B') => void;
 }
 
 export function SdrSummaryTable({ 
@@ -59,6 +61,7 @@ export function SdrSummaryTable({
   segmentAMap,
   segmentBMap,
   unassigned,
+  onUnassignedClick,
 }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -333,8 +336,11 @@ export function SdrSummaryTable({
 
             {/* Não atribuído: contratos pagos no período sem SDR identificável */}
             {un && (
-              <TableRow className="italic text-muted-foreground">
-                <TableCell className="font-normal">Não atribuído</TableCell>
+              <TableRow
+                className={`italic text-muted-foreground ${onUnassignedClick ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+                onClick={onUnassignedClick ? () => onUnassignedClick() : undefined}
+              >
+                <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {showSegments ? (
                   <>
@@ -346,8 +352,18 @@ export function SdrSummaryTable({
                     <TableCell className="text-center">—</TableCell>
                     <TableCell className="text-center">—</TableCell>
                     <TableCell className="text-center">—</TableCell>
-                    <TableCell className="text-center">{un.a}</TableCell>
-                    <TableCell className="text-center">{un.b}</TableCell>
+                    <TableCell
+                      className="text-center"
+                      onClick={onUnassignedClick ? (e) => { e.stopPropagation(); onUnassignedClick('A'); } : undefined}
+                    >
+                      {un.a}
+                    </TableCell>
+                    <TableCell
+                      className="text-center"
+                      onClick={onUnassignedClick ? (e) => { e.stopPropagation(); onUnassignedClick('B'); } : undefined}
+                    >
+                      {un.b}
+                    </TableCell>
                   </>
                 ) : (
                   <>
