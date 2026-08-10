@@ -44,6 +44,8 @@ interface TeamKPICardsProps {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
     b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
   } | null;
+  /** Cauções contadas no total do card mas sem segmento ICP (sem deal/sem ICP). */
+  contratosSemSegmento?: number;
 }
 
 export function TeamKPICards({
@@ -61,6 +63,7 @@ export function TeamKPICards({
   onRefundClick,
   orphanRefundsCount = 0,
   segmentTotals = null,
+  contratosSemSegmento = 0,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -84,6 +87,10 @@ export function TeamKPICards({
     segmentTotals
       ? `A: ${segmentTotals.a[key] ?? 0} · B: ${segmentTotals.b[key] ?? 0}`
       : undefined;
+  const contratosSegLine = segmentTotals
+    ? `A: ${segmentTotals.a.contratos ?? 0} · B: ${segmentTotals.b.contratos ?? 0}`
+      + (contratosSemSegmento > 0 ? ` · s/seg: ${contratosSemSegmento}` : '')
+    : undefined;
 
   const cards: Array<{
     title: string;
@@ -167,9 +174,9 @@ export function TeamKPICards({
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
-        : "Total comercial da tabela Closers: Contrato Pago + Outside. Não depende apenas de atribuição ao SDR.",
+        : "Total de cauções do período (régua caucoes_efetivas): Contrato Pago da tabela de Closers + cauções não atribuídas. O subtítulo abre por segmento ICP; 's/seg' são cauções legítimas sem negócio/ICP identificado.",
       bucket: "contratos" as KpiBucket,
-      segLine: segLineFor('contratos'),
+      segLine: contratosSegLine,
     },
     ...(isConsorcio ? [] : [{
       title: "Outside",
