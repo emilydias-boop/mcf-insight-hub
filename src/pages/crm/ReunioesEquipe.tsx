@@ -613,8 +613,10 @@ export default function ReunioesEquipe() {
       });
       return acc;
     };
+    // Consistência com o número grande do card "Contratos": só Contrato Pago
+    // (Outside tem card próprio).
     const sumCloserContratos = (rows?: any[]) =>
-      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0) + (c.outside || 0), 0);
+      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0), 0);
     const a = sumSdr(sdrSegmentAMap);
     const b = sumSdr(sdrSegmentBMap);
     return {
