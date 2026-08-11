@@ -7,73 +7,90 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Phone, Check } from 'lucide-react';
-
-const OUTCOME_OPTIONS = [
-  { value: 'sem_contato', label: '📵 Sem contato', color: 'text-gray-500' },
-  { value: 'ocupado', label: '📞 Ocupado', color: 'text-yellow-500' },
-  { value: 'caixa_postal', label: '📬 Caixa postal', color: 'text-gray-500' },
-  { value: 'numero_errado', label: '❌ Número errado', color: 'text-red-500' },
-  { value: 'interessado', label: '✅ Interessado', color: 'text-green-500' },
-  { value: 'nao_interessado', label: '👎 Não interessado', color: 'text-red-500' },
-  { value: 'agendou_r1', label: '📅 Agendou R1', color: 'text-blue-500' },
-  { value: 'agendou_r2', label: '📅 Agendou R2', color: 'text-blue-500' },
-  { value: 'follow_up', label: '🔄 Follow-up', color: 'text-orange-500' },
-  { value: 'outro', label: '📝 Outro', color: 'text-gray-500' },
-];
+import { CALL_OUTCOMES, isAnsweredOutcome, isQualifiedOutcome, outcomeMeta } from '@/lib/callOutcomes';
 
 interface PostCallModalProps {
   open: boolean;
   onClose: () => void;
-  callId: string | null;
+  /** Fluxo legado Twilio: grava na tabela calls */
+  callId?: string | null;
+  /** Fluxo Sonax: grava o outcome no metadata da atividade click_to_call */
+  activityId?: string | null;
+  /** Deal usado para registrar a timeline quando não há callId */
+  dealId?: string | null;
   onSave: () => void;
 }
 
-export function PostCallModal({ open, onClose, callId, onSave }: PostCallModalProps) {
+export function PostCallModal({ open, onClose, callId, activityId, dealId, onSave }: PostCallModalProps) {
   const [outcome, setOutcome] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  const saveToActivity = async (id: string) => {
+    const { data } = await supabase
+      .from('deal_activities')
+      .select('metadata')
+      .eq('id', id)
+      .maybeSingle();
+    const meta = (((data as any)?.metadata) || {}) as Record<string, unknown>;
+    const { error } = await supabase
+      .from('deal_activities')
+      .update({
+        metadata: {
+          ...meta,
+          outcome,
+          answered: isAnsweredOutcome(outcome),
+          qualified: isQualifiedOutcome(outcome),
+          outcome_notes: notes || null,
+          outcome_at: new Date().toISOString(),
+        } as any,
+      })
+      .eq('id', id);
+    if (error) throw error;
+  };
+
+  const saveToCall = async (id: string) => {
+    const { error } = await (supabase as any)
+      .from('calls')
+      .update({ outcome, notes, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+
+    const { data: callData } = await (supabase as any)
+      .from('calls')
+      .select('deal_id, duration_seconds, to_number')
+      .eq('id', id)
+      .single();
+
+    const targetDeal = callData?.deal_id || dealId;
+    if (targetDeal) {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      await supabase.from('deal_activities').insert({
+        deal_id: targetDeal,
+        activity_type: 'call',
+        description: `Ligação (${formatDuration(callData?.duration_seconds || 0)}) - ${outcomeMeta(outcome)?.label || outcome}`,
+        user_id: currentUser?.id,
+        metadata: {
+          call_id: id,
+          outcome,
+          answered: isAnsweredOutcome(outcome),
+          qualified: isQualifiedOutcome(outcome),
+          duration_seconds: callData?.duration_seconds,
+          to_number: callData?.to_number,
+          notes,
+        },
+      });
+    }
+  };
+
   const handleSave = async () => {
-    if (!callId) return;
-    
+    if (!outcome) return;
+    if (!callId && !activityId) return;
+
     setIsSaving(true);
     try {
-      // Update call record with outcome and notes (using type assertion)
-      const { error } = await (supabase as any)
-        .from('calls')
-        .update({ 
-          outcome, 
-          notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', callId);
-
-      if (error) throw error;
-
-      // Get call details for activity logging
-      const { data: callData } = await (supabase as any)
-        .from('calls')
-        .select('deal_id, duration_seconds, to_number')
-        .eq('id', callId)
-        .single();
-
-      // Add to deal timeline if deal exists (with user_id)
-      if (callData?.deal_id) {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        await supabase.from('deal_activities').insert({
-          deal_id: callData.deal_id,
-          activity_type: 'call',
-          description: `Ligação (${formatDuration(callData.duration_seconds || 0)}) - ${OUTCOME_OPTIONS.find(o => o.value === outcome)?.label || outcome}`,
-          user_id: currentUser?.id,
-          metadata: {
-            call_id: callId,
-            outcome,
-            duration_seconds: callData.duration_seconds,
-            to_number: callData.to_number,
-            notes
-          }
-        });
-      }
+      if (activityId) await saveToActivity(activityId);
+      else if (callId) await saveToCall(callId);
 
       toast.success('Resultado da ligação salvo!');
       onSave();
@@ -116,7 +133,7 @@ export function PostCallModal({ open, onClose, callId, onSave }: PostCallModalPr
                 <SelectValue placeholder="Selecione o resultado" />
               </SelectTrigger>
               <SelectContent>
-                {OUTCOME_OPTIONS.map(opt => (
+                {CALL_OUTCOMES.map(opt => (
                   <SelectItem key={opt.value} value={opt.value}>
                     <span className={opt.color}>{opt.label}</span>
                   </SelectItem>
