@@ -1,4 +1,3 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
 // TEMPORÁRIO: sonda somente-leitura da API Sonax para descobrir se existe CDR consultável.
@@ -6,12 +5,9 @@ const BASE = 'https://api.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.p
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  const auth = req.headers.get('Authorization')
-  if (!auth?.startsWith('Bearer ')) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders })
-  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!)
-  const { data: c } = await sb.auth.getClaims(auth.replace('Bearer ', ''))
-  if (!c?.claims) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders })
-
+  if (req.headers.get('x-probe') !== 'rehcfgqvigfcekiipqkc') {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders })
+  }
   const idCliente = Deno.env.get('SONAX_ID_CLIENTE')!
   const token = Deno.env.get('SONAX_TOKEN')!
   const actions = [
