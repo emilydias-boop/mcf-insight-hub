@@ -146,8 +146,20 @@ const Negocios = () => {
     return buMapping.groups;
   }, [activeBU, buMapping]);
   
-  // Ref para garantir que só define o default UMA VEZ
-  const hasSetDefault = useRef(false);
+  // Override individual do SDR (allowed_origin_ids) RESTRITO à BU ativa.
+  // Sem essa intersecção, um SDR multi-BU acabava vendo os mesmos negócios
+  // em todas as BUs (o override é uma união plana de origens de várias BUs).
+  // Se a intersecção for vazia, tratamos como "sem override" (cai no default da BU).
+  const sdrScopedOverride = useMemo(() => {
+    if (!sdrOriginOverride || sdrOriginOverride.length === 0) return [];
+    // Sem BU ativa (ou mapeamento ainda carregando) não há como restringir
+    if (!activeBU || !buMapping) return sdrOriginOverride;
+    const allowed = new Set(buAuthorizedOrigins);
+    return sdrOriginOverride.filter(id => allowed.has(id));
+  }, [sdrOriginOverride, activeBU, buMapping, buAuthorizedOrigins]);
+
+  // Ref para garantir que só define o default UMA VEZ **por BU ativa**
+  const defaultSetForBU = useRef<string | null>(null);
   
   // Buscar pipelines para definir o default
   // Se tem BU ativa, pula deduplicação para garantir que os IDs mapeados apareçam
@@ -160,12 +172,12 @@ const Negocios = () => {
   const effectiveOriginId = useMemo(() => {
     // Para SDRs
     if (isSdr) {
-      // Prioridade 0: override individual do SDR (allowed_origin_ids)
-      if (sdrOriginOverride && sdrOriginOverride.length > 0) {
-        if (selectedOriginId && sdrOriginOverride.includes(selectedOriginId)) {
+      // Prioridade 0: override individual do SDR restrito à BU ativa
+      if (sdrScopedOverride.length > 0) {
+        if (selectedOriginId && sdrScopedOverride.includes(selectedOriginId)) {
           return selectedOriginId;
         }
-        return sdrOriginOverride[0];
+        return sdrScopedOverride[0];
       }
       
       // SDRs de BUs com multi-pipeline podem navegar manualmente
@@ -212,7 +224,7 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU, sdrOriginOverride]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr, buMapping, activeBU, sdrScopedOverride]);
   
   // Detecta se o `selectedPipelineId` é um GRUPO (funil com várias origens filhas).
   // `useCRMOriginsByPipeline` devolve, para uma origem, uma lista com ela mesma;
@@ -239,12 +251,14 @@ const Negocios = () => {
   // Definir pipeline padrão APENAS na primeira montagem
   // Prioridade: defaultOrigin do banco > grupo único > SDR origin > BU_DEFAULT_ORIGIN_MAP > fallback
   useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
-      hasSetDefault.current = true;
+    const buKey = activeBU || '__global__';
+    if (pipelines && pipelines.length > 0 && defaultSetForBU.current !== buKey && !isLoadingBU && !isBuMappingLoading) {
+      defaultSetForBU.current = buKey;
+      setSelectedOriginId(null);
       
-      // 0. Se SDR tem override individual, usar o primeiro como default
-      if (isSdr && sdrOriginOverride && sdrOriginOverride.length > 0) {
-        setSelectedPipelineId(sdrOriginOverride[0]);
+      // 0. Se SDR tem override individual válido NA BU ATIVA, usar o primeiro dele
+      if (isSdr && sdrScopedOverride.length > 0) {
+        setSelectedPipelineId(sdrScopedOverride[0]);
         return;
       }
       
@@ -293,7 +307,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr, activeBU, isLoadingBU, buMapping, buAllowedGroups, sdrOriginOverride]);
+  }, [pipelines, isSdr, activeBU, isLoadingBU, isBuMappingLoading, buMapping, buAllowedGroups, sdrScopedOverride]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -750,8 +764,8 @@ const Negocios = () => {
   
   // Determinar se deve mostrar a sidebar
   // SDRs com override individual: esconder sidebar se só tem 1 pipeline no override
-  const sdrHasOverride = isSdr && sdrOriginOverride && sdrOriginOverride.length > 0;
-  const sdrOverrideSingle = sdrHasOverride && sdrOriginOverride!.length === 1;
+  const sdrHasOverride = isSdr && sdrScopedOverride.length > 0;
+  const sdrOverrideSingle = sdrHasOverride && sdrScopedOverride.length === 1;
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
   const sdrCanSeeSidebar = (isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) || (sdrHasOverride && !sdrOverrideSingle);
   const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
