@@ -94,9 +94,14 @@ Deno.serve(async (req) => {
       activity_type: 'click_to_call',
       description: `Click-to-call para ${numero} pelo ramal ${mapping.ramal}`,
       user_id: userId || null,
-      metadata: { numero, ramal: mapping.ramal, sdr_email: email, sonax_status: sonaxStatus, ok },
-    })
-  }
+      metadata: {
+        numero,
+        ramal: mapping.ramal,
+        sdr_email: email,
+        sonax_status: sonaxStatus,
+        ok,
+        sonax_body: sonaxBody,
+      },
     })
   }
 
