@@ -130,7 +130,26 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                <TableBody>
                  {metrics.map((sdr) => (
                    <TableRow key={sdr.sdrEmail}>
-                     <TableCell className="font-medium whitespace-nowrap">{sdr.sdrName}</TableCell>
+                     <TableCell className="font-medium whitespace-nowrap">
+                       <span className="inline-flex items-center gap-1.5">
+                         {sdr.sdrName}
+                         {sdr.source === 'sonax' && (
+                           <Tooltip>
+                             <TooltipTrigger asChild>
+                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary cursor-help">
+                                 via Sonax
+                               </span>
+                             </TooltipTrigger>
+                             <TooltipContent side="top" className="max-w-[260px] text-xs">
+                               Discagem pelo ramal {sdr.ramal || '—'} (Sonax). As ligações vêm do
+                               click-to-call/auto-discador e a efetividade vem do resultado marcado
+                               pelo SDR, não da duração.
+                               {sdr.pendingOutcomeCalls > 0 && ` ${sdr.pendingOutcomeCalls} discagem(ns) sem resultado registrado.`}
+                             </TooltipContent>
+                           </Tooltip>
+                         )}
+                       </span>
+                     </TableCell>
                      <TableCell className="text-center">{sdr.totalCalls}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{sdr.notAnsweredCalls}</TableCell>
                     <TableCell className="text-center text-amber-600">{sdr.ringDropCalls}</TableCell>
