@@ -12175,6 +12175,7 @@ export type Database = {
       sdr_ramal_mapping: {
         Row: {
           active: boolean
+          auto_dialer_engine: string
           created_at: string
           ramal: string
           sdr_email: string
@@ -12183,6 +12184,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          auto_dialer_engine?: string
           created_at?: string
           ramal: string
           sdr_email: string
@@ -12191,6 +12193,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          auto_dialer_engine?: string
           created_at?: string
           ramal?: string
           sdr_email?: string

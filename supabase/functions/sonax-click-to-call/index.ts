@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   const userId = String((claimsData.claims as Record<string, unknown>).sub || '')
   if (!email) return json({ error: 'email_nao_encontrado' }, 401)
 
-  let body: { numero?: string; deal_id?: string } = {}
+  let body: { numero?: string; deal_id?: string; origin?: string; attempt?: number } = {}
   try {
     body = await req.json()
   } catch {
@@ -88,24 +88,38 @@ Deno.serve(async (req) => {
   const ok = sonaxStatus >= 200 && sonaxStatus < 300 && !sonaxRejected
   if (!ok) console.error(`[click-to-call] FALHA numero=${numero} ramal=${mapping.ramal} status=${sonaxStatus} body=${sonaxBody}`)
 
+  const origin = body.origin === 'auto_dialer' ? 'auto_dialer' : 'manual'
+  let activityId: string | null = null
+
   if (body.deal_id) {
-    await admin.from('deal_activities').insert({
-      deal_id: body.deal_id,
-      activity_type: 'click_to_call',
-      description: `Click-to-call para ${numero} pelo ramal ${mapping.ramal}`,
-      user_id: userId || null,
-      metadata: {
-        numero,
-        ramal: mapping.ramal,
-        sdr_email: email,
-        sonax_status: sonaxStatus,
-        ok,
-        sonax_body: sonaxBody,
-      },
-    })
+    const { data: activity, error: activityError } = await admin
+      .from('deal_activities')
+      .insert({
+        deal_id: body.deal_id,
+        activity_type: 'click_to_call',
+        description:
+          origin === 'auto_dialer'
+            ? `Auto-discador (Sonax) para ${numero} pelo ramal ${mapping.ramal}`
+            : `Click-to-call para ${numero} pelo ramal ${mapping.ramal}`,
+        user_id: userId || null,
+        metadata: {
+          numero,
+          ramal: mapping.ramal,
+          sdr_email: email,
+          sonax_status: sonaxStatus,
+          ok,
+          sonax_body: sonaxBody,
+          origin,
+          attempt: typeof body.attempt === 'number' ? body.attempt : null,
+        },
+      })
+      .select('id')
+      .maybeSingle()
+    if (activityError) console.error('[click-to-call] activity insert error', activityError)
+    activityId = (activity as { id?: string } | null)?.id ?? null
   }
 
-  if (!ok) return json({ error: 'sonax_erro', status: sonaxStatus, detail: sonaxBody }, 502)
+  if (!ok) return json({ error: 'sonax_erro', status: sonaxStatus, detail: sonaxBody, activity_id: activityId }, 502)
 
-  return json({ success: true, ramal: mapping.ramal, numero })
+  return json({ success: true, ramal: mapping.ramal, numero, activity_id: activityId })
 })

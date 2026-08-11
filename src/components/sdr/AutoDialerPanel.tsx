@@ -382,7 +382,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
   };
 
-  const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
+  const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying' || ad.state === 'awaiting-outcome';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -395,6 +395,23 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
             Disca leads em sequência. Pausa quando alguém atende, retoma após qualificar.
           </SheetDescription>
         </SheetHeader>
+
+        {/* Aviso do motor Sonax: a ligação toca FORA do navegador */}
+        {ad.engine === 'sonax' && (
+          <div className="mx-4 mt-3 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
+            <div className="font-semibold flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" /> Discagem via Sonax
+            </div>
+            <p className="text-muted-foreground mt-1">
+              A ligação <strong>toca no seu ramal/softphone {ad.ramal ? `(${ad.ramal})` : ''}</strong>, não no navegador.
+              Mantenha o softphone aberto e registrado, atenda por lá e registre o resultado no banner
+              para a fila seguir para o próximo lead.
+            </p>
+            {!ad.ramal && (
+              <p className="text-destructive mt-1">Ramal não configurado — fale com o gestor antes de iniciar.</p>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="px-4 py-3 grid grid-cols-4 gap-2 border-b">

@@ -11,6 +11,7 @@ import { useTwilio } from "@/contexts/TwilioContext";
 import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
 import { DialerLauncherProvider } from "@/contexts/DialerLauncherContext";
 import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner";
+import { AutoDialerOutcomeBanner } from "@/components/sdr/AutoDialerOutcomeBanner";
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +66,7 @@ export function MainLayout() {
               <QuickDialerLauncher />
               <AutoDialerDealDrawer />
               <AutoDialerInCallBanner />
+              <AutoDialerOutcomeBanner />
               <GamificationScheduler />
             </>
           )}

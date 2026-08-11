@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 interface ClickToCallInput {
   numero: string;
   dealId?: string;
+  origin?: 'manual' | 'auto_dialer';
+  attempt?: number;
 }
 
 /**
@@ -13,9 +15,9 @@ interface ClickToCallInput {
  */
 export function useSonaxClickToCall() {
   return useMutation({
-    mutationFn: async ({ numero, dealId }: ClickToCallInput) => {
+    mutationFn: async ({ numero, dealId, origin = 'manual', attempt }: ClickToCallInput) => {
       const { data, error } = await supabase.functions.invoke('sonax-click-to-call', {
-        body: { numero, deal_id: dealId },
+        body: { numero, deal_id: dealId, origin, attempt },
       });
 
       if (error) {
@@ -32,7 +34,7 @@ export function useSonaxClickToCall() {
       }
 
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data as { success: boolean; ramal: string; numero: string };
+      return data as { success: boolean; ramal: string; numero: string; activity_id: string | null };
     },
     onSuccess: (data) => {
       toast.success(`Ligação iniciada no ramal ${data.ramal}`);
