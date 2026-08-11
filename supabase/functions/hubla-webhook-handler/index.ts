@@ -3487,8 +3487,9 @@ Deno.serve(async (req) => {
 
           console.log(`🔄 Reembolso processado: ${hublaId}`);
 
-          // === Zera contract_paid_at do attendee vinculado (se existir) ===
-          // Sem isso, o contrato permanece contado no Contrato Pago mesmo após reembolso.
+          // === Marca reembolso no attendee vinculado (se existir) ===
+          // Não zeramos contract_paid_at (preserva histórico do pagamento):
+          // o reembolso vira flag `refunded_at`, já excluída de caucoes_efetivas.
           const { data: linkedTx } = await supabase
             .from('hubla_transactions')
             .select('linked_attendee_id, linked_deal_id')
@@ -3501,9 +3502,9 @@ Deno.serve(async (req) => {
           if (linkedAttendeeId) {
             await supabase
               .from('meeting_slot_attendees')
-              .update({ contract_paid_at: null })
+              .update({ refunded_at: new Date().toISOString() } as never)
               .eq('id', linkedAttendeeId);
-            console.log(`🔴 [REEMBOLSO HUBLA] contract_paid_at zerado no attendee ${linkedAttendeeId}`);
+            console.log(`🔴 [REEMBOLSO HUBLA] refunded_at gravado no attendee ${linkedAttendeeId}`);
           }
 
           // === Registra atividade canônica de reembolso (fonte oficial de contagem) ===
