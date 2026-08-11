@@ -77,8 +77,14 @@ Deno.serve(async (req) => {
     return json({ error: 'falha_sonax', detail: String(e) }, 502)
   }
 
-  const bodyLower = sonaxBody.toLowerCase()
-  const sonaxRejected = /nao esta atendendo|não está atendendo|erro|invalid|token/.test(bodyLower)
+  // Detecção de falha: SOMENTE a frase literal de rejeição da Sonax.
+  // Termos genéricos ("erro"/"invalid"/"token") causavam falso negativo, pois a
+  // resposta pode ecoar a querystring (token=...) de uma chamada bem-sucedida.
+  const normalized = sonaxBody
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  const sonaxRejected = /nao esta atendendo/.test(normalized)
   const ok = sonaxStatus >= 200 && sonaxStatus < 300 && !sonaxRejected
   if (!ok) console.error(`[click-to-call] FALHA numero=${numero} ramal=${mapping.ramal} status=${sonaxStatus} body=${sonaxBody}`)
 
@@ -88,7 +94,14 @@ Deno.serve(async (req) => {
       activity_type: 'click_to_call',
       description: `Click-to-call para ${numero} pelo ramal ${mapping.ramal}`,
       user_id: userId || null,
-      metadata: { numero, ramal: mapping.ramal, sdr_email: email, sonax_status: sonaxStatus, ok },
+      metadata: {
+        numero,
+        ramal: mapping.ramal,
+        sdr_email: email,
+        sonax_status: sonaxStatus,
+        ok,
+        sonax_body: sonaxBody,
+      },
     })
   }
 
