@@ -7,6 +7,11 @@ export interface SdrActivityMetrics {
   sdrEmail: string;
   sdrName: string;
   sdrUserId: string | null;
+  /** Fonte dos dados de ligação deste SDR na Fase 1 do rollout Sonax */
+  source: 'twilio' | 'sonax';
+  ramal: string | null;
+  /** Só no Sonax: discagens sem outcome registrado pelo SDR */
+  pendingOutcomeCalls: number;
   
   // Atividades do período
   totalCalls: number;
@@ -101,6 +106,19 @@ export function useSdrActivityMetrics(
       const sdrs = sdrsQuery.data || [];
       const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
       const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
+
+      // Motor de discagem por SDR (Fase 1: só piloto está em Sonax)
+      const { data: ramalRows } = await supabase
+        .from('sdr_ramal_mapping')
+        .select('sdr_email, ramal, auto_dialer_engine');
+      const engineByEmail = new Map<string, { engine: 'twilio' | 'sonax'; ramal: string | null }>();
+      (ramalRows || []).forEach((r: any) => {
+        if (!r.sdr_email) return;
+        engineByEmail.set(String(r.sdr_email).toLowerCase(), {
+          engine: r.auto_dialer_engine === 'sonax' ? 'sonax' : 'twilio',
+          ramal: r.ramal ?? null,
+        });
+      });
       
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
@@ -131,7 +149,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('deal_activities')
-          .select('user_id, activity_type, deal_id')
+          .select('user_id, activity_type, deal_id, metadata')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
           .range(actFrom, actFrom + PAGE - 1);
@@ -160,10 +178,14 @@ export function useSdrActivityMetrics(
       // 4. Inicializar métricas para SDRs conhecidos (do banco de dados)
       const metricsMap = new Map<string, SdrActivityMetrics>();
       sdrs.forEach(sdr => {
+        const cfg = engineByEmail.get(sdr.email.toLowerCase());
         metricsMap.set(sdr.email.toLowerCase(), {
           sdrEmail: sdr.email,
           sdrName: sdr.name,
           sdrUserId: emailToUserId.get(sdr.email.toLowerCase()) || null,
+          source: cfg?.engine || 'twilio',
+          ramal: cfg?.ramal || null,
+          pendingOutcomeCalls: 0,
           totalCalls: 0,
           answeredCalls: 0,
           notAnsweredCalls: 0,
@@ -199,6 +221,9 @@ export function useSdrActivityMetrics(
         
         const metrics = metricsMap.get(email);
         if (!metrics) return;
+
+        // SDR do piloto Sonax: a fonte de ligações é deal_activities (click_to_call)
+        if (metrics.source === 'sonax') return;
         
         metrics.totalCalls++;
 
@@ -242,6 +267,27 @@ export function useSdrActivityMetrics(
           case 'whatsapp_sent':
             metrics.whatsappSent++;
             break;
+          case 'click_to_call': {
+            // Só conta como ligação para quem está no motor Sonax; para os
+            // demais o click-to-call avulso é acessório e a fonte é a Twilio.
+            if (metrics.source !== 'sonax') break;
+            const meta = (activity.metadata || {}) as Record<string, any>;
+            metrics.totalCalls++;
+            const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
+            if (meta.ok === false) {
+              metrics.notAnsweredCalls++;
+            } else if (meta.answered === true) {
+              metrics.answeredCalls++;
+              if (meta.qualified === true) metrics.qualifiedCalls++;
+              else metrics.effectiveCalls++;
+            } else if (hasOutcome) {
+              if (meta.outcome === 'caixa_postal') metrics.voicemailCalls++;
+              else metrics.notAnsweredCalls++;
+            } else {
+              metrics.pendingOutcomeCalls++;
+            }
+            break;
+          }
         }
         
         if (activity.deal_id) {
@@ -265,7 +311,7 @@ export function useSdrActivityMetrics(
           : 0;
         
         // Incluir apenas SDRs com alguma atividade
-        if (metrics.totalCalls > 0 || metrics.notesAdded > 0 || metrics.stageChanges > 0 || metrics.whatsappSent > 0) {
+        if (metrics.totalCalls > 0 || metrics.notesAdded > 0 || metrics.stageChanges > 0 || metrics.whatsappSent > 0 || metrics.pendingOutcomeCalls > 0) {
           results.push(metrics);
         }
       });
