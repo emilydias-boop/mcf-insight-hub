@@ -12875,6 +12875,27 @@ export type Database = {
         }
         Relationships: []
       }
+      tv_ranking_manual_exclusions: {
+        Row: {
+          created_at: string
+          email: string
+          ranking: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          ranking: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          ranking?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       user_employment_data: {
         Row: {
           commission_rate: number | null
