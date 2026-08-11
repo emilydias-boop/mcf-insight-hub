@@ -10,27 +10,22 @@ Deno.serve(async (req) => {
   }
   const idCliente = Deno.env.get('SONAX_ID_CLIENTE')!
   const token = Deno.env.get('SONAX_TOKEN')!
-  const actions = [
-    'lista_tabulacao', 'relatorio_chamadas', 'relatorio', 'detalhe_chamadas', 'detalhes_chamadas',
-    'cdr', 'historico_chamadas', 'lista_chamadas', 'status_chamadas', 'consulta_chamada',
-    'chamadas_realizadas', 'lista_ramais', 'status_ramais', 'lista_campanhas', 'lista_pausa',
-    'relatorio_analitico', 'chamadas_ramal', 'detalhe_chamada',
-  ]
   const out: Record<string, unknown> = {}
-  for (const a of actions) {
-    const u = new URL(BASE)
-    u.searchParams.set('action', a)
-    u.searchParams.set('id_cliente', idCliente)
-    u.searchParams.set('token', token)
-    u.searchParams.set('data_inicio', '2026-08-10')
-    u.searchParams.set('data_fim', '2026-08-11')
+  const urls: Record<string, string> = {
+    'dbdial_root_noparams': 'https://api.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.php',
+    'dbdial_dir': 'https://api.sonax.net.br/a2billing_v2/admin/Public/',
+    'c2c_api_host_noparams': 'https://api.sonax.net.br/sonax-click2call.php',
+    'c2c_official_host_noparams': 'https://click2call.sonax.net.br/sonax-click2call.php',
+    'webapi_alt1': `https://api.sonax.net.br/a2billing/admin/Public/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
+    'webapi_alt2': `https://pabxcloud.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
+    'webapi_alt3': `https://api.sonax.net.br/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
+  }
+  for (const [k, u] of Object.entries(urls)) {
     try {
-      const r = await fetch(u.toString(), { method: 'GET' })
+      const r = await fetch(u, { method: 'GET' })
       const t = (await r.text()).replaceAll(token, 'REDACTED')
-      out[a] = { status: r.status, body: t.slice(0, 400) }
-    } catch (e) {
-      out[a] = { error: String(e) }
-    }
+      out[k] = { status: r.status, body: t.replace(/\s+/g, ' ').slice(0, 300) }
+    } catch (e) { out[k] = { error: String(e) } }
   }
   return new Response(JSON.stringify(out, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
