@@ -254,7 +254,7 @@ const Negocios = () => {
     const buKey = activeBU || '__global__';
     if (pipelines && pipelines.length > 0 && defaultSetForBU.current !== buKey && !isLoadingBU && !isBuMappingLoading) {
       defaultSetForBU.current = buKey;
-      setSelectedOriginId(undefined);
+      setSelectedOriginId(null);
       
       // 0. Se SDR tem override individual válido NA BU ATIVA, usar o primeiro dele
       if (isSdr && sdrScopedOverride.length > 0) {
@@ -764,8 +764,8 @@ const Negocios = () => {
   
   // Determinar se deve mostrar a sidebar
   // SDRs com override individual: esconder sidebar se só tem 1 pipeline no override
-  const sdrHasOverride = isSdr && sdrOriginOverride && sdrOriginOverride.length > 0;
-  const sdrOverrideSingle = sdrHasOverride && sdrOriginOverride!.length === 1;
+  const sdrHasOverride = isSdr && sdrScopedOverride.length > 0;
+  const sdrOverrideSingle = sdrHasOverride && sdrScopedOverride.length === 1;
   // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
   const sdrCanSeeSidebar = (isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) || (sdrHasOverride && !sdrOverrideSingle);
   const totalMappedPipelines = buAllowedGroups.length + (buMapping?.origins?.length || 0);
