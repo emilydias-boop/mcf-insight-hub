@@ -7,11 +7,15 @@ export interface SdrActivityMetrics {
   sdrEmail: string;
   sdrName: string;
   sdrUserId: string | null;
-  /** Fonte dos dados de ligação deste SDR na Fase 1 do rollout Sonax */
+  /** Motor de discagem configurado para o SDR (Fase 1 do rollout Sonax) */
   source: 'twilio' | 'sonax';
   ramal: string | null;
   /** Só no Sonax: discagens sem outcome registrado pelo SDR */
   pendingOutcomeCalls: number;
+  /** Discagens contadas via tabela `calls` (Twilio) */
+  twilioCalls: number;
+  /** Discagens contadas via `deal_activities` (click_to_call / Sonax) */
+  sonaxCalls: number;
   
   // Atividades do período
   totalCalls: number;
@@ -186,6 +190,8 @@ export function useSdrActivityMetrics(
           source: cfg?.engine || 'twilio',
           ramal: cfg?.ramal || null,
           pendingOutcomeCalls: 0,
+          twilioCalls: 0,
+          sonaxCalls: 0,
           totalCalls: 0,
           answeredCalls: 0,
           notAnsweredCalls: 0,
@@ -222,10 +228,9 @@ export function useSdrActivityMetrics(
         const metrics = metricsMap.get(email);
         if (!metrics) return;
 
-        // SDR do piloto Sonax: a fonte de ligações é deal_activities (click_to_call)
-        if (metrics.source === 'sonax') return;
-        
+        // Durante a transição, pilotos Sonax continuam somando o histórico Twilio.
         metrics.totalCalls++;
+        metrics.twilioCalls++;
 
         const category = classifyCall(call.status, call.duration_seconds, call.answered_by, thresholds);
         switch (category) {
@@ -268,11 +273,12 @@ export function useSdrActivityMetrics(
             metrics.whatsappSent++;
             break;
           case 'click_to_call': {
-            // Só conta como ligação para quem está no motor Sonax; para os
-            // demais o click-to-call avulso é acessório e a fonte é a Twilio.
+            // Somado para quem está no motor Sonax (auto-discador + avulso).
+            // Para quem ainda está no Twilio, a fonte de ligações é a tabela `calls`.
             if (metrics.source !== 'sonax') break;
             const meta = (activity.metadata || {}) as Record<string, any>;
             metrics.totalCalls++;
+            metrics.sonaxCalls++;
             const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
             if (meta.ok === false) {
               metrics.notAnsweredCalls++;
