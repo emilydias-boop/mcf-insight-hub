@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   }
   for (const [k, u] of Object.entries(urls)) {
     try {
-      const r = await fetch(u, { method: 'GET' })
+      const r = await fetch(u, { method: 'GET', signal: AbortSignal.timeout(7000) })
       const t = (await r.text()).replaceAll(token, 'REDACTED')
       out[k] = { status: r.status, body: t.replace(/\s+/g, ' ').slice(0, 300) }
     } catch (e) { out[k] = { error: String(e) } }
