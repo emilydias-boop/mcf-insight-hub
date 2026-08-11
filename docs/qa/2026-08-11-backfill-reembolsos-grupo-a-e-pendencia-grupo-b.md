@@ -46,3 +46,19 @@ A TV lê `tv_public_snapshots` (cache), então o número novo aparece no próxim
 (Julio 29, William Ferreira 20, Leticia Faustino 14, Jessica Martins 2, Jessica Bellini 1).
 - 58 deals com A000 vinculado; 6 sem vínculo A000 em `hubla_transactions` — mas **todos** têm A000 real de R$497 no MCF Pay (`mcf_pay_transaction_id` + `amount 497 / payment.refunded`). Causa: 4 transações MCF Pay nunca espelhadas em `hubla_transactions`, 1 sem `linked_deal_id` (Kelwim Correa) e 1 vinculada a deal duplicado (Tarcísio Fernandes).
 - **Ressalva Claudio Diniz** (`7c2c20ee`): 2 attendees pagos, mas apenas **1** reembolso real (`pay_zedlpw4q6m1etvge`, R$12.000, A001 - Incorporador Completo, 30/07 17:27). O A000 de R$497 (15/07, closer William) **não foi reembolsado**. Aplicar `refunded_at` somente no attendee da R2 (`117350b7`, closer Jessica Martins). O "duplo lançamento de R$12.000" era artefato de agregação, não duplicidade no banco.
+
+## Grupo B — APLICADO (11/08/2026, autorizado)
+Regra: apenas `refunded_at` gravado (`custom_fields->>'mcf_pay_refunded_at'` → `created_at` da atividade `refund_mcf_pay`/`refund_hubla`). `contract_paid_at` **não** foi tocado.
+Ressalva Claudio Diniz respeitada: só o attendee `117350b7` (R2, Jessica Martins, A001 R$12.000) recebeu `refunded_at`; `ada5556b` (R1, William, A000 R$497) segue como venda válida — é o único registro restante do universo sem flag, por decisão.
+
+### Validação antes/depois
+| métrica | antes | depois |
+|---|---|---|
+| Julho bruto | 263 | 263 |
+| Julho líquido | 241 | 182 |
+| Julho reembolsados | 22 | 81 |
+| Agosto bruto | 85 | 85 |
+| Agosto líquido | 83 | 80 |
+| Agosto reembolsados | 2 | 5 |
+
+Bruto inalterado nos dois meses → ranking Closer da TV (bruto) não muda. Painel Comercial (líquido) cai exatamente o volume marcado e os reembolsos passam a aparecer por closer.
