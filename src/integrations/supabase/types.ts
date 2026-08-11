@@ -12857,6 +12857,24 @@ export type Database = {
           },
         ]
       }
+      tv_public_snapshots: {
+        Row: {
+          computed_at: string
+          key: string
+          payload: Json
+        }
+        Insert: {
+          computed_at?: string
+          key: string
+          payload: Json
+        }
+        Update: {
+          computed_at?: string
+          key?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       user_employment_data: {
         Row: {
           commission_rate: number | null
@@ -15161,6 +15179,8 @@ export type Database = {
         Args: { p_attendee_id: string }
         Returns: undefined
       }
+      tv_incorporador_payload: { Args: never; Returns: Json }
+      tv_incorporador_sdr_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_seg_sums: {
         Args: { _end: string; _seg: string; _start: string }
         Returns: {
@@ -15171,6 +15191,7 @@ export type Database = {
           r1_realizada: number
         }[]
       }
+      tv_refresh_incorporador_snapshot: { Args: never; Returns: undefined }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
