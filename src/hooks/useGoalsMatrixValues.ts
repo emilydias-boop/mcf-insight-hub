@@ -58,7 +58,9 @@ export function useGoalsMatrixValues({
 
   const { data: dayCloserMetrics } = useR1CloserMetrics(dayStart, dayEnd, "incorporador", segment);
   const { data: weekCloserMetrics } = useR1CloserMetrics(weekStart, weekEnd, "incorporador", segment);
-  const { data: periodCloserMetrics } = useR1CloserMetrics(periodStart, periodEnd, "incorporador", segment);
+  // Coluna "Mês" deve refletir SEMPRE o mês corrente (igual às demais linhas),
+  // não o período do filtro da tela.
+  const { data: monthCloserMetrics } = useR1CloserMetrics(monthStart, monthEnd, "incorporador", segment);
 
   const sumContratos = (rows?: { contrato_pago: number; outside: number }[]) =>
     rows?.reduce((sum, c) => sum + c.contrato_pago + c.outside, 0) ?? 0;
@@ -90,11 +92,11 @@ export function useGoalsMatrixValues({
     r1Agendada: monthKPIs?.totalR1Agendada || 0,
     r1Realizada: monthKPIs?.totalRealizadas || 0,
     noShow: monthKPIs?.totalNoShows || 0,
-    contrato: sumContratos(periodCloserMetrics),
+    contrato: sumContratos(monthCloserMetrics),
     r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, periodCloserMetrics]);
+  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs, monthCloserMetrics]);
 
   return { dayValues, weekValues, monthValues };
 }

@@ -428,9 +428,12 @@ Deno.serve(async (req) => {
       await supabase
         .from("meeting_slot_attendees")
         .update({
-          contract_paid_at: null,
+          // NÃO zeramos contract_paid_at: o histórico do pagamento é preservado.
+          // O reembolso passa a ser uma flag própria (refunded_at), consumida por
+          // caucoes_efetivas e pelas métricas de Closer.
+          refunded_at: paidAt ?? new Date().toISOString(),
           // mantemos status atual para investigação manual em reembolso
-        })
+        } as never)
         .eq("id", attendee.id);
     }
   }

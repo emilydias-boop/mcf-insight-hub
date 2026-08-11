@@ -9435,6 +9435,7 @@ export type Database = {
           r2_confirmation: string | null
           r2_observations: string | null
           r2_status_id: string | null
+          refunded_at: string | null
           status: string | null
           thermometer_ids: string[] | null
           updated_at: string | null
@@ -9475,6 +9476,7 @@ export type Database = {
           r2_confirmation?: string | null
           r2_observations?: string | null
           r2_status_id?: string | null
+          refunded_at?: string | null
           status?: string | null
           thermometer_ids?: string[] | null
           updated_at?: string | null
@@ -9515,6 +9517,7 @@ export type Database = {
           r2_confirmation?: string | null
           r2_observations?: string | null
           r2_status_id?: string | null
+          refunded_at?: string | null
           status?: string | null
           thermometer_ids?: string[] | null
           updated_at?: string | null
