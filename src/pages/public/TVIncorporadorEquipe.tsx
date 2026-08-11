@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TVMetricCard, TVShell, TVMsg, TVSection, Metric } from "@/components/public/TVTeamShared";
+import { TVSdrRankingBlock, TVSdrRankingRow } from "@/components/public/TVSdrRankingBlock";
 
 const TOKEN = "e03633d2-f881-4b6d-a5dd-a928e6b7da0c";
 
@@ -14,7 +15,7 @@ interface Block extends SegBlock {
   a?: SegBlock;
   b?: SegBlock;
 }
-interface Payload { today: string; updated_at: string; dia: Block; mes: Block; error?: string }
+interface Payload { today: string; updated_at: string; dia: Block; mes: Block; sdr_ranking?: TVSdrRankingRow[]; error?: string }
 
 const ACCENT = "#ff7a00";
 
@@ -53,6 +54,7 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
+      side={<TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />}
     >
       <TVSection label="Hoje" accent={ACCENT}>
         <Grid b={data.dia} />
