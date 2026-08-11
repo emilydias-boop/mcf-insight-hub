@@ -15179,6 +15179,7 @@ export type Database = {
         Args: { p_attendee_id: string }
         Returns: undefined
       }
+      tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
       tv_incorporador_sdr_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_seg_sums: {
