@@ -69,6 +69,7 @@ export interface R1CloserMetric {
   outside: number;
   r2_agendada: number;
   reembolsos: number;
+  reembolsos_valor: number;
 }
 
 export type IcpSegmentFilter = 'all' | 'A' | 'B';
