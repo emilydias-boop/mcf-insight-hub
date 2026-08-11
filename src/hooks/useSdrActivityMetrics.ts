@@ -12,10 +12,7 @@ export interface SdrActivityMetrics {
   ramal: string | null;
   /** Só no Sonax: discagens sem outcome registrado pelo SDR */
   pendingOutcomeCalls: number;
-  /** Discagens contadas via tabela `calls` (Twilio) */
-  twilioCalls: number;
   /** Discagens contadas via `deal_activities` (click_to_call / Sonax) */
-  sonaxCalls: number;
   
   // Atividades do período
   totalCalls: number;
@@ -190,8 +187,6 @@ export function useSdrActivityMetrics(
           source: cfg?.engine || 'twilio',
           ramal: cfg?.ramal || null,
           pendingOutcomeCalls: 0,
-          twilioCalls: 0,
-          sonaxCalls: 0,
           totalCalls: 0,
           answeredCalls: 0,
           notAnsweredCalls: 0,
@@ -228,9 +223,10 @@ export function useSdrActivityMetrics(
         const metrics = metricsMap.get(email);
         if (!metrics) return;
 
-        // Durante a transição, pilotos Sonax continuam somando o histórico Twilio.
+        // SDRs migrados para Sonax contam exclusivamente por `deal_activities`.
+        if (metrics.source === 'sonax') return;
+
         metrics.totalCalls++;
-        metrics.twilioCalls++;
 
         const category = classifyCall(call.status, call.duration_seconds, call.answered_by, thresholds);
         switch (category) {
@@ -278,7 +274,6 @@ export function useSdrActivityMetrics(
             if (metrics.source !== 'sonax') break;
             const meta = (activity.metadata || {}) as Record<string, any>;
             metrics.totalCalls++;
-            metrics.sonaxCalls++;
             const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
             if (meta.ok === false) {
               metrics.notAnsweredCalls++;
