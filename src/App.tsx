@@ -1,3 +1,4 @@
+import TmpOutcomePreview from "./pages/TmpOutcomePreview";
 import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -187,6 +188,7 @@ const App = () => (
             <Route path="/tv" element={<TVLauncher />} />
             <Route path="/tv/incorporador" element={<TVIncorporadorEquipe />} />
             <Route path="/tv/consorcio" element={<TVConsorcioEquipe />} />
+            <Route path="/tmp-outcome-preview" element={<TmpOutcomePreview />} />
             <Route path="/checkin/sala/:token" element={<CustomerRoom />} />
             
             {/* Protected routes */}
