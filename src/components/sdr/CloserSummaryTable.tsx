@@ -63,8 +63,9 @@ export function CloserSummaryTable({
       outside: acc.outside + row.outside,
       r2_agendada: acc.r2_agendada + row.r2_agendada,
       reembolsos: acc.reembolsos + (row.reembolsos || 0),
+      reembolsos_valor: acc.reembolsos_valor + (row.reembolsos_valor || 0),
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0, reembolsos_valor: 0 }
   );
 
   // Taxa de conversão considera apenas cauções com negócio no CRM (órfãos ficam
@@ -186,6 +187,11 @@ export function CloserSummaryTable({
                     <span className={`font-medium ${(row.reembolsos || 0) > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                       {row.reembolsos || 0}
                     </span>
+                    {(row.reembolsos_valor || 0) > 0 && (
+                      <div className="text-[11px] text-red-400/80">
+                        {(row.reembolsos_valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
@@ -270,6 +276,11 @@ export function CloserSummaryTable({
                 <span className={`font-medium ${totals.reembolsos > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                   {totals.reembolsos}
                 </span>
+                {totals.reembolsos_valor > 0 && (
+                  <div className="text-[11px] text-red-400/80">
+                    {totals.reembolsos_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                  </div>
+                )}
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${

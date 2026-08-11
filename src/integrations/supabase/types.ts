@@ -14311,6 +14311,7 @@ export type Database = {
           fonte: string
           lead_name: string
           origin_id: string
+          refunded_at: string
           sdr_email: string
           sdr_id: string
           sdr_name: string

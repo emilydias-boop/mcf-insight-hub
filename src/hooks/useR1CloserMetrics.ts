@@ -69,6 +69,7 @@ export interface R1CloserMetric {
   outside: number;
   r2_agendada: number;
   reembolsos: number;
+  reembolsos_valor: number;
 }
 
 export type IcpSegmentFilter = 'all' | 'A' | 'B';
@@ -375,10 +376,24 @@ export function useR1CloserMetrics(
       if (caucoesError) throw caucoesError;
 
       const contractsByCloser = new Map<string, number>();
+      // Painel Comercial = LÍQUIDO: caucoes_efetivas passou a devolver também as
+      // vendas reembolsadas (bruto, usado no ranking da TV), então o filtro de
+      // reembolso acontece aqui.
+      const refundByCloser = new Map<string, number>();
+      const refundValueByCloser = new Map<string, number>();
+      const refundedDealsSeen = new Set<string>();
       ((caucoesRows as any[]) || []).forEach((row: any) => {
         if (segmentActive && String(row.segment || '').toUpperCase() !== segment) return;
         const closerId = row.closer_id as string | null;
         if (!closerId) return; // sem closer identificável → linha "Não atribuído"
+        if (row.refunded_at) {
+          const key = String(row.deal_id || row.attendee_id);
+          if (refundedDealsSeen.has(key)) return;
+          refundedDealsSeen.add(key);
+          refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
+          refundValueByCloser.set(closerId, (refundValueByCloser.get(closerId) || 0) + Number(row.valor || 0));
+          return;
+        }
         contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
       });
 
@@ -570,42 +585,9 @@ export function useR1CloserMetrics(
         manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
       });
 
-      // ========== REFUNDS (flag no attendee) ==========
-      // Fonte única: meeting_slot_attendees.refunded_at (gravado pelos webhooks
-      // MCF Pay e Hubla). O contract_paid_at NÃO é mais zerado, então o
-      // reembolso é rastreável e a caução já sai de caucoes_efetivas.
-      // Âncora: data da R1 do negócio.
-      const refundedRows = await (supabase as any)
-        .from('meeting_slot_attendees')
-        .select('deal_id, refunded_at, meeting_slot:meeting_slots!inner(closer_id, scheduled_at, meeting_type)')
-        .not('refunded_at', 'is', null)
-        .eq('is_partner', false)
-        .eq('meeting_slot.meeting_type', 'r1')
-        .gte('meeting_slot.scheduled_at', start)
-        .lte('meeting_slot.scheduled_at', end);
-      if (refundedRows.error) throw refundedRows.error;
-
-      // 1 reembolso por negócio (R1 mais recente define o closer)
-      const refundR1ByDeal = new Map<string, { closerId: string; ts: number }>();
-      ((refundedRows.data as any[]) || []).forEach((att: any) => {
-        const closerId = att.meeting_slot?.closer_id;
-        if (!closerId || !att.deal_id) return;
-        const ts = new Date(att.meeting_slot.scheduled_at).getTime();
-        const prev = refundR1ByDeal.get(att.deal_id);
-        if (!prev || ts > prev.ts) refundR1ByDeal.set(att.deal_id, { closerId, ts });
-      });
-
-      let refundedDealIds = Array.from(refundR1ByDeal.keys());
-      if (segmentActive) {
-        const allowedRefunds = await allowedDealIds(refundedDealIds);
-        refundedDealIds = refundedDealIds.filter((id) => allowedRefunds.has(id));
-      }
-
-      const refundByCloser = new Map<string, number>();
-      refundedDealIds.forEach((dealId) => {
-        const closerId = refundR1ByDeal.get(dealId)!.closerId;
-        refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
-      });
+      // ========== REFUNDS ==========
+      // Fonte única: caucoes_efetivas().refunded_at (gravado pelos webhooks
+      // MCF Pay e Hubla). Contabilizado acima, junto com os contratos líquidos.
 
       // Calculate metrics for each R1 closer
       const metricsMap = new Map<string, R1CloserMetric>();
@@ -624,6 +606,7 @@ export function useR1CloserMetrics(
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
           reembolsos: refundByCloser.get(closer.id) || 0,
+          reembolsos_valor: refundValueByCloser.get(closer.id) || 0,
         });
       });
 
@@ -652,6 +635,7 @@ export function useR1CloserMetrics(
           outside: outsideByCloser.get(closerId) || 0,
           r2_agendada: r2CountByCloser.get(closerId) || 0,
           reembolsos: refundByCloser.get(closerId) || 0,
+          reembolsos_valor: refundValueByCloser.get(closerId) || 0,
         });
       });
 
@@ -680,6 +664,7 @@ export function useR1CloserMetrics(
             outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
             reembolsos: refundByCloser.get(closerId) || 0,
+            reembolsos_valor: refundValueByCloser.get(closerId) || 0,
           };
           metricsMap.set(closerId, metric);
         }
