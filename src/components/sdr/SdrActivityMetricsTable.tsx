@@ -141,10 +141,8 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                                </span>
                              </TooltipTrigger>
                              <TooltipContent side="top" className="max-w-[260px] text-xs">
-                               Discagem pelo ramal {sdr.ramal || '—'} (Sonax). Durante a transição o
-                               total soma as duas fontes: {sdr.sonaxCalls} via Sonax
-                               (click-to-call/auto-discador, efetividade pelo resultado marcado pelo
-                               SDR) + {sdr.twilioCalls} do histórico Twilio (efetividade por duração).
+                                Discagem pelo ramal {sdr.ramal || '—'} (Sonax). A efetividade vem do
+                                resultado marcado manualmente pelo SDR após a ligação.
                                {sdr.pendingOutcomeCalls > 0 && ` ${sdr.pendingOutcomeCalls} discagem(ns) sem resultado registrado.`}
                              </TooltipContent>
                            </Tooltip>
