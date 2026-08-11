@@ -665,7 +665,6 @@ export function useR1CloserMetrics(
             r2_agendada: r2CountByCloser.get(closerId) || 0,
             reembolsos: refundByCloser.get(closerId) || 0,
             reembolsos_valor: refundValueByCloser.get(closerId) || 0,
-          reembolsos_valor: refundValueByCloser.get(closerId) || 0,
           };
           metricsMap.set(closerId, metric);
         }
