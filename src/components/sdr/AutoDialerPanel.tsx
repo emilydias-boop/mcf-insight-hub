@@ -382,7 +382,7 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
   };
 
-  const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying';
+  const isActive = ad.state === 'running' || ad.state === 'paused' || ad.state === 'paused-in-call' || ad.state === 'paused-qualifying' || ad.state === 'awaiting-outcome';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
