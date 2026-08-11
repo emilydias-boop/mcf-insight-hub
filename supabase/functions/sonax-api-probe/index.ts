@@ -11,14 +11,21 @@ Deno.serve(async (req) => {
   const idCliente = Deno.env.get('SONAX_ID_CLIENTE')!
   const token = Deno.env.get('SONAX_TOKEN')!
   const out: Record<string, unknown> = {}
+  const D = 'https://api.sonax.net.br/a2billing_v2/admin/Public/'
+  const q = `?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`
   const urls: Record<string, string> = {
-    'dbdial_root_noparams': 'https://api.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.php',
-    'dbdial_dir': 'https://api.sonax.net.br/a2billing_v2/admin/Public/',
-    'c2c_api_host_noparams': 'https://api.sonax.net.br/sonax-click2call.php',
-    'c2c_official_host_noparams': 'https://click2call.sonax.net.br/sonax-click2call.php',
-    'webapi_alt1': `https://api.sonax.net.br/a2billing/admin/Public/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
-    'webapi_alt2': `https://pabxcloud.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
-    'webapi_alt3': `https://api.sonax.net.br/dbdial_webapi.php?action=lista_tabulacao&id_cliente=${idCliente}&token=${token}`,
+    'dir_root': D,
+    'dir_root_query': D + q,
+    'index.php': D + 'index.php' + q,
+    'api.php': D + 'api.php' + q,
+    'webapi.php': D + 'webapi.php' + q,
+    'dbdial.php': D + 'dbdial.php' + q,
+    'dialer_webapi.php': D + 'dialer_webapi.php' + q,
+    'vingadora.php': D + 'vingadora.php' + q,
+    'vingadora_webapi.php': D + 'vingadora_webapi.php' + q,
+    'dir_relatorio': D + '?action=relatorio_chamadas&id_cliente=' + idCliente + '&token=' + token + '&data_inicio=2026-08-10&data_fim=2026-08-11',
+    'dir_cdr': D + '?action=cdr&id_cliente=' + idCliente + '&token=' + token,
+    'dir_help': D + '?action=help&id_cliente=' + idCliente + '&token=' + token,
   }
   for (const [k, u] of Object.entries(urls)) {
     try {
