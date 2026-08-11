@@ -436,7 +436,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
 
   // ===== API =====
   const loadQueue = useCallback((leads: AutoDialerLead[]) => {
-    if (state === 'running' || state === 'paused' || state === 'paused-in-call' || state === 'paused-qualifying') {
+    if (state === 'running' || state === 'paused' || state === 'paused-in-call' || state === 'paused-qualifying' || state === 'awaiting-outcome') {
       toast.error('Pause ou pare a fila atual antes de carregar outra');
       return;
     }
