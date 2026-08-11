@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TVMetricCard, TVShell, TVMsg, TVSection, Metric } from "@/components/public/TVTeamShared";
 import { TVSdrRankingBlock, TVSdrRankingRow } from "@/components/public/TVSdrRankingBlock";
+import { TVCloserRankingBlock, TVCloserRankingRow } from "@/components/public/TVCloserRankingBlock";
 
 const TOKEN = "e03633d2-f881-4b6d-a5dd-a928e6b7da0c";
 
@@ -15,7 +16,15 @@ interface Block extends SegBlock {
   a?: SegBlock;
   b?: SegBlock;
 }
-interface Payload { today: string; updated_at: string; dia: Block; mes: Block; sdr_ranking?: TVSdrRankingRow[]; error?: string }
+interface Payload {
+  today: string;
+  updated_at: string;
+  dia: Block;
+  mes: Block;
+  sdr_ranking?: TVSdrRankingRow[];
+  closer_ranking?: TVCloserRankingRow[];
+  error?: string;
+}
 
 const ACCENT = "#ff7a00";
 
@@ -54,7 +63,12 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
-      side={<TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />}
+      side={
+        <div className="min-h-0 flex-1 grid grid-rows-2 gap-4 xl:gap-6">
+          <TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />
+          <TVCloserRankingBlock rows={data.closer_ranking} accent="#bfff00" />
+        </div>
+      }
     >
       <TVSection label="Hoje" accent={ACCENT}>
         <Grid b={data.dia} />
