@@ -3,8 +3,10 @@ import { useTwilio } from './TwilioContext';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { toast } from 'sonner';
+import { useDialerEngine, type DialerEngine } from '@/hooks/useDialerEngine';
+import { isAnsweredOutcome, isQualifiedOutcome } from '@/lib/callOutcomes';
 
-export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'finished';
+export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'awaiting-outcome' | 'finished';
 
 export interface AutoDialerLead {
   dealId: string;
@@ -22,6 +24,15 @@ export interface AutoDialerStats {
   answered: number;
   noAnswer: number;
   failed: number;
+}
+
+export interface PendingOutcome {
+  dealId: string;
+  activityId: string | null;
+  name: string;
+  phone: string;
+  ramal: string | null;
+  startedAt: number;
 }
 
 interface AutoDialerContextType {
@@ -48,6 +59,12 @@ interface AutoDialerContextType {
   stop: () => void;
   inCallDrawerOpen: boolean;
   setInCallDrawerOpen: (open: boolean) => void;
+  /** Motor de discagem do usuário logado (Fase 1 do rollout Sonax) */
+  engine: DialerEngine;
+  ramal: string | null;
+  /** Preenchido apenas no motor Sonax: chamada disparada, aguardando outcome manual */
+  pendingOutcome: PendingOutcome | null;
+  registerOutcome: (outcome: string, notes?: string) => Promise<void>;
 }
 
 const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
@@ -66,6 +83,12 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     initializeDevice,
   } = useTwilio();
 
+  const { data: engineConfig } = useDialerEngine();
+  const engine: DialerEngine = engineConfig?.engine || 'twilio';
+  const ramal = engineConfig?.ramal ?? null;
+  const engineRef = useRef<DialerEngine>(engine);
+  useEffect(() => { engineRef.current = engine; }, [engine]);
+
   const [state, setState] = useState<AutoDialerState>('idle');
   const [queue, setQueue] = useState<AutoDialerLead[]>([]);
   const [results, setResults] = useState<Record<string, LeadResult>>({});
@@ -76,6 +99,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const [retryDelayMs, setRetryDelayMs] = useState(10000);
   const [attempts, setAttempts] = useState<Record<string, number>>({});
   const [inCallDrawerOpen, setInCallDrawerOpen] = useState(false);
+  const [pendingOutcome, setPendingOutcome] = useState<PendingOutcome | null>(null);
+  const pendingOutcomeRef = useRef<PendingOutcome | null>(null);
+  useEffect(() => { pendingOutcomeRef.current = pendingOutcome; }, [pendingOutcome]);
 
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,7 +145,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     const lead = queueRef.current[idx];
     if (!lead) return;
 
-    if (deviceStatus !== 'ready') {
+    const isSonax = engineRef.current === 'sonax';
+
+    if (!isSonax && deviceStatus !== 'ready') {
       const ok = await initializeDevice();
       if (!ok) {
         toast.error('Não foi possível inicializar o telefone');
@@ -131,8 +159,10 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     setLeadResult(lead.dealId, 'in-progress');
     wasInProgressRef.current = false;
     // incrementa contagem de tentativas para este lead
+    let attemptNumber = 1;
     setAttempts(prev => {
       const next = { ...prev, [lead.dealId]: (prev[lead.dealId] || 0) + 1 };
+      attemptNumber = next[lead.dealId];
       attemptsRef.current = next;
       return next;
     });
@@ -142,7 +172,44 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       const crmDealId = isUuid(lead.dealId) ? lead.dealId : undefined;
       const crmContactId = isUuid(lead.contactId) ? lead.contactId : undefined;
       const crmOriginId = isUuid(lead.originId) ? lead.originId : undefined;
-      await makeCall(normalized, crmDealId, crmContactId, crmOriginId);
+
+      if (isSonax) {
+        // ===== Motor Sonax: a ligação toca no RAMAL/softphone do SDR =====
+        const { data, error } = await supabase.functions.invoke('sonax-click-to-call', {
+          body: { numero: normalized, deal_id: crmDealId, origin: 'auto_dialer', attempt: attemptNumber },
+        });
+        const activityId = (data as any)?.activity_id ?? null;
+
+        if (error || (data as any)?.error) {
+          console.error('[autodialer] sonax dial error', error || (data as any)?.error);
+          setLeadResult(lead.dealId, 'failed');
+          toast.error(`Falha ao discar ${lead.name} (verifique se o softphone está registrado)`);
+          if (stateRef.current === 'running') {
+            if (attemptNumber < maxAttemptsRef.current) {
+              setLeadResult(lead.dealId, 'pending');
+              retryCurrentRef.current?.();
+            } else {
+              advanceToNextRef.current?.();
+            }
+          }
+          return;
+        }
+
+        // Disparo aceito: aguarda o SDR atender no softphone e registrar o outcome
+        stateRef.current = 'awaiting-outcome';
+        setState('awaiting-outcome');
+        setPendingOutcome({
+          dealId: lead.dealId,
+          activityId,
+          name: lead.name,
+          phone: lead.phone,
+          ramal: (data as any)?.ramal ?? ramal,
+          startedAt: Date.now(),
+        });
+      } else {
+        await makeCall(normalized, crmDealId, crmContactId, crmOriginId);
+      }
+
       // Carimba a última discagem automática para excluir o lead nos próximos
       // carregamentos do dia (regra: discado HOJE não volta na fila; após
       // virar o dia, volta a aparecer).
@@ -156,10 +223,10 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
           });
       }
     } catch (e) {
-      console.error('[autodialer] makeCall error', e);
+      console.error('[autodialer] dial error', e);
       setLeadResult(lead.dealId, 'failed');
     }
-  }, [deviceStatus, initializeDevice, makeCall, setLeadResult]);
+  }, [deviceStatus, initializeDevice, makeCall, setLeadResult, ramal]);
 
   const retryCurrent = useCallback(() => {
     if (isAdvancingRef.current) return;
@@ -172,6 +239,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       dialIndex(idx);
     }, retryDelayRef.current);
   }, [clearTimers, dialIndex]);
+  const retryCurrentRef = useRef<(() => void) | null>(null);
+  useEffect(() => { retryCurrentRef.current = retryCurrent; }, [retryCurrent]);
 
   const advanceToNext = useCallback(() => {
     if (isAdvancingRef.current) return;
@@ -190,9 +259,65 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       dialIndex(next);
     }, betweenCallsMs);
   }, [betweenCallsMs, clearTimers, dialIndex]);
+  const advanceToNextRef = useRef<(() => void) | null>(null);
+  useEffect(() => { advanceToNextRef.current = advanceToNext; }, [advanceToNext]);
+
+  // ===== Motor Sonax: registro manual do resultado da ligação =====
+  const registerOutcome = useCallback(async (outcome: string, notes?: string) => {
+    const pending = pendingOutcomeRef.current;
+    if (!pending) return;
+    const answered = isAnsweredOutcome(outcome);
+
+    if (pending.activityId) {
+      try {
+        const { data } = await supabase
+          .from('deal_activities')
+          .select('metadata')
+          .eq('id', pending.activityId)
+          .maybeSingle();
+        const meta = ((data as any)?.metadata || {}) as Record<string, unknown>;
+        const { error } = await supabase
+          .from('deal_activities')
+          .update({
+            metadata: {
+              ...meta,
+              outcome,
+              answered,
+              qualified: isQualifiedOutcome(outcome),
+              outcome_notes: notes || null,
+              outcome_at: new Date().toISOString(),
+            } as any,
+          })
+          .eq('id', pending.activityId);
+        if (error) console.warn('[autodialer] outcome update error', error);
+      } catch (e) {
+        console.warn('[autodialer] outcome update failed', e);
+      }
+    }
+
+    setLeadResult(pending.dealId, answered ? 'answered' : 'no-answer');
+    setPendingOutcome(null);
+    pendingOutcomeRef.current = null;
+    setInCallDrawerOpen(false);
+
+    if (stateRef.current !== 'awaiting-outcome') return;
+    stateRef.current = 'running';
+    setState('running');
+
+    const attemptCount = attemptsRef.current[pending.dealId] || 1;
+    const retryable = ['sem_contato', 'ocupado', 'caixa_postal'].includes(outcome);
+    if (retryable && attemptCount < maxAttemptsRef.current) {
+      setLeadResult(pending.dealId, 'pending');
+      retryCurrentRef.current?.();
+    } else {
+      advanceToNextRef.current?.();
+    }
+  }, [setLeadResult]);
 
   // Reage a transições do callStatus
   useEffect(() => {
+    // Motor Sonax não tem eventos de chamada no navegador
+    if (engineRef.current === 'sonax') return;
     const prev = lastCallStatusRef.current;
     lastCallStatusRef.current = callStatus;
 
@@ -303,7 +428,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       // Delay de 1.5s para garantir que o AMD callback do Twilio chegue antes
       setTimeout(() => { handleCompletion(); }, 1500);
     }
-  }, [callStatus, currentCallId, hangUp, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent]);
+  }, [callStatus, currentCallId, hangUp, ringTimeoutMs, setLeadResult, advanceToNext, retryCurrent, engine]);
 
   // (Removido) A retomada da fila após qualificação não é mais necessária:
   // o modal de qualificação não abre mais automaticamente — o SDR aciona
@@ -327,18 +452,25 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const start = useCallback(() => {
     if (queue.length === 0) { toast.error('Fila vazia'); return; }
     if (state === 'running') return;
+    if (engine === 'sonax' && !ramal) {
+      toast.error('Seu ramal Sonax não está configurado — fale com o gestor');
+      return;
+    }
+    if (engine === 'sonax') {
+      toast.info('A ligação vai tocar no seu ramal/softphone — mantenha ele aberto');
+    }
     setState('running');
     const startIdx = currentIndex < 0 ? 0 : currentIndex;
     setCurrentIndex(startIdx);
     dialIndex(startIdx);
-  }, [queue.length, state, currentIndex, dialIndex]);
+  }, [queue.length, state, currentIndex, dialIndex, engine, ramal]);
 
   const pause = useCallback(() => {
-    if (state !== 'running') return;
+    if (state !== 'running' && state !== 'awaiting-outcome') return;
     clearTimers();
     isAdvancingRef.current = false;
     // Cancela chamada que ainda está tocando/conectando (não derruba uma já atendida)
-    if (callStatus === 'ringing' || callStatus === 'connecting') {
+    if (engine !== 'sonax' && (callStatus === 'ringing' || callStatus === 'connecting')) {
       try { hangUp(); } catch (e) { console.warn('[autodialer] hangUp on pause failed', e); }
     }
     // Se o lead atual estava 'in-progress' mas não foi atendido, devolve para 'pending'
@@ -355,7 +487,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     setInCallDrawerOpen(false);
     setState('paused');
     toast.info('Fila pausada');
-  }, [state, clearTimers, callStatus, hangUp]);
+  }, [state, clearTimers, callStatus, hangUp, engine]);
 
   const resume = useCallback(() => {
     if (state !== 'paused') return;
@@ -381,19 +513,24 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const skipCurrent = useCallback(() => {
     const lead = queueRef.current[currentIndexRef.current];
     if (lead) setLeadResult(lead.dealId, 'skipped');
-    if (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress') {
+    setPendingOutcome(null);
+    pendingOutcomeRef.current = null;
+    if (engine !== 'sonax' && (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress')) {
       hangUp();
     }
+    if (stateRef.current === 'awaiting-outcome') { stateRef.current = 'running'; setState('running'); }
     setInCallDrawerOpen(false);
     advanceToNext();
-  }, [callStatus, hangUp, advanceToNext, setLeadResult]);
+  }, [callStatus, hangUp, advanceToNext, setLeadResult, engine]);
 
   const stop = useCallback(() => {
     clearTimers();
-    if (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress') {
+    if (engine !== 'sonax' && (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress')) {
       hangUp();
     }
     setState('idle');
+    setPendingOutcome(null);
+    pendingOutcomeRef.current = null;
     setCurrentIndex(-1);
     setQueue([]);
     setResults({});
@@ -401,7 +538,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     attemptsRef.current = {};
     setInCallDrawerOpen(false);
     isAdvancingRef.current = false;
-  }, [callStatus, hangUp, clearTimers]);
+  }, [callStatus, hangUp, clearTimers, engine]);
 
   return (
     <AutoDialerContext.Provider value={{
@@ -411,6 +548,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       attempts,
       loadQueue, start, pause, resume, skipCurrent, stop,
       inCallDrawerOpen, setInCallDrawerOpen,
+      engine, ramal, pendingOutcome, registerOutcome,
     }}>
       {children}
     </AutoDialerContext.Provider>
