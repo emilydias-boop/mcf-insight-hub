@@ -376,10 +376,24 @@ export function useR1CloserMetrics(
       if (caucoesError) throw caucoesError;
 
       const contractsByCloser = new Map<string, number>();
+      // Painel Comercial = LÍQUIDO: caucoes_efetivas passou a devolver também as
+      // vendas reembolsadas (bruto, usado no ranking da TV), então o filtro de
+      // reembolso acontece aqui.
+      const refundByCloser = new Map<string, number>();
+      const refundValueByCloser = new Map<string, number>();
+      const refundedDealsSeen = new Set<string>();
       ((caucoesRows as any[]) || []).forEach((row: any) => {
         if (segmentActive && String(row.segment || '').toUpperCase() !== segment) return;
         const closerId = row.closer_id as string | null;
         if (!closerId) return; // sem closer identificável → linha "Não atribuído"
+        if (row.refunded_at) {
+          const key = String(row.deal_id || row.attendee_id);
+          if (refundedDealsSeen.has(key)) return;
+          refundedDealsSeen.add(key);
+          refundByCloser.set(closerId, (refundByCloser.get(closerId) || 0) + 1);
+          refundValueByCloser.set(closerId, (refundValueByCloser.get(closerId) || 0) + Number(row.valor || 0));
+          return;
+        }
         contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
       });
 
