@@ -346,22 +346,43 @@ html.font-large {
 .SonaxWidget {
   font-size: 16px;
   line-height: normal;
-  z-index: 2147483000;
+  /* Sempre acima de QUALQUER Dialog/Sheet/Popover do app (Radix usa z-50).
+     Sem isso, com um drawer de negócio aberto os cliques em "desligar"
+     vazavam pro painel do CRM atrás. */
+  z-index: 2147483000 !important;
 }
 
 /* Painel expandido: altura/largura reais + folga p/ telas baixas */
+.SonaxWidget .content,
+.SonaxWidget .active-call-minimized,
+.SonaxWidget .widget,
+.SonaxWidget .content *,
+.SonaxWidget .active-call-minimized * {
+  pointer-events: auto;
+}
+
 .SonaxWidget .content {
   width: 368px;          /* 23rem @16px */
   height: 464px;         /* 29rem @16px */
   max-height: calc(100vh - 110px);
   top: -472px;           /* -29.5rem @16px */
   right: 16px;           /* 1rem @16px */
-  z-index: 2;            /* acima da bolha launcher */
+  z-index: 2 !important; /* acima da bolha launcher */
 }
 
 /* Bolha launcher fica atrás do painel quando ele está aberto */
 .SonaxWidget .widget {
-  z-index: 1;
+  z-index: 1 !important;
+}
+
+/* Cabeçalho arrastável (drag habilitado via JS aditivo) */
+.SonaxWidget [data-sonax-drag-handle] {
+  cursor: move;
+  user-select: none;
+}
+
+.SonaxWidget[data-sonax-dragging='true'] {
+  cursor: move;
 }
 
 /* Área central rola em vez de cortar caso a viewport seja muito baixa */
