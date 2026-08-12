@@ -12184,6 +12184,8 @@ export type Database = {
           sdr_email: string
           sdr_name: string
           updated_at: string
+          widget_client: string | null
+          widget_data: string | null
         }
         Insert: {
           active?: boolean
@@ -12193,6 +12195,8 @@ export type Database = {
           sdr_email: string
           sdr_name: string
           updated_at?: string
+          widget_client?: string | null
+          widget_data?: string | null
         }
         Update: {
           active?: boolean
@@ -12202,6 +12206,8 @@ export type Database = {
           sdr_email?: string
           sdr_name?: string
           updated_at?: string
+          widget_client?: string | null
+          widget_data?: string | null
         }
         Relationships: []
       }
