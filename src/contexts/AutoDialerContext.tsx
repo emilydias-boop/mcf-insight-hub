@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { toast } from 'sonner';
 import { useDialerEngine, type DialerEngine } from '@/hooks/useDialerEngine';
+import { toSonaxWidgetDigits } from '@/hooks/useSonaxClickToCall';
 import { isAnsweredOutcome, isQualifiedOutcome } from '@/lib/callOutcomes';
 
 export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'awaiting-outcome' | 'finished';
