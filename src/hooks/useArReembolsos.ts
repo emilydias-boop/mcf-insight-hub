@@ -11,6 +11,8 @@ export interface ArReembolsoWithTitulo extends ArReembolso {
     product_code: string | null;
     product_name: string;
     valor_total: number;
+    sale_date?: string | null;
+    payment_method?: string | null;
   } | null;
 }
 
@@ -32,7 +34,7 @@ export function useArReembolsos(filters?: { status?: ArReembolsoStatus | 'todos'
       const titIds = Array.from(new Set(list.map((r) => r.titulo_id)));
       const { data: tits } = await supabase
         .from('ar_titulos' as any)
-        .select('id, customer_name, customer_email, customer_document, product_code, product_name, valor_total')
+        .select('id, customer_name, customer_email, customer_document, product_code, product_name, valor_total, sale_date, payment_method')
         .in('id', titIds);
       const map = new Map<string, any>();
       (tits || []).forEach((t: any) => map.set(t.id, t));
