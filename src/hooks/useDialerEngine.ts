@@ -7,6 +7,8 @@ export type DialerEngine = 'twilio' | 'sonax';
 export interface DialerEngineConfig {
   engine: DialerEngine;
   ramal: string | null;
+  widgetData: string | null;
+  widgetClient: string | null;
 }
 
 /**
@@ -21,15 +23,26 @@ export function useDialerEngine() {
   return useQuery({
     queryKey: ['dialer-engine', email],
     queryFn: async (): Promise<DialerEngineConfig> => {
-      if (!email) return { engine: 'twilio', ramal: null };
-      const { data } = await supabase
+      if (!email) return { engine: 'twilio', ramal: null, widgetData: null, widgetClient: null };
+      const { data, error } = await supabase
         .from('sdr_ramal_mapping')
-        .select('ramal, auto_dialer_engine, active')
+        .select('ramal, auto_dialer_engine, active, widget_data, widget_client')
         .eq('sdr_email', email)
         .eq('active', true)
         .maybeSingle();
-      const engine = ((data as any)?.auto_dialer_engine === 'sonax' ? 'sonax' : 'twilio') as DialerEngine;
-      return { engine, ramal: (data as any)?.ramal ?? null };
+      // Tolerância a falhas de rede/esquema: em qualquer erro, cai pro default twilio
+      // sem widget — nunca deve quebrar a UI do app.
+      if (error || !data) {
+        return { engine: 'twilio', ramal: null, widgetData: null, widgetClient: null };
+      }
+      const row = data as any;
+      const engine = (row.auto_dialer_engine === 'sonax' ? 'sonax' : 'twilio') as DialerEngine;
+      return {
+        engine,
+        ramal: row.ramal ?? null,
+        widgetData: row.widget_data ?? null,
+        widgetClient: row.widget_client ?? null,
+      };
     },
     enabled: !!email,
     staleTime: 10 * 60 * 1000,
