@@ -269,3 +269,6 @@ verify_jwt = true
 
 [functions.sonax-campaign-proxy]
 verify_jwt = true
+
+[functions.sonax-webhook]
+verify_jwt = false
