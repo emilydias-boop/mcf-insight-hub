@@ -23,11 +23,22 @@ const WIDGET_SCRIPT_ID = 'widget-script';
 const WIDGET_BASE_URL = 'https://webphone2.sonax.cloud/widget';
 const TOP_Z_INDEX = '2147483000';
 
+/** Distância mínima (px) entre mousedown e mouseup para caracterizar arraste
+ *  no launcher (#widget). Abaixo disso o evento é tratado como clique normal,
+ *  preservando o toggle de abrir/fechar o painel implementado pelo Sonax. */
+const DRAG_THRESHOLD = 5;
+
 /**
- * Torna o container do widget arrastável a partir da barra de título
- * ("SONAX | Fone"), de forma puramente aditiva: apenas `transform` no
- * container. Nenhum listener é adicionado aos botões internos (discador,
- * atender, desligar), então o comportamento do script deles é preservado.
+ * Torna o container do widget arrastável a partir de dois pontos:
+ *  - `#header` (barra "SONAX | Fone" do painel aberto): arraste imediato,
+ *    ignorando botões/inputs internos. Comportamento já existente.
+ *  - `#widget` (bolha launcher quando minimizado): arraste com threshold, de
+ *    modo que um clique rápido continue abrindo/fechando o painel (toggle
+ *    nativo deles), e só um movimento real (>5px) arraste o container.
+ *
+ * Tudo é puramente aditivo: apenas `transform` no container `.SonaxWidget`
+ * (painel e ícone se movem juntos como uma unidade). Nenhum listener é
+ * adicionado aos botões internos (discador, atender, desligar).
  */
 function attachDragBehavior(container: HTMLElement): () => void {
   // Garante empilhamento acima de qualquer Dialog/Sheet do app.
@@ -36,63 +47,137 @@ function attachDragBehavior(container: HTMLElement): () => void {
     container.style.position = 'relative';
   }
 
-  const findHandle = (): HTMLElement | null => {
-    // O cabeçalho do widget (injetado pelo script Sonax) é <nav id="header">.
-    // Usamos o seletor estável por ID; fallback pela estrutura .content > nav.
-    return (
+  const findHandles = (): {
+    header: HTMLElement | null;
+    launcher: HTMLElement | null;
+  } => {
+    // Cabeçalho do painel: <nav id="header"> (fallback .content > nav).
+    // Launcher minimizado: <div id="widget"> (a bolha que abre/fecha).
+    const header =
       container.querySelector<HTMLElement>('#header') ??
       container.querySelector<HTMLElement>('.content nav') ??
-      null
-    );
+      null;
+    const launcher = container.querySelector<HTMLElement>('#widget') ?? null;
+    return { header, launcher };
   };
 
   let offsetX = 0;
   let offsetY = 0;
   let startX = 0;
   let startY = 0;
+  // Arraste efetivamente em andamento (threshold já superado, se vindo do
+  // launcher; ou imediato, se vindo do header).
   let dragging = false;
-  let handle: HTMLElement | null = null;
+  // mousedown no launcher, aguardando confirmação de arraste vs. clique.
+  let pendingLauncher = false;
+  // Arraste em andamento originou-se do launcher (#widget).
+  let launcherDragging = false;
+  // Flag levantada no mouseup de um arraste do launcher para suprimir o
+  // click nativo de toggle deles logo em seguida.
+  let suppressClick = false;
+
+  let boundHeader: HTMLElement | null = null;
+  let boundLauncher: HTMLElement | null = null;
 
   const onMouseMove = (event: MouseEvent) => {
-    if (!dragging) return;
-    event.preventDefault();
-    const x = offsetX + (event.clientX - startX);
-    const y = offsetY + (event.clientY - startY);
-    container.style.transform = `translate(${x}px, ${y}px)`;
+    if (!dragging && !pendingLauncher) return;
+    if (pendingLauncher) {
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return; // ainda pode ser clique
+      // Cruzou o threshold → agora é arraste de verdade.
+      pendingLauncher = false;
+      dragging = true;
+      launcherDragging = true;
+      container.setAttribute('data-sonax-dragging', 'true');
+    }
+    if (dragging) {
+      event.preventDefault();
+      const x = offsetX + (event.clientX - startX);
+      const y = offsetY + (event.clientY - startY);
+      container.style.transform = `translate(${x}px, ${y}px)`;
+    }
   };
 
-  const onMouseUp = () => {
-    if (!dragging) return;
-    dragging = false;
-    container.removeAttribute('data-sonax-dragging');
-    const match = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(container.style.transform);
-    offsetX = match ? parseFloat(match[1]) : offsetX;
-    offsetY = match ? parseFloat(match[2]) : offsetY;
+  const onMouseUp = (event: MouseEvent) => {
+    if (dragging) {
+      const wasLauncher = launcherDragging;
+      dragging = false;
+      launcherDragging = false;
+      container.removeAttribute('data-sonax-dragging');
+      const match =
+        /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(container.style.transform);
+      offsetX = match ? parseFloat(match[1]) : offsetX;
+      offsetY = match ? parseFloat(match[2]) : offsetY;
+      // Se o arraste veio do launcher, suprime o click de toggle nativo deles
+      // (via flag lida no handler de click em capture), e ainda para a
+      // propagação do mouseup por segurança.
+      if (wasLauncher) {
+        suppressClick = true;
+        event.stopPropagation();
+      }
+    } else if (pendingLauncher) {
+      // Abaixo do threshold: clique normal — não interfira, deixe o toggle
+      // nativo deles (abrir/fechar painel) acontecer.
+      pendingLauncher = false;
+    }
   };
 
-  const onMouseDown = (event: MouseEvent) => {
-    // Só arrasta pelo cabeçalho; ignora qualquer botão/input/img interno.
+  // Header (#header): arraste imediato, preventDefault no mousedown (já que
+  // o cabeçalho não tem toggle de clique próprio) e ignora botões/inputs.
+  const onHeaderMouseDown = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
     if (!target || target.closest('button, input, a, img, svg')) return;
     dragging = true;
+    launcherDragging = false;
     startX = event.clientX;
     startY = event.clientY;
     container.setAttribute('data-sonax-dragging', 'true');
     event.preventDefault();
   };
 
-  const bindHandle = () => {
-    const next = findHandle();
-    if (!next || next === handle) return;
-    handle?.removeEventListener('mousedown', onMouseDown);
-    handle = next;
-    handle.setAttribute('data-sonax-drag-handle', 'true');
-    handle.addEventListener('mousedown', onMouseDown);
+  // Launcher (#widget): marca intenção pendente sem preventDefault, para que
+  // o click nativo deles (toggle abrir/fechar) continue disponível caso o
+  // mouse não se mova além do threshold.
+  const onLauncherMouseDown = (event: MouseEvent) => {
+    pendingLauncher = true;
+    startX = event.clientX;
+    startY = event.clientY;
   };
 
-  bindHandle();
+  // Suprime o click de toggle quando o gesto acabou de ser um arraste real.
+  // Captura para interceptar antes do handler nativo deles, e atende cliques
+  // disparados em filhos do launcher (ex.: ícone svg interno).
+  const onLauncherClick = (event: MouseEvent) => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const bindHandles = () => {
+    const { header, launcher } = findHandles();
+
+    if (header && header !== boundHeader) {
+      boundHeader?.removeEventListener('mousedown', onHeaderMouseDown);
+      boundHeader = header;
+      header.setAttribute('data-sonax-drag-handle', 'true');
+      header.addEventListener('mousedown', onHeaderMouseDown);
+    }
+
+    if (launcher && launcher !== boundLauncher) {
+      boundLauncher?.removeEventListener('mousedown', onLauncherMouseDown);
+      boundLauncher?.removeEventListener('click', onLauncherClick, true);
+      boundLauncher = launcher;
+      launcher.setAttribute('data-sonax-drag-handle', 'true');
+      launcher.addEventListener('mousedown', onLauncherMouseDown);
+      launcher.addEventListener('click', onLauncherClick, true);
+    }
+  };
+
+  bindHandles();
   // O painel só existe depois de abrir a bolha; observa mudanças no container.
-  const observer = new MutationObserver(() => bindHandle());
+  const observer = new MutationObserver(() => bindHandles());
   observer.observe(container, { childList: true, subtree: true });
 
   window.addEventListener('mousemove', onMouseMove);
@@ -100,7 +185,9 @@ function attachDragBehavior(container: HTMLElement): () => void {
 
   return () => {
     observer.disconnect();
-    handle?.removeEventListener('mousedown', onMouseDown);
+    boundHeader?.removeEventListener('mousedown', onHeaderMouseDown);
+    boundLauncher?.removeEventListener('mousedown', onLauncherMouseDown);
+    boundLauncher?.removeEventListener('click', onLauncherClick, true);
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
   };
