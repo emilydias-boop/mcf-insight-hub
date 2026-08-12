@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Undo2, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useArTitulos } from '@/hooks/useAReceber';
 import {
@@ -24,9 +24,102 @@ import { EditarReembolsoDialog } from './EditarReembolsoDialog';
 import { ExcluirReembolsoDialog } from './ExcluirReembolsoDialog';
 import { AR_REEMBOLSO_STATUS_LABEL, type ArReembolsoStatus } from '@/types/aReceber';
 import { ticketNumber } from '@/lib/arTicketNumber';
+import { getRefundWindow } from '@/lib/refundWindow';
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+
+const fmtDay = (d: Date) => format(d, 'dd/MM/yyyy', { locale: ptBR });
+
+/** Chip compacto com o prazo limite de reembolso (180d cartão / 90d PIX) */
+function PrazoReembolsoBadge({
+  saleDate,
+  paymentMethod,
+  referenceDate,
+}: {
+  saleDate?: string | null;
+  paymentMethod?: string | null;
+  referenceDate?: string | null;
+}) {
+  const w = getRefundWindow(saleDate, paymentMethod, referenceDate);
+  if (w.allowed === null) {
+    return (
+      <Badge variant="outline" className="bg-muted text-muted-foreground">
+        <HelpCircle className="w-3 h-3 mr-1" />
+        Sem data de venda
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className={
+        w.allowed
+          ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
+          : 'bg-rose-500/15 text-rose-600 border-rose-500/30'
+      }
+    >
+      {w.allowed ? <ShieldCheck className="w-3 h-3 mr-1" /> : <ShieldAlert className="w-3 h-3 mr-1" />}
+      {w.allowed ? `${w.daysLeft}d restantes` : `Expirado há ${Math.abs(w.daysLeft!)}d`}
+    </Badge>
+  );
+}
+
+/** Bloco detalhado exibido no formulário de novo reembolso */
+function PrazoReembolsoInfo({
+  saleDate,
+  paymentMethod,
+  referenceDate,
+}: {
+  saleDate?: string | null;
+  paymentMethod?: string | null;
+  referenceDate?: string | null;
+}) {
+  const w = getRefundWindow(saleDate, paymentMethod, referenceDate);
+  const tone =
+    w.allowed === null
+      ? 'border-border bg-muted/40'
+      : w.allowed
+        ? 'border-emerald-500/40 bg-emerald-500/10'
+        : 'border-rose-500/40 bg-rose-500/10';
+  return (
+    <div className={`rounded-md border p-3 text-xs space-y-1 ${tone}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-sm">Tempo limite de reembolso</span>
+        <PrazoReembolsoBadge
+          saleDate={saleDate}
+          paymentMethod={paymentMethod}
+          referenceDate={referenceDate}
+        />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <div className="text-muted-foreground">Meio de pagamento</div>
+          <div className="font-medium">{w.methodLabel}</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Prazo</div>
+          <div className="font-medium">{w.limitDays} dias</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Data da venda</div>
+          <div className="font-medium">
+            {saleDate ? fmtDay(new Date(String(saleDate).slice(0, 10) + 'T00:00:00')) : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Limite para reembolsar</div>
+          <div className="font-medium">{w.deadline ? fmtDay(w.deadline) : '—'}</div>
+        </div>
+      </div>
+      <p className="text-muted-foreground pt-1">
+        Regra: 180 dias para cartão de crédito e 90 dias para PIX, contados da data da venda.
+        {w.allowed === false && ' Prazo expirado — o estorno pelo gateway pode ser recusado.'}
+        {w.allowed === null && ' Sem data de venda no título não é possível calcular o prazo.'}
+      </p>
+    </div>
+  );
+}
 
 function StatusBadge({ status }: { status: ArReembolsoStatus }) {
   const cfg: Record<ArReembolsoStatus, { className: string; Icon: any }> = {
@@ -233,6 +326,13 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2">
+                    <PrazoReembolsoInfo
+                      saleDate={selectedTitulo.sale_date}
+                      paymentMethod={selectedTitulo.payment_method}
+                      referenceDate={dataPedido}
+                    />
+                  </div>
                   <div>
                     <Label>Valor do reembolso</Label>
                     <Input
@@ -318,6 +418,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                         <TableHead>Cliente</TableHead>
                         <TableHead>Produto</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Prazo limite</TableHead>
                         <TableHead>Pedido</TableHead>
                         <TableHead>Prev. pagamento</TableHead>
                         <TableHead>Pago em</TableHead>
@@ -339,6 +440,13 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                           <TableCell className="text-xs">{r.titulo?.product_code || '—'}</TableCell>
                           <TableCell className="text-right text-sm font-medium text-rose-600">
                             {brl(Number(r.valor || 0))}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <PrazoReembolsoBadge
+                              saleDate={r.titulo?.sale_date}
+                              paymentMethod={r.titulo?.payment_method}
+                              referenceDate={r.data_pedido}
+                            />
                           </TableCell>
                           <TableCell className="text-xs">
                             {r.data_pedido
