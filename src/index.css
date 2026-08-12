@@ -329,3 +329,58 @@ html.font-large {
     box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4), 0 8px 32px -8px hsl(var(--primary) / 0.35);
   }
 }
+
+/* ==========================================================================
+   Sonax Webphone widget — correção visual escopada (não tocamos no script deles)
+   --------------------------------------------------------------------------
+   O CSS do widget (webphone2.sonax.cloud/styles/widget.style.css) dimensiona o
+   painel em `rem` (width: 23rem; height: 29rem; top: -29.5rem), assumindo raiz
+   de 16px. Este app define `html { font-size: 50% }` (8px) para escalar a UI,
+   então o painel do webfone nasce com METADE da altura e, com `overflow: hidden`,
+   corta a fileira "7 8 9", o "0" e os botões de atender/desligar. Além disso,
+   a bolha launcher (.widget, 90px fixos) acabava sobreposta ao conteúdo.
+
+   Correção: reescrever apenas as medidas em `px` (equivalentes ao design 16px)
+   e fixar a ordem de empilhamento. Nada de lógica, nada de JS.
+   ========================================================================== */
+.SonaxWidget {
+  font-size: 16px;
+  line-height: normal;
+  z-index: 2147483000;
+}
+
+/* Painel expandido: altura/largura reais + folga p/ telas baixas */
+.SonaxWidget .content {
+  width: 368px;          /* 23rem @16px */
+  height: 464px;         /* 29rem @16px */
+  max-height: calc(100vh - 110px);
+  top: -472px;           /* -29.5rem @16px */
+  right: 16px;           /* 1rem @16px */
+  z-index: 2;            /* acima da bolha launcher */
+}
+
+/* Bolha launcher fica atrás do painel quando ele está aberto */
+.SonaxWidget .widget {
+  z-index: 1;
+}
+
+/* Área central rola em vez de cortar caso a viewport seja muito baixa */
+.SonaxWidget #principal-content {
+  overflow-y: auto;
+}
+
+/* Teclado e campo de discagem nas proporções originais */
+.SonaxWidget #keyboard-display input {
+  height: 24px;          /* 1.5rem @16px */
+}
+
+/* Chamada minimizada */
+.SonaxWidget .active-call-minimized {
+  width: 352px;          /* 22rem @16px */
+  height: 128px;         /* 8rem @16px */
+  border-radius: 5px;    /* 0.3rem @16px */
+}
+
+.SonaxWidget #minimized-actions img {
+  margin-left: 8px;      /* 0.5rem @16px */
+}
