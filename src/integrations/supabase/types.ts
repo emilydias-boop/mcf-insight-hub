@@ -12300,6 +12300,81 @@ export type Database = {
         }
         Relationships: []
       }
+      sonax_call_events: {
+        Row: {
+          aliasramal: string | null
+          contact_id: string | null
+          created_at: string
+          data_fim: string | null
+          data_inicio: string | null
+          deal_activity_id: string | null
+          deal_id: string | null
+          duracao_chamada: string | null
+          evento: string
+          id: string
+          id_chamada: string | null
+          id_chamada_originador: string | null
+          match_error: string | null
+          numero: string | null
+          numero_rec: string | null
+          ramal: string | null
+          raw_payload: Json
+          sdr_email: string | null
+          sdr_name: string | null
+          status_atendimento: string | null
+          status_chamada: string | null
+          url_gravacao: string | null
+        }
+        Insert: {
+          aliasramal?: string | null
+          contact_id?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          deal_activity_id?: string | null
+          deal_id?: string | null
+          duracao_chamada?: string | null
+          evento: string
+          id?: string
+          id_chamada?: string | null
+          id_chamada_originador?: string | null
+          match_error?: string | null
+          numero?: string | null
+          numero_rec?: string | null
+          ramal?: string | null
+          raw_payload?: Json
+          sdr_email?: string | null
+          sdr_name?: string | null
+          status_atendimento?: string | null
+          status_chamada?: string | null
+          url_gravacao?: string | null
+        }
+        Update: {
+          aliasramal?: string | null
+          contact_id?: string | null
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          deal_activity_id?: string | null
+          deal_id?: string | null
+          duracao_chamada?: string | null
+          evento?: string
+          id?: string
+          id_chamada?: string | null
+          id_chamada_originador?: string | null
+          match_error?: string | null
+          numero?: string | null
+          numero_rec?: string | null
+          ramal?: string | null
+          raw_payload?: Json
+          sdr_email?: string | null
+          sdr_name?: string | null
+          status_atendimento?: string | null
+          status_chamada?: string | null
+          url_gravacao?: string | null
+        }
+        Relationships: []
+      }
       sonax_campaign_contacts: {
         Row: {
           added_by: string | null
@@ -15200,6 +15275,13 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sonax_match_lead_by_phone: {
+        Args: { p_phone: string }
+        Returns: {
+          contact_id: string
+          deal_id: string
+        }[]
+      }
       sync_hubla_buyer_to_crm: {
         Args: { p_attendee_id: string }
         Returns: undefined
