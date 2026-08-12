@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   const userId = String((claimsData.claims as Record<string, unknown>).sub || '')
   if (!email) return json({ error: 'email_nao_encontrado' }, 401)
 
-  let body: { numero?: string; deal_id?: string; origin?: string; attempt?: number } = {}
+  let body: { numero?: string; deal_id?: string; origin?: string; attempt?: number; log_only?: boolean } = {}
   try {
     body = await req.json()
   } catch {
@@ -60,6 +60,39 @@ Deno.serve(async (req) => {
 
   if (mappingError) return json({ error: 'erro_ao_buscar_ramal' }, 500)
   if (!mapping?.ramal) return json({ error: 'ramal_nao_configurado' }, 404)
+
+  const logOnly = body.log_only === true
+  const originLog = body.origin === 'auto_dialer' ? 'auto_dialer' : 'manual'
+
+  // Modo log_only: a chamada foi originada direto no widget de webfone Sonax
+  // (evento `sonax:makeCall`). Aqui só registramos a atividade.
+  if (logOnly) {
+    let logActivityId: string | null = null
+    if (body.deal_id) {
+      const { data: activity, error: activityError } = await admin
+        .from('deal_activities')
+        .insert({
+          deal_id: body.deal_id,
+          activity_type: 'click_to_call',
+          description: `Ligação pelo webfone Sonax para ${numero} (ramal ${mapping.ramal})`,
+          user_id: userId || null,
+          metadata: {
+            numero,
+            ramal: mapping.ramal,
+            sdr_email: email,
+            ok: true,
+            origin: originLog,
+            via: 'widget',
+            attempt: typeof body.attempt === 'number' ? body.attempt : null,
+          },
+        })
+        .select('id')
+        .maybeSingle()
+      if (activityError) console.error('[click-to-call:log_only] activity insert error', activityError)
+      logActivityId = (activity as { id?: string } | null)?.id ?? null
+    }
+    return json({ success: true, ramal: mapping.ramal, numero, activity_id: logActivityId, log_only: true })
+  }
 
   const sonaxToken = Deno.env.get('SONAX_TOKEN')
   if (!sonaxToken) return json({ error: 'sonax_token_ausente' }, 500)
