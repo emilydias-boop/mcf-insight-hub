@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { toast } from 'sonner';
 import { useDialerEngine, type DialerEngine } from '@/hooks/useDialerEngine';
+import { toSonaxWidgetDigits } from '@/hooks/useSonaxClickToCall';
 import { isAnsweredOutcome, isQualifiedOutcome } from '@/lib/callOutcomes';
 
 export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'awaiting-outcome' | 'finished';
@@ -174,10 +175,20 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
       const crmOriginId = isUuid(lead.originId) ? lead.originId : undefined;
 
       if (isSonax) {
-        // ===== Motor Sonax: a ligação toca no RAMAL/softphone do SDR =====
-        const { data, error } = await supabase.functions.invoke('sonax-click-to-call', {
-          body: { numero: normalized, deal_id: crmDealId, origin: 'auto_dialer', attempt: attemptNumber },
-        });
+        // ===== Motor Sonax: origina direto no widget de webfone (sonax:makeCall) =====
+        const digits = toSonaxWidgetDigits(lead.phone || normalized);
+        let data: any = null;
+        let error: any = null;
+        if (!digits) {
+          error = new Error('numero_invalido');
+        } else {
+          window.dispatchEvent(new CustomEvent('sonax:makeCall', { detail: { numero: digits } }));
+          const res = await supabase.functions.invoke('sonax-click-to-call', {
+            body: { log_only: true, numero: digits, deal_id: crmDealId, origin: 'auto_dialer', attempt: attemptNumber },
+          });
+          data = res.data;
+          error = res.error;
+        }
         const activityId = (data as any)?.activity_id ?? null;
 
         if (error || (data as any)?.error) {
