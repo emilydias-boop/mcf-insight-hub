@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
 import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
 import { QuickDialerLauncher } from "@/components/crm/QuickDialerLauncher";
+import { SonaxWebphoneWidget } from "@/components/crm/SonaxWebphoneWidget";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
 import { CloserPendingDocsAlert } from "@/components/closer/CloserPendingDocsAlert";
@@ -64,6 +65,7 @@ export function MainLayout() {
             <>
               <TwilioSoftphone />
               <QuickDialerLauncher />
+              <SonaxWebphoneWidget />
               <AutoDialerDealDrawer />
               <AutoDialerInCallBanner />
               <AutoDialerOutcomeBanner />
