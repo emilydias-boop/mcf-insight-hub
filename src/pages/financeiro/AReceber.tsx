@@ -35,6 +35,7 @@ import {
 } from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
 import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
 import { ReembolsosPanel } from '@/components/financeiro/aReceber/ReembolsosPanel';
+import { DuplicidadePanel } from '@/components/financeiro/aReceber/DuplicidadePanel';
 import { CadastroManualDialog } from '@/components/financeiro/aReceber/CadastroManualDialog';
 import { useReembolsoTotais } from '@/hooks/useArReembolsos';
 import { ticketNumber } from '@/lib/arTicketNumber';
@@ -114,6 +115,7 @@ export default function AReceber() {
   const [baixaForma, setBaixaForma] = useState('pix');
   const [openReembolsos, setOpenReembolsos] = useState(false);
   const [openCadastroManual, setOpenCadastroManual] = useState(false);
+  const [openDuplicidade, setOpenDuplicidade] = useState(false);
   const { data: reembTotais } = useReembolsoTotais();
 
   const toggleSelected = (id: string) => {
@@ -223,6 +225,14 @@ export default function AReceber() {
           >
             <FilePlus2 className="w-5 h-5" />
             <span className="text-sm font-semibold">Cadastro Manual</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenDuplicidade(true)}
+            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-amber-600 hover:border-amber-500/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
+          >
+            <Users className="w-5 h-5" />
+            <span className="text-sm font-semibold">Duplicidade</span>
           </button>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
@@ -588,6 +598,7 @@ export default function AReceber() {
         </TabsContent>
       </Tabs>
       <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
+      <DuplicidadePanel open={openDuplicidade} onOpenChange={setOpenDuplicidade} />
       {cobrancaTitulo && (
         <CobrancaResponsavelDialog
           titulo={cobrancaTitulo}
