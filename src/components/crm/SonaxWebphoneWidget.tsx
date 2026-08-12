@@ -37,17 +37,12 @@ function attachDragBehavior(container: HTMLElement): () => void {
   }
 
   const findHandle = (): HTMLElement | null => {
-    const candidates = Array.from(
-      container.querySelectorAll<HTMLElement>('div, header, span, p, h1, h2, h3, h4'),
-    );
-    // Menor elemento cujo texto seja o título do webfone.
-    const matches = candidates.filter((el) => {
-      const text = (el.textContent || '').trim();
-      return /sonax/i.test(text) && text.length <= 40;
-    });
-    if (matches.length === 0) return null;
-    return matches.reduce((smallest, el) =>
-      el.querySelectorAll('*').length < smallest.querySelectorAll('*').length ? el : smallest,
+    // O cabeçalho do widget (injetado pelo script Sonax) é <nav id="header">.
+    // Usamos o seletor estável por ID; fallback pela estrutura .content > nav.
+    return (
+      container.querySelector<HTMLElement>('#header') ??
+      container.querySelector<HTMLElement>('.content nav') ??
+      null
     );
   };
 
