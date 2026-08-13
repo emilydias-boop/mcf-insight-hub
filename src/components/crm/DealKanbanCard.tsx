@@ -24,6 +24,8 @@ import {
   Star,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
+import { useDialerEngine } from "@/hooks/useDialerEngine";
+import { useSonaxClickToCall } from "@/hooks/useSonaxClickToCall";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
@@ -95,6 +97,8 @@ export const DealKanbanCard = ({
   outsideInfo,
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
+  const { data: dialer } = useDialerEngine();
+  const { mutate: sonaxCall } = useSonaxClickToCall();
   const { role } = useAuth();
   const isTestDeal = isTestPipeline(deal.origin_id);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
