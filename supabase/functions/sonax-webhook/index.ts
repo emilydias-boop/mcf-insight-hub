@@ -80,17 +80,40 @@ Deno.serve(async (req) => {
   let match_error: string | null = null
 
   try {
+    // Match do SDR: o Sonax pode enviar RAMAL completo (ex: 10700011149) e
+    // ALIASRAMAL curto (ex: 107). sdr_ramal_mapping guarda o código curto,
+    // então tentamos: ramal completo -> alias -> prefixo/sufixo numérico do ramal.
     const ramal = digits(f.RAMAL)
+    const alias = digits(f.ALIASRAMAL)
 
-    if (ramal) {
-      const { data: mapping } = await supabase
+    const candidates: string[] = []
+    const push = (v: string) => {
+      if (v && v.length >= 2 && !candidates.includes(v)) candidates.push(v)
+    }
+
+    push(ramal)
+    push(alias)
+    for (const len of [3, 4, 5]) {
+      if (ramal.length > len) {
+        push(ramal.slice(0, len))   // prefixo (10700011149 -> 107)
+        push(ramal.slice(-len))     // sufixo  (…11149 -> 1149)
+      }
+    }
+
+    if (candidates.length) {
+      const { data: mappings } = await supabase
         .from('sdr_ramal_mapping')
         .select('sdr_email, sdr_name, ramal')
-        .eq('ramal', ramal)
-        .maybeSingle()
-      if (mapping) {
-        sdr_email = mapping.sdr_email
-        sdr_name = mapping.sdr_name
+        .in('ramal', candidates)
+
+      // respeita a ordem de prioridade dos candidatos
+      for (const cand of candidates) {
+        const hit = (mappings || []).find((m) => digits(String(m.ramal)) === cand)
+        if (hit) {
+          sdr_email = hit.sdr_email
+          sdr_name = hit.sdr_name
+          break
+        }
       }
     }
 
