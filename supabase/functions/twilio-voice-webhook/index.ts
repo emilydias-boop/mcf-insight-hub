@@ -333,11 +333,10 @@ serve(async (req) => {
       updated_at: new Date().toISOString()
     };
 
-    // Do NOT overwrite started_at - it was set by the frontend when the SDR clicked to call
-    // The 'in-progress' webhook means the callee answered, not when the call started
-    if (callStatus === 'in-progress') {
-      updates.answered_at = new Date().toISOString();
-    }
+    // Do NOT overwrite started_at - it was set by the frontend when the SDR clicked to call.
+    // O 'in-progress' significa que o LEAD atendeu — o client observa esse status para
+    // iniciar o cronômetro de duração a partir do atendimento real.
+    // (não existe coluna answered_at em public.calls; gravá-la fazia o UPDATE inteiro falhar)
 
     // Set ended_at and duration when call completes
     if (['completed', 'failed', 'busy', 'no-answer', 'canceled'].includes(callStatus || '')) {
