@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban, DollarSign
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -33,6 +33,7 @@ import { useActiveR2SpecialMarkings } from '@/hooks/useR2SpecialMarkings';
 import { matchR2SpecialMarking } from '@/types/r2SpecialMarking';
 import { useAttendeeChannels } from '@/hooks/useAttendeeChannels';
 import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
+import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -130,6 +131,15 @@ export function R2MeetingDetailDrawer({
   const drawerDealIds = (meeting?.attendees || [])
     .map(a => a.deal_id || (a.deal as any)?.id || null);
   const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(drawerDealIds);
+
+  // Detecção de leads Outside (mesma lógica da Agenda R1)
+  const { data: outsideData = {} } = useOutsideDetectionBatch(
+    (meeting?.attendees || []).map(a => ({
+      id: a.id,
+      email: a.deal?.contact?.email || a.email || null,
+      meetingDate: meeting?.scheduled_at || '',
+    }))
+  );
 
   if (!meeting) return null;
 
@@ -385,6 +395,12 @@ export function R2MeetingDetailDrawer({
                                 <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 border-orange-300 gap-1 shrink-0">
                                   <ArrowRightLeft className="h-3 w-3" />
                                   Reagendado
+                                </Badge>
+                              )}
+                              {outsideData[att.id]?.isOutside && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 border-yellow-300 gap-1 shrink-0">
+                                  <DollarSign className="h-3 w-3" />
+                                  Outside
                                 </Badge>
                               )}
                               {isSelected && (
