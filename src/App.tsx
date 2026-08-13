@@ -126,13 +126,10 @@ const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento")
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
 const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEquipe"));
-const ConsorcioVendas = lazy(() => import("./pages/bu-consorcio/Vendas"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
-const ConsorcioCotasAVenda = lazy(() => import("./pages/bu-consorcio/CotasAVenda"));
 // Visão Chairman - desativada (item de menu/rota comentados abaixo). Mantida para rollback.
 // const Chairman = lazy(() => import("./pages/Chairman"));
 const Home = lazy(() => import("./pages/Home"));
-const DocumentosEstrategicos = lazy(() => import("./pages/bu-common/DocumentosEstrategicos"));
 // BU - Marketing (desativado — rotas comentadas abaixo, manter para rollback)
 // const MarketingDashboard = lazy(() => import("./pages/bu-marketing/MarketingDashboard"));
 // const CampanhasDashboard = lazy(() => import("./pages/bu-marketing/CampanhasDashboard"));
@@ -229,10 +226,7 @@ const App = () => (
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
               <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><CloserMeetingsDetailPage /></BUProvider></RoleGuard>} />
-              <Route path="consorcio/vendas" element={<ResourceGuard resource="crm"><ConsorcioVendas /></ResourceGuard>} />
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
-              <Route path="consorcio/cotas-a-venda" element={<ResourceGuard resource="crm"><ConsorcioCotasAVenda /></ResourceGuard>} />
-              <Route path="consorcio/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="consorcio" /></ResourceGuard>} />
               
               <Route path="consorcio/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
@@ -263,7 +257,6 @@ const App = () => (
               {/* <Route path="bu-marketing/campanhas" element={<ResourceGuard resource="dashboard"><CampanhasDashboard /></ResourceGuard>} /> */}
               {/* <Route path="bu-marketing/aquisicao-a010" element={<ResourceGuard resource="dashboard"><A010AcquisitionDashboard /></ResourceGuard>} /> */}
               {/* <Route path="bu-marketing/a010-links-config" element={<ResourceGuard resource="dashboard" requiredLevel="edit"><A010LinkMappingsConfig /></ResourceGuard>} /> */}
-              {/* <Route path="bu-marketing/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="marketing" /></ResourceGuard>} /> */}
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
