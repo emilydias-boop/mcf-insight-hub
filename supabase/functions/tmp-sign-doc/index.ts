@@ -7,7 +7,7 @@ Deno.serve(async () => {
   );
   const { data, error } = await supabase.storage
     .from("bu-strategic-documents")
-    .createSignedUrl("projetos/2026/2/semana-1/Performance_de_Marketing_-_Janeiro_2026-2.pdf", 60 * 60 * 24 * 7);
+    .createSignedUrl("projetos/2026/2/semana-1/1770755620682_Performance_de_Marketing_-_Janeiro_2026-2.pdf", 60 * 60 * 24 * 7);
   return new Response(JSON.stringify({ url: data?.signedUrl ?? null, error: error?.message ?? null }), {
     headers: { "Content-Type": "application/json" },
   });
