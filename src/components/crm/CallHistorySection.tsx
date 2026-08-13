@@ -141,20 +141,21 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
   });
 
   // Timeline unificada: Twilio (calls) + Sonax (sonax_call_events)
-  const sonaxItems = (sonaxEvents || []).map((ev) => {
-    const when = sonaxParseDate(ev.data_inicio) || new Date(ev.created_at);
-    return {
-      key: `sonax-${ev.id}`,
-      at: when,
-      source: 'sonax' as const,
-      who: ev.sdr_name || ev.sdr_email || (ev.aliasramal || ev.ramal ? `Ramal ${ev.aliasramal || ev.ramal}` : 'Sonax'),
-      phone: sonaxClientPhone(ev),
-      duration: sonaxDurationSeconds(ev.duracao_chamada),
-      notAnswered: (ev.status_atendimento || '').toUpperCase() === 'N',
-      recording: sonaxRecordingProxy(ev.url_gravacao),
-      recordingRaw: ev.url_gravacao,
-    };
-  });
+  const sonaxItems: SonaxItem[] = (sonaxEvents || []).map((ev) => ({
+    id: `sonax-${ev.id}`,
+    at: sonaxParseDate(ev.data_inicio) || new Date(ev.created_at),
+    who: ev.sdr_name || ev.sdr_email || (ev.aliasramal || ev.ramal ? `Ramal ${ev.aliasramal || ev.ramal}` : 'Sonax'),
+    phone: sonaxClientPhone(ev),
+    duration: sonaxDurationSeconds(ev.duracao_chamada),
+    notAnswered: (ev.status_atendimento || '').toUpperCase() === 'N',
+    recording: sonaxRecordingProxy(ev.url_gravacao),
+    recordingRaw: ev.url_gravacao,
+  }));
+
+  const merged: TimelineEntry[] = [
+    ...sonaxItems.map((item) => ({ at: item.at, kind: 'sonax' as const, item })),
+    ...(calls || []).map((call) => ({ at: new Date(call.created_at), kind: 'twilio' as const, call })),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
   if (isLoading || sonaxLoading) {
     return (
@@ -166,9 +167,7 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
     );
   }
 
-  const total = (calls?.length || 0) + sonaxItems.length;
-
-  if (total === 0) {
+  if (merged.length === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground">
         <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -182,142 +181,133 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
       <div className="flex items-center gap-2">
         <Phone className="h-4 w-4 text-muted-foreground" />
         <h3 className="font-semibold text-sm">Histórico de Ligações</h3>
-        <Badge variant="secondary" className="text-xs">{total}</Badge>
+        <Badge variant="secondary" className="text-xs">{merged.length}</Badge>
       </div>
 
       <div className="space-y-2 max-h-64 overflow-y-auto">
-        {sonaxItems
-          .sort((a, b) => b.at.getTime() - a.at.getTime())
-          .map((item) => (
-            <div key={item.key} className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-medium truncate">{item.who}</span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground text-xs">
-                      {format(item.at, "dd/MM HH:mm", { locale: ptBR })}
-                    </span>
-                  </div>
-                  {item.phone && (
-                    <p className="text-xs text-muted-foreground mt-1">{item.phone}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 text-xs">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-mono">{formatDuration(item.duration)}</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-2 flex-wrap">
-                <Badge variant="outline" className="text-xs">Sonax</Badge>
-                <Badge className={`text-xs ${item.notAnswered ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                  {item.notAnswered ? 'Não atendeu' : 'Completada'}
-                </Badge>
-              </div>
-
-              {item.recording && (
-                <div className="mt-2 pt-2 border-t border-border">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Volume2 className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Gravação</span>
-                    <a
-                      href={item.recordingRaw!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
-                    >
-                      abrir na Sonax
-                    </a>
-                  </div>
-                  <audio controls className="w-full h-8" preload="none">
-                    <source src={item.recording} type="audio/mpeg" />
-                  </audio>
-                </div>
-              )}
-            </div>
-          ))}
-
-        {(calls || []).map((call) => {
-          const statusInfo = STATUS_LABELS[call.status] || { label: call.status, color: 'bg-gray-100' };
-          const outcomeInfo = call.outcome ? OUTCOME_LABELS[call.outcome] : null;
-
-          return (
-            <div 
-              key={call.id} 
-              className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  {/* User and Date */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-medium truncate">
-                      {call.profiles?.full_name || 'Usuário'}
-                    </span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground text-xs">
-                      {format(new Date(call.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                    </span>
-                  </div>
-
-                  {/* Phone number */}
-                  {call.to_number && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {call.to_number}
-                    </p>
-                  )}
-                </div>
-
-                {/* Duration Badge */}
-                <div className="flex items-center gap-1 text-xs">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-mono">{formatDuration(getCallDuration(call))}</span>
-                </div>
-              </div>
-
-              {/* Status and Outcome badges */}
-              <div className="flex gap-2 mt-2 flex-wrap">
-                <Badge className={`text-xs ${statusInfo.color}`}>
-                  {statusInfo.label}
-                </Badge>
-                {outcomeInfo && (
-                  <Badge className={`text-xs ${outcomeInfo.color}`}>
-                    {outcomeInfo.label}
-                  </Badge>
-                )}
-              </div>
-
-              {/* Notes */}
-              {call.notes && (
-                <div className="mt-2 flex gap-1 text-xs text-muted-foreground">
-                  <FileText className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                  <p className="line-clamp-2">{call.notes}</p>
-                </div>
-              )}
-
-              {/* Audio Player for Recording */}
-              {call.recording_url && (
-                <div className="mt-2 pt-2 border-t border-border">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Volume2 className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Gravação</span>
-                  </div>
-                  <audio 
-                    controls 
-                    className="w-full h-8"
-                    src={getRecordingProxyUrl(call.recording_url)}
-                    preload="none"
-                  >
-                    Seu navegador não suporta o player de áudio.
-                  </audio>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {merged.map((entry) =>
+          entry.kind === 'sonax'
+            ? <SonaxCallCard key={entry.item.id} item={entry.item} />
+            : <TwilioCallCard key={entry.call.id} call={entry.call} />
+        )}
       </div>
+    </div>
+  );
+}
+
+interface SonaxItem {
+  id: string;
+  at: Date;
+  who: string;
+  phone: string | null;
+  duration: number;
+  notAnswered: boolean;
+  recording: string | null;
+  recordingRaw: string | null;
+}
+
+type TimelineEntry =
+  | { at: Date; kind: 'sonax'; item: SonaxItem }
+  | { at: Date; kind: 'twilio'; call: CallRecord };
+
+function SonaxCallCard({ item }: { item: SonaxItem }) {
+  return (
+    <div className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm">
+            <User className="h-3 w-3 text-muted-foreground" />
+            <span className="font-medium truncate">{item.who}</span>
+            <span className="text-muted-foreground">•</span>
+            <span className="text-muted-foreground text-xs">
+              {format(item.at, "dd/MM HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+          {item.phone && <p className="text-xs text-muted-foreground mt-1">{item.phone}</p>}
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <span className="font-mono">{formatDuration(item.duration)}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-2 flex-wrap">
+        <Badge variant="outline" className="text-xs">Sonax</Badge>
+        <Badge className={`text-xs ${item.notAnswered ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+          {item.notAnswered ? 'Não atendeu' : 'Completada'}
+        </Badge>
+      </div>
+
+      {item.recording && (
+        <div className="mt-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 mb-1">
+            <Volume2 className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Gravação</span>
+            <a
+              href={item.recordingRaw!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline"
+            >
+              abrir na Sonax
+            </a>
+          </div>
+          <audio controls className="w-full h-8" preload="none">
+            <source src={item.recording} type="audio/mpeg" />
+          </audio>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TwilioCallCard({ call }: { call: CallRecord }) {
+  const statusInfo = STATUS_LABELS[call.status] || { label: call.status, color: 'bg-gray-100' };
+  const outcomeInfo = call.outcome ? OUTCOME_LABELS[call.outcome] : null;
+
+  return (
+    <div className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm">
+            <User className="h-3 w-3 text-muted-foreground" />
+            <span className="font-medium truncate">{call.profiles?.full_name || 'Usuário'}</span>
+            <span className="text-muted-foreground">•</span>
+            <span className="text-muted-foreground text-xs">
+              {format(new Date(call.created_at), "dd/MM HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+          {call.to_number && <p className="text-xs text-muted-foreground mt-1">{call.to_number}</p>}
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <span className="font-mono">{formatDuration(getCallDuration(call))}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-2 flex-wrap">
+        <Badge className={`text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+        {outcomeInfo && <Badge className={`text-xs ${outcomeInfo.color}`}>{outcomeInfo.label}</Badge>}
+      </div>
+
+      {call.notes && (
+        <div className="mt-2 flex gap-1 text-xs text-muted-foreground">
+          <FileText className="h-3 w-3 mt-0.5 flex-shrink-0" />
+          <p className="line-clamp-2">{call.notes}</p>
+        </div>
+      )}
+
+      {call.recording_url && (
+        <div className="mt-2 pt-2 border-t border-border">
+          <div className="flex items-center gap-2 mb-1">
+            <Volume2 className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Gravação</span>
+          </div>
+          <audio controls className="w-full h-8" src={getRecordingProxyUrl(call.recording_url)} preload="none">
+            Seu navegador não suporta o player de áudio.
+          </audio>
+        </div>
+      )}
     </div>
   );
 }
