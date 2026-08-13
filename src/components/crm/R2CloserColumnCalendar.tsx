@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, ArrowRightLeft } from "lucide-react";
+import { Plus, ArrowRightLeft, DollarSign } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useActiveR2SpecialMarkings } from "@/hooks/useR2SpecialMarkings";
 import { useAttendeeChannels } from "@/hooks/useAttendeeChannels";
 import { useContractPaidClosersByDeal } from "@/hooks/useContractPaidClosersByDeal";
+import { useOutsideDetectionBatch } from "@/hooks/useOutsideDetection";
 import { matchR2SpecialMarking, R2SpecialMarking } from "@/types/r2SpecialMarking";
 
 interface R2CloserColumnCalendarProps {
@@ -76,6 +77,16 @@ export function R2CloserColumnCalendar({
     }))
   ), [meetings]);
   const channelMap = useAttendeeChannels(channelInputs);
+
+  // Detecção de leads Outside (mesma lógica da Agenda R1)
+  const attendeesForOutsideCheck = useMemo(() => meetings.flatMap(m =>
+    (m.attendees || []).map(att => ({
+      id: att.id,
+      email: (att as any).email || (att as any).deal?.contact?.email || null,
+      meetingDate: m.scheduled_at,
+    }))
+  ), [meetings]);
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   const r2DealIds = useMemo(() => {
     const ids: string[] = [];
@@ -368,6 +379,11 @@ export function R2CloserColumnCalendar({
                                             <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
                                           </span>
                                         )}
+                                        {outsideData[att.id]?.isOutside && (
+                                          <span className="flex items-center bg-yellow-500/40 rounded px-0.5 shrink-0" title="Outside">
+                                            <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                          </span>
+                                        )}
                                       </div>
                                       <Badge
                                         variant="outline"
@@ -404,6 +420,12 @@ export function R2CloserColumnCalendar({
                                         <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
                                           <ArrowRightLeft className="h-2.5 w-2.5" />
                                           Reagendado
+                                        </Badge>
+                                      )}
+                                      {outsideData[att.id]?.isOutside && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
+                                          <DollarSign className="h-2.5 w-2.5" />
+                                          Outside
                                         </Badge>
                                       )}
                                     </div>
