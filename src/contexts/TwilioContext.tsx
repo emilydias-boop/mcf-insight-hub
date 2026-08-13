@@ -127,6 +127,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const tokenCreatedAt = useRef<number | null>(null);
+  // Momento do atendimento REAL do lead (confirmado pelo webhook 'in-progress'),
+  // não o instante em que o navegador aceita o leg WebRTC.
+  const answeredAtRef = useRef<number | null>(null);
+  const answerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callDurationRef = useRef(0);
 
   const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // 50 minutes
   
@@ -164,14 +169,27 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     };
   }, [durationInterval]);
 
-  // Start duration timer when call is in progress
+  // Espelha a duração num ref para os handlers de evento (que capturam closure antiga)
   useEffect(() => {
-    if (callStatus === 'in-progress') {
-      const interval = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
+    callDurationRef.current = callDuration;
+  }, [callDuration]);
+
+  // Timer de duração: conta a partir do ATENDIMENTO REAL (answeredAtRef), que é
+  // confirmado pelo status 'in-progress' vindo do Twilio (webhook). Enquanto o lead
+  // não atende, a duração permanece 0 — igual ao que o Twilio contabiliza.
+  useEffect(() => {
+    if (callStatus === 'in-progress' && answeredAtRef.current) {
+      const tick = () => {
+        const base = answeredAtRef.current;
+        if (!base) return;
+        setCallDuration(Math.max(0, Math.floor((Date.now() - base) / 1000)));
+      };
+      tick();
+      const interval = setInterval(tick, 1000);
       setDurationInterval(interval);
-    } else if (callStatus === 'idle' || callStatus === 'completed' || callStatus === 'failed') {
+      return () => clearInterval(interval);
+    }
+    if (['idle', 'completed', 'failed'].includes(callStatus)) {
       if (durationInterval) {
         clearInterval(durationInterval);
         setDurationInterval(null);
