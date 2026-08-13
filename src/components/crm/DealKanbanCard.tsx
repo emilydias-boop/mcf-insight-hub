@@ -196,6 +196,12 @@ export const DealKanbanCard = ({
 
     const normalizedPhone = normalizePhoneNumber(phone);
 
+    // Motor de discagem por usuário: SDRs migrados seguem no Sonax, o resto (inclui closers) no Twilio.
+    if (dialer?.engine === 'sonax') {
+      sonaxCall({ numero: normalizedPhone, dealId: deal.id });
+      return;
+    }
+
     // If device is not ready, initialize and wait
     if (deviceStatus !== "ready") {
       toast.info("Inicializando Twilio...");
