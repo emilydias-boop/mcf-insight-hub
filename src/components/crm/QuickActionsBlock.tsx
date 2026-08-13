@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
-import { SonaxCallButton } from './SonaxCallButton';
+import { LeadCallButton } from './LeadCallButton';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
@@ -220,7 +220,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
         )}
         <>
             {/* Botão Ligar — click-to-call Sonax (Twilio desativado por bug de duração 0) */}
-            <SonaxCallButton
+            <LeadCallButton
               phone={hasPhone}
               dealId={deal?.id}
               size="sm"

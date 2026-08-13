@@ -19,7 +19,7 @@ import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
-import { SonaxCallButton } from '@/components/crm/SonaxCallButton';
+import { LeadCallButton } from '@/components/crm/LeadCallButton';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
 import { MatchSocioParceiroTab } from '@/components/consorcio/MatchSocioParceiroTab';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
@@ -269,7 +269,7 @@ function RealizadasTab() {
                       <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <span>{r.contact_phone || '—'}</span>
-                          <SonaxCallButton phone={r.contact_phone} dealId={r.deal_id} />
+                          <LeadCallButton phone={r.contact_phone} dealId={r.deal_id} />
                         </div>
                       </TableCell>
                       <TableCell>
@@ -971,7 +971,7 @@ function _SemSucessoTabInner() {
                   <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <span>{d.contact_phone || '—'}</span>
-                          <SonaxCallButton phone={d.contact_phone} dealId={d.deal_id} />
+                          <LeadCallButton phone={d.contact_phone} dealId={d.deal_id} />
                         </div>
                       </TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{d.origin_name}</Badge></TableCell>
@@ -1205,7 +1205,7 @@ function TodasReunioesTab() {
                       <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <span>{r.contact_phone || '—'}</span>
-                          <SonaxCallButton phone={r.contact_phone} dealId={r.deal_id} />
+                          <LeadCallButton phone={r.contact_phone} dealId={r.deal_id} />
                         </div>
                       </TableCell>
                       <TableCell>
