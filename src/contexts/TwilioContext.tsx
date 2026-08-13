@@ -399,6 +399,50 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const FINAL_STATUSES = ['completed', 'no-answer', 'busy', 'failed', 'canceled'];
+
+  /**
+   * Finaliza o registro da chamada SEM sobrescrever o que o Twilio já reportou.
+   * O webhook (DialCallStatus / RecordingDuration) é a fonte de verdade:
+   * - se a linha já tem status final + ended_at, não mexemos em status/ended_at;
+   * - a duração do timer local só é gravada quando o banco ainda está em 0/null.
+   */
+  const finalizeCallInDb = useCallback(async (
+    callId: string | null,
+    fallback: { status: string; durationSeconds?: number | null },
+  ) => {
+    if (!callId) return;
+    try {
+      const { data: row } = await supabase
+        .from('calls')
+        .select('status, ended_at, duration_seconds')
+        .eq('id', callId)
+        .maybeSingle();
+
+      const webhookAlreadyFinal =
+        !!row && FINAL_STATUSES.includes(row.status || '') && !!row.ended_at;
+
+      const updates: Record<string, any> = {};
+      if (!webhookAlreadyFinal) {
+        updates.status = fallback.status;
+        updates.ended_at = new Date().toISOString();
+      }
+
+      const localDuration = Math.max(0, fallback.durationSeconds ?? 0);
+      const dbDuration = row?.duration_seconds ?? 0;
+      if (localDuration > 0 && dbDuration <= 0) {
+        updates.duration_seconds = localDuration;
+      } else if (!row || row.duration_seconds == null) {
+        updates.duration_seconds = localDuration;
+      }
+
+      if (Object.keys(updates).length === 0) return;
+      await updateCallInDb(callId, updates);
+    } catch (e) {
+      console.error('Failed to finalize call in DB:', e);
+    }
+  }, [updateCallInDb]);
+
   const makeCall = useCallback(async (
     phoneNumber: string, 
     dealId?: string, 
