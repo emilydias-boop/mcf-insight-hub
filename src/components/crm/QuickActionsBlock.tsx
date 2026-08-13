@@ -219,7 +219,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
           </div>
         )}
         <>
-            {/* Botão Ligar — click-to-call Sonax (Twilio desativado por bug de duração 0) */}
+            {/* Botão Ligar — motor resolvido por usuário (Sonax ou Twilio) */}
             <LeadCallButton
               phone={hasPhone}
               dealId={deal?.id}
