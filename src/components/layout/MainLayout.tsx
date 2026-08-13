@@ -17,6 +17,7 @@ import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { GamificationScheduler } from "@/components/gamification/GamificationScheduler";
+import { usePageAccessLog } from "@/hooks/usePageAccessLog";
 
 function GlobalQualificationModal() {
   const { 
@@ -41,6 +42,7 @@ function GlobalQualificationModal() {
 
 export function MainLayout() {
   const { allRoles } = useAuth();
+  usePageAccessLog();
   // Dialer/Twilio só para SDRs — closers, admins, managers e demais não ligam pelo sistema
   const isSDR = (allRoles as string[] | undefined)?.includes("sdr") ?? false;
   return (
