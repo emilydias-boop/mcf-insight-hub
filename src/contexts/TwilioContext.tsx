@@ -686,7 +686,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       
       return null;
     }
-  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, ensureValidToken, initializeDevice]);
+  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, finalizeCallInDb, ensureValidToken, initializeDevice]);
 
   const hangUp = useCallback(() => {
     if (currentCall) {
@@ -694,10 +694,6 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCall(null);
       setCallStatus('completed');
       setDeviceStatus('ready');
-      // Persist to DB with duration from local timer
-      updateCallInDb(currentCallId, {
-        status: 'completed',
-        ended_at: new Date().toISOString(),
         duration_seconds: callDuration,
       });
     }
