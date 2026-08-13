@@ -133,7 +133,7 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
                     <p className="font-semibold text-foreground">Apurado (Semana / Mês / Ano)</p>
                     <p>
                       Soma de <b>valor_credito</b> de todas as cotas cadastradas em
-                      <b> BU Consórcio → Cotas</b> (rota <code>/consorcio/vendas</code>),
+                      <b> BU Consórcio → Controle Consórcio</b> (rota <code>/consorcio</code>),
                       filtradas por <b>data de contratação</b> dentro do período.
                     </p>
                     <p className="mt-1">
