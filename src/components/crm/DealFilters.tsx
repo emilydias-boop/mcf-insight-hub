@@ -116,9 +116,9 @@ export const DealFilters = ({
     setIsAttemptsPopoverOpen(false);
   };
   
-  // Buscar ativos e ex-funcionários (desativados) para filtro de responsável
+  // Buscar apenas usuários ATIVOS para o filtro de responsável
   const { data: dealOwners } = useQuery({
-    queryKey: ['deal-owners-all-with-inactive'],
+    queryKey: ['deal-owners-active-only'],
     queryFn: async () => {
       // Ativos com roles específicos
       const { data: activeUsers } = await supabase
@@ -133,13 +133,6 @@ export const DealFilters = ({
         .eq('access_status', 'ativo')
         .order('full_name');
       
-      // Desativados (ex-funcionários)
-      const { data: inactiveUsers } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, access_status')
-        .eq('access_status', 'desativado')
-        .order('full_name');
-      
       // Filtrar ativos que têm roles relevantes
       const filteredActive = (activeUsers || []).filter((u: any) => 
         u.user_roles?.some((r: any) => 
@@ -149,7 +142,6 @@ export const DealFilters = ({
       
       return {
         active: filteredActive,
-        inactive: inactiveUsers || [],
       };
     }
   });
@@ -246,21 +238,7 @@ export const DealFilters = ({
                   {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
                 </SelectItem>
               ))}
-              {/* Ex-funcionários / Legados */}
-              {ownerOptions.some(o => o.isInactive) && (
-                <>
-                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
-                    ── Ex-funcionários ──
-                  </SelectItem>
-                  {ownerOptions.filter(o => o.isInactive).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className="text-muted-foreground">
-                        {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </>
-              )}
+              {/* Inativos/ex-funcionários não são oferecidos como opção de seleção */}
             </>
           ) : (
             /* Fallback: query antiga (para reuso em outros lugares) */
@@ -270,20 +248,6 @@ export const DealFilters = ({
                   {dealOwners.active.map((user: any) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-              {dealOwners?.inactive && dealOwners.inactive.length > 0 && (
-                <>
-                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
-                    ── Ex-funcionários ──
-                  </SelectItem>
-                  {dealOwners.inactive.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      <span className="text-muted-foreground">
-                        {user.full_name || user.email?.split('@')[0]}
-                      </span>
                     </SelectItem>
                   ))}
                 </>
