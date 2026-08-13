@@ -15,7 +15,9 @@ export function AutoDialerDealDrawer() {
 
   const dealId = currentLead?.dealId ?? null;
   const isRealDeal = !!dealId && !dealId.startsWith('manual-');
-  const open = state === 'paused-in-call' && inCallDrawerOpen && isRealDeal;
+  // 'paused-in-call' = motor twilio (atendeu). 'awaiting-outcome' = motor
+  // sonax (disparo aceito no webfone, sem evento de atendimento no navegador).
+  const open = (state === 'paused-in-call' || state === 'awaiting-outcome') && inCallDrawerOpen && isRealDeal;
 
   useEffect(() => {
     console.debug('[AutoDialerDrawer]', {
