@@ -211,18 +211,3 @@ export function useSetPosContemplacaoDecisao() {
     onError: (e: any) => toast.error('Erro: ' + e.message),
   });
 }
-
-export function useCotasAVenda() {
-  return useQuery({
-    queryKey: ['cotas-a-venda'],
-    queryFn: async () => {
-      const { data, error } = await db
-        .from('consortium_cards')
-        .select('id, grupo, cota, valor_credito, tipo_produto, nome_completo, razao_social, tipo_pessoa, motivo_contemplacao, data_contemplacao, vendedor_name, pos_contemplacao_decisao, data_decisao_pos_contemplacao')
-        .eq('pos_contemplacao_decisao', 'a_venda')
-        .order('data_decisao_pos_contemplacao', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}

@@ -11,7 +11,8 @@ const CONTEMPLATION_CARD_SELECT = `
   numero_contemplacao, data_contemplacao, motivo_contemplacao, valor_lance, percentual_lance,
   nome_completo, cpf, telefone, email, razao_social, cnpj,
   valor_comissao, e_transferencia, transferido_de, observacoes,
-  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais
+  produto_embracon, condicao_pagamento, inclui_seguro_vida, parcela_1a_12a, parcela_demais,
+  pos_contemplacao_decisao, data_decisao_pos_contemplacao
 `;
 
 export interface ContemplationFilters {

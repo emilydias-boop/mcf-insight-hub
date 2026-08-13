@@ -34,6 +34,24 @@ import { ContemplationDetailsDrawer } from './ContemplationDetailsDrawer';
 import { FaixasConfigDialog } from './FaixasConfigDialog';
 import { HistoricoAssembleiaPanel } from './HistoricoAssembleiaPanel';
 
+const POS_LABELS: Record<string, string> = {
+  a_venda: 'À venda',
+  manter: 'Manter',
+  em_transferencia: 'Em transferência',
+  transferida: 'Transferida',
+};
+
+function getPosContemplacaoBadge(decisao?: string | null) {
+  if (!decisao) return <span className="text-muted-foreground text-xs">—</span>;
+  const label = POS_LABELS[decisao] || decisao;
+  if (decisao === 'a_venda') {
+    return <Badge className="bg-amber-500 text-white text-xs">{label}</Badge>;
+  }
+  if (decisao === 'transferida') return <Badge className="bg-slate-600 text-white text-xs">{label}</Badge>;
+  if (decisao === 'em_transferencia') return <Badge className="bg-indigo-600 text-white text-xs">{label}</Badge>;
+  return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+}
+
 function getContemplationBadge(card: ConsorcioCard) {
   if (!card.motivo_contemplacao) {
     return <Badge variant="outline" className="text-xs">Não contemplada</Badge>;
@@ -58,6 +76,7 @@ export function ContemplationTab() {
   const [fallbackInfo, setFallbackInfo] = useState<ResultadoFallback | null>(null);
   const [consultaAtiva, setConsultaAtiva] = useState(false);
   const [faixasOpen, setFaixasOpen] = useState(false);
+  const [posFiltro, setPosFiltro] = useState<string>('todos');
 
   // Modal state
   const [selectedCard, setSelectedCard] = useState<ConsorcioCard | null>(null);
@@ -122,11 +141,13 @@ export function ContemplationTab() {
   };
 
   const displayCards = useMemo(() => {
-    if (consultaAtiva && resultados) {
-      return resultados;
-    }
-    return null;
-  }, [consultaAtiva, resultados]);
+    if (!consultaAtiva || !resultados) return null;
+    if (posFiltro === 'todos') return resultados;
+    return resultados.filter((r) => {
+      const d = (r.card as any).pos_contemplacao_decisao as string | null;
+      return posFiltro === 'sem' ? !d : d === posFiltro;
+    });
+  }, [consultaAtiva, resultados, posFiltro]);
 
   const openSorteio = (card: ConsorcioCard) => { setSelectedCard(card); setSorteioOpen(true); };
   const openLance = (card: ConsorcioCard) => { setSelectedCard(card); setLanceOpen(true); };
@@ -336,6 +357,29 @@ export function ContemplationTab() {
         </>
       )}
 
+      {/* Pós-contemplação filter */}
+      {consultaAtiva && (
+        <div className="flex items-center gap-2">
+          <Label className="text-sm">Pós-contemplação:</Label>
+          <Select value={posFiltro} onValueChange={setPosFiltro}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas</SelectItem>
+              <SelectItem value="a_venda">À venda</SelectItem>
+              <SelectItem value="manter">Manter com consorciado</SelectItem>
+              <SelectItem value="em_transferencia">Em transferência</SelectItem>
+              <SelectItem value="transferida">Transferida</SelectItem>
+              <SelectItem value="sem">Sem decisão</SelectItem>
+            </SelectContent>
+          </Select>
+          {resultados && (
+            <Badge className="bg-amber-500 text-white">
+              À venda: {resultados.filter((r) => (r.card as any).pos_contemplacao_decisao === 'a_venda').length}
+            </Badge>
+          )}
+        </div>
+      )}
+
       {/* Results table */}
       <Card>
         <CardContent className="p-0">
@@ -350,6 +394,7 @@ export function ContemplationTab() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status Cota</TableHead>
                 <TableHead>Contemplação</TableHead>
+                <TableHead>Pós-contemplação</TableHead>
                 {consultaAtiva && (
                   <>
                     <TableHead className="text-center">Distância</TableHead>
@@ -367,7 +412,7 @@ export function ContemplationTab() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={consultaAtiva ? 15 : 9}><Skeleton className="h-10 w-full" /></TableCell>
+                    <TableCell colSpan={consultaAtiva ? 16 : 10}><Skeleton className="h-10 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : consultaAtiva && displayCards ? (
@@ -377,7 +422,10 @@ export function ContemplationTab() {
                     const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                     const doc = card.tipo_pessoa === 'pf' ? card.cpf : card.cnpj;
                     return (
-                      <TableRow key={card.id}>
+                      <TableRow
+                        key={card.id}
+                        className={cn((card as any).pos_contemplacao_decisao === 'a_venda' && 'bg-amber-50 dark:bg-amber-950/30')}
+                      >
                         <TableCell className="font-medium">{displayName || '-'}</TableCell>
                         <TableCell className="text-xs font-mono">{doc || '-'}</TableCell>
                         <TableCell className="text-center">{card.grupo}</TableCell>
@@ -392,6 +440,7 @@ export function ContemplationTab() {
                           <Badge variant="outline" className="capitalize text-xs">{card.status}</Badge>
                         </TableCell>
                         <TableCell>{getContemplationBadge(card)}</TableCell>
+                        <TableCell>{getPosContemplacaoBadge((card as any).pos_contemplacao_decisao)}</TableCell>
                         <TableCell className="text-center text-sm font-semibold">{distancia}</TableCell>
                         <TableCell className="text-xs font-mono">{faixaAplicada}</TableCell>
                         <TableCell className="text-center text-sm">
@@ -435,14 +484,14 @@ export function ContemplationTab() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={16} className="text-center py-10 text-muted-foreground">
                       Nenhuma cota encontrada nas zonas de chance para este número
                     </TableCell>
                   </TableRow>
                 )
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
                     Preencha grupo, categoria, período e número da loteria e clique em "Calcular possibilidades" para listar as cotas dentro das zonas de chance.
                   </TableCell>
                 </TableRow>
