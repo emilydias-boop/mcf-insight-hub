@@ -246,21 +246,7 @@ export const DealFilters = ({
                   {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
                 </SelectItem>
               ))}
-              {/* Ex-funcionários / Legados */}
-              {ownerOptions.some(o => o.isInactive) && (
-                <>
-                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
-                    ── Ex-funcionários ──
-                  </SelectItem>
-                  {ownerOptions.filter(o => o.isInactive).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className="text-muted-foreground">
-                        {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </>
-              )}
+              {/* Inativos/ex-funcionários não são oferecidos como opção de seleção */}
             </>
           ) : (
             /* Fallback: query antiga (para reuso em outros lugares) */
@@ -270,20 +256,6 @@ export const DealFilters = ({
                   {dealOwners.active.map((user: any) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-              {dealOwners?.inactive && dealOwners.inactive.length > 0 && (
-                <>
-                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
-                    ── Ex-funcionários ──
-                  </SelectItem>
-                  {dealOwners.inactive.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      <span className="text-muted-foreground">
-                        {user.full_name || user.email?.split('@')[0]}
-                      </span>
                     </SelectItem>
                   ))}
                 </>
