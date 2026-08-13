@@ -275,8 +275,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             }
             
             // Atualizar owner_profile_id se encontrou o profile
-            if (closerProfile?.id) {
-              updatePayload.owner_profile_id = closerProfile.id;
+            if (closerProfileId) {
+              updatePayload.owner_profile_id = closerProfileId;
             }
             
             // Mover para estágio Contrato Pago se encontrou

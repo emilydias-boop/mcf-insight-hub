@@ -234,7 +234,7 @@ serve(async (req) => {
             .from('crm_deals')
             .update({
               owner_id: nextOwnerEmail,
-              owner_profile_id: ownerProfile?.id || null,
+              owner_profile_id: ownerProfileId,
               tags: newTags,
               updated_at: new Date().toISOString()
             })
@@ -268,7 +268,7 @@ serve(async (req) => {
                 to: nextOwnerEmail,
                 previous_owner: previousOwnerEmail,
                 new_owner: nextOwnerEmail,
-                new_owner_profile_id: ownerProfile?.id,
+                new_owner_profile_id: ownerProfileId,
                 distributed_at: new Date().toISOString(),
                 distribution_type: 'outside_fixed_owner',
                 contact_email: contactEmail,
