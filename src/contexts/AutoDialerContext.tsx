@@ -217,6 +217,10 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
           ramal: (data as any)?.ramal ?? ramal,
           startedAt: Date.now(),
         });
+        // No motor Sonax não há transição para 'paused-in-call' (sem eventos
+        // de chamada no navegador), então abrimos o drawer de detalhes do lead
+        // aqui, igual ao fluxo twilio faz ao detectar o atendimento.
+        setInCallDrawerOpen(true);
       } else {
         await makeCall(normalized, crmDealId, crmContactId, crmOriginId);
       }
