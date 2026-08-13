@@ -1918,25 +1918,25 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                 const currentTags = Array.isArray(outsideDeal.tags) ? outsideDeal.tags : [];
                 const newTags = currentTags.includes('Outside') ? currentTags : [...currentTags, 'Outside'];
 
-                let assignedOwnerEmail: string | null = outsideDeal.owner_id || null;
-                let assignedOwnerProfileId: string | null = outsideDeal.owner_profile_id || null;
+                const previousOwnerEmail: string | null = outsideDeal.owner_id || null;
+                const previousOwnerProfileId: string | null = outsideDeal.owner_profile_id || null;
 
-                // CASO A: Deal SEM owner → distribuir automaticamente
-                if (!outsideDeal.owner_id) {
-                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal SEM owner ${outsideDeal.id}. Aplicando owner fixo Outside.`);
-                  const fixedOwner = await getNextOwner();
-                  assignedOwnerEmail = fixedOwner.email;
-                  assignedOwnerProfileId = fixedOwner.profileId;
-                } else {
-                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal COM owner (${outsideDeal.owner_id}) ${outsideDeal.id}. Movendo para Contrato Pago + tag Outside.`);
-                }
+                // Regra: TODO deal Outside passa a ser do owner fixo (Nicola),
+                // mesmo que já tenha outro dono/SDR atribuído.
+                const fixedOwner = await getNextOwner();
+                const assignedOwnerEmail: string | null = fixedOwner.email;
+                const assignedOwnerProfileId: string | null = fixedOwner.profileId;
+                const ownerChanged =
+                  !!assignedOwnerEmail &&
+                  (previousOwnerEmail || '').toLowerCase() !== assignedOwnerEmail.toLowerCase();
+                console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal ${outsideDeal.id} owner anterior=${previousOwnerEmail || 'NENHUM'} → owner Outside=${assignedOwnerEmail}`);
 
                 // Atualizar deal: tags + (opcional) owner + stage Contrato Pago
                 const updatePayload: Record<string, unknown> = {
                   tags: newTags,
                   updated_at: new Date().toISOString(),
                 };
-                if (!outsideDeal.owner_id && assignedOwnerEmail) {
+                if (ownerChanged) {
                   updatePayload.owner_id = assignedOwnerEmail;
                   updatePayload.owner_profile_id = assignedOwnerProfileId;
                 }
@@ -1954,15 +1954,19 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                   .from('deal_activities')
                   .insert({
                     deal_id: outsideDeal.id,
-                    activity_type: !outsideDeal.owner_id && assignedOwnerEmail ? 'owner_change' : 'stage_change',
-                    description: !outsideDeal.owner_id && assignedOwnerEmail
-                      ? `Auto-distribuído como lead Outside para ${assignedOwnerEmail} via webhook Hubla`
+                    activity_type: ownerChanged ? 'owner_change' : 'stage_change',
+                    description: ownerChanged
+                      ? `Lead Outside reatribuído de ${previousOwnerEmail || 'sem dono'} para ${assignedOwnerEmail} via webhook Hubla (regra fixa Outside)`
                       : `Movido para Contrato Pago como Outside (pagamento sem R1) via webhook Hubla`,
                     metadata: {
+                      from: previousOwnerEmail,
+                      to: assignedOwnerEmail,
+                      previous_owner: previousOwnerEmail,
+                      previous_owner_profile_id: previousOwnerProfileId,
                       new_owner: assignedOwnerEmail,
                       new_owner_profile_id: assignedOwnerProfileId,
                       distributed_at: new Date().toISOString(),
-                      distribution_type: !outsideDeal.owner_id ? 'outside_webhook' : 'outside_owner_kept',
+                      distribution_type: ownerChanged ? 'outside_fixed_owner_reassign' : 'outside_owner_kept',
                       contact_email: emailLower,
                       offer_name: data.offerName,
                       trigger: 'contract_paid_no_r1',

@@ -21,7 +21,8 @@ serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dry_run: boolean = body.dry_run ?? false;
-    const only_no_owner: boolean = body.only_no_owner ?? true;
+    // Regra atual: TODO lead Outside vira propriedade do Nicola, mesmo com dono já atribuído.
+    const only_no_owner: boolean = body.only_no_owner ?? false;
 
     console.log(`🚀 [DISTRIBUTE-OUTSIDE] Iniciando. dry_run=${dry_run}, only_no_owner=${only_no_owner}`);
 
@@ -229,6 +230,8 @@ serve(async (req) => {
           const currentTags = Array.isArray(deal.tags) ? deal.tags : [];
           const newTags = currentTags.includes('Outside') ? currentTags : [...currentTags, 'Outside'];
 
+          const previousOwnerEmail: string | null = deal.owner_id || null;
+
           const { error: updateError } = await supabase
             .from('crm_deals')
             .update({
@@ -257,10 +260,15 @@ serve(async (req) => {
             .insert({
               deal_id: deal.id,
               activity_type: 'owner_change',
-              description: `Lead Outside atribuído a ${nextOwnerEmail} (regra fixa Outside)`,
+              description: previousOwnerEmail && previousOwnerEmail.toLowerCase() !== nextOwnerEmail.toLowerCase()
+                ? `Lead Outside reatribuído de ${previousOwnerEmail} para ${nextOwnerEmail} (regra fixa Outside)`
+                : `Lead Outside atribuído a ${nextOwnerEmail} (regra fixa Outside)`,
               to_stage: null,
               from_stage: null,
               metadata: {
+                from: previousOwnerEmail,
+                to: nextOwnerEmail,
+                previous_owner: previousOwnerEmail,
                 new_owner: nextOwnerEmail,
                 new_owner_profile_id: ownerProfile?.id,
                 distributed_at: new Date().toISOString(),
