@@ -699,7 +699,16 @@ export function useR1CloserMetrics(
       });
 
       // Convert to array and sort by r1_agendada desc
-      return Array.from(metricsMap.values()).sort((a, b) => b.r1_agendada - a.r1_agendada);
+      // Períodos "ao vivo" (que incluem hoje) não devem exibir closers inativos,
+      // mesmo que tenham tido produção recente antes de sair.
+      const isLivePeriod = endOfDay(endDate).getTime() >= startOfDay(new Date()).getTime();
+      const inactiveCloserIds = new Set(
+        (closers || []).filter(c => c.is_active !== true).map(c => c.id)
+      );
+
+      return Array.from(metricsMap.values())
+        .filter(m => !(isLivePeriod && inactiveCloserIds.has(m.closer_id)))
+        .sort((a, b) => b.r1_agendada - a.r1_agendada);
     },
     staleTime: 30000,
   });
