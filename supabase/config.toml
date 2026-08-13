@@ -272,3 +272,6 @@ verify_jwt = true
 
 [functions.sonax-webhook]
 verify_jwt = false
+
+[functions.sync-employee-access]
+verify_jwt = false
