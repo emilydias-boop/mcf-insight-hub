@@ -183,28 +183,9 @@ serve(async (req) => {
       );
     }
 
-    // 8. Verificar se há distribuição ativa para esta origin
-    const { data: distConfig } = await supabase
-      .from('lead_distribution_config')
-      .select('id')
-      .eq('origin_id', originId)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (!distConfig || distConfig.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          dry_run,
-          total_checked: deals.length,
-          outside_found: outsideDeals.length,
-          distributed: 0,
-          results: [],
-          message: 'Nenhuma configuração de distribuição ativa encontrada para esta origin. Configure a distribuição em Configurações > Distribuição de Leads.'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 422 }
-      );
-    }
+    // 8. Regra fixa: leads Outside são propriedade do Nicola Ricci
+    //    (substitui o round-robin / lead_distribution_config APENAS para Outside)
+    const OUTSIDE_OWNER_EMAIL = 'nicola.ricci@minhacasafinanciada.com';
 
     // 9. Distribuir cada deal Outside
     const results: Array<{
@@ -224,42 +205,18 @@ serve(async (req) => {
 
       try {
         if (dry_run) {
-          // Simular: obter próximo owner sem incrementar contador
-          const { data: nextOwner } = await supabase
-            .from('lead_distribution_config')
-            .select('user_email')
-            .eq('origin_id', originId)
-            .eq('is_active', true)
-            .gt('percentage', 0)
-            .order('current_count', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
+          // Simular: owner fixo (Nicola) para leads Outside
           results.push({
             deal_id: deal.id,
             deal_name: deal.name,
             contact_email: contactEmail,
-            assigned_to: nextOwner?.user_email || null,
+            assigned_to: OUTSIDE_OWNER_EMAIL,
             success: true,
           });
           distributedCount++;
         } else {
-          // Distribuir de verdade
-          const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
-            p_origin_id: originId
-          });
-
-          if (!nextOwnerEmail) {
-            results.push({
-              deal_id: deal.id,
-              deal_name: deal.name,
-              contact_email: contactEmail,
-              assigned_to: null,
-              success: false,
-              error: 'Não foi possível obter próximo owner da fila'
-            });
-            continue;
-          }
+          // Owner fixo para Outside (não usa round-robin)
+          const nextOwnerEmail = OUTSIDE_OWNER_EMAIL;
 
           // Buscar profile_id do owner
           const { data: ownerProfile } = await supabase
@@ -300,14 +257,14 @@ serve(async (req) => {
             .insert({
               deal_id: deal.id,
               activity_type: 'owner_change',
-              description: `Auto-distribuído como lead Outside para ${nextOwnerEmail}`,
+              description: `Lead Outside atribuído a ${nextOwnerEmail} (regra fixa Outside)`,
               to_stage: null,
               from_stage: null,
               metadata: {
                 new_owner: nextOwnerEmail,
                 new_owner_profile_id: ownerProfile?.id,
                 distributed_at: new Date().toISOString(),
-                distribution_type: 'outside_batch',
+                distribution_type: 'outside_fixed_owner',
                 contact_email: contactEmail,
               }
             });
