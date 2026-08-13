@@ -275,6 +275,3 @@ verify_jwt = false
 
 [functions.sync-employee-access]
 verify_jwt = false
-
-[functions.tmp-sign-doc]
-verify_jwt = false
