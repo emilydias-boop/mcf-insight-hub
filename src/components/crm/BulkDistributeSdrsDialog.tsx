@@ -51,6 +51,7 @@ export const BulkDistributeSdrsDialog = ({
       const { data, error } = await supabase
         .from('profiles')
         .select('id, email, full_name, user_roles!inner(role)')
+        .eq('access_status', 'ativo')
         .in('user_roles.role', ['sdr', 'closer', 'coordenador', 'manager', 'admin'])
         .order('full_name');
       if (error) throw error;
