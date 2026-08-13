@@ -10279,6 +10279,27 @@ export type Database = {
         }
         Relationships: []
       }
+      page_access_log: {
+        Row: {
+          created_at: string
+          id: string
+          path: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          path: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          path?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       partner_returns: {
         Row: {
           blocked: boolean

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BUProvider } from "@/contexts/BUContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TwilioProvider } from "./contexts/TwilioContext";
 import { AppearanceProvider } from "./contexts/AppearanceContext";
@@ -227,6 +228,7 @@ const App = () => (
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
+              <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><CloserMeetingsDetailPage /></BUProvider></RoleGuard>} />
               <Route path="consorcio/vendas" element={<ResourceGuard resource="crm"><ConsorcioVendas /></ResourceGuard>} />
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
               <Route path="consorcio/cotas-a-venda" element={<ResourceGuard resource="crm"><ConsorcioCotasAVenda /></ResourceGuard>} />
@@ -237,12 +239,7 @@ const App = () => (
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="agenda" element={<Agenda />} />
-                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
-                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
-                <Route path="leads-limbo" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsLimbo /></RoleGuard>} />
-                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
@@ -293,7 +290,6 @@ const App = () => (
               <Route path="bu-incorporador/relatorios" element={<ResourceGuard resource="relatorios"><IncorporadorRelatorios /></ResourceGuard>} />
               <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} />
               <Route path="bu-incorporador/bi-comercial" element={<ResourceGuard resource="crm"><BIComercial /></ResourceGuard>} />
-              <Route path="bu-incorporador/documentos-estrategicos" element={<ResourceGuard resource="relatorios"><DocumentosEstrategicos bu="incorporador" /></ResourceGuard>} />
               
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
