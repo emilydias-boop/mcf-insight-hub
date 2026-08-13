@@ -1809,31 +1809,17 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                 fallbackStageId = novoLeadStage?.id || null;
               }
 
-              // Helper: pegar próximo SDR via distribuição
+              // Regra fixa: leads Outside são propriedade do Nicola Ricci
+              // (substitui round-robin / lead_distribution_config APENAS para Outside)
+              const OUTSIDE_OWNER_EMAIL = 'nicola.ricci@minhacasafinanciada.com';
               const getNextOwner = async (): Promise<{ email: string | null; profileId: string | null }> => {
-                const { data: distConfigLocal } = await supabase
-                  .from('lead_distribution_config')
-                  .select('id')
-                  .eq('origin_id', outsideOrigin.id)
-                  .eq('is_active', true)
-                  .limit(1);
-                if (!distConfigLocal || distConfigLocal.length === 0) {
-                  console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Sem configuração de distribuição ativa`);
-                  return { email: null, profileId: null };
-                }
-                const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
-                  p_origin_id: outsideOrigin.id,
-                });
-                if (!nextOwnerEmail) {
-                  console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Fila de distribuição vazia`);
-                  return { email: null, profileId: null };
-                }
                 const { data: ownerProfile } = await supabase
                   .from('profiles')
                   .select('id')
-                  .ilike('email', nextOwnerEmail)
+                  .ilike('email', OUTSIDE_OWNER_EMAIL)
                   .maybeSingle();
-                return { email: nextOwnerEmail, profileId: ownerProfile?.id || null };
+                console.log(`🎯 [AUTO-PAGO][OUTSIDE] Owner fixo Outside: ${OUTSIDE_OWNER_EMAIL}`);
+                return { email: OUTSIDE_OWNER_EMAIL, profileId: ownerProfile?.id || null };
               };
 
               // ===== CASO C: Deal não existe → criar + distribuir =====
@@ -1937,34 +1923,10 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
 
                 // CASO A: Deal SEM owner → distribuir automaticamente
                 if (!outsideDeal.owner_id) {
-                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal SEM owner ${outsideDeal.id}. Iniciando distribuição.`);
-                  const { data: distConfig } = await supabase
-                    .from('lead_distribution_config')
-                    .select('id')
-                    .eq('origin_id', outsideOrigin.id)
-                    .eq('is_active', true)
-                    .limit(1);
-
-                  if (distConfig && distConfig.length > 0) {
-                    const { data: nextOwnerEmail } = await supabase.rpc('get_next_lead_owner', {
-                      p_origin_id: outsideOrigin.id
-                    });
-
-                    if (nextOwnerEmail) {
-                      assignedOwnerEmail = nextOwnerEmail;
-                      const { data: ownerProfile } = await supabase
-                        .from('profiles')
-                        .select('id')
-                        .ilike('email', nextOwnerEmail)
-                        .maybeSingle();
-                      assignedOwnerProfileId = ownerProfile?.id || null;
-                      console.log(`✅ [AUTO-PAGO][OUTSIDE] Deal ${outsideDeal.id} será atribuído a ${nextOwnerEmail}`);
-                    } else {
-                      console.log(`⚠️ [AUTO-PAGO][OUTSIDE] Fila de distribuição vazia para origin ${outsideOrigin.id}`);
-                    }
-                  } else {
-                    console.log(`ℹ️ [AUTO-PAGO][OUTSIDE] Sem configuração de distribuição ativa para origin ${outsideOrigin.id}`);
-                  }
+                  console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal SEM owner ${outsideDeal.id}. Aplicando owner fixo Outside.`);
+                  const fixedOwner = await getNextOwner();
+                  assignedOwnerEmail = fixedOwner.email;
+                  assignedOwnerProfileId = fixedOwner.profileId;
                 } else {
                   console.log(`🎯 [AUTO-PAGO][OUTSIDE] Deal COM owner (${outsideDeal.owner_id}) ${outsideDeal.id}. Movendo para Contrato Pago + tag Outside.`);
                 }
