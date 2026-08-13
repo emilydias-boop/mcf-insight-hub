@@ -21,6 +21,9 @@ import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { useR2LeadsChannelMap, R2LeadInput } from '@/hooks/useR2LeadsChannelMap';
 import { R2LeadBadges } from './R2LeadBadges';
 import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
+import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
+import { Badge } from '@/components/ui/badge';
+import { DollarSign } from 'lucide-react';
 
 interface R2ListViewTableProps {
   meetings: R2MeetingRow[];
@@ -67,6 +70,14 @@ export function R2ListViewTable({
     [rows]
   );
   const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(dealIds);
+
+  // Detecção de leads Outside (mesma lógica da Agenda R1)
+  const attendeesForOutsideCheck = useMemo(() => rows.map(({ meeting, attendee, key }) => ({
+    id: key,
+    email: (attendee as any).email || (attendee as any).deal?.contact?.email || null,
+    meetingDate: meeting.scheduled_at,
+  })), [rows]);
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   const handleQuickUpdate = (attendeeId: string, field: string, value: unknown) => {
     updateAttendee.mutate({
@@ -147,6 +158,12 @@ export function R2ListViewTable({
                         }
                         scheduledAt={meeting.scheduled_at}
                       />
+                      {outsideData[key]?.isOutside && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-1">
+                          <DollarSign className="h-2.5 w-2.5" />
+                          Outside
+                        </Badge>
+                      )}
                     </div>
                     {contactPhone && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
