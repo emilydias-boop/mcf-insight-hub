@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,9 +111,7 @@ Deno.serve(async (req) => {
       const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
       if (nextOwner) {
         ownerEmail = nextOwner;
-        const { data: profile } = await supabase
-          .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
-        ownerProfileId = profile?.id || null;
+        ownerProfileId = await resolveActiveOwnerProfileId(supabase, nextOwner, 'BACKFILL-A010][owner');
       }
 
       const dealPayload = {

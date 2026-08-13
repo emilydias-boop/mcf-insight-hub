@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -653,8 +654,7 @@ serve(async (req) => {
           const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: INSIDE_SALES_ORIGIN_ID });
           if (nextOwner) {
             isOwner = nextOwner;
-            const { data: ownerProfile } = await supabase.from('profiles').select('id').eq('email', nextOwner).maybeSingle();
-            isOwnerProfileId = ownerProfile?.id || null;
+            isOwnerProfileId = await resolveActiveOwnerProfileId(supabase, nextOwner, 'WEBHOOK-RECEIVER][inside-sales-owner');
           }
           
           const isCustomFields: Record<string, unknown> = {
@@ -1050,15 +1050,7 @@ serve(async (req) => {
       assignedOwner = endpoint.fixed_owner_email;
       console.log('[WEBHOOK-RECEIVER] 🔒 Owner fixo do endpoint:', assignedOwner);
 
-      const { data: ownerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', assignedOwner)
-        .maybeSingle();
-
-      if (ownerProfile) {
-        assignedOwnerProfileId = ownerProfile.id;
-      }
+      assignedOwnerProfileId = await resolveActiveOwnerProfileId(supabase, assignedOwner, 'WEBHOOK-RECEIVER][owner-fixo');
     } else {
       // Distribuição normal
       const { data: nextOwner, error: ownerError } = await supabase
@@ -1070,15 +1062,7 @@ serve(async (req) => {
         assignedOwner = nextOwner;
         console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído:', assignedOwner);
         
-        const { data: ownerProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', assignedOwner)
-          .maybeSingle();
-        
-        if (ownerProfile) {
-          assignedOwnerProfileId = ownerProfile.id;
-        }
+        assignedOwnerProfileId = await resolveActiveOwnerProfileId(supabase, assignedOwner, 'WEBHOOK-RECEIVER][owner-distribuido');
       }
     }
 

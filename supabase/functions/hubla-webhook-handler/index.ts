@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -866,14 +867,8 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
             console.log(`[CRM][Hubla] Distribuição ativa - owner atribuído: ${distributedOwnerId}`);
 
             // Buscar profile_id do owner distribuído
-            const { data: ownerProfile } = await supabase
-              .from('profiles')
-              .select('id')
-              .ilike('email', distributedOwnerId)
-              .maybeSingle();
-            if (ownerProfile) {
-              distributedOwnerProfileId = ownerProfile.id;
-            }
+            distributedOwnerProfileId = await resolveActiveOwnerProfileId(
+              supabase, distributedOwnerId, 'CRM][Hubla][owner-distribuido');
           }
         }
       } catch (distError) {
@@ -899,15 +894,8 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
           console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
           
           if (!inheritedOwnerProfileId && inheritedOwnerId) {
-            const { data: ownerProfile } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', inheritedOwnerId)
-              .maybeSingle();
-            
-            if (ownerProfile) {
-              inheritedOwnerProfileId = ownerProfile.id;
-            }
+            inheritedOwnerProfileId = await resolveActiveOwnerProfileId(
+              supabase, inheritedOwnerId, 'CRM][Hubla][owner-herdado');
           }
         }
       }
@@ -1289,12 +1277,8 @@ async function createA017Deal(supabase: any, data: A017DealData): Promise<void> 
         if (nextOwnerEmail) {
           finalOwnerId = nextOwnerEmail;
           wasDistributed = true;
-          const { data: ownerProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .ilike('email', nextOwnerEmail)
-            .maybeSingle();
-          if (ownerProfile) finalOwnerProfileId = ownerProfile.id;
+          finalOwnerProfileId = await resolveActiveOwnerProfileId(
+            supabase, nextOwnerEmail, 'A017][owner-distribuido');
         }
       }
     } catch (e) {
@@ -1813,13 +1797,10 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
               // (substitui round-robin / lead_distribution_config APENAS para Outside)
               const OUTSIDE_OWNER_EMAIL = 'nicola.ricci@minhacasafinanciada.com';
               const getNextOwner = async (): Promise<{ email: string | null; profileId: string | null }> => {
-                const { data: ownerProfile } = await supabase
-                  .from('profiles')
-                  .select('id')
-                  .ilike('email', OUTSIDE_OWNER_EMAIL)
-                  .maybeSingle();
+                const ownerProfileId = await resolveActiveOwnerProfileId(
+                  supabase, OUTSIDE_OWNER_EMAIL, 'AUTO-PAGO][OUTSIDE');
                 console.log(`🎯 [AUTO-PAGO][OUTSIDE] Owner fixo Outside: ${OUTSIDE_OWNER_EMAIL}`);
-                return { email: OUTSIDE_OWNER_EMAIL, profileId: ownerProfile?.id || null };
+                return { email: OUTSIDE_OWNER_EMAIL, profileId: ownerProfileId };
               };
 
               // ===== CASO C: Deal não existe → criar + distribuir =====
@@ -2148,11 +2129,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
             
             // Buscar profile_id do closer para owner_profile_id
-            const { data: closerProfile } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', closerEmail)
-              .maybeSingle();
+            const closerProfileId = await resolveActiveOwnerProfileId(
+              supabase, closerEmail, 'CRM][Hubla][closer-owner');
             
             // Buscar stage "Contrato Pago" no pipeline
             const { data: contractPaidStage } = await supabase
@@ -2174,8 +2152,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             }
             
             // Atualizar owner_profile_id se encontrou o profile
-            if (closerProfile?.id) {
-              updatePayload.owner_profile_id = closerProfile.id;
+            if (closerProfileId) {
+              updatePayload.owner_profile_id = closerProfileId;
             }
             
             // Mover para estágio Contrato Pago se encontrou
