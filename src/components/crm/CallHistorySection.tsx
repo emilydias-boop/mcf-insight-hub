@@ -6,6 +6,8 @@ import { Phone, Clock, User, FileText, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
+import { useSonaxCallEventsByDeal, sonaxClientPhone } from '@/hooks/useSonaxCallEvents';
+import { sonaxRecordingProxy, sonaxDurationSeconds, sonaxParseDate } from '@/lib/sonaxRecording';
 
 const SUPABASE_URL = "https://rehcfgqvigfcekiipqkc.supabase.co";
 
@@ -86,6 +88,7 @@ function getRecordingProxyUrl(recordingUrl: string): string {
 export function CallHistorySection({ contactId, dealId }: CallHistorySectionProps) {
   const { data: allDealIds = [] } = useContactDealIds(dealId, contactId);
   const uniqueIds = [...new Set([...allDealIds, ...(dealId ? [dealId] : [])].filter(Boolean))];
+  const { data: sonaxEvents = [], isLoading: sonaxLoading } = useSonaxCallEventsByDeal(uniqueIds as string[]);
 
   const { data: calls, isLoading } = useQuery({
     queryKey: ['calls-history', uniqueIds, contactId],
@@ -137,7 +140,23 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
     enabled: uniqueIds.length > 0 || !!contactId
   });
 
-  if (isLoading) {
+  // Timeline unificada: Twilio (calls) + Sonax (sonax_call_events)
+  const sonaxItems = (sonaxEvents || []).map((ev) => {
+    const when = sonaxParseDate(ev.data_inicio) || new Date(ev.created_at);
+    return {
+      key: `sonax-${ev.id}`,
+      at: when,
+      source: 'sonax' as const,
+      who: ev.sdr_name || ev.sdr_email || (ev.aliasramal || ev.ramal ? `Ramal ${ev.aliasramal || ev.ramal}` : 'Sonax'),
+      phone: sonaxClientPhone(ev),
+      duration: sonaxDurationSeconds(ev.duracao_chamada),
+      notAnswered: (ev.status_atendimento || '').toUpperCase() === 'N',
+      recording: sonaxRecordingProxy(ev.url_gravacao),
+      recordingRaw: ev.url_gravacao,
+    };
+  });
+
+  if (isLoading || sonaxLoading) {
     return (
       <div className="space-y-3">
         <Skeleton className="h-4 w-32" />
@@ -147,7 +166,9 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
     );
   }
 
-  if (!calls || calls.length === 0) {
+  const total = (calls?.length || 0) + sonaxItems.length;
+
+  if (total === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground">
         <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -161,11 +182,64 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
       <div className="flex items-center gap-2">
         <Phone className="h-4 w-4 text-muted-foreground" />
         <h3 className="font-semibold text-sm">Histórico de Ligações</h3>
-        <Badge variant="secondary" className="text-xs">{calls.length}</Badge>
+        <Badge variant="secondary" className="text-xs">{total}</Badge>
       </div>
 
       <div className="space-y-2 max-h-64 overflow-y-auto">
-        {calls.map((call) => {
+        {sonaxItems
+          .sort((a, b) => b.at.getTime() - a.at.getTime())
+          .map((item) => (
+            <div key={item.key} className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-medium truncate">{item.who}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground text-xs">
+                      {format(item.at, "dd/MM HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                  {item.phone && (
+                    <p className="text-xs text-muted-foreground mt-1">{item.phone}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 text-xs">
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-mono">{formatDuration(item.duration)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <Badge variant="outline" className="text-xs">Sonax</Badge>
+                <Badge className={`text-xs ${item.notAnswered ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                  {item.notAnswered ? 'Não atendeu' : 'Completada'}
+                </Badge>
+              </div>
+
+              {item.recording && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Volume2 className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Gravação</span>
+                    <a
+                      href={item.recordingRaw!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      abrir na Sonax
+                    </a>
+                  </div>
+                  <audio controls className="w-full h-8" preload="none">
+                    <source src={item.recording} type="audio/mpeg" />
+                  </audio>
+                </div>
+              )}
+            </div>
+          ))}
+
+        {(calls || []).map((call) => {
           const statusInfo = STATUS_LABELS[call.status] || { label: call.status, color: 'bg-gray-100' };
           const outcomeInfo = call.outcome ? OUTCOME_LABELS[call.outcome] : null;
 
