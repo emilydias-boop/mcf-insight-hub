@@ -270,6 +270,9 @@ verify_jwt = true
 [functions.sonax-campaign-proxy]
 verify_jwt = true
 
+[functions.get-sonax-recording]
+verify_jwt = false
+
 [functions.sonax-webhook]
 verify_jwt = false
 
