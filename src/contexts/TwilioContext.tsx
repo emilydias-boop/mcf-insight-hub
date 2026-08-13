@@ -515,6 +515,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       callId = insertResult.data.id;
       setCurrentCallId(callId);
       setCurrentCallDealId(safeDealId);
+      answeredAtRef.current = null;
+      if (answerPollRef.current) {
+        clearInterval(answerPollRef.current);
+        answerPollRef.current = null;
+      }
 
       const connectWithCurrentDevice = async () => {
         const activeDevice = deviceRef.current || device;
@@ -577,49 +582,84 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         checkAndUpdateCallSid();
       });
 
+      // O 'accept' do SDK significa apenas que o leg do NAVEGADOR conectou —
+      // o lead pode ainda estar chamando. Marcamos o device como ocupado e
+      // passamos a observar o status real reportado pelo Twilio (webhook).
       call.on('accept', () => {
-        console.log('Call accepted');
-        setCallStatus('in-progress');
+        console.log('Call accepted (browser leg connected)');
         setDeviceStatus('busy');
         checkAndUpdateCallSid();
+
+        const pollId = callId;
+        if (answerPollRef.current) clearInterval(answerPollRef.current);
+        answerPollRef.current = setInterval(async () => {
+          if (!pollId) return;
+          const { data } = await supabase
+            .from('calls')
+            .select('status')
+            .eq('id', pollId)
+            .maybeSingle();
+          const status = data?.status || '';
+          if (status === 'in-progress') {
+            if (!answeredAtRef.current) answeredAtRef.current = Date.now();
+            setCallStatus('in-progress');
+            if (answerPollRef.current) {
+              clearInterval(answerPollRef.current);
+              answerPollRef.current = null;
+            }
+          } else if (FINAL_STATUSES.includes(status)) {
+            if (answerPollRef.current) {
+              clearInterval(answerPollRef.current);
+              answerPollRef.current = null;
+            }
+          }
+        }, 2000);
       });
 
       call.on('disconnect', () => {
         console.log('Call disconnected');
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('completed');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist to DB as safety net (webhook may also update)
-        updateCallInDb(callId, {
+        // Rede de segurança: NUNCA sobrescreve o status final do webhook e
+        // grava a duração do timer local quando o banco ainda está em 0.
+        finalizeCallInDb(callId, {
           status: 'completed',
-          ended_at: new Date().toISOString(),
+          durationSeconds: answeredAtRef.current
+            ? Math.max(0, Math.floor((Date.now() - answeredAtRef.current) / 1000))
+            : 0,
         });
+        answeredAtRef.current = null;
       });
 
       call.on('cancel', () => {
         console.log('Call cancelled');
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('idle');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist canceled status to DB
-        updateCallInDb(callId, {
-          status: 'canceled',
-          ended_at: new Date().toISOString(),
-          duration_seconds: 0,
-        });
+        finalizeCallInDb(callId, { status: 'canceled', durationSeconds: 0 });
+        answeredAtRef.current = null;
       });
 
       call.on('error', (err: Error) => {
         console.error('Call error:', err);
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('failed');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist failed status to DB
-        updateCallInDb(callId, {
-          status: 'failed',
-          ended_at: new Date().toISOString(),
-          duration_seconds: 0,
-        });
+        finalizeCallInDb(callId, { status: 'failed', durationSeconds: 0 });
+        answeredAtRef.current = null;
       });
 
       setCurrentCall(call as unknown as TwilioCall);
