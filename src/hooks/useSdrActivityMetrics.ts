@@ -105,21 +105,59 @@ export function useSdrActivityMetrics(
         effectiveMax: t.effective_max,
       };
       const sdrs = sdrsQuery.data || [];
-      const validSdrEmails = new Set(sdrs.map(s => s.email.toLowerCase()));
-      const sdrNameMap = new Map(sdrs.map(s => [s.email.toLowerCase(), s.name]));
-
       // Motor de discagem por SDR (Fase 1: só piloto está em Sonax)
       const { data: ramalRows } = await supabase
         .from('sdr_ramal_mapping')
-        .select('sdr_email, ramal, auto_dialer_engine');
+        .select('sdr_email, sdr_name, ramal, auto_dialer_engine, active');
       const engineByEmail = new Map<string, { engine: 'twilio' | 'sonax'; ramal: string | null }>();
       (ramalRows || []).forEach((r: any) => {
         if (!r.sdr_email) return;
-        engineByEmail.set(String(r.sdr_email).toLowerCase(), {
-          engine: r.auto_dialer_engine === 'sonax' ? 'sonax' : 'twilio',
-          ramal: r.ramal ?? null,
+        const email = String(r.sdr_email).toLowerCase();
+        const isSonax = r.auto_dialer_engine === 'sonax';
+        const existing = engineByEmail.get(email);
+        // Sonax prevalece se houver múltiplas linhas para o mesmo e-mail
+        if (existing?.engine === 'sonax' && !isSonax) return;
+        engineByEmail.set(email, {
+          engine: isSonax ? 'sonax' : 'twilio',
+          ramal: r.ramal ?? existing?.ramal ?? null,
         });
       });
+
+      // Complemento ADITIVO: SDRs no motor Sonax que não vieram da listagem padrão
+      // (ex.: quem acumula role de closer é filtrado em useSdrsFromSquad).
+      const sdrList: { email: string; name: string }[] = sdrs.map(s => ({
+        email: s.email as string,
+        name: s.name,
+      }));
+      const knownEmails = new Set(sdrList.map(s => s.email.toLowerCase()));
+      const extraSonaxEmails = (ramalRows || [])
+        .filter((r: any) => r.auto_dialer_engine === 'sonax' && r.sdr_email)
+        .map((r: any) => ({ email: String(r.sdr_email).toLowerCase(), name: r.sdr_name || r.sdr_email }));
+      const sonaxSquadCheck = new Map<string, boolean>();
+      if (extraSonaxEmails.some(e => !knownEmails.has(e.email))) {
+        const { data: sdrRows } = await supabase
+          .from('sdr')
+          .select('email, name, squad, role_type, active')
+          .in('email', extraSonaxEmails.map(e => e.email));
+        (sdrRows || []).forEach((row: any) => {
+          if (!row.email) return;
+          const ok = row.active === true && row.role_type === 'sdr' && row.squad === squad;
+          const key = String(row.email).toLowerCase();
+          sonaxSquadCheck.set(key, sonaxSquadCheck.get(key) === true ? true : ok);
+          if (ok) {
+            const idx = extraSonaxEmails.findIndex(e => e.email === key);
+            if (idx >= 0 && row.name) extraSonaxEmails[idx].name = row.name;
+          }
+        });
+        extraSonaxEmails.forEach(e => {
+          if (!knownEmails.has(e.email) && sonaxSquadCheck.get(e.email)) {
+            sdrList.push({ email: e.email, name: e.name });
+            knownEmails.add(e.email);
+          }
+        });
+      }
+
+      const validSdrEmails = new Set(sdrList.map(s => s.email.toLowerCase()));
       
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
@@ -150,7 +188,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('deal_activities')
-          .select('user_id, activity_type, deal_id, metadata')
+          .select('user_id, activity_type, deal_id, metadata, created_at')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
           .range(actFrom, actFrom + PAGE - 1);
@@ -178,7 +216,7 @@ export function useSdrActivityMetrics(
       
       // 4. Inicializar métricas para SDRs conhecidos (do banco de dados)
       const metricsMap = new Map<string, SdrActivityMetrics>();
-      sdrs.forEach(sdr => {
+      sdrList.forEach(sdr => {
         const cfg = engineByEmail.get(sdr.email.toLowerCase());
         metricsMap.set(sdr.email.toLowerCase(), {
           sdrEmail: sdr.email,
@@ -206,7 +244,7 @@ export function useSdrActivityMetrics(
       
       // Sets para rastrear leads únicos por SDR
       const leadsWorkedBySdr = new Map<string, Set<string>>();
-      sdrs.forEach(sdr => {
+      sdrList.forEach(sdr => {
         leadsWorkedBySdr.set(sdr.email.toLowerCase(), new Set());
       });
       
@@ -275,7 +313,13 @@ export function useSdrActivityMetrics(
             const meta = (activity.metadata || {}) as Record<string, any>;
             metrics.totalCalls++;
             const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
-            if (meta.ok === false) {
+            // Bug antigo de detecção de falha na Sonax (corrigido em 12/08/2026):
+            // ok=false anterior a essa data não é evidência de "não atendida".
+            const legacyFalseOk =
+              meta.ok === false &&
+              activity.created_at &&
+              new Date(activity.created_at).getTime() < SONAX_OK_FIX_AT;
+            if (meta.ok === false && !legacyFalseOk) {
               metrics.notAnsweredCalls++;
             } else if (meta.answered === true) {
               metrics.answeredCalls++;
