@@ -24,6 +24,8 @@ import {
   Star,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
+import { useDialerEngine } from "@/hooks/useDialerEngine";
+import { useSonaxClickToCall } from "@/hooks/useSonaxClickToCall";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
@@ -95,6 +97,8 @@ export const DealKanbanCard = ({
   outsideInfo,
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
+  const { data: dialer } = useDialerEngine();
+  const { mutate: sonaxCall } = useSonaxClickToCall();
   const { role } = useAuth();
   const isTestDeal = isTestPipeline(deal.origin_id);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
@@ -195,6 +199,12 @@ export const DealKanbanCard = ({
     }
 
     const normalizedPhone = normalizePhoneNumber(phone);
+
+    // Motor de discagem por usuário: SDRs migrados seguem no Sonax, o resto (inclui closers) no Twilio.
+    if (dialer?.engine === 'sonax') {
+      sonaxCall({ numero: normalizedPhone, dealId: deal.id });
+      return;
+    }
 
     // If device is not ready, initialize and wait
     if (deviceStatus !== "ready") {

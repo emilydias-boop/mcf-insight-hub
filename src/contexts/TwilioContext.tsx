@@ -127,6 +127,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const tokenCreatedAt = useRef<number | null>(null);
+  // Momento do atendimento REAL do lead (confirmado pelo webhook 'in-progress'),
+  // não o instante em que o navegador aceita o leg WebRTC.
+  const answeredAtRef = useRef<number | null>(null);
+  const answerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callDurationRef = useRef(0);
 
   const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // 50 minutes
   
@@ -164,14 +169,27 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     };
   }, [durationInterval]);
 
-  // Start duration timer when call is in progress
+  // Espelha a duração num ref para os handlers de evento (que capturam closure antiga)
   useEffect(() => {
-    if (callStatus === 'in-progress') {
-      const interval = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
+    callDurationRef.current = callDuration;
+  }, [callDuration]);
+
+  // Timer de duração: conta a partir do ATENDIMENTO REAL (answeredAtRef), que é
+  // confirmado pelo status 'in-progress' vindo do Twilio (webhook). Enquanto o lead
+  // não atende, a duração permanece 0 — igual ao que o Twilio contabiliza.
+  useEffect(() => {
+    if (callStatus === 'in-progress' && answeredAtRef.current) {
+      const tick = () => {
+        const base = answeredAtRef.current;
+        if (!base) return;
+        setCallDuration(Math.max(0, Math.floor((Date.now() - base) / 1000)));
+      };
+      tick();
+      const interval = setInterval(tick, 1000);
       setDurationInterval(interval);
-    } else if (callStatus === 'idle' || callStatus === 'completed' || callStatus === 'failed') {
+      return () => clearInterval(interval);
+    }
+    if (['idle', 'completed', 'failed'].includes(callStatus)) {
       if (durationInterval) {
         clearInterval(durationInterval);
         setDurationInterval(null);
@@ -381,6 +399,50 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const FINAL_STATUSES = ['completed', 'no-answer', 'busy', 'failed', 'canceled'];
+
+  /**
+   * Finaliza o registro da chamada SEM sobrescrever o que o Twilio já reportou.
+   * O webhook (DialCallStatus / RecordingDuration) é a fonte de verdade:
+   * - se a linha já tem status final + ended_at, não mexemos em status/ended_at;
+   * - a duração do timer local só é gravada quando o banco ainda está em 0/null.
+   */
+  const finalizeCallInDb = useCallback(async (
+    callId: string | null,
+    fallback: { status: string; durationSeconds?: number | null },
+  ) => {
+    if (!callId) return;
+    try {
+      const { data: row } = await supabase
+        .from('calls')
+        .select('status, ended_at, duration_seconds')
+        .eq('id', callId)
+        .maybeSingle();
+
+      const webhookAlreadyFinal =
+        !!row && FINAL_STATUSES.includes(row.status || '') && !!row.ended_at;
+
+      const updates: Record<string, any> = {};
+      if (!webhookAlreadyFinal) {
+        updates.status = fallback.status;
+        updates.ended_at = new Date().toISOString();
+      }
+
+      const localDuration = Math.max(0, fallback.durationSeconds ?? 0);
+      const dbDuration = row?.duration_seconds ?? 0;
+      if (localDuration > 0 && dbDuration <= 0) {
+        updates.duration_seconds = localDuration;
+      } else if (!row || row.duration_seconds == null) {
+        updates.duration_seconds = localDuration;
+      }
+
+      if (Object.keys(updates).length === 0) return;
+      await updateCallInDb(callId, updates);
+    } catch (e) {
+      console.error('Failed to finalize call in DB:', e);
+    }
+  }, [updateCallInDb]);
+
   const makeCall = useCallback(async (
     phoneNumber: string, 
     dealId?: string, 
@@ -453,6 +515,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       callId = insertResult.data.id;
       setCurrentCallId(callId);
       setCurrentCallDealId(safeDealId);
+      answeredAtRef.current = null;
+      if (answerPollRef.current) {
+        clearInterval(answerPollRef.current);
+        answerPollRef.current = null;
+      }
 
       const connectWithCurrentDevice = async () => {
         const activeDevice = deviceRef.current || device;
@@ -515,49 +582,84 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         checkAndUpdateCallSid();
       });
 
+      // O 'accept' do SDK significa apenas que o leg do NAVEGADOR conectou —
+      // o lead pode ainda estar chamando. Marcamos o device como ocupado e
+      // passamos a observar o status real reportado pelo Twilio (webhook).
       call.on('accept', () => {
-        console.log('Call accepted');
-        setCallStatus('in-progress');
+        console.log('Call accepted (browser leg connected)');
         setDeviceStatus('busy');
         checkAndUpdateCallSid();
+
+        const pollId = callId;
+        if (answerPollRef.current) clearInterval(answerPollRef.current);
+        answerPollRef.current = setInterval(async () => {
+          if (!pollId) return;
+          const { data } = await supabase
+            .from('calls')
+            .select('status')
+            .eq('id', pollId)
+            .maybeSingle();
+          const status = data?.status || '';
+          if (status === 'in-progress') {
+            if (!answeredAtRef.current) answeredAtRef.current = Date.now();
+            setCallStatus('in-progress');
+            if (answerPollRef.current) {
+              clearInterval(answerPollRef.current);
+              answerPollRef.current = null;
+            }
+          } else if (FINAL_STATUSES.includes(status)) {
+            if (answerPollRef.current) {
+              clearInterval(answerPollRef.current);
+              answerPollRef.current = null;
+            }
+          }
+        }, 2000);
       });
 
       call.on('disconnect', () => {
         console.log('Call disconnected');
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('completed');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist to DB as safety net (webhook may also update)
-        updateCallInDb(callId, {
+        // Rede de segurança: NUNCA sobrescreve o status final do webhook e
+        // grava a duração do timer local quando o banco ainda está em 0.
+        finalizeCallInDb(callId, {
           status: 'completed',
-          ended_at: new Date().toISOString(),
+          durationSeconds: answeredAtRef.current
+            ? Math.max(0, Math.floor((Date.now() - answeredAtRef.current) / 1000))
+            : 0,
         });
+        answeredAtRef.current = null;
       });
 
       call.on('cancel', () => {
         console.log('Call cancelled');
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('idle');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist canceled status to DB
-        updateCallInDb(callId, {
-          status: 'canceled',
-          ended_at: new Date().toISOString(),
-          duration_seconds: 0,
-        });
+        finalizeCallInDb(callId, { status: 'canceled', durationSeconds: 0 });
+        answeredAtRef.current = null;
       });
 
       call.on('error', (err: Error) => {
         console.error('Call error:', err);
+        if (answerPollRef.current) {
+          clearInterval(answerPollRef.current);
+          answerPollRef.current = null;
+        }
         setCallStatus('failed');
         setDeviceStatus('ready');
         setCurrentCall(null);
-        // Persist failed status to DB
-        updateCallInDb(callId, {
-          status: 'failed',
-          ended_at: new Date().toISOString(),
-          duration_seconds: 0,
-        });
+        finalizeCallInDb(callId, { status: 'failed', durationSeconds: 0 });
+        answeredAtRef.current = null;
       });
 
       setCurrentCall(call as unknown as TwilioCall);
@@ -584,7 +686,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       
       return null;
     }
-  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, ensureValidToken, initializeDevice]);
+  }, [device, user, deviceStatus, testPipelineId, updateCallInDb, finalizeCallInDb, ensureValidToken, initializeDevice]);
 
   const hangUp = useCallback(() => {
     if (currentCall) {
@@ -592,14 +694,17 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCall(null);
       setCallStatus('completed');
       setDeviceStatus('ready');
-      // Persist to DB with duration from local timer
-      updateCallInDb(currentCallId, {
+      // Rede de segurança: grava a duração do timer local (que só corre após o
+      // atendimento real) sem sobrescrever o status final do webhook.
+      finalizeCallInDb(currentCallId, {
         status: 'completed',
-        ended_at: new Date().toISOString(),
-        duration_seconds: callDuration,
+        durationSeconds: answeredAtRef.current
+          ? Math.max(0, Math.floor((Date.now() - answeredAtRef.current) / 1000))
+          : callDurationRef.current,
       });
+      answeredAtRef.current = null;
     }
-  }, [currentCall, currentCallId, callDuration, updateCallInDb]);
+  }, [currentCall, currentCallId, finalizeCallInDb]);
 
   const toggleMute = useCallback(() => {
     if (currentCall) {

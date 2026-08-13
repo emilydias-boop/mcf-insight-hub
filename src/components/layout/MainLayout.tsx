@@ -43,8 +43,9 @@ function GlobalQualificationModal() {
 export function MainLayout() {
   const { allRoles } = useAuth();
   usePageAccessLog();
-  // Dialer/Twilio só para SDRs — closers, admins, managers e demais não ligam pelo sistema
-  const isSDR = (allRoles as string[] | undefined)?.includes("sdr") ?? false;
+  // Dialer/Twilio para SDRs e Closers — admins, managers e demais não ligam pelo sistema
+  const roles = (allRoles as string[] | undefined) ?? [];
+  const isSDR = roles.includes("sdr") || roles.includes("closer") || roles.includes("closer_sombra");
   return (
       <SidebarProvider defaultOpen={false}>
         <AutoDialerProvider>
