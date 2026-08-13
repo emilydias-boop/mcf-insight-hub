@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -220,11 +221,8 @@ serve(async (req) => {
           const nextOwnerEmail = OUTSIDE_OWNER_EMAIL;
 
           // Buscar profile_id do owner
-          const { data: ownerProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .ilike('email', nextOwnerEmail)
-            .maybeSingle();
+          const ownerProfileId = await resolveActiveOwnerProfileId(
+            supabase, nextOwnerEmail, 'DISTRIBUTE-OUTSIDE][owner');
 
           // Atualizar deal com novo owner
           const currentTags = Array.isArray(deal.tags) ? deal.tags : [];

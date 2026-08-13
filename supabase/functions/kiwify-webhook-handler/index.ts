@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -378,12 +379,8 @@ async function createOrUpdateKiwifyCRMContact(
       if (nextOwnerEmail) {
         distributedOwnerId = nextOwnerEmail;
         wasDistributed = true;
-        const { data: ownerProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .ilike('email', distributedOwnerId)
-          .maybeSingle();
-        if (ownerProfile) distributedOwnerProfileId = ownerProfile.id;
+        distributedOwnerProfileId = await resolveActiveOwnerProfileId(
+          supabase, distributedOwnerId, 'CRM][Kiwify][owner-distribuido');
       }
     }
   } catch (distError) {
@@ -404,12 +401,8 @@ async function createOrUpdateKiwifyCRMContact(
       inheritedOwnerId = dealWithOwner.owner_id;
       inheritedOwnerProfileId = dealWithOwner.owner_profile_id;
       if (!inheritedOwnerProfileId && inheritedOwnerId) {
-        const { data: ownerProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', inheritedOwnerId)
-          .maybeSingle();
-        if (ownerProfile) inheritedOwnerProfileId = ownerProfile.id;
+        inheritedOwnerProfileId = await resolveActiveOwnerProfileId(
+          supabase, inheritedOwnerId, 'CRM][Kiwify][owner-herdado');
       }
     }
   }

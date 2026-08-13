@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -364,14 +365,11 @@ async function processReplication(supabase: any, item: QueueItem) {
             console.warn(`Auto-distribute warning for rule ${rule.id}: ${ownerError.message}`);
           } else if (nextOwner) {
             assignedOwner = nextOwner;
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', nextOwner)
-              .maybeSingle();
+            const nextOwnerProfileId = await resolveActiveOwnerProfileId(
+              supabase, nextOwner, 'REPLICATION][auto-distribute');
             await supabase
               .from('crm_deals')
-              .update({ owner_id: nextOwner, owner_profile_id: prof?.id ?? null })
+              .update({ owner_id: nextOwner, owner_profile_id: nextOwnerProfileId })
               .eq('id', createdDeal.id);
             console.log(`Auto-distributed deal ${createdDeal.id} to ${nextOwner}`);
           } else {

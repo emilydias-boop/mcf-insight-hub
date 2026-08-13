@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -251,11 +252,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
             
             // Buscar profile_id do closer para owner_profile_id
-            const { data: closerProfile } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', closerEmail)
-              .maybeSingle();
+            const closerProfileId = await resolveActiveOwnerProfileId(
+              supabase, closerEmail, 'make-contrato][closer-owner');
             
             // Buscar stage "Contrato Pago" no pipeline
             const { data: contractPaidStage } = await supabase

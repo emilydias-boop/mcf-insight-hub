@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -208,18 +209,8 @@ serve(async (req) => {
       console.log('[LIVE-LEAD] 👤 Owner atribuído automaticamente:', assignedOwner);
       
       // Buscar owner_profile_id correspondente
-      const { data: ownerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', assignedOwner)
-        .maybeSingle();
-      
-      if (ownerProfile) {
-        assignedOwnerProfileId = ownerProfile.id;
-        console.log('[LIVE-LEAD] 👤 Profile ID encontrado:', assignedOwnerProfileId);
-      } else {
-        console.log('[LIVE-LEAD] ⚠️ Profile não encontrado para email:', assignedOwner);
-      }
+      assignedOwnerProfileId = await resolveActiveOwnerProfileId(supabase, assignedOwner, 'LIVE-LEAD][owner');
+      console.log('[LIVE-LEAD] 👤 Profile ID resolvido:', assignedOwnerProfileId);
     } else {
       console.log('[LIVE-LEAD] ⚠️ Nenhum owner configurado para distribuição');
     }

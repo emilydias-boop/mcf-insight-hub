@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -454,9 +455,7 @@ async function createCrmDeal(supabase: any, data: {
     const { data: nextOwner } = await supabase.rpc('get_next_lead_owner', { p_origin_id: originId });
     if (nextOwner) {
       ownerEmail = nextOwner;
-      const { data: profile } = await supabase
-        .from('profiles').select('id').ilike('email', nextOwner).limit(1).maybeSingle();
-      ownerProfileId = profile?.id || null;
+      ownerProfileId = await resolveActiveOwnerProfileId(supabase, nextOwner, 'MAKE-A010][owner');
     }
 
     // 7. Double-check antes de criar (evita race condition)
