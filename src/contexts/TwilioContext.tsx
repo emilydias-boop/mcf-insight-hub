@@ -694,10 +694,17 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       setCurrentCall(null);
       setCallStatus('completed');
       setDeviceStatus('ready');
-        duration_seconds: callDuration,
+      // Rede de segurança: grava a duração do timer local (que só corre após o
+      // atendimento real) sem sobrescrever o status final do webhook.
+      finalizeCallInDb(currentCallId, {
+        status: 'completed',
+        durationSeconds: answeredAtRef.current
+          ? Math.max(0, Math.floor((Date.now() - answeredAtRef.current) / 1000))
+          : callDurationRef.current,
       });
+      answeredAtRef.current = null;
     }
-  }, [currentCall, currentCallId, callDuration, updateCallInDb]);
+  }, [currentCall, currentCallId, finalizeCallInDb]);
 
   const toggleMute = useCallback(() => {
     if (currentCall) {
