@@ -183,28 +183,9 @@ serve(async (req) => {
       );
     }
 
-    // 8. Verificar se há distribuição ativa para esta origin
-    const { data: distConfig } = await supabase
-      .from('lead_distribution_config')
-      .select('id')
-      .eq('origin_id', originId)
-      .eq('is_active', true)
-      .limit(1);
-
-    if (!distConfig || distConfig.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          dry_run,
-          total_checked: deals.length,
-          outside_found: outsideDeals.length,
-          distributed: 0,
-          results: [],
-          message: 'Nenhuma configuração de distribuição ativa encontrada para esta origin. Configure a distribuição em Configurações > Distribuição de Leads.'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 422 }
-      );
-    }
+    // 8. Regra fixa: leads Outside são propriedade do Nicola Ricci
+    //    (substitui o round-robin / lead_distribution_config APENAS para Outside)
+    const OUTSIDE_OWNER_EMAIL = 'nicola.ricci@minhacasafinanciada.com';
 
     // 9. Distribuir cada deal Outside
     const results: Array<{
