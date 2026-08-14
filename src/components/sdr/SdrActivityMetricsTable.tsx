@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, PhoneMissed, Users, ListTree } from "lucide-react";
+import { Phone, PhoneMissed, PhoneCall, Users, ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSdrActivityMetrics } from "@/hooks/useSdrActivityMetrics";
@@ -82,6 +82,9 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
+                    <HeaderWithTooltip icon={<PhoneCall className="h-3.5 w-3.5 text-blue-600" />} label="Efetivas" tooltip={`Conversa curta: entre ${T.voicemailMax + 1}s e ${T.effectiveMax}s.`} />
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Conexão" tooltip={`Taxa de conexão = ligações atendidas (ring drop ≤${T.ringDropMax}s, caixa postal, efetiva ou qualificada) / total.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
@@ -120,6 +123,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     </TableCell>
                     <TableCell className="text-center">{sdr.totalCalls}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{sdr.notAnsweredCalls}</TableCell>
+                    <TableCell className="text-center text-blue-600 font-medium">{sdr.effectiveCalls}</TableCell>
                     <TableCell className="text-center">{sdr.connectionRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center font-medium">{sdr.qualificationRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center font-medium">{sdr.uniqueLeadsWorked}</TableCell>
@@ -151,6 +155,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                       <TableCell>Total</TableCell>
                       <TableCell className="text-center">{total}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{metrics.reduce((s, m) => s + m.notAnsweredCalls, 0)}</TableCell>
+                      <TableCell className="text-center text-blue-600">{metrics.reduce((s, m) => s + m.effectiveCalls, 0)}</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((ans / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((qual / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell className="text-center">{metrics.reduce((s, m) => s + m.uniqueLeadsWorked, 0)}</TableCell>
