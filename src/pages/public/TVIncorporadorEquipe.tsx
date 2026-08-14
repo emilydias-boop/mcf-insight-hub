@@ -126,6 +126,7 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
+      mainRowsClassName="grid-rows-[auto_1fr]"
     >
       <div className="grid grid-cols-2 gap-5 xl:gap-8 min-h-0">
         <DiaMesCard titulo="Agendamento" dia={data.dia.agendamento} mes={data.mes.agendamento} accent={ACCENT} />
