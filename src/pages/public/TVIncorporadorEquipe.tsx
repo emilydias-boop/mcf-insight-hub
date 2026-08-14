@@ -48,14 +48,14 @@ function DiaMesCard({
   const fmt = format ?? ((v: number) => v.toLocaleString("pt-BR"));
   return (
     <div
-      className="rounded-2xl border p-4 xl:p-6 flex flex-col min-h-0"
+      className="rounded-2xl border p-3 xl:p-4 flex flex-col min-h-0"
       style={{
         backgroundColor: "rgba(255,255,255,0.04)",
         borderColor: "rgba(255,255,255,0.10)",
       }}
     >
       <div className="text-white/60 uppercase tracking-widest text-xs xl:text-sm font-bold">{titulo}</div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 xl:gap-6 mt-3">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 xl:gap-6 mt-2">
         {([["Diário", dia], ["Mensal", mes]] as const).map(([label, m]) => {
           const atual = Number(m?.atual ?? 0);
           const meta = Number(m?.meta ?? 0);
@@ -68,7 +68,7 @@ function DiaMesCard({
             <div key={label} className="flex flex-col">
               <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
               <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-                <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color }}>
+                <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color }}>
                   {fmt(atual)}
                 </span>
                 {hasMeta && (
@@ -79,8 +79,8 @@ function DiaMesCard({
                 )}
               </div>
               {hasMeta ? (
-                <div className="mt-3">
-                  <div className="h-2 xl:h-2.5 w-full rounded-full bg-white/10 overflow-hidden">
+                <div className="mt-2">
+                  <div className="h-1.5 xl:h-2 w-full rounded-full bg-white/10 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }}
@@ -126,6 +126,7 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
+      mainRowsClassName="grid-rows-[auto_1fr]"
     >
       <div className="grid grid-cols-2 gap-5 xl:gap-8 min-h-0">
         <DiaMesCard titulo="Agendamento" dia={data.dia.agendamento} mes={data.mes.agendamento} accent={ACCENT} />
