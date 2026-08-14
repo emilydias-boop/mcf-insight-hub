@@ -235,7 +235,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
                 <Input
                   type="email"
                   value={formData.email_pessoal}
-                  onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, email_pessoal: e.target.value }); setDuplicateWarning(null); }}
                   placeholder="usuario@minhacasafinanciada.com"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
