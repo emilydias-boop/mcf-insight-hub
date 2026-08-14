@@ -82,7 +82,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
-                    <HeaderWithTooltip icon={<PhoneCall className="h-3.5 w-3.5 text-blue-600" />} label="Efetivas" tooltip={`Conversa curta: entre ${T.voicemailMax + 1}s e ${T.effectiveMax}s.`} />
+                    <HeaderWithTooltip icon={<PhoneCall className="h-3.5 w-3.5 text-blue-600" />} label="Efetivas" tooltip={`Ligações atendidas com duração acima de ${T.voicemailMax}s, sem limite superior.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Conexão" tooltip={`Taxa de conexão = ligações atendidas (ring drop ≤${T.ringDropMax}s, caixa postal, efetiva ou qualificada) / total.`} />
@@ -117,7 +117,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     </TableCell>
                     <TableCell className="text-center">{sdr.totalCalls}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{sdr.notAnsweredCalls}</TableCell>
-                    <TableCell className="text-center text-blue-600 font-medium">{sdr.effectiveCalls}</TableCell>
+                    <TableCell className="text-center text-blue-600 font-medium">{sdr.effectiveCalls + sdr.qualifiedCalls}</TableCell>
                     <TableCell className="text-center">{sdr.connectionRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center font-medium">{sdr.qualificationRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center">
@@ -148,7 +148,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                       <TableCell>Total</TableCell>
                       <TableCell className="text-center">{total}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{metrics.reduce((s, m) => s + m.notAnsweredCalls, 0)}</TableCell>
-                      <TableCell className="text-center text-blue-600">{metrics.reduce((s, m) => s + m.effectiveCalls, 0)}</TableCell>
+                      <TableCell className="text-center text-blue-600">{metrics.reduce((s, m) => s + m.effectiveCalls + m.qualifiedCalls, 0)}</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((ans / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((qual / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell />
