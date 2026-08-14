@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import CargoSelect from './CargoSelect';
@@ -32,9 +33,32 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
   });
   const [createSystemUser, setCreateSystemUser] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!formData.nome_completo.trim()) return;
+
+    // Defensive duplicate guard: if email is set, check for an existing active
+    // employee with the same email (case-insensitive). If found, warn the user
+    // and return without inserting. A second click proceeds (confirming intent),
+    // which preserves the legitimate two-records-two-roles case.
+    const emailNorm = formData.email_pessoal.trim().toLowerCase();
+    if (emailNorm && !duplicateWarning) {
+      const { data: existing } = await supabase
+        .from('employees')
+        .select('id, nome_completo, cargo')
+        .eq('status', 'ativo')
+        .ilike('email_pessoal', emailNorm)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        setDuplicateWarning(
+          `Já existe um colaborador ativo com esse e-mail: ${existing.nome_completo}${existing.cargo ? ` (${existing.cargo})` : ''}. Clique em "Cadastrar" novamente para confirmar que quer criar outro registro para essa pessoa.`
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       // 1. Resolve cargo role_sistema (defines if we should provision a system user)
@@ -93,6 +117,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
         nivel: 1,
         email_pessoal: '',
       });
+      setDuplicateWarning(null);
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -210,7 +235,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
                 <Input
                   type="email"
                   value={formData.email_pessoal}
-                  onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, email_pessoal: e.target.value }); setDuplicateWarning(null); }}
                   placeholder="usuario@minhacasafinanciada.com"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -220,6 +245,12 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
             )}
           </div>
         </div>
+
+        {duplicateWarning && (
+          <Alert variant="destructive">
+            <AlertDescription>{duplicateWarning}</AlertDescription>
+          </Alert>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
