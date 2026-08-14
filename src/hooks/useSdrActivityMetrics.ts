@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
 import { useCallClassificationThresholds, CallThresholds, DEFAULT_THRESHOLDS } from './useCallClassificationThresholds';
+import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 
 export interface SdrActivityMetrics {
   sdrEmail: string;
