@@ -149,7 +149,7 @@ export default function TVIncorporadorEquipe() {
     >
       <div className="grid grid-cols-2 gap-5 xl:gap-8 min-h-0">
         <DiaMesCard titulo="Agendamento" dia={data.dia.a?.agendamento} mes={data.mes.a?.agendamento} diaB={data.dia.b?.agendamento} mesB={data.mes.b?.agendamento} accent={ACCENT} />
-        <DiaMesCard titulo="Contrato Pago" dia={data.dia.contrato_pago} mes={data.mes.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
+        <DiaMesCard titulo="Contrato Pago" dia={data.dia.a?.contrato_pago} mes={data.mes.a?.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
       </div>
       <div className="grid grid-cols-3 gap-5 xl:gap-8 min-h-0">
         <TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />
