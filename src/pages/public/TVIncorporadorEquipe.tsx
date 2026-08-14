@@ -34,6 +34,8 @@ function DiaMesCard({
   titulo,
   dia,
   mes,
+  diaB,
+  mesB,
   accent,
   invertGoal,
   format,
@@ -41,6 +43,8 @@ function DiaMesCard({
   titulo: string;
   dia?: Metric;
   mes?: Metric;
+  diaB?: Metric;
+  mesB?: Metric;
   accent: string;
   invertGoal?: boolean;
   format?: (v: number) => string;
