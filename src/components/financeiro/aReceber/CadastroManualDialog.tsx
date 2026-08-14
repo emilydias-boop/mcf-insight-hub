@@ -16,6 +16,8 @@ const PRODUCTS = [
   { code: 'A003', name: 'A003 - Anticrise Completo' },
   { code: 'A004', name: 'A004 - Anticrise Básico' },
   { code: 'A009', name: 'A009 - Incorporador + The Club' },
+  { code: 'R001', name: 'R001 - Incorporador Completo (Recorrência)' },
+  { code: 'R009', name: 'R009 - Incorporador + The Club (Recorrência)' },
   { code: 'OUTRO', name: 'Outro (informar manualmente)' },
 ];
 

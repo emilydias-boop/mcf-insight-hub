@@ -50,6 +50,8 @@ const PRODUCT_OPTIONS = [
   { value: 'A003', label: 'A003 - Anticrise Completo' },
   { value: 'A004', label: 'A004 - Anticrise Básico' },
   { value: 'A009', label: 'A009 - Incorporador + The Club' },
+  { value: 'R001', label: 'R001 - Incorporador Completo (Recorrência)' },
+  { value: 'R009', label: 'R009 - Incorporador + The Club (Recorrência)' },
 ];
 
 function StatusBadge({ status }: { status: ArTituloStatus }) {
@@ -179,7 +181,7 @@ export default function AReceber() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas a Receber</h1>
           <p className="text-sm text-muted-foreground">
-            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009).
+            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009 e recorrências R001, R009).
           </p>
         </div>
         <div className="flex items-center gap-2">
