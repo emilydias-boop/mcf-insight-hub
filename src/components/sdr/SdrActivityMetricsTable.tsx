@@ -35,7 +35,7 @@ function HeaderWithTooltip({ icon, label, tooltip }: { icon: React.ReactNode; la
 export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }: SdrActivityMetricsTableProps) {
   const { data: metrics, isLoading, error } = useSdrActivityMetrics(startDate, endDate, originId, squad);
   const { data: thresholds } = useCallClassificationThresholds(squad || 'default');
-  const [selected, setSelected] = useState<{ userId: string | null; name: string } | null>(null);
+  const [selected, setSelected] = useState<{ userId: string | null; email: string | null; source: 'twilio' | 'sonax'; name: string } | null>(null);
 
   if (error) {
     return (
@@ -133,8 +133,8 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                           <Button
                             size="sm"
                             variant="ghost"
-                            disabled={!sdr.sdrUserId || sdr.totalCalls === 0}
-                            onClick={() => setSelected({ userId: sdr.sdrUserId, name: sdr.sdrName })}
+                            disabled={sdr.totalCalls === 0}
+                            onClick={() => setSelected({ userId: sdr.sdrUserId, email: sdr.sdrEmail, source: sdr.source, name: sdr.sdrName })}
                           >
                             <ListTree className="h-4 w-4" />
                           </Button>
@@ -177,6 +177,8 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
        open={!!selected}
        onOpenChange={(o) => !o && setSelected(null)}
        sdrUserId={selected?.userId ?? null}
+       sdrEmail={selected?.email ?? null}
+       source={selected?.source ?? 'twilio'}
        sdrName={selected?.name ?? ''}
        startDate={startDate}
        endDate={endDate}
