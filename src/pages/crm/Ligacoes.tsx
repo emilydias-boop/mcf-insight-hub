@@ -123,8 +123,8 @@ export default function Ligacoes() {
             const phone = sonaxClientPhone(r);
             const dur = sonaxDurationSeconds(r.duracao_chamada);
             const when = sonaxParseDate(r.data_inicio) || new Date(r.created_at);
-            const rec = sonaxRecordingProxy(r.url_gravacao);
             const notAnswered = (r.status_atendimento || '').toUpperCase() === 'N';
+            const rec = notAnswered ? null : sonaxRecordingProxy(r.url_gravacao);
             return (
               <Card key={r.id}>
                 <CardContent className="p-3 space-y-2">

@@ -148,8 +148,8 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
     phone: sonaxClientPhone(ev),
     duration: sonaxDurationSeconds(ev.duracao_chamada),
     notAnswered: (ev.status_atendimento || '').toUpperCase() === 'N',
-    recording: sonaxRecordingProxy(ev.url_gravacao),
-    recordingRaw: ev.url_gravacao,
+    recording: (ev.status_atendimento || '').toUpperCase() === 'N' ? null : sonaxRecordingProxy(ev.url_gravacao),
+    recordingRaw: (ev.status_atendimento || '').toUpperCase() === 'N' ? null : ev.url_gravacao,
   }));
 
   const merged: TimelineEntry[] = [
