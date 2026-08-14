@@ -68,7 +68,7 @@ function DiaMesCard({
             <div key={label} className="flex flex-col">
               <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
               <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-                <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color }}>
+                <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color }}>
                   {fmt(atual)}
                 </span>
                 {hasMeta && (
