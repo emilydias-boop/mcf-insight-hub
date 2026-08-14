@@ -11,9 +11,10 @@ export interface SdrActivityMetrics {
   /** Motor de discagem configurado para o SDR (Fase 1 do rollout Sonax) */
   source: 'twilio' | 'sonax';
   ramal: string | null;
-  /** Só no Sonax: discagens sem outcome registrado pelo SDR */
+  /** Só no Sonax: eventos de desligamento com status_atendimento inválido/placeholder */
   pendingOutcomeCalls: number;
-  /** Discagens contadas via `deal_activities` (click_to_call / Sonax) */
+  /** Discagens contadas via `calls` (Twilio) ou `sonax_call_events` (Sonax) */
+
   
   // Atividades do período
   totalCalls: number;
