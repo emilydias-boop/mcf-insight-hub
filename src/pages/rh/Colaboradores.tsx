@@ -131,7 +131,11 @@ export default function Colaboradores() {
         onDelete={setEmployeeToDelete}
       />
 
-      <EmployeeFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <EmployeeFormDialog
+        open={formOpen}
+        onOpenChange={(v) => { setFormOpen(v); if (!v) setEditEmployee(null); }}
+        employee={editEmployee}
+      />
 
       <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && setEmployeeToDelete(null)}>
         <AlertDialogContent>

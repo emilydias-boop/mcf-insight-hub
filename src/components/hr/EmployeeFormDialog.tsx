@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useEmployeeMutations } from '@/hooks/useEmployees';
+import { Employee } from '@/types/hr';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,35 +16,62 @@ import CargoSelect from './CargoSelect';
 interface EmployeeFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Quando presente, o diálogo entra em modo edição: pré-preenche e atualiza esse registro em vez de criar um novo. */
+  employee?: Employee | null;
 }
 
-export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormDialogProps) {
-  const { createEmployee } = useEmployeeMutations();
-  const [formData, setFormData] = useState({
-    nome_completo: '',
-    cpf: '',
-    cargo: '' as string | null,
-    cargo_catalogo_id: null as string | null,
-    departamento: '',
-    data_admissao: '',
-    tipo_contrato: 'CLT',
-    salario_base: 0,
-    nivel: 1,
-    email_pessoal: '',
-  });
+const BLANK_FORM = {
+  nome_completo: '',
+  cpf: '',
+  cargo: '' as string | null,
+  cargo_catalogo_id: null as string | null,
+  departamento: '',
+  data_admissao: '',
+  tipo_contrato: 'CLT',
+  salario_base: 0,
+  nivel: 1,
+  email_pessoal: '',
+};
+
+export default function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialogProps) {
+  const { createEmployee, updateEmployee } = useEmployeeMutations();
+  const [formData, setFormData] = useState(BLANK_FORM);
   const [createSystemUser, setCreateSystemUser] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
+  const isEditing = !!employee;
+
+  // Ao abrir o diálogo, preenche com os dados do colaborador (modo edição)
+  // ou reseta pro formulário em branco (modo criação).
+  useEffect(() => {
+    if (!open) return;
+    if (employee) {
+      setFormData({
+        nome_completo: employee.nome_completo || '',
+        cpf: employee.cpf || '',
+        cargo: employee.cargo,
+        cargo_catalogo_id: employee.cargo_catalogo_id,
+        departamento: employee.departamento || '',
+        data_admissao: employee.data_admissao || '',
+        tipo_contrato: employee.tipo_contrato || 'CLT',
+        salario_base: employee.salario_base ?? 0,
+        nivel: employee.nivel ?? 1,
+        email_pessoal: employee.email_pessoal || '',
+      });
+    } else {
+      setFormData(BLANK_FORM);
+    }
+    setDuplicateWarning(null);
+  }, [open, employee]);
+
   const handleSubmit = async () => {
     if (!formData.nome_completo.trim()) return;
 
-    // Defensive duplicate guard: if email is set, check for an existing active
-    // employee with the same email (case-insensitive). If found, warn the user
-    // and return without inserting. A second click proceeds (confirming intent),
-    // which preserves the legitimate two-records-two-roles case.
+    // Guard defensivo (só no modo criação): se já existe um colaborador ativo
+    // com o mesmo e-mail, avisa e não insere. Segundo clique confirma e segue.
     const emailNorm = formData.email_pessoal.trim().toLowerCase();
-    if (emailNorm && !duplicateWarning) {
+    if (!isEditing && emailNorm && !duplicateWarning) {
       const { data: existing } = await supabase
         .from('employees')
         .select('id, nome_completo, cargo')
@@ -61,62 +89,55 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
 
     setSubmitting(true);
     try {
-      // 1. Resolve cargo role_sistema (defines if we should provision a system user)
-      let roleSistema: string | null = null;
-      let area: string | null = null;
-      if (formData.cargo_catalogo_id) {
-        const { data: cargo } = await supabase
-          .from('cargos_catalogo')
-          .select('role_sistema, area')
-          .eq('id', formData.cargo_catalogo_id)
-          .maybeSingle();
-        roleSistema = (cargo as any)?.role_sistema || null;
-        area = (cargo as any)?.area || null;
-      }
-
-      // 2. Create employee
-      const employee = await createEmployee.mutateAsync(formData);
-
-      // 3. Optionally provision auth user + role + sdr/closer (trigger handles closer/sdr rows)
-      if (createSystemUser && roleSistema && formData.email_pessoal.trim()) {
-        const squadGuess = (() => {
-          const a = (area || '').toLowerCase();
-          if (a.includes('consórcio') || a.includes('consorcio')) return 'consorcio';
-          if (a.includes('inside') || a.includes('incorporador')) return 'incorporador';
-          if (a.includes('crédito') || a.includes('credito')) return 'credito';
-          if (a.includes('leilão') || a.includes('leilao')) return 'leilao';
-          if (a.includes('solar')) return 'solar';
-          return null;
-        })();
-        const { error: fnError } = await supabase.functions.invoke('create-user', {
-          body: {
-            email: formData.email_pessoal.trim(),
-            full_name: formData.nome_completo.trim(),
-            role: roleSistema,
-            squad: squadGuess,
-            cargo_id: formData.cargo_catalogo_id,
-            employee_id: employee.id,
-          },
-        });
-        if (fnError) {
-          toast.error('Colaborador criado, mas falhou ao gerar usuário: ' + fnError.message);
-        } else {
-          toast.success('Usuário do sistema criado e e-mail de senha enviado');
+      if (isEditing && employee) {
+        // Modo edição: atualiza o registro existente, não cria nada.
+        await updateEmployee.mutateAsync({ id: employee.id, data: formData });
+      } else {
+        // Modo criação
+        let roleSistema: string | null = null;
+        let area: string | null = null;
+        if (formData.cargo_catalogo_id) {
+          const { data: cargo } = await supabase
+            .from('cargos_catalogo')
+            .select('role_sistema, area')
+            .eq('id', formData.cargo_catalogo_id)
+            .maybeSingle();
+          roleSistema = (cargo as any)?.role_sistema || null;
+          area = (cargo as any)?.area || null;
         }
+
+        const created = await createEmployee.mutateAsync(formData);
+
+        if (createSystemUser && roleSistema && formData.email_pessoal.trim()) {
+          const squadGuess = (() => {
+            const a = (area || '').toLowerCase();
+            if (a.includes('consórcio') || a.includes('consorcio')) return 'consorcio';
+            if (a.includes('inside') || a.includes('incorporador')) return 'incorporador';
+            if (a.includes('crédito') || a.includes('credito')) return 'credito';
+            if (a.includes('leilão') || a.includes('leilao')) return 'leilao';
+            if (a.includes('solar')) return 'solar';
+            return null;
+          })();
+          const { error: fnError } = await supabase.functions.invoke('create-user', {
+            body: {
+              email: formData.email_pessoal.trim(),
+              full_name: formData.nome_completo.trim(),
+              role: roleSistema,
+              squad: squadGuess,
+              cargo_id: formData.cargo_catalogo_id,
+              employee_id: created.id,
+            },
+          });
+          if (fnError) {
+            toast.error('Colaborador criado, mas falhou ao gerar usuário: ' + fnError.message);
+          } else {
+            toast.success('Usuário do sistema criado e e-mail de senha enviado');
+          }
+        }
+
+        setFormData(BLANK_FORM);
       }
 
-      setFormData({
-        nome_completo: '',
-        cpf: '',
-        cargo: null,
-        cargo_catalogo_id: null,
-        departamento: '',
-        data_admissao: '',
-        tipo_contrato: 'CLT',
-        salario_base: 0,
-        nivel: 1,
-        email_pessoal: '',
-      });
       setDuplicateWarning(null);
       onOpenChange(false);
     } finally {
@@ -128,7 +149,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo Colaborador</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Colaborador' : 'Novo Colaborador'}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
@@ -162,10 +183,10 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
               <CargoSelect
                 cargoId={formData.cargo_catalogo_id}
                 cargoTexto={formData.cargo}
-                onChange={(cargoId, cargoTexto) => setFormData({ 
-                  ...formData, 
-                  cargo_catalogo_id: cargoId, 
-                  cargo: cargoTexto 
+                onChange={(cargoId, cargoTexto) => setFormData({
+                  ...formData,
+                  cargo_catalogo_id: cargoId,
+                  cargo: cargoTexto
                 })}
                 showInfo={false}
               />
@@ -218,32 +239,48 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
             </div>
           </div>
 
-          <Separator />
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-semibold">Acesso ao Sistema</Label>
-                <p className="text-xs text-muted-foreground">
-                  Cria login + papel + registro operacional (Closer/SDR) automaticamente.
-                </p>
+          {!isEditing && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Acesso ao Sistema</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Cria login + papel + registro operacional (Closer/SDR) automaticamente.
+                    </p>
+                  </div>
+                  <Switch checked={createSystemUser} onCheckedChange={setCreateSystemUser} />
+                </div>
+                {createSystemUser && (
+                  <div>
+                    <Label>E-mail de login *</Label>
+                    <Input
+                      type="email"
+                      value={formData.email_pessoal}
+                      onChange={(e) => { setFormData({ ...formData, email_pessoal: e.target.value }); setDuplicateWarning(null); }}
+                      placeholder="usuario@minhacasafinanciada.com"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Um e-mail será enviado para o colaborador definir a senha.
+                    </p>
+                  </div>
+                )}
               </div>
-              <Switch checked={createSystemUser} onCheckedChange={setCreateSystemUser} />
+            </>
+          )}
+
+          {isEditing && (
+            <div>
+              <Label>E-mail pessoal</Label>
+              <Input
+                type="email"
+                value={formData.email_pessoal}
+                onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
+                placeholder="usuario@minhacasafinanciada.com"
+              />
             </div>
-            {createSystemUser && (
-              <div>
-                <Label>E-mail de login *</Label>
-                <Input
-                  type="email"
-                  value={formData.email_pessoal}
-                  onChange={(e) => { setFormData({ ...formData, email_pessoal: e.target.value }); setDuplicateWarning(null); }}
-                  placeholder="usuario@minhacasafinanciada.com"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Um e-mail será enviado para o colaborador definir a senha.
-                </p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {duplicateWarning && (
@@ -262,10 +299,11 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
               !formData.nome_completo.trim() ||
               submitting ||
               createEmployee.isPending ||
-              (createSystemUser && !formData.email_pessoal.trim())
+              updateEmployee.isPending ||
+              (!isEditing && createSystemUser && !formData.email_pessoal.trim())
             }
           >
-            Cadastrar
+            {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
           </Button>
         </DialogFooter>
       </DialogContent>

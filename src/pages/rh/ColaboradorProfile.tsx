@@ -206,7 +206,7 @@ export default function ColaboradorProfile() {
         </TabsContent>
       </Tabs>
 
-      <EmployeeFormDialog open={formOpen} onOpenChange={setFormOpen} />
+      <EmployeeFormDialog open={formOpen} onOpenChange={setFormOpen} employee={employee} />
     </div>
   );
 }
