@@ -14391,6 +14391,10 @@ export type Database = {
         }
         Returns: Json
       }
+      call_is_visible: {
+        Args: { _created_at: string; _user_id: string }
+        Returns: boolean
+      }
       can_edit_bi_consorcio_meta: {
         Args: { _user_id: string }
         Returns: boolean

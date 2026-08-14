@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.call_is_visible(uuid, timestamptz) FROM anon;
