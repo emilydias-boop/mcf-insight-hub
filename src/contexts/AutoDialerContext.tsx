@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { useDialerEngine, type DialerEngine } from '@/hooks/useDialerEngine';
 import { toSonaxWidgetDigits } from '@/hooks/useSonaxClickToCall';
 import { isAnsweredOutcome, isQualifiedOutcome } from '@/lib/callOutcomes';
+import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
+import { DEFAULT_THRESHOLDS } from '@/hooks/useCallClassificationThresholds';
 
 export type AutoDialerState = 'idle' | 'running' | 'paused' | 'paused-in-call' | 'paused-qualifying' | 'awaiting-outcome' | 'finished';
 
@@ -34,6 +36,13 @@ export interface PendingOutcome {
   phone: string;
   ramal: string | null;
   startedAt: number;
+  /**
+   * Enquanto true, aguardamos silenciosamente o webhook do Sonax
+   * (sonax_call_events) confirmar o resultado automaticamente — o banner
+   * manual de "Como foi essa ligação?" fica oculto. Se o evento não chegar
+   * a tempo, vira false e o banner manual aparece como plano B.
+   */
+  autoDetecting: boolean;
 }
 
 interface AutoDialerContextType {
@@ -73,6 +82,10 @@ const AutoDialerContext = createContext<AutoDialerContextType | null>(null);
 const MAX_QUEUE = 10000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value: string | null | undefined) => !!value && UUID_REGEX.test(value);
+
+// Detecção automática do resultado via sonax_call_events (webhook do Sonax).
+const AUTO_OUTCOME_POLL_MS = 3000;
+const AUTO_OUTCOME_TIMEOUT_MS = 25000;
 
 export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const {
@@ -115,6 +128,8 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const attemptsRef = useRef<Record<string, number>>({});
   const maxAttemptsRef = useRef(maxAttemptsPerLead);
   const retryDelayRef = useRef(retryDelayMs);
+  const autoOutcomePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoOutcomeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
@@ -136,6 +151,11 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const clearTimers = useCallback(() => {
     if (ringTimerRef.current) { clearTimeout(ringTimerRef.current); ringTimerRef.current = null; }
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+  }, []);
+
+  const clearAutoOutcomeTimers = useCallback(() => {
+    if (autoOutcomePollRef.current) { clearInterval(autoOutcomePollRef.current); autoOutcomePollRef.current = null; }
+    if (autoOutcomeTimeoutRef.current) { clearTimeout(autoOutcomeTimeoutRef.current); autoOutcomeTimeoutRef.current = null; }
   }, []);
 
   const setLeadResult = useCallback((dealId: string, result: LeadResult) => {
@@ -206,7 +226,9 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Disparo aceito: aguarda o SDR atender no softphone e registrar o outcome
+        // Disparo aceito: aguarda o webhook do Sonax confirmar o resultado
+        // automaticamente (ver efeito de polling abaixo). Só se o evento não
+        // chegar a tempo é que pedimos confirmação manual do SDR.
         stateRef.current = 'awaiting-outcome';
         setState('awaiting-outcome');
         setPendingOutcome({
@@ -216,6 +238,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
           phone: lead.phone,
           ramal: (data as any)?.ramal ?? ramal,
           startedAt: Date.now(),
+          autoDetecting: true,
         });
         // No motor Sonax não há transição para 'paused-in-call' (sem eventos
         // de chamada no navegador), então abrimos o drawer de detalhes do lead
@@ -277,10 +300,14 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const advanceToNextRef = useRef<(() => void) | null>(null);
   useEffect(() => { advanceToNextRef.current = advanceToNext; }, [advanceToNext]);
 
-  // ===== Motor Sonax: registro manual do resultado da ligação =====
+  // ===== Motor Sonax: registro do resultado da ligação =====
+  // Chamado tanto automaticamente (detecção via sonax_call_events) quanto
+  // manualmente (clique do SDR no banner, quando a detecção automática não
+  // chega a tempo).
   const registerOutcome = useCallback(async (outcome: string, notes?: string) => {
     const pending = pendingOutcomeRef.current;
     if (!pending) return;
+    clearAutoOutcomeTimers();
     const answered = isAnsweredOutcome(outcome);
 
     if (pending.activityId) {
@@ -327,7 +354,69 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     } else {
       advanceToNextRef.current?.();
     }
-  }, [setLeadResult]);
+  }, [setLeadResult, clearAutoOutcomeTimers]);
+  const registerOutcomeRef = useRef(registerOutcome);
+  useEffect(() => { registerOutcomeRef.current = registerOutcome; }, [registerOutcome]);
+
+  // ===== Motor Sonax: detecção automática do resultado via sonax_call_events =====
+  // Enquanto aguarda outcome, faz polling do evento de "desligamento" que o
+  // webhook do Sonax grava (casado pelo deal_id do lead discado). Se achar,
+  // deriva o outcome (S/N + heurística de duração já usada no painel de
+  // métricas) e registra sozinho, sem depender de clique do SDR. Se não achar
+  // dentro do prazo, libera o banner manual como plano B (autoDetecting=false).
+  useEffect(() => {
+    if (engine !== 'sonax' || !pendingOutcome || !pendingOutcome.autoDetecting) return;
+    const pending = pendingOutcome;
+    const sinceIso = new Date(pending.startedAt - 5000).toISOString();
+    let cancelled = false;
+
+    const checkOnce = async () => {
+      if (cancelled) return;
+      const { data, error } = await supabase
+        .from('sonax_call_events')
+        .select('status_atendimento, duracao_chamada, created_at')
+        .eq('deal_id', pending.dealId)
+        .eq('evento', 'desligamento')
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) { console.warn('[autodialer] auto-outcome poll error', error); return; }
+      if (!data) return;
+      if (pendingOutcomeRef.current?.dealId !== pending.dealId || pendingOutcomeRef.current?.startedAt !== pending.startedAt) return;
+
+      const status = String(data.status_atendimento || '').trim().toUpperCase();
+      let outcome: string | null = null;
+      if (status === 'N') {
+        outcome = 'sem_contato';
+      } else if (status === 'S') {
+        const duration = sonaxDurationSeconds(data.duracao_chamada);
+        outcome = duration > 0 && duration <= DEFAULT_THRESHOLDS.voicemail_max ? 'caixa_postal' : 'atendida';
+      } else {
+        return; // status placeholder/inválido — aguarda outro evento ou timeout
+      }
+
+      clearAutoOutcomeTimers();
+      registerOutcomeRef.current?.(outcome, '(detectado automaticamente via Sonax)');
+    };
+
+    checkOnce();
+    autoOutcomePollRef.current = setInterval(checkOnce, AUTO_OUTCOME_POLL_MS);
+    autoOutcomeTimeoutRef.current = setTimeout(() => {
+      if (autoOutcomePollRef.current) { clearInterval(autoOutcomePollRef.current); autoOutcomePollRef.current = null; }
+      // Não achou o evento a tempo — libera o banner manual como plano B.
+      setPendingOutcome(prev => (prev && prev.dealId === pending.dealId && prev.startedAt === pending.startedAt)
+        ? { ...prev, autoDetecting: false }
+        : prev);
+    }, AUTO_OUTCOME_TIMEOUT_MS);
+
+    return () => {
+      cancelled = true;
+      clearAutoOutcomeTimers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, pendingOutcome?.dealId, pendingOutcome?.startedAt, pendingOutcome?.autoDetecting, clearAutoOutcomeTimers]);
 
   // Reage a transições do callStatus
   useEffect(() => {
@@ -528,6 +617,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
   const skipCurrent = useCallback(() => {
     const lead = queueRef.current[currentIndexRef.current];
     if (lead) setLeadResult(lead.dealId, 'skipped');
+    clearAutoOutcomeTimers();
     setPendingOutcome(null);
     pendingOutcomeRef.current = null;
     if (engine !== 'sonax' && (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress')) {
@@ -536,10 +626,11 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     if (stateRef.current === 'awaiting-outcome') { stateRef.current = 'running'; setState('running'); }
     setInCallDrawerOpen(false);
     advanceToNext();
-  }, [callStatus, hangUp, advanceToNext, setLeadResult, engine]);
+  }, [callStatus, hangUp, advanceToNext, setLeadResult, engine, clearAutoOutcomeTimers]);
 
   const stop = useCallback(() => {
     clearTimers();
+    clearAutoOutcomeTimers();
     if (engine !== 'sonax' && (callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'in-progress')) {
       hangUp();
     }
@@ -553,7 +644,7 @@ export function AutoDialerProvider({ children }: { children: ReactNode }) {
     attemptsRef.current = {};
     setInCallDrawerOpen(false);
     isAdvancingRef.current = false;
-  }, [callStatus, hangUp, clearTimers, engine]);
+  }, [callStatus, hangUp, clearTimers, engine, clearAutoOutcomeTimers]);
 
   return (
     <AutoDialerContext.Provider value={{
