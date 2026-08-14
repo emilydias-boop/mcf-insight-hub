@@ -82,6 +82,9 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
+                    <HeaderWithTooltip icon={<PhoneCall className="h-3.5 w-3.5 text-blue-600" />} label="Efetivas" tooltip={`Conversa curta: entre ${T.voicemailMax + 1}s e ${T.effectiveMax}s.`} />
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Conexão" tooltip={`Taxa de conexão = ligações atendidas (ring drop ≤${T.ringDropMax}s, caixa postal, efetiva ou qualificada) / total.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
