@@ -48,14 +48,14 @@ function DiaMesCard({
   const fmt = format ?? ((v: number) => v.toLocaleString("pt-BR"));
   return (
     <div
-      className="rounded-2xl border p-4 xl:p-6 flex flex-col min-h-0"
+      className="rounded-2xl border p-3 xl:p-4 flex flex-col min-h-0"
       style={{
         backgroundColor: "rgba(255,255,255,0.04)",
         borderColor: "rgba(255,255,255,0.10)",
       }}
     >
       <div className="text-white/60 uppercase tracking-widest text-xs xl:text-sm font-bold">{titulo}</div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 xl:gap-6 mt-3">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4 xl:gap-6 mt-2">
         {([["Diário", dia], ["Mensal", mes]] as const).map(([label, m]) => {
           const atual = Number(m?.atual ?? 0);
           const meta = Number(m?.meta ?? 0);
