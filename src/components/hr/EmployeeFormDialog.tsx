@@ -246,6 +246,12 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
           </div>
         </div>
 
+        {duplicateWarning && (
+          <Alert variant="destructive">
+            <AlertDescription>{duplicateWarning}</AlertDescription>
+          </Alert>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
