@@ -112,11 +112,13 @@ export function TVSection({ label, accent, children }: { label: string; accent: 
 }
 
 export function TVShell({
-  title, subtitle, accent, today, updatedAt, children, side,
+  title, subtitle, accent, today, updatedAt, children, side, mainRowsClassName = "grid-rows-2",
 }: {
   title: string; subtitle: string; accent: string; today?: string; updatedAt?: string; children: ReactNode;
   /** Coluna lateral opcional (ex.: ranking de SDRs), ocupa altura cheia à direita. */
   side?: ReactNode;
+  /** Override das rows do grid principal quando não há `side`. Default "grid-rows-2". */
+  mainRowsClassName?: string;
 }) {
   return (
     <div className="fixed inset-0 bg-[#050505] text-white overflow-hidden flex flex-col p-5 xl:p-9">
@@ -147,7 +149,7 @@ export function TVShell({
           <div className="min-h-0 flex flex-col">{side}</div>
         </main>
       ) : (
-        <main className="flex-1 min-h-0 mt-5 xl:mt-8 grid grid-rows-2 gap-5 xl:gap-8">{children}</main>
+        <main className={`flex-1 min-h-0 mt-5 xl:mt-8 grid gap-5 xl:gap-8 ${mainRowsClassName}`}>{children}</main>
       )}
 
       <footer className="shrink-0 mt-3 xl:mt-5 text-center text-[11px] xl:text-sm text-white/30">
