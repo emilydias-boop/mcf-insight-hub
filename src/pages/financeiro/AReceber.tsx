@@ -181,7 +181,7 @@ export default function AReceber() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas a Receber</h1>
           <p className="text-sm text-muted-foreground">
-            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009).
+            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009 e recorrências R001, R009).
           </p>
         </div>
         <div className="flex items-center gap-2">
