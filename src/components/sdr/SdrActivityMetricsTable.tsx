@@ -123,6 +123,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     </TableCell>
                     <TableCell className="text-center">{sdr.totalCalls}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{sdr.notAnsweredCalls}</TableCell>
+                    <TableCell className="text-center text-blue-600 font-medium">{sdr.effectiveCalls}</TableCell>
                     <TableCell className="text-center">{sdr.connectionRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center font-medium">{sdr.qualificationRate.toFixed(1)}%</TableCell>
                     <TableCell className="text-center font-medium">{sdr.uniqueLeadsWorked}</TableCell>
