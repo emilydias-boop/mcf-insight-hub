@@ -1090,6 +1090,41 @@ serve(async (req) => {
       .single();
 
     if (dealError) {
+      // Corrida entre webhooks concorrentes pro mesmo contact_id+origin_id:
+      // o outro já criou o deal entre a checagem de duplicidade e este insert.
+      // Em vez de falhar, busca o deal vencedor e segue o fluxo normal.
+      if (dealError.code === '23505') {
+        console.log('[WEBHOOK-RECEIVER] ⚠️ Corrida detectada (deal já criado por chamada concorrente), buscando deal existente:', dealError.details);
+
+        const { data: raceDeal, error: raceFetchError } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .eq('contact_id', contactId)
+          .eq('origin_id', endpoint.origin_id)
+          .maybeSingle();
+
+        if (raceFetchError || !raceDeal) {
+          console.error('[WEBHOOK-RECEIVER] Erro ao buscar deal da corrida:', raceFetchError);
+          throw dealError;
+        }
+
+        console.log('[WEBHOOK-RECEIVER] ✅ Deal da corrida encontrado:', raceDeal.id);
+
+        await upsertLeadProfile(supabase, contactId, raceDeal.id, payload, cpfClean, normalizedPhone);
+        await updateEndpointMetrics(supabase, endpoint.id);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            action: 'updated_profile',
+            reason: 'race_condition_deal_already_created',
+            deal_id: raceDeal.id,
+            contact_id: contactId,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       console.error('[WEBHOOK-RECEIVER] Erro ao criar deal:', dealError);
       throw dealError;
     }
