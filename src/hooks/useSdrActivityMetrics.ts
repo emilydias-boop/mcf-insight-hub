@@ -324,39 +324,52 @@ export function useSdrActivityMetrics(
           case 'whatsapp_sent':
             metrics.whatsappSent++;
             break;
-          case 'click_to_call': {
-            // Somado para quem está no motor Sonax (auto-discador + avulso).
-            // Para quem ainda está no Twilio, a fonte de ligações é a tabela `calls`.
-            if (metrics.source !== 'sonax') break;
-            const meta = (activity.metadata || {}) as Record<string, any>;
-            metrics.totalCalls++;
-            const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
-            // Bug antigo de detecção de falha na Sonax (corrigido em 12/08/2026):
-            // ok=false anterior a essa data não é evidência de "não atendida".
-            const legacyFalseOk =
-              meta.ok === false &&
-              activity.created_at &&
-              new Date(activity.created_at).getTime() < SONAX_OK_FIX_AT;
-            if (meta.ok === false && !legacyFalseOk) {
-              metrics.notAnsweredCalls++;
-            } else if (meta.answered === true) {
-              metrics.answeredCalls++;
-              if (meta.qualified === true) metrics.qualifiedCalls++;
-              else metrics.effectiveCalls++;
-            } else if (hasOutcome) {
-              if (meta.outcome === 'caixa_postal') metrics.voicemailCalls++;
-              else metrics.notAnsweredCalls++;
-            } else {
-              metrics.pendingOutcomeCalls++;
-            }
-            break;
-          }
         }
         
         if (activity.deal_id) {
           leadsWorkedBySdr.get(email)?.add(activity.deal_id);
         }
       });
+      
+      // 6b. Agregar ligações Sonax (fonte automática — sem depender de outcome manual do SDR)
+      allSonaxEvents.forEach(ev => {
+        if (!ev.sdr_email) return;
+        const email = String(ev.sdr_email).toLowerCase();
+        if (!validSdrEmails.has(email)) return;
+
+        const metrics = metricsMap.get(email);
+        if (!metrics || metrics.source !== 'sonax') return;
+
+        metrics.totalCalls++;
+
+        const status = String(ev.status_atendimento || '').trim().toUpperCase();
+        if (status === 'N') {
+          metrics.notAnsweredCalls++;
+        } else if (status === 'S') {
+          metrics.answeredCalls++;
+          const duration = sonaxDurationSeconds(ev.duracao_chamada);
+          if (duration <= 0) {
+            // Duração ausente/placeholder malformado, mas status confirma que atendeu.
+            metrics.effectiveCalls++;
+          } else if (duration <= thresholds.ringDropMax) {
+            metrics.ringDropCalls++;
+          } else if (duration <= thresholds.voicemailMax) {
+            metrics.voicemailCalls++;
+          } else if (duration <= thresholds.effectiveMax) {
+            metrics.effectiveCalls++;
+          } else {
+            metrics.qualifiedCalls++;
+          }
+        } else {
+          // status_atendimento vazio ou placeholder não substituído pela Sonax (bug conhecido do lado deles).
+          metrics.pendingOutcomeCalls++;
+        }
+
+        if (ev.deal_id) {
+          leadsWorkedBySdr.get(email)?.add(ev.deal_id);
+        }
+      });
+      
       
       // 7. Calcular métricas finais
       const results: SdrActivityMetrics[] = [];
