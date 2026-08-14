@@ -34,7 +34,7 @@ export function AutoDialerOutcomeBanner() {
     return () => clearInterval(id);
   }, [state, pendingOutcome]);
 
-  if (engine !== 'sonax' || state !== 'awaiting-outcome' || !pendingOutcome) return null;
+  if (engine !== 'sonax' || state !== 'awaiting-outcome' || !pendingOutcome || pendingOutcome.autoDetecting) return null;
 
   const save = async (outcome: string) => {
     if (saving) return;
