@@ -34,6 +34,8 @@ function DiaMesCard({
   titulo,
   dia,
   mes,
+  diaB,
+  mesB,
   accent,
   invertGoal,
   format,
@@ -41,6 +43,8 @@ function DiaMesCard({
   titulo: string;
   dia?: Metric;
   mes?: Metric;
+  diaB?: Metric;
+  mesB?: Metric;
   accent: string;
   invertGoal?: boolean;
   format?: (v: number) => string;
@@ -100,6 +104,21 @@ function DiaMesCard({
           );
         })}
       </div>
+      {(diaB || mesB) && (
+        <div
+          className="mt-2 xl:mt-3 pt-2 xl:pt-3 border-t grid grid-cols-2 gap-4 xl:gap-6"
+          style={{ borderColor: "rgba(255,255,255,0.12)" }}
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="text-[9px] xl:text-[10px] font-black tracking-widest text-white/40 uppercase">Lead B</span>
+            <span className="text-lg xl:text-2xl font-black text-white/70">{fmt(Number(diaB?.atual ?? 0))}</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[9px] xl:text-[10px] font-black tracking-widest text-white/40 uppercase">Lead B</span>
+            <span className="text-lg xl:text-2xl font-black text-white/70">{fmt(Number(mesB?.atual ?? 0))}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -129,8 +148,8 @@ export default function TVIncorporadorEquipe() {
       mainRowsClassName="grid-rows-[auto_1fr]"
     >
       <div className="grid grid-cols-2 gap-5 xl:gap-8 min-h-0">
-        <DiaMesCard titulo="Agendamento" dia={data.dia.agendamento} mes={data.mes.agendamento} accent={ACCENT} />
-        <DiaMesCard titulo="Contrato Pago" dia={data.dia.contrato_pago} mes={data.mes.contrato_pago} accent="#bfff00" invertGoal />
+        <DiaMesCard titulo="Agendamento" dia={data.dia.agendamento} mes={data.mes.agendamento} diaB={data.dia.b?.agendamento} mesB={data.mes.b?.agendamento} accent={ACCENT} />
+        <DiaMesCard titulo="Contrato Pago" dia={data.dia.contrato_pago} mes={data.mes.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
       </div>
       <div className="grid grid-cols-3 gap-5 xl:gap-8 min-h-0">
         <TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />
