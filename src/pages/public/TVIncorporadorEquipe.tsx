@@ -104,6 +104,21 @@ function DiaMesCard({
           );
         })}
       </div>
+      {(diaB || mesB) && (
+        <div
+          className="mt-2 xl:mt-3 pt-2 xl:pt-3 border-t grid grid-cols-2 gap-4 xl:gap-6"
+          style={{ borderColor: "rgba(255,255,255,0.12)" }}
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="text-[9px] xl:text-[10px] font-black tracking-widest text-white/40 uppercase">Lead B</span>
+            <span className="text-lg xl:text-2xl font-black text-white/70">{fmt(Number(diaB?.atual ?? 0))}</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[9px] xl:text-[10px] font-black tracking-widest text-white/40 uppercase">Lead B</span>
+            <span className="text-lg xl:text-2xl font-black text-white/70">{fmt(Number(mesB?.atual ?? 0))}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
