@@ -155,6 +155,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                       <TableCell>Total</TableCell>
                       <TableCell className="text-center">{total}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{metrics.reduce((s, m) => s + m.notAnsweredCalls, 0)}</TableCell>
+                      <TableCell className="text-center text-blue-600">{metrics.reduce((s, m) => s + m.effectiveCalls, 0)}</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((ans / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((qual / total) * 100).toFixed(1) : '0.0'}%</TableCell>
                       <TableCell className="text-center">{metrics.reduce((s, m) => s + m.uniqueLeadsWorked, 0)}</TableCell>
