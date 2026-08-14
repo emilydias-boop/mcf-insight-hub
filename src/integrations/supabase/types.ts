@@ -15307,6 +15307,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sonax_duration_seconds: { Args: { raw: string }; Returns: number }
       sonax_match_lead_by_phone: {
         Args: { p_phone: string }
         Returns: {
@@ -15319,6 +15320,7 @@ export type Database = {
         Returns: undefined
       }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
+      tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
       tv_incorporador_sdr_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_seg_sums: {
