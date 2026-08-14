@@ -38,13 +38,6 @@ export interface SdrActivityMetrics {
 
 export type CallCategory = 'not_answered' | 'ring_drop' | 'voicemail' | 'effective' | 'qualified';
 
-/**
- * Data/hora (UTC) da correção da detecção de falha do click2call Sonax.
- * Registros `click_to_call` com metadata.ok=false ANTES disso são falso-negativos
- * e não devem contar como "não atendida" (viram pendente/sem outcome).
- */
-const SONAX_OK_FIX_AT = new Date('2026-08-12T03:00:00Z').getTime();
-
 // Faixas heurísticas padrão (segundos) — fallback quando não há config no banco.
 export const CALL_THRESHOLDS = {
   ringDropMax: 10,
