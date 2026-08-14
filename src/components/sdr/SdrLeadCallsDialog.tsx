@@ -11,6 +11,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sdrUserId: string | null;
+  sdrEmail?: string | null;
+  source?: 'twilio' | 'sonax';
   sdrName: string;
   startDate: Date;
   endDate: Date;
@@ -29,8 +31,8 @@ function fmtDur(s: number) {
   return m > 0 ? `${m}m${r.toString().padStart(2, '0')}s` : `${r}s`;
 }
 
-export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrName, startDate, endDate, squad }: Props) {
-  const { data: rows, isLoading } = useSdrCallsByLead(sdrUserId, startDate, endDate, squad, open);
+export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrEmail = null, source = 'twilio', sdrName, startDate, endDate, squad }: Props) {
+  const { data: rows, isLoading } = useSdrCallsByLead(sdrUserId, startDate, endDate, squad, open, sdrEmail, source);
 
   const totals = (rows || []).reduce(
     (acc, r) => {
@@ -40,10 +42,12 @@ export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrName, sta
       acc.voicemail += r.voicemail;
       acc.effective += r.effective;
       acc.qualified += r.qualified;
+      acc.pending += r.pending;
       return acc;
     },
-    { attempts: 0, notAnswered: 0, ringDrop: 0, voicemail: 0, effective: 0, qualified: 0 },
+    { attempts: 0, notAnswered: 0, ringDrop: 0, voicemail: 0, effective: 0, qualified: 0, pending: 0 },
   );
+  const hasPending = totals.pending > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -90,6 +94,7 @@ export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrName, sta
                   <TableHead className="text-center">C. postal</TableHead>
                   <TableHead className="text-center">Efetivas</TableHead>
                   <TableHead className="text-center">Qualific.</TableHead>
+                  {hasPending && <TableHead className="text-center">Pendente</TableHead>}
                   <TableHead className="text-center">Tempo total</TableHead>
                   <TableHead className="text-center">Última</TableHead>
                 </TableRow>
@@ -107,6 +112,7 @@ export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrName, sta
                     <TableCell className="text-center text-amber-700">{r.voicemail}</TableCell>
                     <TableCell className="text-center text-blue-600">{r.effective}</TableCell>
                     <TableCell className="text-center text-green-600 font-semibold">{r.qualified}</TableCell>
+                    {hasPending && <TableCell className="text-center text-muted-foreground">{r.pending}</TableCell>}
                     <TableCell className="text-center text-xs">{fmtDur(r.totalDurationSeconds)}</TableCell>
                     <TableCell className="text-center text-xs">{fmtDate(r.lastCallAt)}</TableCell>
                   </TableRow>
@@ -119,6 +125,7 @@ export function SdrLeadCallsDialog({ open, onOpenChange, sdrUserId, sdrName, sta
                   <TableCell className="text-center text-amber-700">{totals.voicemail}</TableCell>
                   <TableCell className="text-center text-blue-600">{totals.effective}</TableCell>
                   <TableCell className="text-center text-green-600">{totals.qualified}</TableCell>
+                  {hasPending && <TableCell className="text-center text-muted-foreground">{totals.pending}</TableCell>}
                   <TableCell />
                   <TableCell />
                 </TableRow>

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { classifyCall, CallCategory } from './useSdrActivityMetrics';
 import { useCallClassificationThresholds, DEFAULT_THRESHOLDS } from './useCallClassificationThresholds';
+import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 
 export interface LeadCallBreakdown {
   phone: string;
@@ -14,6 +15,8 @@ export interface LeadCallBreakdown {
   voicemail: number;
   effective: number;
   qualified: number;
+  /** Só Sonax: status_atendimento vazio/placeholder (bug conhecido do lado deles). */
+  pending: number;
   firstCallAt: string | null;
   lastCallAt: string | null;
   totalDurationSeconds: number;
@@ -25,21 +28,52 @@ function normalizePhone(p: string | null | undefined): string {
   return digits.slice(-9); // last 9 digits, alinhado com regra do projeto
 }
 
+/** Classifica um evento Sonax (status_atendimento S/N + duração) na mesma lógica de useSdrActivityMetrics. */
+function classifySonaxEvent(
+  statusAtendimento: string | null | undefined,
+  duracaoChamada: string | null | undefined,
+  thresholds: { ringDropMax: number; voicemailMax: number; effectiveMax: number },
+): CallCategory | 'pending' {
+  const status = String(statusAtendimento || '').trim().toUpperCase();
+  if (status === 'N') return 'not_answered';
+  if (status === 'S') {
+    const duration = sonaxDurationSeconds(duracaoChamada);
+    if (duration <= 0) return 'effective';
+    if (duration <= thresholds.ringDropMax) return 'ring_drop';
+    if (duration <= thresholds.voicemailMax) return 'voicemail';
+    if (duration <= thresholds.effectiveMax) return 'effective';
+    return 'qualified';
+  }
+  return 'pending';
+}
+
 export function useSdrCallsByLead(
   sdrUserId: string | null,
   startDate: Date,
   endDate: Date,
   squad: string = 'incorporador',
   enabled: boolean = true,
+  sdrEmail: string | null = null,
+  source: 'twilio' | 'sonax' = 'twilio',
 ) {
   const thresholdsQuery = useCallClassificationThresholds(squad);
 
   return useQuery({
-    queryKey: ['sdr-calls-by-lead', sdrUserId, startDate.toISOString(), endDate.toISOString(), squad],
-    enabled: enabled && !!sdrUserId && thresholdsQuery.isSuccess,
+    queryKey: [
+      'sdr-calls-by-lead',
+      sdrUserId,
+      sdrEmail,
+      source,
+      startDate.toISOString(),
+      endDate.toISOString(),
+      squad,
+    ],
+    enabled:
+      enabled &&
+      thresholdsQuery.isSuccess &&
+      (source === 'sonax' ? !!sdrEmail : !!sdrUserId),
     staleTime: 2 * 60 * 1000,
     queryFn: async (): Promise<LeadCallBreakdown[]> => {
-      if (!sdrUserId) return [];
       const t = thresholdsQuery.data || DEFAULT_THRESHOLDS;
       const thresholds = {
         ringDropMax: t.ring_drop_max,
@@ -48,30 +82,117 @@ export function useSdrCallsByLead(
       };
 
       const PAGE = 1000;
-      const allCalls: any[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('calls')
-          .select('id, deal_id, to_number, status, duration_seconds, answered_by, created_at')
-          .eq('direction', 'outbound')
-          .eq('user_id', sdrUserId)
-          .gte('created_at', startDate.toISOString())
-          .lte('created_at', endDate.toISOString())
-          .order('created_at', { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        allCalls.push(...data);
-        if (data.length < PAGE) break;
-        from += PAGE;
+      const groups = new Map<string, LeadCallBreakdown>();
+      const dealIdsUsed = new Set<string>();
+
+      const ensureGroup = (phone: string | null, dealId: string | null) => {
+        const normalized = normalizePhone(phone);
+        const key = normalized || `__deal:${dealId ?? Math.random()}`;
+        let g = groups.get(key);
+        if (!g) {
+          g = {
+            phone: phone || '(sem telefone)',
+            phoneNormalized: normalized,
+            leadName: null,
+            dealId: dealId || null,
+            totalAttempts: 0,
+            notAnswered: 0,
+            ringDrop: 0,
+            voicemail: 0,
+            effective: 0,
+            qualified: 0,
+            pending: 0,
+            firstCallAt: null,
+            lastCallAt: null,
+            totalDurationSeconds: 0,
+          };
+          groups.set(key, g);
+        }
+        if (!g.dealId && dealId) g.dealId = dealId;
+        if (dealId) dealIdsUsed.add(dealId);
+        return g;
+      };
+
+      if (source === 'sonax') {
+        if (!sdrEmail) return [];
+        const allEvents: any[] = [];
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('sonax_call_events')
+            .select('deal_id, numero, status_atendimento, duracao_chamada, created_at')
+            .eq('evento', 'desligamento')
+            .ilike('sdr_email', sdrEmail)
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString())
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allEvents.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+
+        for (const ev of allEvents) {
+          const g = ensureGroup(ev.numero, ev.deal_id);
+          const duration = sonaxDurationSeconds(ev.duracao_chamada);
+          g.totalAttempts++;
+          g.totalDurationSeconds += duration;
+          if (!g.firstCallAt || ev.created_at < g.firstCallAt) g.firstCallAt = ev.created_at;
+          if (!g.lastCallAt || ev.created_at > g.lastCallAt) g.lastCallAt = ev.created_at;
+          const cat = classifySonaxEvent(ev.status_atendimento, ev.duracao_chamada, thresholds);
+          switch (cat) {
+            case 'not_answered': g.notAnswered++; break;
+            case 'ring_drop': g.ringDrop++; break;
+            case 'voicemail': g.voicemail++; break;
+            case 'effective': g.effective++; break;
+            case 'qualified': g.qualified++; break;
+            case 'pending': g.pending++; break;
+          }
+        }
+      } else {
+        if (!sdrUserId) return [];
+        const allCalls: any[] = [];
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('calls')
+            .select('id, deal_id, to_number, status, duration_seconds, answered_by, created_at')
+            .eq('direction', 'outbound')
+            .eq('user_id', sdrUserId)
+            .gte('created_at', startDate.toISOString())
+            .lte('created_at', endDate.toISOString())
+            .order('created_at', { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allCalls.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+
+        for (const c of allCalls) {
+          const g = ensureGroup(c.to_number, c.deal_id);
+          g.totalAttempts++;
+          g.totalDurationSeconds += c.duration_seconds || 0;
+          if (!g.firstCallAt || c.created_at < g.firstCallAt) g.firstCallAt = c.created_at;
+          if (!g.lastCallAt || c.created_at > g.lastCallAt) g.lastCallAt = c.created_at;
+          const cat: CallCategory = classifyCall(c.status, c.duration_seconds, c.answered_by, thresholds);
+          switch (cat) {
+            case 'not_answered': g.notAnswered++; break;
+            case 'ring_drop': g.ringDrop++; break;
+            case 'voicemail': g.voicemail++; break;
+            case 'effective': g.effective++; break;
+            case 'qualified': g.qualified++; break;
+          }
+        }
       }
 
-      // Buscar nomes dos leads via crm_deals (por deal_id)
-      const dealIds = Array.from(new Set(allCalls.map(c => c.deal_id).filter(Boolean)));
+      // Buscar nomes dos leads via crm_deals (por deal_id) — comum às duas fontes
+      const dealIds = Array.from(dealIdsUsed);
       const dealMap = new Map<string, string>();
       if (dealIds.length > 0) {
-        // pagina em blocos para evitar limite de IN
         const CHUNK = 200;
         for (let i = 0; i < dealIds.length; i += CHUNK) {
           const slice = dealIds.slice(i, i + CHUNK);
@@ -84,47 +205,9 @@ export function useSdrCallsByLead(
           });
         }
       }
-
-      const groups = new Map<string, LeadCallBreakdown>();
-      for (const c of allCalls) {
-        const normalized = normalizePhone(c.to_number);
-        const key = normalized || `__deal:${c.deal_id ?? c.id}`;
-        let g = groups.get(key);
-        if (!g) {
-          g = {
-            phone: c.to_number || '(sem telefone)',
-            phoneNormalized: normalized,
-            leadName: c.deal_id ? dealMap.get(c.deal_id) || null : null,
-            dealId: c.deal_id || null,
-            totalAttempts: 0,
-            notAnswered: 0,
-            ringDrop: 0,
-            voicemail: 0,
-            effective: 0,
-            qualified: 0,
-            firstCallAt: null,
-            lastCallAt: null,
-            totalDurationSeconds: 0,
-          };
-          groups.set(key, g);
-        }
-        if (!g.leadName && c.deal_id) {
-          g.leadName = dealMap.get(c.deal_id) || g.leadName;
-          g.dealId = g.dealId || c.deal_id;
-        }
-        g.totalAttempts++;
-        g.totalDurationSeconds += c.duration_seconds || 0;
-        if (!g.firstCallAt || c.created_at < g.firstCallAt) g.firstCallAt = c.created_at;
-        if (!g.lastCallAt || c.created_at > g.lastCallAt) g.lastCallAt = c.created_at;
-        const cat: CallCategory = classifyCall(c.status, c.duration_seconds, c.answered_by, thresholds);
-        switch (cat) {
-          case 'not_answered': g.notAnswered++; break;
-          case 'ring_drop': g.ringDrop++; break;
-          case 'voicemail': g.voicemail++; break;
-          case 'effective': g.effective++; break;
-          case 'qualified': g.qualified++; break;
-        }
-      }
+      groups.forEach(g => {
+        if (g.dealId) g.leadName = dealMap.get(g.dealId) || g.leadName;
+      });
 
       return Array.from(groups.values()).sort((a, b) => b.totalAttempts - a.totalAttempts);
     },
@@ -146,6 +229,7 @@ export function exportLeadBreakdownToCsv(
     'Caixa postal',
     'Efetivas',
     'Qualificadas',
+    'Pendentes',
     'Duracao total (s)',
     'Primeira ligacao',
     'Ultima ligacao',
@@ -166,6 +250,7 @@ export function exportLeadBreakdownToCsv(
       r.voicemail,
       r.effective,
       r.qualified,
+      r.pending,
       r.totalDurationSeconds,
       r.firstCallAt || '',
       r.lastCallAt || '',
