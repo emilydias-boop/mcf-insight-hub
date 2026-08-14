@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useSdrsFromSquad } from './useSdrsFromSquad';
 import { useCallClassificationThresholds, CallThresholds, DEFAULT_THRESHOLDS } from './useCallClassificationThresholds';
+import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 
 export interface SdrActivityMetrics {
   sdrEmail: string;
@@ -10,9 +11,10 @@ export interface SdrActivityMetrics {
   /** Motor de discagem configurado para o SDR (Fase 1 do rollout Sonax) */
   source: 'twilio' | 'sonax';
   ramal: string | null;
-  /** Só no Sonax: discagens sem outcome registrado pelo SDR */
+  /** Só no Sonax: eventos de desligamento com status_atendimento inválido/placeholder */
   pendingOutcomeCalls: number;
-  /** Discagens contadas via `deal_activities` (click_to_call / Sonax) */
+  /** Discagens contadas via `calls` (Twilio) ou `sonax_call_events` (Sonax) */
+
   
   // Atividades do período
   totalCalls: number;
@@ -36,13 +38,6 @@ export interface SdrActivityMetrics {
 }
 
 export type CallCategory = 'not_answered' | 'ring_drop' | 'voicemail' | 'effective' | 'qualified';
-
-/**
- * Data/hora (UTC) da correção da detecção de falha do click2call Sonax.
- * Registros `click_to_call` com metadata.ok=false ANTES disso são falso-negativos
- * e não devem contar como "não atendida" (viram pendente/sem outcome).
- */
-const SONAX_OK_FIX_AT = new Date('2026-08-12T03:00:00Z').getTime();
 
 // Faixas heurísticas padrão (segundos) — fallback quando não há config no banco.
 export const CALL_THRESHOLDS = {
@@ -205,7 +200,24 @@ export function useSdrActivityMetrics(
         actFrom += PAGE;
       }
       
-      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities`);
+      // 2b. Buscar TODOS os eventos de desligamento Sonax no período (fonte automática)
+      const allSonaxEvents: any[] = [];
+      let sonaxFrom = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('sonax_call_events')
+          .select('sdr_email, deal_id, status_atendimento, duracao_chamada, created_at')
+          .eq('evento', 'desligamento')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .range(sonaxFrom, sonaxFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allSonaxEvents.push(...data);
+        if (data.length < PAGE) break;
+        sonaxFrom += PAGE;
+      }
+      
+      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities, ${allSonaxEvents.length} sonax events`);
       
       // 3. Buscar profiles para mapear user_id -> email
       const { data: profiles } = await supabase
@@ -313,39 +325,52 @@ export function useSdrActivityMetrics(
           case 'whatsapp_sent':
             metrics.whatsappSent++;
             break;
-          case 'click_to_call': {
-            // Somado para quem está no motor Sonax (auto-discador + avulso).
-            // Para quem ainda está no Twilio, a fonte de ligações é a tabela `calls`.
-            if (metrics.source !== 'sonax') break;
-            const meta = (activity.metadata || {}) as Record<string, any>;
-            metrics.totalCalls++;
-            const hasOutcome = typeof meta.outcome === 'string' && meta.outcome && meta.outcome !== 'nao_registrado';
-            // Bug antigo de detecção de falha na Sonax (corrigido em 12/08/2026):
-            // ok=false anterior a essa data não é evidência de "não atendida".
-            const legacyFalseOk =
-              meta.ok === false &&
-              activity.created_at &&
-              new Date(activity.created_at).getTime() < SONAX_OK_FIX_AT;
-            if (meta.ok === false && !legacyFalseOk) {
-              metrics.notAnsweredCalls++;
-            } else if (meta.answered === true) {
-              metrics.answeredCalls++;
-              if (meta.qualified === true) metrics.qualifiedCalls++;
-              else metrics.effectiveCalls++;
-            } else if (hasOutcome) {
-              if (meta.outcome === 'caixa_postal') metrics.voicemailCalls++;
-              else metrics.notAnsweredCalls++;
-            } else {
-              metrics.pendingOutcomeCalls++;
-            }
-            break;
-          }
         }
         
         if (activity.deal_id) {
           leadsWorkedBySdr.get(email)?.add(activity.deal_id);
         }
       });
+      
+      // 6b. Agregar ligações Sonax (fonte automática — sem depender de outcome manual do SDR)
+      allSonaxEvents.forEach(ev => {
+        if (!ev.sdr_email) return;
+        const email = String(ev.sdr_email).toLowerCase();
+        if (!validSdrEmails.has(email)) return;
+
+        const metrics = metricsMap.get(email);
+        if (!metrics || metrics.source !== 'sonax') return;
+
+        metrics.totalCalls++;
+
+        const status = String(ev.status_atendimento || '').trim().toUpperCase();
+        if (status === 'N') {
+          metrics.notAnsweredCalls++;
+        } else if (status === 'S') {
+          metrics.answeredCalls++;
+          const duration = sonaxDurationSeconds(ev.duracao_chamada);
+          if (duration <= 0) {
+            // Duração ausente/placeholder malformado, mas status confirma que atendeu.
+            metrics.effectiveCalls++;
+          } else if (duration <= thresholds.ringDropMax) {
+            metrics.ringDropCalls++;
+          } else if (duration <= thresholds.voicemailMax) {
+            metrics.voicemailCalls++;
+          } else if (duration <= thresholds.effectiveMax) {
+            metrics.effectiveCalls++;
+          } else {
+            metrics.qualifiedCalls++;
+          }
+        } else {
+          // status_atendimento vazio ou placeholder não substituído pela Sonax (bug conhecido do lado deles).
+          metrics.pendingOutcomeCalls++;
+        }
+
+        if (ev.deal_id) {
+          leadsWorkedBySdr.get(email)?.add(ev.deal_id);
+        }
+      });
+      
       
       // 7. Calcular métricas finais
       const results: SdrActivityMetrics[] = [];
