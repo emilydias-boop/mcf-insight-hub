@@ -50,6 +50,8 @@ const PRODUCT_OPTIONS = [
   { value: 'A003', label: 'A003 - Anticrise Completo' },
   { value: 'A004', label: 'A004 - Anticrise Básico' },
   { value: 'A009', label: 'A009 - Incorporador + The Club' },
+  { value: 'R001', label: 'R001 - Incorporador Completo (Recorrência)' },
+  { value: 'R009', label: 'R009 - Incorporador + The Club (Recorrência)' },
 ];
 
 function StatusBadge({ status }: { status: ArTituloStatus }) {
