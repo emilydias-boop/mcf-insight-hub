@@ -47,145 +47,70 @@ async function resolveCodesForDeal(dealId: string) {
   const transaction_id = (custom.mcf_pay_transaction_id as string) || null;
 
   const tried: string[] = [];
+  const hadSnapshotCloser = !!closer_code;
+  const hadSnapshotSdr = !!sdr_code;
+  if (hadSnapshotCloser) tried.push("snapshot_closer");
+  if (hadSnapshotSdr) tried.push("snapshot_sdr");
 
-  const emails = new Set<string>();
-  if (deal.r2_closer_email) emails.add(deal.r2_closer_email.toLowerCase());
-  if (deal.r1_closer_email) emails.add(deal.r1_closer_email.toLowerCase());
-  if (deal.original_sdr_email) emails.add(deal.original_sdr_email.toLowerCase());
-
-  const profilesByEmail = new Map<string, { mcf_pay_closer_code: string | null; mcf_pay_sdr_code: string | null }>();
-  if (emails.size > 0) {
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("email, mcf_pay_closer_code, mcf_pay_sdr_code")
-      .in("email", Array.from(emails));
-    for (const p of profs ?? []) {
-      if (p.email) profilesByEmail.set(p.email.toLowerCase(), p as any);
-    }
-  }
-
-  if (!closer_code) {
-    for (const email of [deal.r2_closer_email, deal.r1_closer_email].filter(Boolean) as string[]) {
-      tried.push(email === deal.r2_closer_email ? "r2_email" : "r1_email");
-      const code = profilesByEmail.get(email.toLowerCase())?.mcf_pay_closer_code;
-      if (code) { closer_code = code; break; }
-    }
-  }
-
-  if (!sdr_code && deal.original_sdr_email) {
-    tried.push("sdr_email");
-    sdr_code = profilesByEmail.get(deal.original_sdr_email.toLowerCase())?.mcf_pay_sdr_code || null;
-  }
-
-  // ===== Fallbacks via agenda (meeting_slot_attendees + meeting_slots) =====
-  // Necessário quando o deal não tem r1/r2_closer_email/original_sdr_email preenchidos,
-  // mas o SDR agendou a reunião no calendário do Closer.
+  // Resolução ao vivo só roda para os campos que ainda não têm snapshot travado.
+  // Uma vez resolvido pela primeira vez, o valor é gravado em custom_fields e todo
+  // disparo futuro (retry, sweep, vínculo manual) reusa exatamente esse valor,
+  // em vez de recalcular e potencialmente divergir entre disparos concorrentes.
   if (!closer_code || !sdr_code) {
-    const { data: attendees } = await supabase
-      .from("meeting_slot_attendees")
-      .select("booked_by, booked_at, meeting_slot_id")
-      .eq("deal_id", dealId)
-      .order("booked_at", { ascending: false, nullsFirst: false })
-      .limit(10);
+    const emails = new Set<string>();
+    if (deal.r2_closer_email) emails.add(deal.r2_closer_email.toLowerCase());
+    if (deal.r1_closer_email) emails.add(deal.r1_closer_email.toLowerCase());
+    if (deal.original_sdr_email) emails.add(deal.original_sdr_email.toLowerCase());
 
-    const rows = (attendees ?? []) as any[];
-
-    // Buscar slots relacionados (sem depender de FK definido no PostgREST)
-    const slotIds = Array.from(
-      new Set(rows.map((r) => r.meeting_slot_id).filter(Boolean) as string[]),
-    );
-    const slotById = new Map<string, { closer_id: string | null; scheduled_at: string | null }>();
-    if (slotIds.length > 0) {
-      const { data: slots } = await supabase
-        .from("meeting_slots")
-        .select("id, closer_id, scheduled_at")
-        .in("id", slotIds);
-      for (const s of slots ?? []) {
-        slotById.set(s.id as string, {
-          closer_id: (s as any).closer_id ?? null,
-          scheduled_at: (s as any).scheduled_at ?? null,
-        });
-      }
-    }
-    for (const r of rows) {
-      (r as any).meeting_slots = r.meeting_slot_id ? slotById.get(r.meeting_slot_id) ?? null : null;
-    }
-
-    // SDR fallback: booked_by do attendee mais recente → profiles.mcf_pay_sdr_code
-    if (!sdr_code) {
-      const bookedByIds = Array.from(
-        new Set(rows.map((r) => r.booked_by).filter(Boolean) as string[]),
-      );
-      if (bookedByIds.length > 0) {
-        tried.push("slot_booked_by");
-        const { data: bookerProfiles } = await supabase
-          .from("profiles")
-          .select("id, mcf_pay_sdr_code")
-          .in("id", bookedByIds);
-        const byId = new Map(
-          (bookerProfiles ?? []).map((p: any) => [p.id, p.mcf_pay_sdr_code as string | null]),
-        );
-        for (const r of rows) {
-          const code = r.booked_by ? byId.get(r.booked_by) : null;
-          if (code) { sdr_code = code; break; }
-        }
+    const profilesByEmail = new Map<string, { mcf_pay_closer_code: string | null; mcf_pay_sdr_code: string | null }>();
+    if (emails.size > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("email, mcf_pay_closer_code, mcf_pay_sdr_code")
+        .in("email", Array.from(emails));
+      for (const p of profs ?? []) {
+        if (p.email) profilesByEmail.set(p.email.toLowerCase(), p as any);
       }
     }
 
-    // Closer fallback: meeting_slots.closer_id → closers.email → profiles.email → mcf_pay_closer_code
     if (!closer_code) {
-      const closerIds = Array.from(
-        new Set(
-          rows
-            .map((r) => (r.meeting_slots?.closer_id as string | null) ?? null)
-            .filter(Boolean) as string[],
-        ),
-      );
-      if (closerIds.length > 0) {
-        tried.push("slot_closer");
-        const { data: closerRows } = await supabase
-          .from("closers")
-          .select("id, email")
-          .in("id", closerIds);
-        const closerEmailById = new Map(
-          (closerRows ?? []).map((c: any) => [c.id, (c.email as string | null)?.toLowerCase() ?? null]),
-        );
-        const closerEmails = Array.from(
-          new Set(Array.from(closerEmailById.values()).filter(Boolean) as string[]),
-        );
-        if (closerEmails.length > 0) {
-          const { data: closerProfiles } = await supabase
-            .from("profiles")
-            .select("email, mcf_pay_closer_code")
-            .in("email", closerEmails);
-          const codeByEmail = new Map(
-            (closerProfiles ?? []).map((p: any) => [
-              (p.email as string).toLowerCase(),
-              p.mcf_pay_closer_code as string | null,
-            ]),
-          );
-          // Preferir slot mais recente
-          for (const r of rows) {
-            const cid = r.meeting_slots?.closer_id as string | null;
-            const cemail = cid ? closerEmailById.get(cid) : null;
-            const code = cemail ? codeByEmail.get(cemail) : null;
-            if (code) { closer_code = code; break; }
-          }
-        }
+      for (const email of [deal.r2_closer_email, deal.r1_closer_email].filter(Boolean) as string[]) {
+        tried.push(email === deal.r2_closer_email ? "r2_email" : "r1_email");
+        const code = profilesByEmail.get(email.toLowerCase())?.mcf_pay_closer_code;
+        if (code) { closer_code = code; break; }
       }
     }
-  }
 
-  // Owner do deal como último fallback (para closer_code E sdr_code)
-  if ((!closer_code || !sdr_code) && deal.owner_profile_id) {
-    tried.push("owner");
-    const { data: owner } = await supabase
-      .from("profiles")
-      .select("mcf_pay_closer_code, mcf_pay_sdr_code")
-      .eq("id", deal.owner_profile_id)
-      .maybeSingle();
-    if (!closer_code) closer_code = (owner?.mcf_pay_closer_code as string) || null;
-    if (!sdr_code) sdr_code = (owner?.mcf_pay_sdr_code as string) || null;
+    if (!sdr_code && deal.original_sdr_email) {
+      tried.push("sdr_email");
+      sdr_code = profilesByEmail.get(deal.original_sdr_email.toLowerCase())?.mcf_pay_sdr_code || null;
+    }
+
+    // Último recurso: dono atual do deal. Marcado como "risky" nos logs porque
+    // owner_profile_id pode ter mudado (transferência de carteira) depois do
+    // fechamento original, criditando a venda para quem não fechou.
+    if ((!closer_code || !sdr_code) && deal.owner_profile_id) {
+      tried.push("owner_fallback_risky");
+      const { data: owner } = await supabase
+        .from("profiles")
+        .select("mcf_pay_closer_code, mcf_pay_sdr_code")
+        .eq("id", deal.owner_profile_id)
+        .maybeSingle();
+      if (!closer_code) closer_code = (owner?.mcf_pay_closer_code as string) || null;
+      if (!sdr_code) sdr_code = (owner?.mcf_pay_sdr_code as string) || null;
+    }
+
+    // Trava o snapshot em custom_fields — só grava os campos que acabaram de ser
+    // resolvidos agora (não sobrescreve um snapshot que já existia antes desta chamada).
+    const toPersist: Record<string, unknown> = {};
+    if (closer_code && !hadSnapshotCloser) toPersist.mcf_pay_closer_code = closer_code;
+    if (sdr_code && !hadSnapshotSdr) toPersist.mcf_pay_sdr_code = sdr_code;
+    if (Object.keys(toPersist).length > 0) {
+      await supabase
+        .from("crm_deals")
+        .update({ custom_fields: { ...custom, ...toPersist } })
+        .eq("id", dealId);
+    }
   }
 
   // Carregar dados do cliente
