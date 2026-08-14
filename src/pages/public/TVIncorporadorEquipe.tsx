@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TVMetricCard, TVShell, TVMsg, TVSection, Metric } from "@/components/public/TVTeamShared";
 import { TVSdrRankingBlock, TVSdrRankingRow } from "@/components/public/TVSdrRankingBlock";
 import { TVCloserRankingBlock, TVCloserRankingRow } from "@/components/public/TVCloserRankingBlock";
+import { TVLigacaoRankingBlock, TVLigacaoRankingRow } from "@/components/public/TVLigacaoRankingBlock";
 
 const TOKEN = "e03633d2-f881-4b6d-a5dd-a928e6b7da0c";
 
@@ -23,6 +24,7 @@ interface Payload {
   mes: Block;
   sdr_ranking?: TVSdrRankingRow[];
   closer_ranking?: TVCloserRankingRow[];
+  ligacao_ranking?: TVLigacaoRankingRow[];
   error?: string;
 }
 
@@ -32,10 +34,8 @@ function Grid({ b }: { b?: Block }) {
   const a = b?.a ?? b;
   const seg = b?.b;
   return (
-    <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4 xl:gap-6">
+    <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-1 gap-4 xl:gap-6">
       <TVMetricCard titulo="Agendamento" metric={a?.agendamento} metricB={seg?.agendamento} accent={ACCENT} />
-      <TVMetricCard titulo="R1 Realizada" metric={a?.r1_realizada} metricB={seg?.r1_realizada} accent="#38bdf8" />
-      <TVMetricCard titulo="No-show" metric={a?.no_show} metricB={seg?.no_show} accent="#ef4444" invertGoal />
       <TVMetricCard titulo="Contrato Pago" metric={a?.contrato_pago} metricB={seg?.contrato_pago} accent="#bfff00" />
     </div>
   );
@@ -64,9 +64,10 @@ export default function TVIncorporadorEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       side={
-        <div className="min-h-0 flex-1 grid grid-rows-2 gap-4 xl:gap-6">
+        <div className="min-h-0 flex-1 grid grid-rows-3 gap-4 xl:gap-6">
           <TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />
           <TVCloserRankingBlock rows={data.closer_ranking} accent="#bfff00" />
+          <TVLigacaoRankingBlock rows={data.ligacao_ranking} accent="#a855f7" />
         </div>
       }
     >
