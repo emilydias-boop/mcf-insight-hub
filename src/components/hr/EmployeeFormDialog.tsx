@@ -117,6 +117,7 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
         nivel: 1,
         email_pessoal: '',
       });
+      setDuplicateWarning(null);
       onOpenChange(false);
     } finally {
       setSubmitting(false);
