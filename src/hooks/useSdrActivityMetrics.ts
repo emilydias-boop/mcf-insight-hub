@@ -199,7 +199,24 @@ export function useSdrActivityMetrics(
         actFrom += PAGE;
       }
       
-      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities`);
+      // 2b. Buscar TODOS os eventos de desligamento Sonax no período (fonte automática)
+      const allSonaxEvents: any[] = [];
+      let sonaxFrom = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('sonax_call_events')
+          .select('sdr_email, deal_id, status_atendimento, duracao_chamada, created_at')
+          .eq('evento', 'desligamento')
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .range(sonaxFrom, sonaxFrom + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allSonaxEvents.push(...data);
+        if (data.length < PAGE) break;
+        sonaxFrom += PAGE;
+      }
+      
+      console.log(`[SdrActivityMetrics] Fetched ${allCalls.length} outbound calls, ${allActivities.length} activities, ${allSonaxEvents.length} sonax events`);
       
       // 3. Buscar profiles para mapear user_id -> email
       const { data: profiles } = await supabase
