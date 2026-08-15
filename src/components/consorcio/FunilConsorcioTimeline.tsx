@@ -2,12 +2,15 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Clock, Mail, CheckCheck, Inbox, BadgeCheck, Wallet, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRealizadas, useProposals } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioCards } from '@/hooks/useConsorcio';
+
+const STEP_ICONS: LucideIcon[] = [Clock, Mail, CheckCheck, Inbox, BadgeCheck, Wallet];
 
 export type FunilPage = 'pos-reuniao' | 'consorcio';
 
