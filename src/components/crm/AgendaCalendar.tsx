@@ -1774,6 +1774,18 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                     </span>
+                                                    {(() => {
+                                                      const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
+                                                      if (seg !== "A" && seg !== "B") return null;
+                                                      return (
+                                                        <span className={cn(
+                                                          "text-[9px] font-bold",
+                                                          seg === "A" ? "text-green-500" : "text-amber-500",
+                                                        )}>
+                                                          {seg}
+                                                        </span>
+                                                      );
+                                                    })()}
                                                     {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                       <span className={cn(
                                                         "text-[9px] font-bold",
@@ -1829,6 +1841,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                 contact?: { id: string; name: string; phone: string; email: string } | null;
                                                 sdrName: string;
                                                 sdrId: string;
+                                                icpSegment: string | null;
                                               };
                                               
                                               // Flatten all attendees with their SDR info
@@ -1842,7 +1855,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       already_builds: att.already_builds,
                                                       contact: att.contact,
                                                       sdrName: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name || 'N/A',
-                                                      sdrId: att.booked_by || m.booked_by || 'unknown'
+                                                      sdrId: att.booked_by || m.booked_by || 'unknown',
+                                                      icpSegment: att.deal?.icp_segment ?? m.deal?.icp_segment ?? null
                                                     }))
                                                   : [{
                                                       id: m.id,
@@ -1852,7 +1866,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       already_builds: null,
                                                       contact: m.deal?.contact,
                                                       sdrName: m.booked_by_profile?.full_name || 'N/A',
-                                                      sdrId: m.booked_by || 'unknown'
+                                                      sdrId: m.booked_by || 'unknown',
+                                                      icpSegment: m.deal?.icp_segment ?? null
                                                     }]
                                               );
                                               
