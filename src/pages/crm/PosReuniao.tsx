@@ -21,49 +21,58 @@ import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { LeadCallButton } from '@/components/crm/LeadCallButton';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
-import { MatchSocioParceiroTab } from '@/components/consorcio/MatchSocioParceiroTab';
+import { FunilConsorcioTimeline } from '@/components/consorcio/FunilConsorcioTimeline';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
-  useRealizadas, useProposals, useSemSucesso,
-  useRetomarContato, useTodasReunioes, useExcluirProposta,
-  useProposalHasPendingRegistration, useCartasExcluidas,
-  type CompletedMeeting, type Proposal, type SemSucessoDeal, type AllMeetingDeal,
-  type DeletedProposalLog,
+  useRealizadas, useProposals, useExcluirProposta,
+  useProposalHasPendingRegistration,
+  type CompletedMeeting, type Proposal,
 } from '@/hooks/useConsorcioPostMeeting';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Info } from 'lucide-react';
-import { useMyCloser } from '@/hooks/useMyCloser';
-import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { toast } from 'sonner';
 
+const POS_TABS = ['realizadas', 'propostas', 'concluidas'] as const;
+
 export default function PosReuniao() {
-  const [activeTab, setActiveTab] = useState('realizadas');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab = (POS_TABS as readonly string[]).includes(tabParam || '')
+    ? (tabParam as string)
+    : 'realizadas';
+  const mesParam = searchParams.get('mes') || format(new Date(), 'yyyy-MM');
+
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setMes = (mes: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('mes', mes);
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="space-y-4">
+      <FunilConsorcioTimeline
+        page="pos-reuniao"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        mes={mesParam}
+        onMesChange={setMes}
+      />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="realizadas">Reuniões Realizadas</TabsTrigger>
-          <TabsTrigger value="propostas">Cartas Negociadas</TabsTrigger>
-          <TabsTrigger value="concluidas">Concluídas - Operacional</TabsTrigger>
-          <TabsTrigger value="sem-sucesso">Sem Sucesso</TabsTrigger>
-          <TabsTrigger value="excluidas">Cartas Excluídas</TabsTrigger>
-          <TabsTrigger value="todas">Todas Reuniões</TabsTrigger>
-          <TabsTrigger value="match-socio">Match sócio-parceiro</TabsTrigger>
-        </TabsList>
-
         <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
         <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
-        <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
-        <TabsContent value="excluidas"><CartasExcluidasTab /></TabsContent>
-        <TabsContent value="todas"><TodasReunioesTab /></TabsContent>
-        <TabsContent value="match-socio"><MatchSocioParceiroTab /></TabsContent>
       </Tabs>
     </div>
   );
