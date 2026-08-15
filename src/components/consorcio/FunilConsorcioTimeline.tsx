@@ -70,7 +70,8 @@ export function FunilConsorcioTimeline({
   const ownCards = useConsorcioCards(
     cotasCount === undefined
       ? { startDate: startOfMonth(mesDate), endDate: endOfMonth(mesDate) }
-      : {}
+      : {},
+    { enabled: cotasCount === undefined }
   );
 
   const negociadas = useMemo(
