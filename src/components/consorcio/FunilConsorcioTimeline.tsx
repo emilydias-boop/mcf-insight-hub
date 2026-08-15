@@ -133,10 +133,8 @@ export function FunilConsorcioTimeline({
     },
   ];
 
-  const activeIndex = Math.max(
-    0,
-    steps.findIndex(s => s.page === page && s.key === activeTab)
-  );
+  const matchedIndex = steps.findIndex(s => s.page === page && s.key === activeTab);
+  const activeIndex = matchedIndex === -1 ? -1 : matchedIndex;
 
   const goTo = (step: Step) => {
     if (step.page === page) {
