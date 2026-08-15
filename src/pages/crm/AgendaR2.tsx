@@ -265,6 +265,7 @@ export default function AgendaR2() {
           ? {
               id: m.attendees[0].deal.id,
               name: m.attendees[0].deal.name || "",
+              icp_segment: (m.attendees[0].deal as any).icp_segment ?? null,
               // Pass tags for channel classification (ANAMNESE/A010) in AgendaCalendar
               ...(m.attendees[0].deal.tags
                 ? { tags: m.attendees[0].deal.tags as any }
@@ -298,6 +299,7 @@ export default function AgendaR2() {
                 deal: {
                   id: a.deal.id,
                   name: a.deal.name || "",
+                  icp_segment: (a.deal as any).icp_segment ?? null,
                   tags: (a.deal.tags as any) || [],
                   stage_name:
                     (a.deal as any).stage?.stage_name ||
