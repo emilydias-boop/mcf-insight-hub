@@ -52,9 +52,10 @@ const CONSORCIO_CARD_EXTRA_SELECT = `
   telefone_comercial, email_comercial, faturamento_mensal, num_funcionarios
 `;
 
-export function useConsorcioCards(filters: ConsorcioFilters = {}) {
+export function useConsorcioCards(filters: ConsorcioFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['consortium-cards', filters],
+    enabled: options?.enabled !== false,
     queryFn: async () => {
       let query = supabase
         .from('consortium_cards')
