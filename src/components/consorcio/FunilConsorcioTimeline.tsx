@@ -186,11 +186,12 @@ export function FunilConsorcioTimeline({
       </div>
 
       <div className="overflow-x-auto pb-1">
-        <ol className="flex min-w-[720px] items-start gap-0">
+        <ol className="flex min-w-[760px] items-start gap-0">
           {steps.map((step, i) => {
             const isActive = i === activeIndex;
-            const isDone = i < activeIndex;
+            const isDone = activeIndex === -1 ? false : i < activeIndex;
             const conv = i > 0 ? rate(i) : null;
+            const Icon = STEP_ICONS[i] ?? Clock;
             return (
               <li key={step.key} className="flex flex-1 items-start">
                 {i > 0 && (
@@ -198,7 +199,7 @@ export function FunilConsorcioTimeline({
                     <div
                       className={cn(
                         'absolute inset-y-0 left-0 rounded-full bg-primary/70 transition-all',
-                        i <= activeIndex ? 'w-full' : 'w-0'
+                        activeIndex === -1 ? 'w-0' : i <= activeIndex ? 'w-full' : 'w-0'
                       )}
                     />
                     {conv && (
@@ -212,19 +213,19 @@ export function FunilConsorcioTimeline({
                   type="button"
                   onClick={() => goTo(step)}
                   aria-current={isActive ? 'step' : undefined}
-                  className="group flex w-[104px] shrink-0 flex-col items-center gap-1.5 text-center md:w-[128px]"
+                  className="group flex w-[112px] shrink-0 flex-col items-center gap-1 text-center md:w-[132px]"
                 >
                   <span
                     className={cn(
-                      'flex items-center justify-center rounded-full border-2 font-bold transition-all',
+                      'flex items-center justify-center rounded-full border-2 transition-all',
                       isActive
-                        ? 'h-12 w-12 border-primary bg-primary text-primary-foreground text-base shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]'
+                        ? 'h-12 w-12 border-primary bg-primary text-primary-foreground shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]'
                         : isDone
-                          ? 'h-10 w-10 border-primary/50 bg-primary/25 text-primary text-sm'
-                          : 'h-10 w-10 border-border bg-muted/40 text-muted-foreground text-sm group-hover:border-primary/40'
+                          ? 'h-10 w-10 border-primary/50 bg-primary/25 text-primary'
+                          : 'h-10 w-10 border-border bg-muted/40 text-muted-foreground group-hover:border-primary/40'
                     )}
                   >
-                    {step.count == null ? '—' : step.count}
+                    <Icon className="h-5 w-5" />
                   </span>
                   <span
                     className={cn(
@@ -233,6 +234,14 @@ export function FunilConsorcioTimeline({
                     )}
                   >
                     {step.label}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[18px] font-bold leading-none tracking-tight tabular-nums',
+                      isActive ? 'text-foreground' : 'text-muted-foreground'
+                    )}
+                  >
+                    {step.count == null ? '—' : step.count.toLocaleString('pt-BR')}
                   </span>
                   <span className="hidden text-[10px] capitalize text-muted-foreground md:block">
                     {step.hint}
