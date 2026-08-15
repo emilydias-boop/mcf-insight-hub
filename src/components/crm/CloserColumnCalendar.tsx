@@ -435,15 +435,32 @@ export function CloserColumnCalendar({
                                             </span>
                                           )}
                                         </div>
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            "text-[9px] px-1 py-0 border-white/30",
-                                            ATTENDEE_STATUS_CONFIG[att.status]?.bgClass || "bg-white/20",
-                                          )}
-                                        >
-                                          {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
-                                        </Badge>
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                          {(() => {
+                                            const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
+                                            if (seg !== "A" && seg !== "B") return null;
+                                            return (
+                                              <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                  "text-[9px] px-1 py-0 border-white/30",
+                                                  seg === "A" ? "bg-green-600/80" : "bg-amber-600/80",
+                                                )}
+                                              >
+                                                {seg}
+                                              </Badge>
+                                            );
+                                          })()}
+                                          <Badge
+                                            variant="outline"
+                                            className={cn(
+                                              "text-[9px] px-1 py-0 border-white/30",
+                                              ATTENDEE_STATUS_CONFIG[att.status]?.bgClass || "bg-white/20",
+                                            )}
+                                          >
+                                            {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     );
                                   })
@@ -466,6 +483,23 @@ export function CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
+                                      {(() => {
+                                        const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
+                                        if (seg !== "A" && seg !== "B") return null;
+                                        return (
+                                          <Badge
+                                            variant="outline"
+                                            className={cn(
+                                              "text-[9px] px-1 py-0 gap-0.5",
+                                              seg === "A"
+                                                ? "bg-green-100 text-green-700 border-green-300"
+                                                : "bg-amber-100 text-amber-700 border-amber-300",
+                                            )}
+                                          >
+                                            Lead {seg}
+                                          </Badge>
+                                        );
+                                      })()}
                                       {att.is_partner && (
                                         <Badge variant="outline" className="text-[9px] px-1 py-0">
                                           Sócio

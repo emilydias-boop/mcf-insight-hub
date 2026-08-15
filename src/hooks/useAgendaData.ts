@@ -31,6 +31,7 @@ export interface MeetingAttendee {
   deal?: {
     id: string;
     name: string;
+    icp_segment?: string | null;
     owner_id?: string | null;
     owner_profile?: {
       id: string;
@@ -75,6 +76,7 @@ export interface MeetingSlot {
     id: string;
     name: string;
     tags?: any;
+    icp_segment?: string | null;
     data_source?: string | null;
     owner_id?: string | null;
     owner_profile?: {
