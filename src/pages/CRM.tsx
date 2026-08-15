@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3, History, Phone } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
@@ -47,7 +47,6 @@ const CRM = () => {
     { to: '/crm/negocios', label: 'Negócios', icon: Briefcase },
     { to: '/crm/agenda', label: 'Agenda R1', icon: CalendarDays },
     { to: '/crm/discador', label: 'Discador', icon: Phone },
-    { to: '/crm/meu-historico', label: 'Meu Histórico', icon: History },
     { to: '/crm/ligacoes', label: 'Ligações', icon: Phone },
     { to: '/crm/agenda-r2', label: 'Agenda R2', icon: CalendarDays },
     { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
@@ -64,7 +63,7 @@ const CRM = () => {
   let navItems = allNavItems;
   
   if (isAgendaOnly) {
-    const allowedTabs: string[] = ['/crm/agenda', '/crm/negocios', '/crm/contatos', '/crm/meu-historico', '/crm/discador', '/crm/ligacoes']; // Agenda R1 + Negócios + Contatos + Histórico + Discador + Ligações sempre liberados
+    const allowedTabs: string[] = ['/crm/agenda', '/crm/negocios', '/crm/contatos', '/crm/discador', '/crm/ligacoes']; // Agenda R1 + Negócios + Contatos + Discador + Ligações sempre liberados
     
     if (canViewR2) {
       allowedTabs.push('/crm/agenda-r2');
