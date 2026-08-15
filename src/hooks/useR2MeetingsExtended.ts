@@ -50,6 +50,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
               id,
               name,
               tags,
+              icp_segment,
               owner_id,
               origin_id,
               contact_id,
