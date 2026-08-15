@@ -334,7 +334,6 @@ const App = () => (
                 <Route path="revisao-no-shows" element={<RoleGuard allowedRoles={['admin', 'coordenador', 'manager']}><RevisaoNoShows /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
-                <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="ligacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Ligacoes /></RoleGuard>} />
                 <Route path="webhook-analytics" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><WebhookAnalytics /></RoleGuard>} />
                 <Route path="kiwify-reconcile" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><KiwifyReconcile /></RoleGuard>} />
