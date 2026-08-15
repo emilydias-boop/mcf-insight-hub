@@ -17,6 +17,7 @@ import {
   BarChart3,
   Phone
 } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
 import { BusinessUnit } from '@/hooks/useMyBU';
@@ -32,7 +33,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   ],
   consorcio: [
     'visao-geral', 'contatos', 'negocios', 
-    'agenda', 'discador', 'meu-historico', 'pos-reuniao', 'meus-no-shows', 'configuracoes'
+    'agenda', 'discador', 'meu-historico', 'pos-reuniao', 'consultas', 'meus-no-shows', 'configuracoes'
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios',
@@ -109,6 +110,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
     { key: 'meus-no-shows', to: `${basePath}/meus-no-shows`, label: 'Meus No-Shows', icon: ShieldAlert },
     { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
+    { key: 'consultas', to: `${basePath}/consultas`, label: 'Consultas', icon: Search },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
   
@@ -130,6 +132,9 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     // Permitir pos-reuniao para closers/SDRs (necessário para ações pós-reunião)
     if (buVisibleTabs.includes('pos-reuniao')) {
       allowedTabs.push('pos-reuniao');
+    }
+    if (buVisibleTabs.includes('consultas')) {
+      allowedTabs.push('consultas');
     }
     
     allowedTabs.push('negocios');

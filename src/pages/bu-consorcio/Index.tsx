@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Plus, 
@@ -51,6 +52,7 @@ import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
 import { GruposTab } from '@/components/consorcio/grupos/GruposTab';
 import { PrevisaoComissoesTab } from '@/components/consorcio/PrevisaoComissoesTab';
 import { IndicacoesTab } from '@/components/consorcio/IndicacoesTab';
+import { FunilConsorcioTimeline, parseMesKey } from '@/components/consorcio/FunilConsorcioTimeline';
 
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
@@ -132,20 +134,30 @@ function calcularProximoVencimento(diaVencimento: number): Date {
   return nextDueDate;
 }
 
-// 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
-const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
-  const offset = 12 - i; // +12 (futuro) ... -11 (passado)
-  const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
-  return {
-    value: String(-offset), // '0' = mês atual, positivo = passado, negativo = futuro
-    label: format(date, 'MMMM yyyy', { locale: ptBR }),
-    start: startOfMonth(date),
-    end: endOfMonth(date),
-  };
-});
+const CONSORCIO_TABS = [
+  'cotas', 'pendentes', 'cadastradas', 'declinadas',
+  'contemplacao', 'grupos', 'previsao', 'indicacoes',
+] as const;
 
 export default function ConsorcioPage() {
-  const [monthOffset, setMonthOffset] = useState<string>('0');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab = (CONSORCIO_TABS as readonly string[]).includes(tabParam || '')
+    ? (tabParam as string)
+    : 'cotas';
+  const mesParam = searchParams.get('mes') || format(new Date(), 'yyyy-MM');
+
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setMes = (mes: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('mes', mes);
+    setSearchParams(next, { replace: true });
+  };
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
@@ -176,12 +188,9 @@ export default function ConsorcioPage() {
 
   // Calculate date range based on period
   const now = new Date();
-  const selectedMonth =
-    MONTH_OPTIONS.find((o) => o.value === monthOffset) ||
-    MONTH_OPTIONS.find((o) => o.value === '0') ||
-    MONTH_OPTIONS[0];
-  const startDate = selectedMonth.start;
-  const endDate = selectedMonth.end;
+  const selectedMonthDate = parseMesKey(mesParam);
+  const startDate = startOfMonth(selectedMonthDate);
+  const endDate = endOfMonth(selectedMonthDate);
 
   // Resolve date range based on filter selection:
   // - "Todo Período" → no date filter (undefined)
@@ -258,7 +267,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, monthOffset, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, mesParam, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -428,18 +437,6 @@ export default function ConsorcioPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={monthOffset} onValueChange={setMonthOffset}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button 
             variant="outline" 
             size="icon" 
@@ -459,7 +456,16 @@ export default function ConsorcioPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="cotas" className="space-y-6">
+      <FunilConsorcioTimeline
+        page="consorcio"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        mes={mesParam}
+        onMesChange={setMes}
+        cotasCount={cardsLoading ? null : sortedCards.length}
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="cotas">Cotas</TabsTrigger>
           <TabsTrigger value="pendentes">Cadastros Pendentes</TabsTrigger>

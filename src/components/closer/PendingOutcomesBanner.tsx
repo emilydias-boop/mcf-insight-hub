@@ -92,7 +92,7 @@ export function PendingOutcomesBanner() {
                 variant="outline"
                 size="sm"
                 className="w-full"
-                onClick={() => navigate('/consorcio/crm/pos-reuniao')}
+                onClick={() => navigate('/consorcio/crm/pos-reuniao?tab=realizadas')}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Ver todas ({pending.length}) na aba Pós-Reunião

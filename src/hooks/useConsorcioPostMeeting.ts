@@ -248,6 +248,7 @@ export interface SemSucessoDeal {
 export function useRealizadas() {
   return useQuery({
     queryKey: ['consorcio-realizadas'],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const data = await fetchAllPages<any>((from, to) =>
         supabase
@@ -371,6 +372,7 @@ export function useRealizadas() {
 export function useProposals() {
   return useQuery({
     queryKey: ['consorcio-proposals'],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const data = await fetchAllPages<any>((from, to) =>
         supabase
