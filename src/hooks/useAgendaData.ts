@@ -2359,7 +2359,7 @@ export function useUpdateAttendeeAndSlotStatus() {
     },
     onError: (error: any) => {
       const msg = String(error?.message || '');
-      if (/mês|mes .*fechad|month.*lock|meeting_status_lock|travad/i.test(msg)) {
+      if (/est[áa] fechado|fechado\. altera|month.*lock/i.test(msg)) {
         toast.error('Mês fechado: as reuniões deste mês estão travadas para alteração de status. Peça a reabertura em Administração → Travas de Mês.');
         return;
       }
