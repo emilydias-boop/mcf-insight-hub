@@ -5,22 +5,147 @@ import { supabase } from '@/integrations/supabase/client';
  * Cotas que nasceram DENTRO do funil: existe um `consorcio_pending_registrations`
  * apontando para o card (`consortium_card_id`). As demais são "externas" —
  * criadas direto pelo botão "+ Adicionar Cota", sem passar por reunião/proposta.
+ *
+ * Retorna um Map cardId -> nome do lead do cadastro vinculado (para a coluna
+ * "Origem no funil" da lista de Cotas).
  */
 export function useConsorcioCotasOrigem() {
   return useQuery({
     queryKey: ['consorcio-cotas-origem-funil'],
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<Set<string>> => {
+    queryFn: async (): Promise<Map<string, string>> => {
       const { data, error } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('consortium_card_id, nome_completo, razao_social')
+        .not('consortium_card_id', 'is', null);
+      if (error) throw error;
+      const map = new Map<string, string>();
+      (data || []).forEach((r: any) => {
+        if (!r.consortium_card_id) return;
+        const nome = r.nome_completo || r.razao_social || '—';
+        if (!map.has(r.consortium_card_id)) map.set(r.consortium_card_id, nome);
+      });
+      return map;
+    },
+  });
+}
+
+/**
+ * "Criada por" das cotas. `consortium_cards` NÃO tem coluna de autoria
+ * (nem created_by/user_id/criado_por), então usamos o `actor_name` do PRIMEIRO
+ * evento registrado em `consortium_card_activity_log` para cada cota.
+ */
+export function useConsorcioCardCreators(cardIds: string[]) {
+  const key = cardIds.slice().sort().join(',');
+  return useQuery({
+    queryKey: ['consorcio-card-creators', key],
+    enabled: cardIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Map<string, string>> => {
+      const map = new Map<string, string>();
+      for (let i = 0; i < cardIds.length; i += 200) {
+        const { data, error } = await supabase
+          .from('consortium_card_activity_log')
+          .select('card_id, actor_name, created_at')
+          .in('card_id', cardIds.slice(i, i + 200))
+          .order('created_at', { ascending: true });
+        if (error) throw error;
+        (data || []).forEach((l: any) => {
+          if (l.card_id && l.actor_name && !map.has(l.card_id)) map.set(l.card_id, l.actor_name);
+        });
+      }
+      return map;
+    },
+  });
+}
+
+export interface CotaReservada {
+  id: string;
+  nome: string;
+  grupo: string;
+  cota: string;
+  valor_credito: number;
+  data_reserva: string;
+  data_contratacao: string | null;
+  dias: number | null;
+  vendedor_name: string | null;
+}
+
+/**
+ * Etapa 5 do Funil Consórcio — "Cadastradas" (reservadas na Embracon).
+ *
+ * Fonte: `consortium_cards.data_reserva` dentro do período, restrito às cotas
+ * com ORIGEM NO FUNIL (cadastro pendente vinculado). O recorte de origem é
+ * obrigatório: sem ele a etapa incluiria cotas externas e inverteria contra a etapa 4.
+ *
+ * ATENÇÃO (limitação do processo, não do código): esta etapa só descreve o
+ * processo real de cadastramento/pagamento na Embracon se a equipe ABRIR a cota
+ * como RESERVA e só converter em contratação quando a Embracon confirmar.
+ * Se `data_reserva` e `data_contratacao` forem gravadas no mesmo instante,
+ * a etapa 5 vira um espelho da etapa 6 e perde poder de diagnóstico.
+ */
+export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?: Date }) {
+  const toIso = (d?: Date) =>
+    d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null;
+  const start = toIso(range.startDate);
+  const end = toIso(range.endDate);
+
+  return useQuery({
+    queryKey: ['consorcio-cotas-reservadas', start, end],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<CotaReservada[]> => {
+      const { data: links, error: linkErr } = await supabase
         .from('consorcio_pending_registrations')
         .select('consortium_card_id')
         .not('consortium_card_id', 'is', null);
+      if (linkErr) throw linkErr;
+      const funnelIds = new Set<string>(
+        (links || []).map((l: any) => l.consortium_card_id).filter(Boolean),
+      );
+      if (funnelIds.size === 0) return [];
+
+      let q = supabase
+        .from('consortium_cards')
+        .select(
+          'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, data_reserva, data_contratacao, vendedor_name',
+        )
+        .not('data_reserva', 'is', null);
+      if (start) q = q.gte('data_reserva', start);
+      if (end) q = q.lte('data_reserva', end);
+      const { data, error } = await q.order('data_reserva', { ascending: false });
       if (error) throw error;
-      const set = new Set<string>();
-      (data || []).forEach((r: any) => {
-        if (r.consortium_card_id) set.add(r.consortium_card_id as string);
-      });
-      return set;
+
+      return (data || [])
+        .filter((c: any) => funnelIds.has(c.id))
+        .map((c: any) => {
+          const dias =
+            c.data_contratacao && c.data_reserva
+              ? Math.round(
+                  (new Date(`${c.data_contratacao}T00:00:00`).getTime() -
+                    new Date(`${c.data_reserva}T00:00:00`).getTime()) /
+                    86400000,
+                )
+              : null;
+          return {
+            id: c.id,
+            nome: (c.tipo_pessoa === 'pj' ? c.razao_social : c.nome_completo) || '—',
+            grupo: c.grupo,
+            cota: c.cota,
+            valor_credito: Number(c.valor_credito) || 0,
+            data_reserva: c.data_reserva,
+            data_contratacao: c.data_contratacao,
+            dias,
+            vendedor_name: c.vendedor_name || null,
+          };
+        });
     },
   });
+}
+
+/** Mediana de dias entre reserva e contratação (null quando não há dados). */
+export function medianDias(items: CotaReservada[]): number | null {
+  const vals = items.map((i) => i.dias).filter((d): d is number => d != null).sort((a, b) => a - b);
+  if (vals.length === 0) return null;
+  const mid = Math.floor(vals.length / 2);
+  return vals.length % 2 ? vals[mid] : Math.round((vals[mid - 1] + vals[mid]) / 2);
 }

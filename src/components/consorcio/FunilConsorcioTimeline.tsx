@@ -7,7 +7,11 @@ import { useProposals } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
-import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
+import {
+  useConsorcioCotasOrigem,
+  useConsorcioCotasReservadas,
+  medianDias,
+} from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 
 const STEP_ICONS: LucideIcon[] = [CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet];
@@ -27,7 +31,8 @@ export type FunilQuickFilter =
   | 'no-show'
   | 'nao-aceitas'
   | 'aguardando-abertura'
-  | 'do-funil';
+  | 'do-funil'
+  | 'externas';
 
 /** Verifica se uma data (ISO ou YYYY-MM-DD) cai dentro do período selecionado. */
 export function isInPeriod(
@@ -61,9 +66,9 @@ interface Step {
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
   /** Selo clicável abaixo do número (estoque atual / recorte). */
-  badge?: { label: string; filter: FunilQuickFilter; tooltip: string } | null;
+  badge?: { label: string; filter?: FunilQuickFilter; tooltip: string } | null;
   /** Mini-blocos de composição exibidos dentro do card da etapa. */
-  breakdown?: Array<{ label: string; value: number }> | null;
+  breakdown?: Array<{ label: string; value: number; filter?: FunilQuickFilter; tooltip?: string }> | null;
 }
 
 interface FunilConsorcioTimelineProps {
@@ -87,9 +92,9 @@ export function FunilConsorcioTimeline({
   const { data: r1, isLoading: loadingR1 } = useConsorcioR1Funnel(range);
   const { data: proposals, isLoading: loadingProposals } = useProposals();
   const { data: pendentes } = usePendingRegistrations([...PENDING_REGISTRATION_ALL_STATUSES]);
-  const { data: cadastradas } = usePendingRegistrations(['cadastrada']);
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
+  const { data: reservadas, isLoading: loadingReservadas } = useConsorcioCotasReservadas(range);
 
   // Etapa 3 — TODAS as propostas criadas no período (evento, não status).
   // Eixo de data: proposal_date ?? created_at (convenção do BIConsorcio).
@@ -121,15 +126,15 @@ export function FunilConsorcioTimeline({
     ? cadastrosPeriodo.filter((r: any) => r.status === 'aguardando_abertura').length
     : 0;
 
-  // NOTA: não existe campo "quando virou cadastrada". Esta etapa mede cartas cujo
-  // ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
-  const cadastradasCount = useMemo(
-    () =>
-      cadastradas
-        ? cadastradas.filter((r: any) => isInPeriod(r.aceite_date || r.created_at, range)).length
-        : null,
-    [cadastradas, period.startDate, period.endDate],
-  );
+  // Etapa 5 — "Cadastradas" = cotas RESERVADAS na Embracon no período, restritas
+  // às que têm origem no funil (cadastro pendente vinculado).
+  //
+  // ATENÇÃO (processo, não código): esta etapa só descreve o cadastramento/pagamento
+  // real na Embracon se a equipe abrir a cota como RESERVA e converter em contratação
+  // quando a administradora confirmar. Se `data_reserva` e `data_contratacao` forem
+  // gravadas no mesmo instante, a etapa 5 vira espelho da etapa 6.
+  const cadastradasCount = loadingReservadas ? null : (reservadas?.length ?? 0);
+  const medianaReserva = medianDias(reservadas || []);
 
   // Etapa 6 — composição das cotas contratadas no período.
   const cotas = ownCards.data ?? [];
@@ -184,8 +189,19 @@ export function FunilConsorcioTimeline({
     {
       key: 'cadastradas',
       label: 'Cadastradas',
-      hint: 'marcadas',
+      hint: 'reservadas na Embracon',
       count: cadastradasCount,
+      badge:
+        cadastradasCount != null
+          ? {
+              label:
+                medianaReserva != null
+                  ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
+                  : '—',
+              tooltip:
+                'Mediana de dias entre a reserva e a contratação das cotas do período. Mediana 0 indica que reserva e contratação foram gravadas no mesmo dia — nesse caso a etapa espelha as Cotas.',
+            }
+          : null,
     },
     {
       key: 'cotas',
@@ -207,8 +223,19 @@ export function FunilConsorcioTimeline({
       breakdown:
         cotasTotal != null && cotasFunil != null && cotasExternas != null
           ? [
-              { label: 'Do funil', value: cotasFunil },
-              { label: 'Externas', value: cotasExternas },
+              {
+                label: 'Do funil',
+                value: cotasFunil,
+                filter: 'do-funil' as FunilQuickFilter,
+                tooltip: 'Cotas com cadastro pendente vinculado. Clique para filtrar a lista.',
+              },
+              {
+                label: 'Externas',
+                value: cotasExternas,
+                filter: 'externas' as FunilQuickFilter,
+                tooltip:
+                  'Cotas criadas direto pelo "+ Adicionar Cota", sem vínculo com o funil. Clique para conferir na lista.',
+              },
               { label: 'Total', value: cotasTotal },
             ]
           : null,
@@ -368,8 +395,14 @@ export function FunilConsorcioTimeline({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => onQuickFilter?.(step.badge!.filter)}
-                          className="max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                          onClick={() =>
+                            step.badge?.filter && onQuickFilter?.(step.badge.filter)
+                          }
+                          className={`max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors ${
+                            step.badge.filter
+                              ? 'hover:border-primary/50 hover:text-foreground'
+                              : 'cursor-default'
+                          }`}
                         >
                           {step.badge.label}
                         </button>
@@ -381,14 +414,42 @@ export function FunilConsorcioTimeline({
                   )}
                   {step.breakdown && (
                     <div className="mt-1 w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
-                      {step.breakdown.map((b) => (
-                        <div key={b.label} className="flex items-center justify-between gap-1 text-[10px] leading-tight">
-                          <span className="text-muted-foreground">{b.label}</span>
-                          <span className="font-semibold tabular-nums text-foreground">
-                            {b.value.toLocaleString('pt-BR')}
-                          </span>
-                        </div>
-                      ))}
+                      {step.breakdown.map((b) => {
+                        const row = (
+                          <>
+                            <span className="text-muted-foreground">{b.label}</span>
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {b.value.toLocaleString('pt-BR')}
+                            </span>
+                          </>
+                        );
+                        if (!b.filter) {
+                          return (
+                            <div
+                              key={b.label}
+                              className="flex items-center justify-between gap-1 text-[10px] leading-tight"
+                            >
+                              {row}
+                            </div>
+                          );
+                        }
+                        return (
+                          <Tooltip key={b.label}>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => onQuickFilter?.(b.filter!)}
+                                className="flex w-full items-center justify-between gap-1 rounded px-0.5 text-[10px] leading-tight transition-colors hover:bg-primary/10 hover:text-foreground"
+                              >
+                                {row}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px]">
+                              <p className="text-xs">{b.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
                   )}
                   </div>

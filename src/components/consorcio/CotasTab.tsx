@@ -59,7 +59,7 @@ import {
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
-import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
+import { useConsorcioCotasOrigem, useConsorcioCardCreators } from '@/hooks/useConsorcioCotasOrigem';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
@@ -124,10 +124,12 @@ interface CotasTabProps {
   range?: { startDate?: Date; endDate?: Date };
   /** Selo da timeline: mostrar só as cotas originadas no funil. */
   onlyDoFunil?: boolean;
+  /** Selo da timeline: mostrar só as cotas SEM vínculo com o funil. */
+  onlyExternas?: boolean;
   onClearQuickFilter?: () => void;
 }
 
-export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabProps) {
+export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
 
@@ -187,7 +189,11 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
-    const base = onlyDoFunil && funnelCardIds ? cards.filter((c) => funnelCardIds.has(c.id)) : cards;
+    let base = cards;
+    if (funnelCardIds) {
+      if (onlyDoFunil) base = cards.filter((c) => funnelCardIds.has(c.id));
+      else if (onlyExternas) base = cards.filter((c) => !funnelCardIds.has(c.id));
+    }
     return [...base].sort((a, b) => {
       const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
       if (dateCompare !== 0) return dateCompare;
@@ -197,7 +203,33 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
 
       return Number(a.grupo) - Number(b.grupo);
     });
-  }, [cards, onlyDoFunil, funnelCardIds]);
+  }, [cards, onlyDoFunil, onlyExternas, funnelCardIds]);
+
+  // "Criada por": `consortium_cards` não tem coluna de autoria — usamos o
+  // actor_name do primeiro evento de `consortium_card_activity_log`.
+  const { data: creators } = useConsorcioCardCreators(
+    useMemo(() => sortedCards.map((c: any) => c.id), [sortedCards]),
+  );
+
+  /** Quebra nominal das cotas externas (para cobrança da equipe). */
+  const externasBreakdown = useMemo(() => {
+    if (!onlyExternas) return null;
+    const byVendedor = new Map<string, number>();
+    const byOrigem = new Map<string, number>();
+    sortedCards.forEach((c: any) => {
+      const v = (c.vendedor_name || '').trim() || 'sem vendedor';
+      byVendedor.set(v, (byVendedor.get(v) || 0) + 1);
+      const o = (c.origem || '').trim() || 'sem origem';
+      const label = ORIGEM_OPTIONS.find((x) => x.value === o)?.label || o;
+      byOrigem.set(label, (byOrigem.get(label) || 0) + 1);
+    });
+    const fmt = (m: Map<string, number>) =>
+      Array.from(m.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k} ${v}`)
+        .join(' · ');
+    return { vendedores: fmt(byVendedor), origens: fmt(byOrigem) };
+  }, [onlyExternas, sortedCards]);
 
   const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
@@ -321,6 +353,8 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
       'Bairro Comercial', 'Cidade Comercial', 'Estado Comercial',
       // Extras
       'É Transferência', 'Transferido De', 'Observações',
+      // Conferência de origem
+      'Origem no Funil', 'Criada Por', 'Criada Em',
     ];
 
     const rows = sortedCards.map((card: any, index) => {
@@ -366,6 +400,9 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
         card.endereco_comercial_cidade, card.endereco_comercial_estado,
         // Extras
         card.e_transferencia ? 'Sim' : 'Não', card.transferido_de, card.observacoes,
+        funnelCardIds?.has(card.id) ? funnelCardIds.get(card.id) : 'sem vínculo',
+        creators?.get(card.id) || '',
+        card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : '',
       ].map(esc);
     });
 
@@ -711,6 +748,31 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
         </div>
       )}
 
+      {onlyExternas && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+              Filtrado: cotas externas (sem vínculo com o funil)
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+          {externasBreakdown && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs space-y-1">
+              <div>
+                <span className="text-muted-foreground">Por vendedor: </span>
+                <span className="font-medium">{externasBreakdown.vendedores || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Por origem declarada: </span>
+                <span className="font-medium">{externasBreakdown.origens || '—'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -731,6 +793,9 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Responsável</TableHead>
+                <TableHead>Origem no funil</TableHead>
+                <TableHead>Criada por</TableHead>
+                <TableHead>Criada em</TableHead>
                 <TableHead className="text-right">Comissão</TableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
@@ -739,7 +804,7 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={15}>
+                    <TableCell colSpan={18}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
@@ -811,6 +876,21 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
                         )}
                       </TableCell>
                       <TableCell>{getFirstTwoNames(card.vendedor_name)}</TableCell>
+                      <TableCell className="text-sm max-w-[180px]">
+                        {funnelCardIds?.has(card.id) ? (
+                          <span className="truncate block" title={funnelCardIds.get(card.id)}>
+                            {funnelCardIds.get(card.id)}
+                          </span>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                            sem vínculo
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{creators?.get(card.id) || '—'}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : '—'}
+                      </TableCell>
                       <TableCell className="text-right">
                         {card.valor_comissao_total ? formatCurrencyFull(card.valor_comissao_total) : '-'}
                       </TableCell>
@@ -866,7 +946,7 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={15} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
