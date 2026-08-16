@@ -1048,12 +1048,16 @@ serve(async (req) => {
     // Include parent_attendee_id if this is a reschedule/remanejamento
     // For retroactive bookings, use bookedAt if provided, otherwise use scheduledAt if it's in the past
     const now = new Date();
-    let bookedAtValue: string | null = null;
+    // booked_at nunca é NULL: override retroativo explícito > lançamento
+    // retroativo implícito (reunião no passado) > agora (data do ato de agendar)
+    let bookedAtValue: string;
     if (body.bookedAt) {
       bookedAtValue = body.bookedAt;
     } else if (scheduledDate < now) {
       // Retroactive: use scheduled date as booked date
       bookedAtValue = scheduledAt;
+    } else {
+      bookedAtValue = now.toISOString();
     }
     
     const { data: attendee, error: attendeeError } = await supabase

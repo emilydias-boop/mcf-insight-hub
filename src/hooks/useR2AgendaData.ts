@@ -176,6 +176,7 @@ export function useRescheduleR2Meeting() {
             status: 'rescheduled',
             is_reschedule: true,
             parent_attendee_id: attendeeId,
+            booked_at: new Date().toISOString(),
           });
 
         if (attendeeError) throw attendeeError;
@@ -355,6 +356,7 @@ export function useCreateR2Meeting() {
           r2_observations: r2Observations || null,
           booked_by: bookedBy || null,
           notes: notes || null,
+          booked_at: new Date().toISOString(),
         });
 
       if (attendeeError) throw attendeeError;

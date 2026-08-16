@@ -8,6 +8,9 @@ import { useSdrsForSquadInPeriod } from "./useSdrsForSquadInPeriod";
 export interface TeamKPIs {
   sdrCount: number;
   totalAgendamentos: number;
+  /** true quando a visão atual não tem o dado do ATO de agendar (booked_at)
+   *  disponível no payload — a UI deve exibir "—" em vez de um número errado. */
+  agendamentosUnavailable?: boolean;
   totalRealizadas: number;
   totalNoShows: number;
   totalContratos: number;
@@ -23,6 +26,8 @@ export interface SdrSummaryRow {
   sdrEmail: string;
   sdrName: string;
   agendamentos: number;      // Criados no período (created_at)
+  /** true quando a visão não tem booked_at/created_at do agendamento no payload */
+  agendamentosUnavailable?: boolean;
   r1Agendada: number;        // Reuniões PARA o período (scheduled_at)
   r1Realizada: number;       // Realizadas no período
   noShows: number;           // No-shows no período

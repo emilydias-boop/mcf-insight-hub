@@ -111,11 +111,13 @@ export function TeamKPICards({
     }] : []),
     {
       title: "Agendamentos",
-      value: kpis.totalAgendamentos,
+      value: kpis.agendamentosUnavailable ? "—" : kpis.totalAgendamentos,
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
+      tooltip: kpis.agendamentosUnavailable
+        ? "Indisponível nesta visão: o recorte atual é por data da reunião (scheduled_at) e não traz a data do ato de agendar (booked_at)."
+        : "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
       segLine: segLineFor('agendamentos'),
     },
