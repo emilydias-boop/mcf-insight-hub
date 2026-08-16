@@ -1731,6 +1731,7 @@ export function useAddMeetingAttendee() {
         status: 'invited',
         parent_attendee_id: parentAttendeeId || null,
         booked_by: currentUserId,
+        booked_at: new Date().toISOString(),
       });
 
       if (error) throw error;
