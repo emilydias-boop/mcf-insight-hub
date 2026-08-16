@@ -51,6 +51,7 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
+import { isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
 
 export interface PendingRegistrationsListProps {
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
@@ -397,6 +398,20 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {variant === 'pendentes' && (reg.checklist_incompleto || reg.documentos_faltando) && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {reg.checklist_incompleto && (
+              <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
+                checklist incompleto
+              </Badge>
+            )}
+            {reg.documentos_faltando && (
+              <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
+                documento faltando
+              </Badge>
+            )}
+          </div>
+        )}
         <div className="text-xs text-muted-foreground">
           {doc || '—'}
           {sociosLabel ? ` · ${sociosLabel}` : ''}
