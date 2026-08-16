@@ -21,17 +21,19 @@ import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { LeadCallButton } from '@/components/crm/LeadCallButton';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
-import { FunilConsorcioTimeline } from '@/components/consorcio/FunilConsorcioTimeline';
+import { FunilConsorcioTimeline, isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
+import { R1FunnelTab } from '@/components/consorcio/R1FunnelTab';
+import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
-  useRealizadas, useProposals, useExcluirProposta,
+  useProposals, useExcluirProposta,
   useProposalHasPendingRegistration,
-  type CompletedMeeting, type Proposal,
+  type Proposal,
 } from '@/hooks/useConsorcioPostMeeting';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Info } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -42,16 +44,39 @@ import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistra
 import { CotasTab } from '@/components/consorcio/CotasTab';
 
 const POS_TABS = [
-  'realizadas', 'propostas', 'concluidas', 'pendentes', 'cadastradas', 'cotas',
+  'r1-agendadas', 'r1-realizadas', 'propostas', 'pendentes', 'cadastradas', 'cotas',
 ] as const;
+
+const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
+const parseYmd = (v: string | null): Date | undefined => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
+  const [y, m, d] = v.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? undefined : dt;
+};
 
 export default function PosReuniao() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const activeTab = (POS_TABS as readonly string[]).includes(tabParam || '')
     ? (tabParam as string)
-    : 'realizadas';
-  const mesParam = searchParams.get('mes') || format(new Date(), 'yyyy-MM');
+    : 'r1-agendadas';
+
+  // Período global das 6 etapas — persistido na URL (?de=&ate=&periodo=).
+  // Padrão: Este Mês.
+  const hasPeriodParams = searchParams.has('de') || searchParams.has('ate') || searchParams.has('periodo');
+  const period: DateRangeFilter = hasPeriodParams
+    ? {
+        startDate: parseYmd(searchParams.get('de')),
+        endDate: parseYmd(searchParams.get('ate')),
+        label: searchParams.get('periodo') || 'Período',
+      }
+    : {
+        startDate: startOfMonth(new Date()),
+        endDate: endOfMonth(new Date()),
+        label: format(new Date(), 'MMMM', { locale: ptBR }),
+      };
+  const range = { startDate: period.startDate, endDate: period.endDate };
 
   const setActiveTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
@@ -59,9 +84,11 @@ export default function PosReuniao() {
     setSearchParams(next, { replace: true });
   };
 
-  const setMes = (mes: string) => {
+  const setPeriod = (value: DateRangeFilter) => {
     const next = new URLSearchParams(searchParams);
-    next.set('mes', mes);
+    next.set('periodo', value.label || 'Período');
+    if (value.startDate) next.set('de', ymd(value.startDate)); else next.delete('de');
+    if (value.endDate) next.set('ate', ymd(value.endDate)); else next.delete('ate');
     setSearchParams(next, { replace: true });
   };
 
@@ -70,15 +97,21 @@ export default function PosReuniao() {
       <FunilConsorcioTimeline
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        mes={mesParam}
+        period={period}
+        onPeriodChange={setPeriod}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
-        <TabsContent value="propostas"><PropostasTab /></TabsContent>
-        <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
-        <TabsContent value="pendentes"><PendingRegistrationsList variant="pendentes" /></TabsContent>
-        <TabsContent value="cadastradas"><PendingRegistrationsList variant="cadastradas" /></TabsContent>
-        <TabsContent value="cotas"><CotasTab mes={mesParam} onMesChange={setMes} /></TabsContent>
+        {/* Etapas 1 e 2 montadas de forma preguiçosa (queries novas, página pesada) */}
+        <TabsContent value="r1-agendadas">
+          {activeTab === 'r1-agendadas' && <R1FunnelTab mode="agendadas" range={range} />}
+        </TabsContent>
+        <TabsContent value="r1-realizadas">
+          {activeTab === 'r1-realizadas' && <R1FunnelTab mode="realizadas" range={range} />}
+        </TabsContent>
+        <TabsContent value="propostas"><PropostasTab range={range} /></TabsContent>
+        <TabsContent value="pendentes"><PendingRegistrationsList variant="pendentes" range={range} /></TabsContent>
+        <TabsContent value="cadastradas"><PendingRegistrationsList variant="cadastradas" range={range} /></TabsContent>
+        <TabsContent value="cotas"><CotasTab range={range} /></TabsContent>
       </Tabs>
     </div>
   );
