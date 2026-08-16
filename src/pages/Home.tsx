@@ -18,7 +18,7 @@ const BU_CONFIG = {
     name: 'Consórcio',
     icon: TrendingUp,
     color: 'hsl(142, 76%, 36%)', // Green
-    href: '/consorcio',
+    href: '/consorcio/crm/pos-reuniao',
   },
 } as const;
 

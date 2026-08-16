@@ -187,7 +187,6 @@ const menuItems: MenuItem[] = [
       { title: "Painel Comercial", url: "/consorcio/painel-equipe" },
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "CRM", url: "/consorcio/crm" },
-      { title: "Controle Consorcio", url: "/consorcio", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
       { title: "Pagamentos", url: "/consorcio/pagamentos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
     ],
   },

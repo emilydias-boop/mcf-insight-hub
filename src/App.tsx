@@ -110,7 +110,6 @@ const MovimentacoesEstagio = lazy(() => import("./pages/crm/MovimentacoesEstagio
 const Webhooks = lazy(() => import("./pages/crm/Webhooks"));
 const WebhookAnalytics = lazy(() => import("./pages/crm/WebhookAnalytics"));
 const KiwifyReconcile = lazy(() => import("./pages/crm/KiwifyReconcile"));
-const ConsorcioIndex = lazy(() => import("./pages/bu-consorcio/Index"));
 const AdminPermissoes = lazy(() => import("./pages/admin/Permissoes"));
 const AdminRoles = lazy(() => import("./pages/admin/Roles"));
 const ConfiguracaoProdutos = lazy(() => import("./pages/admin/ConfiguracaoProdutos"));
@@ -222,7 +221,7 @@ const App = () => (
               
               {/* BU Consórcio */}
               <Route path="consorcio/bi-consorcio" element={<ResourceGuard resource="crm"><BIConsorcio /></ResourceGuard>} />
-              <Route path="consorcio" element={<ResourceGuard resource="crm"><ConsorcioIndex /></ResourceGuard>} />
+              <Route path="consorcio" element={<Navigate to="/consorcio/crm/pos-reuniao" replace />} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
