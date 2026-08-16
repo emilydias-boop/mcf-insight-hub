@@ -67,6 +67,7 @@ import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
+import { NoShowReasonPicker } from './NoShowReasonPicker';
 import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
