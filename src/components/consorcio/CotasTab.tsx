@@ -743,6 +743,31 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         </div>
       )}
 
+      {onlyExternas && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+              Filtrado: cotas externas (sem vínculo com o funil)
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+          {externasBreakdown && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs space-y-1">
+              <div>
+                <span className="text-muted-foreground">Por vendedor: </span>
+                <span className="font-medium">{externasBreakdown.vendedores || '—'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Por origem declarada: </span>
+                <span className="font-medium">{externasBreakdown.origens || '—'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
