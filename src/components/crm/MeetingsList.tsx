@@ -100,6 +100,8 @@ interface AttendeeRow {
   attendeePhone: string | null;
   attendeeStatus: string;
   isReschedule: boolean;
+  /** Tipo real do slot ('r1' | 'r2') — usado na sincronização de estágio. */
+  meetingType: 'r1' | 'r2';
   /** true quando a linha veio de um attendee real (não do slot) */
   hasAttendee: boolean;
   isPartner: boolean;
