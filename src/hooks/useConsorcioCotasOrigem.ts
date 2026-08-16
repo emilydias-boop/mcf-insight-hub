@@ -90,18 +90,16 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
   const start = toIso(range.startDate);
   const end = toIso(range.endDate);
 
+  // Reaproveita o Map de vínculos já carregado por useConsorcioCotasOrigem
+  // (mesma queryKey no React Query) — evita repetir a consulta de vínculos.
+  const { data: funnelLinks } = useConsorcioCotasOrigem();
+
   return useQuery({
-    queryKey: ['consorcio-cotas-reservadas', start, end],
+    queryKey: ['consorcio-cotas-reservadas', start, end, funnelLinks?.size ?? 0],
+    enabled: !!funnelLinks,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<CotaReservada[]> => {
-      const { data: links, error: linkErr } = await supabase
-        .from('consorcio_pending_registrations')
-        .select('consortium_card_id')
-        .not('consortium_card_id', 'is', null);
-      if (linkErr) throw linkErr;
-      const funnelIds = new Set<string>(
-        (links || []).map((l: any) => l.consortium_card_id).filter(Boolean),
-      );
+      const funnelIds = funnelLinks ?? new Map<string, string>();
       if (funnelIds.size === 0) return [];
 
       let q = supabase
