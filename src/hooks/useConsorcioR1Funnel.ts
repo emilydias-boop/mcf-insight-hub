@@ -21,6 +21,7 @@ const SEM_DESFECHO_STATUS = new Set(['invited', 'scheduled', 'rescheduled']);
 
 export interface R1FunnelParticipant {
   id: string;
+  meeting_slot_id: string;
   deal_id: string | null;
   contact_id: string | null;
   lead_name: string;
@@ -31,6 +32,10 @@ export interface R1FunnelParticipant {
   closer_notes: string;
   notes: string;
   sem_desfecho: boolean;
+  is_partner: boolean;
+  parent_attendee_id: string | null;
+  outcome_reason: string | null;
+  outcome_reason_note: string | null;
 }
 
 export interface R1FunnelResult {
@@ -121,7 +126,7 @@ export function useConsorcioR1Funnel(
         const { data, error } = await supabase
           .from('meeting_slot_attendees')
           .select(
-            'id, meeting_slot_id, deal_id, contact_id, attendee_name, attendee_phone, status, closer_notes, notes',
+            'id, meeting_slot_id, deal_id, contact_id, attendee_name, attendee_phone, status, closer_notes, notes, is_partner, parent_attendee_id, outcome_reason, outcome_reason_note',
           )
           .in('meeting_slot_id', ids)
           .eq('is_partner', false);
@@ -137,6 +142,7 @@ export function useConsorcioR1Funnel(
         const passou = scheduledAt ? new Date(scheduledAt).getTime() < now : false;
         return {
           id: a.id,
+          meeting_slot_id: a.meeting_slot_id,
           deal_id: a.deal_id || null,
           contact_id: a.contact_id || null,
           lead_name: a.attendee_name || '—',
@@ -147,6 +153,10 @@ export function useConsorcioR1Funnel(
           closer_notes: a.closer_notes || '',
           notes: a.notes || '',
           sem_desfecho: passou && SEM_DESFECHO_STATUS.has(status),
+          is_partner: !!a.is_partner,
+          parent_attendee_id: a.parent_attendee_id || null,
+          outcome_reason: a.outcome_reason || null,
+          outcome_reason_note: a.outcome_reason_note || null,
         };
       });
 
