@@ -356,6 +356,7 @@ export function useCreateR2Meeting() {
           r2_observations: r2Observations || null,
           booked_by: bookedBy || null,
           notes: notes || null,
+          booked_at: new Date().toISOString(),
         });
 
       if (attendeeError) throw attendeeError;

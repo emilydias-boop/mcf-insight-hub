@@ -163,6 +163,10 @@ Deno.serve(async (req) => {
         status: 'completed',
         carrinho_status: 'aprovado',
         carrinho_updated_at: new Date().toISOString(),
+        // Roda como service_role, então o default auth.uid() de booked_by não
+        // resolve: gravamos explicitamente o usuário autenticado que originou a ação.
+        booked_by: user.id,
+        booked_at: new Date().toISOString(),
       })
       .select('id')
       .single();
