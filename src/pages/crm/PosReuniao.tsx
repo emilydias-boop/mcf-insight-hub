@@ -119,9 +119,9 @@ export default function PosReuniao() {
 
 
 // ─── Propostas Tab ───────────────────────────────────────────
-function PropostasTab() {
+function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }) {
   const { data: allPropostas = [], isLoading } = useProposals();
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'aceita' | 'documento-pendente'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState('all');
 
@@ -131,9 +131,14 @@ function PropostasTab() {
   }, [allPropostas]);
 
   const propostas = useMemo(() => {
-    let list = allPropostas.filter(p => !p.completa && !p.cadastro_completo);
+    // Etapa 3 do funil: divisor é o ACEITE do closer (não o checklist derivado).
+    // Propostas aceitas passam a viver exclusivamente na etapa "Cadastros Pendentes",
+    // eliminando a dupla contagem do mesmo lead no funil.
+    // Eixo de data: proposal_date ?? created_at.
+    let list = allPropostas.filter(
+      p => p.status !== 'aceita' && isInPeriod(p.proposal_date || p.created_at, range),
+    );
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
-    else if (statusFilter === 'aceita') list = list.filter(p => p.status === 'aceita');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
     if (searchTerm.trim()) {
@@ -141,7 +146,7 @@ function PropostasTab() {
       list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
     }
     return list;
-  }, [allPropostas, statusFilter, closerFilter, searchTerm]);
+  }, [allPropostas, statusFilter, closerFilter, searchTerm, range.startDate, range.endDate]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -188,7 +193,6 @@ function PropostasTab() {
             <SelectContent>
               <SelectItem value="all">Todos Status</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="aceita">Cadastrada</SelectItem>
               <SelectItem value="documento-pendente">Documento pendente</SelectItem>
             </SelectContent>
           </Select>
