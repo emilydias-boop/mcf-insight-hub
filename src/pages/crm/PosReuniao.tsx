@@ -86,6 +86,7 @@ export default function PosReuniao() {
     'nao-aceitas': 'propostas',
     'aguardando-abertura': 'pendentes',
     'do-funil': 'cotas',
+    reservadas: 'cadastradas',
     externas: 'cotas',
   };
   const filtroParam = searchParams.get('filtro') as FunilQuickFilter | null;
