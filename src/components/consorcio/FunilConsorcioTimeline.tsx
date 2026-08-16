@@ -409,14 +409,42 @@ export function FunilConsorcioTimeline({
                   )}
                   {step.breakdown && (
                     <div className="mt-1 w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
-                      {step.breakdown.map((b) => (
-                        <div key={b.label} className="flex items-center justify-between gap-1 text-[10px] leading-tight">
-                          <span className="text-muted-foreground">{b.label}</span>
-                          <span className="font-semibold tabular-nums text-foreground">
-                            {b.value.toLocaleString('pt-BR')}
-                          </span>
-                        </div>
-                      ))}
+                      {step.breakdown.map((b) => {
+                        const row = (
+                          <>
+                            <span className="text-muted-foreground">{b.label}</span>
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {b.value.toLocaleString('pt-BR')}
+                            </span>
+                          </>
+                        );
+                        if (!b.filter) {
+                          return (
+                            <div
+                              key={b.label}
+                              className="flex items-center justify-between gap-1 text-[10px] leading-tight"
+                            >
+                              {row}
+                            </div>
+                          );
+                        }
+                        return (
+                          <Tooltip key={b.label}>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => onQuickFilter?.(b.filter!)}
+                                className="flex w-full items-center justify-between gap-1 rounded px-0.5 text-[10px] leading-tight transition-colors hover:bg-primary/10 hover:text-foreground"
+                              >
+                                {row}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px]">
+                              <p className="text-xs">{b.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
                   )}
                   </div>
