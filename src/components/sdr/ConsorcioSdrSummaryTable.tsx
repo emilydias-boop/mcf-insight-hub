@@ -82,7 +82,8 @@ export function ConsorcioSdrSummaryTable({
               const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
               const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
               const metaPeriodo = metaDiaria * diasEfetivos;
-              const bateuMeta = row.agendamentos >= metaPeriodo;
+              const agendamentosNA = row.agendamentosUnavailable === true;
+              const bateuMeta = !agendamentosNA && row.agendamentos >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const propostas = propostasEnviadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
@@ -135,7 +136,7 @@ export function ConsorcioSdrSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                      {row.agendamentos}
+                      {agendamentosNA ? '—' : row.agendamentos}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
