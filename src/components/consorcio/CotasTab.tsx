@@ -64,7 +64,6 @@ import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
-import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   useConsorcioCategoriaOptions,
@@ -72,7 +71,6 @@ import {
   useConsorcioTipoOptions,
 } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
-import { parseMesKey } from '@/components/consorcio/FunilConsorcioTimeline';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -121,27 +119,13 @@ function calcularProximoVencimento(diaVencimento: number): Date {
 }
 
 interface CotasTabProps {
-  /** Mês selecionado (YYYY-MM) — controlado pela página. */
-  mes: string;
-  onMesChange: (mes: string) => void;
+  /** Período global do funil (eixo: data_contratacao) — controlado pela página. */
+  range?: { startDate?: Date; endDate?: Date };
 }
 
-export function CotasTab({ mes, onMesChange }: CotasTabProps) {
+export function CotasTab({ range }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
-
-  const MONTH_OPTIONS = useMemo(
-    () =>
-      Array.from({ length: 24 }, (_, i) => {
-        const offset = 12 - i; // +12 futuro ... -11 passado
-        const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
-        return {
-          value: format(date, 'yyyy-MM'),
-          label: format(date, 'MMMM yyyy', { locale: ptBR }),
-        };
-      }),
-    [],
-  );
 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
@@ -151,11 +135,6 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [origemFilter, setOrigemFilter] = useState<string>('todos');
   const [objetivoFilter, setObjetivoFilter] = useState<string>('todos');
-  const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
-    startDate: undefined,
-    endDate: undefined,
-    label: 'Período',
-  });
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -173,18 +152,11 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
 
   const now = new Date();
-  const selectedMonthDate = parseMesKey(mes);
-  const startDate = startOfMonth(selectedMonthDate);
-  const endDate = endOfMonth(selectedMonthDate);
-
-  const isTodoPeriodo = dateRangeFilter.label === 'Todo Periodo' || dateRangeFilter.label === 'Todo Período';
-  const isPeriodoCustom = !!(dateRangeFilter.startDate || dateRangeFilter.endDate);
-
-  const resolvedDateRange = isTodoPeriodo
-    ? { startDate: undefined as Date | undefined, endDate: undefined as Date | undefined }
-    : isPeriodoCustom
-      ? { startDate: dateRangeFilter.startDate, endDate: dateRangeFilter.endDate }
-      : { startDate, endDate };
+  // Período vem do filtro global da timeline do funil.
+  const resolvedDateRange = {
+    startDate: range?.startDate,
+    endDate: range?.endDate,
+  };
 
   const filters = {
     startDate: resolvedDateRange.startDate,
