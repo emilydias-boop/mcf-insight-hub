@@ -32,6 +32,7 @@ export type FunilQuickFilter =
   | 'nao-aceitas'
   | 'aguardando-abertura'
   | 'do-funil'
+  | 'reservadas'
   | 'externas';
 
 /** Verifica se uma data (ISO ou YYYY-MM-DD) cai dentro do período selecionado. */
@@ -63,6 +64,8 @@ interface Step {
   count: number | null;
   /** Base usada no cálculo da taxa de conversão desta etapa (default: count). */
   rateCount?: number | null;
+  /** Índice da etapa usada como denominador da taxa (default: etapa anterior). */
+  rateBaseIndex?: number;
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
   /** Selo clicável abaixo do número (estoque atual / recorte). */
@@ -191,6 +194,9 @@ export function FunilConsorcioTimeline({
       label: 'Cadastradas',
       hint: 'reservadas na Embracon',
       count: cadastradasCount,
+      rateBaseIndex: 3,
+      rateTooltip:
+        'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
       badge:
         cadastradasCount != null
           ? {
@@ -198,8 +204,9 @@ export function FunilConsorcioTimeline({
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
                   : '—',
+              filter: 'reservadas',
               tooltip:
-                'Mediana de dias entre a reserva e a contratação das cotas do período. Mediana 0 indica que reserva e contratação foram gravadas no mesmo dia — nesse caso a etapa espelha as Cotas.',
+                'Mediana de dias entre a reserva e a contratação das cotas do período. Mediana 0 indica que reserva e contratação foram gravadas no mesmo dia — nesse caso a etapa espelha as Cotas. Clique para ver a lista das cotas reservadas no período.',
             }
           : null,
     },
@@ -209,8 +216,9 @@ export function FunilConsorcioTimeline({
       hint: 'contratadas no período',
       count: cotasTotal,
       rateCount: cotasFunil,
+      rateBaseIndex: 3,
       rateTooltip:
-        'Calculada sobre as cotas originadas no funil; as externas não vieram de reunião.',
+        'Calculada sobre os cadastros do período: cotas originadas no funil ÷ cadastros criados. A etapa Cadastradas usa a data de reserva, um eixo diferente, e por isso não entra nesta conta. As cotas externas não vieram de reunião e ficam fora do numerador.',
       badge:
         cotasFunil && cotasFunil > 0
           ? {
