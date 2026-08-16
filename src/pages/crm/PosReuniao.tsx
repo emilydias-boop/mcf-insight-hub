@@ -136,7 +136,7 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
     // eliminando a dupla contagem do mesmo lead no funil.
     // Eixo de data: proposal_date ?? created_at.
     let list = allPropostas.filter(
-      p => p.status !== 'aceita' && isInPeriod(p.proposal_date || p.created_at, range),
+      p => p.status !== 'aceita' && !p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
     );
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
