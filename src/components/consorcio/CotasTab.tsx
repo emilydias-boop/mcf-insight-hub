@@ -121,9 +121,12 @@ function calcularProximoVencimento(diaVencimento: number): Date {
 interface CotasTabProps {
   /** Período global do funil (eixo: data_contratacao) — controlado pela página. */
   range?: { startDate?: Date; endDate?: Date };
+  /** Selo da timeline: mostrar só as cotas originadas no funil. */
+  onlyDoFunil?: boolean;
+  onClearQuickFilter?: () => void;
 }
 
-export function CotasTab({ range }: CotasTabProps) {
+export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
 
@@ -178,11 +181,13 @@ export function CotasTab({ range }: CotasTabProps) {
   });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
+  const { data: funnelCardIds } = useConsorcioCotasOrigem();
 
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
-    return [...cards].sort((a, b) => {
+    const base = onlyDoFunil && funnelCardIds ? cards.filter((c) => funnelCardIds.has(c.id)) : cards;
+    return [...base].sort((a, b) => {
       const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
       if (dateCompare !== 0) return dateCompare;
 
@@ -191,7 +196,7 @@ export function CotasTab({ range }: CotasTabProps) {
 
       return Number(a.grupo) - Number(b.grupo);
     });
-  }, [cards]);
+  }, [cards, onlyDoFunil, funnelCardIds]);
 
   const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
