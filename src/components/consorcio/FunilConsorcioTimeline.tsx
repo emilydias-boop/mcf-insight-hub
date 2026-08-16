@@ -66,7 +66,7 @@ interface Step {
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
   /** Selo clicável abaixo do número (estoque atual / recorte). */
-  badge?: { label: string; filter: FunilQuickFilter; tooltip: string } | null;
+  badge?: { label: string; filter?: FunilQuickFilter; tooltip: string } | null;
   /** Mini-blocos de composição exibidos dentro do card da etapa. */
   breakdown?: Array<{ label: string; value: number; filter?: FunilQuickFilter; tooltip?: string }> | null;
 }
@@ -198,7 +198,6 @@ export function FunilConsorcioTimeline({
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
                   : '—',
-              filter: 'do-funil',
               tooltip:
                 'Mediana de dias entre a reserva e a contratação das cotas do período. Mediana 0 indica que reserva e contratação foram gravadas no mesmo dia — nesse caso a etapa espelha as Cotas.',
             }
@@ -396,8 +395,14 @@ export function FunilConsorcioTimeline({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => onQuickFilter?.(step.badge!.filter)}
-                          className="max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                          onClick={() =>
+                            step.badge?.filter && onQuickFilter?.(step.badge.filter)
+                          }
+                          className={`max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors ${
+                            step.badge.filter
+                              ? 'hover:border-primary/50 hover:text-foreground'
+                              : 'cursor-default'
+                          }`}
                         >
                           {step.badge.label}
                         </button>
