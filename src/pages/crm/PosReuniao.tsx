@@ -85,6 +85,7 @@ export default function PosReuniao() {
     'nao-aceitas': 'propostas',
     'aguardando-abertura': 'pendentes',
     'do-funil': 'cotas',
+    externas: 'cotas',
   };
   const filtroParam = searchParams.get('filtro') as FunilQuickFilter | null;
   const quickFilter: FunilQuickFilter | null =
@@ -154,11 +155,12 @@ export default function PosReuniao() {
             onClearQuickFilter={() => setQuickFilter(null)}
           />
         </TabsContent>
-        <TabsContent value="cadastradas"><PendingRegistrationsList variant="cadastradas" range={range} /></TabsContent>
+        <TabsContent value="cadastradas"><CotasReservadasTab range={range} /></TabsContent>
         <TabsContent value="cotas">
           <CotasTab
             range={range}
             onlyDoFunil={quickFilter === 'do-funil'}
+            onlyExternas={quickFilter === 'externas'}
             onClearQuickFilter={() => setQuickFilter(null)}
           />
         </TabsContent>
