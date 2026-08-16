@@ -63,6 +63,9 @@ export interface R1CloserMetric {
   closer_name: string;
   closer_color: string | null;
   r1_agendada: number;
+  /** Ato de agendar: participantes cujo booked_at cai no período (eixo diferente
+   *  de r1_agendada, que usa meeting_slots.scheduled_at). */
+  agendamentos: number;
   r1_realizada: number;
   noshow: number;
   contrato_pago: number;
@@ -171,6 +174,34 @@ export function useR1CloserMetrics(
         .neq('status', 'canceled');
 
       if (meetingsError) throw meetingsError;
+
+      // ========== AGENDAMENTOS (eixo = data do ATO de agendar) ==========
+      // r1_agendada conta reuniões PARA o período (meeting_slots.scheduled_at).
+      // Aqui contamos agendamentos FEITOS no período (booked_at), mesmo que a
+      // reunião esteja fora da janela. Mesmas exclusões: slot não cancelado,
+      // is_partner = false, status de attendee permitido, offset BRT.
+      const { data: bookedAttendees, error: bookedError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          deal_id,
+          booked_at,
+          is_partner,
+          meeting_slot:meeting_slots!inner(
+            id,
+            closer_id,
+            meeting_type,
+            status
+          )
+        `)
+        .eq('meeting_slot.meeting_type', 'r1')
+        .eq('is_partner', false)
+        .not('booked_at', 'is', null)
+        .gte('booked_at', start)
+        .lte('booked_at', end);
+
+      if (bookedError) throw bookedError;
 
       // Fetch profiles to map booked_by UUID to email
       const bookedByIds = new Set<string>();
@@ -362,6 +393,25 @@ export function useR1CloserMetrics(
         });
         segmentAllowedContracts = allowed;
       }
+
+      // Contagem de "Agendamentos" por closer (eixo booked_at)
+      const bookedAllowedDeals = segmentActive
+        ? await allowedDealIds(
+            Array.from(new Set(((bookedAttendees as any[]) || [])
+              .map((a: any) => a.deal_id)
+              .filter(Boolean) as string[]))
+          )
+        : null;
+      const agendamentosByCloser = new Map<string, number>();
+      ((bookedAttendees as any[]) || []).forEach((att: any) => {
+        const slot = att.meeting_slot;
+        if (!slot?.closer_id) return;
+        const slotStatus = String(slot.status || '').toLowerCase();
+        if (slotStatus === 'cancelled' || slotStatus === 'canceled') return;
+        if (!allowedAgendadaStatuses.includes(att.status)) return;
+        if (bookedAllowedDeals && !(att.deal_id && bookedAllowedDeals.has(att.deal_id))) return;
+        agendamentosByCloser.set(slot.closer_id, (agendamentosByCloser.get(slot.closer_id) || 0) + 1);
+      });
 
       // ========== RÉGUA DE CAUÇÃO (Contrato Pago) ==========
       // Fonte única: RPC caucoes_efetivas.
@@ -599,6 +649,7 @@ export function useR1CloserMetrics(
           closer_name: closer.name,
           closer_color: closer.color,
           r1_agendada: 0,
+          agendamentos: agendamentosByCloser.get(closer.id) || 0,
           r1_realizada: 0,
           noshow: 0,
           // caucoes_efetivas já exclui reembolsados (refunded_at) → não subtrair de novo
@@ -619,6 +670,7 @@ export function useR1CloserMetrics(
         ...r2CountByCloser.keys(),
         ...manualByCloser.keys(),
         ...refundByCloser.keys(),
+        ...agendamentosByCloser.keys(),
       ]);
       closersWithProduction.forEach(closerId => {
         if (metricsMap.has(closerId)) return;
@@ -629,6 +681,7 @@ export function useR1CloserMetrics(
           closer_name: closerInfo.name,
           closer_color: closerInfo.color || null,
           r1_agendada: 0,
+          agendamentos: agendamentosByCloser.get(closerId) || 0,
           r1_realizada: 0,
           noshow: 0,
           contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
@@ -658,6 +711,7 @@ export function useR1CloserMetrics(
             closer_name: closerInfo.name,
             closer_color: closerInfo.color || null,
             r1_agendada: 0,
+            agendamentos: agendamentosByCloser.get(closerId) || 0,
             r1_realizada: 0,
             noshow: 0,
             contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
