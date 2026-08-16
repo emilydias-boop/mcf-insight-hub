@@ -274,6 +274,27 @@ export function FunilConsorcioTimeline({
             })}
           </ol>
         </div>
+
+        {/* Mobile: os selos de saúde da etapa R1 ficam empilhados abaixo da timeline */}
+        {r1 && (
+          <div className="mt-3 flex flex-wrap gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => onQuickFilter?.('no-show')}
+              className="whitespace-nowrap rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground"
+            >
+              No-show {r1.noShow} · {pct(r1.noShow, r1.agendadas)}
+            </button>
+            <button
+              type="button"
+              onClick={() => onQuickFilter?.('sem-desfecho')}
+              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+            >
+              <AlertTriangle className="h-3 w-3" />
+              Sem desfecho {r1.semDesfecho} · {pct(r1.semDesfecho, r1.agendadas)}
+            </button>
+          </div>
+        )}
       </Card>
     </TooltipProvider>
   );

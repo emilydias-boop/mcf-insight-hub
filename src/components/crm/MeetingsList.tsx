@@ -165,6 +165,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             attendeeStatus: att.status || meeting.status,
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
+            meetingType: meeting.meeting_type === 'r2' ? 'r2' : 'r1',
             hasAttendee: true,
             isPartner: !!att.is_partner,
             parentAttendeeId: att.parent_attendee_id || null,
@@ -203,6 +204,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeePhone: meeting.deal?.contact?.phone || null,
           attendeeStatus: meeting.status,
           isReschedule: false,
+          meetingType: meeting.meeting_type === 'r2' ? 'r2' : 'r1',
           hasAttendee: false,
           isPartner: false,
           parentAttendeeId: null,
@@ -232,7 +234,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
       meetingId: row.meetingId,
       syncSlot:
         ['completed', 'contract_paid'].includes(status) && !row.isPartner && !row.parentAttendeeId,
-      meetingType: 'r1',
+      meetingType: row.meetingType,
       outcomeReason: outcome?.reason,
       outcomeReasonNote: outcome?.note,
     });
