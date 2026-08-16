@@ -353,6 +353,8 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       'Bairro Comercial', 'Cidade Comercial', 'Estado Comercial',
       // Extras
       'É Transferência', 'Transferido De', 'Observações',
+      // Conferência de origem
+      'Origem no Funil', 'Criada Por', 'Criada Em',
     ];
 
     const rows = sortedCards.map((card: any, index) => {
@@ -398,6 +400,9 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         card.endereco_comercial_cidade, card.endereco_comercial_estado,
         // Extras
         card.e_transferencia ? 'Sim' : 'Não', card.transferido_de, card.observacoes,
+        funnelCardIds?.has(card.id) ? funnelCardIds.get(card.id) : 'sem vínculo',
+        creators?.get(card.id) || '',
+        card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : '',
       ].map(esc);
     });
 
