@@ -51,29 +51,50 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
-import { isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
+import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
+
+const STATUS_LABELS: Record<string, string> = {
+  aguardando_abertura: 'Aguardando abertura',
+  cadastrada: 'Cadastrada',
+  cota_aberta: 'Cota aberta',
+  vinculada: 'Vinculada',
+  declinada: 'Declinada',
+};
 
 export interface PendingRegistrationsListProps {
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
   /** Período global do funil — eixo: aceite_date ?? created_at. */
   range?: { startDate?: Date; endDate?: Date };
+  /** Selo da timeline: mostrar só o estoque atual em `aguardando_abertura`. */
+  onlyAguardandoAbertura?: boolean;
+  onClearQuickFilter?: () => void;
 }
 
-export function PendingRegistrationsList({ variant = 'pendentes', range }: PendingRegistrationsListProps = {}) {
+export function PendingRegistrationsList({
+  variant = 'pendentes',
+  range,
+  onlyAguardandoAbertura,
+  onClearQuickFilter,
+}: PendingRegistrationsListProps = {}) {
   const statuses =
     variant === 'cadastradas' ? ['cadastrada']
     : variant === 'declinadas' ? ['declinada']
-    : ['aguardando_abertura'];
+    // Etapa 4 mede EVENTO: todos os cadastros criados no período,
+    // independente do status atual.
+    : [...PENDING_REGISTRATION_ALL_STATUSES];
   const { data: allRegistrations = [], isLoading } = usePendingRegistrations(statuses);
   // Etapas 4 e 5 do funil: eixo aceite_date ?? created_at.
   // NOTA (etapa 5): não existe campo de "quando virou cadastrada" — a etapa mede
   // cartas cujo ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
   const registrations = useMemo(
-    () =>
-      range
+    () => {
+      let list = range
         ? allRegistrations.filter((r) => isInPeriod(r.aceite_date || r.created_at, range))
-        : allRegistrations,
-    [allRegistrations, range?.startDate, range?.endDate],
+        : allRegistrations;
+      if (onlyAguardandoAbertura) list = list.filter((r) => r.status === 'aguardando_abertura');
+      return list;
+    },
+    [allRegistrations, onlyAguardandoAbertura, range?.startDate, range?.endDate],
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -179,6 +200,16 @@ export function PendingRegistrationsList({ variant = 'pendentes', range }: Pendi
         </div>
       </CardHeader>
       <CardContent>
+        {onlyAguardandoAbertura && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/50 text-primary">
+              Filtrado: aguardando abertura
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {registrations.length === 0
@@ -204,6 +235,7 @@ export function PendingRegistrationsList({ variant = 'pendentes', range }: Pendi
                   <TableHead className="text-center">Cotas existentes</TableHead>
                   <TableHead className="text-center">Destinada</TableHead>
                   <TableHead>Solicitado em</TableHead>
+                  {variant === 'pendentes' && <TableHead>Status</TableHead>}
                   {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
