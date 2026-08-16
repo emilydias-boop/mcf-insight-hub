@@ -403,11 +403,11 @@ export default function ConsorcioPainelEquipe() {
   // KPIs derivados da tabela de Closers para consistência quando aba Closers ativa
   const closerKPIs = useMemo(() => {
     const metrics = closerMetrics || [];
-    // "R1 Agendada" = reuniões marcadas PARA o período (scheduled_at) — é o que
-    // useR1CloserMetrics entrega. "Agendamento" (data do ATO de agendar,
-    // booked_at ?? created_at) NÃO existe neste payload por closer, então não é
-    // derivável aqui: exibimos "—" em vez de repetir o número de R1 Agendada.
+    // "R1 Agendada" = reuniões marcadas PARA o período (scheduled_at).
+    // "Agendamento" = ato de agendar (booked_at) no período — desde 2026-08-16
+    // useR1CloserMetrics traz o campo `agendamentos` (eixo booked_at).
     const totalR1Agendada = metrics.reduce((s, m) => s + m.r1_agendada, 0);
+    const totalAgendamentos = metrics.reduce((s, m) => s + (m.agendamentos || 0), 0);
     const totalRealizadas = metrics.reduce((s, m) => s + m.r1_realizada, 0);
     const totalNoShows = metrics.reduce((s, m) => s + m.noshow, 0);
     const totalContratos = produtosFechadosByCloser
@@ -415,8 +415,7 @@ export default function ConsorcioPainelEquipe() {
       : 0;
     return {
       sdrCount: metrics.length,
-      totalAgendamentos: 0,
-      agendamentosUnavailable: true,
+      totalAgendamentos,
       totalRealizadas,
       totalNoShows,
       totalContratos,
@@ -475,11 +474,6 @@ export default function ConsorcioPainelEquipe() {
           sdrEmail: m.intermediador,
           sdrName,
           agendamentos: 0,
-          // O recorte de pipelineFilteredMeetings vem da RPC de reuniões, que
-          // filtra por scheduled_at. Logo NÃO dá para contar "Agendamento"
-          // (data do ato, booked_at ?? created_at) aqui: agendamentos feitos no
-          // período para reuniões fora dele não estão no payload.
-          agendamentosUnavailable: true,
           r1Agendada: 0,
           r1Realizada: 0,
           noShows: 0,
@@ -489,15 +483,25 @@ export default function ConsorcioPainelEquipe() {
       
       const row = sdrMap.get(email)!;
       const status = (m.status_atual || '').toLowerCase();
-      // Toda linha do recorte é uma R1 não cancelada com scheduled_at no período
+      // 2026-08-16 — mudança de critério: antes só contava quando o status ainda
+      // era "agendada" (`status.includes('agendada')`); agora é incondicional,
+      // igual às RPCs get_sdr_metrics_from_agenda*: uma reunião realizada, com
+      // no-show ou com contrato pago TAMBÉM foi agendada. Isso faz R1 Agendada
+      // subir nesta visão em relação ao número exibido antes desta data.
       row.r1Agendada++;
+      // "Agendamento" = ato de agendar. A RPC traz booked_at por linha, então
+      // contamos aqui pelo eixo correto. Ressalva conhecida: o universo de
+      // linhas vem filtrado por scheduled_at, logo agendamentos feitos no
+      // período para reuniões FORA dele não aparecem (subcontagem possível).
+      const bookedAt = (m as any).booked_at ? new Date((m as any).booked_at) : null;
+      if (bookedAt && start && end && bookedAt >= start && bookedAt <= end) row.agendamentos++;
       if (status.includes('realizada')) row.r1Realizada++;
       if (status.includes('no-show') || status.includes('no show')) row.noShows++;
       if (status.includes('contrato') || status.includes('contract')) row.contratos++;
     });
     
     return Array.from(sdrMap.values()).sort((a, b) => b.r1Agendada - a.r1Agendada);
-  }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList]);
+  }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList, start, end]);
 
   // Re-derive KPIs from pipeline-filtered data
   const pipelineFilteredKPIs = useMemo(() => {
@@ -511,10 +515,7 @@ export default function ConsorcioPainelEquipe() {
     
     return {
       sdrCount: data.length,
-      // Recorte por pipeline é derivado da lista de reuniões (scheduled_at),
-      // que não permite contar o ato de agendar — ver pipelineFilteredBySDR.
-      totalAgendamentos: 0,
-      agendamentosUnavailable: true,
+      totalAgendamentos: data.reduce((sum, s) => sum + s.agendamentos, 0),
       totalRealizadas,
       totalNoShows,
       totalContratos,
