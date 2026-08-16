@@ -495,6 +495,13 @@ function RegistrationRow({
           ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
           : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
       </TableCell>
+      {variant === 'pendentes' && (
+        <TableCell className="text-sm">
+          <Badge variant={reg.status === 'aguardando_abertura' ? 'outline' : 'secondary'}>
+            {STATUS_LABELS[reg.status] || reg.status}
+          </Badge>
+        </TableCell>
+      )}
       {variant === 'declinadas' && (
         <TableCell className="text-sm max-w-[280px]">
           <div className="truncate" title={reg.motivo_declinio || ''}>
@@ -509,12 +516,12 @@ function RegistrationRow({
       )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          {variant !== 'declinadas' && (
+          {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
             <Button size="sm" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
             </Button>
           )}
-          {variant === 'pendentes' && (
+          {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
             <Button
               size="sm"
               variant="outline"
@@ -555,12 +562,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
-              {variant !== 'declinadas' && (
+              {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
               )}
-              {variant === 'pendentes' && (
+              {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
