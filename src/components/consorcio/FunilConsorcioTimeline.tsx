@@ -253,15 +253,29 @@ export function FunilConsorcioTimeline({
   const matchedIndex = steps.findIndex(s => s.key === activeTab);
   const activeIndex = matchedIndex === -1 ? -1 : matchedIndex;
 
-  const rate = (i: number): string | null => {
-    const prev = steps[i - 1]?.count;
+  /**
+   * Taxa de conversão que chega na etapa `i`.
+   * O denominador é a etapa anterior, salvo quando a etapa declara `rateBaseIndex`
+   * (etapas 5 e 6 medem contra a etapa 4 — os eixos de data são diferentes).
+   * `over100` marca a rede de segurança: funil não pode crescer da esquerda p/ direita.
+   */
+  const rate = (i: number): { label: string; over100: boolean } | null => {
+    const baseIdx = steps[i]?.rateBaseIndex ?? i - 1;
+    const prev = steps[baseIdx]?.count;
     const curr = steps[i]?.rateCount !== undefined ? steps[i]?.rateCount : steps[i]?.count;
     if (prev == null || curr == null || prev === 0) return null;
-    return `${((curr / prev) * 100).toLocaleString('pt-BR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    })}%`;
+    const value = (curr / prev) * 100;
+    return {
+      label: `${value.toLocaleString('pt-BR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`,
+      over100: value > 100,
+    };
   };
+
+  const OVER_100_TOOLTIP =
+    'A etapa seguinte tem mais registros que a anterior — provável travessia de mês ou origem fora do funil.';
 
   const pct = (n: number, total: number) =>
     total > 0
@@ -301,24 +315,33 @@ export function FunilConsorcioTimeline({
                           activeIndex === -1 ? 'w-0' : i <= activeIndex ? 'w-full' : 'w-0'
                         )}
                       />
-                      {conv && (
-                        step.rateTooltip ? (
+                      {conv &&
+                        (conv.over100 || step.rateTooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 cursor-help whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
-                                {conv}
+                              <span
+                                className={cn(
+                                  'absolute -top-4 left-1/2 hidden -translate-x-1/2 cursor-help items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-medium md:flex',
+                                  conv.over100
+                                    ? 'border-destructive/60 bg-destructive/10 text-destructive'
+                                    : 'border-border bg-background text-muted-foreground',
+                                )}
+                              >
+                                {conv.over100 && <AlertTriangle className="h-3 w-3" />}
+                                {conv.label}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-[260px]">
-                              <p className="text-xs">{step.rateTooltip}</p>
+                              <p className="text-xs">
+                                {conv.over100 ? OVER_100_TOOLTIP : step.rateTooltip}
+                              </p>
                             </TooltipContent>
                           </Tooltip>
                         ) : (
                           <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
-                            {conv}
+                            {conv.label}
                           </span>
-                        )
-                      )}
+                        ))}
                       {showHealth && (
                         <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 flex-col items-center gap-1 md:flex">
                           <Tooltip>
