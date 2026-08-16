@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting } from '@/hooks/useAgendaData';
+import { MeetingSlot, useUpdateAttendeeAndSlotStatus, useCancelMeeting } from '@/hooks/useAgendaData';
+import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
 import { cn } from '@/lib/utils';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -99,14 +100,19 @@ interface AttendeeRow {
   attendeePhone: string | null;
   attendeeStatus: string;
   isReschedule: boolean;
+  /** true quando a linha veio de um attendee real (não do slot) */
+  hasAttendee: boolean;
+  isPartner: boolean;
+  parentAttendeeId: string | null;
   channel: SimpleChannel;
   segment: LeadSegment;
   sdrName: string | null;
 }
 
 export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, searchTerm = '', channelFilter }: MeetingsListProps) {
-  const updateStatus = useUpdateMeetingStatus();
+  const updateStatus = useUpdateAttendeeAndSlotStatus();
   const cancelMeeting = useCancelMeeting();
+  const [noShowRowId, setNoShowRowId] = useState<string | null>(null);
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
@@ -157,6 +163,9 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             attendeeStatus: att.status || meeting.status,
             isReschedule: !!(att.parent_attendee_id && !att.is_partner &&
               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status)),
+            hasAttendee: true,
+            isPartner: !!att.is_partner,
+            parentAttendeeId: att.parent_attendee_id || null,
             channel,
             segment: resolveLeadSegment(dealForChannel?.icp_segment),
             sdrName: resolveSdrName(att, meeting),
@@ -192,6 +201,9 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           attendeePhone: meeting.deal?.contact?.phone || null,
           attendeeStatus: meeting.status,
           isReschedule: false,
+          hasAttendee: false,
+          isPartner: false,
+          parentAttendeeId: null,
           channel,
           segment: resolveLeadSegment(dealForChannel?.icp_segment),
           sdrName: resolveSdrName(null, meeting),
@@ -201,8 +213,27 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     return rows;
   }, [meetings, statusFilter, searchTerm, channelFilter]);
 
-  const handleUpdateStatus = (meetingId: string, status: string) => {
-    updateStatus.mutate({ meetingId, status });
+  /**
+   * Grava o status no ATTENDEE (não no slot) e sincroniza o slot apenas para
+   * completed/contract_paid de participante principal — mesma regra do
+   * AgendaMeetingDrawer. Antes usava o id do slot e o negócio não mudava de
+   * estágio no CRM.
+   */
+  const handleUpdateStatus = (
+    row: AttendeeRow,
+    status: string,
+    outcome?: { reason: string; note?: string },
+  ) => {
+    updateStatus.mutate({
+      attendeeId: row.attendeeId,
+      status,
+      meetingId: row.meetingId,
+      syncSlot:
+        ['completed', 'contract_paid'].includes(status) && !row.isPartner && !row.parentAttendeeId,
+      meetingType: 'r1',
+      outcomeReason: outcome?.reason,
+      outcomeReasonNote: outcome?.note,
+    });
   };
 
   if (isLoading) {
@@ -350,13 +381,18 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                           Ver negócio
                         </DropdownMenuItem>
                       )}
-                      {canChangeStatus && (
+                      {canChangeStatus && row.hasAttendee && (
                         <>
-                          <DropdownMenuItem onClick={() => handleUpdateStatus(row.meetingId, 'completed')}>
+                          <DropdownMenuItem onClick={() => handleUpdateStatus(row, 'completed')}>
                             <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
                             Marcar como realizada
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateStatus(row.meetingId, 'no_show')}>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setNoShowRowId(row.attendeeId);
+                            }}
+                          >
                             <AlertTriangle className="h-4 w-4 mr-2 text-yellow-500" />
                             Marcar como no-show
                           </DropdownMenuItem>
@@ -371,6 +407,19 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
+
+                  {/* Seletor de motivo do no-show (catálogo único) */}
+                  <NoShowReasonPicker
+                    open={noShowRowId === row.attendeeId}
+                    onOpenChange={(v) => setNoShowRowId(v ? row.attendeeId : null)}
+                    loading={updateStatus.isPending}
+                    onConfirm={(payload) => {
+                      handleUpdateStatus(row, 'no_show', payload);
+                      setNoShowRowId(null);
+                    }}
+                  >
+                    <span aria-hidden className="block h-0 w-0" />
+                  </NoShowReasonPicker>
                 </TableCell>
               </TableRow>
             );
