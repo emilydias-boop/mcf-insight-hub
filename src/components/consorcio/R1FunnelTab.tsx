@@ -22,7 +22,7 @@ import {
 } from '@/hooks/useConsorcioR1Funnel';
 import { useProposals } from '@/hooks/useConsorcioPostMeeting';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { getReasonLabel, NO_REASON_LABEL } from '@/lib/meetingOutcomeReasons';
 import { cn } from '@/lib/utils';
 
