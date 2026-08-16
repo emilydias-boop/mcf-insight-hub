@@ -146,6 +146,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
+  // Motivo do no-show escolhido no popover, aplicado após evidência/confirmação
+  const [pendingNoShowReason, setPendingNoShowReason] = useState<{ reason: string; note?: string } | null>(null);
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editedPhone, setEditedPhone] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
