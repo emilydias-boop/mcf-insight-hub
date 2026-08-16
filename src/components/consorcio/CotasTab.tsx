@@ -871,6 +871,21 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                         )}
                       </TableCell>
                       <TableCell>{getFirstTwoNames(card.vendedor_name)}</TableCell>
+                      <TableCell className="text-sm max-w-[180px]">
+                        {funnelCardIds?.has(card.id) ? (
+                          <span className="truncate block" title={funnelCardIds.get(card.id)}>
+                            {funnelCardIds.get(card.id)}
+                          </span>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                            sem vínculo
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{creators?.get(card.id) || '—'}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {card.created_at ? format(new Date(card.created_at), 'dd/MM/yyyy') : '—'}
+                      </TableCell>
                       <TableCell className="text-right">
                         {card.valor_comissao_total ? formatCurrencyFull(card.valor_comissao_total) : '-'}
                       </TableCell>
@@ -926,7 +941,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={15} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
