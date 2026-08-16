@@ -78,9 +78,25 @@ export default function PosReuniao() {
       };
   const range = { startDate: period.startDate, endDate: period.endDate };
 
+  // Filtro rápido da etapa R1 Agendadas (?filtro=sem-desfecho|no-show)
+  const filtroParam = searchParams.get('filtro');
+  const quickFilter: 'sem-desfecho' | 'no-show' | null =
+    filtroParam === 'sem-desfecho' || filtroParam === 'no-show' ? filtroParam : null;
+
   const setActiveTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setQuickFilter = (filter: 'sem-desfecho' | 'no-show' | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (filter) {
+      next.set('filtro', filter);
+      next.set('tab', 'r1-agendadas');
+    } else {
+      next.delete('filtro');
+    }
     setSearchParams(next, { replace: true });
   };
 
@@ -99,11 +115,19 @@ export default function PosReuniao() {
         onTabChange={setActiveTab}
         period={period}
         onPeriodChange={setPeriod}
+        onQuickFilter={setQuickFilter}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Etapas 1 e 2 montadas de forma preguiçosa (queries novas, página pesada) */}
         <TabsContent value="r1-agendadas">
-          {activeTab === 'r1-agendadas' && <R1FunnelTab mode="agendadas" range={range} />}
+          {activeTab === 'r1-agendadas' && (
+            <R1FunnelTab
+              mode="agendadas"
+              range={range}
+              quickFilter={quickFilter}
+              onClearQuickFilter={() => setQuickFilter(null)}
+            />
+          )}
         </TabsContent>
         <TabsContent value="r1-realizadas">
           {activeTab === 'r1-realizadas' && <R1FunnelTab mode="realizadas" range={range} />}
