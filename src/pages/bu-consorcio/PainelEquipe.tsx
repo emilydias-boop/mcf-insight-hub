@@ -500,7 +500,12 @@ export default function ConsorcioPainelEquipe() {
       if (status.includes('contrato') || status.includes('contract')) row.contratos++;
     });
     
-    return Array.from(sdrMap.values()).sort((a, b) => b.r1Agendada - a.r1Agendada);
+    // Ordenação única em todos os presets: R1 Agendada desc → R1 Realizada desc → nome asc
+    return Array.from(sdrMap.values()).sort((a, b) => {
+      if (b.r1Agendada !== a.r1Agendada) return b.r1Agendada - a.r1Agendada;
+      if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
+      return a.sdrName.localeCompare(b.sdrName);
+    });
   }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList, start, end]);
 
   // Re-derive KPIs from pipeline-filtered data
@@ -551,7 +556,7 @@ export default function ConsorcioPainelEquipe() {
       if (dataMap.has(realRow.sdrEmail)) dataMap.set(realRow.sdrEmail, realRow);
     });
     return Array.from(dataMap.values()).sort((a, b) => {
-      if (b.agendamentos !== a.agendamentos) return b.agendamentos - a.agendamentos;
+      if (b.r1Agendada !== a.r1Agendada) return b.r1Agendada - a.r1Agendada;
       if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
       return a.sdrName.localeCompare(b.sdrName);
     });
