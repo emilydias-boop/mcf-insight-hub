@@ -16,13 +16,13 @@ export function useConsorcioCotasOrigem() {
     queryFn: async (): Promise<Map<string, string>> => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
-        .select('consortium_card_id, nome_completo, razao_social, deal_name')
+        .select('consortium_card_id, nome_completo, razao_social')
         .not('consortium_card_id', 'is', null);
       if (error) throw error;
       const map = new Map<string, string>();
       (data || []).forEach((r: any) => {
         if (!r.consortium_card_id) return;
-        const nome = r.nome_completo || r.razao_social || r.deal_name || '—';
+        const nome = r.nome_completo || r.razao_social || '—';
         if (!map.has(r.consortium_card_id)) map.set(r.consortium_card_id, nome);
       });
       return map;
