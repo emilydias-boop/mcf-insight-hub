@@ -267,9 +267,22 @@ export function FunilConsorcioTimeline({
                         )}
                       />
                       {conv && (
-                        <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
-                          {conv}
-                        </span>
+                        step.rateTooltip ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 cursor-help whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+                                {conv}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px]">
+                              <p className="text-xs">{step.rateTooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+                            {conv}
+                          </span>
+                        )
                       )}
                       {showHealth && (
                         <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 flex-col items-center gap-1 md:flex">
@@ -311,11 +324,12 @@ export function FunilConsorcioTimeline({
                       )}
                     </div>
                   )}
+                  <div className="flex w-[112px] shrink-0 flex-col items-center gap-1 md:w-[132px]">
                   <button
                     type="button"
                     onClick={() => onTabChange(step.key)}
                     aria-current={isActive ? 'step' : undefined}
-                    className="group flex w-[112px] shrink-0 flex-col items-center gap-1 text-center md:w-[132px]"
+                    className="group flex w-full flex-col items-center gap-1 text-center"
                   >
                     <span
                       className={cn(
@@ -349,6 +363,35 @@ export function FunilConsorcioTimeline({
                       {step.hint}
                     </span>
                   </button>
+                  {step.badge && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => onQuickFilter?.(step.badge!.filter)}
+                          className="max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                        >
+                          {step.badge.label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[260px]">
+                        <p className="text-xs">{step.badge.tooltip}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {step.breakdown && (
+                    <div className="mt-1 w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
+                      {step.breakdown.map((b) => (
+                        <div key={b.label} className="flex items-center justify-between gap-1 text-[10px] leading-tight">
+                          <span className="text-muted-foreground">{b.label}</span>
+                          <span className="font-semibold tabular-nums text-foreground">
+                            {b.value.toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  </div>
                 </li>
               );
             })}
