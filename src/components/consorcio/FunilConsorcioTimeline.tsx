@@ -45,6 +45,8 @@ interface FunilConsorcioTimelineProps {
   onTabChange: (tab: string) => void;
   period: DateRangeFilter;
   onPeriodChange: (value: DateRangeFilter) => void;
+  /** Filtro rápido aplicado à etapa R1 Agendadas ('sem-desfecho' | 'no-show' | null) */
+  onQuickFilter?: (filter: 'sem-desfecho' | 'no-show') => void;
 }
 
 export function FunilConsorcioTimeline({
@@ -52,6 +54,7 @@ export function FunilConsorcioTimeline({
   onTabChange,
   period,
   onPeriodChange,
+  onQuickFilter,
 }: FunilConsorcioTimelineProps) {
   const range = { startDate: period.startDate, endDate: period.endDate };
 
@@ -190,20 +193,37 @@ export function FunilConsorcioTimeline({
                       )}
                       {showHealth && (
                         <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 flex-col items-center gap-1 md:flex">
-                          <span className="whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            No-show {r1!.noShow} · {pct(r1!.noShow, r1!.agendadas)}
-                          </span>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="flex cursor-help items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                              <button
+                                type="button"
+                                onClick={() => onQuickFilter?.('no-show')}
+                                className="whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                              >
+                                No-show {r1!.noShow} · {pct(r1!.noShow, r1!.agendadas)}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px]">
+                              <p className="text-xs">
+                                Clique para ver só os no-shows do período, com a quebra por motivo.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => onQuickFilter?.('sem-desfecho')}
+                                className="flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
+                              >
                                 <AlertTriangle className="h-3 w-3" />
                                 Sem desfecho {r1!.semDesfecho} · {pct(r1!.semDesfecho, r1!.agendadas)}
-                              </span>
+                              </button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-[260px]">
                               <p className="text-xs">
                                 Reuniões que já passaram e continuam sem status — não entram nem em
-                                realizadas nem em no-show.
+                                realizadas nem em no-show. Clique para abrir a fila de trabalho.
                               </p>
                             </TooltipContent>
                           </Tooltip>
