@@ -504,7 +504,6 @@ export default function ConsorcioPainelEquipe() {
     if (!allowedOriginNames) return teamKPIs; // No filter
     
     const data = pipelineFilteredBySDR;
-    const totalAgendamentos = data.reduce((sum, s) => sum + s.agendamentos, 0);
     const totalRealizadas = data.reduce((sum, s) => sum + s.r1Realizada, 0);
     const totalNoShows = data.reduce((sum, s) => sum + s.noShows, 0);
     const totalContratos = data.reduce((sum, s) => sum + s.contratos, 0);
@@ -512,7 +511,10 @@ export default function ConsorcioPainelEquipe() {
     
     return {
       sdrCount: data.length,
-      totalAgendamentos,
+      // Recorte por pipeline é derivado da lista de reuniões (scheduled_at),
+      // que não permite contar o ato de agendar — ver pipelineFilteredBySDR.
+      totalAgendamentos: 0,
+      agendamentosUnavailable: true,
       totalRealizadas,
       totalNoShows,
       totalContratos,
