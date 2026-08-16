@@ -205,6 +205,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       status: newStatus,
       meetingId: activeMeeting?.id,
       syncSlot: shouldSyncSlot,
+      meetingType: activeMeeting?.meeting_type === 'r2' ? 'r2' : 'r1',
       outcomeReason: outcome?.reason,
       outcomeReasonNote: outcome?.note,
     }, {
