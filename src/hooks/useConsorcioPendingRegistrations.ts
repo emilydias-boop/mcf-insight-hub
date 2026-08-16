@@ -120,6 +120,7 @@ const normalizeEmail = (email: string | null | undefined) => String(email || '')
 
 export interface EnrichedPendingRegistration {
   id: string;
+  proposal_id: string | null;
   tipo_pessoa: 'pf' | 'pj';
   nome_completo: string | null;
   razao_social: string | null;
@@ -151,6 +152,10 @@ export interface EnrichedPendingRegistration {
   total_destinado: number;
   motivo_declinio?: string | null;
   declinada_at?: string | null;
+  /** Checklist de dados do cadastro incompleto (campos obrigatórios faltando). */
+  checklist_incompleto: boolean;
+  /** Nenhum documento anexado ao cadastro pendente. */
+  documentos_faltando: boolean;
 }
 
 export function usePendingRegistrations(statuses: string[] = ['aguardando_abertura']) {
@@ -165,6 +170,24 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
 
       if (error) throw error;
       const rows = (data || []) as any[];
+
+      // Documentos anexados por cadastro pendente (para o selo de pendência).
+      const regIds = rows.map((r) => r.id).filter(Boolean) as string[];
+      const regsWithDocs = new Set<string>();
+      if (regIds.length) {
+        const { data: docs } = await supabase
+          .from('consortium_documents')
+          .select('pending_registration_id')
+          .in('pending_registration_id', regIds);
+        (docs || []).forEach((d: any) => {
+          if (d.pending_registration_id) regsWithDocs.add(d.pending_registration_id);
+        });
+      }
+
+      const isChecklistIncompleto = (r: any) =>
+        r.tipo_pessoa === 'pj'
+          ? !(r.razao_social && r.cnpj && r.telefone_comercial && r.email_comercial && r.endereco_comercial && r.faturamento_mensal)
+          : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda);
 
       // Resolver nomes de closer (owner_id → profiles/employees) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
       // owner_id em crm_deals é TEXT: pode conter UUID OU e-mail do owner. Tratamos os dois casos.
@@ -288,6 +311,7 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
 
         return {
           id: r.id,
+          proposal_id: r.proposal_id ?? null,
           tipo_pessoa: r.tipo_pessoa,
           nome_completo: r.nome_completo || r.deal?.contact?.name || null,
           razao_social: r.razao_social,
@@ -322,6 +346,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           total_destinado: totalDestinado,
           motivo_declinio: r.motivo_declinio ?? null,
           declinada_at: r.declinada_at ?? null,
+          checklist_incompleto: isChecklistIncompleto(r),
+          documentos_faltando: !regsWithDocs.has(r.id),
         };
       });
     },
