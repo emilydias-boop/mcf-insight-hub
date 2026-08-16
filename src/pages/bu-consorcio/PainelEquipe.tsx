@@ -403,7 +403,11 @@ export default function ConsorcioPainelEquipe() {
   // KPIs derivados da tabela de Closers para consistência quando aba Closers ativa
   const closerKPIs = useMemo(() => {
     const metrics = closerMetrics || [];
-    const totalAgendamentos = metrics.reduce((s, m) => s + m.r1_agendada, 0);
+    // "R1 Agendada" = reuniões marcadas PARA o período (scheduled_at) — é o que
+    // useR1CloserMetrics entrega. "Agendamento" (data do ATO de agendar,
+    // booked_at ?? created_at) NÃO existe neste payload por closer, então não é
+    // derivável aqui: exibimos "—" em vez de repetir o número de R1 Agendada.
+    const totalR1Agendada = metrics.reduce((s, m) => s + m.r1_agendada, 0);
     const totalRealizadas = metrics.reduce((s, m) => s + m.r1_realizada, 0);
     const totalNoShows = metrics.reduce((s, m) => s + m.noshow, 0);
     const totalContratos = produtosFechadosByCloser
@@ -411,14 +415,15 @@ export default function ConsorcioPainelEquipe() {
       : 0;
     return {
       sdrCount: metrics.length,
-      totalAgendamentos,
+      totalAgendamentos: 0,
+      agendamentosUnavailable: true,
       totalRealizadas,
       totalNoShows,
       totalContratos,
       totalOutside: 0,
-      totalR1Agendada: totalAgendamentos,
+      totalR1Agendada,
       taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
-      taxaNoShow: totalAgendamentos > 0 ? (totalNoShows / totalAgendamentos) * 100 : 0,
+      taxaNoShow: totalR1Agendada > 0 ? (totalNoShows / totalR1Agendada) * 100 : 0,
     };
   }, [closerMetrics, produtosFechadosByCloser]);
 
@@ -470,6 +475,11 @@ export default function ConsorcioPainelEquipe() {
           sdrEmail: m.intermediador,
           sdrName,
           agendamentos: 0,
+          // O recorte de pipelineFilteredMeetings vem da RPC de reuniões, que
+          // filtra por scheduled_at. Logo NÃO dá para contar "Agendamento"
+          // (data do ato, booked_at ?? created_at) aqui: agendamentos feitos no
+          // período para reuniões fora dele não estão no payload.
+          agendamentosUnavailable: true,
           r1Agendada: 0,
           r1Realizada: 0,
           noShows: 0,
@@ -478,16 +488,15 @@ export default function ConsorcioPainelEquipe() {
       }
       
       const row = sdrMap.get(email)!;
-      row.agendamentos++;
-      
       const status = (m.status_atual || '').toLowerCase();
-      if (status.includes('agendada')) row.r1Agendada++;
+      // Toda linha do recorte é uma R1 não cancelada com scheduled_at no período
+      row.r1Agendada++;
       if (status.includes('realizada')) row.r1Realizada++;
       if (status.includes('no-show') || status.includes('no show')) row.noShows++;
       if (status.includes('contrato') || status.includes('contract')) row.contratos++;
     });
     
-    return Array.from(sdrMap.values()).sort((a, b) => b.agendamentos - a.agendamentos);
+    return Array.from(sdrMap.values()).sort((a, b) => b.r1Agendada - a.r1Agendada);
   }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList]);
 
   // Re-derive KPIs from pipeline-filtered data
