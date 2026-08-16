@@ -59,6 +59,7 @@ import {
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
+import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
@@ -121,9 +122,12 @@ function calcularProximoVencimento(diaVencimento: number): Date {
 interface CotasTabProps {
   /** Período global do funil (eixo: data_contratacao) — controlado pela página. */
   range?: { startDate?: Date; endDate?: Date };
+  /** Selo da timeline: mostrar só as cotas originadas no funil. */
+  onlyDoFunil?: boolean;
+  onClearQuickFilter?: () => void;
 }
 
-export function CotasTab({ range }: CotasTabProps) {
+export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
 
@@ -178,11 +182,13 @@ export function CotasTab({ range }: CotasTabProps) {
   });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
+  const { data: funnelCardIds } = useConsorcioCotasOrigem();
 
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
-    return [...cards].sort((a, b) => {
+    const base = onlyDoFunil && funnelCardIds ? cards.filter((c) => funnelCardIds.has(c.id)) : cards;
+    return [...base].sort((a, b) => {
       const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
       if (dateCompare !== 0) return dateCompare;
 
@@ -191,7 +197,7 @@ export function CotasTab({ range }: CotasTabProps) {
 
       return Number(a.grupo) - Number(b.grupo);
     });
-  }, [cards]);
+  }, [cards, onlyDoFunil, funnelCardIds]);
 
   const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
@@ -693,6 +699,17 @@ export function CotasTab({ range }: CotasTabProps) {
         <div className="flex-1" />
 
       </div>
+
+      {onlyDoFunil && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/50 text-primary">
+            Filtrado: cotas originadas no funil
+          </Badge>
+          <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+            Limpar filtro
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <Card>

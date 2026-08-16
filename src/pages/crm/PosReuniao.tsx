@@ -21,7 +21,7 @@ import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { LeadCallButton } from '@/components/crm/LeadCallButton';
 import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
-import { FunilConsorcioTimeline, isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
+import { FunilConsorcioTimeline, isInPeriod, type FunilQuickFilter } from '@/components/consorcio/FunilConsorcioTimeline';
 import { R1FunnelTab } from '@/components/consorcio/R1FunnelTab';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
@@ -78,10 +78,17 @@ export default function PosReuniao() {
       };
   const range = { startDate: period.startDate, endDate: period.endDate };
 
-  // Filtro rápido da etapa R1 Agendadas (?filtro=sem-desfecho|no-show)
-  const filtroParam = searchParams.get('filtro');
-  const quickFilter: 'sem-desfecho' | 'no-show' | null =
-    filtroParam === 'sem-desfecho' || filtroParam === 'no-show' ? filtroParam : null;
+  // Filtro rápido dos selos da timeline (?filtro=...)
+  const QUICK_FILTER_TAB: Record<FunilQuickFilter, string> = {
+    'sem-desfecho': 'r1-agendadas',
+    'no-show': 'r1-agendadas',
+    'nao-aceitas': 'propostas',
+    'aguardando-abertura': 'pendentes',
+    'do-funil': 'cotas',
+  };
+  const filtroParam = searchParams.get('filtro') as FunilQuickFilter | null;
+  const quickFilter: FunilQuickFilter | null =
+    filtroParam && filtroParam in QUICK_FILTER_TAB ? filtroParam : null;
 
   const setActiveTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);
@@ -89,11 +96,11 @@ export default function PosReuniao() {
     setSearchParams(next, { replace: true });
   };
 
-  const setQuickFilter = (filter: 'sem-desfecho' | 'no-show' | null) => {
+  const setQuickFilter = (filter: FunilQuickFilter | null) => {
     const next = new URLSearchParams(searchParams);
     if (filter) {
       next.set('filtro', filter);
-      next.set('tab', 'r1-agendadas');
+      next.set('tab', QUICK_FILTER_TAB[filter]);
     } else {
       next.delete('filtro');
     }
@@ -124,7 +131,7 @@ export default function PosReuniao() {
             <R1FunnelTab
               mode="agendadas"
               range={range}
-              quickFilter={quickFilter}
+              quickFilter={quickFilter === 'sem-desfecho' || quickFilter === 'no-show' ? quickFilter : null}
               onClearQuickFilter={() => setQuickFilter(null)}
             />
           )}
@@ -132,10 +139,29 @@ export default function PosReuniao() {
         <TabsContent value="r1-realizadas">
           {activeTab === 'r1-realizadas' && <R1FunnelTab mode="realizadas" range={range} />}
         </TabsContent>
-        <TabsContent value="propostas"><PropostasTab range={range} /></TabsContent>
-        <TabsContent value="pendentes"><PendingRegistrationsList variant="pendentes" range={range} /></TabsContent>
+        <TabsContent value="propostas">
+          <PropostasTab
+            range={range}
+            onlyNaoAceitas={quickFilter === 'nao-aceitas'}
+            onClearQuickFilter={() => setQuickFilter(null)}
+          />
+        </TabsContent>
+        <TabsContent value="pendentes">
+          <PendingRegistrationsList
+            variant="pendentes"
+            range={range}
+            onlyAguardandoAbertura={quickFilter === 'aguardando-abertura'}
+            onClearQuickFilter={() => setQuickFilter(null)}
+          />
+        </TabsContent>
         <TabsContent value="cadastradas"><PendingRegistrationsList variant="cadastradas" range={range} /></TabsContent>
-        <TabsContent value="cotas"><CotasTab range={range} /></TabsContent>
+        <TabsContent value="cotas">
+          <CotasTab
+            range={range}
+            onlyDoFunil={quickFilter === 'do-funil'}
+            onClearQuickFilter={() => setQuickFilter(null)}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -143,7 +169,15 @@ export default function PosReuniao() {
 
 
 // ─── Propostas Tab ───────────────────────────────────────────
-function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }) {
+function PropostasTab({
+  range,
+  onlyNaoAceitas,
+  onClearQuickFilter,
+}: {
+  range: { startDate?: Date; endDate?: Date };
+  onlyNaoAceitas?: boolean;
+  onClearQuickFilter?: () => void;
+}) {
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -155,13 +189,13 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
   }, [allPropostas]);
 
   const propostas = useMemo(() => {
-    // Etapa 3 do funil: divisor é o ACEITE do closer (não o checklist derivado).
-    // Propostas aceitas passam a viver exclusivamente na etapa "Cadastros Pendentes",
-    // eliminando a dupla contagem do mesmo lead no funil.
+    // Etapa 3 do funil mede EVENTO: todas as propostas criadas no período,
+    // independente do status atual (a coluna Status distingue o desfecho).
     // Eixo de data: proposal_date ?? created_at.
     let list = allPropostas.filter(
-      p => p.status !== 'aceita' && !p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
+      p => !p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
     );
+    if (onlyNaoAceitas) list = list.filter(p => p.status !== 'aceita');
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
@@ -170,7 +204,7 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
       list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
     }
     return list;
-  }, [allPropostas, statusFilter, closerFilter, searchTerm, range.startDate, range.endDate]);
+  }, [allPropostas, statusFilter, closerFilter, searchTerm, onlyNaoAceitas, range.startDate, range.endDate]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -248,6 +282,16 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
         </Button>
       </CardHeader>
       <CardContent>
+        {onlyNaoAceitas && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/50 text-primary">
+              Filtrado: ainda não aceitas
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+        )}
         <TotalCreditoSummary propostas={propostas} title="Crédito Contratado — Cartas Negociadas" className="mb-4" />
         {propostas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>

@@ -7,9 +7,27 @@ import { useProposals } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
+import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 
 const STEP_ICONS: LucideIcon[] = [CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet];
+
+/** Todos os status possíveis de um cadastro pendente (etapa 4 mede evento, não status). */
+export const PENDING_REGISTRATION_ALL_STATUSES = [
+  'aguardando_abertura',
+  'cadastrada',
+  'cota_aberta',
+  'vinculada',
+  'declinada',
+] as const;
+
+/** Filtros rápidos disparados pelos selos da timeline. */
+export type FunilQuickFilter =
+  | 'sem-desfecho'
+  | 'no-show'
+  | 'nao-aceitas'
+  | 'aguardando-abertura'
+  | 'do-funil';
 
 /** Verifica se uma data (ISO ou YYYY-MM-DD) cai dentro do período selecionado. */
 export function isInPeriod(
@@ -38,6 +56,14 @@ interface Step {
   label: string;
   hint: string;
   count: number | null;
+  /** Base usada no cálculo da taxa de conversão desta etapa (default: count). */
+  rateCount?: number | null;
+  /** Tooltip da taxa de conversão que chega nesta etapa. */
+  rateTooltip?: string;
+  /** Selo clicável abaixo do número (estoque atual / recorte). */
+  badge?: { label: string; filter: FunilQuickFilter; tooltip: string } | null;
+  /** Mini-blocos de composição exibidos dentro do card da etapa. */
+  breakdown?: Array<{ label: string; value: number }> | null;
 }
 
 interface FunilConsorcioTimelineProps {
@@ -45,8 +71,8 @@ interface FunilConsorcioTimelineProps {
   onTabChange: (tab: string) => void;
   period: DateRangeFilter;
   onPeriodChange: (value: DateRangeFilter) => void;
-  /** Filtro rápido aplicado à etapa R1 Agendadas ('sem-desfecho' | 'no-show' | null) */
-  onQuickFilter?: (filter: 'sem-desfecho' | 'no-show') => void;
+  /** Filtro rápido disparado pelos selos da timeline. */
+  onQuickFilter?: (filter: FunilQuickFilter) => void;
 }
 
 export function FunilConsorcioTimeline({
@@ -60,31 +86,40 @@ export function FunilConsorcioTimeline({
 
   const { data: r1, isLoading: loadingR1 } = useConsorcioR1Funnel(range);
   const { data: proposals, isLoading: loadingProposals } = useProposals();
-  const { data: pendentes } = usePendingRegistrations(['aguardando_abertura']);
+  const { data: pendentes } = usePendingRegistrations([...PENDING_REGISTRATION_ALL_STATUSES]);
   const { data: cadastradas } = usePendingRegistrations(['cadastrada']);
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
+  const { data: funnelCardIds } = useConsorcioCotasOrigem();
 
-  // Etapa 3 — cartas ainda NÃO aceitas (divisor = aceite do closer, não checklist).
+  // Etapa 3 — TODAS as propostas criadas no período (evento, não status).
   // Eixo de data: proposal_date ?? created_at (convenção do BIConsorcio).
-  const negociadas = useMemo(
+  const propostasPeriodo = useMemo(
     () =>
       (proposals || []).filter(
         (p: any) =>
-          p.status !== 'aceita' &&
           !p.carta_excluida &&
           isInPeriod(p.proposal_date || p.created_at, range),
-      ).length,
+      ),
     [proposals, period.startDate, period.endDate],
   );
+  const negociadas = propostasPeriodo.length;
+  /** Estoque atual: criadas no período e que HOJE seguem sem aceite. */
+  const naoAceitas = propostasPeriodo.filter((p: any) => p.status !== 'aceita').length;
 
-  // Etapas 4 e 5 — eixo aceite_date ?? created_at.
-  const pendentesCount = useMemo(
+  // Etapa 4 — TODOS os cadastros criados no período (evento, não status).
+  // Eixo aceite_date ?? created_at.
+  const cadastrosPeriodo = useMemo(
     () =>
       pendentes
-        ? pendentes.filter((r: any) => isInPeriod(r.aceite_date || r.created_at, range)).length
+        ? pendentes.filter((r: any) => isInPeriod(r.aceite_date || r.created_at, range))
         : null,
     [pendentes, period.startDate, period.endDate],
   );
+  const pendentesCount = cadastrosPeriodo ? cadastrosPeriodo.length : null;
+  /** Estoque atual da fila da equipe de acompanhamento. */
+  const aguardandoAbertura = cadastrosPeriodo
+    ? cadastrosPeriodo.filter((r: any) => r.status === 'aguardando_abertura').length
+    : 0;
 
   // NOTA: não existe campo "quando virou cadastrada". Esta etapa mede cartas cujo
   // ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
@@ -95,6 +130,13 @@ export function FunilConsorcioTimeline({
         : null,
     [cadastradas, period.startDate, period.endDate],
   );
+
+  // Etapa 6 — composição das cotas contratadas no período.
+  const cotas = ownCards.data ?? [];
+  const cotasTotal = ownCards.isLoading ? null : cotas.length;
+  const cotasFunil = funnelCardIds ? cotas.filter((c: any) => funnelCardIds.has(c.id)).length : null;
+  const cotasExternas =
+    cotasTotal != null && cotasFunil != null ? cotasTotal - cotasFunil : null;
 
   const steps: Step[] = [
     {
@@ -112,14 +154,32 @@ export function FunilConsorcioTimeline({
     {
       key: 'propostas',
       label: 'Cartas Negociadas',
-      hint: 'ainda não aceitas',
+      hint: 'criadas no período',
       count: loadingProposals ? null : negociadas,
+      badge:
+        !loadingProposals && naoAceitas > 0
+          ? {
+              label: `${naoAceitas} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
+              filter: 'nao-aceitas',
+              tooltip:
+                'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. Clique para filtrar a lista.',
+            }
+          : null,
     },
     {
       key: 'pendentes',
       label: 'Cadastros Pendentes',
-      hint: 'aguardando abertura',
+      hint: 'criados no período',
       count: pendentesCount,
+      badge:
+        aguardandoAbertura > 0
+          ? {
+              label: `${aguardandoAbertura} aguardando abertura`,
+              filter: 'aguardando-abertura',
+              tooltip:
+                'Estoque atual: cadastros criados no período que hoje continuam aguardando abertura de cota. Clique para filtrar a lista.',
+            }
+          : null,
     },
     {
       key: 'cadastradas',
@@ -131,7 +191,27 @@ export function FunilConsorcioTimeline({
       key: 'cotas',
       label: 'Cotas',
       hint: 'contratadas no período',
-      count: ownCards.isLoading ? null : (ownCards.data?.length ?? 0),
+      count: cotasTotal,
+      rateCount: cotasFunil,
+      rateTooltip:
+        'Calculada sobre as cotas originadas no funil; as externas não vieram de reunião.',
+      badge:
+        cotasFunil && cotasFunil > 0
+          ? {
+              label: `${cotasFunil} do funil`,
+              filter: 'do-funil',
+              tooltip:
+                'Cotas com cadastro pendente vinculado — nasceram no funil. Clique para filtrar a lista.',
+            }
+          : null,
+      breakdown:
+        cotasTotal != null && cotasFunil != null && cotasExternas != null
+          ? [
+              { label: 'Do funil', value: cotasFunil },
+              { label: 'Externas', value: cotasExternas },
+              { label: 'Total', value: cotasTotal },
+            ]
+          : null,
     },
   ];
 
@@ -140,7 +220,7 @@ export function FunilConsorcioTimeline({
 
   const rate = (i: number): string | null => {
     const prev = steps[i - 1]?.count;
-    const curr = steps[i]?.count;
+    const curr = steps[i]?.rateCount !== undefined ? steps[i]?.rateCount : steps[i]?.count;
     if (prev == null || curr == null || prev === 0) return null;
     return `${((curr / prev) * 100).toLocaleString('pt-BR', {
       minimumFractionDigits: 1,
@@ -187,9 +267,22 @@ export function FunilConsorcioTimeline({
                         )}
                       />
                       {conv && (
-                        <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
-                          {conv}
-                        </span>
+                        step.rateTooltip ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 cursor-help whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+                                {conv}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[260px]">
+                              <p className="text-xs">{step.rateTooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+                            {conv}
+                          </span>
+                        )
                       )}
                       {showHealth && (
                         <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 flex-col items-center gap-1 md:flex">
@@ -231,11 +324,12 @@ export function FunilConsorcioTimeline({
                       )}
                     </div>
                   )}
+                  <div className="flex w-[112px] shrink-0 flex-col items-center gap-1 md:w-[132px]">
                   <button
                     type="button"
                     onClick={() => onTabChange(step.key)}
                     aria-current={isActive ? 'step' : undefined}
-                    className="group flex w-[112px] shrink-0 flex-col items-center gap-1 text-center md:w-[132px]"
+                    className="group flex w-full flex-col items-center gap-1 text-center"
                   >
                     <span
                       className={cn(
@@ -269,6 +363,35 @@ export function FunilConsorcioTimeline({
                       {step.hint}
                     </span>
                   </button>
+                  {step.badge && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => onQuickFilter?.(step.badge!.filter)}
+                          className="max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                        >
+                          {step.badge.label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[260px]">
+                        <p className="text-xs">{step.badge.tooltip}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {step.breakdown && (
+                    <div className="mt-1 w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
+                      {step.breakdown.map((b) => (
+                        <div key={b.label} className="flex items-center justify-between gap-1 text-[10px] leading-tight">
+                          <span className="text-muted-foreground">{b.label}</span>
+                          <span className="font-semibold tabular-nums text-foreground">
+                            {b.value.toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  </div>
                 </li>
               );
             })}

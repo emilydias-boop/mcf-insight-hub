@@ -51,29 +51,50 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
-import { isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
+import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
+
+const STATUS_LABELS: Record<string, string> = {
+  aguardando_abertura: 'Aguardando abertura',
+  cadastrada: 'Cadastrada',
+  cota_aberta: 'Cota aberta',
+  vinculada: 'Vinculada',
+  declinada: 'Declinada',
+};
 
 export interface PendingRegistrationsListProps {
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
   /** Período global do funil — eixo: aceite_date ?? created_at. */
   range?: { startDate?: Date; endDate?: Date };
+  /** Selo da timeline: mostrar só o estoque atual em `aguardando_abertura`. */
+  onlyAguardandoAbertura?: boolean;
+  onClearQuickFilter?: () => void;
 }
 
-export function PendingRegistrationsList({ variant = 'pendentes', range }: PendingRegistrationsListProps = {}) {
+export function PendingRegistrationsList({
+  variant = 'pendentes',
+  range,
+  onlyAguardandoAbertura,
+  onClearQuickFilter,
+}: PendingRegistrationsListProps = {}) {
   const statuses =
     variant === 'cadastradas' ? ['cadastrada']
     : variant === 'declinadas' ? ['declinada']
-    : ['aguardando_abertura'];
+    // Etapa 4 mede EVENTO: todos os cadastros criados no período,
+    // independente do status atual.
+    : [...PENDING_REGISTRATION_ALL_STATUSES];
   const { data: allRegistrations = [], isLoading } = usePendingRegistrations(statuses);
   // Etapas 4 e 5 do funil: eixo aceite_date ?? created_at.
   // NOTA (etapa 5): não existe campo de "quando virou cadastrada" — a etapa mede
   // cartas cujo ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
   const registrations = useMemo(
-    () =>
-      range
+    () => {
+      let list = range
         ? allRegistrations.filter((r) => isInPeriod(r.aceite_date || r.created_at, range))
-        : allRegistrations,
-    [allRegistrations, range?.startDate, range?.endDate],
+        : allRegistrations;
+      if (onlyAguardandoAbertura) list = list.filter((r) => r.status === 'aguardando_abertura');
+      return list;
+    },
+    [allRegistrations, onlyAguardandoAbertura, range?.startDate, range?.endDate],
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -179,6 +200,16 @@ export function PendingRegistrationsList({ variant = 'pendentes', range }: Pendi
         </div>
       </CardHeader>
       <CardContent>
+        {onlyAguardandoAbertura && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/50 text-primary">
+              Filtrado: aguardando abertura
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {registrations.length === 0
@@ -204,6 +235,7 @@ export function PendingRegistrationsList({ variant = 'pendentes', range }: Pendi
                   <TableHead className="text-center">Cotas existentes</TableHead>
                   <TableHead className="text-center">Destinada</TableHead>
                   <TableHead>Solicitado em</TableHead>
+                  {variant === 'pendentes' && <TableHead>Status</TableHead>}
                   {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -463,6 +495,13 @@ function RegistrationRow({
           ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
           : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
       </TableCell>
+      {variant === 'pendentes' && (
+        <TableCell className="text-sm">
+          <Badge variant={reg.status === 'aguardando_abertura' ? 'outline' : 'secondary'}>
+            {STATUS_LABELS[reg.status] || reg.status}
+          </Badge>
+        </TableCell>
+      )}
       {variant === 'declinadas' && (
         <TableCell className="text-sm max-w-[280px]">
           <div className="truncate" title={reg.motivo_declinio || ''}>
@@ -477,12 +516,12 @@ function RegistrationRow({
       )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          {variant !== 'declinadas' && (
+          {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
             <Button size="sm" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
             </Button>
           )}
-          {variant === 'pendentes' && (
+          {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
             <Button
               size="sm"
               variant="outline"
@@ -523,12 +562,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
-              {variant !== 'declinadas' && (
+              {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
               )}
-              {variant === 'pendentes' && (
+              {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
