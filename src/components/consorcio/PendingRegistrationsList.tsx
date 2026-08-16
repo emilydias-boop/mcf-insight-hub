@@ -54,14 +54,26 @@ import { loadXLSX } from '@/lib/lazyExport';
 
 export interface PendingRegistrationsListProps {
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
+  /** Período global do funil — eixo: aceite_date ?? created_at. */
+  range?: { startDate?: Date; endDate?: Date };
 }
 
-export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegistrationsListProps = {}) {
+export function PendingRegistrationsList({ variant = 'pendentes', range }: PendingRegistrationsListProps = {}) {
   const statuses =
     variant === 'cadastradas' ? ['cadastrada']
     : variant === 'declinadas' ? ['declinada']
     : ['aguardando_abertura'];
-  const { data: registrations = [], isLoading } = usePendingRegistrations(statuses);
+  const { data: allRegistrations = [], isLoading } = usePendingRegistrations(statuses);
+  // Etapas 4 e 5 do funil: eixo aceite_date ?? created_at.
+  // NOTA (etapa 5): não existe campo de "quando virou cadastrada" — a etapa mede
+  // cartas cujo ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
+  const registrations = useMemo(
+    () =>
+      range
+        ? allRegistrations.filter((r) => isInPeriod(r.aceite_date || r.created_at, range))
+        : allRegistrations,
+    [allRegistrations, range?.startDate, range?.endDate],
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
