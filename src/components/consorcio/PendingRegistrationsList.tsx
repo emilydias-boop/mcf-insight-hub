@@ -51,17 +51,30 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
+import { isInPeriod } from '@/components/consorcio/FunilConsorcioTimeline';
 
 export interface PendingRegistrationsListProps {
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
+  /** Período global do funil — eixo: aceite_date ?? created_at. */
+  range?: { startDate?: Date; endDate?: Date };
 }
 
-export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegistrationsListProps = {}) {
+export function PendingRegistrationsList({ variant = 'pendentes', range }: PendingRegistrationsListProps = {}) {
   const statuses =
     variant === 'cadastradas' ? ['cadastrada']
     : variant === 'declinadas' ? ['declinada']
     : ['aguardando_abertura'];
-  const { data: registrations = [], isLoading } = usePendingRegistrations(statuses);
+  const { data: allRegistrations = [], isLoading } = usePendingRegistrations(statuses);
+  // Etapas 4 e 5 do funil: eixo aceite_date ?? created_at.
+  // NOTA (etapa 5): não existe campo de "quando virou cadastrada" — a etapa mede
+  // cartas cujo ACEITE caiu no período e que HOJE estão marcadas como cadastradas.
+  const registrations = useMemo(
+    () =>
+      range
+        ? allRegistrations.filter((r) => isInPeriod(r.aceite_date || r.created_at, range))
+        : allRegistrations,
+    [allRegistrations, range?.startDate, range?.endDate],
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
@@ -385,6 +398,20 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {variant === 'pendentes' && (reg.checklist_incompleto || reg.documentos_faltando) && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {reg.checklist_incompleto && (
+              <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
+                checklist incompleto
+              </Badge>
+            )}
+            {reg.documentos_faltando && (
+              <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
+                documento faltando
+              </Badge>
+            )}
+          </div>
+        )}
         <div className="text-xs text-muted-foreground">
           {doc || '—'}
           {sociosLabel ? ` · ${sociosLabel}` : ''}
