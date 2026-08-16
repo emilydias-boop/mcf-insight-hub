@@ -94,7 +94,7 @@ function formatCurrencyFull(value: number): string {
   }).format(value);
 }
 
-// Extract first two names from full name (for Responsavel column)
+// Extract first two names from full name (for Responsável column)
 function getFirstTwoNames(fullName?: string): string {
   if (!fullName) return '-';
   const parts = fullName.trim().split(/\s+/);
@@ -121,7 +121,7 @@ function calcularProximoVencimento(diaVencimento: number): Date {
 }
 
 interface CotasTabProps {
-  /** Mes selecionado (YYYY-MM) — controlado pela pagina. */
+  /** Mês selecionado (YYYY-MM) — controlado pela página. */
   mes: string;
   onMesChange: (mes: string) => void;
 }
@@ -154,7 +154,7 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
     startDate: undefined,
     endDate: undefined,
-    label: 'Periodo',
+    label: 'Período',
   });
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -207,7 +207,7 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
 
-  // Sort cards: Data de Contratacao (desc) -> Cota (desc) -> Grupo (asc)
+  // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
     return [...cards].sort((a, b) => {
@@ -402,7 +402,7 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Barra de acao da etapa Cotas */}
+      {/* Barra de ação da etapa Cotas */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Select value={mes} onValueChange={onMesChange}>
@@ -417,7 +417,7 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
               ))}
             </SelectContent>
           </Select>
-          <span className="text-[11px] text-muted-foreground">mes de referencia das cotas</span>
+          <span className="text-[11px] text-muted-foreground">mês de referência das cotas</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canRecalculate && (
@@ -425,16 +425,16 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" disabled={recalculateAll.isPending}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${recalculateAll.isPending ? 'animate-spin' : ''}`} />
-                  Recalcular comissoes
+                  Recalcular comissões
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Recalcular todas as comissoes?</AlertDialogTitle>
+                  <AlertDialogTitle>Recalcular todas as comissões?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta acao reprocessa TODAS as cartas e TODAS as parcelas de consorcio, gravando
-                    novamente o valor de comissao de cada parcela. Pode levar alguns minutos e alterar
-                    valores ja registrados. Use apenas quando a tabela de comissoes mudar.
+                    Esta ação reprocessa TODAS as cartas e TODAS as parcelas de consórcio, gravando
+                    novamente o valor de comissão de cada parcela. Pode levar alguns minutos e alterar
+                    valores já registrados. Use apenas quando a tabela de comissões mudar.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -453,7 +453,7 @@ export function CotasTab({ mes, onMesChange }: CotasTabProps) {
           )}
           <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
             <Settings className="h-4 w-4 mr-2" />
-            Configuracoes
+            Configurações
           </Button>
           <Button
             variant="outline"
