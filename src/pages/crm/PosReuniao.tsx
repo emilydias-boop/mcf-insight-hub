@@ -169,7 +169,15 @@ export default function PosReuniao() {
 
 
 // ─── Propostas Tab ───────────────────────────────────────────
-function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }) {
+function PropostasTab({
+  range,
+  onlyNaoAceitas,
+  onClearQuickFilter,
+}: {
+  range: { startDate?: Date; endDate?: Date };
+  onlyNaoAceitas?: boolean;
+  onClearQuickFilter?: () => void;
+}) {
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -181,13 +189,13 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
   }, [allPropostas]);
 
   const propostas = useMemo(() => {
-    // Etapa 3 do funil: divisor é o ACEITE do closer (não o checklist derivado).
-    // Propostas aceitas passam a viver exclusivamente na etapa "Cadastros Pendentes",
-    // eliminando a dupla contagem do mesmo lead no funil.
+    // Etapa 3 do funil mede EVENTO: todas as propostas criadas no período,
+    // independente do status atual (a coluna Status distingue o desfecho).
     // Eixo de data: proposal_date ?? created_at.
     let list = allPropostas.filter(
-      p => p.status !== 'aceita' && !p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
+      p => !p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
     );
+    if (onlyNaoAceitas) list = list.filter(p => p.status !== 'aceita');
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
@@ -196,7 +204,7 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
       list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
     }
     return list;
-  }, [allPropostas, statusFilter, closerFilter, searchTerm, range.startDate, range.endDate]);
+  }, [allPropostas, statusFilter, closerFilter, searchTerm, onlyNaoAceitas, range.startDate, range.endDate]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -274,6 +282,16 @@ function PropostasTab({ range }: { range: { startDate?: Date; endDate?: Date } }
         </Button>
       </CardHeader>
       <CardContent>
+        {onlyNaoAceitas && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/50 text-primary">
+              Filtrado: ainda não aceitas
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+        )}
         <TotalCreditoSummary propostas={propostas} title="Crédito Contratado — Cartas Negociadas" className="mb-4" />
         {propostas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>
