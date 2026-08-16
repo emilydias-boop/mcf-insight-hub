@@ -59,6 +59,7 @@ import {
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
+import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
