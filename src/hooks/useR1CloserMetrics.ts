@@ -402,7 +402,12 @@ export function useR1CloserMetrics(
               .filter(Boolean) as string[]))
           )
         : null;
+      // Mesma régua de dedup do r1_agendada: por (closer, deal_id) com cap 2 —
+      // agendamentos no MESMO dia contam 1x, dias distintos contam até 2x.
+      // Aqui os dias são de booked_at (ato de agendar), não de scheduled_at.
+      // Attendee sem deal_id conta 1 individualmente.
       const agendamentosByCloser = new Map<string, number>();
+      const bookedDealDays = new Map<string, Map<string, Set<string>>>();
       ((bookedAttendees as any[]) || []).forEach((att: any) => {
         const slot = att.meeting_slot;
         if (!slot?.closer_id) return;
@@ -410,7 +415,20 @@ export function useR1CloserMetrics(
         if (slotStatus === 'cancelled' || slotStatus === 'canceled') return;
         if (!allowedAgendadaStatuses.includes(att.status)) return;
         if (bookedAllowedDeals && !(att.deal_id && bookedAllowedDeals.has(att.deal_id))) return;
-        agendamentosByCloser.set(slot.closer_id, (agendamentosByCloser.get(slot.closer_id) || 0) + 1);
+
+        if (!att.deal_id) {
+          agendamentosByCloser.set(slot.closer_id, (agendamentosByCloser.get(slot.closer_id) || 0) + 1);
+          return;
+        }
+        if (!bookedDealDays.has(slot.closer_id)) bookedDealDays.set(slot.closer_id, new Map());
+        const dealMap = bookedDealDays.get(slot.closer_id)!;
+        if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, new Set());
+        dealMap.get(att.deal_id)!.add(format(new Date(att.booked_at), 'yyyy-MM-dd'));
+      });
+      bookedDealDays.forEach((dealMap, closerId) => {
+        let total = 0;
+        dealMap.forEach((days) => { total += days.size >= 2 ? 2 : 1; });
+        agendamentosByCloser.set(closerId, (agendamentosByCloser.get(closerId) || 0) + total);
       });
 
       // ========== RÉGUA DE CAUÇÃO (Contrato Pago) ==========
