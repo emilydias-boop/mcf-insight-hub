@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { CotasTab } from '@/components/consorcio/CotasTab';
+import { CotasReservadasTab } from '@/components/consorcio/CotasReservadasTab';
 
 const POS_TABS = [
   'r1-agendadas', 'r1-realizadas', 'propostas', 'pendentes', 'cadastradas', 'cotas',
