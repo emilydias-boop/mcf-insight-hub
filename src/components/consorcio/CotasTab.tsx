@@ -788,6 +788,9 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Responsável</TableHead>
+                <TableHead>Origem no funil</TableHead>
+                <TableHead>Criada por</TableHead>
+                <TableHead>Criada em</TableHead>
                 <TableHead className="text-right">Comissão</TableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
@@ -796,7 +799,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={15}>
+                    <TableCell colSpan={18}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
