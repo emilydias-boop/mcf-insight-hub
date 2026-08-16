@@ -700,6 +700,17 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
 
       </div>
 
+      {onlyDoFunil && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/50 text-primary">
+            Filtrado: cotas originadas no funil
+          </Badge>
+          <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+            Limpar filtro
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
