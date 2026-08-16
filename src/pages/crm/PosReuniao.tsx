@@ -38,7 +38,12 @@ import { cn } from '@/lib/utils';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { toast } from 'sonner';
 
-const POS_TABS = ['realizadas', 'propostas', 'concluidas'] as const;
+import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
+import { CotasTab } from '@/components/consorcio/CotasTab';
+
+const POS_TABS = [
+  'realizadas', 'propostas', 'concluidas', 'pendentes', 'cadastradas', 'cotas',
+] as const;
 
 export default function PosReuniao() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -63,16 +68,17 @@ export default function PosReuniao() {
   return (
     <div className="space-y-4">
       <FunilConsorcioTimeline
-        page="pos-reuniao"
         activeTab={activeTab}
         onTabChange={setActiveTab}
         mes={mesParam}
-        onMesChange={setMes}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsContent value="realizadas"><RealizadasTab /></TabsContent>
         <TabsContent value="propostas"><PropostasTab /></TabsContent>
         <TabsContent value="concluidas"><ConcluidasTab /></TabsContent>
+        <TabsContent value="pendentes"><PendingRegistrationsList variant="pendentes" /></TabsContent>
+        <TabsContent value="cadastradas"><PendingRegistrationsList variant="cadastradas" /></TabsContent>
+        <TabsContent value="cotas"><CotasTab mes={mesParam} onMesChange={setMes} /></TabsContent>
       </Tabs>
     </div>
   );
