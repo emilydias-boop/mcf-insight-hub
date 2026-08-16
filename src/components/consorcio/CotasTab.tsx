@@ -46,6 +46,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import {
   Pagination,
   PaginationContent,
