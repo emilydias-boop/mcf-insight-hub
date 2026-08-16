@@ -2268,13 +2268,18 @@ export function useUpdateAttendeeAndSlotStatus() {
       status, 
       meetingId,
       syncSlot = false,
-      meetingType = 'r1'
+      meetingType = 'r1',
+      outcomeReason,
+      outcomeReasonNote,
     }: { 
       attendeeId: string; 
       status: string;
       meetingId?: string;
       syncSlot?: boolean;
       meetingType?: 'r1' | 'r2';
+      /** Motivo estruturado (catálogo em src/lib/meetingOutcomeReasons.ts) */
+      outcomeReason?: string;
+      outcomeReasonNote?: string;
     }) => {
       // 1. Fetch attendee to get deal_id and meeting_slot_id for CRM sync
       const { data: attendee } = await supabase
@@ -2297,11 +2302,20 @@ export function useUpdateAttendeeAndSlotStatus() {
       }
 
       // 3. Update attendee status
-      const updateData: { status: string; contract_paid_at?: string } = { status };
+      const updateData: Record<string, unknown> = { status };
       
       // Se o status for contract_paid, registrar timestamp do pagamento
       if (status === 'contract_paid') {
         updateData.contract_paid_at = new Date().toISOString();
+      }
+
+      // Motivo estruturado do desfecho (hoje usado no no-show)
+      if (outcomeReason) {
+        const { data: authData } = await supabase.auth.getUser();
+        updateData.outcome_reason = outcomeReason;
+        updateData.outcome_reason_note = outcomeReasonNote?.trim() || null;
+        updateData.outcome_set_by = authData?.user?.id ?? null;
+        updateData.outcome_set_at = new Date().toISOString();
       }
       
       const { error: attendeeError } = await supabase
@@ -2340,10 +2354,16 @@ export function useUpdateAttendeeAndSlotStatus() {
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-r1-funnel'] });
       toast.success('Status atualizado');
     },
-    onError: () => {
-      toast.error('Erro ao atualizar status');
+    onError: (error: any) => {
+      const msg = String(error?.message || '');
+      if (/est[áa] fechado|fechado\. altera|month.*lock/i.test(msg)) {
+        toast.error('Mês fechado: as reuniões deste mês estão travadas para alteração de status. Peça a reabertura em Administração → Travas de Mês.');
+        return;
+      }
+      toast.error(msg ? `Erro ao atualizar status: ${msg}` : 'Erro ao atualizar status');
     },
   });
 }

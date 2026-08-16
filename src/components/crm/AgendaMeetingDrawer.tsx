@@ -67,6 +67,7 @@ import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
+import { NoShowReasonPicker } from './NoShowReasonPicker';
 import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -146,6 +147,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
+  // Motivo do no-show escolhido no popover, aplicado após evidência/confirmação
+  const [pendingNoShowReason, setPendingNoShowReason] = useState<{ reason: string; note?: string } | null>(null);
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editedPhone, setEditedPhone] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -187,7 +190,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   // Handler to update participant status - uses combined mutation to prevent race condition
   // Syncs meeting_slots.status when the principal participant changes to completed/contract_paid
   // Note: no_show is individual per participant - should NOT sync to slot to avoid affecting other leads
-  const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
+  const handleParticipantStatusChange = (
+    participantId: string,
+    newStatus: string,
+    outcome?: { reason: string; note?: string },
+  ) => {
     const statusesToSync = ['completed', 'contract_paid'];
     const attendee = activeMeeting?.attendees?.find(a => a.id === participantId);
     const isPrincipal = attendee && !attendee.is_partner && !attendee.parent_attendee_id;
@@ -198,10 +205,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       status: newStatus,
       meetingId: activeMeeting?.id,
       syncSlot: shouldSyncSlot,
+      outcomeReason: outcome?.reason,
+      outcomeReasonNote: outcome?.note,
     }, {
       onSuccess: () => {
         if (newStatus === 'no_show') {
           setShowNoShowConfirm(false);
+          setPendingNoShowReason(null);
         }
       }
     });
@@ -209,7 +219,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const handleNoShowConfirm = () => {
     if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, 'no_show');
+      handleParticipantStatusChange(
+        selectedParticipant.id,
+        'no_show',
+        pendingNoShowReason ?? undefined,
+      );
     }
   };
 
@@ -1056,29 +1070,35 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     
                     {/* No-Show */}
                     {selectedParticipant.status !== 'contract_paid' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          "flex-col h-14 gap-1",
-                          selectedParticipant.status === 'no_show' 
-                            ? "bg-red-500/10 border-red-500 text-red-600" 
-                            : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
-                        )}
-                        onClick={() => {
-                          if (selectedParticipant.status === 'no_show') return;
+                      <NoShowReasonPicker
+                        loading={updateAttendeeAndSlotStatus.isPending}
+                        align="center"
+                        onConfirm={(payload) => {
                           if (skipNoShowConfirm) {
                             // Closer / Closer Sombra: marca direto, sem confirmação
-                            handleParticipantStatusChange(selectedParticipant.id, 'no_show');
+                            handleParticipantStatusChange(selectedParticipant.id, 'no_show', payload);
                           } else {
+                            // SDR (evidência + IA) ou liderança (confirmação simples)
+                            setPendingNoShowReason(payload);
                             setShowNoShowConfirm(true);
                           }
                         }}
-                        disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'no_show'}
                       >
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="text-xs">{selectedParticipant.status === 'no_show' ? 'No-Show ✓' : 'No-Show'}</span>
-                      </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "flex-col h-14 gap-1",
+                            selectedParticipant.status === 'no_show' 
+                              ? "bg-red-500/10 border-red-500 text-red-600" 
+                              : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
+                          )}
+                          disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'no_show'}
+                        >
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-xs">{selectedParticipant.status === 'no_show' ? 'No-Show ✓' : 'No-Show'}</span>
+                        </Button>
+                      </NoShowReasonPicker>
                     )}
                     
                     {/* Realizada */}

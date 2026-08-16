@@ -9430,6 +9430,10 @@ export type Database = {
           meeting_slot_id: string
           notes: string | null
           notified_at: string | null
+          outcome_reason: string | null
+          outcome_reason_note: string | null
+          outcome_set_at: string | null
+          outcome_set_by: string | null
           parent_attendee_id: string | null
           partner_name: string | null
           r2_confirmation: string | null
@@ -9471,6 +9475,10 @@ export type Database = {
           meeting_slot_id: string
           notes?: string | null
           notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
           parent_attendee_id?: string | null
           partner_name?: string | null
           r2_confirmation?: string | null
@@ -9512,6 +9520,10 @@ export type Database = {
           meeting_slot_id?: string
           notes?: string | null
           notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
           parent_attendee_id?: string | null
           partner_name?: string | null
           r2_confirmation?: string | null
