@@ -56,6 +56,7 @@ export interface MeetingSlot {
   deal_id: string | null;
   contact_id: string | null;
   scheduled_at: string;
+  meeting_type?: string | null;
   duration_minutes: number;
   status: string;
   booked_by: string | null;
@@ -2309,13 +2310,22 @@ export function useUpdateAttendeeAndSlotStatus() {
         updateData.contract_paid_at = new Date().toISOString();
       }
 
-      // Motivo estruturado do desfecho (hoje usado no no-show)
-      if (outcomeReason) {
-        const { data: authData } = await supabase.auth.getUser();
-        updateData.outcome_reason = outcomeReason;
-        updateData.outcome_reason_note = outcomeReasonNote?.trim() || null;
-        updateData.outcome_set_by = authData?.user?.id ?? null;
-        updateData.outcome_set_at = new Date().toISOString();
+      // Motivo estruturado do desfecho — só existe para no_show.
+      // Qualquer outro desfecho ZERA os campos, senão o motivo antigo
+      // contamina a coluna Motivo e a quebra por motivo.
+      if (status === 'no_show') {
+        if (outcomeReason) {
+          const { data: authData } = await supabase.auth.getUser();
+          updateData.outcome_reason = outcomeReason;
+          updateData.outcome_reason_note = outcomeReasonNote?.trim() || null;
+          updateData.outcome_set_by = authData?.user?.id ?? null;
+          updateData.outcome_set_at = new Date().toISOString();
+        }
+      } else {
+        updateData.outcome_reason = null;
+        updateData.outcome_reason_note = null;
+        updateData.outcome_set_by = null;
+        updateData.outcome_set_at = null;
       }
       
       const { error: attendeeError } = await supabase
