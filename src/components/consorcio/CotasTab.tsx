@@ -59,7 +59,7 @@ import {
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
-import { useConsorcioCotasOrigem } from '@/hooks/useConsorcioCotasOrigem';
+import { useConsorcioCotasOrigem, useConsorcioCardCreators } from '@/hooks/useConsorcioCotasOrigem';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
@@ -124,10 +124,12 @@ interface CotasTabProps {
   range?: { startDate?: Date; endDate?: Date };
   /** Selo da timeline: mostrar só as cotas originadas no funil. */
   onlyDoFunil?: boolean;
+  /** Selo da timeline: mostrar só as cotas SEM vínculo com o funil. */
+  onlyExternas?: boolean;
   onClearQuickFilter?: () => void;
 }
 
-export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabProps) {
+export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
 
@@ -187,7 +189,11 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
-    const base = onlyDoFunil && funnelCardIds ? cards.filter((c) => funnelCardIds.has(c.id)) : cards;
+    let base = cards;
+    if (funnelCardIds) {
+      if (onlyDoFunil) base = cards.filter((c) => funnelCardIds.has(c.id));
+      else if (onlyExternas) base = cards.filter((c) => !funnelCardIds.has(c.id));
+    }
     return [...base].sort((a, b) => {
       const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
       if (dateCompare !== 0) return dateCompare;
@@ -197,7 +203,33 @@ export function CotasTab({ range, onlyDoFunil, onClearQuickFilter }: CotasTabPro
 
       return Number(a.grupo) - Number(b.grupo);
     });
-  }, [cards, onlyDoFunil, funnelCardIds]);
+  }, [cards, onlyDoFunil, onlyExternas, funnelCardIds]);
+
+  // "Criada por": `consortium_cards` não tem coluna de autoria — usamos o
+  // actor_name do primeiro evento de `consortium_card_activity_log`.
+  const { data: creators } = useConsorcioCardCreators(
+    useMemo(() => sortedCards.map((c: any) => c.id), [sortedCards]),
+  );
+
+  /** Quebra nominal das cotas externas (para cobrança da equipe). */
+  const externasBreakdown = useMemo(() => {
+    if (!onlyExternas) return null;
+    const byVendedor = new Map<string, number>();
+    const byOrigem = new Map<string, number>();
+    sortedCards.forEach((c: any) => {
+      const v = (c.vendedor_name || '').trim() || 'sem vendedor';
+      byVendedor.set(v, (byVendedor.get(v) || 0) + 1);
+      const o = (c.origem || '').trim() || 'sem origem';
+      const label = ORIGEM_OPTIONS.find((x) => x.value === o)?.label || o;
+      byOrigem.set(label, (byOrigem.get(label) || 0) + 1);
+    });
+    const fmt = (m: Map<string, number>) =>
+      Array.from(m.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k} ${v}`)
+        .join(' · ');
+    return { vendedores: fmt(byVendedor), origens: fmt(byOrigem) };
+  }, [onlyExternas, sortedCards]);
 
   const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
