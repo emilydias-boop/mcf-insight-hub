@@ -118,8 +118,16 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
     });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Cadastros Pendentes');
-    XLSX.writeFile(wb, `cadastros-pendentes-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
+    const sheetName =
+      variant === 'cadastradas' ? 'Cadastradas'
+      : variant === 'declinadas' ? 'Cartas Declinadas'
+      : 'Cadastros Pendentes';
+    const fileSlug =
+      variant === 'cadastradas' ? 'cadastradas'
+      : variant === 'declinadas' ? 'cartas-declinadas'
+      : 'cadastros-pendentes';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
   };
 
   if (isLoading) {
@@ -138,7 +146,7 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
       onChange={setFilters}
       registrations={registrations}
     />
-    <PendingRegistrationsKPIs registrations={filtered} />
+    <PendingRegistrationsKPIs registrations={filtered} variant={variant} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
@@ -161,7 +169,11 @@ export function PendingRegistrationsList({ variant = 'pendentes' }: PendingRegis
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {registrations.length === 0
-              ? 'Nenhum cadastro pendente de abertura.'
+              ? variant === 'cadastradas'
+                ? 'Nenhuma cota marcada como cadastrada.'
+                : variant === 'declinadas'
+                  ? 'Nenhuma carta declinada.'
+                  : 'Nenhum cadastro pendente de abertura.'
               : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
         ) : (

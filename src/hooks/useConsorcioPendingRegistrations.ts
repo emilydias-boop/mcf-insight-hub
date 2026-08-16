@@ -487,7 +487,7 @@ export function useCreatePendingRegistration() {
       return registration;
     },
     onSuccess: () => {
-      toast.success('Cadastro enviado para Controle Consórcio!');
+      toast.success('Cadastro enviado para Cadastros Pendentes!');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },

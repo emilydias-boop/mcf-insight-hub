@@ -8,9 +8,35 @@ import type { EnrichedPendingRegistration } from '@/hooks/useConsorcioPendingReg
 
 interface Props {
   registrations: EnrichedPendingRegistration[];
+  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
 }
 
-export function PendingRegistrationsKPIs({ registrations }: Props) {
+const VARIANT_LABELS = {
+  pendentes: {
+    cotas: 'Cotas a cadastrar',
+    cotasSub: 'pendentes de abertura',
+    credito: 'Crédito pendente',
+    creditoSub: 'valor total a cadastrar',
+    mes: 'Mês com maior déficit',
+  },
+  cadastradas: {
+    cotas: 'Cotas cadastradas',
+    cotasSub: 'marcadas, aguardando abertura',
+    credito: 'Crédito cadastrado',
+    creditoSub: 'valor total',
+    mes: 'Mês com maior volume',
+  },
+  declinadas: {
+    cotas: 'Cotas declinadas',
+    cotasSub: 'arquivadas',
+    credito: 'Crédito declinado',
+    creditoSub: 'valor total',
+    mes: 'Mês com maior volume',
+  },
+} as const;
+
+export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' }: Props) {
+  const labels = VARIANT_LABELS[variant];
   const stats = useMemo(() => {
     const totalCotas = registrations.length;
     const totalParcelas = registrations.reduce(
@@ -58,9 +84,9 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
   const items = [
     {
       icon: FileClock,
-      label: 'Cotas a cadastrar',
+      label: labels.cotas,
       value: String(stats.totalCotas),
-      sub: 'pendentes de abertura',
+      sub: labels.cotasSub,
     },
     {
       icon: Layers,
@@ -76,13 +102,13 @@ export function PendingRegistrationsKPIs({ registrations }: Props) {
     },
     {
       icon: Wallet,
-      label: 'Crédito pendente',
+      label: labels.credito,
       value: formatCurrency(stats.totalCredito),
-      sub: 'valor total a cadastrar',
+      sub: labels.creditoSub,
     },
     {
       icon: CalendarRange,
-      label: 'Mês com maior déficit',
+      label: labels.mes,
       value: stats.topMonthLabel,
       sub: stats.topMonthSub,
     },

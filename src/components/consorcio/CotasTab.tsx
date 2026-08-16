@@ -1,13 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  Plus, 
-  Download, 
-  CreditCard, 
-  TrendingUp, 
+import {
+  Plus,
+  Download,
+  CreditCard,
+  TrendingUp,
   FileText,
   Filter,
   Eye,
@@ -16,7 +14,7 @@ import {
   Settings,
   Search,
   RefreshCw,
-  Copy
+  Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,24 +36,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
-import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
-import { useConsorcioEmployees } from '@/hooks/useEmployees';
-import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
-import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
-import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
-import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
-import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
-import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
-import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
-import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
-import { GruposTab } from '@/components/consorcio/grupos/GruposTab';
-import { PrevisaoComissoesTab } from '@/components/consorcio/PrevisaoComissoesTab';
-import { IndicacoesTab } from '@/components/consorcio/IndicacoesTab';
-import { FunilConsorcioTimeline, parseMesKey } from '@/components/consorcio/FunilConsorcioTimeline';
-
-import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
-import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,8 +45,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import {
   Pagination,
   PaginationContent,
@@ -76,6 +56,23 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
+import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
+import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
+import { useConsorcioEmployees } from '@/hooks/useEmployees';
+import { useAuth } from '@/contexts/AuthContext';
+import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
+import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
+import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
+import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
+import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
+import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import {
+  useConsorcioCategoriaOptions,
+  useConsorcioOrigemOptions,
+  useConsorcioTipoOptions,
+} from '@/hooks/useConsorcioConfigOptions';
+import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
+import { parseMesKey } from '@/components/consorcio/FunilConsorcioTimeline';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -97,14 +94,6 @@ function formatCurrencyFull(value: number): string {
   }).format(value);
 }
 
-// Extract first name and last name from full name
-function getFirstLastName(fullName?: string): string {
-  if (!fullName) return '-';
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length - 1]}`;
-}
-
 // Extract first two names from full name (for Responsável column)
 function getFirstTwoNames(fullName?: string): string {
   if (!fullName) return '-';
@@ -113,51 +102,47 @@ function getFirstTwoNames(fullName?: string): string {
   return `${parts[0]} ${parts[1]}`;
 }
 
-
 // Calculate next due date based on dia_vencimento
 function calcularProximoVencimento(diaVencimento: number): Date {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   const currentDay = now.getDate();
-  
-  // Adjust day to be valid for any month (max 28 for safety, or actual last day)
+
   const adjustedDay = Math.min(diaVencimento, 28);
-  
+
   let nextDueDate = new Date(currentYear, currentMonth, adjustedDay);
-  
-  // If the due date has passed this month, move to next month
+
   if (currentDay > diaVencimento) {
     nextDueDate = new Date(currentYear, currentMonth + 1, adjustedDay);
   }
-  
+
   return nextDueDate;
 }
 
-const CONSORCIO_TABS = [
-  'cotas', 'pendentes', 'cadastradas', 'declinadas',
-  'contemplacao', 'grupos', 'previsao', 'indicacoes',
-] as const;
+interface CotasTabProps {
+  /** Mês selecionado (YYYY-MM) — controlado pela página. */
+  mes: string;
+  onMesChange: (mes: string) => void;
+}
 
-export default function ConsorcioPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const activeTab = (CONSORCIO_TABS as readonly string[]).includes(tabParam || '')
-    ? (tabParam as string)
-    : 'cotas';
-  const mesParam = searchParams.get('mes') || format(new Date(), 'yyyy-MM');
+export function CotasTab({ mes, onMesChange }: CotasTabProps) {
+  const { role } = useAuth();
+  const canRecalculate = role === 'admin' || role === 'coordenador';
 
-  const setActiveTab = (tab: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', tab);
-    setSearchParams(next, { replace: true });
-  };
+  const MONTH_OPTIONS = useMemo(
+    () =>
+      Array.from({ length: 24 }, (_, i) => {
+        const offset = 12 - i; // +12 futuro ... -11 passado
+        const date = offset >= 0 ? addMonths(new Date(), offset) : subMonths(new Date(), -offset);
+        return {
+          value: format(date, 'yyyy-MM'),
+          label: format(date, 'MMMM yyyy', { locale: ptBR }),
+        };
+      }),
+    [],
+  );
 
-  const setMes = (mes: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('mes', mes);
-    setSearchParams(next, { replace: true });
-  };
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
@@ -169,7 +154,7 @@ export default function ConsorcioPage() {
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
     startDate: undefined,
     endDate: undefined,
-    label: 'Período'
+    label: 'Período',
   });
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -180,23 +165,19 @@ export default function ConsorcioPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [duplicatingCard, setDuplicatingCard] = useState<Partial<ConsorcioCard> | null>(null);
+  const [recalcOpen, setRecalcOpen] = useState(false);
 
   const { data: employees } = useConsorcioEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
   const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
 
-  // Calculate date range based on period
   const now = new Date();
-  const selectedMonthDate = parseMesKey(mesParam);
+  const selectedMonthDate = parseMesKey(mes);
   const startDate = startOfMonth(selectedMonthDate);
   const endDate = endOfMonth(selectedMonthDate);
 
-  // Resolve date range based on filter selection:
-  // - "Todo Período" → no date filter (undefined)
-  // - Custom/preset range → use filter range
-  // - No selection (initial state) → fallback to selected month
-  const isTodoPeriodo = dateRangeFilter.label === 'Todo Período';
+  const isTodoPeriodo = dateRangeFilter.label === 'Todo Periodo' || dateRangeFilter.label === 'Todo Período';
   const isPeriodoCustom = !!(dateRangeFilter.startDate || dateRangeFilter.endDate);
 
   const resolvedDateRange = isTodoPeriodo
@@ -226,48 +207,41 @@ export default function ConsorcioPage() {
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
 
-  // Sort cards: Data de Contratação (desc) → Cota (desc) → Grupo (asc)
+  // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
     return [...cards].sort((a, b) => {
-      // 1. Data de contratação (mais recente primeiro)
       const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
       if (dateCompare !== 0) return dateCompare;
 
-      // 2. Cota (numérico decrescente - maior primeiro)
       const cotaCompare = Number(b.cota) - Number(a.cota);
       if (cotaCompare !== 0) return cotaCompare;
 
-      // 3. Grupo (numérico crescente)
       return Number(a.grupo) - Number(b.grupo);
     });
   }, [cards]);
 
-  // Pagination
   const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return sortedCards.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedCards, currentPage, itemsPerPage]);
 
-  // Get unique groups for filter dropdown
   const uniqueGrupos = useMemo(() => {
     if (!cards) return [];
     const grupos = [...new Set(cards.map(c => c.grupo))];
     return grupos.sort((a, b) => Number(a) - Number(b));
   }, [cards]);
 
-  // Get unique vencimento days for filter dropdown
   const uniqueVencimentos = useMemo(() => {
     if (!cards) return [];
     const dias = [...new Set(cards.map(c => c.dia_vencimento))];
     return dias.sort((a, b) => a - b);
   }, [cards]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, mesParam, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, mes, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -427,57 +401,76 @@ export default function ConsorcioPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">🏠 Consórcio</h1>
-          <p className="text-muted-foreground">
-            Gestão de cartas de consórcio
-          </p>
+    <div className="space-y-6">
+      {/* Barra de ação da etapa Cotas */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Select value={mes} onValueChange={onMesChange}>
+            <SelectTrigger className="h-9 w-44 text-sm capitalize">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={opt.value} className="capitalize">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[11px] text-muted-foreground">mês de referência das cotas</span>
         </div>
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => recalculateAll.mutate()}
-            disabled={recalculateAll.isPending}
-            title="Recalcular todas as comissões"
+        <div className="flex flex-wrap items-center gap-2">
+          {canRecalculate && (
+            <AlertDialog open={recalcOpen} onOpenChange={setRecalcOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={recalculateAll.isPending}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${recalculateAll.isPending ? 'animate-spin' : ''}`} />
+                  Recalcular comissões
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Recalcular todas as comissões?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação reprocessa TODAS as cartas e TODAS as parcelas de consórcio, gravando
+                    novamente o valor de comissão de cada parcela. Pode levar alguns minutos e alterar
+                    valores já registrados. Use apenas quando a tabela de comissões mudar.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      recalculateAll.mutate();
+                      setRecalcOpen(false);
+                    }}
+                  >
+                    Recalcular
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            Configurações
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            disabled={!cards || cards.length === 0}
           >
-            <RefreshCw className={`h-4 w-4 ${recalculateAll.isPending ? 'animate-spin' : ''}`} />
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setConfigOpen(true)}>
-            <Settings className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => setFormOpen(true)}>
+          <Button size="sm" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Cota
           </Button>
         </div>
       </div>
 
-      <FunilConsorcioTimeline
-        page="consorcio"
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        mes={mesParam}
-        onMesChange={setMes}
-        cotasCount={cardsLoading ? null : sortedCards.length}
-      />
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="cotas">Cotas</TabsTrigger>
-          <TabsTrigger value="pendentes">Cadastros Pendentes</TabsTrigger>
-          <TabsTrigger value="cadastradas">Cadastradas</TabsTrigger>
-         <TabsTrigger value="declinadas">Cartas Declinadas</TabsTrigger>
-          <TabsTrigger value="contemplacao">Contemplação</TabsTrigger>
-          <TabsTrigger value="grupos">Grupos</TabsTrigger>
-          <TabsTrigger value="previsao">Previsão</TabsTrigger>
-          <TabsTrigger value="indicacoes">Indicações</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="cotas" className="space-y-6">
       {/* KPIs */}
       <div className="space-y-4">
         {/* Bloco 1 — Globais (valor das cotas + comissões geradas) */}
@@ -747,15 +740,12 @@ export default function ConsorcioPage() {
 
         <div className="flex-1" />
 
-        <Button variant="outline" onClick={handleExportCSV} disabled={!cards || cards.length === 0}>
-          <Download className="h-4 w-4 mr-2" />
-          Exportar CSV
-        </Button>
       </div>
 
       {/* Table */}
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -780,7 +770,7 @@ export default function ConsorcioPage() {
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={11}>
+                    <TableCell colSpan={15}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
@@ -907,16 +897,16 @@ export default function ConsorcioPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={14} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={15} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
-
       {/* Pagination */}
       {sortedCards.length > 0 && (
         <div className="flex items-center justify-between">
@@ -986,8 +976,8 @@ export default function ConsorcioPage() {
       )}
 
       {/* Form Dialog */}
-      <ConsorcioCardForm 
-        open={formOpen} 
+      <ConsorcioCardForm
+        open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);
           if (!open) {
@@ -1000,10 +990,10 @@ export default function ConsorcioPage() {
       />
 
       {/* Details Drawer */}
-      <ConsorcioCardDrawer 
-        cardId={selectedCardId} 
-        open={drawerOpen} 
-        onOpenChange={setDrawerOpen} 
+      <ConsorcioCardDrawer
+        cardId={selectedCardId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
       />
 
       <DeleteCartaDialog
@@ -1014,41 +1004,10 @@ export default function ConsorcioPage() {
       />
 
       {/* Config Modal */}
-      <ConsorcioConfigModal 
-        open={configOpen} 
-        onOpenChange={setConfigOpen} 
+      <ConsorcioConfigModal
+        open={configOpen}
+        onOpenChange={setConfigOpen}
       />
-        </TabsContent>
-
-        <TabsContent value="pendentes">
-          <PendingRegistrationsList />
-        </TabsContent>
-
-        <TabsContent value="cadastradas">
-          <PendingRegistrationsList variant="cadastradas" />
-        </TabsContent>
-
-        <TabsContent value="declinadas">
-          <PendingRegistrationsList variant="declinadas" />
-        </TabsContent>
-
-        <TabsContent value="contemplacao">
-          <ContemplationTab />
-        </TabsContent>
-
-        <TabsContent value="grupos">
-          <GruposTab />
-        </TabsContent>
-
-        <TabsContent value="previsao">
-          <PrevisaoComissoesTab />
-        </TabsContent>
-
-        <TabsContent value="indicacoes">
-          <IndicacoesTab />
-        </TabsContent>
-
-      </Tabs>
     </div>
   );
 }
