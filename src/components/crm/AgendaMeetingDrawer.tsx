@@ -187,7 +187,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   // Handler to update participant status - uses combined mutation to prevent race condition
   // Syncs meeting_slots.status when the principal participant changes to completed/contract_paid
   // Note: no_show is individual per participant - should NOT sync to slot to avoid affecting other leads
-  const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
+  const handleParticipantStatusChange = (
+    participantId: string,
+    newStatus: string,
+    outcome?: { reason: string; note?: string },
+  ) => {
     const statusesToSync = ['completed', 'contract_paid'];
     const attendee = activeMeeting?.attendees?.find(a => a.id === participantId);
     const isPrincipal = attendee && !attendee.is_partner && !attendee.parent_attendee_id;
@@ -198,10 +202,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       status: newStatus,
       meetingId: activeMeeting?.id,
       syncSlot: shouldSyncSlot,
+      outcomeReason: outcome?.reason,
+      outcomeReasonNote: outcome?.note,
     }, {
       onSuccess: () => {
         if (newStatus === 'no_show') {
           setShowNoShowConfirm(false);
+          setPendingNoShowReason(null);
         }
       }
     });
@@ -209,7 +216,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const handleNoShowConfirm = () => {
     if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, 'no_show');
+      handleParticipantStatusChange(
+        selectedParticipant.id,
+        'no_show',
+        pendingNoShowReason ?? undefined,
+      );
     }
   };
 
