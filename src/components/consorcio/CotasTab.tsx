@@ -213,7 +213,7 @@ export function CotasTab({ range }: CotasTabProps) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, mes, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, range?.startDate, range?.endDate, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -376,21 +376,6 @@ export function CotasTab({ range }: CotasTabProps) {
     <div className="space-y-6">
       {/* Barra de ação da etapa Cotas */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Select value={mes} onValueChange={onMesChange}>
-            <SelectTrigger className="h-9 w-44 text-sm capitalize">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_OPTIONS.map(opt => (
-                <SelectItem key={opt.value} value={opt.value} className="capitalize">
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-[11px] text-muted-foreground">mês de referência das cotas</span>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           {canRecalculate && (
             <AlertDialog open={recalcOpen} onOpenChange={setRecalcOpen}>
@@ -704,11 +689,6 @@ export function CotasTab({ range }: CotasTabProps) {
             <SelectItem value="imovel">🏠 Imóvel</SelectItem>
           </SelectContent>
         </Select>
-
-        <ConsorcioPeriodFilter 
-          value={dateRangeFilter} 
-          onChange={setDateRangeFilter} 
-        />
 
         <div className="flex-1" />
 
