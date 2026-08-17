@@ -154,70 +154,10 @@ export function AcceptProposalModal({
   const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
   const [qtdParcelasEmpresa, setQtdParcelasEmpresa] = useState<number>(0);
 
-  // ===== Dados do plano (comerciais do Termo de Adesão) =====
-  const { data: creditos = [] } = useAllConsorcioCreditos();
-  const { data: produtos = [] } = useConsorcioProdutos();
-  const { data: objetivos = [] } = useConsorcioObjetivoOptions();
-  const [creditoId, setCreditoId] = useState('');
-  const [planoOpen, setPlanoOpen] = useState(false);
-  const [valorCreditoStr, setValorCreditoStr] = useState('');
-  const [prazo, setPrazo] = useState('');
-  const [condicao, setCondicao] = useState('convencional');
-  const [parcela1a12, setParcela1a12] = useState('');
-  const [parcelaDemais, setParcelaDemais] = useState('');
-  const [parcelasFonte, setParcelasFonte] = useState<'tabela' | 'manual' | null>(null);
-  const [diaVencimento, setDiaVencimento] = useState('');
-  const [inicioSegundaParcela, setInicioSegundaParcela] = useState('');
-  const [objetivo, setObjetivo] = useState('');
-  const [incluiSeguro, setIncluiSeguro] = useState(false);
-
-  const creditosAtivos = creditos.filter((c) => c.ativo);
-  const creditoSelecionado = creditos.find((c) => c.id === creditoId);
-  const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
-  const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
-    ? produtoDoPlano.prazos_disponiveis
-    : [200, 220, 240];
-  const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
-
-  const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
-    if (!credito || !prz) return;
-    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou, nem mexa no selo.
-    if (![200, 220, 240].includes(Number(prz))) return;
-    const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
-    const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
-    if (c1 || c2) {
-      setParcela1a12(numberToBRLInput(c1 ?? null));
-      setParcelaDemais(numberToBRLInput(c2 ?? null));
-      setParcelasFonte('tabela');
-    } else {
-      // Prazo válido mas sem valor cadastrado nesta combinação: mantém os valores digitados,
-      // mas zera a fonte para o selo "da tabela oficial" não continuar mentindo.
-      setParcelasFonte(null);
-    }
-  };
-
-  // true quando há plano + prazo válido, mas a combinação não tem valor tabelado.
-  const semValorTabelado =
-    !!creditoSelecionado && !!prazo && !prazoSemTabela && parcelasFonte === null;
-
-  const handleSelectPlano = (id: string) => {
-    const credito = creditos.find((c) => c.id === id);
-    setCreditoId(id);
-    setPlanoOpen(false);
-    if (credito) {
-      setValorCreditoStr(numberToBRLInput(credito.valor_credito));
-      aplicarValoresTabela(credito, condicao, prazo);
-    }
-  };
-
-  // Bloco "Dados do plano" é opcional: serve para emitir o Termo de Adesão, não trava o aceite.
-  // O aviso aparece quando falta QUALQUER campo que o termo precisa (plano, parcelas, dia de vencimento).
-  // Os campos herdados da proposta (valor do crédito, prazo) não contam.
-  const termoIncompleto =
-    !creditoId ||
-    !parseBRLInput(parcela1a12) ||
-    !parseBRLInput(parcelaDemais) ||
-    !diaVencimento;
+  // ===== Dados do plano (comerciais do Termo de Adesão) — bloco compartilhado =====
+  // Bloco opcional: serve para emitir o Termo de Adesão, não trava o aceite.
+  const plano = useDadosPlano();
+  const { valorCreditoStr, prazo, incluiSeguro, produtoDoPlano } = plano;
 
   // Carrega proposta para pegar valor_credito/prazo
   const { data: proposal } = useQuery({
