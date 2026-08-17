@@ -103,6 +103,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
   const plano = useDadosPlano();
   const planoHidratado = useRef(false);
+  const planoSyncKey = useRef<string | null>(null);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
 
   // Documents attached to the pending registration
@@ -226,6 +227,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   useEffect(() => {
     if (!registration || planoHidratado.current) return;
     planoHidratado.current = true;
+    // Baseline: não reaplicar a tabela na hidratação (senão sobrescreve valor ajustado manualmente).
+    planoSyncKey.current = `${registration.prazo_meses ?? ''}|${registration.condicao_pagamento ?? 'convencional'}`;
     plano.hidratar({
       creditoId: (registration as any).credito_id,
       valorCredito: registration.valor_credito != null ? Number(registration.valor_credito) : null,
@@ -244,6 +247,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Prazo e condição vivem no formulário da cota: espelha no bloco do plano e reaplica a tabela.
   useEffect(() => {
     if (!planoHidratado.current) return;
+    const key = `${prazoMeses || ''}|${condicaoPagamento || 'convencional'}`;
+    if (planoSyncKey.current === key) return;
+    planoSyncKey.current = key;
     plano.sincronizarPrazoCondicao(String(prazoMeses || ''), condicaoPagamento || 'convencional');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prazoMeses, condicaoPagamento]);
