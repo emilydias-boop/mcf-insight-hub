@@ -738,7 +738,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormField control={form.control} name="prazo_meses" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Prazo (meses) *</FormLabel>
-                          <Select value={String(field.value)} onValueChange={v => field.onChange(Number(v))}>
+                          <Select value={field.value ? String(field.value) : ''} onValueChange={v => handlePrazoChange(Number(v))}>
                             <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                             <SelectContent>
                               {PRAZO_OPTIONS.map(o => (
@@ -775,7 +775,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormField control={form.control} name="condicao_pagamento" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Condição de Pagamento</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
+                          <Select value={field.value} onValueChange={handleCondicaoChange}>
                             <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                             <SelectContent>
                               {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
