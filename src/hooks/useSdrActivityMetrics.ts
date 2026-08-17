@@ -416,6 +416,10 @@ export function useSdrActivityMetrics(
         if (activity.activity_type !== 'click_to_call') return;
 
         const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+        // A metadata do click_to_call traz `ok: false` quando a discagem
+        // falhou (Sonax recusou, timeout, etc). Tentativa que falhou não é
+        // ligação — somar isso infla o painel com ligação que nunca houve.
+        const dialOk = String(meta.ok ?? '') === 'true';
         let email = meta.sdr_email ? String(meta.sdr_email).toLowerCase() : '';
         if (!email && activity.user_id) {
           email = profileMap.get(activity.user_id)?.email ?? '';
@@ -425,7 +429,7 @@ export function useSdrActivityMetrics(
         const metrics = metricsMap.get(email);
         if (!metrics || metrics.source !== 'sonax') return;
 
-        if (String(meta.origin ?? '') === 'auto_dialer') {
+        if (dialOk && String(meta.origin ?? '') === 'auto_dialer') {
           metrics.autoDialerCalls++;
         }
 
@@ -435,7 +439,7 @@ export function useSdrActivityMetrics(
         const matched = (sonaxIndexByEmail.get(email) ?? []).some(
           (e) => e.num === num && e.at >= at - MATCH_BEFORE_MS && e.at <= at + MATCH_AFTER_MS,
         );
-        if (!matched) {
+        if (!matched && dialOk) {
           metrics.totalCalls++;
           // Sem evento de telefonia não há duração nem confirmação de
           // atendimento, então entra como não atendida.
