@@ -101,6 +101,7 @@ export function PendingRegistrationsList({
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
+  const [completarId, setCompletarId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
