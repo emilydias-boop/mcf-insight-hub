@@ -181,7 +181,7 @@ export function AcceptProposalModal({
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
-    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou.
+    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou, nem mexa no selo.
     if (![200, 220, 240].includes(Number(prz))) return;
     const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
     const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
@@ -189,8 +189,16 @@ export function AcceptProposalModal({
       setParcela1a12(numberToBRLInput(c1 ?? null));
       setParcelaDemais(numberToBRLInput(c2 ?? null));
       setParcelasFonte('tabela');
+    } else {
+      // Prazo válido mas sem valor cadastrado nesta combinação: mantém os valores digitados,
+      // mas zera a fonte para o selo "da tabela oficial" não continuar mentindo.
+      setParcelasFonte(null);
     }
   };
+
+  // true quando há plano + prazo válido, mas a combinação não tem valor tabelado.
+  const semValorTabelado =
+    !!creditoSelecionado && !!prazo && !prazoSemTabela && parcelasFonte === null;
 
   const handleSelectPlano = (id: string) => {
     const credito = creditos.find((c) => c.id === id);
@@ -203,12 +211,12 @@ export function AcceptProposalModal({
   };
 
   // Bloco "Dados do plano" é opcional: serve para emitir o Termo de Adesão, não trava o aceite.
-  const planoVazio =
-    !creditoId &&
-    !parseBRLInput(valorCreditoStr) &&
-    !prazo &&
-    !parseBRLInput(parcela1a12) &&
-    !parseBRLInput(parcelaDemais) &&
+  // O aviso aparece quando falta QUALQUER campo que o termo precisa (plano, parcelas, dia de vencimento).
+  // Os campos herdados da proposta (valor do crédito, prazo) não contam.
+  const termoIncompleto =
+    !creditoId ||
+    !parseBRLInput(parcela1a12) ||
+    !parseBRLInput(parcelaDemais) ||
     !diaVencimento;
 
   // Carrega proposta para pegar valor_credito/prazo
@@ -394,7 +402,7 @@ export function AcceptProposalModal({
             {/* ===== Dados do plano ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
-              {planoVazio && (
+              {termoIncompleto && (
                 <p className="text-xs text-muted-foreground">
                   Preencha para gerar o Termo de Adesão. Sem estes dados o aceite funciona, mas o termo não pode ser emitido.
                 </p>
@@ -518,6 +526,11 @@ export function AcceptProposalModal({
                     placeholder="0,00"
                   />
                 </div>
+                {semValorTabelado && (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-amber-500">sem valor tabelado para esta combinação</p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Dia de vencimento</Label>
                   <Input
