@@ -10,12 +10,14 @@ export interface TermoPublicoCertificado {
 }
 
 export interface TermoPublico {
+  tipo: 'adesao' | 'comprovante_cadastro';
   status: 'pendente' | 'assinado' | 'expirado' | 'cancelado';
   expires_at: string;
   conteudo?: string;
   nome_mascarado?: string;
   documento_mascarado?: string;
   assinado_em?: string | null;
+  visualizado_em?: string | null;
   certificado?: TermoPublicoCertificado | null;
 }
 
