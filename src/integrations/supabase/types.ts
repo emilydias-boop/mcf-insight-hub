@@ -15499,11 +15499,13 @@ export type Database = {
         Returns: undefined
       }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
+      redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
       }
+      resolve_actor_email: { Args: { _user_id: string }; Returns: string }
       resolve_actor_name: { Args: { _user_id: string }; Returns: string }
       resolve_deal_owner: {
         Args: { _deal_id: string }
