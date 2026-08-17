@@ -4258,6 +4258,7 @@ export type Database = {
           cpf_conjuge: string | null
           created_at: string
           created_by: string | null
+          credito_id: string | null
           data_contratacao: string | null
           data_fundacao: string | null
           deal_id: string | null
@@ -4282,9 +4283,12 @@ export type Database = {
           natureza_juridica: string | null
           nome_completo: string | null
           num_funcionarios: number | null
+          objetivo: string | null
           observacoes: string | null
           origem: string | null
           origem_detalhe: string | null
+          parcela_1a_12a: number | null
+          parcela_demais: number | null
           parcelas_pagas_empresa: number | null
           patrimonio: number | null
           pix: string | null
@@ -4325,6 +4329,7 @@ export type Database = {
           cpf_conjuge?: string | null
           created_at?: string
           created_by?: string | null
+          credito_id?: string | null
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
@@ -4349,9 +4354,12 @@ export type Database = {
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null
+          objetivo?: string | null
           observacoes?: string | null
           origem?: string | null
           origem_detalhe?: string | null
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_pagas_empresa?: number | null
           patrimonio?: number | null
           pix?: string | null
@@ -4392,6 +4400,7 @@ export type Database = {
           cpf_conjuge?: string | null
           created_at?: string
           created_by?: string | null
+          credito_id?: string | null
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
@@ -4416,9 +4425,12 @@ export type Database = {
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null
+          objetivo?: string | null
           observacoes?: string | null
           origem?: string | null
           origem_detalhe?: string | null
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_pagas_empresa?: number | null
           patrimonio?: number | null
           pix?: string | null
@@ -4446,6 +4458,13 @@ export type Database = {
           webhook_carta_cadastrada_enviado_em?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "consorcio_pending_registrations_credito_id_fkey"
+            columns: ["credito_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_creditos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "consorcio_pending_registrations_deal_id_fkey"
             columns: ["deal_id"]
