@@ -138,7 +138,7 @@ function useLeadReportAccess(dealId: string | undefined) {
     },
   });
 
-  if (isLeadership) return { canView: true, loading: false, error: null as any };
+  if (isLeadership) return { canView: true, isLeadership, loading: false, error: null as any };
   if (isLoading || !data) return { canView: false, isLeadership, loading: isLoading, error };
 
   const email = (user?.email || '').toLowerCase();
@@ -512,7 +512,11 @@ export default function RelatorioLead() {
                     <Field label="Grupo / Cota" value={`${r.grupo || NOT_RECORDED} / ${r.cota || NOT_RECORDED}`} />
                     <Field label="Criado em" value={fmtDateTime(r.created_at)} />
                     <Field label="Cadastrada na Embracon" value={fmtDateTime(r.cadastrada_at)} />
+                    <Field label="Cadastrada por" value={r.cadastrada_por} />
                     <Field label="Cota aberta" value={fmtDateTime(r.cota_aberta_at)} />
+                    <Field label="Cota aberta por" value={r.cota_aberta_por} />
+                    <Field label="Vinculada em" value={fmtDateTime(r.vinculada_at)} />
+                    <Field label="Vinculada por" value={r.vinculada_por} />
                   </div>
                   {r.declinada_at && (
                     <div className="text-xs">
@@ -756,7 +760,10 @@ export default function RelatorioLead() {
               {data.unknowns.map((u, i) => (
                 <li key={`u-${i}`} className="flex items-start gap-2">
                   <HelpCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                  <span>{tech ? u : u.replace(/\s*\([^()]*\)\.?$/, '.')}</span>
+                  <span>
+                    {u.label}: fonte indisponível, não é possível afirmar
+                    {tech && u.error ? ` (${u.error})` : ''}.
+                  </span>
                 </li>
               ))}
             </ul>
