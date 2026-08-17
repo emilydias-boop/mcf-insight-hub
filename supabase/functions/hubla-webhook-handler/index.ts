@@ -1935,7 +1935,9 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
                   .from('deal_activities')
                   .insert({
                     deal_id: outsideDeal.id,
-                    activity_type: ownerChanged ? 'owner_change' : 'stage_change',
+                    // stage_change e owner_change vêm dos triggers em crm_deals.
+                    // Aqui fica só o contexto da detecção de Outside.
+                    activity_type: 'outside_detected',
                     description: ownerChanged
                       ? `Lead Outside reatribuído de ${previousOwnerEmail || 'sem dono'} para ${assignedOwnerEmail} via webhook Hubla (regra fixa Outside)`
                       : `Movido para Contrato Pago como Outside (pagamento sem R1) via webhook Hubla`,
