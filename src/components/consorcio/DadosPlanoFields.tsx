@@ -112,17 +112,6 @@ export function useDadosPlano(controlled?: DadosPlanoControlled) {
     setCondicaoState(v);
     aplicarValoresTabela(creditoSelecionado, v, prazo);
   };
-  /**
-   * Reaplica a tabela para uma combinação prazo/condição já escrita no formulário do pai.
-   * Mantido para quem controla os selects fora do bloco (OpenCotaModal).
-   */
-  const sincronizarPrazoCondicao = (prz: string, cond: string) => {
-    if (!controlled) {
-      setPrazoInterno(prz);
-      setCondicaoInterna(cond);
-    }
-    aplicarValoresTabela(creditoSelecionado, cond, prz);
-  };
 
   const setParcela1a12 = (raw: string) => {
     setParcela1a12State(formatBRLInput(raw));
@@ -169,7 +158,7 @@ export function useDadosPlano(controlled?: DadosPlanoControlled) {
     creditos, creditosAtivos, produtos, objetivos,
     creditoId, planoOpen, setPlanoOpen, selecionarPlano,
     valorCreditoStr, setValorCreditoStr,
-    prazo, setPrazo, condicao, setCondicao, sincronizarPrazoCondicao,
+    prazo, setPrazo, condicao, setCondicao,
     parcela1a12, setParcela1a12, parcelaDemais, setParcelaDemais, parcelasFonte,
     diaVencimento, setDiaVencimento,
     inicioSegundaParcela, setInicioSegundaParcela,
@@ -264,6 +253,11 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
               </Command>
             </PopoverContent>
           </Popover>
+        )}
+        {plano.creditoSelecionado && !plano.prazo && (
+          <p className="text-xs text-muted-foreground">
+            Escolha o prazo para preencher os valores da tabela.
+          </p>
         )}
       </div>
 
