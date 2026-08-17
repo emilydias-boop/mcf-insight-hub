@@ -49,6 +49,10 @@ export function TermoPanelDialog({
       clienteNome,
       certificado: !isComprovante && t.status === 'assinado' ? t : null,
       prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
+      canceladoStamp:
+        t.status === 'cancelado' && t.cancelado_em
+          ? { data: t.cancelado_em, motivo: t.cancelado_motivo || '' }
+          : null,
     });
   };
 
