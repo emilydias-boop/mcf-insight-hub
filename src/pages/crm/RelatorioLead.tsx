@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, Printer, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLeadReport, BOOKED_AT_TRACKING_SINCE, type SourceStatus } from '@/hooks/useLeadReport';
 import { useLeadFullTimeline } from '@/hooks/useLeadFullTimeline';
 import { maskDocumento } from '@/lib/consorcioTermo';
-import { PAPEL_CSS } from '@/lib/documentoPapel';
+import { PAPEL_CSS, PAPEL_PAGE_CSS } from '@/lib/documentoPapel';
 import { PapelBrand } from '@/components/consorcio/PapelBrand';
 
 /**
@@ -44,9 +43,23 @@ const PRINT_CSS = `
   table { break-inside: auto; }
   thead { display: table-header-group; }
   tr, li { break-inside: avoid; }
-  @page { size: A4; margin: 14mm; }
 }
 `;
+
+/**
+ * Selos do papel — NÃO usar `Badge` do design system aqui: `variant="outline"`
+ * aplica `text-foreground`, que no tema escuro é quase branco e desaparece
+ * sobre o papel claro (na tela e no PDF).
+ */
+function Selo({ children, tom = 'neutro' }: { children: React.ReactNode; tom?: 'neutro' | 'erro' | 'mcf' }) {
+  const cls = tom === 'erro' ? 'tag err' : tom === 'mcf' ? 'tag mcf' : 'tag cli';
+  return <span className={cls}>{children}</span>;
+}
+
+/** Aviso em tinta explícita (o `Alert` do design system herda os tokens). */
+const Aviso = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={className ? `aviso ${className}` : 'aviso'}>{children}</div>
+);
 
 const NOT_RECORDED = 'não registrado';
 
@@ -79,15 +92,11 @@ function Section({
         {subtitle && <p className="sub">{subtitle}</p>}
       </div>
       {failures.length > 0 && (
-        <Alert variant="destructive" className="avoid-break">
-          <AlertDescription className="text-xs">
-            Não foi possível carregar esta seção
-            {showTechnical
-              ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}`
-              : ''}
-            . Nada aqui pode ser lido como ausência de dado.
-          </AlertDescription>
-        </Alert>
+        <Aviso className="avoid-break">
+          Não foi possível carregar esta seção
+          {showTechnical ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}` : ''}
+          . Nada aqui pode ser lido como ausência de dado.
+        </Aviso>
       )}
       {children}
     </section>
@@ -104,7 +113,9 @@ function Field({ label, value, full }: { label: string; value: React.ReactNode; 
 }
 
 const Empty = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-sm dim italic">{children}</p>
+  <p className="text-sm italic" style={{ color: '#777' }}>
+    {children}
+  </p>
 );
 
 const jsonSnippet = (v: any) => {
@@ -223,7 +234,7 @@ export default function RelatorioLead() {
 
   return (
     <div className="p-4 md:p-6">
-      <style>{`${PAPEL_CSS}\n${PRINT_CSS}`}</style>
+      <style>{`${PAPEL_CSS}\n${PRINT_CSS}\n${PAPEL_PAGE_CSS}`}</style>
 
       <div className="no-print flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -246,12 +257,10 @@ export default function RelatorioLead() {
             {d.pipeline_name ? `${d.pipeline_name} · ` : ''}Negócio {d.id}
           </p>
           {data.unknowns.length > 0 && (
-            <Alert variant="destructive" className="mt-2 avoid-break">
-              <AlertDescription className="text-xs">
-                <strong>Atenção:</strong> parte das fontes não pôde ser lida. Onde isso ocorreu, o relatório diz
-                “fonte indisponível” — não afirma ausência.
-              </AlertDescription>
-            </Alert>
+            <Aviso className="mt-2 avoid-break">
+              <strong>Atenção:</strong> parte das fontes não pôde ser lida. Onde isso ocorreu, o relatório diz
+              “fonte indisponível” — não afirma ausência.
+            </Aviso>
           )}
         </header>
 
@@ -295,13 +304,11 @@ export default function RelatorioLead() {
           subtitle="Eventos registrados em todos os negócios deste contato. Reuniões vêm da mesma leitura da seção 3."
         >
           {timelineError ? (
-            <Alert variant="destructive" className="avoid-break">
-              <AlertDescription className="text-xs">
-                Não foi possível carregar a linha do tempo
-                {tech ? ` — ${(timelineError as any)?.message || 'erro desconhecido'}` : ''}. Fonte indisponível,
-                não é possível afirmar ausência de eventos.
-              </AlertDescription>
-            </Alert>
+            <Aviso className="avoid-break">
+              Não foi possível carregar a linha do tempo
+              {tech ? ` — ${(timelineError as any)?.message || 'erro desconhecido'}` : ''}. Fonte indisponível,
+              não é possível afirmar ausência de eventos.
+            </Aviso>
           ) : timeline.length === 0 ? (
             <Empty>Nenhum evento registrado.</Empty>
           ) : (
