@@ -117,9 +117,7 @@ export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[]
 export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Date()): TermoDados {
   const parcelas = parcelasMcfComValoresDigitados(reg);
   const total = parcelas.reduce((s, p) => s + p.valor, 0);
-  const lista = parcelas.length
-    ? parcelas.map((p) => `- Parcela ${p.numero} — ${formatCurrency(p.valor)}`).join('\n')
-    : '- Nenhuma parcela sob responsabilidade da MCF Capital';
+  const lista = montarTabelaParcelasMcf(parcelas, total, reg.dia_vencimento);
 
   const isPj = reg.tipo_pessoa === 'pj';
   return {
