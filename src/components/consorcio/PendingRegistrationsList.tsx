@@ -260,6 +260,9 @@ export function PendingRegistrationsList({
                     onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
                     onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
                     onUndecline={() => undeclineMut.mutate(reg.id)}
+                    termos={termosByPending[reg.id] || []}
+                    onGerarTermo={() => setTermoTarget(reg)}
+                    onVerTermos={() => setTermoPanelTarget(reg)}
                     isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
                   />
                 ))}
@@ -350,6 +353,22 @@ export function PendingRegistrationsList({
       </CardContent>
     </Card>
     <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    {termoTarget && (
+      <GerarTermoModal
+        open={!!termoTarget}
+        onOpenChange={(o) => !o && setTermoTarget(null)}
+        registrationId={termoTarget.id}
+      />
+    )}
+    {termoPanelTarget && (
+      <TermoPanelDialog
+        open={!!termoPanelTarget}
+        onOpenChange={(o) => !o && setTermoPanelTarget(null)}
+        termos={termosByPending[termoPanelTarget.id] || []}
+        clienteNome={termoPanelTarget.nome_completo || termoPanelTarget.razao_social || 'cliente'}
+        onGerarNovo={() => setTermoTarget(termoPanelTarget)}
+      />
+    )}
     <Dialog open={!!declineTarget} onOpenChange={(o) => { if (!o) { setDeclineTarget(null); setDeclineReason(''); } }}>
       <DialogContent>
         <DialogHeader>
