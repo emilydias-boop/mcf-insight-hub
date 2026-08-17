@@ -211,12 +211,12 @@ export function AcceptProposalModal({
   };
 
   // Bloco "Dados do plano" é opcional: serve para emitir o Termo de Adesão, não trava o aceite.
-  const planoVazio =
-    !creditoId &&
-    !parseBRLInput(valorCreditoStr) &&
-    !prazo &&
-    !parseBRLInput(parcela1a12) &&
-    !parseBRLInput(parcelaDemais) &&
+  // O aviso aparece quando falta QUALQUER campo que o termo precisa (plano, parcelas, dia de vencimento).
+  // Os campos herdados da proposta (valor do crédito, prazo) não contam.
+  const termoIncompleto =
+    !creditoId ||
+    !parseBRLInput(parcela1a12) ||
+    !parseBRLInput(parcelaDemais) ||
     !diaVencimento;
 
   // Carrega proposta para pegar valor_credito/prazo
