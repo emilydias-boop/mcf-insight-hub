@@ -1142,21 +1142,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               if (!deal) throw new Error('Negócio não encontrado');
                               const fromStage = deal.stage_id;
                               await updateDeal.mutateAsync({ id: dealId, stage_id: FOLLOWUP_CLOSER_STAGE_ID } as any);
-                              try {
-                                await createDealActivity.mutateAsync({
-                                  deal_id: dealId,
-                                  activity_type: 'stage_change',
-                                  description: 'Movido para Follow-up Closer',
-                                  metadata: {
-                                    source: 'agenda_drawer',
-                                    from_stage: fromStage,
-                                    to_stage: FOLLOWUP_CLOSER_STAGE_ID,
-                                    user_id: user?.id ?? null,
-                                  },
-                                } as any);
-                              } catch (actErr) {
-                                console.warn('[Follow-up] activity log failed', actErr);
-                              }
+                              // stage_change é registrado pelo trigger
+                              // trg_log_deal_stage_change em crm_deals — não duplicar aqui.
                               toast.success('Movido para Follow-up Closer');
                             } catch (e: any) {
                               console.error('[Follow-up] failed', e);
