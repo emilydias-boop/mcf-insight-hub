@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, PhoneMissed, PhoneCall, ListTree } from "lucide-react";
+import { Phone, PhoneMissed, PhoneCall, ListTree, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSdrActivityMetrics } from "@/hooks/useSdrActivityMetrics";
@@ -79,7 +79,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<Phone className="h-3.5 w-3.5" />} label="Total" tooltip="Total de ligações outbound disparadas no período." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
-                    <HeaderWithTooltip icon={<span className="text-xs">⚡</span>} label="Auto-Disc." tooltip="Discagens iniciadas pelo Auto-Discador (já incluídas no total)." />
+                    <HeaderWithTooltip icon={<Zap className="h-3.5 w-3.5 text-amber-500" />} label="Auto-Disc." tooltip="Discagens iniciadas pelo Auto-Discador (já incluídas no total)." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
