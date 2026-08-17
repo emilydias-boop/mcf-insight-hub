@@ -222,6 +222,38 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
 
+  // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
+  useEffect(() => {
+    if (!registration || planoHidratado.current) return;
+    planoHidratado.current = true;
+    plano.hidratar({
+      creditoId: (registration as any).credito_id,
+      valorCredito: registration.valor_credito != null ? Number(registration.valor_credito) : null,
+      prazo: registration.prazo_meses != null ? Number(registration.prazo_meses) : null,
+      condicao: registration.condicao_pagamento,
+      parcela1a12: (registration as any).parcela_1a_12a != null ? Number((registration as any).parcela_1a_12a) : null,
+      parcelaDemais: (registration as any).parcela_demais != null ? Number((registration as any).parcela_demais) : null,
+      diaVencimento: registration.dia_vencimento != null ? Number(registration.dia_vencimento) : null,
+      inicioSegundaParcela: registration.inicio_segunda_parcela,
+      objetivo: (registration as any).objetivo,
+      incluiSeguro: registration.inclui_seguro,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registration]);
+
+  // Prazo e condição vivem no formulário da cota: espelha no bloco do plano e reaplica a tabela.
+  useEffect(() => {
+    if (!planoHidratado.current) return;
+    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), condicaoPagamento || 'convencional');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prazoMeses, condicaoPagamento]);
+
+  useEffect(() => {
+    if (!open || !focusPlano) return;
+    const t = setTimeout(() => cotaBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    return () => clearTimeout(t);
+  }, [open, focusPlano, registration]);
+
   // Duplicate check on client fields (CPF, nome, e-mail, telefone) for PF/PJ
   const clienteCpf = form.watch('cliente_cpf');
   const clienteNome = form.watch('cliente_nome');
