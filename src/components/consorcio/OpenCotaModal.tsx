@@ -103,7 +103,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
   const plano = useDadosPlano();
   const planoHidratado = useRef(false);
-  const planoSyncKey = useRef<string | null>(null);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
 
   // Documents attached to the pending registration
@@ -191,29 +190,39 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       form.setValue('cliente_renda', registration.renda || 0);
       form.setValue('cliente_patrimonio', registration.patrimonio || 0);
       form.setValue('cliente_pix', registration.pix || '');
-      // Populate cota fields if already saved (so view/edit shows real values)
-      if (registration.valor_credito != null) form.setValue('valor_credito', Number(registration.valor_credito));
-      if (registration.prazo_meses != null) form.setValue('prazo_meses', Number(registration.prazo_meses));
-      if (registration.tipo_produto) form.setValue('tipo_produto', registration.tipo_produto);
-      if (registration.produto_codigo) form.setValue('produto_codigo', registration.produto_codigo);
-      if (registration.condicao_pagamento) form.setValue('condicao_pagamento', registration.condicao_pagamento);
-      if (registration.inclui_seguro != null) form.setValue('inclui_seguro', !!registration.inclui_seguro);
-      if (registration.empresa_paga_parcelas) form.setValue('empresa_paga_parcelas', registration.empresa_paga_parcelas);
-      if (registration.tipo_contrato) form.setValue('tipo_contrato', registration.tipo_contrato);
-      if (registration.parcelas_pagas_empresa != null) form.setValue('parcelas_pagas_empresa', Number(registration.parcelas_pagas_empresa));
-      if (registration.dia_vencimento != null) form.setValue('dia_vencimento', Number(registration.dia_vencimento));
-      if (registration.inicio_segunda_parcela) form.setValue('inicio_segunda_parcela', registration.inicio_segunda_parcela);
-      if (registration.data_contratacao) form.setValue('data_contratacao', registration.data_contratacao);
-      if (registration.categoria) form.setValue('categoria', registration.categoria);
-      if (registration.grupo) form.setValue('grupo', registration.grupo);
-      if (registration.cota) form.setValue('cota', registration.cota);
-      if (registration.origem) form.setValue('origem', registration.origem);
-      if (registration.origem_detalhe) form.setValue('origem_detalhe', registration.origem_detalhe);
-      if (registration.vendedor_id) form.setValue('vendedor_id', registration.vendedor_id);
-      if (registration.vendedor_name_cota) form.setValue('vendedor_name', registration.vendedor_name_cota);
-      if (registration.observacoes) form.setValue('observacoes', registration.observacoes);
+      // Populate cota fields if already saved (so view/edit shows real values).
+      // No modo de edição do cadastro pendente, campo sem valor no registro fica VAZIO —
+      // nunca com o default do formulário, para o "Salvar" não carimbar dados inventados.
+      const setCota = (name: any, value: any, vazio: any) => {
+        if (value != null && value !== '') form.setValue(name, value);
+        else if (isViewMode) form.setValue(name, vazio);
+      };
+      setCota('valor_credito', registration.valor_credito != null ? Number(registration.valor_credito) : null, null);
+      setCota('prazo_meses', registration.prazo_meses != null ? Number(registration.prazo_meses) : null, null);
+      setCota('tipo_produto', registration.tipo_produto, '');
+      setCota('produto_codigo', registration.produto_codigo, '');
+      setCota('condicao_pagamento', registration.condicao_pagamento, '');
+      setCota('inclui_seguro', registration.inclui_seguro != null ? !!registration.inclui_seguro : null, false);
+      setCota('empresa_paga_parcelas', registration.empresa_paga_parcelas, '');
+      setCota('tipo_contrato', registration.tipo_contrato, '');
+      setCota('parcelas_pagas_empresa', registration.parcelas_pagas_empresa != null ? Number(registration.parcelas_pagas_empresa) : null, 0);
+      setCota('dia_vencimento', registration.dia_vencimento != null ? Number(registration.dia_vencimento) : null, null);
+      setCota('inicio_segunda_parcela', registration.inicio_segunda_parcela, '');
+      setCota('data_contratacao', registration.data_contratacao, '');
+      setCota('categoria', registration.categoria, '');
+      setCota('grupo', registration.grupo, '');
+      setCota('cota', registration.cota, '');
+      setCota('origem', registration.origem, '');
+      setCota('origem_detalhe', registration.origem_detalhe, '');
+      setCota('vendedor_id', registration.vendedor_id, '');
+      setCota('vendedor_name', registration.vendedor_name_cota, '');
+      setCota('observacoes', registration.observacoes, '');
+      setCota('valor_comissao', (registration as any).valor_comissao ?? null, null);
+      setCota('e_transferencia', (registration as any).e_transferencia ?? null, false);
+      setCota('transferido_de', (registration as any).transferido_de, '');
     }
-  }, [registration, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registration, form, isViewMode]);
 
   const valorCredito = form.watch('valor_credito');
   const prazoMeses = form.watch('prazo_meses');
@@ -244,15 +253,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registration]);
 
-  // Prazo e condição vivem no formulário da cota: espelha no bloco do plano e reaplica a tabela.
-  useEffect(() => {
-    if (!planoHidratado.current) return;
-    const key = `${prazoMeses || ''}|${condicaoPagamento || 'convencional'}`;
-    if (planoSyncKey.current === key) return;
-    planoSyncKey.current = key;
-    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), condicaoPagamento || 'convencional');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prazoMeses, condicaoPagamento]);
+  /**
+   * Prazo e condição vivem no formulário da cota. A tabela é reaplicada apenas quando o
+   * USUÁRIO troca um desses campos (handlers abaixo) — nunca por re-render/hidratação,
+   * o que sobrescreveria a parcela ajustada à mão.
+   */
+  const handlePrazoChange = (v: number) => {
+    form.setValue('prazo_meses', v);
+    plano.sincronizarPrazoCondicao(String(v || ''), condicaoPagamento || 'convencional');
+  };
+  const handleCondicaoChange = (v: string) => {
+    form.setValue('condicao_pagamento', v);
+    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), v || 'convencional');
+  };
 
   useEffect(() => {
     if (!open || !focusPlano) return;
