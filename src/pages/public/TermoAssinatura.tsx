@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Download, FileBadge, FileSignature, Loader2, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, FileBadge, FileSignature, Loader2, Printer, ShieldAlert } from 'lucide-react';
 import { useTermoPublico } from '@/hooks/useTermoPublico';
 import { TermoMarkdown } from '@/components/consorcio/TermoMarkdown';
-import { baixarTermoPdf } from '@/lib/consorcioTermo';
+import { PapelBrand } from '@/components/consorcio/PapelBrand';
+import { imprimirDocumento } from '@/lib/consorcioTermo';
+import { PAPEL_CSS } from '@/lib/documentoPapel';
 
 export default function TermoAssinatura() {
   const { token } = useParams<{ token: string }>();
@@ -13,6 +15,7 @@ export default function TermoAssinatura() {
   const [aceite, setAceite] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [avisoPopup, setAvisoPopup] = useState(false);
 
   const isComprovante = termo?.tipo === 'comprovante_cadastro';
 
@@ -46,7 +49,9 @@ export default function TermoAssinatura() {
     return <Aviso titulo="Documento não encontrado" texto="Verifique o link recebido ou entre em contato com quem enviou o documento." />;
   }
 
-  if (termo.status === 'cancelado') {
+  // Termo de adesão cancelado deixa de ser assinável e não é exibido.
+  // O comprovante cancelado continua visível, com tarja — é documento informativo.
+  if (termo.status === 'cancelado' && !isComprovante) {
     return (
       <Aviso
         titulo="Documento cancelado"
@@ -55,134 +60,149 @@ export default function TermoAssinatura() {
     );
   }
 
-  if (termo.status === 'expirado') {
+  if (termo.status === 'expirado' && !isComprovante) {
     return <Aviso titulo="Prazo expirado" texto="O prazo para assinatura deste termo expirou. Fale com o seu consultor para receber um novo link." />;
   }
 
   const assinado = termo.status === 'assinado';
+  const cancelado = termo.status === 'cancelado';
   const cert = termo.certificado;
 
-  const download = () =>
-    baixarTermoPdf({
+  const imprimir = async () => {
+    const ok = await imprimirDocumento({
       conteudo: termo.conteudo || '',
       clienteNome: cert?.assinante_nome || termo.nome_mascarado || 'cliente',
+      tituloDocumento: isComprovante ? 'Comprovante de Cadastro' : 'Termo de Adesão',
       certificado: assinado && !isComprovante ? cert : null,
-      prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
     });
+    setAvisoPopup(!ok);
+  };
+
+  const botaoImprimir = (
+    <button onClick={imprimir} className="mcf-btn no-print">
+      <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
+    </button>
+  );
 
   return (
-    <div className="min-h-[100dvh] bg-slate-100 text-slate-900">
-      <header className="bg-white border-b">
-        <div className="max-w-3xl mx-auto px-5 py-5">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">MCF Capital</div>
-          <h1 className="text-xl sm:text-2xl font-semibold mt-1">
-            {isComprovante ? 'Comprovante de Cadastro — Consórcio' : 'Termo de Adesão — Consórcio'}
-          </h1>
-        </div>
-      </header>
+    <div className="min-h-[100dvh] bg-[#eeeeea] py-6 px-3 sm:px-6">
+      <style>{`${PAPEL_CSS}
+.mcf-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  background:#1f3864;color:#fff;border:0;border-radius:7px;padding:13px 18px;font-size:14px;
+  font-weight:600;cursor:pointer}
+.mcf-btn:hover{background:#16294a}
+.mcf-btn:disabled{opacity:.5;cursor:not-allowed}
+.mcf-field{display:block;margin-bottom:12px}
+.mcf-field span{font-size:12px;font-weight:600;color:#444}
+.mcf-field input{margin-top:4px;width:100%;box-sizing:border-box;border:1px solid #ccccc6;
+  border-radius:6px;padding:11px 12px;font-size:15px;background:#fff}
+.mcf-field input:focus{outline:2px solid #1f3864;outline-offset:1px}
+.mcf-folha{max-width:820px;margin:0 auto;background:#fcfcfb;border:1px solid #e4e4df;
+  border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.07);padding:34px 30px}
+@media print{.mcf-folha{border:0;box-shadow:none;padding:0;max-width:none}
+  body{background:#fcfcfb}}
+`}</style>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-5 py-6 space-y-5">
-        {isComprovante && (
-          <div className="rounded-lg border border-sky-300 bg-sky-50 p-4 flex gap-3">
-            <FileBadge className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <div className="font-semibold text-sky-900">Comprovante de cadastro da sua cota</div>
-              <div className="text-sky-800">
-                Documento apenas informativo — não é necessário assinar. Guarde uma cópia em PDF.
-              </div>
-            </div>
+      <div className="mcf-folha papel">
+        {cancelado && (
+          <div className="tarja">
+            Documento cancelado — não é mais válido
           </div>
+        )}
+
+        <PapelBrand
+          subtitulo={isComprovante ? 'Comprovante de Cadastro — Consórcio' : 'Termo de Adesão — Consórcio'}
+        />
+
+        {isComprovante && !cancelado && (
+          <p className="legal" style={{ marginTop: 0 }}>
+            Documento apenas informativo — não é necessário assinar. Guarde uma cópia em PDF.
+          </p>
         )}
 
         {assinado && !isComprovante && (
-          <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 flex gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <div className="font-semibold text-emerald-800">Termo assinado com sucesso</div>
-              <div className="text-emerald-700">
-                Guarde uma cópia em PDF para os seus registros.
-              </div>
-            </div>
-          </div>
+          <p className="legal" style={{ marginTop: 0, color: '#166534', fontSize: 11 }}>
+            <CheckCircle2 className="h-3 w-3 inline mr-1" />
+            Termo assinado com sucesso — guarde uma cópia em PDF para os seus registros.
+          </p>
         )}
 
-        <article className="bg-white rounded-lg border shadow-sm px-5 py-6 sm:px-8 sm:py-8 text-[15px] leading-relaxed">
-          <TermoMarkdown content={termo.conteudo || ''} />
-        </article>
+        <TermoMarkdown content={termo.conteudo || ''} />
 
         {isComprovante ? (
-          <section className="bg-white rounded-lg border shadow-sm p-5 sm:p-6">
-            <button
-              onClick={download}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-slate-800 w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4" /> Baixar PDF
-            </button>
-          </section>
+          <div className="cert">
+            <div className="kv">
+              <div>
+                <b>Emitido em</b>
+                <span>
+                  {termo.visualizado_em || termo.assinado_em
+                    ? new Date(termo.visualizado_em || termo.assinado_em || '').toLocaleString('pt-BR', {
+                        timeZone: 'America/Sao_Paulo',
+                      })
+                    : new Date().toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            </div>
+            {botaoImprimir}
+          </div>
         ) : assinado ? (
-          <section className="bg-white rounded-lg border shadow-sm p-5 sm:p-6 space-y-3">
-            <h2 className="font-semibold flex items-center gap-2">
-              <FileSignature className="h-4 w-4" /> Certificado de assinatura eletrônica
-            </h2>
-            <dl className="text-sm space-y-1.5">
-              <Linha rotulo="Assinante" valor={cert?.assinante_nome || '—'} />
-              <Linha rotulo="CPF/CNPJ" valor={cert?.assinante_cpf || '—'} />
-              <Linha
-                rotulo="Data e hora (Brasília)"
-                valor={
-                  cert?.assinado_em
+          <div className="cert">
+            <h3>Certificado de assinatura eletrônica</h3>
+            <div className="kv">
+              <div>
+                <b>Signatário</b>
+                <span>{cert?.assinante_nome || '—'}</span>
+              </div>
+              <div>
+                <b>CPF / CNPJ</b>
+                <span>{cert?.assinante_cpf || '—'}</span>
+              </div>
+              <div>
+                <b>Data e hora (Brasília)</b>
+                <span>
+                  {cert?.assinado_em
                     ? new Date(cert.assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-                    : '—'
-                }
-              />
-              <Linha rotulo="Endereço IP" valor={cert?.assinante_ip || '—'} />
-              <Linha rotulo="Hash SHA-256" valor={cert?.conteudo_hash || '—'} mono />
-            </dl>
-            <p className="text-xs text-slate-500">
-              Assinatura eletrônica com validade jurídica nos termos da MP nº 2.200-2/2001 e da Lei nº 14.063/2020.
+                    : '—'}
+                </span>
+              </div>
+              <div>
+                <b>Endereço IP</b>
+                <span>{cert?.assinante_ip || '—'}</span>
+              </div>
+            </div>
+            <div className="hashline">Hash SHA-256 do conteúdo assinado: {cert?.conteudo_hash || '—'}</div>
+            <p className="legal">
+              Assinatura eletrônica válida nos termos da Medida Provisória nº 2.200-2/2001 e da Lei nº
+              14.063/2020. Ficam registrados nome, documento, data, hora, endereço IP e o resumo criptográfico do
+              conteúdo lido pelo signatário.
             </p>
-            <button
-              onClick={download}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-slate-800 w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4" /> Baixar PDF
-            </button>
-          </section>
+            {botaoImprimir}
+          </div>
         ) : (
-          <section className="bg-white rounded-lg border shadow-sm p-5 sm:p-6 space-y-4">
-            <h2 className="font-semibold">Assinatura eletrônica</h2>
-            <p className="text-sm text-slate-600">
-              Confirme seus dados exatamente como constam no termo — conferindo com{' '}
+          <div className="assin no-print">
+            <h3>
+              <FileSignature className="h-4 w-4 inline mr-1" /> Assinatura eletrônica
+            </h3>
+            <p style={{ fontSize: 12, color: '#555' }}>
+              Confirme seus dados exatamente como constam no documento — conferindo com{' '}
               <strong>{termo.nome_mascarado}</strong>, documento <strong>{termo.documento_mascarado}</strong>.
             </p>
 
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium">Nome completo</span>
-                <input
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  autoComplete="name"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium">CPF / CNPJ</span>
-                <input
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value)}
-                  inputMode="numeric"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-slate-400"
-                />
-              </label>
-            </div>
+            <label className="mcf-field">
+              <span>Nome completo</span>
+              <input value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" />
+            </label>
+            <label className="mcf-field">
+              <span>CPF / CNPJ</span>
+              <input value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" />
+            </label>
 
-            <label className="flex gap-3 items-start text-sm text-slate-700">
+            <label className="chk">
               <input
                 type="checkbox"
                 checked={aceite}
                 onChange={(e) => setAceite(e.target.checked)}
-                className="mt-1 h-4 w-4"
+                style={{ marginTop: 3, width: 16, height: 16 }}
               />
               <span>
                 Declaro que li e concordo integralmente com o conteúdo deste termo e reconheço que esta
@@ -193,35 +213,44 @@ export default function TermoAssinatura() {
             </label>
 
             {erro && (
-              <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 flex gap-2">
-                <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" /> {erro}
+              <div
+                style={{
+                  border: '1px solid #fca5a5',
+                  background: '#fef2f2',
+                  color: '#991b1b',
+                  borderRadius: 6,
+                  padding: 10,
+                  fontSize: 12.5,
+                  marginBottom: 12,
+                }}
+              >
+                <ShieldAlert className="h-4 w-4 inline mr-1" /> {erro}
               </div>
             )}
 
             <button
               onClick={submit}
               disabled={!nome.trim() || !cpf.trim() || !aceite || enviando}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white px-5 py-3 text-base font-medium hover:bg-slate-800 disabled:opacity-50 w-full sm:w-auto"
+              className="mcf-btn"
             >
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
               Assinar termo
             </button>
-          </section>
+          </div>
         )}
 
-        <footer className="text-xs text-slate-500 text-center pb-8">
-          MCF Capital · documento gerado eletronicamente
-        </footer>
-      </main>
-    </div>
-  );
-}
+        {avisoPopup && (
+          <p className="legal no-print" style={{ color: '#991b1b' }}>
+            O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e toque novamente em
+            “Imprimir / Salvar PDF”.
+          </p>
+        )}
 
-function Linha({ rotulo, valor, mono }: { rotulo: string; valor: string; mono?: boolean }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:gap-2">
-      <dt className="text-slate-500 sm:w-52 shrink-0">{rotulo}</dt>
-      <dd className={`font-medium break-all ${mono ? 'font-mono text-xs' : ''}`}>{valor}</dd>
+        <p className="legal">
+          MCF Capital · documento gerado eletronicamente
+          {isComprovante ? '' : ' · assinatura eletrônica com validade jurídica'}
+        </p>
+      </div>
     </div>
   );
 }
