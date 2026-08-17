@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { TermoAdesaoEditor } from '@/components/consorcio/TermoAdesaoEditor';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag } from 'lucide-react';
+import { Settings, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync, Tag, FileSignature } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
@@ -337,6 +338,11 @@ const Configuracoes = () => {
             <span className="hidden sm:inline">Importar Histórico</span>
             <span className="sm:hidden">Histórico</span>
           </TabsTrigger>
+          <TabsTrigger value="termo" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <FileSignature className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Termo de Adesão</span>
+            <span className="sm:hidden">Termo</span>
+          </TabsTrigger>
           <TabsTrigger value="tags" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
             <Tag className="h-3 w-3 sm:h-4 sm:w-4" />
             Tags
@@ -357,6 +363,10 @@ const Configuracoes = () => {
 
         <TabsContent value="importar-historico">
           <ImportarHistorico />
+        </TabsContent>
+
+        <TabsContent value="termo">
+          <TermoAdesaoEditor />
         </TabsContent>
 
         <TabsContent value="tags">

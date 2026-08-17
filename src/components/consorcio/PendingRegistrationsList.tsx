@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw, FileSignature } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,6 +39,9 @@ import {
   type EnrichedPendingRegistration,
 } from '@/hooks/useConsorcioPendingRegistrations';
 import { OpenCotaModal } from './OpenCotaModal';
+import { GerarTermoModal } from './GerarTermoModal';
+import { TermoPanelDialog } from './TermoPanelDialog';
+import { useTermosByPending, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
 import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
@@ -103,7 +106,10 @@ export function PendingRegistrationsList({
   const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
+  const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
   const unmarkCadastrada = useUnmarkPendingCadastrada();
@@ -254,6 +260,9 @@ export function PendingRegistrationsList({
                     onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
                     onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
                     onUndecline={() => undeclineMut.mutate(reg.id)}
+                    termos={termosByPending[reg.id] || []}
+                    onGerarTermo={() => setTermoTarget(reg)}
+                    onVerTermos={() => setTermoPanelTarget(reg)}
                     isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
                   />
                 ))}
@@ -344,6 +353,22 @@ export function PendingRegistrationsList({
       </CardContent>
     </Card>
     <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
+    {termoTarget && (
+      <GerarTermoModal
+        open={!!termoTarget}
+        onOpenChange={(o) => !o && setTermoTarget(null)}
+        registrationId={termoTarget.id}
+      />
+    )}
+    {termoPanelTarget && (
+      <TermoPanelDialog
+        open={!!termoPanelTarget}
+        onOpenChange={(o) => !o && setTermoPanelTarget(null)}
+        termos={termosByPending[termoPanelTarget.id] || []}
+        clienteNome={termoPanelTarget.nome_completo || termoPanelTarget.razao_social || 'cliente'}
+        onGerarNovo={() => setTermoTarget(termoPanelTarget)}
+      />
+    )}
     <Dialog open={!!declineTarget} onOpenChange={(o) => { if (!o) { setDeclineTarget(null); setDeclineReason(''); } }}>
       <DialogContent>
         <DialogHeader>
@@ -398,6 +423,9 @@ function RegistrationRow({
   onUnmarkCadastrada,
   onDecline,
   onUndecline,
+  termos,
+  onGerarTermo,
+  onVerTermos,
   isMarking,
 }: {
   reg: EnrichedPendingRegistration;
@@ -410,6 +438,9 @@ function RegistrationRow({
   onUnmarkCadastrada: () => void;
   onDecline: () => void;
   onUndecline: () => void;
+  termos: ConsorcioTermo[];
+  onGerarTermo: () => void;
+  onVerTermos: () => void;
   isMarking: boolean;
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
@@ -423,6 +454,14 @@ function RegistrationRow({
     ? `${reg.parcelas_empresa.length}× · ${tipoContratoLabel(reg.tipo_contrato)}`
     : '—';
 
+  const termoAssinado = termos.find((t) => t.status === 'assinado');
+  const termoPendente = termos.find((t) => t.status === 'pendente');
+  const termoBadge = termoAssinado
+    ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
+    : termoPendente
+      ? { label: 'Termo pendente', className: 'border-amber-500/60 text-amber-600 hover:bg-amber-500/10' }
+      : null;
+
   return (
     <TableRow>
       <TableCell className="text-sm">
@@ -430,6 +469,13 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {termoBadge && (
+          <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
+            <Badge variant="outline" className={`text-[10px] cursor-pointer ${termoBadge.className}`}>
+              <FileSignature className="h-3 w-3 mr-1" /> {termoBadge.label}
+            </Badge>
+          </button>
+        )}
         {variant === 'pendentes' && (reg.checklist_incompleto || reg.documentos_faltando) && (
           <div className="mt-1 flex flex-wrap gap-1">
             {reg.checklist_incompleto && (
@@ -562,6 +608,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
+              {variant === 'pendentes' && (
+                <DropdownMenuItem onClick={termos.length ? onVerTermos : onGerarTermo}>
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  {termos.length ? 'Termo de Adesão' : 'Gerar Termo de Adesão'}
+                </DropdownMenuItem>
+              )}
               {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
