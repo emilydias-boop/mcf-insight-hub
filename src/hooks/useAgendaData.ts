@@ -2227,23 +2227,24 @@ export async function syncDealStageFromAgenda(
       return;
     }
 
-    // 8. Log activity with user_id
+    // 8. stage_change e owner_change são registrados pelos triggers em crm_deals.
+    //    Aqui fica apenas o contexto da sincronização da Agenda.
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     await supabase
       .from('deal_activities')
       .insert({
         deal_id: dealId,
-        activity_type: 'stage_change',
+        activity_type: 'auto_move',
         description: shouldTransferOwnership 
           ? `Status atualizado via Agenda: ${agendaStatus}. Responsável transferido para Closer.`
           : `Status atualizado via Agenda: ${agendaStatus}`,
-        from_stage: deal.stage_id,
-        to_stage: canMoveStage ? targetStage.id : deal.stage_id,
         user_id: currentUser?.id,
         metadata: { 
           via: 'agenda_sync', 
           status: agendaStatus, 
           meetingType,
+          from_stage_id: deal.stage_id,
+          to_stage_id: canMoveStage ? targetStage.id : deal.stage_id,
           ownershipTransferred: shouldTransferOwnership,
           newOwner: shouldTransferOwnership ? closerEmail : undefined,
           previousOwner: shouldTransferOwnership ? deal.owner_id : undefined,
