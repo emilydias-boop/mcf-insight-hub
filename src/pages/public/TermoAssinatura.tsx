@@ -121,7 +121,8 @@ export default function TermoAssinatura() {
           </p>
         )}
 
-        <TermoMarkdown content={termo.conteudo || ''} />
+        {/* `bare`: esta folha já é o `.papel` — não aninhar papel em papel. */}
+        <TermoMarkdown content={termo.conteudo || ''} bare />
 
         {isComprovante ? (
           <div className="cert">

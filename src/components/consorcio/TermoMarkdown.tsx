@@ -201,7 +201,10 @@ export function TermoMarkdown({
     const key = `l-${idx}`;
 
     if (!line) {
-      flushAll(idx);
+      // Linha em branco NÃO quebra lista: itens separados por linha vazia
+      // continuam a mesma `<ol>`/`<ul>`. Grades e tabelas, sim, são fechadas.
+      flushKv(`kv-${idx}`);
+      flushTable(`tb-${idx}`);
       return;
     }
 
