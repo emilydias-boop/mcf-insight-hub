@@ -348,12 +348,12 @@ export default function RelatorioLead() {
                   <div key={m.id} className="bloco text-sm space-y-1 avoid-break">
                     <div className="flex flex-wrap items-center gap-2">
                       <strong>{fmtDateTime(m.scheduled_at)}</strong>
-                      <Badge variant="outline">{m.status || 'sem status'}</Badge>
-                      {m.is_reschedule && <Badge variant="outline">Remarcada</Badge>}
+                      <Selo>{m.status || 'sem status'}</Selo>
+                      {m.is_reschedule && <Selo>Remarcada</Selo>}
                       {m.contract_paid_at && (
-                        <Badge variant="outline">Contrato pago {fmtDate(m.contract_paid_at)}</Badge>
+                        <Selo>Contrato pago {fmtDate(m.contract_paid_at)}</Selo>
                       )}
-                      {m.refunded_at && <Badge variant="outline">Reembolsado {fmtDate(m.refunded_at)}</Badge>}
+                      {m.refunded_at && <Selo>Reembolsado {fmtDate(m.refunded_at)}</Selo>}
                     </div>
                     <div className="kv">
                       <Field label="Closer" value={m.closer_name} />
@@ -433,8 +433,8 @@ export default function RelatorioLead() {
                     <span className="text-xs dim">
                       {p.prazo_meses ? `${p.prazo_meses} meses` : ''} {p.tipo_produto || ''}
                     </span>
-                    <Badge variant="outline">{p.status || 'sem status'}</Badge>
-                    {(p.carta_excluida || p.excluida_value) && <Badge variant="destructive">Excluída</Badge>}
+                    <Selo>{p.status || 'sem status'}</Selo>
+                    {(p.carta_excluida || p.excluida_value) && <Selo tom="erro">Excluída</Selo>}
                   </div>
                   <div className="kv">
                     <Field label="Data da proposta" value={fmtDate(p.proposal_date)} />
@@ -511,9 +511,9 @@ export default function RelatorioLead() {
                 <div key={r.id} className="bloco text-sm space-y-1 avoid-break">
                   <div className="flex flex-wrap items-center gap-2">
                     <strong>{r.nome || 'Sem nome'}</strong>
-                    <Badge variant="outline">{r.tipo_pessoa === 'PJ' ? 'PJ' : 'PF'}</Badge>
-                    <Badge variant="outline">{r.status || 'sem status'}</Badge>
-                    {r.declinada_at && <Badge variant="destructive">Declinado</Badge>}
+                    <Selo>{r.tipo_pessoa === 'PJ' ? 'PJ' : 'PF'}</Selo>
+                    <Selo>{r.status || 'sem status'}</Selo>
+                    {r.declinada_at && <Selo tom="erro">Declinado</Selo>}
                   </div>
                   <div className="kv">
                     <Field label="Categoria" value={r.categoria} />
@@ -592,7 +592,7 @@ export default function RelatorioLead() {
                       <strong>
                         {t.tipo === 'comprovante_cadastro' ? 'Comprovante de Cadastro' : 'Termo de Adesão'}
                       </strong>
-                      <Badge variant="outline">{t.status}</Badge>
+                      <Selo>{t.status}</Selo>
                       <span className="dim">
                         modelo v{t.modelo_versao ?? '?'} · emitido em {fmtDateTime(t.created_at)}
                       </span>
@@ -640,8 +640,8 @@ export default function RelatorioLead() {
                     <strong>
                       Grupo {c.grupo || NOT_RECORDED} · Cota {c.cota || NOT_RECORDED}
                     </strong>
-                    <Badge variant="outline">{c.status || 'sem status'}</Badge>
-                    {c.isExternal && <Badge variant="destructive">Cota externa (sem vínculo com o funil)</Badge>}
+                    <Selo>{c.status || 'sem status'}</Selo>
+                    {c.isExternal && <Selo tom="erro">Cota externa (sem vínculo com o funil)</Selo>}
                   </div>
                   <div className="kv avoid-break">
                     <Field label="Contrato Embracon" value={c.contrato_embracon} />
