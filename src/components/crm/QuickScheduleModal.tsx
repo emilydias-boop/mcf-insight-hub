@@ -56,7 +56,7 @@ import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 interface QuickScheduleModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  closers: CloserWithAvailability[];
+  closers?: CloserWithAvailability[];
   preselectedCloserId?: string;
   preselectedDate?: Date;
   prefilledDealId?: string;
@@ -136,7 +136,7 @@ function formatPhoneDisplay(phone: string | null | undefined): string {
 export function QuickScheduleModal({ 
   open, 
   onOpenChange, 
-  closers,
+  closers: closersProp = [],
   preselectedCloserId,
   preselectedDate,
   prefilledDealId,
@@ -146,6 +146,12 @@ export function QuickScheduleModal({
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
+  // Alguns pontos do app abrem este modal sem passar a lista de closers
+  // (o "Qualificar e Agendar" passava um array vazio fixo). Sem fallback o
+  // SDR ficava sem NENHUM closer para escolher e não conseguia agendar.
+  // Buscamos a lista aqui quando ela não vier pronta de fora.
+  const { data: closersFallback = [] } = useClosersWithAvailability(activeBU);
+  const closers = closersProp.length > 0 ? closersProp : closersFallback;
   // Usar hook que expande grupos para origens filhas
   const { data: buOriginIds = [] } = useBUOriginIds(activeBU);
   const originIds = buOriginIds.length > 0 ? buOriginIds : undefined;
