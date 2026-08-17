@@ -123,11 +123,6 @@ export function montarTabelaParcelasMcf(
   return linhas.join('\n');
 }
 
-interface TermoFaltandoLegacy {
-  campo: string;
-  label: string;
-}
-
 export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[] {
   const faltando: TermoFaltando[] = [];
   if (!termoNomeCliente(reg)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente' });
