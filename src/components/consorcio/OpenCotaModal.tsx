@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
@@ -75,17 +75,22 @@ import { CATEGORIA_OPTIONS, ORIGEM_OPTIONS } from '@/types/consorcio';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
+import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
 
 interface OpenCotaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   registrationId: string;
   mode?: 'open' | 'view';
+  /** Abre já em modo edição (usado pelo atalho "Completar cadastro" do Termo de Adesão). */
+  startEditing?: boolean;
+  /** Rola até o bloco "Dados da Cota" ao abrir. */
+  focusPlano?: boolean;
 }
 
-export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open' }: OpenCotaModalProps) {
+export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false }: OpenCotaModalProps) {
   const isViewMode = mode === 'view';
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(startEditing);
   const readOnly = isViewMode && !isEditing;
   const { data: registration, isLoading: regLoading } = usePendingRegistration(registrationId);
   const { data: produtos = [] } = useConsorcioProdutos();
