@@ -18,6 +18,8 @@ import {
   Filter,
   LogIn,
   Tag,
+  UserCog,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +41,8 @@ const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: 
   closer_note: { icon: MessageSquare, color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'bg-indigo-100 dark:bg-indigo-900/40', label: 'Nota Closer' },
   entry: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/40', label: 'Entrada' },
   tag_change: { icon: Tag, color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-100 dark:bg-sky-900/40', label: 'Tag' },
+  owner_change: { icon: UserCog, color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-100 dark:bg-rose-900/40', label: 'Responsável' },
+  automation: { icon: Zap, color: 'text-violet-600 dark:text-violet-400', bgColor: 'bg-violet-100 dark:bg-violet-900/40', label: 'Automação' },
 };
 
 const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
@@ -52,6 +56,8 @@ const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
   { type: 'qualification', label: 'Qualif.' },
   { type: 'entry', label: 'Entrada' },
   { type: 'tag_change', label: 'Tags' },
+  { type: 'owner_change', label: 'Responsável' },
+  { type: 'automation', label: 'Automações' },
 ];
 
 function TimelineEventItem({ event }: { event: TimelineEvent }) {

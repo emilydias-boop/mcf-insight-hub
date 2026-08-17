@@ -20,6 +20,12 @@ import {
   AlertCircle,
   Bell,
   User,
+  UserCog,
+  Users,
+  Repeat,
+  Handshake,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 
 interface DealHistoryProps {
@@ -40,6 +46,23 @@ const activityIcons: Record<string, any> = {
   payment_received: DollarSign,
   no_show: AlertCircle,
   next_action_scheduled: Bell,
+  owner_change: UserCog,
+  closer_change: Users,
+  lead_distribution: Handshake,
+  webhook_reentry: Repeat,
+  partner_detected: Sparkles,
+  outside_detected: Sparkles,
+  auto_move: Zap,
+};
+
+const activityLabels: Record<string, string> = {
+  owner_change: 'Responsável alterado',
+  closer_change: 'Closer alterado',
+  lead_distribution: 'Lead distribuído',
+  webhook_reentry: 'Reentrada via webhook',
+  partner_detected: 'Parceria detectada',
+  outside_detected: 'Venda Outside detectada',
+  auto_move: 'Movimentação automática',
 };
 
 export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryProps) => {
@@ -114,6 +137,7 @@ export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryP
         <div className="space-y-3 pr-4">
           {displayedActivities.map((activity: any) => {
             const Icon = activityIcons[activity.activity_type] || FileText;
+            const typeLabel = activityLabels[activity.activity_type];
             
             return (
               <div key={activity.id} className="flex gap-3">
@@ -125,7 +149,12 @@ export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryP
                 
                   <div className="flex-1 space-y-1">
                     <div className="flex items-start justify-between">
-                      <p className="text-xs font-medium">{activity.description}</p>
+                      <div className="space-y-0.5">
+                        {typeLabel && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-semibold">{typeLabel}</Badge>
+                        )}
+                        <p className="text-xs font-medium">{activity.description}</p>
+                      </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                         {format(new Date(activity.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                       </span>

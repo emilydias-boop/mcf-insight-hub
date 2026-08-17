@@ -204,10 +204,14 @@ export function QualificationAndScheduleModal({
           } as any);
           await createActivity.mutateAsync({
             deal_id: dealId,
-            activity_type: 'stage_change',
+            // stage_change vem do trigger trg_log_deal_stage_change; aqui só o contexto.
+            activity_type: 'auto_move',
             description: 'Movido para "Em contato" — SDR confirmou conversa com o lead via Twilio',
-            from_stage: previousStageId,
-            to_stage: EM_CONTATO_STAGE_ID,
+            metadata: {
+              via: 'qualificacao_twilio',
+              from_stage_id: previousStageId,
+              to_stage_id: EM_CONTATO_STAGE_ID,
+            },
           });
           toast.success('Lead movido para "Em contato" 🎯');
         } catch (moveErr) {

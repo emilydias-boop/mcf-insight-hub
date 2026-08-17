@@ -1172,18 +1172,19 @@ serve(async (req) => {
           if (updateError) {
             console.error('❌ Erro ao atualizar deal:', updateError.message);
           } else {
-            // Registrar atividade de mudança de estágio
+            // stage_change é registrado pelo trigger trg_log_deal_stage_change.
+            // Aqui fica apenas o contexto do agendamento (slot, troca de pipeline).
             await supabase.from('deal_activities').insert({
               deal_id: dealId,
-              activity_type: 'stage_change',
+              activity_type: 'auto_move',
               description: originChanged 
                 ? `Movido automaticamente ao agendar ${meetingType.toUpperCase()} (pipeline alterada para INSIDE SALES)`
                 : `Movido automaticamente ao agendar ${meetingType.toUpperCase()}`,
-              from_stage: dealForStage.stage_id,
-              to_stage: targetStageId,
               metadata: { 
                 via: 'agenda_scheduling', 
                 meeting_slot_id: slotId,
+                from_stage_id: dealForStage.stage_id,
+                to_stage_id: targetStageId,
                 origin_changed: originChanged,
                 from_origin_id: originChanged ? dealForStage.origin_id : undefined,
                 to_origin_id: originChanged ? newOriginId : undefined
