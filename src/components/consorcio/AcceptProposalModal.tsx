@@ -38,6 +38,17 @@ import { TipoDocumento } from '@/types/consorcio';
 import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { ChevronsUpDown } from 'lucide-react';
+import { useAllConsorcioCreditos } from '@/hooks/useConsorcioCreditosAdmin';
+import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
+import { CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
+import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+
+const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
 
 // Formatting functions
 function formatCpf(value: string): string {
