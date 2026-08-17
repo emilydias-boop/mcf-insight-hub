@@ -109,6 +109,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   const planoHidratado = useRef(false);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
+  const dialogContentRef = useRef<HTMLDivElement | null>(null);
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
@@ -242,8 +243,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const plano = useDadosPlano({
     prazo: prazoMeses ? String(prazoMeses) : '',
     condicao: condicaoPagamento || 'convencional',
-    setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any)),
-    setCondicao: (v) => form.setValue('condicao_pagamento', v),
+    setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any), { shouldValidate: true }),
+    setCondicao: (v) => form.setValue('condicao_pagamento', v, { shouldValidate: true }),
   });
 
   // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
@@ -369,6 +370,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   /** Validação reprovada: avisa quais campos faltam e leva a tela até o primeiro erro. */
   const CAMPO_LABELS: Record<string, string> = {
+    cliente_nome: 'Nome Completo',
+    cliente_cpf: 'CPF',
+    cliente_telefone: 'Telefone',
+    cliente_email: 'Email',
     categoria: 'Categoria',
     grupo: 'Grupo',
     cota: 'Cota',
@@ -384,7 +389,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     if (nomes.length === 0) return;
     toast.error(`Complete os campos obrigatórios: ${nomes.map((n) => CAMPO_LABELS[n] || n).join(', ')}`);
     setTimeout(() => {
-      const el = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
+      const root = dialogContentRef.current;
+      if (!root) return;
+      const el = root.querySelector('[aria-invalid="true"]') as HTMLElement | null;
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el?.focus?.();
     }, 50);
@@ -457,7 +464,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent ref={dialogContentRef} className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-6">
             <DialogTitle>
