@@ -39,6 +39,7 @@ const TVIncorporadorEquipe = lazy(() => import("./pages/public/TVIncorporadorEqu
 const TVConsorcioEquipe = lazy(() => import("./pages/public/TVConsorcioEquipe"));
 const CheckinInbox = lazy(() => import("./pages/checkin/CheckinInbox"));
 const CustomerRoom = lazy(() => import("./pages/checkin/CustomerRoom"));
+const TermoAssinatura = lazy(() => import('./pages/public/TermoAssinatura'));
 const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoAccess"));
 
 // Lazy — all other routes (split into per-route chunks)
@@ -187,6 +188,7 @@ const App = () => (
             <Route path="/tv/incorporador" element={<TVIncorporadorEquipe />} />
             <Route path="/tv/consorcio" element={<TVConsorcioEquipe />} />
             <Route path="/checkin/sala/:token" element={<CustomerRoom />} />
+            <Route path="/termo/:token" element={<TermoAssinatura />} />
             
             {/* Protected routes */}
             <Route
