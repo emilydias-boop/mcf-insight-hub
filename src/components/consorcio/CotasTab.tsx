@@ -938,7 +938,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                             }
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (comprovantesAtivos(card.id).length) setComprovantePanelCard(card);
+                              if ((comprovantesByCard[card.id] || []).length) setComprovantePanelCard(card);
                               else setComprovanteCard(card);
                             }}
                           >
