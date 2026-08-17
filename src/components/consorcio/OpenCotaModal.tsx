@@ -236,8 +236,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   useEffect(() => {
     if (!registration || planoHidratado.current) return;
     planoHidratado.current = true;
-    // Baseline: não reaplicar a tabela na hidratação (senão sobrescreve valor ajustado manualmente).
-    planoSyncKey.current = `${registration.prazo_meses ?? ''}|${registration.condicao_pagamento ?? 'convencional'}`;
+    // Só hidrata: a tabela nunca é reaplicada aqui, senão sobrescreve valor ajustado manualmente.
     plano.hidratar({
       creditoId: (registration as any).credito_id,
       valorCredito: registration.valor_credito != null ? Number(registration.valor_credito) : null,
