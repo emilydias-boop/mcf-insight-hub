@@ -241,7 +241,17 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="consultas" element={<ConsorcioConsultas />} />
-                <Route path="relatorio-lead/:dealId" element={<RelatorioLead />} />
+                <Route
+                  path="relatorio-lead/:dealId"
+                  element={
+                    <RoleGuard
+                      allowedRoles={['admin', 'manager', 'coordenador']}
+                      fallback={<RelatorioLead />}
+                    >
+                      <RelatorioLead />
+                    </RoleGuard>
+                  }
+                />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
