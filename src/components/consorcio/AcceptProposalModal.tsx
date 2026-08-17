@@ -154,6 +154,64 @@ export function AcceptProposalModal({
   const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
   const [qtdParcelasEmpresa, setQtdParcelasEmpresa] = useState<number>(0);
 
+  // ===== Dados do plano (comerciais do Termo de Adesão) =====
+  const { data: creditos = [] } = useAllConsorcioCreditos();
+  const { data: produtos = [] } = useConsorcioProdutos();
+  const { data: objetivos = [] } = useConsorcioObjetivoOptions();
+  const [creditoId, setCreditoId] = useState('');
+  const [planoOpen, setPlanoOpen] = useState(false);
+  const [valorCreditoStr, setValorCreditoStr] = useState('');
+  const [prazo, setPrazo] = useState('');
+  const [condicao, setCondicao] = useState('convencional');
+  const [parcela1a12, setParcela1a12] = useState('');
+  const [parcelaDemais, setParcelaDemais] = useState('');
+  const [parcelasFonte, setParcelasFonte] = useState<'tabela' | 'manual' | null>(null);
+  const [diaVencimento, setDiaVencimento] = useState('');
+  const [inicioSegundaParcela, setInicioSegundaParcela] = useState('');
+  const [objetivo, setObjetivo] = useState('');
+  const [incluiSeguro, setIncluiSeguro] = useState(false);
+
+  const creditoSelecionado = creditos.find((c) => c.id === creditoId);
+  const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
+  const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
+    ? produtoDoPlano.prazos_disponiveis
+    : [200, 220, 240];
+
+  const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
+    if (!credito || !prz) return;
+    const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
+    const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
+    if (c1 || c2) {
+      setParcela1a12(numberToBRLInput(c1 ?? null));
+      setParcelaDemais(numberToBRLInput(c2 ?? null));
+      setParcelasFonte('tabela');
+    } else {
+      setParcela1a12('');
+      setParcelaDemais('');
+      setParcelasFonte(null);
+    }
+  };
+
+  const handleSelectPlano = (id: string) => {
+    const credito = creditos.find((c) => c.id === id);
+    setCreditoId(id);
+    setPlanoOpen(false);
+    if (credito) {
+      setValorCreditoStr(numberToBRLInput(credito.valor_credito));
+      aplicarValoresTabela(credito, condicao, prazo);
+    }
+  };
+
+  const planoOk =
+    !!creditoId &&
+    parseBRLInput(valorCreditoStr) > 0 &&
+    !!prazo &&
+    !!condicao &&
+    parseBRLInput(parcela1a12) > 0 &&
+    parseBRLInput(parcelaDemais) > 0 &&
+    Number(diaVencimento) >= 1 &&
+    Number(diaVencimento) <= 28;
+
   // Carrega proposta para pegar valor_credito/prazo
   const { data: proposal } = useQuery({
     queryKey: ['consorcio-proposal-snapshot', proposalId],
