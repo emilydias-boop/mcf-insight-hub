@@ -11,12 +11,14 @@ import { ensurePapelStylesheet } from '@/lib/documentoPapel';
 
 const WORD_CHAR = /[0-9A-Za-zÀ-ÿ]/;
 const isWord = (c?: string) => !!c && WORD_CHAR.test(c);
+const isWhitespace = (c?: string) => !!c && /\s/.test(c);
 
 /**
  * `**negrito**`, `*itálico*` e `_itálico_`.
  *
- * Os delimitadores simples só abrem/fecham ênfase em **fronteira de palavra**:
- * sem isso, e-mails com `_` e expressões como `a*b*c` seriam corrompidos.
+ * Os delimitadores só abrem/fecham ênfase em **fronteira de palavra** e nunca
+ * junto a espaço no lado interno: sem isso, e-mails com `_` e expressões como
+ * `a*b*c` ou `5 * 12 * 3` seriam corrompidos.
  * Tokenizador manual de propósito — lookbehind em regex não é seguro em
  * Safari/iOS antigo, e esta função roda na página pública do cliente.
  */
@@ -32,9 +34,14 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
   };
   let i = 0;
   while (i < text.length) {
-    if (text.startsWith('**', i)) {
+    if (text.startsWith('**', i) && !isWord(text[i - 1]) && !isWhitespace(text[i + 2])) {
       const end = text.indexOf('**', i + 2);
-      if (end > i + 2) {
+      if (
+        end > i + 2 &&
+        !isWhitespace(text[end - 1]) &&
+        !isWord(text[end + 2]) &&
+        !text.slice(i + 2, end).includes('\n')
+      ) {
         flush();
         nodes.push(<strong key={`${keyPrefix}-b${k++}`}>{text.slice(i + 2, end)}</strong>);
         i = end + 2;
@@ -42,18 +49,28 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
       }
     }
     const c = text[i];
-    if (c === '*' && !isWord(text[i - 1])) {
+    if (c === '*' && text[i + 1] !== '*' && !isWord(text[i - 1]) && !isWhitespace(text[i + 1])) {
       const end = text.indexOf('*', i + 1);
-      if (end > i + 1 && !isWord(text[end + 1]) && !text.slice(i + 1, end).includes('\n')) {
+      if (
+        end > i + 1 &&
+        !isWhitespace(text[end - 1]) &&
+        !isWord(text[end + 1]) &&
+        !text.slice(i + 1, end).includes('\n')
+      ) {
         flush();
         nodes.push(<em key={`${keyPrefix}-i${k++}`}>{text.slice(i + 1, end)}</em>);
         i = end + 1;
         continue;
       }
     }
-    if (c === '_' && !isWord(text[i - 1])) {
+    if (c === '_' && !isWord(text[i - 1]) && !isWhitespace(text[i + 1])) {
       const end = text.indexOf('_', i + 1);
-      if (end > i + 1 && !isWord(text[end + 1]) && !text.slice(i + 1, end).includes('\n')) {
+      if (
+        end > i + 1 &&
+        !isWhitespace(text[end - 1]) &&
+        !isWord(text[end + 1]) &&
+        !text.slice(i + 1, end).includes('\n')
+      ) {
         flush();
         nodes.push(<em key={`${keyPrefix}-u${k++}`}>{text.slice(i + 1, end)}</em>);
         i = end + 1;
