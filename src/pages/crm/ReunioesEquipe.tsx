@@ -636,6 +636,13 @@ export default function ReunioesEquipe() {
     const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
     const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
     const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+    // Taxa de Conversão usa exatamente o mesmo número exibido no card Contratos,
+    // para as duas informações nunca divergirem. O Outside foi retirado do
+    // cálculo por decisão do gestor — ele não aparece no card e não deve inflar
+    // a taxa.
+    const totalContratosCard = segmentTotals
+      ? (segmentTotals.a.contratos || 0) + (segmentTotals.b.contratos || 0)
+      : contractsFromClosers.contratoPago;
     return {
       ...teamKPIs,
       sdrCount: filteredBySDR.length,
