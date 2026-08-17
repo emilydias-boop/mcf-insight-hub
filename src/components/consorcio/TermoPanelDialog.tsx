@@ -44,7 +44,7 @@ export function TermoPanelDialog({
   };
 
   const imprimir = async (t: ConsorcioTermo) => {
-    const ok = await imprimirDocumento({
+    const resultado = await imprimirDocumento({
       conteudo: t.conteudo_renderizado,
       clienteNome,
       tituloDocumento: isComprovante ? 'Comprovante de Cadastro' : 'Termo de Adesão',
@@ -54,7 +54,11 @@ export function TermoPanelDialog({
           ? { data: t.cancelado_em, motivo: t.cancelado_motivo || '' }
           : null,
     });
-    if (!ok) toast.error('O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e tente de novo.');
+    if (resultado === 'popup') {
+      toast.error('O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e tente de novo.');
+    } else if (resultado === 'erro') {
+      toast.error('Não foi possível preparar o documento para impressão. Verifique sua conexão e tente novamente.');
+    }
   };
 
   const temPendente = !isComprovante && termos.some((t) => t.status === 'pendente');

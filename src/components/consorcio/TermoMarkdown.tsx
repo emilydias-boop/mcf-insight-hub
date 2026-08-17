@@ -15,8 +15,8 @@ const isWord = (c?: string) => !!c && WORD_CHAR.test(c);
 /**
  * `**negrito**`, `*itálico*` e `_itálico_`.
  *
- * O sublinhado só abre/fecha ênfase em **fronteira de palavra** (CommonMark):
- * sem isso, `joao_silva_2@gmail.com` perderia os sublinhados e viraria itálico.
+ * Os delimitadores simples só abrem/fecham ênfase em **fronteira de palavra**:
+ * sem isso, e-mails com `_` e expressões como `a*b*c` seriam corrompidos.
  * Tokenizador manual de propósito — lookbehind em regex não é seguro em
  * Safari/iOS antigo, e esta função roda na página pública do cliente.
  */
@@ -42,9 +42,9 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
       }
     }
     const c = text[i];
-    if (c === '*') {
+    if (c === '*' && !isWord(text[i - 1])) {
       const end = text.indexOf('*', i + 1);
-      if (end > i + 1 && !text.slice(i + 1, end).includes('\n')) {
+      if (end > i + 1 && !isWord(text[end + 1]) && !text.slice(i + 1, end).includes('\n')) {
         flush();
         nodes.push(<em key={`${keyPrefix}-i${k++}`}>{text.slice(i + 1, end)}</em>);
         i = end + 1;
@@ -96,6 +96,13 @@ export function TermoMarkdown({
   /** Renderiza sem o wrapper `.papel` — evita `.papel` dentro de `.papel`. */
   bare?: boolean;
 }) {
+  // Também garante o CSS em consumidores `bare` renderizados no navegador.
+  // Na renderização estática da janela de impressão o efeito não roda, e a
+  // própria janela já recebe a folha completa por `escreverImpressao`.
+  useEffect(() => {
+    ensurePapelStylesheet();
+  }, []);
+
   const lines = (content || '').split('\n');
   const blocks: JSX.Element[] = [];
 
@@ -261,10 +268,7 @@ export function TermoMarkdown({
   return <PapelWrapper className={className}>{blocks}</PapelWrapper>;
 }
 
-/** Wrapper `.papel` que garante a folha de estilo injetada uma única vez. */
+/** Wrapper `.papel`; a folha já é garantida pelo componente acima. */
 function PapelWrapper({ className, children }: { className?: string; children: React.ReactNode }) {
-  useEffect(() => {
-    ensurePapelStylesheet();
-  }, []);
   return <div className={className ? `papel ${className}` : 'papel'}>{children}</div>;
 }
