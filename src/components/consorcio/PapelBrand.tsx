@@ -1,0 +1,23 @@
+/** Cabeçalho institucional dos documentos (versão React do `papelBrandHtml`). */
+import { EMPRESA_CNPJ, EMPRESA_RAZAO_SOCIAL } from '@/lib/documentoPapel';
+
+export function PapelBrand({ subtitulo, data }: { subtitulo?: string; data?: Date }) {
+  const quando = (data || new Date()).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return (
+    <div className="brand">
+      <div>
+        <div className="logo">
+          MCF CAPITAL<small>Minha Casa Financiada</small>
+        </div>
+        {subtitulo ? <div className="sub">{subtitulo}</div> : null}
+      </div>
+      <div className="meta">
+        {EMPRESA_RAZAO_SOCIAL}
+        <br />
+        CNPJ {EMPRESA_CNPJ}
+        <br />
+        Documento gerado em {quando}
+      </div>
+    </div>
+  );
+}
