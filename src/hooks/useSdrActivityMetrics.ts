@@ -294,14 +294,18 @@ export function useSdrActivityMetrics(
         metrics.totalCalls++;
 
         const category = classifyCall(call.status, call.duration_seconds, call.answered_by, thresholds);
+        // Ring drop e caixa postal contam como não atendidas: tirar do gancho
+        // e desligar na hora não é conversa. Os contadores próprios continuam
+        // preenchidos para o drill-down de Detalhes.
         switch (category) {
           case 'not_answered': metrics.notAnsweredCalls++; break;
-          case 'ring_drop': metrics.ringDropCalls++; break;
-          case 'voicemail': metrics.voicemailCalls++; break;
+          case 'ring_drop': metrics.ringDropCalls++; metrics.notAnsweredCalls++; break;
+          case 'voicemail': metrics.voicemailCalls++; metrics.notAnsweredCalls++; break;
           case 'effective': metrics.effectiveCalls++; break;
           case 'qualified': metrics.qualifiedCalls++; break;
         }
-        if (category !== 'not_answered') {
+        // Conexão = conversa real (efetiva ou qualificada).
+        if (category === 'effective' || category === 'qualified') {
           metrics.answeredCalls++;
         }
         
@@ -362,19 +366,24 @@ export function useSdrActivityMetrics(
         if (status === 'N') {
           metrics.notAnsweredCalls++;
         } else if (status === 'S') {
-          metrics.answeredCalls++;
           const duration = sonaxDurationSeconds(ev.duracao_chamada);
           if (duration <= 0) {
             // Duração ausente/placeholder malformado, mas status confirma que atendeu.
             metrics.effectiveCalls++;
+            metrics.answeredCalls++;
           } else if (duration <= thresholds.ringDropMax) {
+            // Atendeu e desligou na hora — não é conversa.
             metrics.ringDropCalls++;
+            metrics.notAnsweredCalls++;
           } else if (duration <= thresholds.voicemailMax) {
             metrics.voicemailCalls++;
+            metrics.notAnsweredCalls++;
           } else if (duration <= thresholds.effectiveMax) {
             metrics.effectiveCalls++;
+            metrics.answeredCalls++;
           } else {
             metrics.qualifiedCalls++;
+            metrics.answeredCalls++;
           }
         } else {
           // status_atendimento vazio ou placeholder não substituído pela Sonax (bug conhecido do lado deles).

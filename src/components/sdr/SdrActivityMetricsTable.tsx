@@ -82,13 +82,13 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<Zap className="h-3.5 w-3.5 text-amber-500" />} label="Auto-Disc." tooltip="Discagens iniciadas pelo Auto-Discador (já incluídas no total)." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
-                    <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
+                    <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip={`Ligações que não geraram conversa: ninguém atendeu, atendeu e desligou na hora (até ${T.ringDropMax}s), caiu na caixa postal (até ${T.voicemailMax}s), ou discagem que a telefonia não reportou.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<PhoneCall className="h-3.5 w-3.5 text-blue-600" />} label="Efetivas" tooltip={`Ligações atendidas com duração acima de ${T.voicemailMax}s, sem limite superior.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
-                    <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Conexão" tooltip={`Taxa de conexão = ligações atendidas (ring drop ≤${T.ringDropMax}s, caixa postal, efetiva ou qualificada) / total.`} />
+                    <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Conexão" tooltip={`Taxa de conversa real = ligações acima de ${T.voicemailMax}s (efetivas + qualificadas) / total. Ring drop e caixa postal não entram.`} />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<span className="text-xs">%</span>} label="Qualif." tooltip={`Taxa de qualificação = ligações qualificadas (conversa real, acima de ${T.effectiveMax}s) / total. Indicador de prospecção produtiva.`} />
