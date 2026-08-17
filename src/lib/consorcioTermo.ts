@@ -222,6 +222,8 @@ export async function baixarTermoPdf(opts: {
   conteudo: string;
   clienteNome: string;
   certificado?: TermoCertificado | null;
+  /** Prefixo do arquivo salvo. Padrão: `termo-adesao`. */
+  prefixoArquivo?: string;
 }) {
   const { loadJsPDF } = await import('@/lib/lazyExport');
   const { jsPDF } = await loadJsPDF();
@@ -254,6 +256,15 @@ export async function baixarTermoPdf(opts: {
     const line = rawLine.trimEnd();
     if (!line.trim()) {
       y += 6;
+      continue;
+    }
+    // Tabela markdown (ex.: cronograma das 12 parcelas): linha separadora some,
+    // células viram colunas separadas por ' · '.
+    if (line.trim().startsWith('|')) {
+      const celulas = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      if (celulas.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      const isHeader = /^\*\*/.test(celulas[0] || '') || celulas.every((c) => /[A-Za-zÀ-ÿ]/.test(c) && !/\d/.test(c));
+      writeLines(celulas.map((c) => c.replace(/\*\*/g, '')).join('  ·  '), 10, isHeader ? 'bold' : 'normal', 1);
       continue;
     }
     if (line.startsWith('# ')) {
@@ -291,5 +302,5 @@ export async function baixarTermoPdf(opts: {
   }
 
   const dataArq = new Date().toISOString().slice(0, 10);
-  doc.save(`termo-adesao-${slugify(opts.clienteNome)}-${dataArq}.pdf`);
+  doc.save(`${opts.prefixoArquivo || 'termo-adesao'}-${slugify(opts.clienteNome)}-${dataArq}.pdf`);
 }
