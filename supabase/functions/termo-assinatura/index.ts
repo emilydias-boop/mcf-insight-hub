@@ -60,7 +60,8 @@ async function getTermo(token: string) {
 }
 
 function isExpired(t: any) {
-  return t.tipo !== 'comprovante_cadastro' && t.status === 'pendente' && new Date(t.expires_at).getTime() < Date.now();
+  // Vale para todos os tipos, inclusive o comprovante (validade de 2 anos).
+  return t.status === 'pendente' && new Date(t.expires_at).getTime() < Date.now();
 }
 
 /** Resposta pública — nunca expõe token, ids internos ou o snapshot inteiro. */

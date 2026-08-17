@@ -5,6 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatBRLInput, numberToBRLInput, parseBRLInput } from '@/lib/brlMask';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { TermoMarkdown } from './TermoMarkdown';
@@ -12,7 +15,9 @@ import { useTermoModelos, useCreateTermo, termoPublicUrl, type ConsorcioTermo } 
 import { renderTermo } from '@/lib/consorcioTermo';
 import {
   montarDadosComprovante,
+  qtdParcelasCronograma,
   validarDadosComprovante,
+  valorParcelaDoCard,
   type ComprovanteParcela,
 } from '@/lib/consorcioComprovante';
 
@@ -24,10 +29,10 @@ interface GerarComprovanteModalProps {
   onCompletarCota?: () => void;
 }
 
-/** Link do comprovante não expira na prática — 10 anos. */
-function expiraEm10Anos() {
+/** Validade do link do comprovante: 2 anos. Depois é só reemitir pelo painel. */
+function expiraEm2Anos() {
   const d = new Date();
-  d.setFullYear(d.getFullYear() + 10);
+  d.setFullYear(d.getFullYear() + 2);
   return d.toISOString();
 }
 
@@ -35,6 +40,9 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   const { data: modelos = [], isLoading: loadingModelos } = useTermoModelos(true, 'comprovante_cadastro');
   const createTermo = useCreateTermo();
   const [gerado, setGerado] = useState<ConsorcioTermo | null>(null);
+  /** Cronograma conferido pelo operador — nunca é gravado em consortium_installments. */
+  const [linhas, setLinhas] = useState<ComprovanteParcela[] | null>(null);
+  const [valoresTexto, setValoresTexto] = useState<Record<number, string>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ['consorcio-card-comprovante', cardId],
@@ -56,12 +64,38 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   });
 
   useEffect(() => {
-    if (!open) setGerado(null);
+    if (!open) {
+      setGerado(null);
+      setLinhas(null);
+      setValoresTexto({});
+    }
   }, [open]);
 
   const modelo = modelos[0];
   const card = data?.card;
-  const parcelas = data?.parcelas || [];
+  const parcelasBanco = data?.parcelas || [];
+
+  // Semeia a tabela editável a partir do banco (vencimento + tipo) e do card (valor).
+  useEffect(() => {
+    if (!card) return;
+    const limite = qtdParcelasCronograma(card);
+    const base = [...parcelasBanco]
+      .filter((p) => p.numero_parcela <= limite)
+      .sort((a, b) => a.numero_parcela - b.numero_parcela)
+      .map((p) => ({
+        numero_parcela: p.numero_parcela,
+        data_vencimento: p.data_vencimento,
+        tipo: p.tipo,
+        valor: valorParcelaDoCard(card, p.numero_parcela),
+      }));
+    setLinhas(base);
+    setValoresTexto(Object.fromEntries(base.map((p) => [p.numero_parcela, numberToBRLInput(p.valor)])));
+  }, [card?.id, parcelasBanco.length]);
+
+  const parcelas = linhas ?? parcelasBanco;
+
+  const atualizarLinha = (numero: number, patch: Partial<ComprovanteParcela>) =>
+    setLinhas((prev) => (prev || []).map((p) => (p.numero_parcela === numero ? { ...p, ...patch } : p)));
 
   const faltando = useMemo(() => (card ? validarDadosComprovante(card, parcelas) : []), [card, parcelas]);
   const dados = useMemo(() => (card ? montarDadosComprovante(card, parcelas) : null), [card, parcelas]);
@@ -82,7 +116,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       modeloVersao: modelo.versao,
       dados,
       conteudoRenderizado: preview,
-      expiresAt: expiraEm10Anos(),
+      expiresAt: expiraEm2Anos(),
     });
     setGerado(termo);
   };
@@ -95,8 +129,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
             <FileBadge className="h-5 w-5" /> Gerar Comprovante de Cadastro
           </DialogTitle>
           <DialogDescription>
-            Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das 12 primeiras
-            parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
+            Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das primeiras parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,6 +177,72 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                   <p className="mt-2">Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.</p>
                 </AlertDescription>
               </Alert>
+            )}
+            {linhas && linhas.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Cronograma — confira antes de emitir</Label>
+                <p className="text-xs text-muted-foreground">
+                  Ajustes aqui valem só para este comprovante. Para mudar a parcela de verdade, use a aba Parcelas da
+                  cota.
+                </p>
+                <div className="rounded-lg border overflow-x-auto max-h-[38vh] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left font-medium w-16">#</th>
+                        <th className="p-2 text-left font-medium">Vencimento</th>
+                        <th className="p-2 text-left font-medium">Valor</th>
+                        <th className="p-2 text-left font-medium">Quem paga</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linhas.map((p) => (
+                        <tr key={p.numero_parcela} className="border-t">
+                          <td className="p-2 text-muted-foreground">{p.numero_parcela}ª</td>
+                          <td className="p-2">
+                            <Input
+                              type="date"
+                              className="h-8"
+                              value={p.data_vencimento ?? ''}
+                              onChange={(e) =>
+                                atualizarLinha(p.numero_parcela, { data_vencimento: e.target.value || null })
+                              }
+                            />
+                          </td>
+                          <td className="p-2">
+                            <Input
+                              className="h-8"
+                              inputMode="numeric"
+                              value={valoresTexto[p.numero_parcela] ?? ''}
+                              onChange={(e) => {
+                                const masked = formatBRLInput(e.target.value);
+                                setValoresTexto((v) => ({ ...v, [p.numero_parcela]: masked }));
+                                atualizarLinha(p.numero_parcela, { valor: parseBRLInput(masked) });
+                              }}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <Select
+                              value={p.tipo}
+                              onValueChange={(v) =>
+                                atualizarLinha(p.numero_parcela, { tipo: v as ComprovanteParcela['tipo'] })
+                              }
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="empresa">MCF Capital</SelectItem>
+                                <SelectItem value="cliente">Cliente</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
             <div className="rounded-lg border bg-card p-5 text-sm max-h-[45vh] overflow-y-auto">
               <TermoMarkdown content={preview} />

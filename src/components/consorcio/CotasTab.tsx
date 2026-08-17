@@ -192,6 +192,8 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const recalculateAll = useRecalculateAllCommissions();
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: comprovantesByCard = {} } = useComprovantesByCard();
+  const comprovantesAtivos = (cardId: string) =>
+    (comprovantesByCard[cardId] || []).filter((t) => t.status !== 'cancelado');
 
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
@@ -927,16 +929,16 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                             variant="ghost"
                             size="icon"
                             title={
-                              (comprovantesByCard[card.id] || []).length
+                              comprovantesAtivos(card.id).length
                                 ? 'Comprovante de cadastro emitido — ver/baixar'
                                 : 'Gerar comprovante de cadastro'
                             }
                             className={
-                              (comprovantesByCard[card.id] || []).length ? 'text-emerald-600 hover:text-emerald-600' : ''
+                              comprovantesAtivos(card.id).length ? 'text-emerald-600 hover:text-emerald-600' : ''
                             }
                             onClick={(e) => {
                               e.stopPropagation();
-                              if ((comprovantesByCard[card.id] || []).length) setComprovantePanelCard(card);
+                              if (comprovantesAtivos(card.id).length) setComprovantePanelCard(card);
                               else setComprovanteCard(card);
                             }}
                           >

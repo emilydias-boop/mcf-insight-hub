@@ -920,7 +920,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       categoria: data.categoria,
       grupo: data.grupo,
       cota: data.cota,
-      contrato_embracon: data.contrato_embracon || undefined,
+      contrato_embracon: data.contrato_embracon ?? '',
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
       tipo_produto: tipoProdutoDerivado,

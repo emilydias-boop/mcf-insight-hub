@@ -118,6 +118,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
   const queryClient = useQueryClient();
+  const { data: comprovantesByCard = {} } = useComprovantesByCard();
 
   // Check inadimplência (apenas alerta visual — auto-cancelamento removido para evitar
   // cancelamentos indevidos de cotas cadastradas retroativamente).
@@ -226,8 +227,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   };
 
   const displayName = card?.tipo_pessoa === "pf" ? card?.nome_completo : card?.razao_social;
-  const { data: comprovantesByCard = {} } = useComprovantesByCard();
-  const comprovantes = (card?.id ? comprovantesByCard[card.id] : undefined) || [];
+  const comprovantes = ((card?.id ? comprovantesByCard[card.id] : undefined) || []).filter(
+    (t) => t.status !== 'cancelado',
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
