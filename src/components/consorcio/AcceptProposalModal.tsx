@@ -181,7 +181,7 @@ export function AcceptProposalModal({
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
-    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou.
+    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou, nem mexa no selo.
     if (![200, 220, 240].includes(Number(prz))) return;
     const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
     const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
@@ -189,8 +189,16 @@ export function AcceptProposalModal({
       setParcela1a12(numberToBRLInput(c1 ?? null));
       setParcelaDemais(numberToBRLInput(c2 ?? null));
       setParcelasFonte('tabela');
+    } else {
+      // Prazo válido mas sem valor cadastrado nesta combinação: mantém os valores digitados,
+      // mas zera a fonte para o selo "da tabela oficial" não continuar mentindo.
+      setParcelasFonte(null);
     }
   };
+
+  // true quando há plano + prazo válido, mas a combinação não tem valor tabelado.
+  const semValorTabelado =
+    !!creditoSelecionado && !!prazo && !prazoSemTabela && parcelasFonte === null;
 
   const handleSelectPlano = (id: string) => {
     const credito = creditos.find((c) => c.id === id);
