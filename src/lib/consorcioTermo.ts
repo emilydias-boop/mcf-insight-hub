@@ -272,8 +272,10 @@ export function certificadoHtml(cert: TermoCertificado): string {
  * IMPORTANTE (iOS/Safari): a janela é aberta de forma **síncrona**, ainda dentro
  * do gesto do clique, ANTES dos imports dinâmicos. Só depois o conteúdo é
  * escrito nela. Se os imports falharem, a janela é fechada.
- * Devolve `false` quando o popup é bloqueado — quem chama avisa na tela.
+ * O resultado distingue bloqueio de popup de falha ao carregar/renderizar.
  */
+export type ImprimirDocumentoResultado = 'ok' | 'popup' | 'erro';
+
 export async function imprimirDocumento(opts: {
   conteudo: string;
   clienteNome: string;
@@ -281,9 +283,9 @@ export async function imprimirDocumento(opts: {
   tituloDocumento?: string;
   certificado?: TermoCertificado | null;
   canceladoStamp?: { data: string; motivo: string } | null;
-}): Promise<boolean> {
+}): Promise<ImprimirDocumentoResultado> {
   const win = abrirJanelaImpressao();
-  if (!win) return false;
+  if (!win) return 'popup';
 
   let corpoMarkdown: string;
   try {
@@ -297,7 +299,7 @@ export async function imprimirDocumento(opts: {
     );
   } catch {
     win.close();
-    return false;
+    return 'erro';
   }
 
   const cert = opts.certificado?.assinado_em ? certificadoHtml(opts.certificado) : '';
@@ -318,5 +320,5 @@ export async function imprimirDocumento(opts: {
     corpoHtml: `${corpoMarkdown}${cert}`,
     avisoTopo,
   });
-  return true;
+  return 'ok';
 }

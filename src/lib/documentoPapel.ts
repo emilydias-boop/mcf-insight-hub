@@ -104,8 +104,8 @@ export const PAPEL_CSS = `
 @media(max-width:760px){.papel .kv{grid-template-columns:1fr}}
 `;
 
-/** Regra `@page` — vale SÓ onde a impressão é do documento (janela de impressão
- *  e página do relatório). Nunca dentro do `PAPEL_CSS`, senão vaza para a app. */
+/** Regra `@page` — vale SÓ onde a impressão é do documento (janela de impressão,
+ *  página pública e relatório). Nunca dentro do `PAPEL_CSS`, senão vaza para a app. */
 export const PAPEL_PAGE_CSS = `@media print{@page{size:A4;margin:16mm}}`;
 
 const PAPEL_STYLE_ID = 'mcf-papel-css';

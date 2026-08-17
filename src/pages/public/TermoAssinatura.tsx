@@ -5,7 +5,7 @@ import { useTermoPublico } from '@/hooks/useTermoPublico';
 import { TermoMarkdown } from '@/components/consorcio/TermoMarkdown';
 import { PapelBrand } from '@/components/consorcio/PapelBrand';
 import { imprimirDocumento } from '@/lib/consorcioTermo';
-import { PAPEL_CSS } from '@/lib/documentoPapel';
+import { PAPEL_CSS, PAPEL_PAGE_CSS } from '@/lib/documentoPapel';
 
 export default function TermoAssinatura() {
   const { token } = useParams<{ token: string }>();
@@ -15,7 +15,7 @@ export default function TermoAssinatura() {
   const [aceite, setAceite] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [avisoPopup, setAvisoPopup] = useState(false);
+  const [erroImpressao, setErroImpressao] = useState<'popup' | 'erro' | null>(null);
 
   const isComprovante = termo?.tipo === 'comprovante_cadastro';
 
@@ -69,13 +69,14 @@ export default function TermoAssinatura() {
   const cert = termo.certificado;
 
   const imprimir = async () => {
-    const ok = await imprimirDocumento({
+    setErroImpressao(null);
+    const resultado = await imprimirDocumento({
       conteudo: termo.conteudo || '',
       clienteNome: cert?.assinante_nome || termo.nome_mascarado || 'cliente',
       tituloDocumento: isComprovante ? 'Comprovante de Cadastro' : 'Termo de Adesão',
       certificado: assinado && !isComprovante ? cert : null,
     });
-    setAvisoPopup(!ok);
+    setErroImpressao(resultado === 'ok' ? null : resultado);
   };
 
   const botaoImprimir = (
@@ -87,6 +88,7 @@ export default function TermoAssinatura() {
   return (
     <div className="min-h-[100dvh] bg-[#eeeeea] py-6 px-3 sm:px-6">
       <style>{`${PAPEL_CSS}
+${PAPEL_PAGE_CSS}
 .mcf-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
   background:#1f3864;color:#fff;border:0;border-radius:7px;padding:13px 18px;font-size:14px;
   font-weight:600;cursor:pointer}
@@ -234,10 +236,11 @@ export default function TermoAssinatura() {
           </div>
         )}
 
-        {avisoPopup && (
+        {erroImpressao && (
           <p className="legal no-print" style={{ color: '#991b1b' }}>
-            O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e toque novamente em
-            “Imprimir / Salvar PDF”.
+            {erroImpressao === 'popup'
+              ? 'O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e toque novamente em “Imprimir / Salvar PDF”.'
+              : 'Não foi possível preparar o documento para impressão. Verifique sua conexão e tente novamente.'}
           </p>
         )}
 
