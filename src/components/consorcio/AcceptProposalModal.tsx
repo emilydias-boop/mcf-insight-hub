@@ -393,7 +393,7 @@ export function AcceptProposalModal({
         <DialogHeader>
           <DialogTitle>Cadastrar Dados da Cota</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Preencha os dados completos do cliente para enviar ao Cadastros Pendentes.
+            Preencha os dados completos do cliente para enviar aos Cadastros Pendentes.
           </p>
         </DialogHeader>
 
