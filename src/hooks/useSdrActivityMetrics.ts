@@ -339,8 +339,15 @@ export function useSdrActivityMetrics(
       
       // 6b. Agregar ligações Sonax (fonte automática — sem depender de outcome manual do SDR)
       allSonaxEvents.forEach(ev => {
-        if (!ev.sdr_email) return;
-        const email = String(ev.sdr_email).toLowerCase();
+        // Reserva: quando o Sonax manda o evento sem sdr_email, descobrimos o SDR
+        // pelo ramal (aliasramal) via sdr_ramal_mapping. Sem isso essas ligações
+        // eram descartadas e sumiam do painel.
+        let email = ev.sdr_email ? String(ev.sdr_email).toLowerCase() : '';
+        if (!email) {
+          const ramalKey = String(ev.aliasramal ?? '').replace(/\D/g, '');
+          email = ramalKey ? (emailByRamal.get(ramalKey) ?? '') : '';
+        }
+        if (!email) return;
         if (!validSdrEmails.has(email)) return;
 
         const metrics = metricsMap.get(email);
