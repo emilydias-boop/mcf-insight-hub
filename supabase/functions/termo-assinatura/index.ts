@@ -44,8 +44,10 @@ function maskNome(nome: string) {
   return partes.map((p, i) => (i === 0 || i === partes.length - 1 ? p : `${p[0]}.`)).join(' ');
 }
 
+// Somente o necessário para publicPayload() + conferência de assinatura.
+// access_token não é lido: ele já vem no request e nunca volta na resposta.
 const TERMO_COLS =
-  'id, access_token, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, dados_snapshot';
+  'id, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, dados_snapshot';
 
 async function getTermo(token: string) {
   const { data, error } = await supabase
