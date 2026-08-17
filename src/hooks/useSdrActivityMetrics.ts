@@ -13,6 +13,8 @@ export interface SdrActivityMetrics {
   ramal: string | null;
   /** Só no Sonax: eventos de desligamento com status_atendimento inválido/placeholder */
   pendingOutcomeCalls: number;
+  /** Discagens iniciadas pelo Auto-Discador (subconjunto de totalCalls) */
+  autoDialerCalls: number;
   /** Discagens contadas via `calls` (Twilio) ou `sonax_call_events` (Sonax) */
 
   
@@ -211,7 +213,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('sonax_call_events')
-          .select('sdr_email, aliasramal, deal_id, status_atendimento, duracao_chamada, created_at')
+          .select('sdr_email, aliasramal, numero, deal_id, status_atendimento, duracao_chamada, created_at')
           .eq('evento', 'desligamento')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
@@ -249,6 +251,7 @@ export function useSdrActivityMetrics(
           source: cfg?.engine || 'twilio',
           ramal: cfg?.ramal || null,
           pendingOutcomeCalls: 0,
+          autoDialerCalls: 0,
           totalCalls: 0,
           answeredCalls: 0,
           notAnsweredCalls: 0,
@@ -382,8 +385,64 @@ export function useSdrActivityMetrics(
           leadsWorkedBySdr.get(email)?.add(ev.deal_id);
         }
       });
-      
-      
+
+      // 6c. Tentativas de discagem registradas pelo CRM (click_to_call).
+      // Dois objetivos: (1) medir adoção do Auto-Discador por SDR; (2) somar
+      // ao total as discagens que a telefonia Sonax nunca reportou — sem isso
+      // o esforço do SDR simplesmente desaparecia do painel.
+      const onlyDigits = (v: unknown) => String(v ?? '').replace(/\D/g, '');
+
+      // Índice dos eventos de telefonia por SDR, para casar com as tentativas.
+      const sonaxIndexByEmail = new Map<string, { num: string; at: number }[]>();
+      allSonaxEvents.forEach(ev => {
+        let email = ev.sdr_email ? String(ev.sdr_email).toLowerCase() : '';
+        if (!email) {
+          const ramalKey = onlyDigits(ev.aliasramal);
+          email = ramalKey ? (emailByRamal.get(ramalKey) ?? '') : '';
+        }
+        if (!email) return;
+        const list = sonaxIndexByEmail.get(email) ?? [];
+        list.push({
+          num: onlyDigits(ev.numero).slice(-11),
+          at: new Date(ev.created_at).getTime(),
+        });
+        sonaxIndexByEmail.set(email, list);
+      });
+
+      const MATCH_BEFORE_MS = 3 * 60 * 1000;
+      const MATCH_AFTER_MS = 10 * 60 * 1000;
+
+      allActivities.forEach(activity => {
+        if (activity.activity_type !== 'click_to_call') return;
+
+        const meta = (activity.metadata ?? {}) as Record<string, unknown>;
+        let email = meta.sdr_email ? String(meta.sdr_email).toLowerCase() : '';
+        if (!email && activity.user_id) {
+          email = profileMap.get(activity.user_id)?.email ?? '';
+        }
+        if (!email || !validSdrEmails.has(email)) return;
+
+        const metrics = metricsMap.get(email);
+        if (!metrics || metrics.source !== 'sonax') return;
+
+        if (String(meta.origin ?? '') === 'auto_dialer') {
+          metrics.autoDialerCalls++;
+        }
+
+        // Só soma ao total se a telefonia NÃO reportou essa discagem.
+        const num = onlyDigits(meta.numero).slice(-11);
+        const at = new Date(activity.created_at).getTime();
+        const matched = (sonaxIndexByEmail.get(email) ?? []).some(
+          (e) => e.num === num && e.at >= at - MATCH_BEFORE_MS && e.at <= at + MATCH_AFTER_MS,
+        );
+        if (!matched) {
+          metrics.totalCalls++;
+          // Sem evento de telefonia não há duração nem confirmação de
+          // atendimento, então entra como não atendida.
+          metrics.notAnsweredCalls++;
+        }
+      });
+
       // 7. Calcular métricas finais
       const results: SdrActivityMetrics[] = [];
       metricsMap.forEach((metrics, email) => {
@@ -400,7 +459,7 @@ export function useSdrActivityMetrics(
           : 0;
         
         // Incluir apenas SDRs com alguma atividade
-        if (metrics.totalCalls > 0 || metrics.notesAdded > 0 || metrics.stageChanges > 0 || metrics.whatsappSent > 0 || metrics.pendingOutcomeCalls > 0) {
+        if (metrics.totalCalls > 0 || metrics.notesAdded > 0 || metrics.stageChanges > 0 || metrics.whatsappSent > 0 || metrics.pendingOutcomeCalls > 0 || metrics.autoDialerCalls > 0) {
           results.push(metrics);
         }
       });
