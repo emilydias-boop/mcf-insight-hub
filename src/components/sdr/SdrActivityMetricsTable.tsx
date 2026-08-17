@@ -79,6 +79,9 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <HeaderWithTooltip icon={<Phone className="h-3.5 w-3.5" />} label="Total" tooltip="Total de ligações outbound disparadas no período." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
+                    <HeaderWithTooltip icon={<span className="text-xs">⚡</span>} label="Auto-Disc." tooltip="Discagens iniciadas pelo Auto-Discador (já incluídas no total)." />
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
                     <HeaderWithTooltip icon={<PhoneMissed className="h-3.5 w-3.5 text-muted-foreground" />} label="Não atend." tooltip="Status no-answer / failed / busy / initiated, ou duração 0s. Ninguém atendeu." />
                   </TableHead>
                   <TableHead className="text-center whitespace-nowrap">
@@ -116,6 +119,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                       </span>
                     </TableCell>
                     <TableCell className="text-center">{sdr.totalCalls}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{sdr.autoDialerCalls}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{sdr.notAnsweredCalls}</TableCell>
                     <TableCell className="text-center text-blue-600 font-medium">{sdr.effectiveCalls + sdr.qualifiedCalls}</TableCell>
                     <TableCell className="text-center">{sdr.connectionRate.toFixed(1)}%</TableCell>
@@ -147,6 +151,7 @@ export function SdrActivityMetricsTable({ startDate, endDate, originId, squad }:
                     <TableRow className="bg-muted/50 font-semibold">
                       <TableCell>Total</TableCell>
                       <TableCell className="text-center">{total}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">{metrics.reduce((s, m) => s + m.autoDialerCalls, 0)}</TableCell>
                       <TableCell className="text-center text-muted-foreground">{metrics.reduce((s, m) => s + m.notAnsweredCalls, 0)}</TableCell>
                       <TableCell className="text-center text-blue-600">{metrics.reduce((s, m) => s + m.effectiveCalls + m.qualifiedCalls, 0)}</TableCell>
                       <TableCell className="text-center">{total > 0 ? ((ans / total) * 100).toFixed(1) : '0.0'}%</TableCell>
