@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { TermoMarkdown } from './TermoMarkdown';
+import { PapelBrand } from './PapelBrand';
 import { useSaveTermoModelo, useTermoModelos, TERMO_TIPO_LABEL, type TermoTipo } from '@/hooks/useConsorcioTermos';
 import { DADOS_EXEMPLO_TERMO, TERMO_PLACEHOLDERS, renderTermo } from '@/lib/consorcioTermo';
 import { COMPROVANTE_PLACEHOLDERS, DADOS_EXEMPLO_COMPROVANTE } from '@/lib/consorcioComprovante';
@@ -103,6 +104,12 @@ export function TermoAdesaoEditor() {
 
         <div className="space-y-2">
           <Label>Placeholders disponíveis (clique para inserir no fim do texto)</Label>
+          <p className="text-xs text-muted-foreground">
+            <strong>Montados pelo sistema — não reescreva à mão:</strong> identificação do cliente, dados da cota,
+            cronograma de parcelas e certificado de assinatura. Eles vêm dos placeholders e ganham o desenho do
+            papel automaticamente (grades de rótulo/valor, tabelas e selos de quem paga).{' '}
+            <strong>Livres para editar:</strong> textos de compromisso, declarações e observações.
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {placeholders.map((p) => (
               <button
@@ -136,9 +143,17 @@ export function TermoAdesaoEditor() {
             <Label className="flex items-center gap-2">
               <Eye className="h-4 w-4" /> Prévia com dados de exemplo
             </Label>
-            <ScrollArea className="h-[560px] rounded-md border bg-card p-5">
-              <TermoMarkdown content={preview} className="text-sm" />
+            <ScrollArea className="h-[560px] rounded-md border bg-[#fcfcfb] p-6">
+              <div className="papel">
+                <PapelBrand
+                  subtitulo={isComprovante ? 'Comprovante de Cadastro — Consórcio' : 'Termo de Adesão — Consórcio'}
+                />
+              </div>
+              <TermoMarkdown content={preview} />
             </ScrollArea>
+            <p className="text-xs text-muted-foreground">
+              É exatamente este desenho que o cliente recebe na página do link e na impressão em PDF.
+            </p>
           </div>
         </div>
 

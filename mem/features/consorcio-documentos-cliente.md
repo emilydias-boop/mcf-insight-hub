@@ -11,3 +11,5 @@ Os dois documentos do cliente do Consórcio usam a MESMA infraestrutura, diferen
 - Comprovante exige `consortium_cards.contrato_embracon`, grupo, cota e as 12 primeiras parcelas geradas.
 - Valor de parcela do cronograma vem SEMPRE do card (`parcela_1a_12a` / `parcela_demais`), nunca de `consortium_installments.valor_parcela` (que é crédito ÷ prazo). `tipo='empresa'` = MCF paga.
 - Emissão: lista de Cotas (ícone FileBadge) e drawer da cota. Modelo editável em Configurações do CRM → Documentos.
+
+Desenho: os três documentos (termo, comprovante e Relatório do Lead) usam o papel institucional de `src/lib/documentoPapel.ts` (`PAPEL_CSS`, `papelBrandHtml`, `abrirParaImpressao`, `EMPRESA_RAZAO_SOCIAL`/`EMPRESA_CNPJ`). `conteudo_renderizado` continua sendo **markdown** (é ele que está no `conteudo_hash` — nunca converter para HTML). PDF sai pela impressão do navegador (`imprimirDocumento`), não por jsPDF. Sem marca-texto amarelo nos documentos emitidos.

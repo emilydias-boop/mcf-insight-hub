@@ -13,6 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLeadReport, BOOKED_AT_TRACKING_SINCE, type SourceStatus } from '@/hooks/useLeadReport';
 import { useLeadFullTimeline } from '@/hooks/useLeadFullTimeline';
 import { maskDocumento } from '@/lib/consorcioTermo';
+import { PAPEL_CSS } from '@/lib/documentoPapel';
+import { PapelBrand } from '@/components/consorcio/PapelBrand';
 
 /**
  * Impressão: NÃO usar `position: absolute` no container do relatório — no Chromium
@@ -71,10 +73,10 @@ function Section({
 }) {
   const failures = (Array.isArray(source) ? source : source ? [source] : []).filter((s) => !s.ok);
   return (
-    <section className="report-section space-y-2 border-t border-border pt-4">
+    <section className="report-section space-y-2">
       <div>
-        <h2 className="text-base font-semibold">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        <h2>{title}</h2>
+        {subtitle && <p className="sub">{subtitle}</p>}
       </div>
       {failures.length > 0 && (
         <Alert variant="destructive" className="avoid-break">
@@ -92,11 +94,11 @@ function Section({
   );
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function Field({ label, value, full }: { label: string; value: React.ReactNode; full?: boolean }) {
   return (
-    <div className="text-sm">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium break-words">{value ?? NOT_RECORDED}</div>
+    <div className={full ? 'full' : undefined}>
+      <b>{label}</b>
+      <span className="break-words">{value ?? NOT_RECORDED}</span>
     </div>
   );
 }
@@ -221,7 +223,7 @@ export default function RelatorioLead() {
 
   return (
     <div className="p-4 md:p-6">
-      <style>{PRINT_CSS}</style>
+      <style>{`${PAPEL_CSS}\n${PRINT_CSS}`}</style>
 
       <div className="no-print flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -234,12 +236,14 @@ export default function RelatorioLead() {
         </Button>
       </div>
 
-      <div id="lead-report" className="mx-auto max-w-4xl space-y-5 bg-background text-foreground">
+      <div id="lead-report" className="papel mx-auto max-w-4xl space-y-5 rounded-lg border bg-[#fcfcfb] p-8">
         {/* Cabeçalho */}
         <header className="space-y-1 avoid-break">
-          <h1 className="text-xl font-bold">Relatório do Lead — {d.name || data.contact.name || 'Sem nome'}</h1>
-          <p className="text-xs text-muted-foreground">
-            Gerado em {fmtDateTime(new Date().toISOString())} · Negócio {d.id}
+          <PapelBrand subtitulo="Relatório do Lead — Consórcio" />
+          <h1>Relatório do Lead — {d.name || data.contact.name || 'Sem nome'}</h1>
+          <p className="sub">
+            {data.contact.email ? `${data.contact.email} · ` : ''}
+            {d.pipeline_name ? `${d.pipeline_name} · ` : ''}Negócio {d.id}
           </p>
           {data.unknowns.length > 0 && (
             <Alert variant="destructive" className="mt-2 avoid-break">
@@ -253,7 +257,7 @@ export default function RelatorioLead() {
 
         {/* 1. Identificação */}
         <Section title="1. Identificação" source={[s.deal, s.deals, s.profiles]} showTechnical={tech}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="kv">
             <Field label="Contato" value={data.contact.name} />
             <Field label="E-mail" value={data.contact.email} />
             <Field label="Telefone" value={data.contact.phone} />
@@ -301,22 +305,26 @@ export default function RelatorioLead() {
           ) : timeline.length === 0 ? (
             <Empty>Nenhum evento registrado.</Empty>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <div className="tl">
               {[...timeline]
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .map((e) => (
-                  <li key={e.id} className="flex gap-2">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap w-32 shrink-0">
-                      {fmtDateTime(e.date)}
-                    </span>
-                    <span>
-                      <strong>{e.title}</strong>
-                      {e.description ? ` — ${e.description}` : ''}
-                      {e.author ? ` (${e.author})` : ''}
-                    </span>
-                  </li>
-                ))}
-            </ul>
+                .map((e) => {
+                  const texto = `${e.title} ${e.description || ''}`.toLowerCase();
+                  const pendente = /no-?show|pendente|aguard|atras|recus|cancel|declin/.test(texto);
+                  const concluido = /pago|assinad|realizada|cadastrad|conclu/.test(texto);
+                  return (
+                    <div
+                      key={e.id}
+                      className={`ev ${pendente ? 'warn' : concluido ? 'ok' : ''}`}
+                    >
+                      <div className="when">{fmtDateTime(e.date)}</div>
+                      <div className="what">{e.title}</div>
+                      {e.description ? <div className="who">{e.description}</div> : null}
+                      {e.author ? <div className="who">{e.author}</div> : null}
+                    </div>
+                  );
+                })}
+            </div>
           )}
         </Section>
 
@@ -340,7 +348,7 @@ export default function RelatorioLead() {
                       )}
                       {m.refunded_at && <Badge variant="outline">Reembolsado {fmtDate(m.refunded_at)}</Badge>}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="kv">
                       <Field label="Closer" value={m.closer_name} />
                       <Field label="Agendada por" value={m.booked_by_name} />
                       <Field
@@ -421,7 +429,7 @@ export default function RelatorioLead() {
                     <Badge variant="outline">{p.status || 'sem status'}</Badge>
                     {(p.carta_excluida || p.excluida_value) && <Badge variant="destructive">Excluída</Badge>}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <div className="kv">
                     <Field label="Data da proposta" value={fmtDate(p.proposal_date)} />
                     <Field
                       label="Criada em"
@@ -500,7 +508,7 @@ export default function RelatorioLead() {
                     <Badge variant="outline">{r.status || 'sem status'}</Badge>
                     {r.declinada_at && <Badge variant="destructive">Declinado</Badge>}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="kv">
                     <Field label="Categoria" value={r.categoria} />
                     <Field label="Crédito" value={fmtMoney(r.valor_credito)} />
                     <Field label="Prazo" value={r.prazo_meses ? `${r.prazo_meses} meses` : NOT_RECORDED} />
@@ -582,7 +590,7 @@ export default function RelatorioLead() {
                         modelo v{t.modelo_versao ?? '?'} · emitido em {fmtDateTime(t.created_at)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="kv">
                       <Field label="Assinante" value={t.assinante_nome} />
                       <Field
                         label="CPF do assinante"
@@ -628,7 +636,7 @@ export default function RelatorioLead() {
                     <Badge variant="outline">{c.status || 'sem status'}</Badge>
                     {c.isExternal && <Badge variant="destructive">Cota externa (sem vínculo com o funil)</Badge>}
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 avoid-break">
+                  <div className="kv avoid-break">
                     <Field label="Contrato Embracon" value={c.contrato_embracon} />
                     <Field label="Crédito" value={fmtMoney(c.valor_credito)} />
                     <Field label="Prazo" value={c.prazo_meses ? `${c.prazo_meses} meses` : NOT_RECORDED} />
@@ -646,14 +654,14 @@ export default function RelatorioLead() {
                     <Empty>Nenhuma parcela gerada para esta cota.</Empty>
                   ) : (
                     <>
-                      <table className="w-full text-xs border-collapse avoid-break">
+                      <table className="doc avoid-break">
                         <thead>
                           <tr>
-                            <th className="border border-border p-1 text-left">Quem paga</th>
-                            <th className="border border-border p-1 text-left">Parcelas</th>
-                            <th className="border border-border p-1 text-left">Total</th>
-                            <th className="border border-border p-1 text-left">Já pago</th>
-                            <th className="border border-border p-1 text-left">Falta</th>
+                            <th>Quem paga</th>
+                            <th>Parcelas</th>
+                            <th>Total</th>
+                            <th>Já pago</th>
+                            <th>Falta</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -662,13 +670,15 @@ export default function RelatorioLead() {
                             ['Cliente', c.totals.cliente],
                           ] as const).map(([label, t]) => (
                             <tr key={label}>
-                              <td className="border border-border p-1 font-medium">{label}</td>
-                              <td className="border border-border p-1">
+                              <td>
+                                <span className={label === 'Cliente' ? 'tag cli' : 'tag mcf'}>{label}</span>
+                              </td>
+                              <td>
                                 {t.paidCount}/{t.count}
                               </td>
-                              <td className="border border-border p-1">{fmtMoney(t.total)}</td>
-                              <td className="border border-border p-1">{fmtMoney(t.paid)}</td>
-                              <td className="border border-border p-1">
+                              <td>{fmtMoney(t.total)}</td>
+                              <td>{fmtMoney(t.paid)}</td>
+                              <td>
                                 {fmtMoney(t.open)} ({t.openCount})
                               </td>
                             </tr>
@@ -676,28 +686,40 @@ export default function RelatorioLead() {
                         </tbody>
                       </table>
 
-                      <table className="w-full text-xs border-collapse">
+                      <table className="doc">
                         <thead>
                           <tr>
-                            <th className="border border-border p-1 text-left">#</th>
-                            <th className="border border-border p-1 text-left">Quem paga</th>
-                            <th className="border border-border p-1 text-left">Valor</th>
-                            <th className="border border-border p-1 text-left">Vencimento</th>
-                            <th className="border border-border p-1 text-left">Pagamento</th>
-                            <th className="border border-border p-1 text-left">Status</th>
+                            <th>#</th>
+                            <th>Quem paga</th>
+                            <th>Valor</th>
+                            <th>Vencimento</th>
+                            <th>Pagamento</th>
+                            <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {c.installments.map((i) => (
                             <tr key={i.id}>
-                              <td className="border border-border p-1">{i.numero_parcela}</td>
-                              <td className="border border-border p-1">
-                                {i.tipo === 'empresa' ? 'MCF Capital' : 'Cliente'}
+                              <td>{i.numero_parcela}</td>
+                              <td>
+                                <span className={i.tipo === 'empresa' ? 'tag mcf' : 'tag cli'}>
+                                  {i.tipo === 'empresa' ? 'MCF Capital' : 'Cliente'}
+                                </span>
                               </td>
-                              <td className="border border-border p-1">{fmtMoney(i.valor_parcela)}</td>
-                              <td className="border border-border p-1">{fmtDate(i.data_vencimento)}</td>
-                              <td className="border border-border p-1">{fmtDate(i.data_pagamento, 'não pago')}</td>
-                              <td className="border border-border p-1">{i.status || NOT_RECORDED}</td>
+                              <td>{fmtMoney(i.valor_parcela)}</td>
+                              <td>{fmtDate(i.data_vencimento)}</td>
+                              <td>{fmtDate(i.data_pagamento, 'não pago')}</td>
+                              <td>
+                                <span
+                                  className={
+                                    i.data_pagamento || /pag/i.test(i.status || '')
+                                      ? 'tag pg'
+                                      : 'tag pend'
+                                  }
+                                >
+                                  {i.status || NOT_RECORDED}
+                                </span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -785,6 +807,11 @@ export default function RelatorioLead() {
             </ul>
           )}
         </Section>
+
+        <p className="legal">
+          Relatório gerado em {fmtDateTime(new Date().toISOString())} a partir dos registros do MCF Gestão. Cada
+          evento tem origem rastreável, com autor e carimbo de data e hora.
+        </p>
       </div>
     </div>
   );

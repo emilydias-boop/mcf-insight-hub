@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Ban, Copy, Download, Eye, FileBadge, FileSignature, Loader2 } from 'lucide-react';
+import { Ban, Copy, Eye, FileBadge, FileSignature, Loader2, Printer } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useCancelTermo, termoPublicUrl, type ConsorcioTermo, type TermoTipo } from '@/hooks/useConsorcioTermos';
-import { baixarTermoPdf } from '@/lib/consorcioTermo';
+import { imprimirDocumento } from '@/lib/consorcioTermo';
 
 const STATUS_LABEL: Record<string, string> = {
   pendente: 'Aguardando assinatura',
@@ -43,17 +43,18 @@ export function TermoPanelDialog({
     toast.success('Link copiado');
   };
 
-  const download = async (t: ConsorcioTermo) => {
-    await baixarTermoPdf({
+  const imprimir = async (t: ConsorcioTermo) => {
+    const ok = await imprimirDocumento({
       conteudo: t.conteudo_renderizado,
       clienteNome,
+      tituloDocumento: isComprovante ? 'Comprovante de Cadastro' : 'Termo de Adesão',
       certificado: !isComprovante && t.status === 'assinado' ? t : null,
-      prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
       canceladoStamp:
         t.status === 'cancelado' && t.cancelado_em
           ? { data: t.cancelado_em, motivo: t.cancelado_motivo || '' }
           : null,
     });
+    if (!ok) toast.error('O navegador bloqueou a janela de impressão. Libere os pop-ups deste site e tente de novo.');
   };
 
   const temPendente = !isComprovante && termos.some((t) => t.status === 'pendente');
@@ -156,8 +157,8 @@ export function TermoPanelDialog({
               )}
 
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => download(t)}>
-                  <Download className="h-4 w-4 mr-1" /> Baixar PDF
+                <Button variant="outline" size="sm" onClick={() => imprimir(t)}>
+                  <Printer className="h-4 w-4 mr-1" /> Imprimir / Salvar PDF
                 </Button>
                 {t.status === 'pendente' && (
                   <Button

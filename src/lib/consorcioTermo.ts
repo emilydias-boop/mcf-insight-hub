@@ -1,5 +1,7 @@
+import { createElement } from 'react';
 import { getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatCurrency } from '@/lib/consorcioCalculos';
+import { abrirParaImpressao, escapeHtml } from '@/lib/documentoPapel';
 
 /** Administradora do consórcio — usada no placeholder {{administradora}}. */
 export const ADMINISTRADORA_CONSORCIO = 'Embracon Administradora de Consórcio Ltda';
@@ -20,7 +22,7 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'parcela_demais', label: 'Demais parcelas' },
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
   { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas pagas pela MCF' },
-  { key: 'parcelas_mcf_lista', label: 'Lista das parcelas da MCF' },
+  { key: 'parcelas_mcf_lista', label: 'Tabela das parcelas da MCF' },
   { key: 'parcelas_mcf_total', label: 'Total pago pela MCF' },
   { key: 'tipo_contrato', label: 'Tipo de contrato' },
   { key: 'data_emissao', label: 'Data de emissão' },
@@ -100,6 +102,27 @@ export interface TermoFaltando {
   label: string;
 }
 
+/**
+ * Tabela markdown das parcelas cobertas pela MCF (Parcela · Vencimento · Valor ·
+ * Responsável), com linha de total. Substitui a antiga lista de bolinhas —
+ * afeta apenas documentos novos.
+ */
+export function montarTabelaParcelasMcf(
+  parcelas: { numero: number; valor: number }[],
+  total: number,
+  diaVencimento?: number | null,
+): string {
+  if (!parcelas.length) return 'Nenhuma parcela sob responsabilidade da MCF Capital.';
+  const venc = Number(diaVencimento) ? `dia ${Number(diaVencimento)}` : '—';
+  const linhas = [
+    '| Parcela | Vencimento | Valor | Responsável |',
+    '| --- | --- | --- | --- |',
+    ...parcelas.map((p) => `| ${p.numero}ª | ${venc} | ${formatCurrency(p.valor)} | MCF Capital |`),
+    `| **Total** | | **${formatCurrency(total)}** | |`,
+  ];
+  return linhas.join('\n');
+}
+
 export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[] {
   const faltando: TermoFaltando[] = [];
   if (!termoNomeCliente(reg)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente' });
@@ -115,9 +138,7 @@ export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[]
 export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Date()): TermoDados {
   const parcelas = parcelasMcfComValoresDigitados(reg);
   const total = parcelas.reduce((s, p) => s + p.valor, 0);
-  const lista = parcelas.length
-    ? parcelas.map((p) => `- Parcela ${p.numero} — ${formatCurrency(p.valor)}`).join('\n')
-    : '- Nenhuma parcela sob responsabilidade da MCF Capital';
+  const lista = montarTabelaParcelasMcf(parcelas, total, reg.dia_vencimento);
 
   const isPj = reg.tipo_pessoa === 'pj';
   return {
@@ -217,112 +238,70 @@ export interface TermoCertificado {
   conteudo_hash?: string | null;
 }
 
-/** Gera e baixa o PDF do termo a partir do conteúdo renderizado + certificado. */
-export async function baixarTermoPdf(opts: {
+export interface CertificadoHtmlParte {
+  label: string;
+  valor: string;
+}
+
+/** Bloco `.cert` do certificado de assinatura eletrônica, em HTML seguro. */
+export function certificadoHtml(cert: TermoCertificado): string {
+  const dataBr = cert.assinado_em
+    ? new Date(cert.assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    : '—';
+  const pares: CertificadoHtmlParte[] = [
+    { label: 'Signatário', valor: cert.assinante_nome || '—' },
+    { label: 'CPF', valor: cert.assinante_cpf || '—' },
+    { label: 'Data e hora (Brasília)', valor: dataBr },
+    { label: 'Endereço IP', valor: cert.assinante_ip || '—' },
+  ];
+  return `<div class="cert">
+  <h3>Certificado de assinatura eletrônica</h3>
+  <div class="kv">${pares
+    .map((p) => `<div><b>${escapeHtml(p.label)}</b><span>${escapeHtml(p.valor)}</span></div>`)
+    .join('')}</div>
+  <div class="hashline">Hash SHA-256 do conteúdo assinado: ${escapeHtml(cert.conteudo_hash || '—')}</div>
+  <p class="legal">Assinatura eletrônica válida nos termos da Medida Provisória nº 2.200-2/2001 e da Lei nº 14.063/2020.
+  Ficam registrados nome, documento, data, hora, endereço IP e o resumo criptográfico do conteúdo lido pelo signatário.</p>
+</div>`;
+}
+
+/**
+ * Abre a janela de impressão do documento com o MESMO desenho da tela
+ * (o markdown passa pelo `TermoMarkdown`, então nada divergir do papel).
+ * Devolve `false` quando o popup é bloqueado — quem chama avisa na tela.
+ */
+export async function imprimirDocumento(opts: {
   conteudo: string;
   clienteNome: string;
+  /** Rótulo do documento — vira o nome sugerido do arquivo. */
+  tituloDocumento?: string;
   certificado?: TermoCertificado | null;
-  /** Prefixo do arquivo salvo. Padrão: `termo-adesao`. */
-  prefixoArquivo?: string;
-  /** Carimbo de cancelamento exibido no topo do PDF. */
   canceladoStamp?: { data: string; motivo: string } | null;
-}) {
-  const { loadJsPDF } = await import('@/lib/lazyExport');
-  const { jsPDF } = await loadJsPDF();
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 56;
-  const width = doc.internal.pageSize.getWidth() - margin * 2;
-  const pageHeight = doc.internal.pageSize.getHeight();
-  let y = margin;
+}): Promise<boolean> {
+  const [{ renderToStaticMarkup }, { TermoMarkdown }] = await Promise.all([
+    import('react-dom/server'),
+    import('@/components/consorcio/TermoMarkdown'),
+  ]);
 
-  // Carimbo de cancelamento — vai no topo, antes de qualquer conteúdo.
+  const corpoMarkdown = renderToStaticMarkup(
+    createElement(TermoMarkdown, { content: opts.conteudo }),
+  );
+  const cert = opts.certificado?.assinado_em ? certificadoHtml(opts.certificado) : '';
+
+  let avisoTopo: string | null = null;
   if (opts.canceladoStamp) {
-    const dataBr = new Date(opts.canceladoStamp.data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const stampText = `DOCUMENTO CANCELADO EM ${dataBr}${opts.canceladoStamp.motivo ? ` — ${opts.canceladoStamp.motivo}` : ''}`;
-    doc.setFillColor(220, 38, 38);
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    const stampLines = doc.splitTextToSize(stampText, width - 24) as string[];
-    const boxH = stampLines.length * 15 + 12;
-    doc.roundedRect(margin - 6, y, width + 12, boxH, 4, 4, 'F');
-    let sy = y + 17;
-    for (const sl of stampLines) {
-      doc.text(sl, margin, sy);
-      sy += 15;
-    }
-    doc.setTextColor(0, 0, 0);
-    y += boxH + 16;
+    const dataBr = new Date(opts.canceladoStamp.data).toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+    });
+    avisoTopo = `Documento cancelado em ${dataBr}${
+      opts.canceladoStamp.motivo ? ` — ${opts.canceladoStamp.motivo}` : ''
+    }`;
   }
 
-  const ensure = (h: number) => {
-    if (y + h > pageHeight - margin) {
-      doc.addPage();
-      y = margin;
-    }
-  };
-
-  const writeLines = (text: string, size: number, style: 'normal' | 'bold', gap = 6) => {
-    doc.setFont('helvetica', style);
-    doc.setFontSize(size);
-    const lines = doc.splitTextToSize(text, width) as string[];
-    for (const line of lines) {
-      ensure(size + 4);
-      doc.text(line, margin, y);
-      y += size + 4;
-    }
-    y += gap;
-  };
-
-  for (const rawLine of opts.conteudo.split('\n')) {
-    const line = rawLine.trimEnd();
-    if (!line.trim()) {
-      y += 6;
-      continue;
-    }
-    // Tabela markdown (ex.: cronograma das 12 parcelas): linha separadora some,
-    // células viram colunas separadas por ' · '.
-    if (line.trim().startsWith('|')) {
-      const celulas = line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
-      if (celulas.every((c) => /^:?-{2,}:?$/.test(c))) continue;
-      const isHeader = /^\*\*/.test(celulas[0] || '') || celulas.every((c) => /[A-Za-zÀ-ÿ]/.test(c) && !/\d/.test(c));
-      writeLines(celulas.map((c) => c.replace(/\*\*/g, '')).join('  ·  '), 10, isHeader ? 'bold' : 'normal', 1);
-      continue;
-    }
-    if (line.startsWith('# ')) {
-      writeLines(line.slice(2), 15, 'bold', 10);
-    } else if (line.startsWith('## ')) {
-      writeLines(line.slice(3), 12, 'bold', 6);
-    } else if (line.startsWith('### ')) {
-      writeLines(line.slice(4), 11, 'bold', 4);
-    } else {
-      const clean = line.replace(/\*\*/g, '');
-      writeLines(clean, 10, 'normal', 2);
-    }
-  }
-
-  const cert = opts.certificado;
-  if (cert?.assinado_em) {
-    y += 10;
-    ensure(120);
-    doc.setDrawColor(180);
-    doc.line(margin, y, margin + width, y);
-    y += 18;
-    writeLines('CERTIFICADO DE ASSINATURA ELETRÔNICA', 11, 'bold', 6);
-    const dataBr = new Date(cert.assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    writeLines(`Assinante: ${cert.assinante_nome || '—'}`, 9, 'normal', 1);
-    writeLines(`CPF: ${cert.assinante_cpf || '—'}`, 9, 'normal', 1);
-    writeLines(`Data e hora (Brasília): ${dataBr}`, 9, 'normal', 1);
-    writeLines(`Endereço IP: ${cert.assinante_ip || '—'}`, 9, 'normal', 1);
-    writeLines(`Hash SHA-256 do conteúdo: ${cert.conteudo_hash || '—'}`, 9, 'normal', 1);
-    writeLines(
-      'Assinatura eletrônica válida nos termos da MP nº 2.200-2/2001 e da Lei nº 14.063/2020.',
-      8,
-      'normal',
-      0,
-    );
-  }
-
-  const dataArq = new Date().toISOString().slice(0, 10);
-  doc.save(`${opts.prefixoArquivo || 'termo-adesao'}-${slugify(opts.clienteNome)}-${dataArq}.pdf`);
+  const doc = opts.tituloDocumento || 'Termo de Adesão';
+  return abrirParaImpressao({
+    titulo: `${doc} — ${opts.clienteNome || 'Cliente'} — ${new Date().toLocaleDateString('pt-BR')}`,
+    corpoHtml: `${corpoMarkdown}${cert}`,
+    avisoTopo,
+  });
 }

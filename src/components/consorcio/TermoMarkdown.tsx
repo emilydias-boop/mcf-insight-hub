@@ -1,99 +1,188 @@
 /**
- * Renderizador simples do markdown usado no Termo de Adesão
- * (títulos, negrito, listas e parágrafos). Sem dependência externa.
+ * Renderizador do markdown dos documentos do Consórcio (Termo de Adesão e
+ * Comprovante de Cadastro) dentro do papel institucional (`.papel`).
+ *
+ * O conteúdo armazenado continua sendo markdown — aqui só se decide a
+ * apresentação. Nunca use `dangerouslySetInnerHTML` com o texto do modelo:
+ * ele é editável por admin/manager e é exibido numa página pública.
  */
-function inline(text: string, keyPrefix: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith('**') && p.endsWith('**') ? (
-      <strong key={`${keyPrefix}-${i}`}>{p.slice(2, -2)}</strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{p}</span>
-    ),
-  );
+import { PAPEL_CSS } from '@/lib/documentoPapel';
+
+/** `**negrito**` e `_itálico_`. */
+function inline(text: string, keyPrefix: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
+  return parts.map((p, i) => {
+    const k = `${keyPrefix}-${i}`;
+    if (p.startsWith('**') && p.endsWith('**')) return <strong key={k}>{p.slice(2, -2)}</strong>;
+    if (p.length > 2 && p.startsWith('_') && p.endsWith('_')) return <em key={k}>{p.slice(1, -1)}</em>;
+    return <span key={k}>{p}</span>;
+  });
 }
+
+const TAG_CLASS: Record<string, string> = {
+  'mcf capital': 'tag mcf',
+  cliente: 'tag cli',
+  pago: 'tag pg',
+  'a pagar': 'tag pend',
+  'a vencer': 'tag pend',
+  pendente: 'tag pend',
+};
+
+/** Célula de tabela: selo quando o texto é exatamente um dos rótulos conhecidos. */
+function cell(raw: string, key: string): React.ReactNode {
+  const limpo = raw.replace(/\*\*/g, '').trim();
+  const cls = TAG_CLASS[limpo.toLowerCase()];
+  if (cls) return <span className={cls}>{limpo}</span>;
+  return inline(raw, key);
+}
+
+const KV_RE = /^\*\*(.+?):\*\*\s*(.*)$/;
 
 export function TermoMarkdown({ content, className }: { content: string; className?: string }) {
   const lines = (content || '').split('\n');
   const blocks: JSX.Element[] = [];
-  let list: string[] = [];
-  let table: string[][] = [];
 
-  const flushList = (key: string) => {
-    if (!list.length) return;
+  let ul: string[] = [];
+  let ol: string[] = [];
+  let table: string[][] = [];
+  let kv: { rotulo: string; valor: string }[] = [];
+
+  const flushUl = (key: string) => {
+    if (!ul.length) return;
     blocks.push(
-      <ul key={key} className="list-disc pl-6 space-y-1 my-3">
-        {list.map((item, i) => (
+      <ul key={key}>
+        {ul.map((item, i) => (
           <li key={i}>{inline(item, `${key}-${i}`)}</li>
         ))}
       </ul>,
     );
-    list = [];
+    ul = [];
+  };
+
+  const flushOl = (key: string) => {
+    if (!ol.length) return;
+    blocks.push(
+      <ol key={key}>
+        {ol.map((item, i) => (
+          <li key={i}>{inline(item, `${key}-${i}`)}</li>
+        ))}
+      </ol>,
+    );
+    ol = [];
+  };
+
+  const flushKv = (key: string) => {
+    if (!kv.length) return;
+    blocks.push(
+      <div className="kv" key={key}>
+        {kv.map((par, i) => {
+          const full = /^endere[çc]o/i.test(par.rotulo) || par.valor.length > 60;
+          return (
+            <div key={i} className={full ? 'full' : undefined}>
+              <b>{par.rotulo}</b>
+              <span>{inline(par.valor, `${key}-${i}`)}</span>
+            </div>
+          );
+        })}
+      </div>,
+    );
+    kv = [];
   };
 
   const flushTable = (key: string) => {
     if (!table.length) return;
     const [head, ...body] = table;
     blocks.push(
-      <div key={key} className="my-4 overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/60">
-              {head.map((c, i) => (
-                <th key={i} className="border px-2 py-1 text-left font-semibold">
-                  {inline(c, `${key}-h-${i}`)}
-                </th>
+      <table className="doc" key={key}>
+        <thead>
+          <tr>
+            {head.map((c, i) => (
+              <th key={i}>{c.replace(/\*\*/g, '')}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, r) => (
+            <tr key={r}>
+              {row.map((c, i) => (
+                <td key={i}>{cell(c, `${key}-${r}-${i}`)}</td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {body.map((row, r) => (
-              <tr key={r}>
-                {row.map((c, i) => (
-                  <td key={i} className="border px-2 py-1">
-                    {inline(c, `${key}-${r}-${i}`)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>,
+          ))}
+        </tbody>
+      </table>,
     );
     table = [];
+  };
+
+  const flushAll = (idx: number | string) => {
+    flushUl(`ul-${idx}`);
+    flushOl(`ol-${idx}`);
+    flushKv(`kv-${idx}`);
+    flushTable(`tb-${idx}`);
   };
 
   lines.forEach((raw, idx) => {
     const line = raw.trim();
     const key = `l-${idx}`;
+
     if (!line) {
-      flushList(`ul-${idx}`);
-      flushTable(`tb-${idx}`);
+      flushAll(idx);
       return;
     }
+
+    // Tabela markdown
     if (line.startsWith('|')) {
+      flushUl(`ul-${idx}`);
+      flushOl(`ol-${idx}`);
+      flushKv(`kv-${idx}`);
       const celulas = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
       if (!celulas.every((c) => /^:?-{2,}:?$/.test(c))) table.push(celulas);
       return;
     }
     flushTable(`tb-${idx}`);
-    if (/^(-|\d+\.)\s+/.test(line)) {
-      list.push(line.replace(/^(-|\d+\.)\s+/, ''));
+
+    // Par rótulo/valor → grade .kv
+    const par = KV_RE.exec(line);
+    if (par) {
+      flushUl(`ul-${idx}`);
+      flushOl(`ol-${idx}`);
+      kv.push({ rotulo: par[1].trim(), valor: par[2].trim() });
       return;
     }
-    flushList(`ul-${idx}`);
+    flushKv(`kv-${idx}`);
+
+    // Listas — ordenada preserva a numeração
+    if (/^\d+\.\s+/.test(line)) {
+      flushUl(`ul-${idx}`);
+      ol.push(line.replace(/^\d+\.\s+/, ''));
+      return;
+    }
+    if (/^-\s+/.test(line)) {
+      flushOl(`ol-${idx}`);
+      ul.push(line.replace(/^-\s+/, ''));
+      return;
+    }
+    flushUl(`ul-${idx}`);
+    flushOl(`ol-${idx}`);
+
     if (line.startsWith('### ')) {
-      blocks.push(<h4 key={key} className="font-semibold mt-4 mb-1">{inline(line.slice(4), key)}</h4>);
+      blocks.push(<h3 key={key}>{inline(line.slice(4), key)}</h3>);
     } else if (line.startsWith('## ')) {
-      blocks.push(<h3 key={key} className="font-semibold text-base mt-5 mb-2">{inline(line.slice(3), key)}</h3>);
+      blocks.push(<h2 key={key}>{inline(line.slice(3), key)}</h2>);
     } else if (line.startsWith('# ')) {
-      blocks.push(<h2 key={key} className="font-bold text-lg mt-2 mb-3">{inline(line.slice(2), key)}</h2>);
+      blocks.push(<h1 key={key}>{inline(line.slice(2), key)}</h1>);
     } else {
-      blocks.push(<p key={key} className="my-2 leading-relaxed">{inline(line, key)}</p>);
+      blocks.push(<p key={key}>{inline(line, key)}</p>);
     }
   });
-  flushList('ul-end');
-  flushTable('tb-end');
 
-  return <div className={className}>{blocks}</div>;
+  flushAll('end');
+
+  return (
+    <div className={className ? `papel ${className}` : 'papel'}>
+      <style>{PAPEL_CSS}</style>
+      {blocks}
+    </div>
+  );
 }
