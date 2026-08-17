@@ -89,7 +89,9 @@ export interface LeadReportProposal {
   excluida_value: string | null;
   excluida_source: 'carta_excluida_em' | 'deleted_at' | null;
   carta_excluida_por_nome: string | null;
+  excluida_por_source: 'carta_excluida_por_nome' | 'perfil_do_usuario' | null;
   excluida_motivo: string | null;
+  excluida_motivo_source: 'carta_excluida_motivo' | 'deletion_reason' | null;
   consortium_card_id: string | null;
   valueChanges: LeadReportAudit[];
 }
@@ -265,6 +267,62 @@ const AUDITABLE_FIELDS = [
 const CARD_COLUMNS =
   'id, grupo, cota, contrato_embracon, status, categoria, valor_credito, prazo_meses, parcela_1a_12a, parcela_demais, parcelas_pagas_empresa, dia_vencimento, data_contratacao, vendedor_name, created_at';
 
+/** Colunas explícitas — evita trazer dado pessoal e faz coluna inexistente virar erro 400. */
+const PROPOSAL_COLUMNS = [
+  'id',
+  'deal_id',
+  'proposal_date',
+  'proposal_details',
+  'valor_credito',
+  'prazo_meses',
+  'tipo_produto',
+  'status',
+  'created_at',
+  'created_by',
+  'consortium_card_id',
+  'aceite_at',
+  'aceite_date',
+  'aceite_by',
+  'recusada_at',
+  'recusada_by',
+  'motivo_recusa',
+  'carta_excluida',
+  'carta_excluida_em',
+  'carta_excluida_por',
+  'carta_excluida_por_nome',
+  'carta_excluida_motivo',
+  'deleted_at',
+  'deletion_reason',
+].join(', ');
+
+const REGISTRATION_COLUMNS = [
+  'id',
+  'proposal_id',
+  'deal_id',
+  'status',
+  'tipo_pessoa',
+  'nome_completo',
+  'razao_social',
+  'categoria',
+  'grupo',
+  'cota',
+  'valor_credito',
+  'prazo_meses',
+  'condicao_pagamento',
+  'parcela_1a_12a',
+  'parcela_demais',
+  'parcelas_pagas_empresa',
+  'dia_vencimento',
+  'data_contratacao',
+  'created_at',
+  'cadastrada_at',
+  'cota_aberta_at',
+  'vinculada_at',
+  'declinada_at',
+  'motivo_declinio',
+  'consortium_card_id',
+].join(', ');
+
 function diffAuditable(oldData: any, newData: any) {
   const out: { field: string; from: any; to: any }[] = [];
   for (const f of AUDITABLE_FIELDS) {
@@ -359,8 +417,12 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
           )
           .in('deal_id', uuidIds)
           .limit(200),
-        supabase.from('consorcio_proposals').select('*').in('deal_id', uuidIds).limit(100),
-        supabase.from('consorcio_pending_registrations').select('*').in('deal_id', uuidIds).limit(100),
+        supabase.from('consorcio_proposals').select(PROPOSAL_COLUMNS).in('deal_id', uuidIds).limit(100),
+        supabase
+          .from('consorcio_pending_registrations')
+          .select(REGISTRATION_COLUMNS)
+          .in('deal_id', uuidIds)
+          .limit(100),
       ]);
 
       sources.deal = st(dealRes);
@@ -381,7 +443,7 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
       if (proposalIds.length) {
         const byProposalRes = await supabase
           .from('consorcio_pending_registrations')
-          .select('*')
+          .select(REGISTRATION_COLUMNS)
           .in('proposal_id', proposalIds);
         sources.registrationsByProposal = st(byProposalRes);
         const seen = new Set(registrations.map((r) => r.id));
@@ -576,7 +638,17 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
           excluida_value: p.carta_excluida_em || p.deleted_at || null,
           excluida_source: (p.carta_excluida_em ? 'carta_excluida_em' : p.deleted_at ? 'deleted_at' : null) as any,
           carta_excluida_por_nome: p.carta_excluida_por_nome || nameOf(p.carta_excluida_por),
+          excluida_por_source: (p.carta_excluida_por_nome
+            ? 'carta_excluida_por_nome'
+            : p.carta_excluida_por
+              ? 'perfil_do_usuario'
+              : null) as any,
           excluida_motivo: p.carta_excluida_motivo || p.deletion_reason || null,
+          excluida_motivo_source: (p.carta_excluida_motivo
+            ? 'carta_excluida_motivo'
+            : p.deletion_reason
+              ? 'deletion_reason'
+              : null) as any,
           consortium_card_id: p.consortium_card_id,
           valueChanges: auditByRecord[p.id] || [],
         }))
@@ -594,9 +666,9 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
           uploaded_at: d.uploaded_at,
         };
         if (d.card_id) (docsByCard[d.card_id] ||= []).push(doc);
-        else if (d.pending_registration_id) {
+        else if (d.pending_registration_id && regIds.includes(d.pending_registration_id)) {
+          // Documento de cadastro pendente conhecido: sai só dentro do cadastro.
           (docsByReg[d.pending_registration_id] ||= []).push(doc);
-          documentosSoltos.push(doc);
         } else documentosSoltos.push(doc);
       }
 
