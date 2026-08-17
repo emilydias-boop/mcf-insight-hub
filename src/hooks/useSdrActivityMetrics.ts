@@ -112,6 +112,7 @@ export function useSdrActivityMetrics(
         .from('sdr_ramal_mapping')
         .select('sdr_email, sdr_name, ramal, auto_dialer_engine, active');
       const engineByEmail = new Map<string, { engine: 'twilio' | 'sonax'; ramal: string | null }>();
+      const emailByRamal = new Map<string, string>();
       (ramalRows || []).forEach((r: any) => {
         if (!r.sdr_email) return;
         const email = String(r.sdr_email).toLowerCase();
@@ -123,6 +124,10 @@ export function useSdrActivityMetrics(
           engine: isSonax ? 'sonax' : 'twilio',
           ramal: r.ramal ?? existing?.ramal ?? null,
         });
+        const ramalKey = String(r.ramal ?? '').replace(/\D/g, '');
+        if (ramalKey && !emailByRamal.has(ramalKey)) {
+          emailByRamal.set(ramalKey, email);
+        }
       });
 
       // Complemento ADITIVO: SDRs no motor Sonax que não vieram da listagem padrão
