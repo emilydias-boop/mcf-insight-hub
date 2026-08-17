@@ -82,6 +82,7 @@ const AgendaR2 = lazy(() => import("./pages/crm/AgendaR2"));
 const R2Carrinho = lazy(() => import("./pages/crm/R2Carrinho"));
 const PosReuniao = lazy(() => import("./pages/crm/PosReuniao"));
 const ConsorcioConsultas = lazy(() => import("./pages/crm/Consultas"));
+const RelatorioLead = lazy(() => import("./pages/crm/RelatorioLead"));
 const ConfigurarClosersR2 = lazy(() => import("./pages/crm/ConfigurarClosersR2"));
 const FechamentoSDRList = lazy(() => import("./pages/fechamento-sdr/Index"));
 const FechamentoSDRDetail = lazy(() => import("./pages/fechamento-sdr/Detail"));
@@ -240,6 +241,7 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="consultas" element={<ConsorcioConsultas />} />
+                <Route path="relatorio-lead/:dealId" element={<RelatorioLead />} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>

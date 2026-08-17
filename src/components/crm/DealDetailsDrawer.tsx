@@ -26,6 +26,8 @@ import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperature
 import { LeadTagsManager } from './LeadTagsManager';
 import { LeadCallButton } from './LeadCallButton';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
+import { FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -211,6 +213,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 5b. PERFIL DO LEAD (dados do webhook) ===== */}
               <LeadProfileSection contactId={deal?.contact_id} />
+
+              {/* ===== 5c. RELATÓRIO DO LEAD (documento imprimível) ===== */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => window.open(`/consorcio/crm/relatorio-lead/${deal.id}`, '_blank')}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Relatório do Lead
+              </Button>
               
               {/* ===== 6. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">

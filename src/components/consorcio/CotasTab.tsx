@@ -69,6 +69,7 @@ import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModa
 import { GerarComprovanteModal } from '@/components/consorcio/GerarComprovanteModal';
 import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
 import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
+import { useConsorcioCardDealLinks } from '@/hooks/useLeadReport';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   useConsorcioCategoriaOptions,
@@ -192,6 +193,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const recalculateAll = useRecalculateAllCommissions();
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: comprovantesByCard = {} } = useComprovantesByCard();
+  const { data: cardDealLinks } = useConsorcioCardDealLinks();
   const comprovantesAtivos = (cardId: string) =>
     (comprovantesByCard[cardId] || []).filter((t) => t.status !== 'cancelado');
 
@@ -943,6 +945,23 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                             }}
                           >
                             <FileBadge className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!cardDealLinks?.get(card.id)}
+                            title={
+                              cardDealLinks?.get(card.id)
+                                ? 'Relatório do Lead'
+                                : 'Cota externa — sem lead vinculado'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const dealId = cardDealLinks?.get(card.id);
+                              if (dealId) window.open(`/consorcio/crm/relatorio-lead/${dealId}`, '_blank');
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
                           </Button>
                           <Button 
                             variant="ghost" 
