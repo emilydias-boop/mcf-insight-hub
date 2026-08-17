@@ -11,7 +11,7 @@ import {
   Eye,
   Edit,
   Trash2,
-  Settings,
+  Database,
   Search,
   RefreshCw,
   Copy,
@@ -452,8 +452,8 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
             </AlertDialog>
           )}
           <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Configurações
+            <Database className="h-4 w-4 mr-2" />
+            Cadastros
           </Button>
           <Button
             variant="outline"

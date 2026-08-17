@@ -57,6 +57,9 @@ export function TermoAdesaoEditor() {
           Texto do termo enviado ao cliente para assinatura eletrônica. Cada gravação cria uma nova versão —
           termos já emitidos continuam com a versão que usaram.
         </CardDescription>
+        <CardDescription className="text-xs">
+          Os planos que preenchem os valores de parcela do termo ficam em Pós-Reunião → etapa Cotas → Cadastros → Planos.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2">

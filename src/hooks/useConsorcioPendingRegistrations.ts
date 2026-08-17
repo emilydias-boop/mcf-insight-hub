@@ -819,6 +819,24 @@ export type UpdatePendingRegistrationPatch = Partial<{
   vendedor_name_cota: string | null;
   observacoes: string | null;
   aceite_date: string | null;
+  // cota — campos que a edição precisa gravar (antes eram descartados em silêncio)
+  categoria: string | null;
+  grupo: string | null;
+  cota: string | null;
+  produto_codigo: string | null;
+  inclui_seguro: boolean | null;
+  data_contratacao: string | null;
+  valor_comissao: number | null;
+  e_transferencia: boolean | null;
+  transferido_de: string | null;
+  // plano / Termo de Adesão
+  credito_id: string | null;
+  condicao_pagamento: string | null;
+  parcela_1a_12a: number | null;
+  parcela_demais: number | null;
+  dia_vencimento: number | null;
+  inicio_segunda_parcela: string | null;
+  objetivo: string | null;
 }>;
 
 export function useUpdatePendingRegistration() {

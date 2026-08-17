@@ -138,7 +138,7 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configurações do Consórcio</DialogTitle>
+          <DialogTitle>Cadastros do Consórcio</DialogTitle>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>

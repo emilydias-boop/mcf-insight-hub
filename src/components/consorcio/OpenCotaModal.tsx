@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
@@ -75,17 +75,22 @@ import { CATEGORIA_OPTIONS, ORIGEM_OPTIONS } from '@/types/consorcio';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
+import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
 
 interface OpenCotaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   registrationId: string;
   mode?: 'open' | 'view';
+  /** Abre já em modo edição (usado pelo atalho "Completar cadastro" do Termo de Adesão). */
+  startEditing?: boolean;
+  /** Rola até o bloco "Dados da Cota" ao abrir. */
+  focusPlano?: boolean;
 }
 
-export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open' }: OpenCotaModalProps) {
+export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false }: OpenCotaModalProps) {
   const isViewMode = mode === 'view';
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(startEditing);
   const readOnly = isViewMode && !isEditing;
   const { data: registration, isLoading: regLoading } = usePendingRegistration(registrationId);
   const { data: produtos = [] } = useConsorcioProdutos();
@@ -94,6 +99,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const { data: vendedorOptions = [] } = useConsorcioVendedorOptions();
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
+
+  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
+  const plano = useDadosPlano();
+  const planoHidratado = useRef(false);
+  const planoSyncKey = useRef<string | null>(null);
+  const cotaBlockRef = useRef<HTMLDivElement | null>(null);
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
@@ -211,6 +222,43 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const incluiSeguro = form.watch('inclui_seguro');
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
+
+  // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
+  useEffect(() => {
+    if (!registration || planoHidratado.current) return;
+    planoHidratado.current = true;
+    // Baseline: não reaplicar a tabela na hidratação (senão sobrescreve valor ajustado manualmente).
+    planoSyncKey.current = `${registration.prazo_meses ?? ''}|${registration.condicao_pagamento ?? 'convencional'}`;
+    plano.hidratar({
+      creditoId: (registration as any).credito_id,
+      valorCredito: registration.valor_credito != null ? Number(registration.valor_credito) : null,
+      prazo: registration.prazo_meses != null ? Number(registration.prazo_meses) : null,
+      condicao: registration.condicao_pagamento,
+      parcela1a12: (registration as any).parcela_1a_12a != null ? Number((registration as any).parcela_1a_12a) : null,
+      parcelaDemais: (registration as any).parcela_demais != null ? Number((registration as any).parcela_demais) : null,
+      diaVencimento: registration.dia_vencimento != null ? Number(registration.dia_vencimento) : null,
+      inicioSegundaParcela: registration.inicio_segunda_parcela,
+      objetivo: (registration as any).objetivo,
+      incluiSeguro: registration.inclui_seguro,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registration]);
+
+  // Prazo e condição vivem no formulário da cota: espelha no bloco do plano e reaplica a tabela.
+  useEffect(() => {
+    if (!planoHidratado.current) return;
+    const key = `${prazoMeses || ''}|${condicaoPagamento || 'convencional'}`;
+    if (planoSyncKey.current === key) return;
+    planoSyncKey.current = key;
+    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), condicaoPagamento || 'convencional');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prazoMeses, condicaoPagamento]);
+
+  useEffect(() => {
+    if (!open || !focusPlano) return;
+    const t = setTimeout(() => cotaBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+    return () => clearTimeout(t);
+  }, [open, focusPlano, registration]);
 
   // Duplicate check on client fields (CPF, nome, e-mail, telefone) for PF/PJ
   const clienteCpf = form.watch('cliente_cpf');
@@ -331,14 +379,30 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         valor_credito: data.valor_credito || null,
         prazo_meses: data.prazo_meses || null,
         tipo_produto: data.tipo_produto || null,
+        categoria: data.categoria || null,
+        grupo: data.grupo || null,
+        cota: data.cota || null,
+        inclui_seguro: !!data.inclui_seguro,
         empresa_paga_parcelas: data.empresa_paga_parcelas || null,
         tipo_contrato: data.tipo_contrato || null,
         parcelas_pagas_empresa: data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+        dia_vencimento: data.dia_vencimento ? Number(data.dia_vencimento) : null,
+        inicio_segunda_parcela: data.inicio_segunda_parcela || null,
+        data_contratacao: data.data_contratacao || null,
+        valor_comissao: data.valor_comissao || null,
+        e_transferencia: !!data.e_transferencia,
+        transferido_de: data.transferido_de || null,
         origem: data.origem || null,
         origem_detalhe: data.origem_detalhe || null,
         vendedor_id: data.vendedor_id || null,
         vendedor_name_cota: data.vendedor_name || null,
         observacoes: data.observacoes || null,
+        // plano (Termo de Adesão) — o que vale é o que está digitado, não o cálculo
+        credito_id: plano.valores.credito_id ?? null,
+        condicao_pagamento: data.condicao_pagamento || null,
+        parcela_1a_12a: plano.valores.parcela_1a_12a ?? null,
+        parcela_demais: plano.valores.parcela_demais ?? null,
+        objetivo: plano.valores.objetivo ?? null,
       },
     });
     setIsEditing(false);
@@ -624,7 +688,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             <Separator />
 
             {/* Cota form */}
-            <Card>
+            <Card ref={cotaBlockRef}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Dados da Cota (preencher)</CardTitle>
               </CardHeader>
@@ -727,6 +791,23 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         taxaAntecipadaTipo={tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12'}
                       />
                     )}
+
+                    {/* Dados do plano (valores que vão para o Termo de Adesão) */}
+                    <div className="rounded-lg border p-3 space-y-3">
+                      <div>
+                        <h4 className="text-sm font-semibold">Dados do plano</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Os valores digitados aqui são os que vão para o Termo de Adesão — a composição acima é apenas
+                          o cálculo estimado.
+                        </p>
+                      </div>
+                      <DadosPlanoFields
+                        plano={plano}
+                        disabled={readOnly}
+                        showAviso={false}
+                        hide={['valorCredito', 'prazo', 'condicao', 'diaVencimento', 'inicioSegundaParcela', 'incluiSeguro']}
+                      />
+                    </div>
 
                     {/* Empresa paga */}
                     <div className="grid grid-cols-3 gap-3">

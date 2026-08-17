@@ -15,9 +15,11 @@ interface GerarTermoModalProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   registrationId: string;
+  /** Fecha este modal e abre o cadastro pendente em modo edição, no bloco "Dados da Cota". */
+  onCompletarCadastro?: () => void;
 }
 
-export function GerarTermoModal({ open, onOpenChange, registrationId }: GerarTermoModalProps) {
+export function GerarTermoModal({ open, onOpenChange, registrationId, onCompletarCadastro }: GerarTermoModalProps) {
   const { data: modelos = [], isLoading: loadingModelos } = useTermoModelos(true);
   const createTermo = useCreateTermo();
   const [gerado, setGerado] = useState<ConsorcioTermo | null>(null);
@@ -120,7 +122,9 @@ export function GerarTermoModal({ open, onOpenChange, registrationId }: GerarTer
                       <li key={f.campo}>{f.label}</li>
                     ))}
                   </ul>
-                  <p className="mt-2">Complete o cadastro pendente antes de gerar o termo.</p>
+                  <p className="mt-2">
+                    Abra o cadastro em Cadastros Pendentes → ⋮ → Ver detalhes → Editar, ou use o botão abaixo.
+                  </p>
                 </AlertDescription>
               </Alert>
             )}
@@ -137,6 +141,11 @@ export function GerarTermoModal({ open, onOpenChange, registrationId }: GerarTer
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {gerado ? 'Fechar' : 'Cancelar'}
           </Button>
+          {!gerado && faltando.length > 0 && onCompletarCadastro && (
+            <Button variant="outline" onClick={onCompletarCadastro}>
+              Completar cadastro
+            </Button>
+          )}
           {!gerado && modelo && (
             <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
               {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
