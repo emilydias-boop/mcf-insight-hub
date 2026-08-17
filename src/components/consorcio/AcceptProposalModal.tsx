@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -278,7 +278,17 @@ export function AcceptProposalModal({
   const docsOk = tipoPessoa === 'pf'
     ? pfDocuments.length > 0
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
-  const canSubmit = checklistOk && docsOk;
+  const canSubmit = checklistOk && docsOk && planoOk;
+
+  // Pré-preenche valor do crédito e prazo com o que veio da proposta
+  useEffect(() => {
+    if (!proposal) return;
+    if (!valorCreditoStr && proposal.valor_credito) {
+      setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
+    }
+    if (!prazo && proposal.prazo_meses) setPrazo(String(proposal.prazo_meses));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal]);
 
   const handleCepLookup = useCallback(async (cep: string, prefix: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -352,8 +362,17 @@ export function AcceptProposalModal({
       empresa_paga_parcelas: empresaPaga,
       tipo_contrato: tipoContrato,
       parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
-      valor_credito: proposal?.valor_credito ? Number(proposal.valor_credito) : undefined,
-      prazo_meses: proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined,
+      valor_credito: parseBRLInput(valorCreditoStr) || (proposal?.valor_credito ? Number(proposal.valor_credito) : undefined),
+      prazo_meses: prazo ? Number(prazo) : (proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined),
+      credito_id: creditoId || undefined,
+      produto_codigo: produtoDoPlano?.codigo || undefined,
+      condicao_pagamento: condicao || undefined,
+      parcela_1a_12a: parseBRLInput(parcela1a12) || undefined,
+      parcela_demais: parseBRLInput(parcelaDemais) || undefined,
+      dia_vencimento: diaVencimento ? Number(diaVencimento) : undefined,
+      inicio_segunda_parcela: inicioSegundaParcela || undefined,
+      objetivo: objetivo || undefined,
+      inclui_seguro: incluiSeguro,
       observacoes: proposal?.proposal_details?.trim() || undefined,
       ...cleanData,
     });
