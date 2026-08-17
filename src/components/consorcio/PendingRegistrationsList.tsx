@@ -608,6 +608,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
+              {variant === 'pendentes' && (
+                <DropdownMenuItem onClick={termos.length ? onVerTermos : onGerarTermo}>
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  {termos.length ? 'Termo de Adesão' : 'Gerar Termo de Adesão'}
+                </DropdownMenuItem>
+              )}
               {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
