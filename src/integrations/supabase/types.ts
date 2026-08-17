@@ -4826,6 +4826,129 @@ export type Database = {
           },
         ]
       }
+      consorcio_termo_modelos: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: []
+      }
+      consorcio_termos: {
+        Row: {
+          access_token: string
+          assinado_em: string | null
+          assinante_cpf: string | null
+          assinante_ip: string | null
+          assinante_nome: string | null
+          assinante_user_agent: string | null
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          conteudo_hash: string
+          conteudo_renderizado: string
+          created_at: string
+          created_by: string | null
+          dados_snapshot: Json
+          deal_id: string | null
+          expires_at: string
+          id: string
+          modelo_id: string | null
+          modelo_versao: number | null
+          pending_registration_id: string | null
+          proposal_id: string | null
+          status: string
+        }
+        Insert: {
+          access_token?: string
+          assinado_em?: string | null
+          assinante_cpf?: string | null
+          assinante_ip?: string | null
+          assinante_nome?: string | null
+          assinante_user_agent?: string | null
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          conteudo_hash: string
+          conteudo_renderizado: string
+          created_at?: string
+          created_by?: string | null
+          dados_snapshot: Json
+          deal_id?: string | null
+          expires_at?: string
+          id?: string
+          modelo_id?: string | null
+          modelo_versao?: number | null
+          pending_registration_id?: string | null
+          proposal_id?: string | null
+          status?: string
+        }
+        Update: {
+          access_token?: string
+          assinado_em?: string | null
+          assinante_cpf?: string | null
+          assinante_ip?: string | null
+          assinante_nome?: string | null
+          assinante_user_agent?: string | null
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          conteudo_hash?: string
+          conteudo_renderizado?: string
+          created_at?: string
+          created_by?: string | null
+          dados_snapshot?: Json
+          deal_id?: string | null
+          expires_at?: string
+          id?: string
+          modelo_id?: string | null
+          modelo_versao?: number | null
+          pending_registration_id?: string | null
+          proposal_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_termos_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_termo_modelos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_termos_pending_registration_id_fkey"
+            columns: ["pending_registration_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_pending_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_tipo_produto_options: {
         Row: {
           color: string | null
