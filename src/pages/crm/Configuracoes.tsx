@@ -340,8 +340,8 @@ const Configuracoes = () => {
           </TabsTrigger>
           <TabsTrigger value="termo" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
             <FileSignature className="h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Termo de Adesão</span>
-            <span className="sm:hidden">Termo</span>
+            <span className="hidden sm:inline">Documentos</span>
+            <span className="sm:hidden">Docs</span>
           </TabsTrigger>
           <TabsTrigger value="tags" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
             <Tag className="h-3 w-3 sm:h-4 sm:w-4" />
