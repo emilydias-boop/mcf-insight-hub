@@ -102,6 +102,32 @@ export interface TermoFaltando {
   label: string;
 }
 
+/**
+ * Tabela markdown das parcelas cobertas pela MCF (Parcela · Vencimento · Valor ·
+ * Responsável), com linha de total. Substitui a antiga lista de bolinhas —
+ * afeta apenas documentos novos.
+ */
+export function montarTabelaParcelasMcf(
+  parcelas: { numero: number; valor: number }[],
+  total: number,
+  diaVencimento?: number | null,
+): string {
+  if (!parcelas.length) return 'Nenhuma parcela sob responsabilidade da MCF Capital.';
+  const venc = Number(diaVencimento) ? `dia ${Number(diaVencimento)}` : '—';
+  const linhas = [
+    '| Parcela | Vencimento | Valor | Responsável |',
+    '| --- | --- | --- | --- |',
+    ...parcelas.map((p) => `| ${p.numero}ª | ${venc} | ${formatCurrency(p.valor)} | MCF Capital |`),
+    `| **Total** | | **${formatCurrency(total)}** | |`,
+  ];
+  return linhas.join('\n');
+}
+
+interface TermoFaltandoLegacy {
+  campo: string;
+  label: string;
+}
+
 export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[] {
   const faltando: TermoFaltando[] = [];
   if (!termoNomeCliente(reg)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente' });
