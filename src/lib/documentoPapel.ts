@@ -143,7 +143,7 @@ export function papelBrandHtml(opts: { subtitulo?: string } = {}): string {
 export interface AbrirParaImpressaoOpts {
   /** Vira o `document.title` da janela — é o nome sugerido do arquivo PDF. */
   titulo: string;
-  /** HTML do corpo (já dentro do papel, sem o cabeçalho de marca). */
+  /** HTML do corpo — SEM wrapper `.papel` (ele é criado aqui, uma única vez). */
   corpoHtml: string;
   /** Tarja opcional no topo (ex.: "DOCUMENTO CANCELADO EM ..."). */
   avisoTopo?: string | null;
@@ -151,19 +151,24 @@ export interface AbrirParaImpressaoOpts {
 }
 
 /**
- * Abre uma janela A4 com o documento e dispara a impressão.
- * Devolve `false` quando o navegador bloqueia o popup — quem chama avisa na tela.
+ * Abre a janela de impressão de forma SÍNCRONA. Precisa ser chamada dentro do
+ * handler do clique: Safari/iOS bloqueia `window.open` depois de qualquer
+ * fronteira assíncrona (import dinâmico, fetch, await).
  */
-export function abrirParaImpressao(opts: AbrirParaImpressaoOpts): boolean {
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) return false;
+export function abrirJanelaImpressao(): Window | null {
+  return window.open('', '_blank', 'width=900,height=1000');
+}
+
+/** Escreve o documento numa janela já aberta e dispara a impressão. */
+export function escreverImpressao(win: Window, opts: AbrirParaImpressaoOpts): void {
   win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(opts.titulo)}</title>
 <style>html,body{margin:0;padding:0;background:#fcfcfb}
 body{padding:22px}
 @media print{body{padding:0}}
-${PAPEL_CSS}</style></head>
+${PAPEL_CSS}
+${PAPEL_PAGE_CSS}</style></head>
 <body><div class="papel">
 ${opts.avisoTopo ? `<div class="tarja">${escapeHtml(opts.avisoTopo)}</div>` : ''}
 ${papelBrandHtml({ subtitulo: opts.subtitulo })}
@@ -172,5 +177,15 @@ ${opts.corpoHtml}
 <script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250);};</script>
 </body></html>`);
   win.document.close();
+}
+
+/**
+ * Conveniência para chamadas 100% síncronas (desktop, sem import dinâmico).
+ * Devolve `false` quando o navegador bloqueia o popup.
+ */
+export function abrirParaImpressao(opts: AbrirParaImpressaoOpts): boolean {
+  const win = abrirJanelaImpressao();
+  if (!win) return false;
+  escreverImpressao(win, opts);
   return true;
 }
