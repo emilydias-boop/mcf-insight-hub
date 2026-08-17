@@ -402,7 +402,7 @@ export function AcceptProposalModal({
             {/* ===== Dados do plano ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
-              {planoVazio && (
+              {termoIncompleto && (
                 <p className="text-xs text-muted-foreground">
                   Preencha para gerar o Termo de Adesão. Sem estes dados o aceite funciona, mas o termo não pode ser emitido.
                 </p>
