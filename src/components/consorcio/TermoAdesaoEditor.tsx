@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Eye, FileSignature, History, Loader2, Save } from 'lucide-react';
+import { Eye, FileBadge, FileSignature, History, Loader2, Save } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,21 +8,31 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { TermoMarkdown } from './TermoMarkdown';
-import { useSaveTermoModelo, useTermoModelos } from '@/hooks/useConsorcioTermos';
+import { useSaveTermoModelo, useTermoModelos, TERMO_TIPO_LABEL, type TermoTipo } from '@/hooks/useConsorcioTermos';
 import { DADOS_EXEMPLO_TERMO, TERMO_PLACEHOLDERS, renderTermo } from '@/lib/consorcioTermo';
+import { COMPROVANTE_PLACEHOLDERS, DADOS_EXEMPLO_COMPROVANTE } from '@/lib/consorcioComprovante';
 
 export function TermoAdesaoEditor() {
   const { role } = useAuth();
   const podeEditar = role === 'admin' || role === 'manager';
-  const { data: modelos = [], isLoading } = useTermoModelos(false);
+  const [tipo, setTipo] = useState<TermoTipo>('adesao');
+  const { data: modelos = [], isLoading } = useTermoModelos(false, tipo);
   const saveMut = useSaveTermoModelo();
 
   const ativo = useMemo(() => modelos.find((m) => m.ativo) || modelos[0], [modelos]);
   const [nome, setNome] = useState('');
   const [conteudo, setConteudo] = useState('');
   const [carregado, setCarregado] = useState(false);
+
+  // Trocar de documento recarrega o editor com o modelo do novo tipo.
+  useEffect(() => {
+    setCarregado(false);
+    setNome('');
+    setConteudo('');
+  }, [tipo]);
 
   useEffect(() => {
     if (ativo && !carregado) {
@@ -32,7 +42,10 @@ export function TermoAdesaoEditor() {
     }
   }, [ativo, carregado]);
 
-  const preview = useMemo(() => renderTermo(conteudo, DADOS_EXEMPLO_TERMO), [conteudo]);
+  const isComprovante = tipo === 'comprovante_cadastro';
+  const placeholders = isComprovante ? COMPROVANTE_PLACEHOLDERS : TERMO_PLACEHOLDERS;
+  const dadosExemplo = isComprovante ? DADOS_EXEMPLO_COMPROVANTE : DADOS_EXEMPLO_TERMO;
+  const preview = useMemo(() => renderTermo(conteudo, dadosExemplo), [conteudo, dadosExemplo]);
   const alterado = !!ativo && (ativo.conteudo !== conteudo || ativo.nome !== nome);
 
   const inserirPlaceholder = (key: string) => {
@@ -51,17 +64,33 @@ export function TermoAdesaoEditor() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <FileSignature className="h-5 w-5" /> Termo de Adesão
+          {isComprovante ? <FileBadge className="h-5 w-5" /> : <FileSignature className="h-5 w-5" />}
+          Documentos do Consórcio
         </CardTitle>
         <CardDescription>
-          Texto do termo enviado ao cliente para assinatura eletrônica. Cada gravação cria uma nova versão —
-          termos já emitidos continuam com a versão que usaram.
+          {isComprovante
+            ? 'Texto do comprovante enviado ao cliente depois do cadastro da cota na Embracon. Não é assinado.'
+            : 'Texto do termo enviado ao cliente para assinatura eletrônica.'}{' '}
+          Cada gravação cria uma nova versão — documentos já emitidos continuam com a versão que usaram.
         </CardDescription>
         <CardDescription className="text-xs">
           Os planos que preenchem os valores de parcela do termo ficam em Pós-Reunião → etapa Cotas → Cadastros → Planos.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <Label>Documento</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as TermoTipo)}>
+            <SelectTrigger className="w-full sm:w-80">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="adesao">{TERMO_TIPO_LABEL.adesao}</SelectItem>
+              <SelectItem value="comprovante_cadastro">{TERMO_TIPO_LABEL.comprovante_cadastro}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="termo-nome">Nome do modelo</Label>
           <Input
@@ -75,7 +104,7 @@ export function TermoAdesaoEditor() {
         <div className="space-y-2">
           <Label>Placeholders disponíveis (clique para inserir no fim do texto)</Label>
           <div className="flex flex-wrap gap-1.5">
-            {TERMO_PLACEHOLDERS.map((p) => (
+            {placeholders.map((p) => (
               <button
                 key={p.key}
                 type="button"
@@ -120,7 +149,7 @@ export function TermoAdesaoEditor() {
               {alterado ? ' · há alterações não salvas' : ''}
             </p>
             <Button
-              onClick={() => saveMut.mutate({ nome: nome.trim(), conteudo })}
+              onClick={() => saveMut.mutate({ nome: nome.trim(), conteudo, tipo })}
               disabled={!alterado || !nome.trim() || !conteudo.trim() || saveMut.isPending}
             >
               {saveMut.isPending ? (
