@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
+import type { LeadReportMeeting } from './useLeadReport';
 
 export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation';
 
@@ -33,16 +34,33 @@ interface UseLeadFullTimelineParams {
   dealUuid: string;
   contactEmail?: string | null;
   contactId?: string | null;
+  /**
+   * Reuniões já lidas por outro consumidor (Relatório do Lead). Quando informado,
+   * a timeline NÃO consulta `meeting_slot_attendees` de novo — leitura única.
+   */
+  meetings?: LeadReportMeeting[] | null;
+  enabled?: boolean;
 }
 
-export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId }: UseLeadFullTimelineParams) {
+export function useLeadFullTimeline({
+  dealId,
+  dealUuid,
+  contactEmail,
+  contactId,
+  meetings: externalMeetings,
+  enabled = true,
+}: UseLeadFullTimelineParams) {
   const { data: allDealIds = [dealUuid, dealId] } = useContactDealIds(dealUuid, contactId);
 
   // Deduplicate IDs
   const uniqueIds = [...new Set([...allDealIds, dealUuid, dealId].filter(Boolean))];
+  const useExternalMeetings = Array.isArray(externalMeetings);
+  const externalMeetingsKey = useExternalMeetings
+    ? (externalMeetings as LeadReportMeeting[]).map((m) => `${m.id}:${m.status ?? ''}`).join('|')
+    : null;
 
   return useQuery({
-    queryKey: ['lead-full-timeline', uniqueIds, contactEmail],
+    queryKey: ['lead-full-timeline', uniqueIds, contactEmail, externalMeetingsKey],
     queryFn: async (): Promise<TimelineEvent[]> => {
       const events: TimelineEvent[] = [];
 
@@ -70,13 +88,34 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           .order('created_at', { ascending: false })
           .limit(100),
 
-        // 3. Meetings (attendees + slots) - ALL deals
-        supabase
-          .from('meeting_slot_attendees')
-          .select('*, meeting_slots(*, closers(name))')
-          .in('deal_id', uniqueIds)
-          .order('created_at', { ascending: false })
-          .limit(50),
+        // 3. Meetings (attendees + slots) - ALL deals.
+        //    Reaproveita a leitura externa quando ela existe (evita duas verdades).
+        useExternalMeetings
+          ? Promise.resolve({
+              data: (externalMeetings as LeadReportMeeting[]).map((m) => ({
+                id: m.id,
+                status: m.status,
+                booked_by: null,
+                booked_at: m.booked_at,
+                created_at: m.created_at,
+                updated_at: m.updated_at,
+                closer_notes: m.closer_notes,
+                booked_by_name: m.booked_by_name,
+                meeting_slots: {
+                  scheduled_at: m.scheduled_at,
+                  meeting_type: m.meeting_type,
+                  google_meet_link: m.google_meet_link,
+                  closers: m.closer_name ? { name: m.closer_name } : null,
+                },
+              })),
+              error: null,
+            })
+          : supabase
+              .from('meeting_slot_attendees')
+              .select('*, meeting_slots(*, closers(name))')
+              .in('deal_id', uniqueIds)
+              .order('created_at', { ascending: false })
+              .limit(50),
 
         // 4. Transactions by email
         contactEmail
@@ -355,11 +394,13 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
           });
         }
 
-        for (const att of meetingsRes.data) {
+        for (const att of meetingsRes.data as any[]) {
           const slot = att.meeting_slots as any;
           const closerName = slot?.closers?.name || null;
           const scheduledAt = slot?.scheduled_at;
-          const bookedByName = att.booked_by ? (bookerNameMap.get(att.booked_by) || null) : null;
+          const bookedByName = att.booked_by
+            ? bookerNameMap.get(att.booked_by) || null
+            : att.booked_by_name || null;
           events.push({
             id: att.id,
             type: 'meeting',
@@ -472,7 +513,7 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
 
       return events;
     },
-    enabled: uniqueIds.length > 0,
+    enabled: enabled && uniqueIds.length > 0,
     staleTime: 30000,
   });
 }

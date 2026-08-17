@@ -30,6 +30,7 @@ import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBUContext } from '@/contexts/BUContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,6 +43,7 @@ interface DealDetailsDrawerProps {
 
 export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDrawerProps) => {
   const { role } = useAuth();
+  const { activeBU } = useBUContext();
   const { setDrawerState } = useTwilio();
   const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
   const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
@@ -53,6 +55,13 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   const [showQualification, setShowQualification] = useState(false);
   
   const isLoading = dealLoading || contactLoading;
+
+  // Relatório do Lead é um documento de consórcio — não faz sentido em outras BUs.
+  const isConsorcioDeal = useMemo(() => {
+    if (activeBU === 'consorcio') return true;
+    const originName = ((deal as any)?.crm_origins?.name || '').toLowerCase();
+    return originName.includes('consorcio') || originName.includes('consórcio');
+  }, [activeBU, deal]);
   
   // Notify TwilioContext when drawer opens/closes
   useEffect(() => {
@@ -214,16 +223,18 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               {/* ===== 5b. PERFIL DO LEAD (dados do webhook) ===== */}
               <LeadProfileSection contactId={deal?.contact_id} />
 
-              {/* ===== 5c. RELATÓRIO DO LEAD (documento imprimível) ===== */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-2"
-                onClick={() => window.open(`/consorcio/crm/relatorio-lead/${deal.id}`, '_blank')}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Relatório do Lead
-              </Button>
+              {/* ===== 5c. RELATÓRIO DO LEAD (documento imprimível) — só Consórcio ===== */}
+              {isConsorcioDeal && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={() => window.open(`/consorcio/crm/relatorio-lead/${deal.id}`, '_blank')}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Relatório do Lead
+                </Button>
+              )}
               
               {/* ===== 6. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">
