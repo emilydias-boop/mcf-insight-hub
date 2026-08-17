@@ -864,8 +864,23 @@ serve(async (req) => {
 
         console.log('[WEBHOOK-RECEIVER] ✅ Deal atualizado para ANAMNESE completa, stage:', newStageId, 'owner mantido:', existingDeal.owner_id);
 
-        // 5. O registro em deal_activities ('stage_change') é feito pelo trigger
-        //    trg_log_deal_stage_change em crm_deals — não duplicar aqui.
+        // 5. stage_change é registrado pelo trigger trg_log_deal_stage_change.
+        //    Aqui preservamos apenas o contexto que o trigger não conhece.
+        await supabase
+          .from('deal_activities')
+          .insert({
+            deal_id: existingDeal.id,
+            activity_type: 'webhook_reentry',
+            description: 'ANAMNESE-INCOMPLETA → Lead Gratuito (anamnese completada via webhook)',
+            metadata: {
+              from_stage_id: oldStageId,
+              to_stage_id: newStageId,
+              trigger: 'webhook_anamnese_completed',
+              slug,
+              webhook_endpoint: endpoint.name,
+              owner_preserved: existingDeal.owner_id,
+            },
+          });
 
         // 6. Update lead_profile
         await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
