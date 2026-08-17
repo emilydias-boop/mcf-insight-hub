@@ -192,6 +192,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const recalculateAll = useRecalculateAllCommissions();
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: comprovantesByCard = {} } = useComprovantesByCard();
+  const { data: cardDealLinks } = useConsorcioCardDealLinks();
   const comprovantesAtivos = (cardId: string) =>
     (comprovantesByCard[cardId] || []).filter((t) => t.status !== 'cancelado');
 
