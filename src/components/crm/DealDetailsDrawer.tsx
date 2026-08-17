@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBUContext } from '@/contexts/BUContext';
+import { CONSORCIO_ORIGIN_IDS } from '@/hooks/useConsorcioPostMeeting';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -59,8 +60,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   // Relatório do Lead é um documento de consórcio — não faz sentido em outras BUs.
   const isConsorcioDeal = useMemo(() => {
     if (activeBU === 'consorcio') return true;
-    const originName = ((deal as any)?.crm_origins?.name || '').toLowerCase();
-    return originName.includes('consorcio') || originName.includes('consórcio');
+    // Fora do CRM da BU, o vínculo é pelo id da origem — os nomes reais são
+    // "Viver de Aluguel" e "Efeito Alavanca", que não contêm "consórcio".
+    const originId = (deal as any)?.origin_id || null;
+    return !!originId && CONSORCIO_ORIGIN_IDS.includes(originId);
   }, [activeBU, deal]);
   
   // Notify TwilioContext when drawer opens/closes
