@@ -2,7 +2,21 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
 
-export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change';
+export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation';
+
+// Rótulos PT-BR para os tipos que antes caíam no catch-all de "Notas"
+const OWNERSHIP_TYPES: Record<string, string> = {
+  owner_change: 'Responsável alterado',
+  closer_change: 'Closer alterado',
+  lead_distribution: 'Lead distribuído',
+};
+
+const AUTOMATION_TYPES: Record<string, string> = {
+  webhook_reentry: 'Reentrada via webhook',
+  partner_detected: 'Parceria detectada',
+  outside_detected: 'Venda Outside detectada',
+  auto_move: 'Movimentação automática',
+};
 
 export interface TimelineEvent {
   id: string;
@@ -259,6 +273,26 @@ export function useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId 
               date: act.created_at,
               author: resolveAuthor(act.user_id),
               metadata: { added, removed, source, initial: isInitial, ...meta },
+            });
+          } else if (OWNERSHIP_TYPES[actType]) {
+            events.push({
+              id: act.id,
+              type: 'owner_change',
+              title: OWNERSHIP_TYPES[actType],
+              description: act.description,
+              date: act.created_at,
+              author: resolveAuthor(act.user_id, meta.transferred_by, meta.moved_by_name, meta.moved_by_email),
+              metadata: { original_type: actType, ...meta },
+            });
+          } else if (AUTOMATION_TYPES[actType]) {
+            events.push({
+              id: act.id,
+              type: 'automation',
+              title: AUTOMATION_TYPES[actType],
+              description: act.description,
+              date: act.created_at,
+              author: resolveAuthor(act.user_id, meta.moved_by_name, meta.changed_by),
+              metadata: { original_type: actType, ...meta },
             });
           } else if (actType) {
             // Other activity types
