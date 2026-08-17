@@ -258,10 +258,11 @@ async function autoMarkSaleComplete(supabase: any, data: {
       .from('deal_activities')
       .insert({
         deal_id: deal.id,
-        activity_type: 'stage_change',
+        // stage_change vem do trigger trg_log_deal_stage_change.
+        activity_type: 'partner_detected',
         description: `Venda de parceria realizada via Asaas: ${data.productName}`,
-        to_stage: vendaStage.stage_name,
         metadata: {
+          to_stage_name: vendaStage.stage_name,
           via: 'webhook_asaas',
           product_name: data.productName,
           net_value: data.netValue,

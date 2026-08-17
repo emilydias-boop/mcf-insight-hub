@@ -292,10 +292,12 @@ async function autoMarkSaleComplete(supabase: any, data: {
       .from('deal_activities')
       .insert({
         deal_id: deal.id,
-        activity_type: 'stage_change',
+        // stage_change/owner_change vêm dos triggers em crm_deals.
+        // Aqui fica só o contexto da venda de parceria.
+        activity_type: 'partner_detected',
         description: activityDescription,
-        to_stage: vendaStage.stage_name,
         metadata: {
+          to_stage_name: vendaStage.stage_name,
           via: usedFallback ? 'webhook_parceria_fallback' : 'webhook_parceria',
           used_fallback: usedFallback,
           product_name: data.productName,
