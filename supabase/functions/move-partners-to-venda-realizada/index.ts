@@ -220,15 +220,19 @@ Deno.serve(async (req) => {
       await Promise.all(promises);
     }
 
-    // 10. Insert deal_activities
+    // 10. Insert deal_activities — stage_change é registrado pelo trigger
+    //     trg_log_deal_stage_change em crm_deals. Aqui só o motivo/origem.
     const ACTIVITY_BATCH = 100;
     const activities = partnerDeals.map(deal => ({
       deal_id: deal.id,
-      activity_type: 'stage_change',
+      activity_type: 'partner_detected',
       description: 'Parceiro detectado: movido automaticamente para Venda Realizada',
-      from_stage: deal.stage_id,
-      to_stage: vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE,
-      metadata: { source: 'move-partners-to-venda-realizada', email: contactEmails.get(deal.contact_id) || '' },
+      metadata: {
+        source: 'move-partners-to-venda-realizada',
+        from_stage_id: deal.stage_id,
+        to_stage_id: vendaRealizadaByOrigin.get(deal.origin_id) || FALLBACK_VENDA_REALIZADA_STAGE,
+        email: contactEmails.get(deal.contact_id) || '',
+      },
     }));
 
     for (let i = 0; i < activities.length; i += ACTIVITY_BATCH) {
