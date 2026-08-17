@@ -1,5 +1,7 @@
+import { createElement } from 'react';
 import { getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatCurrency } from '@/lib/consorcioCalculos';
+import { abrirParaImpressao, escapeHtml } from '@/lib/documentoPapel';
 
 /** Administradora do consórcio — usada no placeholder {{administradora}}. */
 export const ADMINISTRADORA_CONSORCIO = 'Embracon Administradora de Consórcio Ltda';
@@ -20,7 +22,7 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'parcela_demais', label: 'Demais parcelas' },
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
   { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas pagas pela MCF' },
-  { key: 'parcelas_mcf_lista', label: 'Lista das parcelas da MCF' },
+  { key: 'parcelas_mcf_lista', label: 'Tabela das parcelas da MCF' },
   { key: 'parcelas_mcf_total', label: 'Total pago pela MCF' },
   { key: 'tipo_contrato', label: 'Tipo de contrato' },
   { key: 'data_emissao', label: 'Data de emissão' },
