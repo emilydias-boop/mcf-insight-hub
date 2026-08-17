@@ -64,7 +64,7 @@ export function TermoPanelDialog({
           </DialogTitle>
           <DialogDescription>
             {isComprovante
-              ? 'Link do comprovante (válido por 2 anos), registro de visualização e download. Vencido, basta reemitir.'
+              ? 'Link do comprovante, registro de visualização e download. A validade de cada link aparece no respectivo card — vencido, basta reemitir.'
               : 'Link de assinatura, status e download do documento.'}
           </DialogDescription>
         </DialogHeader>

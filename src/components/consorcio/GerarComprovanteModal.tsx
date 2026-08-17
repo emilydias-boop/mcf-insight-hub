@@ -76,8 +76,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   const parcelasBanco = data?.parcelas || [];
 
   // Semeia a tabela editável a partir do banco (vencimento + tipo) e do card (valor).
+  // `open` entra nas deps porque o modal fica montado no drawer: sem isso, a segunda
+  // abertura não semeava nada (card.id e parcelasBanco.length não mudam) e a tabela sumia.
   useEffect(() => {
-    if (!card) return;
+    if (!open || !card) return;
     const limite = qtdParcelasCronograma(card);
     const base = [...parcelasBanco]
       .filter((p) => p.numero_parcela <= limite)
@@ -90,14 +92,29 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       }));
     setLinhas(base);
     setValoresTexto(Object.fromEntries(base.map((p) => [p.numero_parcela, numberToBRLInput(p.valor)])));
-  }, [card?.id, parcelasBanco.length]);
+  }, [open, card?.id, parcelasBanco.length]);
 
   const parcelas = linhas ?? parcelasBanco;
 
   const atualizarLinha = (numero: number, patch: Partial<ComprovanteParcela>) =>
     setLinhas((prev) => (prev || []).map((p) => (p.numero_parcela === numero ? { ...p, ...patch } : p)));
 
-  const faltando = useMemo(() => (card ? validarDadosComprovante(card, parcelas) : []), [card, parcelas]);
+  const faltandoCard = useMemo(() => (card ? validarDadosComprovante(card, parcelas) : []), [card, parcelas]);
+
+  /** Linha sem valor (vazio ou zero) ou sem vencimento não pode virar boleto no documento. */
+  const faltandoLinhas = useMemo(() => {
+    if (!linhas) return [] as { campo: string; label: string }[];
+    const semValor = linhas.filter((p) => !Number(p.valor)).map((p) => `${p.numero_parcela}ª`);
+    const semVenc = linhas.filter((p) => !p.data_vencimento).map((p) => `${p.numero_parcela}ª`);
+    const out: { campo: string; label: string }[] = [];
+    if (semValor.length)
+      out.push({ campo: 'linhas_valor', label: `Valor da parcela: ${semValor.join(', ')}` });
+    if (semVenc.length)
+      out.push({ campo: 'linhas_venc', label: `Vencimento da parcela: ${semVenc.join(', ')}` });
+    return out;
+  }, [linhas]);
+
+  const faltando = useMemo(() => [...faltandoCard, ...faltandoLinhas], [faltandoCard, faltandoLinhas]);
   const dados = useMemo(() => (card ? montarDadosComprovante(card, parcelas) : null), [card, parcelas]);
   const preview = useMemo(() => (modelo && dados ? renderTermo(modelo.conteudo, dados) : ''), [modelo, dados]);
 
@@ -107,7 +124,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   };
 
   const handleGerar = async () => {
-    if (!card || !modelo || !dados) return;
+    if (!card || !modelo || !dados || faltando.length > 0) return;
     const termo = await createTermo.mutateAsync({
       tipo: 'comprovante_cadastro',
       cardId: card.id,
@@ -174,7 +191,11 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                       <li key={f.campo}>{f.label}</li>
                     ))}
                   </ul>
-                  <p className="mt-2">Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.</p>
+                  <p className="mt-2">
+                    {faltandoCard.length > 0
+                      ? 'Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.'
+                      : 'Preencha as parcelas destacadas no cronograma abaixo para liberar a emissão.'}
+                  </p>
                 </AlertDescription>
               </Alert>
             )}

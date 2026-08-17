@@ -171,7 +171,7 @@ export function useCreateTermo() {
       modeloVersao: number;
       dados: TermoDados;
       conteudoRenderizado: string;
-      /** Validade do link. Comprovante não expira na prática (10 anos). */
+      /** Validade do link. Termo de adesão: prazo curto de assinatura. Comprovante: 2 anos. */
       expiresAt?: string;
     }) => {
       const { data: userData } = await supabase.auth.getUser();

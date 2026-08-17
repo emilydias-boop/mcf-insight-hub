@@ -227,9 +227,10 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   };
 
   const displayName = card?.tipo_pessoa === "pf" ? card?.nome_completo : card?.razao_social;
-  const comprovantes = ((card?.id ? comprovantesByCard[card.id] : undefined) || []).filter(
-    (t) => t.status !== 'cancelado',
-  );
+  /** Lista completa (inclusive cancelados) — o painel precisa mostrar o motivo do cancelamento. */
+  const comprovantesTodos = (card?.id ? comprovantesByCard[card.id] : undefined) || [];
+  /** Só os vigentes — usados no selo e no rótulo do botão. */
+  const comprovantes = comprovantesTodos.filter((t) => t.status !== 'cancelado');
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -830,7 +831,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
             <TermoPanelDialog
               open={comprovantePanelOpen}
               onOpenChange={setComprovantePanelOpen}
-              termos={comprovantes}
+              termos={comprovantesTodos}
               clienteNome={displayName || "cliente"}
               tipo="comprovante_cadastro"
               onGerarNovo={() => setComprovanteOpen(true)}
