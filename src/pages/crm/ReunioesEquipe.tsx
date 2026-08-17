@@ -653,16 +653,14 @@ export default function ReunioesEquipe() {
       totalSemStatus,
       // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
       // órfãs sem deal NÃO entram em nenhum KPI/total.
-      totalContratos: segmentTotals
-        ? (segmentTotals.a.contratos || 0) + (segmentTotals.b.contratos || 0)
-        : contractsFromClosers.contratoPago,
+      totalContratos: totalContratosCard,
       totalOutside: contractsFromClosers.outside,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
         : 0,
       taxaConversao: totalRealizadas > 0
-        ? (contractsFromClosers.total / totalRealizadas) * 100
+        ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
   }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals]);
