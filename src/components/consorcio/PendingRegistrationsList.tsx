@@ -423,6 +423,9 @@ function RegistrationRow({
   onUnmarkCadastrada,
   onDecline,
   onUndecline,
+  termos,
+  onGerarTermo,
+  onVerTermos,
   isMarking,
 }: {
   reg: EnrichedPendingRegistration;
@@ -435,6 +438,9 @@ function RegistrationRow({
   onUnmarkCadastrada: () => void;
   onDecline: () => void;
   onUndecline: () => void;
+  termos: ConsorcioTermo[];
+  onGerarTermo: () => void;
+  onVerTermos: () => void;
   isMarking: boolean;
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
@@ -448,6 +454,14 @@ function RegistrationRow({
     ? `${reg.parcelas_empresa.length}× · ${tipoContratoLabel(reg.tipo_contrato)}`
     : '—';
 
+  const termoAssinado = termos.find((t) => t.status === 'assinado');
+  const termoPendente = termos.find((t) => t.status === 'pendente');
+  const termoBadge = termoAssinado
+    ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
+    : termoPendente
+      ? { label: 'Termo pendente', className: 'border-amber-500/60 text-amber-600 hover:bg-amber-500/10' }
+      : null;
+
   return (
     <TableRow>
       <TableCell className="text-sm">
@@ -455,6 +469,13 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {termoBadge && (
+          <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
+            <Badge variant="outline" className={`text-[10px] cursor-pointer ${termoBadge.className}`}>
+              <FileSignature className="h-3 w-3 mr-1" /> {termoBadge.label}
+            </Badge>
+          </button>
+        )}
         {variant === 'pendentes' && (reg.checklist_incompleto || reg.documentos_faltando) && (
           <div className="mt-1 flex flex-wrap gap-1">
             {reg.checklist_incompleto && (
