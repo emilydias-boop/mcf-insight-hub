@@ -927,7 +927,7 @@ export function AcceptProposalModal({
                     }
                   >
                     {createRegistration.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Confirmar e Enviar para Controle Consórcio
+                    Confirmar e Enviar para Cadastros Pendentes
                   </Button>
                 </div>
                 {!canSubmit && (
