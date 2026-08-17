@@ -11,6 +11,20 @@ export const EMPRESA_RAZAO_SOCIAL = 'VMX Participações e Empreendimentos Ltda'
 export const EMPRESA_CNPJ = '39.662.160/0001-31';
 
 export const PAPEL_CSS = `
+/* Tinta explícita: nada dentro do papel pode herdar os tokens de tema da
+   aplicação (que é escura por padrão). Redefinir as variáveis aqui é a rede de
+   segurança para qualquer componente do design system que entre no papel. */
+.papel{
+  --background:60 20% 99%;--foreground:60 3% 10%;
+  --card:60 20% 99%;--card-foreground:60 3% 10%;
+  --popover:60 20% 99%;--popover-foreground:60 3% 10%;
+  --muted:60 6% 94%;--muted-foreground:0 0% 40%;
+  --primary:219 53% 26%;--primary-foreground:0 0% 100%;
+  --secondary:60 6% 94%;--secondary-foreground:60 3% 10%;
+  --accent:60 6% 94%;--accent-foreground:60 3% 10%;
+  --destructive:0 72% 42%;--destructive-foreground:0 0% 100%;
+  --border:47 8% 88%;--input:47 8% 88%;--ring:219 53% 26%;
+}
 .papel{background:#fcfcfb;color:#1a1a19;font-size:13px;line-height:1.62;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
 .papel h1{font-size:17px;margin:0 0 3px;color:#1f3864;letter-spacing:.02em}
@@ -72,8 +86,14 @@ export const PAPEL_CSS = `
 .papel .tarja{background:#e8484a;color:#fff;font-weight:800;font-size:11px;letter-spacing:.05em;
   padding:9px 14px;border-radius:6px;margin-bottom:18px;text-transform:uppercase}
 
+/* Texto secundário e blocos — substituem text-muted-foreground / border-border. */
+.papel .dim{color:#777}
+.papel .dim2{color:#555}
+.papel .bloco{border:1px solid #e4e4df;border-radius:7px;padding:12px;background:#fff}
+.papel .aviso{border:1px solid #f0b3b3;background:#fdf3f3;color:#8f1d1d;
+  border-radius:6px;padding:9px 11px;font-size:11.5px;line-height:1.5;margin:6px 0}
+
 @media print{
-  @page{size:A4;margin:16mm}
   .papel{font-size:11.5pt}
   .papel table.doc{break-inside:auto}
   .papel thead{display:table-header-group}
@@ -83,6 +103,22 @@ export const PAPEL_CSS = `
 }
 @media(max-width:760px){.papel .kv{grid-template-columns:1fr}}
 `;
+
+/** Regra `@page` — vale SÓ onde a impressão é do documento (janela de impressão
+ *  e página do relatório). Nunca dentro do `PAPEL_CSS`, senão vaza para a app. */
+export const PAPEL_PAGE_CSS = `@media print{@page{size:A4;margin:16mm}}`;
+
+const PAPEL_STYLE_ID = 'mcf-papel-css';
+
+/** Injeta o `PAPEL_CSS` no `<head>` UMA única vez (idempotente por id). */
+export function ensurePapelStylesheet(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(PAPEL_STYLE_ID)) return;
+  const el = document.createElement('style');
+  el.id = PAPEL_STYLE_ID;
+  el.textContent = PAPEL_CSS;
+  document.head.appendChild(el);
+}
 
 export function escapeHtml(v: string): string {
   return String(v ?? '')
