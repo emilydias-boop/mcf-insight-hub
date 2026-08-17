@@ -17,13 +17,23 @@ import { maskDocumento } from '@/lib/consorcioTermo';
 /**
  * Impressão: NÃO usar `position: absolute` no container do relatório — no Chromium
  * um bloco absolutamente posicionado maior que uma página não pagina e o restante
- * é descartado. Aqui escondemos tudo que não é ancestral/descendente do relatório,
- * mantendo o relatório no fluxo normal.
+ * é descartado. Além disso, os ancestrais do layout (`SidebarInset` com
+ * `overflow-hidden` e o wrapper com `overflow-auto`) fazem o Chromium **cortar** o
+ * conteúdo em vez de paginar: por isso forçamos `overflow: visible` e altura
+ * automática em todo ancestral do relatório.
  */
 const PRINT_CSS = `
 @media print {
   body *:not(:has(#lead-report)):not(#lead-report):not(#lead-report *) {
     display: none !important;
+  }
+  html, body, body *:has(#lead-report) {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    position: static !important;
+    display: block !important;
   }
   #lead-report { position: static !important; width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
   .no-print { display: none !important; }
