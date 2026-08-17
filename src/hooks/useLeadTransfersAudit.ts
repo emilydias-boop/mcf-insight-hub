@@ -58,17 +58,36 @@ export function useLeadTransfersAudit(days: number = 7, search: string = '') {
       const dealMap = new Map((dealsRes.data || []).map((d: any) => [d.id, d]));
       const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
 
+      // `bulk_transfer` não existe mais no metadata (o trigger no banco não sabe
+      // se a transferência veio de uma ação em massa). Derivamos: mesmo autor,
+      // mesmo novo dono e 3+ linhas numa janela de 10s ⇒ operação em massa.
+      const bulkKeys = new Set<string>();
+      const buckets = new Map<string, number>();
+      for (const r of rows) {
+        const meta = (r.metadata || {}) as any;
+        const bucket = `${r.user_id ?? 'na'}|${meta.new_owner ?? 'na'}|${Math.floor(
+          new Date(r.created_at).getTime() / 10000
+        )}`;
+        buckets.set(bucket, (buckets.get(bucket) || 0) + 1);
+      }
+      buckets.forEach((count, key) => {
+        if (count >= 3) bulkKeys.add(key);
+      });
+
       const entries: LeadTransferEntry[] = rows.map((r) => {
         const meta = (r.metadata || {}) as any;
         const deal = dealMap.get(r.deal_id);
         const actor = r.user_id ? profileMap.get(r.user_id) : null;
+        const bucket = `${r.user_id ?? 'na'}|${meta.new_owner ?? 'na'}|${Math.floor(
+          new Date(r.created_at).getTime() / 10000
+        )}`;
         return {
           id: r.id,
           deal_id: r.deal_id,
           created_at: r.created_at,
           description: r.description,
           user_id: r.user_id,
-          bulk_transfer: !!meta.bulk_transfer,
+          bulk_transfer: !!meta.bulk_transfer || bulkKeys.has(bucket),
           previous_owner: meta.previous_owner ?? null,
           new_owner: meta.new_owner ?? null,
           new_owner_name: meta.new_owner_name ?? null,

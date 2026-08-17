@@ -21,9 +21,7 @@ export const useBulkTransfer = () => {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerName, newOwnerProfileId }: BulkTransferParams): Promise<TransferResult> => {
-      const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Sistema';
-      
+    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerProfileId }: BulkTransferParams): Promise<TransferResult> => {
       const results = await Promise.allSettled(
         dealIds.map(async (dealId) => {
           // Atualizar owner (email e UUID).
