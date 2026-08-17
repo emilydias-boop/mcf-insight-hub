@@ -69,6 +69,7 @@ import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModa
 import { GerarComprovanteModal } from '@/components/consorcio/GerarComprovanteModal';
 import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
 import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
+import { useConsorcioCardDealLinks } from '@/hooks/useLeadReport';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   useConsorcioCategoriaOptions,
