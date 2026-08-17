@@ -695,7 +695,12 @@ export function useUndeclinePendingRegistration() {
       if ((reg as any)?.proposal_id) {
         await supabase
           .from('consorcio_proposals')
-          .update({ status: 'aceita', motivo_recusa: null } as any)
+          .update({
+            status: 'aceita',
+            motivo_recusa: null,
+            recusada_at: null,
+            recusada_by: null,
+          } as any)
           .eq('id', (reg as any).proposal_id);
       }
       const { error } = await supabase

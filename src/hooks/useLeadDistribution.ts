@@ -132,7 +132,9 @@ export const useTransferDealOwner = () => {
       newOwnerProfileId?: string;
       previousOwner?: string;
     }) => {
-      // 1. Atualizar owner_id (email legacy) e owner_profile_id (UUID) no deal
+      // Atualizar owner_id (email legacy) e owner_profile_id (UUID) no deal.
+      // O registro em deal_activities ('owner_change') é feito pelo trigger
+      // trg_log_deal_owner_change em crm_deals — não duplicar aqui.
       const { error: updateError } = await supabase
         .from('crm_deals')
         .update({ 
@@ -143,27 +145,7 @@ export const useTransferDealOwner = () => {
         .eq('id', dealId);
       
       if (updateError) throw updateError;
-      
-      // 2. Registrar atividade de transferência
-      const { data: userData } = await supabase.auth.getUser();
-      const { error: activityError } = await supabase
-        .from('deal_activities')
-        .insert({
-          deal_id: dealId,
-          activity_type: 'owner_change',
-          description: `Lead transferido de ${previousOwner || 'N/A'} para ${newOwnerName || newOwnerEmail}`,
-          user_id: userData.user?.id,
-          metadata: {
-            previous_owner: previousOwner,
-            new_owner: newOwnerEmail,
-            new_owner_name: newOwnerName,
-            transferred_by: userData.user?.email,
-            transferred_at: new Date().toISOString(),
-          },
-        });
-      
-      if (activityError) throw activityError;
-      
+
       return true;
     },
     onSuccess: () => {

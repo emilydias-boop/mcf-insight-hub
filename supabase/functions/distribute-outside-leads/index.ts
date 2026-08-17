@@ -252,17 +252,16 @@ serve(async (req) => {
             continue;
           }
 
-          // Registrar atividade
+          // Registrar atividade — 'owner_change' é escrito pelo trigger
+          // trg_log_deal_owner_change; aqui fica só o contexto da distribuição.
           await supabase
             .from('deal_activities')
             .insert({
               deal_id: deal.id,
-              activity_type: 'owner_change',
+              activity_type: 'lead_distribution',
               description: previousOwnerEmail && previousOwnerEmail.toLowerCase() !== nextOwnerEmail.toLowerCase()
                 ? `Lead Outside reatribuído de ${previousOwnerEmail} para ${nextOwnerEmail} (regra fixa Outside)`
                 : `Lead Outside atribuído a ${nextOwnerEmail} (regra fixa Outside)`,
-              to_stage: null,
-              from_stage: null,
               metadata: {
                 from: previousOwnerEmail,
                 to: nextOwnerEmail,

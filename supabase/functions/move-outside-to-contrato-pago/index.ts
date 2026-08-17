@@ -102,15 +102,19 @@ Deno.serve(async (req) => {
       movedDeals.push(...batch);
     }
 
-    // 5. Insert deal_activities
+    // 5. Insert deal_activities — stage_change é registrado pelo trigger
+    //    trg_log_deal_stage_change em crm_deals. Aqui só o motivo/origem.
     const ACTIVITY_BATCH = 100;
     const activities = movedDeals.map(deal => ({
       deal_id: deal.id,
-      activity_type: 'stage_change',
+      activity_type: 'auto_move',
       description: 'Outside com R1 Realizada: movido automaticamente para Contrato Pago',
-      from_stage: R1_REALIZADA_STAGE,
-      to_stage: CONTRATO_PAGO_STAGE,
-      metadata: { source: 'move-outside-to-contrato-pago', email: contactEmails.get(deal.contact_id) || '' },
+      metadata: {
+        source: 'move-outside-to-contrato-pago',
+        from_stage_id: R1_REALIZADA_STAGE,
+        to_stage_id: CONTRATO_PAGO_STAGE,
+        email: contactEmails.get(deal.contact_id) || '',
+      },
     }));
 
     for (let i = 0; i < activities.length; i += ACTIVITY_BATCH) {

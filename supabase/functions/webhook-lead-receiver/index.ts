@@ -864,21 +864,8 @@ serve(async (req) => {
 
         console.log('[WEBHOOK-RECEIVER] ✅ Deal atualizado para ANAMNESE completa, stage:', newStageId, 'owner mantido:', existingDeal.owner_id);
 
-        // 5. Log stage change activity (if stage actually changed)
-        if (newStageId !== oldStageId) {
-          await supabase
-            .from('deal_activities')
-            .insert({
-              deal_id: existingDeal.id,
-              activity_type: 'stage_change',
-              description: 'ANAMNESE-INCOMPLETA → Lead Gratuito (anamnese completada via webhook)',
-              metadata: {
-                from_stage_id: oldStageId,
-                to_stage_id: newStageId,
-                trigger: 'webhook_anamnese_completed'
-              }
-            });
-        }
+        // 5. O registro em deal_activities ('stage_change') é feito pelo trigger
+        //    trg_log_deal_stage_change em crm_deals — não duplicar aqui.
 
         // 6. Update lead_profile
         await upsertLeadProfile(supabase, contactId, existingDeal.id, payload, cpfClean, normalizedPhone);
@@ -947,11 +934,13 @@ serve(async (req) => {
       }
 
       if (stageMoved) {
+        // stage_change é registrado pelo trigger trg_log_deal_stage_change.
+        // Mantemos aqui apenas o rastro de origem da reentrada.
         await supabase
           .from('deal_activities')
           .insert({
             deal_id: existingDeal.id,
-            activity_type: 'stage_change',
+            activity_type: 'webhook_reentry',
             description: `Reentrada via webhook ${slug} → ${targetStageId === STAGE_NOVO_LEAD ? 'Novo Lead' : 'Anamnese Completa'}`,
             metadata: {
               from_stage_id: oldStageIdReentry,
@@ -1204,14 +1193,13 @@ serve(async (req) => {
           console.error('[WEBHOOK-RECEIVER] Erro ao registrar partner_returns:', prErr);
         }
 
-        // Registrar deal_activity
+        // stage_change é registrado pelo trigger trg_log_deal_stage_change.
+        // Aqui fica só o motivo (parceiro detectado), que o trigger não conhece.
         try {
           await supabase.from('deal_activities').insert({
             deal_id: deal.id,
-            activity_type: 'stage_change',
+            activity_type: 'partner_detected',
             description: `Parceiro detectado: movido automaticamente para Venda Realizada (produto: ${partnerCheck.product})`,
-            from_stage: stageId,
-            to_stage: vendaRealizadaStageId || stageId,
             metadata: { source: 'webhook-lead-receiver', email: contactEmail, partner_product: partnerCheck.product },
           });
         } catch (actErr) {

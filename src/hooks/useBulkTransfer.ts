@@ -21,21 +21,12 @@ export const useBulkTransfer = () => {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerName, newOwnerProfileId }: BulkTransferParams): Promise<TransferResult> => {
-      const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Sistema';
-      
+    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerProfileId }: BulkTransferParams): Promise<TransferResult> => {
       const results = await Promise.allSettled(
         dealIds.map(async (dealId) => {
-          // 1. Buscar owner atual
-          const { data: deal } = await supabase
-            .from('crm_deals')
-            .select('owner_id, name')
-            .eq('id', dealId)
-            .single();
-          
-          const previousOwner = deal?.owner_id || 'Sem responsável';
-          
-          // 2. Atualizar owner (email e UUID)
+          // Atualizar owner (email e UUID).
+          // O registro em deal_activities ('owner_change') é feito pelo trigger
+          // trg_log_deal_owner_change em crm_deals — não duplicar aqui.
           const { error: updateError } = await supabase
             .from('crm_deals')
             .update({ 
@@ -45,25 +36,7 @@ export const useBulkTransfer = () => {
             .eq('id', dealId);
           
           if (updateError) throw updateError;
-          
-          // 3. Registrar atividade
-          await supabase
-            .from('deal_activities')
-            .insert({
-              deal_id: dealId,
-              activity_type: 'owner_change',
-              description: `Transferido de ${previousOwner} para ${newOwnerName} (em massa)`,
-              user_id: user?.id,
-              metadata: {
-                previous_owner: previousOwner,
-                new_owner: newOwnerEmail,
-                new_owner_name: newOwnerName,
-                transferred_by: userName,
-                transferred_at: new Date().toISOString(),
-                bulk_transfer: true,
-              }
-            });
-          
+
           return dealId;
         })
       );
