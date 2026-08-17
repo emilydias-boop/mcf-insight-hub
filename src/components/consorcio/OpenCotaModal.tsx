@@ -367,6 +367,29 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     onOpenChange(false);
   };
 
+  /** Validação reprovada: avisa quais campos faltam e leva a tela até o primeiro erro. */
+  const CAMPO_LABELS: Record<string, string> = {
+    categoria: 'Categoria',
+    grupo: 'Grupo',
+    cota: 'Cota',
+    valor_credito: 'Valor do Crédito',
+    prazo_meses: 'Prazo (meses)',
+    tipo_produto: 'Tipo',
+    dia_vencimento: 'Dia de Vencimento',
+    data_contratacao: 'Data de Contratação',
+    origem: 'Origem',
+  };
+  const onInvalid = (errors: Record<string, any>) => {
+    const nomes = Object.keys(errors);
+    if (nomes.length === 0) return;
+    toast.error(`Complete os campos obrigatórios: ${nomes.map((n) => CAMPO_LABELS[n] || n).join(', ')}`);
+    setTimeout(() => {
+      const el = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus?.();
+    }, 50);
+  };
+
   if (regLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -465,7 +488,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         <ScrollArea className="max-h-[75vh] pr-4">
           <Form {...form}>
             <fieldset disabled={readOnly} className="contents">
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
             <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
             {/* Editable client data */}
             <Card>
