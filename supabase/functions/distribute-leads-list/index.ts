@@ -328,7 +328,9 @@ serve(async (req) => {
         .from('deal_activities')
         .insert({
           deal_id: dealId,
-          activity_type: 'owner_change',
+          // 'owner_change' é escrito pelo trigger trg_log_deal_owner_change;
+          // aqui fica só o contexto da distribuição em massa.
+          activity_type: 'lead_distribution',
           description: `Atribuído para ${sdr.name} via distribuição de lista específica`,
           metadata: {
             new_owner: sdr.email,
