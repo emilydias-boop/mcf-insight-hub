@@ -11,7 +11,7 @@ import {
   Eye,
   Edit,
   Trash2,
-  Settings,
+  Database,
   Search,
   RefreshCw,
   Copy,
