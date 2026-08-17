@@ -211,7 +211,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('sonax_call_events')
-          .select('sdr_email, deal_id, status_atendimento, duracao_chamada, created_at')
+          .select('sdr_email, aliasramal, deal_id, status_atendimento, duracao_chamada, created_at')
           .eq('evento', 'desligamento')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
