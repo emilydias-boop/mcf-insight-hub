@@ -688,7 +688,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             <Separator />
 
             {/* Cota form */}
-            <Card>
+            <Card ref={cotaBlockRef}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Dados da Cota (preencher)</CardTitle>
               </CardHeader>
@@ -791,6 +791,23 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         taxaAntecipadaTipo={tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12'}
                       />
                     )}
+
+                    {/* Dados do plano (valores que vão para o Termo de Adesão) */}
+                    <div className="rounded-lg border p-3 space-y-3">
+                      <div>
+                        <h4 className="text-sm font-semibold">Dados do plano</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Os valores digitados aqui são os que vão para o Termo de Adesão — a composição acima é apenas
+                          o cálculo estimado.
+                        </p>
+                      </div>
+                      <DadosPlanoFields
+                        plano={plano}
+                        disabled={readOnly}
+                        showAviso={false}
+                        hide={['valorCredito', 'prazo', 'condicao', 'diaVencimento', 'inicioSegundaParcela', 'incluiSeguro']}
+                      />
+                    </div>
 
                     {/* Empresa paga */}
                     <div className="grid grid-cols-3 gap-3">
