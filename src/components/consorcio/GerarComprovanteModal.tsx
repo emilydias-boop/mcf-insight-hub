@@ -129,8 +129,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
             <FileBadge className="h-5 w-5" /> Gerar Comprovante de Cadastro
           </DialogTitle>
           <DialogDescription>
-            Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das 12 primeiras
-            parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
+            Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das primeiras parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
           </DialogDescription>
         </DialogHeader>
 

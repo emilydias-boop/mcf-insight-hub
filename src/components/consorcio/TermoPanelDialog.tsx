@@ -64,7 +64,7 @@ export function TermoPanelDialog({
           </DialogTitle>
           <DialogDescription>
             {isComprovante
-              ? 'Link do comprovante, registro de visualização e download do documento.'
+              ? 'Link do comprovante (válido por 2 anos), registro de visualização e download. Vencido, basta reemitir.'
               : 'Link de assinatura, status e download do documento.'}
           </DialogDescription>
         </DialogHeader>
@@ -92,6 +92,8 @@ export function TermoPanelDialog({
                   {isComprovante
                     ? t.status === 'cancelado'
                       ? 'Cancelado'
+                      : t.status === 'expirado'
+                        ? 'Link expirado'
                       : t.visualizado_em
                         ? 'Visualizado pelo cliente'
                         : 'Emitido'
@@ -118,11 +120,10 @@ export function TermoPanelDialog({
                         ? `Aberto pelo cliente em ${format(new Date(t.visualizado_em), 'dd/MM/yyyy HH:mm')}${t.visualizado_ip ? ` · IP ${t.visualizado_ip}` : ''}`
                         : 'Ainda não aberto pelo cliente'}
                     </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
-                    </p>
-                  )}
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">
+                    Link válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
+                  </p>
                 </>
               )}
 
@@ -211,7 +212,7 @@ export function TermoPanelDialog({
               }}
             >
               {isComprovante ? <FileBadge className="h-4 w-4 mr-1" /> : <FileSignature className="h-4 w-4 mr-1" />}
-              {isComprovante ? 'Gerar novo comprovante' : 'Gerar novo termo'}
+              {isComprovante ? 'Reemitir comprovante' : 'Gerar novo termo'}
             </Button>
           )}
         </DialogFooter>
