@@ -245,7 +245,7 @@ export interface LeadReportData {
   cards: LeadReportCard[];
   gaps: string[];
   /** Fontes que falharam — não é possível afirmar ausência sobre elas. */
-  unknowns: string[];
+  unknowns: { label: string; error: string | null }[];
   sources: Record<LeadReportSourceKey, SourceStatus>;
 }
 
@@ -319,8 +319,11 @@ const REGISTRATION_COLUMNS = [
   'data_contratacao',
   'created_at',
   'cadastrada_at',
+  'cadastrada_by',
   'cota_aberta_at',
+  'cota_aberta_by',
   'vinculada_at',
+  'vinculada_by',
   'declinada_at',
   'motivo_declinio',
   'consortium_card_id',
@@ -550,6 +553,11 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
         addUser(p.carta_excluida_por);
       }
       for (const l of ((auditRes as any).data || [])) addUser(l.user_id);
+      for (const r of registrations) {
+        addUser(r.cadastrada_by);
+        addUser(r.cota_aberta_by);
+        addUser(r.vinculada_by);
+      }
 
       const profileMap: Record<string, string> = {};
       if (userIds.size) {
@@ -697,8 +705,11 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
           data_contratacao: r.data_contratacao,
           created_at: r.created_at,
           cadastrada_at: r.cadastrada_at,
+          cadastrada_por: r.cadastrada_by ? nameOf(r.cadastrada_by) : null,
           cota_aberta_at: r.cota_aberta_at,
+          cota_aberta_por: r.cota_aberta_by ? nameOf(r.cota_aberta_by) : null,
           vinculada_at: r.vinculada_at,
+          vinculada_por: r.vinculada_by ? nameOf(r.vinculada_by) : null,
           declinada_at: r.declinada_at,
           motivo_declinio: r.motivo_declinio,
           consortium_card_id: r.consortium_card_id,
@@ -781,7 +792,7 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
 
       // ===== Lacunas — só afirmam ausência sobre fontes que leram com sucesso =====
       const gaps: string[] = [];
-      const unknowns: string[] = [];
+      const unknowns: { label: string; error: string | null }[] = [];
       const SOURCE_LABEL: Record<string, string> = {
         deals: 'negócios do contato',
         meetings: 'reuniões (agenda)',
@@ -799,7 +810,7 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
       };
       for (const [k, v] of Object.entries(sources)) {
         if (k === 'deal') continue;
-        if (!v.ok) unknowns.push(`${SOURCE_LABEL[k] || k}: fonte indisponível, não é possível afirmar (${v.error}).`);
+        if (!v.ok) unknowns.push({ label: SOURCE_LABEL[k] || k, error: v.error ?? null });
       }
 
       const okMeetings = sources.meetings.ok;
