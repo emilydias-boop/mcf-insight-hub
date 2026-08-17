@@ -388,7 +388,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         patrimonio: data.cliente_patrimonio || null,
         pix: data.cliente_pix || null,
         // cota
-        valor_credito: data.valor_credito || null,
+        valor_credito: numOuNull(data.valor_credito),
         prazo_meses: data.prazo_meses || null,
         tipo_produto: data.tipo_produto || null,
         categoria: data.categoria || null,
@@ -401,7 +401,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         dia_vencimento: data.dia_vencimento ? Number(data.dia_vencimento) : null,
         inicio_segunda_parcela: data.inicio_segunda_parcela || null,
         data_contratacao: data.data_contratacao || null,
-        valor_comissao: data.valor_comissao || null,
+        valor_comissao: numOuNull(data.valor_comissao),
         e_transferencia: !!data.e_transferencia,
         transferido_de: data.transferido_de || null,
         origem: data.origem || null,
