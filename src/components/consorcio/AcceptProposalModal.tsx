@@ -392,6 +392,146 @@ export function AcceptProposalModal({
 
         <ScrollArea className="max-h-[70vh] pr-4">
           <div className="space-y-4">
+            {/* ===== Dados do plano ===== */}
+            <div className="space-y-3 rounded-lg border p-3">
+              <h3 className="font-semibold text-sm">Dados do plano</h3>
+
+              <div className="space-y-2">
+                <Label>Plano *</Label>
+                <Popover open={planoOpen} onOpenChange={setPlanoOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                      <span className="truncate">
+                        {creditoSelecionado
+                          ? `${creditoSelecionado.codigo_credito} — ${Number(creditoSelecionado.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                          : 'Selecione o plano'}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar por código ou valor..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum plano encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {creditos.map((c) => {
+                            const prod = produtos.find((p) => p.id === c.produto_id);
+                            if (!prod) return null;
+                            const valor = Number(c.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                            return (
+                              <CommandItem
+                                key={c.id}
+                                value={`${c.codigo_credito} ${valor} ${prod.codigo}`}
+                                onSelect={() => handleSelectPlano(c.id)}
+                              >
+                                <span className="truncate">
+                                  {c.codigo_credito} — {valor}
+                                  <span className="text-muted-foreground text-xs"> · {prod.codigo}</span>
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Valor do crédito (R$) *</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={valorCreditoStr}
+                    onChange={(e) => setValorCreditoStr(formatBRLInput(e.target.value))}
+                    placeholder="150.000,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo (meses) *</Label>
+                  <Select
+                    value={prazo}
+                    onValueChange={(v) => { setPrazo(v); aplicarValoresTabela(creditoSelecionado, condicao, v); }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {prazosDisponiveis.map((p) => (
+                        <SelectItem key={p} value={String(p)}>{p} meses</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Condição de pagamento *</Label>
+                  <Select
+                    value={condicao}
+                    onValueChange={(v) => { setCondicao(v); aplicarValoresTabela(creditoSelecionado, v, prazo); }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONDICAO_PAGAMENTO_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    Parcela 1ª à 12ª *
+                    {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
+                    {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
+                  </Label>
+                  <Input
+                    inputMode="numeric"
+                    value={parcela1a12}
+                    onChange={(e) => { setParcela1a12(formatBRLInput(e.target.value)); setParcelasFonte('manual'); }}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Demais parcelas *</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={parcelaDemais}
+                    onChange={(e) => { setParcelaDemais(formatBRLInput(e.target.value)); setParcelasFonte('manual'); }}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dia de vencimento *</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={diaVencimento}
+                    onChange={(e) => setDiaVencimento(e.target.value)}
+                    placeholder="1 a 28"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Início da 2ª parcela</Label>
+                  <Input type="date" value={inicioSegundaParcela} onChange={(e) => setInicioSegundaParcela(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Objetivo</Label>
+                  <Select value={objetivo} onValueChange={setObjetivo}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {objetivos.map((o) => (
+                        <SelectItem key={o.id} value={o.name}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <Switch checked={incluiSeguro} onCheckedChange={setIncluiSeguro} />
+                  <Label>Inclui seguro de vida</Label>
+                </div>
+              </div>
+            </div>
+
             {/* Tipo de Pessoa */}
             <div className="space-y-2">
               <Label>Tipo de Pessoa *</Label>
