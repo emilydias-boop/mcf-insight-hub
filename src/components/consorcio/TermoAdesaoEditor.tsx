@@ -104,6 +104,12 @@ export function TermoAdesaoEditor() {
 
         <div className="space-y-2">
           <Label>Placeholders disponíveis (clique para inserir no fim do texto)</Label>
+          <p className="text-xs text-muted-foreground">
+            <strong>Montados pelo sistema — não reescreva à mão:</strong> identificação do cliente, dados da cota,
+            cronograma de parcelas e certificado de assinatura. Eles vêm dos placeholders e ganham o desenho do
+            papel automaticamente (grades de rótulo/valor, tabelas e selos de quem paga).{' '}
+            <strong>Livres para editar:</strong> textos de compromisso, declarações e observações.
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {placeholders.map((p) => (
               <button
