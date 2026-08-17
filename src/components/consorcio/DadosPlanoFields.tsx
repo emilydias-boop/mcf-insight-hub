@@ -30,7 +30,20 @@ export type ParcelasFonte = 'tabela' | 'manual' | null;
  * (AcceptProposalModal) e a edição/abertura do cadastro pendente (OpenCotaModal),
  * para que o autopreenchimento por condição + prazo não divirja entre as telas.
  */
-export function useDadosPlano() {
+/**
+ * Quando a tela hospedeira já possui os campos Prazo e Condição no próprio formulário,
+ * ela passa `controlled` — o hook então NÃO mantém cópia própria desses dois valores:
+ * lê sempre o valor efetivo do formulário e escreve de volta pelos setters.
+ * Assim prazo/condição têm uma única fonte de verdade e não podem divergir.
+ */
+export interface DadosPlanoControlled {
+  prazo: string;
+  condicao: string;
+  setPrazo: (v: string) => void;
+  setCondicao: (v: string) => void;
+}
+
+export function useDadosPlano(controlled?: DadosPlanoControlled) {
   const { data: creditos = [] } = useAllConsorcioCreditos();
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: objetivos = [] } = useConsorcioObjetivoOptions();
@@ -38,8 +51,13 @@ export function useDadosPlano() {
   const [creditoId, setCreditoIdState] = useState('');
   const [planoOpen, setPlanoOpen] = useState(false);
   const [valorCreditoStr, setValorCreditoStr] = useState('');
-  const [prazo, setPrazoState] = useState('');
-  const [condicao, setCondicaoState] = useState('convencional');
+  const [prazoInterno, setPrazoInterno] = useState('');
+  const [condicaoInterna, setCondicaoInterna] = useState('convencional');
+  // Fonte única de verdade: o formulário do pai quando controlado, o estado local caso contrário.
+  const prazo = controlled ? controlled.prazo : prazoInterno;
+  const condicao = controlled ? controlled.condicao : condicaoInterna;
+  const setPrazoState = controlled ? controlled.setPrazo : setPrazoInterno;
+  const setCondicaoState = controlled ? controlled.setCondicao : setCondicaoInterna;
   const [parcela1a12, setParcela1a12State] = useState('');
   const [parcelaDemais, setParcelaDemaisState] = useState('');
   const [parcelasFonte, setParcelasFonte] = useState<ParcelasFonte>(null);
@@ -94,10 +112,15 @@ export function useDadosPlano() {
     setCondicaoState(v);
     aplicarValoresTabela(creditoSelecionado, v, prazo);
   };
-  /** Sincroniza prazo/condição vindos de outro formulário (OpenCotaModal) e reaplica a tabela. */
+  /**
+   * Reaplica a tabela para uma combinação prazo/condição já escrita no formulário do pai.
+   * Mantido para quem controla os selects fora do bloco (OpenCotaModal).
+   */
   const sincronizarPrazoCondicao = (prz: string, cond: string) => {
-    setPrazoState(prz);
-    setCondicaoState(cond);
+    if (!controlled) {
+      setPrazoInterno(prz);
+      setCondicaoInterna(cond);
+    }
     aplicarValoresTabela(creditoSelecionado, cond, prz);
   };
 
@@ -125,8 +148,11 @@ export function useDadosPlano() {
   }) => {
     if (v.creditoId) setCreditoIdState(v.creditoId);
     if (v.valorCredito != null) setValorCreditoStr(numberToBRLInput(v.valorCredito));
-    if (v.prazo != null) setPrazoState(String(v.prazo));
-    if (v.condicao) setCondicaoState(v.condicao);
+    // Prazo/condição controlados pelo pai são hidratados pelo próprio formulário dele.
+    if (!controlled) {
+      if (v.prazo != null) setPrazoInterno(String(v.prazo));
+      if (v.condicao) setCondicaoInterna(v.condicao);
+    }
     if (v.parcela1a12 != null) setParcela1a12State(numberToBRLInput(v.parcela1a12));
     if (v.parcelaDemais != null) setParcelaDemaisState(numberToBRLInput(v.parcelaDemais));
     if (v.diaVencimento != null) setDiaVencimento(String(v.diaVencimento));
