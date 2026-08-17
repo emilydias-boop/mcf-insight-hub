@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Ban, Copy, Download, FileSignature, Loader2 } from 'lucide-react';
+import { Ban, Copy, Download, Eye, FileBadge, FileSignature, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { useCancelTermo, termoPublicUrl, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
+import { useCancelTermo, termoPublicUrl, type ConsorcioTermo, type TermoTipo } from '@/hooks/useConsorcioTermos';
 import { baixarTermoPdf } from '@/lib/consorcioTermo';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -24,16 +24,19 @@ export function TermoPanelDialog({
   termos,
   clienteNome,
   onGerarNovo,
+  tipo = 'adesao',
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   termos: ConsorcioTermo[];
   clienteNome: string;
   onGerarNovo: () => void;
+  tipo?: TermoTipo;
 }) {
   const cancelMut = useCancelTermo();
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const isComprovante = tipo === 'comprovante_cadastro';
 
   const copy = async (token: string) => {
     await navigator.clipboard.writeText(termoPublicUrl(token));
@@ -44,20 +47,26 @@ export function TermoPanelDialog({
     await baixarTermoPdf({
       conteudo: t.conteudo_renderizado,
       clienteNome,
-      certificado: t.status === 'assinado' ? t : null,
+      certificado: !isComprovante && t.status === 'assinado' ? t : null,
+      prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
     });
   };
 
-  const temPendente = termos.some((t) => t.status === 'pendente');
+  const temPendente = !isComprovante && termos.some((t) => t.status === 'pendente');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileSignature className="h-5 w-5" /> Termos de Adesão — {clienteNome}
+            {isComprovante ? <FileBadge className="h-5 w-5" /> : <FileSignature className="h-5 w-5" />}
+            {isComprovante ? 'Comprovantes de Cadastro' : 'Termos de Adesão'} — {clienteNome}
           </DialogTitle>
-          <DialogDescription>Link de assinatura, status e download do documento.</DialogDescription>
+          <DialogDescription>
+            {isComprovante
+              ? 'Link do comprovante, registro de visualização e download do documento.'
+              : 'Link de assinatura, status e download do documento.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -67,14 +76,26 @@ export function TermoPanelDialog({
                 <Badge
                   variant="outline"
                   className={
-                    t.status === 'assinado'
+                    isComprovante
+                      ? t.status === 'cancelado'
+                        ? 'text-muted-foreground'
+                        : t.visualizado_em
+                          ? 'border-emerald-500/60 text-emerald-600'
+                          : 'border-sky-500/60 text-sky-600'
+                      : t.status === 'assinado'
                       ? 'border-emerald-500/60 text-emerald-600'
                       : t.status === 'pendente'
                         ? 'border-amber-500/60 text-amber-600'
                         : 'text-muted-foreground'
                   }
                 >
-                  {STATUS_LABEL[t.status] || t.status}
+                  {isComprovante
+                    ? t.status === 'cancelado'
+                      ? 'Cancelado'
+                      : t.visualizado_em
+                        ? 'Visualizado pelo cliente'
+                        : 'Emitido'
+                    : STATUS_LABEL[t.status] || t.status}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
                   Emitido em {format(new Date(t.created_at), 'dd/MM/yyyy HH:mm')}
@@ -90,13 +111,22 @@ export function TermoPanelDialog({
                       <Copy className="h-4 w-4 mr-1" /> Copiar
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
-                  </p>
+                  {isComprovante ? (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Eye className="h-3 w-3" />
+                      {t.visualizado_em
+                        ? `Aberto pelo cliente em ${format(new Date(t.visualizado_em), 'dd/MM/yyyy HH:mm')}${t.visualizado_ip ? ` · IP ${t.visualizado_ip}` : ''}`
+                        : 'Ainda não aberto pelo cliente'}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
+                    </p>
+                  )}
                 </>
               )}
 
-              {t.status === 'assinado' && (
+              {!isComprovante && t.status === 'assinado' && (
                 <div className="text-sm space-y-1">
                   <p>
                     Assinado por <strong>{t.assinante_nome}</strong> (CPF {t.assinante_cpf}) em{' '}
@@ -131,7 +161,7 @@ export function TermoPanelDialog({
                       setCancelId(t.id);
                     }}
                   >
-                    <Ban className="h-4 w-4 mr-1" /> Cancelar termo
+                    <Ban className="h-4 w-4 mr-1" /> {isComprovante ? 'Cancelar comprovante' : 'Cancelar termo'}
                   </Button>
                 )}
               </div>
@@ -180,7 +210,8 @@ export function TermoPanelDialog({
                 onGerarNovo();
               }}
             >
-              <FileSignature className="h-4 w-4 mr-1" /> Gerar novo termo
+              {isComprovante ? <FileBadge className="h-4 w-4 mr-1" /> : <FileSignature className="h-4 w-4 mr-1" />}
+              {isComprovante ? 'Gerar novo comprovante' : 'Gerar novo termo'}
             </Button>
           )}
         </DialogFooter>
