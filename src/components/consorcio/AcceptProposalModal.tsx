@@ -526,6 +526,11 @@ export function AcceptProposalModal({
                     placeholder="0,00"
                   />
                 </div>
+                {semValorTabelado && (
+                  <div className="sm:col-span-2">
+                    <p className="text-xs text-amber-500">sem valor tabelado para esta combinação</p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Dia de vencimento</Label>
                   <Input
