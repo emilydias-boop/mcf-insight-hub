@@ -39,7 +39,6 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
       if (
         end > i + 2 &&
         !isWhitespace(text[end - 1]) &&
-        !isWord(text[end + 2]) &&
         !text.slice(i + 2, end).includes('\n')
       ) {
         flush();
