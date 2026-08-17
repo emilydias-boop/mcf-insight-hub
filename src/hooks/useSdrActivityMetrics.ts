@@ -112,6 +112,7 @@ export function useSdrActivityMetrics(
         .from('sdr_ramal_mapping')
         .select('sdr_email, sdr_name, ramal, auto_dialer_engine, active');
       const engineByEmail = new Map<string, { engine: 'twilio' | 'sonax'; ramal: string | null }>();
+      const emailByRamal = new Map<string, string>();
       (ramalRows || []).forEach((r: any) => {
         if (!r.sdr_email) return;
         const email = String(r.sdr_email).toLowerCase();
@@ -123,6 +124,10 @@ export function useSdrActivityMetrics(
           engine: isSonax ? 'sonax' : 'twilio',
           ramal: r.ramal ?? existing?.ramal ?? null,
         });
+        const ramalKey = String(r.ramal ?? '').replace(/\D/g, '');
+        if (ramalKey && !emailByRamal.has(ramalKey)) {
+          emailByRamal.set(ramalKey, email);
+        }
       });
 
       // Complemento ADITIVO: SDRs no motor Sonax que não vieram da listagem padrão
@@ -206,7 +211,7 @@ export function useSdrActivityMetrics(
       while (true) {
         const { data } = await supabase
           .from('sonax_call_events')
-          .select('sdr_email, deal_id, status_atendimento, duracao_chamada, created_at')
+          .select('sdr_email, aliasramal, deal_id, status_atendimento, duracao_chamada, created_at')
           .eq('evento', 'desligamento')
           .gte('created_at', startIso)
           .lte('created_at', endIso)
@@ -334,8 +339,15 @@ export function useSdrActivityMetrics(
       
       // 6b. Agregar ligações Sonax (fonte automática — sem depender de outcome manual do SDR)
       allSonaxEvents.forEach(ev => {
-        if (!ev.sdr_email) return;
-        const email = String(ev.sdr_email).toLowerCase();
+        // Reserva: quando o Sonax manda o evento sem sdr_email, descobrimos o SDR
+        // pelo ramal (aliasramal) via sdr_ramal_mapping. Sem isso essas ligações
+        // eram descartadas e sumiam do painel.
+        let email = ev.sdr_email ? String(ev.sdr_email).toLowerCase() : '';
+        if (!email) {
+          const ramalKey = String(ev.aliasramal ?? '').replace(/\D/g, '');
+          email = ramalKey ? (emailByRamal.get(ramalKey) ?? '') : '';
+        }
+        if (!email) return;
         if (!validSdrEmails.has(email)) return;
 
         const metrics = metricsMap.get(email);
