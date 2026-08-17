@@ -60,11 +60,13 @@ function Section({
   title,
   subtitle,
   source,
+  showTechnical,
   children,
 }: {
   title: string;
   subtitle?: string;
   source?: SourceStatus | SourceStatus[];
+  showTechnical?: boolean;
   children: React.ReactNode;
 }) {
   const failures = (Array.isArray(source) ? source : source ? [source] : []).filter((s) => !s.ok);
@@ -77,8 +79,11 @@ function Section({
       {failures.length > 0 && (
         <Alert variant="destructive" className="avoid-break">
           <AlertDescription className="text-xs">
-            Não foi possível carregar esta seção — {failures.map((f) => f.error || 'erro desconhecido').join(' · ')}.
-            Nada aqui pode ser lido como ausência de dado.
+            Não foi possível carregar esta seção
+            {showTechnical
+              ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}`
+              : ''}
+            . Nada aqui pode ser lido como ausência de dado.
           </AlertDescription>
         </Alert>
       )}
@@ -134,7 +139,7 @@ function useLeadReportAccess(dealId: string | undefined) {
   });
 
   if (isLeadership) return { canView: true, loading: false, error: null as any };
-  if (isLoading || !data) return { canView: false, loading: isLoading, error };
+  if (isLoading || !data) return { canView: false, isLeadership, loading: isLoading, error };
 
   const email = (user?.email || '').toLowerCase();
   const owns =
@@ -144,7 +149,7 @@ function useLeadReportAccess(dealId: string | undefined) {
       .filter(Boolean)
       .some((e) => (e as string).toLowerCase() === email);
 
-  return { canView: owns, loading: false, error };
+  return { canView: owns, isLeadership, loading: false, error };
 }
 
 export default function RelatorioLead() {
