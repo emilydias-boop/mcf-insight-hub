@@ -191,7 +191,11 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                       <li key={f.campo}>{f.label}</li>
                     ))}
                   </ul>
-                  <p className="mt-2">Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.</p>
+                  <p className="mt-2">
+                    {faltandoCard.length > 0
+                      ? 'Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.'
+                      : 'Preencha as parcelas destacadas no cronograma abaixo para liberar a emissão.'}
+                  </p>
                 </AlertDescription>
               </Alert>
             )}
