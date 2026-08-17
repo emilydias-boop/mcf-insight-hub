@@ -242,7 +242,7 @@ export default function RelatorioLead() {
           <PapelBrand subtitulo="Relatório do Lead — Consórcio" />
           <h1>Relatório do Lead — {d.name || data.contact.name || 'Sem nome'}</h1>
           <p className="sub">
-            {data.contact.document ? `CPF/CNPJ ${maskDocumento(data.contact.document)} · ` : ''}
+            {data.contact.email ? `${data.contact.email} · ` : ''}
             {d.pipeline_name ? `${d.pipeline_name} · ` : ''}Negócio {d.id}
           </p>
           {data.unknowns.length > 0 && (
@@ -305,22 +305,26 @@ export default function RelatorioLead() {
           ) : timeline.length === 0 ? (
             <Empty>Nenhum evento registrado.</Empty>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <div className="tl">
               {[...timeline]
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .map((e) => (
-                  <li key={e.id} className="flex gap-2">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap w-32 shrink-0">
-                      {fmtDateTime(e.date)}
-                    </span>
-                    <span>
-                      <strong>{e.title}</strong>
-                      {e.description ? ` — ${e.description}` : ''}
-                      {e.author ? ` (${e.author})` : ''}
-                    </span>
-                  </li>
-                ))}
-            </ul>
+                .map((e) => {
+                  const texto = `${e.title} ${e.description || ''}`.toLowerCase();
+                  const pendente = /no-?show|pendente|aguard|atras|recus|cancel|declin/.test(texto);
+                  const concluido = /pago|assinad|realizada|cadastrad|conclu/.test(texto);
+                  return (
+                    <div
+                      key={e.id}
+                      className={`ev ${pendente ? 'warn' : concluido ? 'ok' : ''}`}
+                    >
+                      <div className="when">{fmtDateTime(e.date)}</div>
+                      <div className="what">{e.title}</div>
+                      {e.description ? <div className="who">{e.description}</div> : null}
+                      {e.author ? <div className="who">{e.author}</div> : null}
+                    </div>
+                  );
+                })}
+            </div>
           )}
         </Section>
 
@@ -666,7 +670,9 @@ export default function RelatorioLead() {
                             ['Cliente', c.totals.cliente],
                           ] as const).map(([label, t]) => (
                             <tr key={label}>
-                              <td>{label}</td>
+                              <td>
+                                <span className={label === 'Cliente' ? 'tag cli' : 'tag mcf'}>{label}</span>
+                              </td>
                               <td>
                                 {t.paidCount}/{t.count}
                               </td>
@@ -696,12 +702,24 @@ export default function RelatorioLead() {
                             <tr key={i.id}>
                               <td>{i.numero_parcela}</td>
                               <td>
-                                {i.tipo === 'empresa' ? 'MCF Capital' : 'Cliente'}
+                                <span className={i.tipo === 'empresa' ? 'tag mcf' : 'tag cli'}>
+                                  {i.tipo === 'empresa' ? 'MCF Capital' : 'Cliente'}
+                                </span>
                               </td>
                               <td>{fmtMoney(i.valor_parcela)}</td>
                               <td>{fmtDate(i.data_vencimento)}</td>
                               <td>{fmtDate(i.data_pagamento, 'não pago')}</td>
-                              <td>{i.status || NOT_RECORDED}</td>
+                              <td>
+                                <span
+                                  className={
+                                    i.data_pagamento || /pag/i.test(i.status || '')
+                                      ? 'tag pg'
+                                      : 'tag pend'
+                                  }
+                                >
+                                  {i.status || NOT_RECORDED}
+                                </span>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -789,6 +807,11 @@ export default function RelatorioLead() {
             </ul>
           )}
         </Section>
+
+        <p className="legal">
+          Relatório gerado em {fmtDateTime(new Date().toISOString())} a partir dos registros do MCF Gestão. Cada
+          evento tem origem rastreável, com autor e carimbo de data e hora.
+        </p>
       </div>
     </div>
   );
