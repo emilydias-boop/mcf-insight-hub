@@ -506,7 +506,6 @@ export function QualificationAndScheduleModal({
           setShowManualSchedule(open);
           if (!open) handleScheduleComplete();
         }}
-        closers={[]}
         prefilledDealId={dealId}
         prefilledNotes={leadSummary}
         preselectedCloserId={topSuggestion?.closerId}
