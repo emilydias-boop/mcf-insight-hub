@@ -15,6 +15,7 @@ import {
   Search,
   RefreshCw,
   Copy,
+  FileBadge,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,6 +66,9 @@ import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { DeleteCartaDialog } from '@/components/consorcio/DeleteCartaDialog';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
+import { GerarComprovanteModal } from '@/components/consorcio/GerarComprovanteModal';
+import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
+import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   useConsorcioCategoriaOptions,
@@ -151,6 +155,8 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [duplicatingCard, setDuplicatingCard] = useState<Partial<ConsorcioCard> | null>(null);
   const [recalcOpen, setRecalcOpen] = useState(false);
+  const [comprovanteCard, setComprovanteCard] = useState<ConsorcioCard | null>(null);
+  const [comprovantePanelCard, setComprovantePanelCard] = useState<ConsorcioCard | null>(null);
 
   const { data: employees } = useConsorcioEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
@@ -185,6 +191,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
+  const { data: comprovantesByCard = {} } = useComprovantesByCard();
 
   // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
   const sortedCards = useMemo(() => {
@@ -916,6 +923,25 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title={
+                              (comprovantesByCard[card.id] || []).length
+                                ? 'Comprovante de cadastro emitido — ver/baixar'
+                                : 'Gerar comprovante de cadastro'
+                            }
+                            className={
+                              (comprovantesByCard[card.id] || []).length ? 'text-emerald-600 hover:text-emerald-600' : ''
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if ((comprovantesByCard[card.id] || []).length) setComprovantePanelCard(card);
+                              else setComprovanteCard(card);
+                            }}
+                          >
+                            <FileBadge className="h-4 w-4" />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon"
@@ -1057,6 +1083,34 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         open={configOpen}
         onOpenChange={setConfigOpen}
       />
+
+      {comprovanteCard && (
+        <GerarComprovanteModal
+          open={!!comprovanteCard}
+          onOpenChange={(o) => !o && setComprovanteCard(null)}
+          cardId={comprovanteCard.id}
+          onCompletarCota={() => {
+            const c = comprovanteCard;
+            setComprovanteCard(null);
+            if (c) handleEditCard(c);
+          }}
+        />
+      )}
+
+      {comprovantePanelCard && (
+        <TermoPanelDialog
+          open={!!comprovantePanelCard}
+          onOpenChange={(o) => !o && setComprovantePanelCard(null)}
+          termos={comprovantesByCard[comprovantePanelCard.id] || []}
+          clienteNome={(comprovantePanelCard.tipo_pessoa === 'pf' ? comprovantePanelCard.nome_completo : comprovantePanelCard.razao_social) || 'cliente'}
+          tipo="comprovante_cadastro"
+          onGerarNovo={() => {
+            const c = comprovantePanelCard;
+            setComprovantePanelCard(null);
+            setComprovanteCard(c);
+          }}
+        />
+      )}
     </div>
   );
 }

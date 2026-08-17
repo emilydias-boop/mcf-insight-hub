@@ -17,6 +17,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -116,6 +117,7 @@ const formSchema = z.object({
   // Cota
   grupo: z.string().optional().or(z.literal('')),
   cota: z.string().optional().or(z.literal('')),
+  contrato_embracon: z.string().optional().or(z.literal('')),
   valor_credito: z.number().min(1, 'Valor do crédito é obrigatório'),
   prazo_meses: z.number().optional(),
   tipo_produto: z.enum(['select', 'parcelinha']),
@@ -272,6 +274,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       origem_detalhe: card.origem_detalhe || undefined,
       grupo: card.grupo,
       cota: card.cota,
+      contrato_embracon: (card as any).contrato_embracon || '',
       valor_credito: Number(card.valor_credito),
       prazo_meses: card.prazo_meses,
       data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
@@ -587,7 +590,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       ? ['endereco_cep', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado']
       : ['endereco_comercial_cep', 'endereco_comercial_rua', 'endereco_comercial_numero', 'endereco_comercial_bairro', 'endereco_comercial_cidade', 'endereco_comercial_estado'],
     documentos: [],
-    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem'],
+    cota: ['grupo', 'cota', 'contrato_embracon', 'valor_credito', 'prazo_meses', 'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem'],
     socios: ['partners'],
   }), [tipoPessoa]);
 
@@ -618,6 +621,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           origem_detalhe: card.origem_detalhe || undefined,
           grupo: card.grupo,
           cota: card.cota,
+          contrato_embracon: (card as any).contrato_embracon || '',
           valor_credito: Number(card.valor_credito),
           prazo_meses: card.prazo_meses,
           data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
@@ -691,6 +695,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           // Cota fields empty
           grupo: '',
           cota: '',
+          contrato_embracon: '',
           valor_credito: 0,
           prazo_meses: 0,
           produto_codigo: 'auto',
@@ -755,6 +760,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
           partners: [],
           grupo: '',
           cota: '',
+          contrato_embracon: '',
           valor_credito: 0,
           prazo_meses: 0,
           nome_completo: '',
@@ -914,6 +920,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       categoria: data.categoria,
       grupo: data.grupo,
       cota: data.cota,
+      contrato_embracon: data.contrato_embracon || undefined,
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
       tipo_produto: tipoProdutoDerivado,
@@ -1129,6 +1136,23 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="contrato_embracon"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contrato Embracon</FormLabel>
+                      <FormControl>
+                        <Input {...field} value={field.value ?? ''} placeholder="Nº do contrato na administradora" />
+                      </FormControl>
+                      <FormDescription>
+                        Necessário para emitir o Comprovante de Cadastro ao cliente.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField

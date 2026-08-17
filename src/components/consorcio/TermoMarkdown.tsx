@@ -17,6 +17,7 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
   const lines = (content || '').split('\n');
   const blocks: JSX.Element[] = [];
   let list: string[] = [];
+  let table: string[][] = [];
 
   const flushList = (key: string) => {
     if (!list.length) return;
@@ -30,13 +31,52 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
     list = [];
   };
 
+  const flushTable = (key: string) => {
+    if (!table.length) return;
+    const [head, ...body] = table;
+    blocks.push(
+      <div key={key} className="my-4 overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-muted/60">
+              {head.map((c, i) => (
+                <th key={i} className="border px-2 py-1 text-left font-semibold">
+                  {inline(c, `${key}-h-${i}`)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((row, r) => (
+              <tr key={r}>
+                {row.map((c, i) => (
+                  <td key={i} className="border px-2 py-1">
+                    {inline(c, `${key}-${r}-${i}`)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    );
+    table = [];
+  };
+
   lines.forEach((raw, idx) => {
     const line = raw.trim();
     const key = `l-${idx}`;
     if (!line) {
       flushList(`ul-${idx}`);
+      flushTable(`tb-${idx}`);
       return;
     }
+    if (line.startsWith('|')) {
+      const celulas = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      if (!celulas.every((c) => /^:?-{2,}:?$/.test(c))) table.push(celulas);
+      return;
+    }
+    flushTable(`tb-${idx}`);
     if (/^(-|\d+\.)\s+/.test(line)) {
       list.push(line.replace(/^(-|\d+\.)\s+/, ''));
       return;
@@ -53,6 +93,7 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
     }
   });
   flushList('ul-end');
+  flushTable('tb-end');
 
   return <div className={className}>{blocks}</div>;
 }

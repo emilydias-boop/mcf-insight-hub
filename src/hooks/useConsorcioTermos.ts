@@ -9,15 +9,25 @@ export interface ConsorcioTermoModelo {
   conteudo: string;
   versao: number;
   ativo: boolean;
+  tipo: TermoTipo;
   created_at: string;
   created_by: string | null;
 }
 
+export type TermoTipo = 'adesao' | 'comprovante_cadastro';
+
+export const TERMO_TIPO_LABEL: Record<TermoTipo, string> = {
+  adesao: 'Termo de Adesão',
+  comprovante_cadastro: 'Comprovante de Cadastro',
+};
+
 export interface ConsorcioTermo {
   id: string;
+  tipo: TermoTipo;
   pending_registration_id: string | null;
   proposal_id: string | null;
   deal_id: string | null;
+  card_id: string | null;
   modelo_id: string | null;
   modelo_versao: number | null;
   access_token: string;
@@ -29,47 +39,59 @@ export interface ConsorcioTermo {
   assinante_nome: string | null;
   assinante_cpf: string | null;
   assinante_ip: string | null;
+  visualizado_em: string | null;
+  visualizado_ip: string | null;
   cancelado_em: string | null;
   cancelado_motivo: string | null;
   created_at: string;
 }
 
 const TERMO_SELECT =
-  'id, pending_registration_id, proposal_id, deal_id, modelo_id, modelo_versao, access_token, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, cancelado_em, cancelado_motivo, created_at';
+  'id, tipo, pending_registration_id, proposal_id, deal_id, card_id, modelo_id, modelo_versao, access_token, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, visualizado_em, visualizado_ip, cancelado_em, cancelado_motivo, created_at';
 
-/** Modelos do termo. `onlyAtivo` para o uso operacional (geração). */
-export function useTermoModelos(onlyAtivo = false) {
+/** Modelos de um tipo de documento. `onlyAtivo` para o uso operacional (geração). */
+export function useTermoModelos(onlyAtivo = false, tipo: TermoTipo = 'adesao') {
   return useQuery({
-    queryKey: ['consorcio-termo-modelos', onlyAtivo],
+    queryKey: ['consorcio-termo-modelos', onlyAtivo, tipo],
     queryFn: async (): Promise<ConsorcioTermoModelo[]> => {
       let q = supabase
         .from('consorcio_termo_modelos')
-        .select('id, nome, conteudo, versao, ativo, created_at, created_by')
+        .select('id, nome, conteudo, versao, ativo, tipo, created_at, created_by')
+        .eq('tipo', tipo)
         .order('versao', { ascending: false });
       if (onlyAtivo) q = q.eq('ativo', true);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as ConsorcioTermoModelo[];
+      return (data || []) as unknown as ConsorcioTermoModelo[];
     },
   });
 }
 
-/** Salva uma NOVA versão do modelo (nunca sobrescreve o texto anterior). */
+/** Salva uma NOVA versão do modelo do tipo informado (nunca sobrescreve o texto anterior). */
 export function useSaveTermoModelo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ nome, conteudo }: { nome: string; conteudo: string }) => {
+    mutationFn: async ({
+      nome,
+      conteudo,
+      tipo = 'adesao' as TermoTipo,
+    }: { nome: string; conteudo: string; tipo?: TermoTipo }) => {
       const { data: userData } = await supabase.auth.getUser();
       const { data: last } = await supabase
         .from('consorcio_termo_modelos')
         .select('versao')
+        .eq('tipo', tipo)
         .order('versao', { ascending: false })
         .limit(1)
         .maybeSingle();
       const nextVersao = Number((last as any)?.versao || 0) + 1;
 
-      // desativa versões anteriores — só a mais nova fica ativa
-      await supabase.from('consorcio_termo_modelos').update({ ativo: false }).eq('ativo', true);
+      // desativa versões anteriores DO MESMO TIPO — os outros tipos não são tocados
+      await supabase
+        .from('consorcio_termo_modelos')
+        .update({ ativo: false })
+        .eq('ativo', true)
+        .eq('tipo', tipo);
 
       const { data, error } = await supabase
         .from('consorcio_termo_modelos')
@@ -78,8 +100,9 @@ export function useSaveTermoModelo() {
           conteudo,
           versao: nextVersao,
           ativo: true,
+          tipo,
           created_by: userData?.user?.id ?? null,
-        })
+        } as any)
         .select('id, versao')
         .single();
       if (error) throw error;
@@ -93,7 +116,7 @@ export function useSaveTermoModelo() {
   });
 }
 
-/** Termos emitidos, indexados por pending_registration_id (o mais recente primeiro). */
+/** Termos de adesão emitidos, indexados por pending_registration_id (o mais recente primeiro). */
 export function useTermosByPending() {
   return useQuery({
     queryKey: ['consorcio-termos-by-pending'],
@@ -101,6 +124,7 @@ export function useTermosByPending() {
       const { data, error } = await supabase
         .from('consorcio_termos')
         .select(TERMO_SELECT)
+        .eq('tipo', 'adesao')
         .order('created_at', { ascending: false });
       if (error) throw error;
       const map: Record<string, ConsorcioTermo[]> = {};
@@ -113,24 +137,51 @@ export function useTermosByPending() {
   });
 }
 
+/** Comprovantes de cadastro emitidos, indexados por card_id (o mais recente primeiro). */
+export function useComprovantesByCard() {
+  return useQuery({
+    queryKey: ['consorcio-comprovantes-by-card'],
+    queryFn: async (): Promise<Record<string, ConsorcioTermo[]>> => {
+      const { data, error } = await supabase
+        .from('consorcio_termos')
+        .select(TERMO_SELECT)
+        .eq('tipo', 'comprovante_cadastro')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map: Record<string, ConsorcioTermo[]> = {};
+      for (const t of (data || []) as any[]) {
+        if (!t.card_id) continue;
+        (map[t.card_id] ||= []).push(t as ConsorcioTermo);
+      }
+      return map;
+    },
+  });
+}
+
 export function useCreateTermo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      pendingRegistrationId: string;
+      tipo?: TermoTipo;
+      pendingRegistrationId?: string | null;
+      cardId?: string | null;
       proposalId?: string | null;
       dealId?: string | null;
       modeloId: string;
       modeloVersao: number;
       dados: TermoDados;
       conteudoRenderizado: string;
+      /** Validade do link. Comprovante não expira na prática (10 anos). */
+      expiresAt?: string;
     }) => {
       const { data: userData } = await supabase.auth.getUser();
       const hash = await sha256Hex(input.conteudoRenderizado);
       const { data, error } = await supabase
         .from('consorcio_termos')
         .insert({
-          pending_registration_id: input.pendingRegistrationId,
+          tipo: input.tipo ?? 'adesao',
+          pending_registration_id: input.pendingRegistrationId ?? null,
+          card_id: input.cardId ?? null,
           proposal_id: input.proposalId ?? null,
           deal_id: input.dealId ?? null,
           modelo_id: input.modeloId,
@@ -138,18 +189,22 @@ export function useCreateTermo() {
           dados_snapshot: input.dados as any,
           conteudo_renderizado: input.conteudoRenderizado,
           conteudo_hash: hash,
+          ...(input.expiresAt ? { expires_at: input.expiresAt } : {}),
           created_by: userData?.user?.id ?? null,
-        })
+        } as any)
         .select(TERMO_SELECT)
         .single();
       if (error) throw error;
       return data as unknown as ConsorcioTermo;
     },
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['consorcio-termos-by-pending'] });
-      toast.success('Termo de adesão gerado');
+      qc.invalidateQueries({ queryKey: ['consorcio-comprovantes-by-card'] });
+      toast.success(
+        vars.tipo === 'comprovante_cadastro' ? 'Comprovante de cadastro gerado' : 'Termo de adesão gerado',
+      );
     },
-    onError: (e: any) => toast.error(e.message || 'Erro ao gerar termo'),
+    onError: (e: any) => toast.error(e.message || 'Erro ao gerar documento'),
   });
 }
 
@@ -172,9 +227,10 @@ export function useCancelTermo() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['consorcio-termos-by-pending'] });
-      toast.success('Termo cancelado');
+      qc.invalidateQueries({ queryKey: ['consorcio-comprovantes-by-card'] });
+      toast.success('Documento cancelado');
     },
-    onError: (e: any) => toast.error(e.message || 'Erro ao cancelar termo'),
+    onError: (e: any) => toast.error(e.message || 'Erro ao cancelar documento'),
   });
 }
 

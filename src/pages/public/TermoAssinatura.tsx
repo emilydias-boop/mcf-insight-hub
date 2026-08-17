@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Download, FileSignature, Loader2, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, Download, FileBadge, FileSignature, Loader2, ShieldAlert } from 'lucide-react';
 import { useTermoPublico } from '@/hooks/useTermoPublico';
 import { TermoMarkdown } from '@/components/consorcio/TermoMarkdown';
 import { baixarTermoPdf } from '@/lib/consorcioTermo';
@@ -14,9 +14,13 @@ export default function TermoAssinatura() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  const isComprovante = termo?.tipo === 'comprovante_cadastro';
+
   useEffect(() => {
-    document.title = 'Termo de Adesão — MCF Capital';
-  }, []);
+    document.title = isComprovante
+      ? 'Comprovante de Cadastro — MCF Capital'
+      : 'Termo de Adesão — MCF Capital';
+  }, [isComprovante]);
 
   const submit = async () => {
     setErro(null);
@@ -39,11 +43,16 @@ export default function TermoAssinatura() {
   }
 
   if (notFound || !termo) {
-    return <Aviso titulo="Termo não encontrado" texto="Verifique o link recebido ou entre em contato com quem enviou o documento." />;
+    return <Aviso titulo="Documento não encontrado" texto="Verifique o link recebido ou entre em contato com quem enviou o documento." />;
   }
 
   if (termo.status === 'cancelado') {
-    return <Aviso titulo="Termo cancelado" texto="Este termo foi cancelado e não pode mais ser assinado. Fale com o seu consultor para receber um novo documento." />;
+    return (
+      <Aviso
+        titulo="Documento cancelado"
+        texto="Este documento foi cancelado e não é mais válido. Fale com o seu consultor para receber um novo."
+      />
+    );
   }
 
   if (termo.status === 'expirado') {
@@ -57,7 +66,8 @@ export default function TermoAssinatura() {
     baixarTermoPdf({
       conteudo: termo.conteudo || '',
       clienteNome: cert?.assinante_nome || termo.nome_mascarado || 'cliente',
-      certificado: assinado ? cert : null,
+      certificado: assinado && !isComprovante ? cert : null,
+      prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
     });
 
   return (
@@ -65,12 +75,26 @@ export default function TermoAssinatura() {
       <header className="bg-white border-b">
         <div className="max-w-3xl mx-auto px-5 py-5">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-500">MCF Capital</div>
-          <h1 className="text-xl sm:text-2xl font-semibold mt-1">Termo de Adesão — Consórcio</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold mt-1">
+            {isComprovante ? 'Comprovante de Cadastro — Consórcio' : 'Termo de Adesão — Consórcio'}
+          </h1>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-5 py-6 space-y-5">
-        {assinado && (
+        {isComprovante && (
+          <div className="rounded-lg border border-sky-300 bg-sky-50 p-4 flex gap-3">
+            <FileBadge className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold text-sky-900">Comprovante de cadastro da sua cota</div>
+              <div className="text-sky-800">
+                Documento apenas informativo — não é necessário assinar. Guarde uma cópia em PDF.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {assinado && !isComprovante && (
           <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 flex gap-3">
             <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
             <div className="text-sm">
@@ -86,7 +110,16 @@ export default function TermoAssinatura() {
           <TermoMarkdown content={termo.conteudo || ''} />
         </article>
 
-        {assinado ? (
+        {isComprovante ? (
+          <section className="bg-white rounded-lg border shadow-sm p-5 sm:p-6">
+            <button
+              onClick={download}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 text-white px-4 py-2.5 text-sm font-medium hover:bg-slate-800 w-full sm:w-auto"
+            >
+              <Download className="h-4 w-4" /> Baixar PDF
+            </button>
+          </section>
+        ) : assinado ? (
           <section className="bg-white rounded-lg border shadow-sm p-5 sm:p-6 space-y-3">
             <h2 className="font-semibold flex items-center gap-2">
               <FileSignature className="h-4 w-4" /> Certificado de assinatura eletrônica

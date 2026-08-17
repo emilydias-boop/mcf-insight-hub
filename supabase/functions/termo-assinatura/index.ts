@@ -47,7 +47,7 @@ function maskNome(nome: string) {
 // Somente o necessário para publicPayload() + conferência de assinatura.
 // access_token não é lido: ele já vem no request e nunca volta na resposta.
 const TERMO_COLS =
-  'id, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, dados_snapshot';
+  'id, tipo, conteudo_renderizado, conteudo_hash, status, expires_at, assinado_em, assinante_nome, assinante_cpf, assinante_ip, visualizado_em, dados_snapshot';
 
 async function getTermo(token: string) {
   const { data, error } = await supabase
@@ -60,13 +60,14 @@ async function getTermo(token: string) {
 }
 
 function isExpired(t: any) {
-  return t.status === 'pendente' && new Date(t.expires_at).getTime() < Date.now();
+  return t.tipo !== 'comprovante_cadastro' && t.status === 'pendente' && new Date(t.expires_at).getTime() < Date.now();
 }
 
 /** Resposta pública — nunca expõe token, ids internos ou o snapshot inteiro. */
 function publicPayload(t: any) {
   const snap = t.dados_snapshot || {};
   const base = {
+    tipo: (t.tipo || 'adesao') as string,
     status: t.status as string,
     expires_at: t.expires_at as string,
   };
@@ -78,6 +79,7 @@ function publicPayload(t: any) {
     nome_mascarado: maskNome(String(snap.cliente_nome || '')),
     documento_mascarado: maskDocumento(String(snap.cliente_documento || '')),
     assinado_em: t.assinado_em,
+    visualizado_em: t.visualizado_em,
     certificado:
       t.status === 'assinado'
         ? {
@@ -105,6 +107,16 @@ Deno.serve(async (req) => {
       if (isExpired(termo)) {
         await supabase.from('consorcio_termos').update({ status: 'expirado' }).eq('id', termo.id);
         termo.status = 'expirado';
+      } else if (termo.status !== 'cancelado' && !termo.visualizado_em) {
+        // Primeira abertura pelo cliente: registra data/IP (não sobrescreve).
+        const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
+        const nowIso = new Date().toISOString();
+        await supabase
+          .from('consorcio_termos')
+          .update({ visualizado_em: nowIso, visualizado_ip: ip })
+          .eq('id', termo.id)
+          .is('visualizado_em', null);
+        termo.visualizado_em = nowIso;
       }
       return json(200, { termo: publicPayload(termo) });
     }
@@ -119,6 +131,12 @@ Deno.serve(async (req) => {
 
       const termo = await getTermo(body.token);
       if (!termo) return json(404, { error: 'not_found' });
+      if (termo.tipo === 'comprovante_cadastro') {
+        return json(409, {
+          error: 'not_signable',
+          message: 'Este documento é apenas um comprovante e não requer assinatura.',
+        });
+      }
       if (termo.status === 'assinado') {
         return json(409, { error: 'already_signed', message: 'Este termo já foi assinado.' });
       }

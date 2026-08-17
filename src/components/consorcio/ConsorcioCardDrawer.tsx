@@ -16,6 +16,7 @@ import {
   FileText,
   Briefcase,
   Heart,
+  FileBadge,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,9 @@ import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment, ConsorcioSt
 import { calcularResumoComissoes } from "@/lib/commissionCalculator";
 import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
 import { ConsorcioCardForm } from "./ConsorcioCardForm";
+import { GerarComprovanteModal } from "./GerarComprovanteModal";
+import { TermoPanelDialog } from "./TermoPanelDialog";
+import { useComprovantesByCard } from "@/hooks/useConsorcioTermos";
 import { InstallmentsPaginated } from "./InstallmentsPaginated";
 import { CardActivityHistoryTab } from "./CardActivityHistoryTab";
 import { GroupDetailsCard } from "./GroupDetailsCard";
@@ -100,6 +104,8 @@ function getEstadoCivilLabel(value?: string | null): string {
 
 export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCardDrawerProps) {
   const [editFormOpen, setEditFormOpen] = useState(false);
+  const [comprovanteOpen, setComprovanteOpen] = useState(false);
+  const [comprovantePanelOpen, setComprovantePanelOpen] = useState(false);
   const [editInstallmentOpen, setEditInstallmentOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<ConsorcioInstallment | null>(null);
   const [confirmPayOpen, setConfirmPayOpen] = useState(false);
@@ -220,6 +226,8 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   };
 
   const displayName = card?.tipo_pessoa === "pf" ? card?.nome_completo : card?.razao_social;
+  const { data: comprovantesByCard = {} } = useComprovantesByCard();
+  const comprovantes = (card?.id ? comprovantesByCard[card.id] : undefined) || [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -755,6 +763,12 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                           <p className="font-medium">Dia {card.dia_vencimento}</p>
                         </div>
                       </div>
+                      <div className="grid grid-cols-4 gap-4 mt-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Contrato Embracon</p>
+                          <p className="font-medium">{(card as any).contrato_embracon || "—"}</p>
+                        </div>
+                      </div>
                       {card.parcelas_pagas_empresa > 0 && (
                         <div className="mt-4 p-3 bg-primary/5 rounded-lg">
                           <p className="text-sm text-muted-foreground">Parcelas pagas pela empresa</p>
@@ -779,16 +793,48 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       />
                     </>
 
-                    <Button variant="outline" onClick={() => setEditFormOpen(true)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar Carta
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => (comprovantes.length ? setComprovantePanelOpen(true) : setComprovanteOpen(true))}
+                      >
+                        <FileBadge className="h-4 w-4 mr-2" />
+                        {comprovantes.length ? "Comprovante de Cadastro" : "Gerar Comprovante"}
+                      </Button>
+                      <Button variant="outline" onClick={() => setEditFormOpen(true)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar Carta
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : null}
             </div>
           </ScrollArea>
         </div>
+
+        {/* Comprovante de Cadastro na Embracon */}
+        {card && (
+          <>
+            <GerarComprovanteModal
+              open={comprovanteOpen}
+              onOpenChange={setComprovanteOpen}
+              cardId={card.id}
+              onCompletarCota={() => {
+                setComprovanteOpen(false);
+                setEditFormOpen(true);
+              }}
+            />
+            <TermoPanelDialog
+              open={comprovantePanelOpen}
+              onOpenChange={setComprovantePanelOpen}
+              termos={comprovantes}
+              clienteNome={displayName || "cliente"}
+              tipo="comprovante_cadastro"
+              onGerarNovo={() => setComprovanteOpen(true)}
+            />
+          </>
+        )}
 
         {/* Edit Installment Dialog */}
         <EditInstallmentDialog

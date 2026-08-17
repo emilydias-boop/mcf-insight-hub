@@ -4834,6 +4834,7 @@ export type Database = {
           created_by: string | null
           id: string
           nome: string
+          tipo: string
           updated_at: string
           versao: number
         }
@@ -4844,6 +4845,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           nome: string
+          tipo?: string
           updated_at?: string
           versao?: number
         }
@@ -4854,6 +4856,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           nome?: string
+          tipo?: string
           updated_at?: string
           versao?: number
         }
@@ -4870,6 +4873,7 @@ export type Database = {
           cancelado_em: string | null
           cancelado_motivo: string | null
           cancelado_por: string | null
+          card_id: string | null
           conteudo_hash: string
           conteudo_renderizado: string
           created_at: string
@@ -4883,6 +4887,9 @@ export type Database = {
           pending_registration_id: string | null
           proposal_id: string | null
           status: string
+          tipo: string
+          visualizado_em: string | null
+          visualizado_ip: string | null
         }
         Insert: {
           access_token?: string
@@ -4894,6 +4901,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_motivo?: string | null
           cancelado_por?: string | null
+          card_id?: string | null
           conteudo_hash: string
           conteudo_renderizado: string
           created_at?: string
@@ -4907,6 +4915,9 @@ export type Database = {
           pending_registration_id?: string | null
           proposal_id?: string | null
           status?: string
+          tipo?: string
+          visualizado_em?: string | null
+          visualizado_ip?: string | null
         }
         Update: {
           access_token?: string
@@ -4918,6 +4929,7 @@ export type Database = {
           cancelado_em?: string | null
           cancelado_motivo?: string | null
           cancelado_por?: string | null
+          card_id?: string | null
           conteudo_hash?: string
           conteudo_renderizado?: string
           created_at?: string
@@ -4931,8 +4943,18 @@ export type Database = {
           pending_registration_id?: string | null
           proposal_id?: string | null
           status?: string
+          tipo?: string
+          visualizado_em?: string | null
+          visualizado_ip?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "consorcio_termos_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "consorcio_termos_modelo_id_fkey"
             columns: ["modelo_id"]
@@ -5117,6 +5139,7 @@ export type Database = {
           categoria: string
           cnpj: string | null
           condicao_pagamento: string | null
+          contrato_embracon: string | null
           cota: string
           cpf: string | null
           cpf_conjuge: string | null
@@ -5195,6 +5218,7 @@ export type Database = {
           categoria?: string
           cnpj?: string | null
           condicao_pagamento?: string | null
+          contrato_embracon?: string | null
           cota: string
           cpf?: string | null
           cpf_conjuge?: string | null
@@ -5273,6 +5297,7 @@ export type Database = {
           categoria?: string
           cnpj?: string | null
           condicao_pagamento?: string | null
+          contrato_embracon?: string | null
           cota?: string
           cpf?: string | null
           cpf_conjuge?: string | null

@@ -23,6 +23,8 @@ export interface ConsorcioCard {
   // Dados da cota
   grupo: string;
   cota: string;
+  /** Número do contrato na administradora (Embracon), usado no Comprovante de Cadastro. */
+  contrato_embracon?: string | null;
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: TipoProduto;
@@ -167,6 +169,7 @@ export interface CreateConsorcioCardInput {
   categoria: CategoriaConsorcio;
   grupo: string;
   cota: string;
+  contrato_embracon?: string;
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: TipoProduto;
