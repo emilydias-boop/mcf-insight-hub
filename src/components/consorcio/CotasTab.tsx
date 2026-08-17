@@ -247,6 +247,11 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     return sortedCards.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedCards, currentPage, itemsPerPage]);
 
+  // Só os cards efetivamente exibidos na página — evita varrer a tabela inteira.
+  const { data: cardDealLinks } = useConsorcioCardDealLinks(
+    useMemo(() => paginatedCards.map((c: any) => c.id), [paginatedCards]),
+  );
+
   const uniqueGrupos = useMemo(() => {
     if (!cards) return [];
     const grupos = [...new Set(cards.map(c => c.grupo))];
