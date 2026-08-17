@@ -17,13 +17,23 @@ import { maskDocumento } from '@/lib/consorcioTermo';
 /**
  * Impressão: NÃO usar `position: absolute` no container do relatório — no Chromium
  * um bloco absolutamente posicionado maior que uma página não pagina e o restante
- * é descartado. Aqui escondemos tudo que não é ancestral/descendente do relatório,
- * mantendo o relatório no fluxo normal.
+ * é descartado. Além disso, os ancestrais do layout (`SidebarInset` com
+ * `overflow-hidden` e o wrapper com `overflow-auto`) fazem o Chromium **cortar** o
+ * conteúdo em vez de paginar: por isso forçamos `overflow: visible` e altura
+ * automática em todo ancestral do relatório.
  */
 const PRINT_CSS = `
 @media print {
   body *:not(:has(#lead-report)):not(#lead-report):not(#lead-report *) {
     display: none !important;
+  }
+  html, body, body *:has(#lead-report) {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    position: static !important;
+    display: block !important;
   }
   #lead-report { position: static !important; width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
   .no-print { display: none !important; }
@@ -50,11 +60,13 @@ function Section({
   title,
   subtitle,
   source,
+  showTechnical,
   children,
 }: {
   title: string;
   subtitle?: string;
   source?: SourceStatus | SourceStatus[];
+  showTechnical?: boolean;
   children: React.ReactNode;
 }) {
   const failures = (Array.isArray(source) ? source : source ? [source] : []).filter((s) => !s.ok);
@@ -67,8 +79,11 @@ function Section({
       {failures.length > 0 && (
         <Alert variant="destructive" className="avoid-break">
           <AlertDescription className="text-xs">
-            Não foi possível carregar esta seção — {failures.map((f) => f.error || 'erro desconhecido').join(' · ')}.
-            Nada aqui pode ser lido como ausência de dado.
+            Não foi possível carregar esta seção
+            {showTechnical
+              ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}`
+              : ''}
+            . Nada aqui pode ser lido como ausência de dado.
           </AlertDescription>
         </Alert>
       )}
@@ -124,7 +139,7 @@ function useLeadReportAccess(dealId: string | undefined) {
   });
 
   if (isLeadership) return { canView: true, loading: false, error: null as any };
-  if (isLoading || !data) return { canView: false, loading: isLoading, error };
+  if (isLoading || !data) return { canView: false, isLeadership, loading: isLoading, error };
 
   const email = (user?.email || '').toLowerCase();
   const owns =
@@ -134,7 +149,7 @@ function useLeadReportAccess(dealId: string | undefined) {
       .filter(Boolean)
       .some((e) => (e as string).toLowerCase() === email);
 
-  return { canView: owns, loading: false, error };
+  return { canView: owns, isLeadership, loading: false, error };
 }
 
 export default function RelatorioLead() {
@@ -201,6 +216,8 @@ export default function RelatorioLead() {
 
   const d = data.deal;
   const s = data.sources;
+  /** Mensagem técnica (nome de tabela/coluna) só para liderança. */
+  const tech = !!access.isLeadership;
 
   return (
     <div className="p-4 md:p-6">
@@ -235,7 +252,7 @@ export default function RelatorioLead() {
         </header>
 
         {/* 1. Identificação */}
-        <Section title="1. Identificação" source={[s.deal, s.deals, s.profiles]}>
+        <Section title="1. Identificação" source={[s.deal, s.deals, s.profiles]} showTechnical={tech}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Field label="Contato" value={data.contact.name} />
             <Field label="E-mail" value={data.contact.email} />
@@ -276,8 +293,9 @@ export default function RelatorioLead() {
           {timelineError ? (
             <Alert variant="destructive" className="avoid-break">
               <AlertDescription className="text-xs">
-                Não foi possível carregar a linha do tempo — {(timelineError as any)?.message || 'erro desconhecido'}.
-                Fonte indisponível, não é possível afirmar ausência de eventos.
+                Não foi possível carregar a linha do tempo
+                {tech ? ` — ${(timelineError as any)?.message || 'erro desconhecido'}` : ''}. Fonte indisponível,
+                não é possível afirmar ausência de eventos.
               </AlertDescription>
             </Alert>
           ) : timeline.length === 0 ? (
@@ -303,7 +321,7 @@ export default function RelatorioLead() {
         </Section>
 
         {/* 3. Reuniões */}
-        <Section title="3. Reuniões" source={[s.meetings, s.movements]}>
+        <Section title="3. Reuniões" source={[s.meetings, s.movements]} showTechnical={tech}>
           {!s.meetings.ok ? null : data.meetings.length === 0 ? (
             <Empty>Nenhuma reunião registrada na agenda.</Empty>
           ) : (
@@ -388,7 +406,7 @@ export default function RelatorioLead() {
         </Section>
 
         {/* 4. Cartas / Propostas */}
-        <Section title="4. Cartas negociadas" source={[s.proposals, s.audit]}>
+        <Section title="4. Cartas negociadas" source={[s.proposals, s.audit]} showTechnical={tech}>
           {!s.proposals.ok ? null : data.proposals.length === 0 ? (
             <Empty>Nenhuma carta/proposta registrada.</Empty>
           ) : (
@@ -434,8 +452,14 @@ export default function RelatorioLead() {
                     <div className="text-xs">
                       <span className="text-muted-foreground">Exclusão: </span>
                       {p.excluida_value ? `${fmtDateTime(p.excluida_value)} (campo ${p.excluida_source})` : NOT_RECORDED}
-                      {p.carta_excluida_por_nome ? ` · ${p.carta_excluida_por_nome}` : ''}
-                      {p.excluida_motivo ? ` — ${p.excluida_motivo}` : ''}
+                      {p.carta_excluida_por_nome
+                        ? ` · ${p.carta_excluida_por_nome}${
+                            p.excluida_por_source === 'perfil_do_usuario'
+                              ? ' (nome obtido do perfil do usuário, campo carta_excluida_por)'
+                              : ' (campo carta_excluida_por_nome)'
+                          }`
+                        : ''}
+                      {p.excluida_motivo ? ` — ${p.excluida_motivo} (campo ${p.excluida_motivo_source})` : ''}
                     </div>
                   )}
                   {p.valueChanges.length > 0 && (
@@ -463,7 +487,7 @@ export default function RelatorioLead() {
         </Section>
 
         {/* 5. Cadastros e documentos */}
-        <Section title="5. Cadastro e documentos do cliente" source={[s.registrations, s.registrationsByProposal]}>
+        <Section title="5. Cadastro e documentos do cliente" source={[s.registrations, s.registrationsByProposal]} showTechnical={tech}>
           {!s.registrations.ok ? null : data.registrations.length === 0 ? (
             <Empty>Nenhum cadastro de dados da cota registrado.</Empty>
           ) : (
@@ -521,7 +545,7 @@ export default function RelatorioLead() {
           {s.documents.ok && data.documentosSoltos.length > 0 && (
             <div className="mt-3 text-sm avoid-break">
               <div className="text-xs text-muted-foreground mb-1">
-                Documentos do cadastro pendente (sem vínculo com cota)
+                Documentos sem vínculo conhecido (nem cota, nem cadastro deste lead)
               </div>
               <ul className="list-disc pl-5 text-xs">
                 {data.documentosSoltos.map((doc) => (
@@ -586,7 +610,7 @@ export default function RelatorioLead() {
         </Section>
 
         {/* 6. Cotas e parcelas */}
-        <Section title="6. Cotas e parcelas" source={[s.cards, s.installments, s.cardActivity]}>
+        <Section title="6. Cotas e parcelas" source={[s.cards, s.installments, s.cardActivity]} showTechnical={tech}>
           {!s.cards.ok ? null : data.cards.length === 0 ? (
             <Empty>Nenhuma cota vinculada a este lead.</Empty>
           ) : (
@@ -732,7 +756,7 @@ export default function RelatorioLead() {
               {data.unknowns.map((u, i) => (
                 <li key={`u-${i}`} className="flex items-start gap-2">
                   <HelpCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                  <span>{u}</span>
+                  <span>{tech ? u : u.replace(/\s*\([^()]*\)\.?$/, '.')}</span>
                 </li>
               ))}
             </ul>

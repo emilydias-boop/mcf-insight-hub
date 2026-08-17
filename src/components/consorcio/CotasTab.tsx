@@ -193,8 +193,6 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const recalculateAll = useRecalculateAllCommissions();
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: comprovantesByCard = {} } = useComprovantesByCard();
-  // Só os cards carregados na grade — evita varrer a tabela inteira e truncar em silêncio.
-  const { data: cardDealLinks } = useConsorcioCardDealLinks((cards || []).map((c: any) => c.id));
   const comprovantesAtivos = (cardId: string) =>
     (comprovantesByCard[cardId] || []).filter((t) => t.status !== 'cancelado');
 
@@ -248,6 +246,11 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     const startIndex = (currentPage - 1) * itemsPerPage;
     return sortedCards.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedCards, currentPage, itemsPerPage]);
+
+  // Só os cards efetivamente exibidos na página — evita varrer a tabela inteira.
+  const { data: cardDealLinks } = useConsorcioCardDealLinks(
+    useMemo(() => paginatedCards.map((c: any) => c.id), [paginatedCards]),
+  );
 
   const uniqueGrupos = useMemo(() => {
     if (!cards) return [];
