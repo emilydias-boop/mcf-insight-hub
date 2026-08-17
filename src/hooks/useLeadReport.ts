@@ -278,6 +278,28 @@ function diffAuditable(oldData: any, newData: any) {
   return out;
 }
 
+/** Busca todas as parcelas das cotas paginando — o teto do PostgREST truncaria em silêncio. */
+async function fetchAllInstallments(cardIds: string[]) {
+  const PAGE = 1000;
+  const rows: any[] = [];
+  let from = 0;
+  for (;;) {
+    const res = await supabase
+      .from('consortium_installments')
+      .select('id, card_id, numero_parcela, tipo, valor_parcela, data_vencimento, data_pagamento, status')
+      .in('card_id', cardIds)
+      .order('numero_parcela', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (res.error) return { data: rows, error: res.error };
+    const batch = (res.data as any[]) || [];
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+    from += PAGE;
+    if (from > 20_000) break;
+  }
+  return { data: rows, error: null };
+}
+
 function emptyTotals(): LeadReportSideTotals {
   return { count: 0, total: 0, paidCount: 0, paid: 0, openCount: 0, open: 0 };
 }
@@ -384,14 +406,7 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
         cardIds.length
           ? supabase.from('consortium_cards').select(CARD_COLUMNS).in('id', cardIds)
           : Promise.resolve(OK),
-        cardIds.length
-          ? supabase
-              .from('consortium_installments')
-              .select('id, card_id, numero_parcela, tipo, valor_parcela, data_vencimento, data_pagamento, status')
-              .in('card_id', cardIds)
-              .order('numero_parcela', { ascending: true })
-              .limit(2000)
-          : Promise.resolve(OK),
+        cardIds.length ? fetchAllInstallments(cardIds) : Promise.resolve(OK),
         cardIds.length || regIds.length
           ? supabase
               .from('consortium_documents')
