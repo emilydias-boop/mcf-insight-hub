@@ -38,17 +38,8 @@ import { TipoDocumento } from '@/types/consorcio';
 import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Badge } from '@/components/ui/badge';
-import { ChevronsUpDown } from 'lucide-react';
-import { useAllConsorcioCreditos } from '@/hooks/useConsorcioCreditosAdmin';
-import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
-import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
-import { CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
-import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
-
-const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
+import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
+import { parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 
 // Formatting functions
 function formatCpf(value: string): string {
@@ -231,9 +222,9 @@ export function AcceptProposalModal({
   useEffect(() => {
     if (!proposal) return;
     if (!valorCreditoStr && proposal.valor_credito) {
-      setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
+      plano.setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
     }
-    if (!prazo && proposal.prazo_meses) setPrazo(String(proposal.prazo_meses));
+    if (!prazo && proposal.prazo_meses) plano.setPrazo(String(proposal.prazo_meses));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposal]);
 
