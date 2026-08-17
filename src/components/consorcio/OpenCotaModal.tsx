@@ -107,8 +107,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
-  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
-  const plano = useDadosPlano();
   const planoHidratado = useRef(false);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
 
@@ -239,6 +237,15 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
 
+  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos).
+  // Prazo e condição NÃO são duplicados aqui: o hook lê e escreve direto no formulário desta tela.
+  const plano = useDadosPlano({
+    prazo: prazoMeses ? String(prazoMeses) : '',
+    condicao: condicaoPagamento || 'convencional',
+    setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any)),
+    setCondicao: (v) => form.setValue('condicao_pagamento', v),
+  });
+
   // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
   useEffect(() => {
     if (!registration || planoHidratado.current) return;
@@ -265,12 +272,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * o que sobrescreveria a parcela ajustada à mão.
    */
   const handlePrazoChange = (v: number) => {
-    form.setValue('prazo_meses', v);
-    plano.sincronizarPrazoCondicao(String(v || ''), condicaoPagamento || 'convencional');
+    plano.setPrazo(String(v || ''));
   };
   const handleCondicaoChange = (v: string) => {
-    form.setValue('condicao_pagamento', v);
-    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), v || 'convencional');
+    plano.setCondicao(v || 'convencional');
   };
 
   useEffect(() => {
@@ -360,6 +365,29 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     });
 
     onOpenChange(false);
+  };
+
+  /** Validação reprovada: avisa quais campos faltam e leva a tela até o primeiro erro. */
+  const CAMPO_LABELS: Record<string, string> = {
+    categoria: 'Categoria',
+    grupo: 'Grupo',
+    cota: 'Cota',
+    valor_credito: 'Valor do Crédito',
+    prazo_meses: 'Prazo (meses)',
+    tipo_produto: 'Tipo',
+    dia_vencimento: 'Dia de Vencimento',
+    data_contratacao: 'Data de Contratação',
+    origem: 'Origem',
+  };
+  const onInvalid = (errors: Record<string, any>) => {
+    const nomes = Object.keys(errors);
+    if (nomes.length === 0) return;
+    toast.error(`Complete os campos obrigatórios: ${nomes.map((n) => CAMPO_LABELS[n] || n).join(', ')}`);
+    setTimeout(() => {
+      const el = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus?.();
+    }, 50);
   };
 
   if (regLoading) {
@@ -460,7 +488,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         <ScrollArea className="max-h-[75vh] pr-4">
           <Form {...form}>
             <fieldset disabled={readOnly} className="contents">
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
             <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
             {/* Editable client data */}
             <Card>
@@ -740,7 +768,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Valor + Prazo + Tipo */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="valor_credito" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Valor do Crédito *</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Valor do Crédito *</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="prazo_meses" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
@@ -867,7 +895,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="dia_vencimento" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Dia de Vencimento *</FormLabel><FormControl><Input type="number" min={1} max={31} {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Dia de Vencimento *</FormLabel><FormControl><Input type="number" min={1} max={31} {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="inicio_segunda_parcela" render={({ field }) => (
                         <FormItem>
@@ -937,7 +965,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Comissão + transferência */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="valor_comissao" render={({ field }) => (
-                        <FormItem><FormLabel>Valor Comissão</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                        <FormItem><FormLabel>Valor Comissão</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name="e_transferencia" render={({ field }) => (
                         <FormItem className="flex items-center gap-3 pt-6">
