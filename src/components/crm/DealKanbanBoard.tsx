@@ -11,7 +11,6 @@ import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { StageSelectionControls } from './StageSelectionControls';
 import { StageSortDropdown, SortOption } from './StageSortDropdown';
-import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
@@ -67,7 +66,6 @@ export const DealKanbanBoard = ({
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
-  const createActivity = useCreateDealActivity();
   const { data: stages, isLoading: isLoadingStages } = useCRMStages(originId);
   const { user, role } = useAuth();
   
@@ -230,7 +228,6 @@ export const DealKanbanBoard = ({
     }
     
     const deal = deals.find(d => d.id === dealId);
-    const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
