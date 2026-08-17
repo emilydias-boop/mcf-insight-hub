@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, Printer, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLeadReport, BOOKED_AT_TRACKING_SINCE, type SourceStatus } from '@/hooks/useLeadReport';
 import { useLeadFullTimeline } from '@/hooks/useLeadFullTimeline';
 import { maskDocumento } from '@/lib/consorcioTermo';
-import { PAPEL_CSS } from '@/lib/documentoPapel';
+import { PAPEL_CSS, PAPEL_PAGE_CSS } from '@/lib/documentoPapel';
 import { PapelBrand } from '@/components/consorcio/PapelBrand';
 
 /**
@@ -44,9 +43,23 @@ const PRINT_CSS = `
   table { break-inside: auto; }
   thead { display: table-header-group; }
   tr, li { break-inside: avoid; }
-  @page { size: A4; margin: 14mm; }
 }
 `;
+
+/**
+ * Selos do papel — NÃO usar `Badge` do design system aqui: `variant="outline"`
+ * aplica `text-foreground`, que no tema escuro é quase branco e desaparece
+ * sobre o papel claro (na tela e no PDF).
+ */
+function Selo({ children, tom = 'neutro' }: { children: React.ReactNode; tom?: 'neutro' | 'erro' | 'mcf' }) {
+  const cls = tom === 'erro' ? 'tag err' : tom === 'mcf' ? 'tag mcf' : 'tag cli';
+  return <span className={cls}>{children}</span>;
+}
+
+/** Aviso em tinta explícita (o `Alert` do design system herda os tokens). */
+const Aviso = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={className ? `aviso ${className}` : 'aviso'}>{children}</div>
+);
 
 const NOT_RECORDED = 'não registrado';
 
@@ -79,15 +92,11 @@ function Section({
         {subtitle && <p className="sub">{subtitle}</p>}
       </div>
       {failures.length > 0 && (
-        <Alert variant="destructive" className="avoid-break">
-          <AlertDescription className="text-xs">
-            Não foi possível carregar esta seção
-            {showTechnical
-              ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}`
-              : ''}
-            . Nada aqui pode ser lido como ausência de dado.
-          </AlertDescription>
-        </Alert>
+        <Aviso className="avoid-break">
+          Não foi possível carregar esta seção
+          {showTechnical ? ` — ${failures.map((f) => f.error || 'erro desconhecido').join(' · ')}` : ''}
+          . Nada aqui pode ser lido como ausência de dado.
+        </Aviso>
       )}
       {children}
     </section>
@@ -104,7 +113,9 @@ function Field({ label, value, full }: { label: string; value: React.ReactNode; 
 }
 
 const Empty = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-sm text-muted-foreground italic">{children}</p>
+  <p className="text-sm italic" style={{ color: '#777' }}>
+    {children}
+  </p>
 );
 
 const jsonSnippet = (v: any) => {
@@ -223,7 +234,7 @@ export default function RelatorioLead() {
 
   return (
     <div className="p-4 md:p-6">
-      <style>{`${PAPEL_CSS}\n${PRINT_CSS}`}</style>
+      <style>{`${PAPEL_CSS}\n${PRINT_CSS}\n${PAPEL_PAGE_CSS}`}</style>
 
       <div className="no-print flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -246,12 +257,10 @@ export default function RelatorioLead() {
             {d.pipeline_name ? `${d.pipeline_name} · ` : ''}Negócio {d.id}
           </p>
           {data.unknowns.length > 0 && (
-            <Alert variant="destructive" className="mt-2 avoid-break">
-              <AlertDescription className="text-xs">
-                <strong>Atenção:</strong> parte das fontes não pôde ser lida. Onde isso ocorreu, o relatório diz
-                “fonte indisponível” — não afirma ausência.
-              </AlertDescription>
-            </Alert>
+            <Aviso className="mt-2 avoid-break">
+              <strong>Atenção:</strong> parte das fontes não pôde ser lida. Onde isso ocorreu, o relatório diz
+              “fonte indisponível” — não afirma ausência.
+            </Aviso>
           )}
         </header>
 
@@ -277,7 +286,7 @@ export default function RelatorioLead() {
 
           {data.pipelines.length > 1 && (
             <div className="mt-2 text-sm">
-              <div className="text-xs text-muted-foreground mb-1">Presença em outras pipelines</div>
+              <div className="text-xs dim mb-1">Presença em outras pipelines</div>
               <ul className="list-disc pl-5">
                 {data.pipelines.map((p) => (
                   <li key={p.deal_id}>
@@ -295,13 +304,11 @@ export default function RelatorioLead() {
           subtitle="Eventos registrados em todos os negócios deste contato. Reuniões vêm da mesma leitura da seção 3."
         >
           {timelineError ? (
-            <Alert variant="destructive" className="avoid-break">
-              <AlertDescription className="text-xs">
-                Não foi possível carregar a linha do tempo
-                {tech ? ` — ${(timelineError as any)?.message || 'erro desconhecido'}` : ''}. Fonte indisponível,
-                não é possível afirmar ausência de eventos.
-              </AlertDescription>
-            </Alert>
+            <Aviso className="avoid-break">
+              Não foi possível carregar a linha do tempo
+              {tech ? ` — ${(timelineError as any)?.message || 'erro desconhecido'}` : ''}. Fonte indisponível,
+              não é possível afirmar ausência de eventos.
+            </Aviso>
           ) : timeline.length === 0 ? (
             <Empty>Nenhum evento registrado.</Empty>
           ) : (
@@ -338,15 +345,15 @@ export default function RelatorioLead() {
                 const scheduledMs = m.scheduled_at ? new Date(m.scheduled_at).getTime() : null;
                 const preCutoff = scheduledMs !== null && scheduledMs < bookedAtCutoff;
                 return (
-                  <div key={m.id} className="rounded border border-border p-3 text-sm space-y-1 avoid-break">
+                  <div key={m.id} className="bloco text-sm space-y-1 avoid-break">
                     <div className="flex flex-wrap items-center gap-2">
                       <strong>{fmtDateTime(m.scheduled_at)}</strong>
-                      <Badge variant="outline">{m.status || 'sem status'}</Badge>
-                      {m.is_reschedule && <Badge variant="outline">Remarcada</Badge>}
+                      <Selo>{m.status || 'sem status'}</Selo>
+                      {m.is_reschedule && <Selo>Remarcada</Selo>}
                       {m.contract_paid_at && (
-                        <Badge variant="outline">Contrato pago {fmtDate(m.contract_paid_at)}</Badge>
+                        <Selo>Contrato pago {fmtDate(m.contract_paid_at)}</Selo>
                       )}
-                      {m.refunded_at && <Badge variant="outline">Reembolsado {fmtDate(m.refunded_at)}</Badge>}
+                      {m.refunded_at && <Selo>Reembolsado {fmtDate(m.refunded_at)}</Selo>}
                     </div>
                     <div className="kv">
                       <Field label="Closer" value={m.closer_name} />
@@ -357,7 +364,7 @@ export default function RelatorioLead() {
                           m.booked_at ? (
                             fmtDateTime(m.booked_at)
                           ) : (
-                            <span className="text-muted-foreground">
+                            <span className="dim">
                               não registrado
                               {preCutoff
                                 ? ' — agendamentos anteriores a 16/08/2026 não gravavam a data do agendamento'
@@ -369,26 +376,26 @@ export default function RelatorioLead() {
                     </div>
                     {(m.outcome_reason || m.outcome_reason_note) && (
                       <div className="text-xs">
-                        <span className="text-muted-foreground">Desfecho: </span>
+                        <span className="dim">Desfecho: </span>
                         {m.outcome_reason}
                         {m.outcome_reason_note ? ` — ${m.outcome_reason_note}` : ''}
                       </div>
                     )}
                     {m.notes && (
                       <div className="text-xs whitespace-pre-wrap">
-                        <span className="text-muted-foreground">Notas: </span>
+                        <span className="dim">Notas: </span>
                         {m.notes}
                       </div>
                     )}
                     {m.closer_notes && (
                       <div className="text-xs whitespace-pre-wrap">
-                        <span className="text-muted-foreground">Notas do closer: </span>
+                        <span className="dim">Notas do closer: </span>
                         {m.closer_notes}
                       </div>
                     )}
                     {m.movements.length > 0 && (
                       <div className="text-xs">
-                        <div className="text-muted-foreground">Movimentações</div>
+                        <div className="dim">Movimentações</div>
                         <ul className="list-disc pl-5">
                           {m.movements.map((mv) => (
                             <li key={mv.id}>
@@ -420,14 +427,14 @@ export default function RelatorioLead() {
           ) : (
             <div className="space-y-3">
               {data.proposals.map((p) => (
-                <div key={p.id} className="rounded border border-border p-3 text-sm space-y-1 avoid-break">
+                <div key={p.id} className="bloco text-sm space-y-1 avoid-break">
                   <div className="flex flex-wrap items-center gap-2">
                     <strong>{fmtMoney(p.valor_credito)}</strong>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs dim">
                       {p.prazo_meses ? `${p.prazo_meses} meses` : ''} {p.tipo_produto || ''}
                     </span>
-                    <Badge variant="outline">{p.status || 'sem status'}</Badge>
-                    {(p.carta_excluida || p.excluida_value) && <Badge variant="destructive">Excluída</Badge>}
+                    <Selo>{p.status || 'sem status'}</Selo>
+                    {(p.carta_excluida || p.excluida_value) && <Selo tom="erro">Excluída</Selo>}
                   </div>
                   <div className="kv">
                     <Field label="Data da proposta" value={fmtDate(p.proposal_date)} />
@@ -452,13 +459,13 @@ export default function RelatorioLead() {
                   </div>
                   {p.proposal_details && (
                     <div className="text-xs whitespace-pre-wrap">
-                      <span className="text-muted-foreground">Detalhes: </span>
+                      <span className="dim">Detalhes: </span>
                       {p.proposal_details}
                     </div>
                   )}
                   {(p.carta_excluida || p.excluida_value) && (
                     <div className="text-xs">
-                      <span className="text-muted-foreground">Exclusão: </span>
+                      <span className="dim">Exclusão: </span>
                       {p.excluida_value ? `${fmtDateTime(p.excluida_value)} (campo ${p.excluida_source})` : NOT_RECORDED}
                       {p.carta_excluida_por_nome
                         ? ` · ${p.carta_excluida_por_nome}${
@@ -472,7 +479,7 @@ export default function RelatorioLead() {
                   )}
                   {p.valueChanges.length > 0 && (
                     <div className="text-xs">
-                      <div className="text-muted-foreground">Alterações de valor/condição</div>
+                      <div className="dim">Alterações de valor/condição</div>
                       <ul className="list-disc pl-5">
                         {p.valueChanges.map((a) => (
                           <li key={a.id}>
@@ -501,12 +508,12 @@ export default function RelatorioLead() {
           ) : (
             <div className="space-y-3">
               {data.registrations.map((r) => (
-                <div key={r.id} className="rounded border border-border p-3 text-sm space-y-1 avoid-break">
+                <div key={r.id} className="bloco text-sm space-y-1 avoid-break">
                   <div className="flex flex-wrap items-center gap-2">
                     <strong>{r.nome || 'Sem nome'}</strong>
-                    <Badge variant="outline">{r.tipo_pessoa === 'PJ' ? 'PJ' : 'PF'}</Badge>
-                    <Badge variant="outline">{r.status || 'sem status'}</Badge>
-                    {r.declinada_at && <Badge variant="destructive">Declinado</Badge>}
+                    <Selo>{r.tipo_pessoa === 'PJ' ? 'PJ' : 'PF'}</Selo>
+                    <Selo>{r.status || 'sem status'}</Selo>
+                    {r.declinada_at && <Selo tom="erro">Declinado</Selo>}
                   </div>
                   <div className="kv">
                     <Field label="Categoria" value={r.categoria} />
@@ -528,13 +535,13 @@ export default function RelatorioLead() {
                   </div>
                   {r.declinada_at && (
                     <div className="text-xs">
-                      <span className="text-muted-foreground">Declínio: </span>
+                      <span className="dim">Declínio: </span>
                       {fmtDateTime(r.declinada_at)}
                       {r.motivo_declinio ? ` — ${r.motivo_declinio}` : ''}
                     </div>
                   )}
                   <div className="text-xs">
-                    <div className="text-muted-foreground">Documentos anexados ao cadastro</div>
+                    <div className="dim">Documentos anexados ao cadastro</div>
                     {!s.documents.ok ? (
                       <span className="italic">fonte indisponível, não é possível afirmar</span>
                     ) : r.documentos.length === 0 ? (
@@ -556,7 +563,7 @@ export default function RelatorioLead() {
 
           {s.documents.ok && data.documentosSoltos.length > 0 && (
             <div className="mt-3 text-sm avoid-break">
-              <div className="text-xs text-muted-foreground mb-1">
+              <div className="text-xs dim mb-1">
                 Documentos sem vínculo conhecido (nem cota, nem cadastro deste lead)
               </div>
               <ul className="list-disc pl-5 text-xs">
@@ -570,7 +577,7 @@ export default function RelatorioLead() {
           )}
 
           <div className="mt-3">
-            <div className="text-xs text-muted-foreground mb-1">
+            <div className="text-xs dim mb-1">
               Documentos assinados (termo de adesão e comprovante de cadastro) — evidência de assinatura
             </div>
             {!s.termos.ok ? (
@@ -580,13 +587,13 @@ export default function RelatorioLead() {
             ) : (
               <div className="space-y-2">
                 {data.termos.map((t) => (
-                  <div key={t.id} className="rounded border border-border p-2 text-xs space-y-1 avoid-break">
+                  <div key={t.id} className="bloco text-xs space-y-1 avoid-break">
                     <div className="flex flex-wrap items-center gap-2">
                       <strong>
                         {t.tipo === 'comprovante_cadastro' ? 'Comprovante de Cadastro' : 'Termo de Adesão'}
                       </strong>
-                      <Badge variant="outline">{t.status}</Badge>
-                      <span className="text-muted-foreground">
+                      <Selo>{t.status}</Selo>
+                      <span className="dim">
                         modelo v{t.modelo_versao ?? '?'} · emitido em {fmtDateTime(t.created_at)}
                       </span>
                     </div>
@@ -611,7 +618,7 @@ export default function RelatorioLead() {
                       />
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Hash SHA-256 do conteúdo: </span>
+                      <span className="dim">Hash SHA-256 do conteúdo: </span>
                       <span className="font-mono break-all">{t.conteudo_hash || NOT_RECORDED}</span>
                     </div>
                   </div>
@@ -628,13 +635,13 @@ export default function RelatorioLead() {
           ) : (
             <div className="space-y-4">
               {data.cards.map((c) => (
-                <div key={c.id} className="rounded border border-border p-3 text-sm space-y-2">
+                <div key={c.id} className="bloco text-sm space-y-2">
                   <div className="flex flex-wrap items-center gap-2 avoid-break">
                     <strong>
                       Grupo {c.grupo || NOT_RECORDED} · Cota {c.cota || NOT_RECORDED}
                     </strong>
-                    <Badge variant="outline">{c.status || 'sem status'}</Badge>
-                    {c.isExternal && <Badge variant="destructive">Cota externa (sem vínculo com o funil)</Badge>}
+                    <Selo>{c.status || 'sem status'}</Selo>
+                    {c.isExternal && <Selo tom="erro">Cota externa (sem vínculo com o funil)</Selo>}
                   </div>
                   <div className="kv avoid-break">
                     <Field label="Contrato Embracon" value={c.contrato_embracon} />
@@ -728,7 +735,7 @@ export default function RelatorioLead() {
                   )}
 
                   <div className="text-xs">
-                    <div className="text-muted-foreground">Documentos anexados à cota</div>
+                    <div className="dim">Documentos anexados à cota</div>
                     {!s.documents.ok ? (
                       <span className="italic">fonte indisponível, não é possível afirmar</span>
                     ) : c.documentos.length === 0 ? (
@@ -746,7 +753,7 @@ export default function RelatorioLead() {
 
                   {/* Histórico da cota (antes → depois) */}
                   <div className="text-xs">
-                    <div className="text-muted-foreground">Histórico da cota (antes → depois)</div>
+                    <div className="dim">Histórico da cota (antes → depois)</div>
                     {!s.cardActivity.ok ? (
                       <span className="italic">fonte indisponível, não é possível afirmar</span>
                     ) : c.activity.length === 0 ? (
@@ -781,7 +788,7 @@ export default function RelatorioLead() {
             <ul className="space-y-1 text-sm mb-2">
               {data.unknowns.map((u, i) => (
                 <li key={`u-${i}`} className="flex items-start gap-2">
-                  <HelpCircle className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                  <HelpCircle className="h-4 w-4 mt-0.5 shrink-0 dim" />
                   <span>
                     {u.label}: fonte indisponível, não é possível afirmar
                     {tech && u.error ? ` (${u.error})` : ''}.

@@ -6,17 +6,65 @@
  * apresentação. Nunca use `dangerouslySetInnerHTML` com o texto do modelo:
  * ele é editável por admin/manager e é exibido numa página pública.
  */
-import { PAPEL_CSS } from '@/lib/documentoPapel';
+import { useEffect } from 'react';
+import { ensurePapelStylesheet } from '@/lib/documentoPapel';
 
-/** `**negrito**` e `_itálico_`. */
+const WORD_CHAR = /[0-9A-Za-zÀ-ÿ]/;
+const isWord = (c?: string) => !!c && WORD_CHAR.test(c);
+
+/**
+ * `**negrito**`, `*itálico*` e `_itálico_`.
+ *
+ * O sublinhado só abre/fecha ênfase em **fronteira de palavra** (CommonMark):
+ * sem isso, `joao_silva_2@gmail.com` perderia os sublinhados e viraria itálico.
+ * Tokenizador manual de propósito — lookbehind em regex não é seguro em
+ * Safari/iOS antigo, e esta função roda na página pública do cliente.
+ */
 function inline(text: string, keyPrefix: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
-  return parts.map((p, i) => {
-    const k = `${keyPrefix}-${i}`;
-    if (p.startsWith('**') && p.endsWith('**')) return <strong key={k}>{p.slice(2, -2)}</strong>;
-    if (p.length > 2 && p.startsWith('_') && p.endsWith('_')) return <em key={k}>{p.slice(1, -1)}</em>;
-    return <span key={k}>{p}</span>;
-  });
+  const nodes: React.ReactNode[] = [];
+  let buf = '';
+  let k = 0;
+  const flush = () => {
+    if (buf) {
+      nodes.push(<span key={`${keyPrefix}-t${k++}`}>{buf}</span>);
+      buf = '';
+    }
+  };
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith('**', i)) {
+      const end = text.indexOf('**', i + 2);
+      if (end > i + 2) {
+        flush();
+        nodes.push(<strong key={`${keyPrefix}-b${k++}`}>{text.slice(i + 2, end)}</strong>);
+        i = end + 2;
+        continue;
+      }
+    }
+    const c = text[i];
+    if (c === '*') {
+      const end = text.indexOf('*', i + 1);
+      if (end > i + 1 && !text.slice(i + 1, end).includes('\n')) {
+        flush();
+        nodes.push(<em key={`${keyPrefix}-i${k++}`}>{text.slice(i + 1, end)}</em>);
+        i = end + 1;
+        continue;
+      }
+    }
+    if (c === '_' && !isWord(text[i - 1])) {
+      const end = text.indexOf('_', i + 1);
+      if (end > i + 1 && !isWord(text[end + 1]) && !text.slice(i + 1, end).includes('\n')) {
+        flush();
+        nodes.push(<em key={`${keyPrefix}-u${k++}`}>{text.slice(i + 1, end)}</em>);
+        i = end + 1;
+        continue;
+      }
+    }
+    buf += c;
+    i++;
+  }
+  flush();
+  return nodes;
 }
 
 const TAG_CLASS: Record<string, string> = {
@@ -38,12 +86,22 @@ function cell(raw: string, key: string): React.ReactNode {
 
 const KV_RE = /^\*\*(.+?):\*\*\s*(.*)$/;
 
-export function TermoMarkdown({ content, className }: { content: string; className?: string }) {
+export function TermoMarkdown({
+  content,
+  className,
+  bare,
+}: {
+  content: string;
+  className?: string;
+  /** Renderiza sem o wrapper `.papel` — evita `.papel` dentro de `.papel`. */
+  bare?: boolean;
+}) {
   const lines = (content || '').split('\n');
   const blocks: JSX.Element[] = [];
 
   let ul: string[] = [];
   let ol: string[] = [];
+  let olStart = 1;
   let table: string[][] = [];
   let kv: { rotulo: string; valor: string }[] = [];
 
@@ -62,17 +120,33 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
   const flushOl = (key: string) => {
     if (!ol.length) return;
     blocks.push(
-      <ol key={key}>
+      <ol key={key} start={olStart}>
         {ol.map((item, i) => (
           <li key={i}>{inline(item, `${key}-${i}`)}</li>
         ))}
       </ol>,
     );
     ol = [];
+    olStart = 1;
   };
 
+  /**
+   * Grade rótulo/valor só quando houver DUAS ou mais linhas consecutivas no
+   * padrão `**Rótulo:** valor`. Linha isolada é parágrafo comum — senão uma
+   * frase legítima como `**Importante:** ...` viraria célula de grade.
+   */
   const flushKv = (key: string) => {
     if (!kv.length) return;
+    if (kv.length === 1) {
+      const par = kv[0];
+      blocks.push(
+        <p key={key}>
+          <strong>{par.rotulo}:</strong> {inline(par.valor, `${key}-0`)}
+        </p>,
+      );
+      kv = [];
+      return;
+    }
     blocks.push(
       <div className="kv" key={key}>
         {kv.map((par, i) => {
@@ -127,7 +201,10 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
     const key = `l-${idx}`;
 
     if (!line) {
-      flushAll(idx);
+      // Linha em branco NÃO quebra lista: itens separados por linha vazia
+      // continuam a mesma `<ol>`/`<ul>`. Grades e tabelas, sim, são fechadas.
+      flushKv(`kv-${idx}`);
+      flushTable(`tb-${idx}`);
       return;
     }
 
@@ -155,6 +232,7 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
     // Listas — ordenada preserva a numeração
     if (/^\d+\.\s+/.test(line)) {
       flushUl(`ul-${idx}`);
+      if (!ol.length) olStart = Number(line.match(/^(\d+)\./)?.[1] || 1);
       ol.push(line.replace(/^\d+\.\s+/, ''));
       return;
     }
@@ -179,10 +257,14 @@ export function TermoMarkdown({ content, className }: { content: string; classNa
 
   flushAll('end');
 
-  return (
-    <div className={className ? `papel ${className}` : 'papel'}>
-      <style>{PAPEL_CSS}</style>
-      {blocks}
-    </div>
-  );
+  if (bare) return <>{blocks}</>;
+  return <PapelWrapper className={className}>{blocks}</PapelWrapper>;
+}
+
+/** Wrapper `.papel` que garante a folha de estilo injetada uma única vez. */
+function PapelWrapper({ className, children }: { className?: string; children: React.ReactNode }) {
+  useEffect(() => {
+    ensurePapelStylesheet();
+  }, []);
+  return <div className={className ? `papel ${className}` : 'papel'}>{children}</div>;
 }

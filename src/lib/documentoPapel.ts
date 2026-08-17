@@ -11,6 +11,20 @@ export const EMPRESA_RAZAO_SOCIAL = 'VMX Participações e Empreendimentos Ltda'
 export const EMPRESA_CNPJ = '39.662.160/0001-31';
 
 export const PAPEL_CSS = `
+/* Tinta explícita: nada dentro do papel pode herdar os tokens de tema da
+   aplicação (que é escura por padrão). Redefinir as variáveis aqui é a rede de
+   segurança para qualquer componente do design system que entre no papel. */
+.papel{
+  --background:60 20% 99%;--foreground:60 3% 10%;
+  --card:60 20% 99%;--card-foreground:60 3% 10%;
+  --popover:60 20% 99%;--popover-foreground:60 3% 10%;
+  --muted:60 6% 94%;--muted-foreground:0 0% 40%;
+  --primary:219 53% 26%;--primary-foreground:0 0% 100%;
+  --secondary:60 6% 94%;--secondary-foreground:60 3% 10%;
+  --accent:60 6% 94%;--accent-foreground:60 3% 10%;
+  --destructive:0 72% 42%;--destructive-foreground:0 0% 100%;
+  --border:47 8% 88%;--input:47 8% 88%;--ring:219 53% 26%;
+}
 .papel{background:#fcfcfb;color:#1a1a19;font-size:13px;line-height:1.62;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
 .papel h1{font-size:17px;margin:0 0 3px;color:#1f3864;letter-spacing:.02em}
@@ -72,8 +86,14 @@ export const PAPEL_CSS = `
 .papel .tarja{background:#e8484a;color:#fff;font-weight:800;font-size:11px;letter-spacing:.05em;
   padding:9px 14px;border-radius:6px;margin-bottom:18px;text-transform:uppercase}
 
+/* Texto secundário e blocos — substituem text-muted-foreground / border-border. */
+.papel .dim{color:#777}
+.papel .dim2{color:#555}
+.papel .bloco{border:1px solid #e4e4df;border-radius:7px;padding:12px;background:#fff}
+.papel .aviso{border:1px solid #f0b3b3;background:#fdf3f3;color:#8f1d1d;
+  border-radius:6px;padding:9px 11px;font-size:11.5px;line-height:1.5;margin:6px 0}
+
 @media print{
-  @page{size:A4;margin:16mm}
   .papel{font-size:11.5pt}
   .papel table.doc{break-inside:auto}
   .papel thead{display:table-header-group}
@@ -83,6 +103,22 @@ export const PAPEL_CSS = `
 }
 @media(max-width:760px){.papel .kv{grid-template-columns:1fr}}
 `;
+
+/** Regra `@page` — vale SÓ onde a impressão é do documento (janela de impressão
+ *  e página do relatório). Nunca dentro do `PAPEL_CSS`, senão vaza para a app. */
+export const PAPEL_PAGE_CSS = `@media print{@page{size:A4;margin:16mm}}`;
+
+const PAPEL_STYLE_ID = 'mcf-papel-css';
+
+/** Injeta o `PAPEL_CSS` no `<head>` UMA única vez (idempotente por id). */
+export function ensurePapelStylesheet(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(PAPEL_STYLE_ID)) return;
+  const el = document.createElement('style');
+  el.id = PAPEL_STYLE_ID;
+  el.textContent = PAPEL_CSS;
+  document.head.appendChild(el);
+}
 
 export function escapeHtml(v: string): string {
   return String(v ?? '')
@@ -107,7 +143,7 @@ export function papelBrandHtml(opts: { subtitulo?: string } = {}): string {
 export interface AbrirParaImpressaoOpts {
   /** Vira o `document.title` da janela — é o nome sugerido do arquivo PDF. */
   titulo: string;
-  /** HTML do corpo (já dentro do papel, sem o cabeçalho de marca). */
+  /** HTML do corpo — SEM wrapper `.papel` (ele é criado aqui, uma única vez). */
   corpoHtml: string;
   /** Tarja opcional no topo (ex.: "DOCUMENTO CANCELADO EM ..."). */
   avisoTopo?: string | null;
@@ -115,19 +151,24 @@ export interface AbrirParaImpressaoOpts {
 }
 
 /**
- * Abre uma janela A4 com o documento e dispara a impressão.
- * Devolve `false` quando o navegador bloqueia o popup — quem chama avisa na tela.
+ * Abre a janela de impressão de forma SÍNCRONA. Precisa ser chamada dentro do
+ * handler do clique: Safari/iOS bloqueia `window.open` depois de qualquer
+ * fronteira assíncrona (import dinâmico, fetch, await).
  */
-export function abrirParaImpressao(opts: AbrirParaImpressaoOpts): boolean {
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) return false;
+export function abrirJanelaImpressao(): Window | null {
+  return window.open('', '_blank', 'width=900,height=1000');
+}
+
+/** Escreve o documento numa janela já aberta e dispara a impressão. */
+export function escreverImpressao(win: Window, opts: AbrirParaImpressaoOpts): void {
   win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(opts.titulo)}</title>
 <style>html,body{margin:0;padding:0;background:#fcfcfb}
 body{padding:22px}
 @media print{body{padding:0}}
-${PAPEL_CSS}</style></head>
+${PAPEL_CSS}
+${PAPEL_PAGE_CSS}</style></head>
 <body><div class="papel">
 ${opts.avisoTopo ? `<div class="tarja">${escapeHtml(opts.avisoTopo)}</div>` : ''}
 ${papelBrandHtml({ subtitulo: opts.subtitulo })}
@@ -136,5 +177,15 @@ ${opts.corpoHtml}
 <script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250);};</script>
 </body></html>`);
   win.document.close();
+}
+
+/**
+ * Conveniência para chamadas 100% síncronas (desktop, sem import dinâmico).
+ * Devolve `false` quando o navegador bloqueia o popup.
+ */
+export function abrirParaImpressao(opts: AbrirParaImpressaoOpts): boolean {
+  const win = abrirJanelaImpressao();
+  if (!win) return false;
+  escreverImpressao(win, opts);
   return true;
 }

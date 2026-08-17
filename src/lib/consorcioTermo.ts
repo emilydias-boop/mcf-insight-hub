@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatCurrency } from '@/lib/consorcioCalculos';
-import { abrirParaImpressao, escapeHtml } from '@/lib/documentoPapel';
+import { abrirJanelaImpressao, escreverImpressao, escapeHtml } from '@/lib/documentoPapel';
 
 /** Administradora do consórcio — usada no placeholder {{administradora}}. */
 export const ADMINISTRADORA_CONSORCIO = 'Embracon Administradora de Consórcio Ltda';
@@ -268,6 +268,10 @@ export function certificadoHtml(cert: TermoCertificado): string {
 /**
  * Abre a janela de impressão do documento com o MESMO desenho da tela
  * (o markdown passa pelo `TermoMarkdown`, então nada divergir do papel).
+ *
+ * IMPORTANTE (iOS/Safari): a janela é aberta de forma **síncrona**, ainda dentro
+ * do gesto do clique, ANTES dos imports dinâmicos. Só depois o conteúdo é
+ * escrito nela. Se os imports falharem, a janela é fechada.
  * Devolve `false` quando o popup é bloqueado — quem chama avisa na tela.
  */
 export async function imprimirDocumento(opts: {
@@ -278,14 +282,24 @@ export async function imprimirDocumento(opts: {
   certificado?: TermoCertificado | null;
   canceladoStamp?: { data: string; motivo: string } | null;
 }): Promise<boolean> {
-  const [{ renderToStaticMarkup }, { TermoMarkdown }] = await Promise.all([
-    import('react-dom/server'),
-    import('@/components/consorcio/TermoMarkdown'),
-  ]);
+  const win = abrirJanelaImpressao();
+  if (!win) return false;
 
-  const corpoMarkdown = renderToStaticMarkup(
-    createElement(TermoMarkdown, { content: opts.conteudo }),
-  );
+  let corpoMarkdown: string;
+  try {
+    const [{ renderToStaticMarkup }, { TermoMarkdown }] = await Promise.all([
+      import('react-dom/server'),
+      import('@/components/consorcio/TermoMarkdown'),
+    ]);
+    // `bare`: a janela já cria o wrapper `.papel` — sem aninhar papel em papel.
+    corpoMarkdown = renderToStaticMarkup(
+      createElement(TermoMarkdown, { content: opts.conteudo, bare: true }),
+    );
+  } catch {
+    win.close();
+    return false;
+  }
+
   const cert = opts.certificado?.assinado_em ? certificadoHtml(opts.certificado) : '';
 
   let avisoTopo: string | null = null;
@@ -299,9 +313,10 @@ export async function imprimirDocumento(opts: {
   }
 
   const doc = opts.tituloDocumento || 'Termo de Adesão';
-  return abrirParaImpressao({
+  escreverImpressao(win, {
     titulo: `${doc} — ${opts.clienteNome || 'Cliente'} — ${new Date().toLocaleDateString('pt-BR')}`,
     corpoHtml: `${corpoMarkdown}${cert}`,
     avisoTopo,
   });
+  return true;
 }
