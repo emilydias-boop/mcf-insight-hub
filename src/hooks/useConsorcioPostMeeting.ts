@@ -683,6 +683,7 @@ export function useEnviarProposta() {
 // Mutation: Marcar sem sucesso
 export function useMarcarSemSucesso() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (params: {
@@ -707,7 +708,12 @@ export function useMarcarSemSucesso() {
       if (params.proposal_id) {
         await supabase
           .from('consorcio_proposals')
-          .update({ status: 'recusada', motivo_recusa: params.motivo })
+          .update({
+            status: 'recusada',
+            motivo_recusa: params.motivo,
+            recusada_at: new Date().toISOString(),
+            recusada_by: user?.id ?? null,
+          } as any)
           .eq('id', params.proposal_id);
       }
     },
@@ -724,12 +730,19 @@ export function useMarcarSemSucesso() {
 // Mutation: Aceite confirmado
 export function useConfirmarAceite() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (params: { proposal_id: string }) => {
       const { error } = await supabase
         .from('consorcio_proposals')
-        .update({ status: 'aceita', aceite_date: new Date().toISOString().split('T')[0] })
+        .update({
+          status: 'aceita',
+          // aceite_date (date) segue sendo gravado: funil e relatórios dependem dele.
+          aceite_date: new Date().toISOString().split('T')[0],
+          aceite_at: new Date().toISOString(),
+          aceite_by: user?.id ?? null,
+        } as any)
         .eq('id', params.proposal_id);
       if (error) throw error;
     },
