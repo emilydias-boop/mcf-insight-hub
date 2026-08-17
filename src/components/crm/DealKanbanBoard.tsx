@@ -11,7 +11,6 @@ import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { StageSelectionControls } from './StageSelectionControls';
 import { StageSortDropdown, SortOption } from './StageSortDropdown';
-import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
@@ -67,7 +66,6 @@ export const DealKanbanBoard = ({
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
-  const createActivity = useCreateDealActivity();
   const { data: stages, isLoading: isLoadingStages } = useCRMStages(originId);
   const { user, role } = useAuth();
   
@@ -230,32 +228,15 @@ export const DealKanbanBoard = ({
     }
     
     const deal = deals.find(d => d.id === dealId);
-    const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId, previousStageId: oldStageId },
       {
         onSuccess: () => {
-          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
-          
-          // Log activity for stage change
-          createActivity.mutate({
-            deal_id: dealId,
-            activity_type: 'stage_change',
-            description: `Movido de "${oldStage?.stage_name || 'Estágio anterior'}" para "${newStage?.stage_name || 'Novo estágio'}"`,
-            from_stage: oldStage?.stage_name || 'Estágio anterior',
-            to_stage: newStage?.stage_name || 'Novo estágio',
-            user_id: user?.id,
-            metadata: {
-              moved_by_name: userName,
-              moved_by_email: user?.email,
-              moved_at: new Date().toISOString(),
-              from_stage_id: oldStageId,
-              to_stage_id: newStageId,
-            }
-          });
-          
+          // O registro em deal_activities (stage_change) é feito pelo trigger
+          // trg_log_deal_stage_change em crm_deals — não duplicar aqui.
+
           // Tasks are now generated automatically in useUpdateCRMDeal hook
           
           // Abrir modal para definir próxima ação

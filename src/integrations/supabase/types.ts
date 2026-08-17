@@ -4249,11 +4249,15 @@ export type Database = {
           boas_vindas_email_enviado_em: string | null
           boas_vindas_enviado_em: string | null
           boas_vindas_whatsapp_enviado_em: string | null
+          cadastrada_at: string | null
+          cadastrada_by: string | null
           categoria: string | null
           cnpj: string | null
           condicao_pagamento: string | null
           consortium_card_id: string | null
           cota: string | null
+          cota_aberta_at: string | null
+          cota_aberta_by: string | null
           cpf: string | null
           cpf_conjuge: string | null
           created_at: string
@@ -4313,6 +4317,8 @@ export type Database = {
           vendedor_id: string | null
           vendedor_name: string | null
           vendedor_name_cota: string | null
+          vinculada_at: string | null
+          vinculada_by: string | null
           webhook_carta_cadastrada_enviado_em: string | null
         }
         Insert: {
@@ -4320,11 +4326,15 @@ export type Database = {
           boas_vindas_email_enviado_em?: string | null
           boas_vindas_enviado_em?: string | null
           boas_vindas_whatsapp_enviado_em?: string | null
+          cadastrada_at?: string | null
+          cadastrada_by?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
           consortium_card_id?: string | null
           cota?: string | null
+          cota_aberta_at?: string | null
+          cota_aberta_by?: string | null
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
@@ -4384,6 +4394,8 @@ export type Database = {
           vendedor_id?: string | null
           vendedor_name?: string | null
           vendedor_name_cota?: string | null
+          vinculada_at?: string | null
+          vinculada_by?: string | null
           webhook_carta_cadastrada_enviado_em?: string | null
         }
         Update: {
@@ -4391,11 +4403,15 @@ export type Database = {
           boas_vindas_email_enviado_em?: string | null
           boas_vindas_enviado_em?: string | null
           boas_vindas_whatsapp_enviado_em?: string | null
+          cadastrada_at?: string | null
+          cadastrada_by?: string | null
           categoria?: string | null
           cnpj?: string | null
           condicao_pagamento?: string | null
           consortium_card_id?: string | null
           cota?: string | null
+          cota_aberta_at?: string | null
+          cota_aberta_by?: string | null
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
@@ -4455,6 +4471,8 @@ export type Database = {
           vendedor_id?: string | null
           vendedor_name?: string | null
           vendedor_name_cota?: string | null
+          vinculada_at?: string | null
+          vinculada_by?: string | null
           webhook_carta_cadastrada_enviado_em?: string | null
         }
         Relationships: [
@@ -4596,6 +4614,8 @@ export type Database = {
       }
       consorcio_proposals: {
         Row: {
+          aceite_at: string | null
+          aceite_by: string | null
           aceite_date: string | null
           aguardando_retorno: boolean
           aguardando_retorno_until: string | null
@@ -4618,12 +4638,16 @@ export type Database = {
           prazo_meses: number | null
           proposal_date: string | null
           proposal_details: string | null
+          recusada_at: string | null
+          recusada_by: string | null
           status: string | null
           tipo_produto: string | null
           updated_at: string | null
           valor_credito: number | null
         }
         Insert: {
+          aceite_at?: string | null
+          aceite_by?: string | null
           aceite_date?: string | null
           aguardando_retorno?: boolean
           aguardando_retorno_until?: string | null
@@ -4646,12 +4670,16 @@ export type Database = {
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null
+          recusada_at?: string | null
+          recusada_by?: string | null
           status?: string | null
           tipo_produto?: string | null
           updated_at?: string | null
           valor_credito?: number | null
         }
         Update: {
+          aceite_at?: string | null
+          aceite_by?: string | null
           aceite_date?: string | null
           aguardando_retorno?: boolean
           aguardando_retorno_until?: string | null
@@ -4674,6 +4702,8 @@ export type Database = {
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null
+          recusada_at?: string | null
+          recusada_by?: string | null
           status?: string | null
           tipo_produto?: string | null
           updated_at?: string | null
@@ -15474,6 +15504,7 @@ export type Database = {
         Args: { p_origin_id: string }
         Returns: undefined
       }
+      resolve_actor_name: { Args: { _user_id: string }; Returns: string }
       resolve_deal_owner: {
         Args: { _deal_id: string }
         Returns: {
@@ -15484,6 +15515,8 @@ export type Database = {
           telefone: string
         }[]
       }
+      resolve_owner_label: { Args: { _owner: string }; Returns: string }
+      resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sonax_duration_seconds: { Args: { raw: string }; Returns: number }

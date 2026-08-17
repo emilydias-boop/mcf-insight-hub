@@ -440,7 +440,13 @@ export function useCreatePendingRegistration() {
       // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
       const { error: proposalError } = await supabase
         .from('consorcio_proposals')
-        .update({ status: 'aceita', aceite_date: new Date().toISOString().split('T')[0] })
+        .update({
+          status: 'aceita',
+          // aceite_date (date) mantido: funil e relatórios dependem dele.
+          aceite_date: new Date().toISOString().split('T')[0],
+          aceite_at: new Date().toISOString(),
+          aceite_by: user.id,
+        } as any)
         .eq('id', input.proposal_id);
 
       if (proposalError) throw proposalError;
@@ -572,11 +578,16 @@ export function useDeletePendingRegistration() {
 /** Marcar cadastro pendente como "Cadastrada" (move para aba Cadastradas). */
 export function useMarkPendingAsCadastrada() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (registrationId: string) => {
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
-        .update({ status: 'cadastrada' } as any)
+        .update({
+          status: 'cadastrada',
+          cadastrada_at: new Date().toISOString(),
+          cadastrada_by: user?.id ?? null,
+        } as any)
         .eq('id', registrationId)
         .select('id, consortium_card_id, proposal_id')
         .maybeSingle();
@@ -599,7 +610,11 @@ export function useUnmarkPendingCadastrada() {
     mutationFn: async (registrationId: string) => {
       const { error } = await supabase
         .from('consorcio_pending_registrations')
-        .update({ status: 'aguardando_abertura' } as any)
+        .update({
+          status: 'aguardando_abertura',
+          cadastrada_at: null,
+          cadastrada_by: null,
+        } as any)
         .eq('id', registrationId);
       if (error) throw error;
     },
@@ -635,7 +650,12 @@ export function useDeclinePendingRegistration() {
       if ((reg as any)?.proposal_id) {
         await supabase
           .from('consorcio_proposals')
-          .update({ status: 'recusada', motivo_recusa: motivo } as any)
+          .update({
+            status: 'recusada',
+            motivo_recusa: motivo,
+            recusada_at: new Date().toISOString(),
+            recusada_by: user?.id ?? null,
+          } as any)
           .eq('id', (reg as any).proposal_id);
       }
 
@@ -703,6 +723,7 @@ export function useUndeclinePendingRegistration() {
 /** Vincular um cadastro pendente a uma cota já existente (migra documentos). */
 export function useLinkPendingToCard() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async (params: { registrationId: string; cardId: string }) => {
       // 1. Migrar documentos do pending para o card
@@ -717,6 +738,8 @@ export function useLinkPendingToCard() {
         .update({
           status: 'vinculada',
           consortium_card_id: params.cardId,
+          vinculada_at: new Date().toISOString(),
+          vinculada_by: user?.id ?? null,
         } as any)
         .eq('id', params.registrationId)
         .select('proposal_id')
@@ -863,6 +886,7 @@ export function useUpdatePendingRegistration() {
 
 export function useOpenCota() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (params: {
@@ -1079,6 +1103,8 @@ export function useOpenCota() {
       // 6. Update pending registration status
       const pendingUpdate = {
         status: 'cota_aberta',
+        cota_aberta_at: new Date().toISOString(),
+        cota_aberta_by: user?.id ?? null,
         consortium_card_id: card.id,
         categoria: cotaData.categoria,
         grupo: cotaData.grupo,
