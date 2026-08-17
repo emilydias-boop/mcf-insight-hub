@@ -100,6 +100,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
+  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
+  const plano = useDadosPlano();
+  const planoHidratado = useRef(false);
+  const cotaBlockRef = useRef<HTMLDivElement | null>(null);
+
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
   const uploadPendingDocs = useBatchUploadPendingDocuments();
