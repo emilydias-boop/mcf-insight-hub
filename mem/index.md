@@ -27,3 +27,4 @@
 - [Ofertas Outside Configuráveis](mem://business-logic/outside-offers-configurable) — Tabela public.outside_offers (nome ou offer_id) é a fonte de verdade do Outside.
 - [Webhook Lead Reentry](mem://features/webhook-lead-reentry-stage-move) — Reentrada move deal existente p/ Novo Lead ou Anamnese Completa, com 3 travas de cliente pago.
 - [Twilio SDR Cutoff](mem://business-logic/twilio-sdr-cutoff-visibility) — Ligações Twilio de SDR após 14/08/2026 01:36 UTC ficam invisíveis via call_is_visible; closers intactos.
+- [Documentos do Consórcio](mem://features/consorcio-documentos-cliente) — Termo de Adesão e Comprovante de Cadastro compartilham tabelas, rota pública e edge function.
