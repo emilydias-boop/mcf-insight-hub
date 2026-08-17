@@ -40,6 +40,7 @@ import {
   useDeleteConsorcioProduto,
 } from '@/hooks/useConsorcioProdutos';
 import { ConsorcioProduto, ComissaoScheduleItem, ComissaoBase, COMISSAO_BASE_OPTIONS } from '@/types/consorcioProdutos';
+import { PlanosTab } from '@/components/consorcio/PlanosTab';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -148,6 +149,7 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
             <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
             <TabsTrigger value="objetivos">Objetivos</TabsTrigger>
             <TabsTrigger value="produtos">Produtos</TabsTrigger>
+            <TabsTrigger value="planos">Planos</TabsTrigger>
           </TabsList>
 
           {/* Tipos Tab */}
@@ -305,6 +307,11 @@ export function ConsorcioConfigModal({ open, onOpenChange }: ConsorcioConfigModa
           {/* Produtos Tab */}
           <TabsContent value="produtos" className="space-y-4">
             <ProdutosTab />
+          </TabsContent>
+
+          {/* Planos Tab */}
+          <TabsContent value="planos" className="space-y-4">
+            <PlanosTab />
           </TabsContent>
         </Tabs>
       </DialogContent>
