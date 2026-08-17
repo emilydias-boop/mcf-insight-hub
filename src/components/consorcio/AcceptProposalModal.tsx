@@ -394,9 +394,19 @@ export function AcceptProposalModal({
             {/* ===== Dados do plano ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
+              {planoVazio && (
+                <p className="text-xs text-muted-foreground">
+                  Preencha para gerar o Termo de Adesão. Sem estes dados o aceite funciona, mas o termo não pode ser emitido.
+                </p>
+              )}
 
               <div className="space-y-2">
-                <Label>Plano *</Label>
+                <Label>Plano</Label>
+                {creditosAtivos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
+                    Nenhum plano cadastrado. Cadastre em Configurações → Planos.
+                  </p>
+                ) : (
                 <Popover open={planoOpen} onOpenChange={setPlanoOpen}>
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" className="w-full justify-between font-normal">
@@ -414,7 +424,7 @@ export function AcceptProposalModal({
                       <CommandList>
                         <CommandEmpty>Nenhum plano encontrado.</CommandEmpty>
                         <CommandGroup>
-                          {creditos.map((c) => {
+                          {creditosAtivos.map((c) => {
                             const prod = produtos.find((p) => p.id === c.produto_id);
                             if (!prod) return null;
                             const valor = Number(c.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -436,11 +446,12 @@ export function AcceptProposalModal({
                     </Command>
                   </PopoverContent>
                 </Popover>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Valor do crédito (R$) *</Label>
+                  <Label>Valor do crédito (R$)</Label>
                   <Input
                     inputMode="numeric"
                     value={valorCreditoStr}
@@ -449,7 +460,7 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Prazo (meses) *</Label>
+                  <Label>Prazo (meses)</Label>
                   <Select
                     value={prazo}
                     onValueChange={(v) => { setPrazo(v); aplicarValoresTabela(creditoSelecionado, condicao, v); }}
@@ -461,9 +472,14 @@ export function AcceptProposalModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {prazoSemTabela && (
+                    <p className="text-xs text-amber-500">
+                      Não há valor tabelado para este prazo; informe manualmente.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Condição de pagamento *</Label>
+                  <Label>Condição de pagamento</Label>
                   <Select
                     value={condicao}
                     onValueChange={(v) => { setCondicao(v); aplicarValoresTabela(creditoSelecionado, v, prazo); }}
@@ -478,7 +494,7 @@ export function AcceptProposalModal({
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    Parcela 1ª à 12ª *
+                    Parcela 1ª à 12ª
                     {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
                     {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
                   </Label>
@@ -490,7 +506,11 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Demais parcelas *</Label>
+                  <Label className="flex items-center gap-2">
+                    Demais parcelas
+                    {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
+                    {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
+                  </Label>
                   <Input
                     inputMode="numeric"
                     value={parcelaDemais}
@@ -499,7 +519,7 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Dia de vencimento *</Label>
+                  <Label>Dia de vencimento</Label>
                   <Input
                     type="number"
                     min={1}
