@@ -318,6 +318,16 @@ export function PendingRegistrationsList({
             mode="view"
           />
         )}
+        {completarId && (
+          <OpenCotaModal
+            open={!!completarId}
+            onOpenChange={(o) => !o && setCompletarId(null)}
+            registrationId={completarId}
+            mode="view"
+            startEditing
+            focusPlano
+          />
+        )}
         {linkTarget && (
           <LinkExistingCotaModal
             open={!!linkTarget}
@@ -358,6 +368,11 @@ export function PendingRegistrationsList({
         open={!!termoTarget}
         onOpenChange={(o) => !o && setTermoTarget(null)}
         registrationId={termoTarget.id}
+        onCompletarCadastro={() => {
+          const id = termoTarget.id;
+          setTermoTarget(null);
+          setCompletarId(id);
+        }}
       />
     )}
     {termoPanelTarget && (
