@@ -946,6 +946,23 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                           >
                             <FileBadge className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!cardDealLinks?.get(card.id)}
+                            title={
+                              cardDealLinks?.get(card.id)
+                                ? 'Relatório do Lead'
+                                : 'Cota externa — sem lead vinculado'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const dealId = cardDealLinks?.get(card.id);
+                              if (dealId) window.open(`/consorcio/crm/relatorio-lead/${dealId}`, '_blank');
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon"
