@@ -745,7 +745,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Valor + Prazo + Tipo */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="valor_credito" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Valor do Crédito *</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Valor do Crédito *</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="prazo_meses" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
@@ -872,7 +872,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="dia_vencimento" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Dia de Vencimento *</FormLabel><FormControl><Input type="number" min={1} max={31} {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Dia de Vencimento *</FormLabel><FormControl><Input type="number" min={1} max={31} {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="inicio_segunda_parcela" render={({ field }) => (
                         <FormItem>
@@ -942,7 +942,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Comissão + transferência */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="valor_comissao" render={({ field }) => (
-                        <FormItem><FormLabel>Valor Comissão</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                        <FormItem><FormLabel>Valor Comissão</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name="e_transferencia" render={({ field }) => (
                         <FormItem className="flex items-center gap-3 pt-6">
