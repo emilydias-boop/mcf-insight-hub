@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw, FileSignature } from 'lucide-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,6 +39,9 @@ import {
   type EnrichedPendingRegistration,
 } from '@/hooks/useConsorcioPendingRegistrations';
 import { OpenCotaModal } from './OpenCotaModal';
+import { GerarTermoModal } from './GerarTermoModal';
+import { TermoPanelDialog } from './TermoPanelDialog';
+import { useTermosByPending, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
 import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
@@ -103,7 +106,10 @@ export function PendingRegistrationsList({
   const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
+  const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
+  const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
   const unmarkCadastrada = useUnmarkPendingCadastrada();
