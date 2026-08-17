@@ -34,12 +34,11 @@ function inline(text: string, keyPrefix: string): React.ReactNode[] {
   };
   let i = 0;
   while (i < text.length) {
-    if (text.startsWith('**', i) && !isWord(text[i - 1]) && !isWhitespace(text[i + 2])) {
+    if (text.startsWith('**', i) && !isWhitespace(text[i + 2])) {
       const end = text.indexOf('**', i + 2);
       if (
         end > i + 2 &&
         !isWhitespace(text[end - 1]) &&
-        !isWord(text[end + 2]) &&
         !text.slice(i + 2, end).includes('\n')
       ) {
         flush();
