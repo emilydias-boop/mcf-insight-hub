@@ -171,24 +171,24 @@ export function AcceptProposalModal({
   const [objetivo, setObjetivo] = useState('');
   const [incluiSeguro, setIncluiSeguro] = useState(false);
 
+  const creditosAtivos = creditos.filter((c) => c.ativo);
   const creditoSelecionado = creditos.find((c) => c.id === creditoId);
   const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
   const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
     ? produtoDoPlano.prazos_disponiveis
     : [200, 220, 240];
+  const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
+    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou.
+    if (![200, 220, 240].includes(Number(prz))) return;
     const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
     const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
     if (c1 || c2) {
       setParcela1a12(numberToBRLInput(c1 ?? null));
       setParcelaDemais(numberToBRLInput(c2 ?? null));
       setParcelasFonte('tabela');
-    } else {
-      setParcela1a12('');
-      setParcelaDemais('');
-      setParcelasFonte(null);
     }
   };
 
@@ -202,15 +202,14 @@ export function AcceptProposalModal({
     }
   };
 
-  const planoOk =
-    !!creditoId &&
-    parseBRLInput(valorCreditoStr) > 0 &&
-    !!prazo &&
-    !!condicao &&
-    parseBRLInput(parcela1a12) > 0 &&
-    parseBRLInput(parcelaDemais) > 0 &&
-    Number(diaVencimento) >= 1 &&
-    Number(diaVencimento) <= 28;
+  // Bloco "Dados do plano" é opcional: serve para emitir o Termo de Adesão, não trava o aceite.
+  const planoVazio =
+    !creditoId &&
+    !parseBRLInput(valorCreditoStr) &&
+    !prazo &&
+    !parseBRLInput(parcela1a12) &&
+    !parseBRLInput(parcelaDemais) &&
+    !diaVencimento;
 
   // Carrega proposta para pegar valor_credito/prazo
   const { data: proposal } = useQuery({
@@ -278,7 +277,7 @@ export function AcceptProposalModal({
   const docsOk = tipoPessoa === 'pf'
     ? pfDocuments.length > 0
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
-  const canSubmit = checklistOk && docsOk && planoOk;
+  const canSubmit = checklistOk && docsOk;
 
   // Pré-preenche valor do crédito e prazo com o que veio da proposta
   useEffect(() => {
