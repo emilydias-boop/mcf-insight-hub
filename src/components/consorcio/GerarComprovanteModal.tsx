@@ -278,7 +278,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {gerado ? 'Fechar' : 'Cancelar'}
           </Button>
-          {!gerado && faltando.length > 0 && onCompletarCota && (
+          {!gerado && faltandoCard.length > 0 && onCompletarCota && (
             <Button variant="outline" onClick={onCompletarCota}>
               Completar dados da cota
             </Button>
