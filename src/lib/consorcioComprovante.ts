@@ -22,10 +22,11 @@ export const COMPROVANTE_PLACEHOLDERS = [
   { key: 'prazo', label: 'Prazo (meses)' },
   { key: 'condicao_pagamento', label: 'Condição de pagamento' },
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
-  { key: 'cronograma_12', label: 'Cronograma das 12 primeiras parcelas' },
-  { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas da MCF (nas 12)' },
-  { key: 'parcelas_mcf_total', label: 'Total pago pela MCF (nas 12)' },
-  { key: 'parcelas_cliente_qtd', label: 'Qtd. de parcelas do cliente (nas 12)' },
+  { key: 'cronograma_12', label: 'Cronograma das primeiras parcelas' },
+  { key: 'cronograma_qtd', label: 'Qtd. de parcelas no cronograma' },
+  { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas da MCF (no cronograma)' },
+  { key: 'parcelas_mcf_total', label: 'Total pago pela MCF (no cronograma)' },
+  { key: 'parcelas_cliente_qtd', label: 'Qtd. de parcelas do cliente (no cronograma)' },
   { key: 'data_emissao', label: 'Data de emissão' },
 ] as const;
 
@@ -73,6 +74,14 @@ export interface ComprovanteParcela {
   data_vencimento: string | null;
   /** 'empresa' = MCF Capital paga · 'cliente' = cliente paga. */
   tipo: 'empresa' | 'cliente';
+  /** Valor conferido pelo operador. Sem valor, cai no `parcela_1a_12a` do card. */
+  valor?: number | null;
+}
+
+/** Quantas parcelas o cronograma do comprovante mostra: min(12, prazo). */
+export function qtdParcelasCronograma(card: ComprovanteSourceCard): number {
+  const prazo = Number(card.prazo_meses || 0);
+  return prazo > 0 ? Math.min(12, prazo) : 12;
 }
 
 const CONDICAO_LABELS: Record<string, string> = {
@@ -131,13 +140,16 @@ export function validarDadosComprovante(
   if (!Number(card.valor_credito)) faltando.push({ campo: 'valor_credito', label: 'Valor do crédito' });
   if (!Number(card.prazo_meses)) faltando.push({ campo: 'prazo_meses', label: 'Prazo (meses)' });
   if (!Number(card.parcela_1a_12a)) faltando.push({ campo: 'parcela_1a_12a', label: 'Valor da parcela (1ª à 12ª)' });
-  if (!Number(card.parcela_demais)) faltando.push({ campo: 'parcela_demais', label: 'Valor das demais parcelas' });
   if (!Number(card.dia_vencimento)) faltando.push({ campo: 'dia_vencimento', label: 'Dia de vencimento' });
   if (!String(card.contrato_embracon || '').trim()) {
     faltando.push({ campo: 'contrato_embracon', label: 'Número do contrato Embracon' });
   }
-  if (parcelas.filter((p) => p.numero_parcela <= 12).length < 12) {
-    faltando.push({ campo: 'parcelas', label: 'As 12 primeiras parcelas geradas na aba Parcelas' });
+  const esperado = qtdParcelasCronograma(card);
+  if (parcelas.filter((p) => p.numero_parcela <= esperado).length < esperado) {
+    faltando.push({
+      campo: 'parcelas',
+      label: `As ${esperado} primeiras parcelas geradas na aba Parcelas`,
+    });
   }
   return faltando;
 }
@@ -148,13 +160,19 @@ export function montarDadosComprovante(
   contratoEmbracon?: string | null,
   emissao = new Date(),
 ): TermoDados {
+  const limite = qtdParcelasCronograma(card);
   const doze = [...parcelas]
-    .filter((p) => p.numero_parcela <= 12)
+    .filter((p) => p.numero_parcela <= limite)
     .sort((a, b) => a.numero_parcela - b.numero_parcela)
-    .slice(0, 12);
+    .slice(0, limite);
+
+  const valorDaLinha = (p: ComprovanteParcela) =>
+    p.valor != null && Number.isFinite(Number(p.valor))
+      ? Number(p.valor)
+      : valorParcelaDoCard(card, p.numero_parcela);
 
   const linhas = doze.map((p) => {
-    const valor = valorParcelaDoCard(card, p.numero_parcela);
+    const valor = valorDaLinha(p);
     const quem = p.tipo === 'empresa' ? 'MCF Capital' : 'Cliente';
     return `| ${p.numero_parcela} | ${formatDataVencimento(p.data_vencimento)} | ${formatCurrency(valor)} | ${quem} |`;
   });
@@ -164,7 +182,7 @@ export function montarDadosComprovante(
     : '_Cronograma indisponível — gere as parcelas da cota antes de emitir o comprovante._';
 
   const daMcf = doze.filter((p) => p.tipo === 'empresa');
-  const totalMcf = daMcf.reduce((s, p) => s + valorParcelaDoCard(card, p.numero_parcela), 0);
+  const totalMcf = daMcf.reduce((s, p) => s + valorDaLinha(p), 0);
 
   return {
     cliente_nome: comprovanteNomeCliente(card) || '—',
@@ -183,6 +201,7 @@ export function montarDadosComprovante(
     condicao_pagamento: CONDICAO_LABELS[String(card.condicao_pagamento)] || card.condicao_pagamento || '—',
     dia_vencimento: String(card.dia_vencimento || '—'),
     cronograma_12: cronograma,
+    cronograma_qtd: String(doze.length || limite),
     parcelas_mcf_qtd: String(daMcf.length),
     parcelas_mcf_total: formatCurrency(totalMcf),
     parcelas_cliente_qtd: String(doze.length - daMcf.length),
