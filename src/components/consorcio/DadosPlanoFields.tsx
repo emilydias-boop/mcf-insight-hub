@@ -16,6 +16,13 @@ import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 
 const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
 
+/** Converte campo BRL em número preservando o zero legítimo (vazio → undefined). */
+const brlOuUndefined = (s: string): number | undefined => {
+  if (s == null || String(s).trim() === '') return undefined;
+  const n = parseBRLInput(s);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 export type ParcelasFonte = 'tabela' | 'manual' | null;
 
 /**
@@ -145,11 +152,11 @@ export function useDadosPlano() {
     termoIncompleto, hidratar,
     valores: {
       credito_id: creditoId || undefined,
-      valor_credito: parseBRLInput(valorCreditoStr) || undefined,
+      valor_credito: brlOuUndefined(valorCreditoStr),
       prazo_meses: prazo ? Number(prazo) : undefined,
       condicao_pagamento: condicao || undefined,
-      parcela_1a_12a: parseBRLInput(parcela1a12) || undefined,
-      parcela_demais: parseBRLInput(parcelaDemais) || undefined,
+      parcela_1a_12a: brlOuUndefined(parcela1a12),
+      parcela_demais: brlOuUndefined(parcelaDemais),
       dia_vencimento: diaVencimento ? Number(diaVencimento) : undefined,
       inicio_segunda_parcela: inicioSegundaParcela || undefined,
       objetivo: objetivo || undefined,
