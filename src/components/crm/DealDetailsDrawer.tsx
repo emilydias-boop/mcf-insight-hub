@@ -55,6 +55,13 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   const [showQualification, setShowQualification] = useState(false);
   
   const isLoading = dealLoading || contactLoading;
+
+  // Relatório do Lead é um documento de consórcio — não faz sentido em outras BUs.
+  const isConsorcioDeal = useMemo(() => {
+    if (activeBU === 'consorcio') return true;
+    const originName = ((deal as any)?.crm_origins?.name || '').toLowerCase();
+    return originName.includes('consorcio') || originName.includes('consórcio');
+  }, [activeBU, deal]);
   
   // Notify TwilioContext when drawer opens/closes
   useEffect(() => {
