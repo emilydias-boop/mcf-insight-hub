@@ -15,7 +15,7 @@ export const PARCELA_COLUMNS: string[] = CONDICOES.flatMap((c) =>
   PRAZOS.flatMap((p) => [`parcela_1a_12a_${c.key}_${p}`, `parcela_demais_${c.key}_${p}`])
 );
 
-/** Todos os planos (consorcio_creditos) ativos, para a tela de cadastro. */
+/** Todos os planos (consorcio_creditos), inclusive inativos, para a tela de cadastro. */
 export function useAllConsorcioCreditos() {
   return useQuery({
     queryKey: ['consorcio-creditos-all'],
@@ -23,12 +23,23 @@ export function useAllConsorcioCreditos() {
       const { data, error } = await supabase
         .from('consorcio_creditos')
         .select('*')
-        .eq('ativo', true)
         .order('produto_id', { ascending: true })
         .order('valor_credito', { ascending: true });
       if (error) throw error;
       return (data || []) as ConsorcioCredito[];
     },
+  });
+}
+
+export function useReactivateConsorcioCredito() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('consorcio_creditos').update({ ativo: true }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(qc); toast.success('Plano reativado'); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao reativar plano'),
   });
 }
 

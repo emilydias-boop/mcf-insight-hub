@@ -3,7 +3,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Search } from 'lucide-react';
+import { Plus, Trash2, Search, RotateCcw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -13,6 +18,7 @@ import {
   useCreateConsorcioCredito,
   useUpdateConsorcioCredito,
   useDeleteConsorcioCredito,
+  useReactivateConsorcioCredito,
   CONDICOES,
   PRAZOS,
   PARCELA_COLUMNS,
@@ -29,10 +35,13 @@ export function PlanosTab() {
   const create = useCreateConsorcioCredito();
   const update = useUpdateConsorcioCredito();
   const remove = useDeleteConsorcioCredito();
+  const reactivate = useReactivateConsorcioCredito();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ConsorcioCredito | null>(null);
   const [search, setSearch] = useState('');
+  const [showInativos, setShowInativos] = useState(false);
+  const [toDelete, setToDelete] = useState<ConsorcioCredito | null>(null);
 
   const produtoLabel = (id?: string | null) => {
     const p = produtos.find((x) => x.id === id);
@@ -49,6 +58,7 @@ export function PlanosTab() {
         return (a.valor_credito || 0) - (b.valor_credito || 0);
       })
       .filter((c) => {
+        if (!showInativos && !c.ativo) return false;
         if (!term) return true;
         return (
           (c.codigo_credito || '').toLowerCase().includes(term) ||
@@ -56,7 +66,7 @@ export function PlanosTab() {
           brl(c.valor_credito).toLowerCase().includes(term)
         );
       });
-  }, [creditos, search, produtos]);
+  }, [creditos, search, produtos, showInativos]);
 
   const handleSave = (data: Record<string, any>) => {
     if (editing) {
@@ -79,14 +89,20 @@ export function PlanosTab() {
         </Button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          className="pl-8"
-          placeholder="Buscar por código ou valor do crédito..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Buscar por código ou valor do crédito..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Switch checked={showInativos} onCheckedChange={setShowInativos} />
+          <Label className="text-sm text-muted-foreground">Mostrar inativos</Label>
+        </div>
       </div>
 
       {showForm && (
@@ -105,10 +121,14 @@ export function PlanosTab() {
           <p className="text-sm text-muted-foreground text-center py-4">Nenhum plano cadastrado.</p>
         )}
         {ordered.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg text-sm">
+          <div
+            key={c.id}
+            className={`flex items-center gap-3 p-3 bg-muted/50 rounded-lg text-sm ${c.ativo ? '' : 'opacity-60'}`}
+          >
             <div className="flex-1 min-w-0">
-              <div className="font-medium truncate">
+              <div className="font-medium truncate flex items-center gap-2">
                 {c.codigo_credito} — {brl(c.valor_credito)}
+                {!c.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 Produto: <strong>{produtoLabel(c.produto_id)}</strong> ·
@@ -118,18 +138,39 @@ export function PlanosTab() {
             <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
               Editar
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (confirm(`Remover plano ${c.codigo_credito}?`)) remove.mutate(c.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+            {c.ativo ? (
+              <Button variant="ghost" size="icon" onClick={() => setToDelete(c)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => reactivate.mutate(c.id)}>
+                <RotateCcw className="h-4 w-4 mr-1" /> Reativar
+              </Button>
+            )}
           </div>
         ))}
       </div>
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover plano</AlertDialogTitle>
+            <AlertDialogDescription>
+              O plano <strong>{toDelete?.codigo_credito}</strong> será desativado e deixará de aparecer na seleção
+              de planos. Você pode reativá-lo depois usando o filtro "Mostrar inativos".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (toDelete) remove.mutate(toDelete.id); setToDelete(null); }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

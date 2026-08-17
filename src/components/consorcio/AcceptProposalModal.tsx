@@ -171,24 +171,24 @@ export function AcceptProposalModal({
   const [objetivo, setObjetivo] = useState('');
   const [incluiSeguro, setIncluiSeguro] = useState(false);
 
+  const creditosAtivos = creditos.filter((c) => c.ativo);
   const creditoSelecionado = creditos.find((c) => c.id === creditoId);
   const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
   const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
     ? produtoDoPlano.prazos_disponiveis
     : [200, 220, 240];
+  const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
+    // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou.
+    if (![200, 220, 240].includes(Number(prz))) return;
     const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
     const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
     if (c1 || c2) {
       setParcela1a12(numberToBRLInput(c1 ?? null));
       setParcelaDemais(numberToBRLInput(c2 ?? null));
       setParcelasFonte('tabela');
-    } else {
-      setParcela1a12('');
-      setParcelaDemais('');
-      setParcelasFonte(null);
     }
   };
 
@@ -202,15 +202,14 @@ export function AcceptProposalModal({
     }
   };
 
-  const planoOk =
-    !!creditoId &&
-    parseBRLInput(valorCreditoStr) > 0 &&
-    !!prazo &&
-    !!condicao &&
-    parseBRLInput(parcela1a12) > 0 &&
-    parseBRLInput(parcelaDemais) > 0 &&
-    Number(diaVencimento) >= 1 &&
-    Number(diaVencimento) <= 28;
+  // Bloco "Dados do plano" é opcional: serve para emitir o Termo de Adesão, não trava o aceite.
+  const planoVazio =
+    !creditoId &&
+    !parseBRLInput(valorCreditoStr) &&
+    !prazo &&
+    !parseBRLInput(parcela1a12) &&
+    !parseBRLInput(parcelaDemais) &&
+    !diaVencimento;
 
   // Carrega proposta para pegar valor_credito/prazo
   const { data: proposal } = useQuery({
@@ -278,7 +277,7 @@ export function AcceptProposalModal({
   const docsOk = tipoPessoa === 'pf'
     ? pfDocuments.length > 0
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
-  const canSubmit = checklistOk && docsOk && planoOk;
+  const canSubmit = checklistOk && docsOk;
 
   // Pré-preenche valor do crédito e prazo com o que veio da proposta
   useEffect(() => {
@@ -395,9 +394,19 @@ export function AcceptProposalModal({
             {/* ===== Dados do plano ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
+              {planoVazio && (
+                <p className="text-xs text-muted-foreground">
+                  Preencha para gerar o Termo de Adesão. Sem estes dados o aceite funciona, mas o termo não pode ser emitido.
+                </p>
+              )}
 
               <div className="space-y-2">
-                <Label>Plano *</Label>
+                <Label>Plano</Label>
+                {creditosAtivos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
+                    Nenhum plano cadastrado. Cadastre em Configurações → Planos.
+                  </p>
+                ) : (
                 <Popover open={planoOpen} onOpenChange={setPlanoOpen}>
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" className="w-full justify-between font-normal">
@@ -415,7 +424,7 @@ export function AcceptProposalModal({
                       <CommandList>
                         <CommandEmpty>Nenhum plano encontrado.</CommandEmpty>
                         <CommandGroup>
-                          {creditos.map((c) => {
+                          {creditosAtivos.map((c) => {
                             const prod = produtos.find((p) => p.id === c.produto_id);
                             if (!prod) return null;
                             const valor = Number(c.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -437,11 +446,12 @@ export function AcceptProposalModal({
                     </Command>
                   </PopoverContent>
                 </Popover>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Valor do crédito (R$) *</Label>
+                  <Label>Valor do crédito (R$)</Label>
                   <Input
                     inputMode="numeric"
                     value={valorCreditoStr}
@@ -450,7 +460,7 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Prazo (meses) *</Label>
+                  <Label>Prazo (meses)</Label>
                   <Select
                     value={prazo}
                     onValueChange={(v) => { setPrazo(v); aplicarValoresTabela(creditoSelecionado, condicao, v); }}
@@ -462,9 +472,14 @@ export function AcceptProposalModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {prazoSemTabela && (
+                    <p className="text-xs text-amber-500">
+                      Não há valor tabelado para este prazo; informe manualmente.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Condição de pagamento *</Label>
+                  <Label>Condição de pagamento</Label>
                   <Select
                     value={condicao}
                     onValueChange={(v) => { setCondicao(v); aplicarValoresTabela(creditoSelecionado, v, prazo); }}
@@ -479,7 +494,7 @@ export function AcceptProposalModal({
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    Parcela 1ª à 12ª *
+                    Parcela 1ª à 12ª
                     {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
                     {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
                   </Label>
@@ -491,7 +506,11 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Demais parcelas *</Label>
+                  <Label className="flex items-center gap-2">
+                    Demais parcelas
+                    {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
+                    {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
+                  </Label>
                   <Input
                     inputMode="numeric"
                     value={parcelaDemais}
@@ -500,7 +519,7 @@ export function AcceptProposalModal({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Dia de vencimento *</Label>
+                  <Label>Dia de vencimento</Label>
                   <Input
                     type="number"
                     min={1}
@@ -885,9 +904,7 @@ export function AcceptProposalModal({
                     type="submit"
                     disabled={createRegistration.isPending || !canSubmit}
                     title={
-                      !planoOk
-                        ? 'Preencha os dados do plano (plano, crédito, prazo, condição, parcelas e dia de vencimento)'
-                        : !checklistOk
+                      !checklistOk
                         ? 'Preencha todos os campos do checklist antes de enviar'
                         : !docsOk
                           ? (tipoPessoa === 'pf'
@@ -902,9 +919,7 @@ export function AcceptProposalModal({
                 </div>
                 {!canSubmit && (
                   <p className="text-xs text-destructive text-right">
-                    {!planoOk
-                      ? 'Preencha os dados do plano para habilitar o envio.'
-                      : !checklistOk
+                    {!checklistOk
                       ? 'Preencha todos os campos do checklist para habilitar o envio.'
                       : (tipoPessoa === 'pf'
                           ? 'Anexe ao menos 1 documento (CNH/RG) para habilitar o envio.'
