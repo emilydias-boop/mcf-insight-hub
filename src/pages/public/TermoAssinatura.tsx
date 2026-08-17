@@ -49,9 +49,10 @@ export default function TermoAssinatura() {
     return <Aviso titulo="Documento não encontrado" texto="Verifique o link recebido ou entre em contato com quem enviou o documento." />;
   }
 
-  // Termo de adesão cancelado deixa de ser assinável e não é exibido.
-  // O comprovante cancelado continua visível, com tarja — é documento informativo.
-  if (termo.status === 'cancelado' && !isComprovante) {
+  // Documento cancelado: a função pública não devolve o conteúdo (nem para o
+  // comprovante), então a página mostra o aviso. A tarja de cancelamento aparece
+  // na impressão feita internamente, pelo painel de documentos.
+  if (termo.status === 'cancelado') {
     return (
       <Aviso
         titulo="Documento cancelado"
@@ -60,12 +61,11 @@ export default function TermoAssinatura() {
     );
   }
 
-  if (termo.status === 'expirado' && !isComprovante) {
+  if (termo.status === 'expirado') {
     return <Aviso titulo="Prazo expirado" texto="O prazo para assinatura deste termo expirou. Fale com o seu consultor para receber um novo link." />;
   }
 
   const assinado = termo.status === 'assinado';
-  const cancelado = termo.status === 'cancelado';
   const cert = termo.certificado;
 
   const imprimir = async () => {
@@ -104,17 +104,11 @@ export default function TermoAssinatura() {
 `}</style>
 
       <div className="mcf-folha papel">
-        {cancelado && (
-          <div className="tarja">
-            Documento cancelado — não é mais válido
-          </div>
-        )}
-
         <PapelBrand
           subtitulo={isComprovante ? 'Comprovante de Cadastro — Consórcio' : 'Termo de Adesão — Consórcio'}
         />
 
-        {isComprovante && !cancelado && (
+        {isComprovante && (
           <p className="legal" style={{ marginTop: 0 }}>
             Documento apenas informativo — não é necessário assinar. Guarde uma cópia em PDF.
           </p>
