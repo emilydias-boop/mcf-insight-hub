@@ -254,6 +254,11 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
             </PopoverContent>
           </Popover>
         )}
+        {plano.creditoSelecionado && !plano.prazo && (
+          <p className="text-xs text-muted-foreground">
+            Escolha o prazo para preencher os valores da tabela.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
