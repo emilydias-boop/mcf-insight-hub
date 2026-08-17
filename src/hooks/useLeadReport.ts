@@ -133,8 +133,11 @@ export interface LeadReportRegistration {
   data_contratacao: string | null;
   created_at: string;
   cadastrada_at: string | null;
+  cadastrada_por: string | null;
   cota_aberta_at: string | null;
+  cota_aberta_por: string | null;
   vinculada_at: string | null;
+  vinculada_por: string | null;
   declinada_at: string | null;
   motivo_declinio: string | null;
   consortium_card_id: string | null;
