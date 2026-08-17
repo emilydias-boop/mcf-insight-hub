@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,6 +38,17 @@ import { TipoDocumento } from '@/types/consorcio';
 import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { ChevronsUpDown } from 'lucide-react';
+import { useAllConsorcioCreditos } from '@/hooks/useConsorcioCreditosAdmin';
+import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
+import { CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
+import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+
+const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
 
 // Formatting functions
 function formatCpf(value: string): string {
@@ -143,6 +154,64 @@ export function AcceptProposalModal({
   const [tipoContrato, setTipoContrato] = useState<'normal' | 'intercalado' | 'intercalado_impar'>('normal');
   const [qtdParcelasEmpresa, setQtdParcelasEmpresa] = useState<number>(0);
 
+  // ===== Dados do plano (comerciais do Termo de Adesão) =====
+  const { data: creditos = [] } = useAllConsorcioCreditos();
+  const { data: produtos = [] } = useConsorcioProdutos();
+  const { data: objetivos = [] } = useConsorcioObjetivoOptions();
+  const [creditoId, setCreditoId] = useState('');
+  const [planoOpen, setPlanoOpen] = useState(false);
+  const [valorCreditoStr, setValorCreditoStr] = useState('');
+  const [prazo, setPrazo] = useState('');
+  const [condicao, setCondicao] = useState('convencional');
+  const [parcela1a12, setParcela1a12] = useState('');
+  const [parcelaDemais, setParcelaDemais] = useState('');
+  const [parcelasFonte, setParcelasFonte] = useState<'tabela' | 'manual' | null>(null);
+  const [diaVencimento, setDiaVencimento] = useState('');
+  const [inicioSegundaParcela, setInicioSegundaParcela] = useState('');
+  const [objetivo, setObjetivo] = useState('');
+  const [incluiSeguro, setIncluiSeguro] = useState(false);
+
+  const creditoSelecionado = creditos.find((c) => c.id === creditoId);
+  const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
+  const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
+    ? produtoDoPlano.prazos_disponiveis
+    : [200, 220, 240];
+
+  const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
+    if (!credito || !prz) return;
+    const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
+    const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
+    if (c1 || c2) {
+      setParcela1a12(numberToBRLInput(c1 ?? null));
+      setParcelaDemais(numberToBRLInput(c2 ?? null));
+      setParcelasFonte('tabela');
+    } else {
+      setParcela1a12('');
+      setParcelaDemais('');
+      setParcelasFonte(null);
+    }
+  };
+
+  const handleSelectPlano = (id: string) => {
+    const credito = creditos.find((c) => c.id === id);
+    setCreditoId(id);
+    setPlanoOpen(false);
+    if (credito) {
+      setValorCreditoStr(numberToBRLInput(credito.valor_credito));
+      aplicarValoresTabela(credito, condicao, prazo);
+    }
+  };
+
+  const planoOk =
+    !!creditoId &&
+    parseBRLInput(valorCreditoStr) > 0 &&
+    !!prazo &&
+    !!condicao &&
+    parseBRLInput(parcela1a12) > 0 &&
+    parseBRLInput(parcelaDemais) > 0 &&
+    Number(diaVencimento) >= 1 &&
+    Number(diaVencimento) <= 28;
+
   // Carrega proposta para pegar valor_credito/prazo
   const { data: proposal } = useQuery({
     queryKey: ['consorcio-proposal-snapshot', proposalId],
@@ -209,7 +278,17 @@ export function AcceptProposalModal({
   const docsOk = tipoPessoa === 'pf'
     ? pfDocuments.length > 0
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
-  const canSubmit = checklistOk && docsOk;
+  const canSubmit = checklistOk && docsOk && planoOk;
+
+  // Pré-preenche valor do crédito e prazo com o que veio da proposta
+  useEffect(() => {
+    if (!proposal) return;
+    if (!valorCreditoStr && proposal.valor_credito) {
+      setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
+    }
+    if (!prazo && proposal.prazo_meses) setPrazo(String(proposal.prazo_meses));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal]);
 
   const handleCepLookup = useCallback(async (cep: string, prefix: string) => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -283,8 +362,17 @@ export function AcceptProposalModal({
       empresa_paga_parcelas: empresaPaga,
       tipo_contrato: tipoContrato,
       parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
-      valor_credito: proposal?.valor_credito ? Number(proposal.valor_credito) : undefined,
-      prazo_meses: proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined,
+      valor_credito: parseBRLInput(valorCreditoStr) || (proposal?.valor_credito ? Number(proposal.valor_credito) : undefined),
+      prazo_meses: prazo ? Number(prazo) : (proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined),
+      credito_id: creditoId || undefined,
+      produto_codigo: produtoDoPlano?.codigo || undefined,
+      condicao_pagamento: condicao || undefined,
+      parcela_1a_12a: parseBRLInput(parcela1a12) || undefined,
+      parcela_demais: parseBRLInput(parcelaDemais) || undefined,
+      dia_vencimento: diaVencimento ? Number(diaVencimento) : undefined,
+      inicio_segunda_parcela: inicioSegundaParcela || undefined,
+      objetivo: objetivo || undefined,
+      inclui_seguro: incluiSeguro,
       observacoes: proposal?.proposal_details?.trim() || undefined,
       ...cleanData,
     });
@@ -304,6 +392,146 @@ export function AcceptProposalModal({
 
         <ScrollArea className="max-h-[70vh] pr-4">
           <div className="space-y-4">
+            {/* ===== Dados do plano ===== */}
+            <div className="space-y-3 rounded-lg border p-3">
+              <h3 className="font-semibold text-sm">Dados do plano</h3>
+
+              <div className="space-y-2">
+                <Label>Plano *</Label>
+                <Popover open={planoOpen} onOpenChange={setPlanoOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                      <span className="truncate">
+                        {creditoSelecionado
+                          ? `${creditoSelecionado.codigo_credito} — ${Number(creditoSelecionado.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                          : 'Selecione o plano'}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar por código ou valor..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhum plano encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {creditos.map((c) => {
+                            const prod = produtos.find((p) => p.id === c.produto_id);
+                            if (!prod) return null;
+                            const valor = Number(c.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                            return (
+                              <CommandItem
+                                key={c.id}
+                                value={`${c.codigo_credito} ${valor} ${prod.codigo}`}
+                                onSelect={() => handleSelectPlano(c.id)}
+                              >
+                                <span className="truncate">
+                                  {c.codigo_credito} — {valor}
+                                  <span className="text-muted-foreground text-xs"> · {prod.codigo}</span>
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Valor do crédito (R$) *</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={valorCreditoStr}
+                    onChange={(e) => setValorCreditoStr(formatBRLInput(e.target.value))}
+                    placeholder="150.000,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo (meses) *</Label>
+                  <Select
+                    value={prazo}
+                    onValueChange={(v) => { setPrazo(v); aplicarValoresTabela(creditoSelecionado, condicao, v); }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {prazosDisponiveis.map((p) => (
+                        <SelectItem key={p} value={String(p)}>{p} meses</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Condição de pagamento *</Label>
+                  <Select
+                    value={condicao}
+                    onValueChange={(v) => { setCondicao(v); aplicarValoresTabela(creditoSelecionado, v, prazo); }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CONDICAO_PAGAMENTO_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    Parcela 1ª à 12ª *
+                    {parcelasFonte === 'tabela' && <Badge variant="secondary" className="text-[10px]">da tabela oficial</Badge>}
+                    {parcelasFonte === 'manual' && <Badge variant="outline" className="text-[10px]">editado manualmente</Badge>}
+                  </Label>
+                  <Input
+                    inputMode="numeric"
+                    value={parcela1a12}
+                    onChange={(e) => { setParcela1a12(formatBRLInput(e.target.value)); setParcelasFonte('manual'); }}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Demais parcelas *</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={parcelaDemais}
+                    onChange={(e) => { setParcelaDemais(formatBRLInput(e.target.value)); setParcelasFonte('manual'); }}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dia de vencimento *</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={28}
+                    value={diaVencimento}
+                    onChange={(e) => setDiaVencimento(e.target.value)}
+                    placeholder="1 a 28"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Início da 2ª parcela</Label>
+                  <Input type="date" value={inicioSegundaParcela} onChange={(e) => setInicioSegundaParcela(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Objetivo</Label>
+                  <Select value={objetivo} onValueChange={setObjetivo}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {objetivos.map((o) => (
+                        <SelectItem key={o.id} value={o.name}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <Switch checked={incluiSeguro} onCheckedChange={setIncluiSeguro} />
+                  <Label>Inclui seguro de vida</Label>
+                </div>
+              </div>
+            </div>
+
             {/* Tipo de Pessoa */}
             <div className="space-y-2">
               <Label>Tipo de Pessoa *</Label>
@@ -657,7 +885,9 @@ export function AcceptProposalModal({
                     type="submit"
                     disabled={createRegistration.isPending || !canSubmit}
                     title={
-                      !checklistOk
+                      !planoOk
+                        ? 'Preencha os dados do plano (plano, crédito, prazo, condição, parcelas e dia de vencimento)'
+                        : !checklistOk
                         ? 'Preencha todos os campos do checklist antes de enviar'
                         : !docsOk
                           ? (tipoPessoa === 'pf'
@@ -672,7 +902,9 @@ export function AcceptProposalModal({
                 </div>
                 {!canSubmit && (
                   <p className="text-xs text-destructive text-right">
-                    {!checklistOk
+                    {!planoOk
+                      ? 'Preencha os dados do plano para habilitar o envio.'
+                      : !checklistOk
                       ? 'Preencha todos os campos do checklist para habilitar o envio.'
                       : (tipoPessoa === 'pf'
                           ? 'Anexe ao menos 1 documento (CNH/RG) para habilitar o envio.'

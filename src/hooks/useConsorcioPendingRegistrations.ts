@@ -384,6 +384,16 @@ export interface CreatePendingRegistrationInput {
   valor_credito?: number;
   prazo_meses?: number;
   observacoes?: string;
+  // Dados do plano (Termo de Adesão)
+  credito_id?: string;
+  produto_codigo?: string;
+  condicao_pagamento?: string;
+  parcela_1a_12a?: number;
+  parcela_demais?: number;
+  dia_vencimento?: number;
+  inicio_segunda_parcela?: string;
+  objetivo?: string;
+  inclui_seguro?: boolean;
   // PF
   nome_completo?: string;
   rg?: string;

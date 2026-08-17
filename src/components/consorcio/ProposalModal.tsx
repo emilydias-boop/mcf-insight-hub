@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEnviarProposta } from '@/hooks/useConsorcioPostMeeting';
+import { useConsorcioTipoOptions, useConsorcioOrigemOptions } from '@/hooks/useConsorcioConfigOptions';
 
 interface ProposalModalProps {
   open: boolean;
@@ -25,6 +26,16 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
   const [tipoProduto, setTipoProduto] = useState('');
   const [origemLead, setOrigemLead] = useState('');
   const enviarProposta = useEnviarProposta();
+  const { data: tipoOptions = [] } = useConsorcioTipoOptions();
+  const { data: origemOptions = [] } = useConsorcioOrigemOptions();
+
+  // Se o valor atual não existir no catálogo, exibe como "legado" para não esvaziar o campo.
+  const tipoList = tipoProduto && !tipoOptions.some(o => o.name === tipoProduto)
+    ? [...tipoOptions.map(o => ({ name: o.name, label: o.label })), { name: tipoProduto, label: `${tipoProduto} (legado)` }]
+    : tipoOptions.map(o => ({ name: o.name, label: o.label }));
+  const origemList = origemLead && !origemOptions.some(o => o.name === origemLead)
+    ? [...origemOptions.map(o => ({ name: o.name, label: o.label })), { name: origemLead, label: `${origemLead} (legado)` }]
+    : origemOptions.map(o => ({ name: o.name, label: o.label }));
 
   // Formata valor em BRL (1.000.000,00) enquanto o usuário digita.
   // Armazena internamente como string com centavos preservados.
@@ -55,7 +66,7 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
       valor_credito: valorNumerico,
       prazo_meses: Number(prazoMeses),
       tipo_produto: tipoProduto,
-      origem_lead: origemLead.trim() || undefined,
+      origem_lead: origemLead || undefined,
     }, {
       onSuccess: () => {
         onOpenChange(false);
@@ -93,8 +104,9 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
             <Select value={tipoProduto} onValueChange={setTipoProduto}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="select">Select</SelectItem>
-                <SelectItem value="parcelinha">Parcelinha</SelectItem>
+                {tipoList.map(o => (
+                  <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -104,12 +116,14 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
           </div>
           <div>
             <Label>Origem do Lead</Label>
-            <Input
-              type="text"
-              value={origemLead}
-              onChange={e => setOrigemLead(e.target.value)}
-              placeholder="Ex: Indicação, Instagram, Parceiro João..."
-            />
+            <Select value={origemLead} onValueChange={setOrigemLead}>
+              <SelectTrigger><SelectValue placeholder="Selecione a origem" /></SelectTrigger>
+              <SelectContent>
+                {origemList.map(o => (
+                  <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
