@@ -49,6 +49,10 @@ export function TermoPanelDialog({
       clienteNome,
       certificado: !isComprovante && t.status === 'assinado' ? t : null,
       prefixoArquivo: isComprovante ? 'comprovante-cadastro' : 'termo-adesao',
+      canceladoStamp:
+        t.status === 'cancelado' && t.cancelado_em
+          ? { data: t.cancelado_em, motivo: t.cancelado_motivo || '' }
+          : null,
     });
   };
 
@@ -121,10 +125,13 @@ export function TermoPanelDialog({
                         : 'Ainda não aberto pelo cliente'}
                     </p>
                   ) : null}
-                  <p className="text-xs text-muted-foreground">
-                    Link válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
-                  </p>
                 </>
+              )}
+
+              {(t.status === 'pendente' || t.status === 'expirado' || t.status === 'cancelado') && t.expires_at && (
+                <p className="text-xs text-muted-foreground">
+                  Link válido até {format(new Date(t.expires_at), 'dd/MM/yyyy')}
+                </p>
               )}
 
               {!isComprovante && t.status === 'assinado' && (

@@ -799,7 +799,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        onClick={() => (comprovantes.length ? setComprovantePanelOpen(true) : setComprovanteOpen(true))}
+                        onClick={() =>
+                          comprovantesTodos.length ? setComprovantePanelOpen(true) : setComprovanteOpen(true)
+                        }
                       >
                         <FileBadge className="h-4 w-4 mr-2" />
                         {comprovantes.length ? "Comprovante de Cadastro" : "Gerar Comprovante"}

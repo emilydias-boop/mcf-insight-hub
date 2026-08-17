@@ -224,6 +224,8 @@ export async function baixarTermoPdf(opts: {
   certificado?: TermoCertificado | null;
   /** Prefixo do arquivo salvo. Padrão: `termo-adesao`. */
   prefixoArquivo?: string;
+  /** Carimbo de cancelamento exibido no topo do PDF. */
+  canceladoStamp?: { data: string; motivo: string } | null;
 }) {
   const { loadJsPDF } = await import('@/lib/lazyExport');
   const { jsPDF } = await loadJsPDF();
@@ -232,6 +234,26 @@ export async function baixarTermoPdf(opts: {
   const width = doc.internal.pageSize.getWidth() - margin * 2;
   const pageHeight = doc.internal.pageSize.getHeight();
   let y = margin;
+
+  // Carimbo de cancelamento — vai no topo, antes de qualquer conteúdo.
+  if (opts.canceladoStamp) {
+    const dataBr = new Date(opts.canceladoStamp.data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const stampText = `DOCUMENTO CANCELADO EM ${dataBr}${opts.canceladoStamp.motivo ? ` — ${opts.canceladoStamp.motivo}` : ''}`;
+    doc.setFillColor(220, 38, 38);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    const stampLines = doc.splitTextToSize(stampText, width - 24) as string[];
+    const boxH = stampLines.length * 15 + 12;
+    doc.roundedRect(margin - 6, y, width + 12, boxH, 4, 4, 'F');
+    let sy = y + 17;
+    for (const sl of stampLines) {
+      doc.text(sl, margin, sy);
+      sy += 15;
+    }
+    doc.setTextColor(0, 0, 0);
+    y += boxH + 16;
+  }
 
   const ensure = (h: number) => {
     if (y + h > pageHeight - margin) {
