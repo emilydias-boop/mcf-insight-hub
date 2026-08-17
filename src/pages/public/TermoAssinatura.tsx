@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, FileBadge, FileSignature, Loader2, Printer, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, FileSignature, Loader2, Printer, ShieldAlert } from 'lucide-react';
 import { useTermoPublico } from '@/hooks/useTermoPublico';
 import { TermoMarkdown } from '@/components/consorcio/TermoMarkdown';
 import { PapelBrand } from '@/components/consorcio/PapelBrand';
