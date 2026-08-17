@@ -107,8 +107,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
-  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos)
-  const plano = useDadosPlano();
   const planoHidratado = useRef(false);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
 
@@ -239,6 +237,15 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
 
+  // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos).
+  // Prazo e condição NÃO são duplicados aqui: o hook lê e escreve direto no formulário desta tela.
+  const plano = useDadosPlano({
+    prazo: prazoMeses ? String(prazoMeses) : '',
+    condicao: condicaoPagamento || 'convencional',
+    setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any)),
+    setCondicao: (v) => form.setValue('condicao_pagamento', v),
+  });
+
   // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
   useEffect(() => {
     if (!registration || planoHidratado.current) return;
@@ -265,12 +272,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * o que sobrescreveria a parcela ajustada à mão.
    */
   const handlePrazoChange = (v: number) => {
-    form.setValue('prazo_meses', v);
-    plano.sincronizarPrazoCondicao(String(v || ''), condicaoPagamento || 'convencional');
+    plano.setPrazo(String(v || ''));
   };
   const handleCondicaoChange = (v: string) => {
-    form.setValue('condicao_pagamento', v);
-    plano.sincronizarPrazoCondicao(String(prazoMeses || ''), v || 'convencional');
+    plano.setCondicao(v || 'convencional');
   };
 
   useEffect(() => {
