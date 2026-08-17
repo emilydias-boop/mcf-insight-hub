@@ -236,7 +236,7 @@ export interface LeadReportData {
   meetings: LeadReportMeeting[];
   proposals: LeadReportProposal[];
   registrations: LeadReportRegistration[];
-  /** Documentos ligados a cadastros pendentes sem card. */
+  /** Documentos sem vínculo conhecido (nem cota, nem cadastro deste lead). */
   documentosSoltos: LeadReportDoc[];
   termos: LeadReportTermo[];
   cards: LeadReportCard[];
@@ -850,6 +850,7 @@ export function useLeadReport(dealId: string | undefined, enabled = true) {
         okRegs &&
         registrationsOut.length > 0 &&
         documentosSoltos.length === 0 &&
+        registrationsOut.every((r) => r.documentos.length === 0) &&
         cards.every((c) => c.documentos.length === 0)
       )
         gaps.push('Nenhum documento anexado ao cadastro.');
