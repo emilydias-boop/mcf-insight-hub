@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
+import { parseChecklistPF } from '@/lib/checklistParser';
+import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -136,8 +137,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
-  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
-  const [checklistTextPJ, setChecklistTextPJ] = useState('');
 
   const form = useForm({
     defaultValues: {
@@ -497,18 +496,15 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             <fieldset disabled={readOnly} className="contents">
             <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
             <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
+            <CloserR1NoteBlock dealId={registration.deal_id} />
             {/* Editable client data */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">Dados do Cliente</CardTitle>
-                  {registration.tipo_pessoa === 'pf' ? (
+                  {registration.tipo_pessoa === 'pf' && (
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklist(!showChecklist)}>
                       {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
-                    </Button>
-                  ) : (
-                    <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklistPJ(!showChecklistPJ)}>
-                      {showChecklistPJ ? 'Fechar' : '📋 Colar Check-list PJ'}
                     </Button>
                   )}
                 </div>
@@ -587,23 +583,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                   </div>
                 ) : (
                   <>
-                    {showChecklistPJ && (
-                      <div className="space-y-2 p-3 border rounded-md bg-muted/30 mb-4">
-                        <Label className="text-xs text-muted-foreground">Cole o texto do check-list PJ abaixo:</Label>
-                        <Textarea
-                          value={checklistTextPJ}
-                          onChange={e => setChecklistTextPJ(e.target.value)}
-                          rows={6}
-                          placeholder={"Razão Social: ...\nCNPJ: ...\nNatureza Jurídica: ...\nInscrição Estadual: ...\nData de Fundação: dd/mm/aaaa\nCPF dos sócios: 000.000.000-00, ...\nEndereço Comercial: ...\nCEP: ...\nTelefone Comercial: ...\nE-mail comercial: ...\nFaturamento médio: R$ ...\nNúmero de funcionários: ...\nRenda dos sócios: R$ ..."}
-                        />
-                        <Button type="button" size="sm" onClick={() => {
-                          setShowChecklistPJ(false);
-                          setChecklistTextPJ('');
-                        }}>
-                          Preencher Campos
-                        </Button>
-                      </div>
-                    )}
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div><span className="text-muted-foreground">Razão Social:</span> <strong>{registration.razao_social}</strong></div>
                       <div><span className="text-muted-foreground">CNPJ:</span> {registration.cnpj}</div>
