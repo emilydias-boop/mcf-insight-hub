@@ -20,6 +20,8 @@ export interface ChecklistPJData {
   inscricao_estadual: string;
   data_fundacao: string;
   socios_cpfs: string[];
+  /** Nomes dos sócios, pareados por posição com socios_cpfs (vazio quando o texto não traz nome). */
+  socios_nomes: string[];
   endereco_comercial: string;
   endereco_comercial_cep: string;
   telefone_comercial: string;
@@ -127,7 +129,31 @@ export function parseChecklistPJ(text: string): Partial<ChecklistPJData> {
 
   const sociosCpf = extractFromLines(lines, /cpf\s*dos\s*s[oó]cios:\s*(.+)/i);
   if (sociosCpf) {
-    result.socios_cpfs = sociosCpf.split(',').map(s => s.trim()).filter(Boolean);
+    const partes = sociosCpf.split(/[,;\/]/).map(s => s.trim()).filter(Boolean);
+    const cpfs: string[] = [];
+    const nomes: string[] = [];
+    partes.forEach(parte => {
+      // Formatos aceitos: "000.000.000-00", "Nome - 000.000.000-00", "Nome: X" + "CPF: Y"
+      const comNomeECpf = parte.match(/^(.*?)\s*[-–—:]\s*([\d.\-\s]{11,})$/);
+      const soNome = parte.match(/^nome:\s*(.+)$/i);
+      const soCpf = parte.match(/^cpf:\s*(.+)$/i);
+      if (comNomeECpf) {
+        nomes.push(comNomeECpf[1].replace(/^nome:\s*/i, '').trim());
+        cpfs.push(comNomeECpf[2].trim());
+      } else if (soNome) {
+        nomes.push(soNome[1].trim());
+      } else if (soCpf) {
+        cpfs.push(soCpf[1].trim());
+        if (nomes.length < cpfs.length - 1) nomes.push('');
+      } else if (/\d/.test(parte)) {
+        cpfs.push(parte);
+      } else {
+        nomes.push(parte);
+      }
+    });
+    result.socios_cpfs = cpfs;
+    // Pareia por posição; sem nome no texto, deixa vazio para digitação manual.
+    result.socios_nomes = cpfs.map((_, i) => nomes[i] || '');
   }
 
   const endereco = extractFromLines(lines, /endere[cç]o\s*comercial:\s*(.+)/i);
