@@ -15489,6 +15489,15 @@ export type Database = {
           telefone: string
         }[]
       }
+      outside_fora_do_funil: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          contrato_em: string
+          customer_email: string
+          customer_name: string
+          motivo: string
+        }[]
+      }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       recalc_automation_queue_for_deal: {
         Args: {
