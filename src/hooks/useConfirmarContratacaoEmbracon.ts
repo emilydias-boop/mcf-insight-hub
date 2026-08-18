@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConvertReservaToContratacao } from './useConsorcio';
 
@@ -84,7 +85,12 @@ export function useConfirmarContratacaoEmbracon() {
       }
 
       // 3. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
-      await convert.mutateAsync({ cardId, dataContratacao });
+      try {
+        await convert.mutateAsync({ cardId, dataContratacao });
+      } catch (e: any) {
+        // A própria mutation de conversão já mostrou o toast — não avisar de novo.
+        throw Object.assign(e instanceof Error ? e : new Error(String(e)), { silent: true });
+      }
 
       // 4. Motivo da exceção em observacoes (append, com carimbo) — SÓ depois da
       // conversão dar certo, senão uma falha deixaria linhas duplicadas a cada
@@ -117,7 +123,7 @@ export function useConfirmarContratacaoEmbracon() {
     // Sucesso é anunciado pelo `useConvertReservaToContratacao` (evita aviso duplo).
     // Aqui só avisamos falhas que ocorrem ANTES da conversão (upload/documento).
     onError: (e: any) => {
-      if (!e?.__convertToastShown) toast.error(e?.message || 'Erro ao confirmar contratação');
+      if (!e?.silent) toast.error(e?.message || 'Erro ao confirmar contratação');
     },
   });
 }
