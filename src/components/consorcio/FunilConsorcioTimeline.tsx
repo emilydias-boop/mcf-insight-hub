@@ -10,6 +10,8 @@ import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
 import {
   useConsorcioCotasOrigem,
   useConsorcioCotasReservadas,
+  useConsorcioReservasAguardando,
+  diasParados,
   medianDias,
 } from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
@@ -65,6 +67,11 @@ interface Step {
   rateCount?: number | null;
   /** Índice da etapa usada como denominador da taxa (default: etapa anterior). */
   rateBaseIndex?: number;
+  /**
+   * Registros desta etapa que vieram de coorte anterior (evento em mês diferente
+   * da etapa base). Explica taxa > 100% sem precisar de alarme.
+   */
+  rateCohort?: number;
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
   /** Selos clicáveis abaixo do número (estoque atual / recorte). */
@@ -103,6 +110,9 @@ export function FunilConsorcioTimeline({
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: reservadas, isLoading: loadingReservadas } = useConsorcioCotasReservadas(range);
+  // Estoque GLOBAL de reservas em aberto (ignora o período de propósito) — sinal
+  // que antes só existia dentro da aba 5.
+  const { data: reservasAbertas } = useConsorcioReservasAguardando();
 
   // Etapa 3 — TODAS as propostas criadas no período (evento, não status).
   // Eixo de data: proposal_date ?? created_at (convenção do BIConsorcio).
@@ -145,6 +155,28 @@ export function FunilConsorcioTimeline({
   // gravadas no mesmo instante, a etapa 5 vira espelho da etapa 6.
   const cadastradasCount = loadingReservadas ? null : (reservadas?.length ?? 0);
   const medianaReserva = medianDias(reservadas || []);
+
+  const reservasEmAberto = reservasAbertas?.length ?? 0;
+  const reservasParadas15 = (reservasAbertas || []).filter((c) => {
+    const d = diasParados(c.data_reserva);
+    return d != null && d > 15;
+  }).length;
+
+  /**
+   * Cadastros do período cujo aceite caiu em mês diferente da proposta vinculada:
+   * travessia de coorte. É a explicação normal para a etapa 4 ficar maior que a 3.
+   */
+  const cadastrosDeCoorteAnterior = useMemo(() => {
+    if (!cadastrosPeriodo || !proposals) return 0;
+    const porId = new Map((proposals as any[]).map((p) => [p.id, p]));
+    const ym = (v?: string | null) => (v ? String(v).slice(0, 7) : null);
+    return cadastrosPeriodo.filter((r: any) => {
+      const p = r.proposal_id ? porId.get(r.proposal_id) : null;
+      const mesProposta = ym(p?.proposal_date || p?.created_at);
+      const mesCadastro = ym(r.aceite_date || r.created_at);
+      return !!mesProposta && !!mesCadastro && mesProposta !== mesCadastro;
+    }).length;
+  }, [cadastrosPeriodo, proposals]);
 
   const pct = (n: number, total: number) =>
     total > 0
