@@ -637,9 +637,16 @@ function RegistrationRow({
         {reg.total_destinado > 1 ? `${reg.parte_atual}/${reg.total_destinado}` : '1/1'}
       </TableCell>
       <TableCell className="text-sm whitespace-nowrap">
-        {reg.aceite_date
-          ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
-          : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+        <div className="flex flex-col items-start">
+          <span>
+            {reg.aceite_date
+              ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+              : reg.created_at
+                ? format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })
+                : '—'}
+          </span>
+          {reg.status === 'aguardando_abertura' && <IdadeFilaBadge dias={idadeFilaDias(reg)} />}
+        </div>
       </TableCell>
       {variant === 'pendentes' && (
         <TableCell className="text-sm">
