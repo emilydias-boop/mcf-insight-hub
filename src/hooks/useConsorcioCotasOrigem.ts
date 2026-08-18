@@ -71,6 +71,8 @@ export interface CotaReservada {
   vendedor_name: string | null;
   tipo_registro: 'reserva' | 'contratacao' | null;
   contrato_embracon: string | null;
+  /** A cota nasceu dentro do funil (cadastro pendente vinculado)? */
+  origemFunil: boolean;
 }
 
 const CARD_RESERVA_SELECT =
@@ -84,7 +86,7 @@ function diasEntre(de?: string | null, ate?: string | null): number | null {
   );
 }
 
-function mapCard(c: any): CotaReservada {
+function mapCard(c: any, origemFunil = true): CotaReservada {
   return {
     id: c.id,
     nome: (c.tipo_pessoa === 'pj' ? c.razao_social : c.nome_completo) || '—',
@@ -97,6 +99,7 @@ function mapCard(c: any): CotaReservada {
     vendedor_name: c.vendedor_name || null,
     tipo_registro: c.tipo_registro ?? null,
     contrato_embracon: c.contrato_embracon ?? null,
+    origemFunil,
   };
 }
 
@@ -140,21 +143,23 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
       const { data, error } = await q.order('data_reserva', { ascending: false });
       if (error) throw error;
 
-      return (data || []).filter((c: any) => funnelIds.has(c.id)).map(mapCard);
+      return (data || []).filter((c: any) => funnelIds.has(c.id)).map((c: any) => mapCard(c, true));
     },
   });
 }
 
 /**
- * Fila de trabalho da etapa 5: cotas abertas como RESERVA e ainda sem confirmação
- * da Embracon (`data_contratacao` nula).
+ * Fila de trabalho da etapa 5: TODAS as cotas abertas como RESERVA e ainda sem
+ * confirmação da Embracon (`data_contratacao` nula) — inclusive as criadas por
+ * fora do funil ("+ Adicionar Cota"), marcadas com `origemFunil = false`.
+ *
+ * As externas entram só para não ficarem órfãs (sem tela para confirmar); elas
+ * NÃO contam no número da etapa 5, que segue restrita à origem no funil.
  *
  * IGNORA o filtro de período de propósito — uma reserva parada há 40 dias precisa
  * aparecer mesmo com o filtro no mês corrente.
  */
 export function useConsorcioReservasAguardando() {
-  // Mesma restrição da etapa 5: só cotas com ORIGEM NO FUNIL. Sem isso a fila
-  // mostraria cotas externas e o número não bateria com a bolinha da timeline.
   const { data: funnelLinks } = useConsorcioCotasOrigem();
 
   return useQuery({
@@ -163,7 +168,6 @@ export function useConsorcioReservasAguardando() {
     staleTime: 60 * 1000,
     queryFn: async (): Promise<CotaReservada[]> => {
       const funnelIds = funnelLinks ?? new Map<string, string>();
-      if (funnelIds.size === 0) return [];
 
       // Paginação explícita: sem .range() o PostgREST corta no teto de linhas
       // em silêncio e o contador da fila ficaria errado sem ninguém notar.
@@ -183,7 +187,7 @@ export function useConsorcioReservasAguardando() {
         all.push(...data);
         if (data.length < PAGE) break;
       }
-      return all.filter((c: any) => funnelIds.has(c.id)).map(mapCard);
+      return all.map((c: any) => mapCard(c, funnelIds.has(c.id)));
     },
   });
 }

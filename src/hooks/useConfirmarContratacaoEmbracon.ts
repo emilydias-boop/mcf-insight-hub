@@ -14,8 +14,14 @@ import { useConvertReservaToContratacao } from './useConsorcio';
  *
  * Saída de exceção: sem comprovante, exigindo motivo escrito, que é registrado
  * com carimbo de data e usuário em `observacoes` (em linha própria, preservando
- * o que já estava lá).
+ * o que já estava lá). O motivo é gravado ANTES da conversão: se a conversão
+ * falhar, sobra motivo sem contratação (recuperável na retentativa, que não
+ * duplica a linha) em vez de contratação sem justificativa — este segundo caso
+ * seria irrecuperável, porque a reconversão é bloqueada ("já está contratada").
  */
+/** Marca fixa usada para detectar (e não duplicar) a linha de motivo. */
+const MARCA_SEM_COMPROVANTE = 'Contratação confirmada SEM comprovante da Embracon';
+
 export function useConfirmarContratacaoEmbracon() {
   const queryClient = useQueryClient();
   const convert = useConvertReservaToContratacao();
@@ -84,17 +90,9 @@ export function useConfirmarContratacaoEmbracon() {
         if (error) throw error;
       }
 
-      // 3. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
-      try {
-        await convert.mutateAsync({ cardId, dataContratacao });
-      } catch (e: any) {
-        // A própria mutation de conversão já mostrou o toast — não avisar de novo.
-        throw Object.assign(e instanceof Error ? e : new Error(String(e)), { silent: true });
-      }
-
-      // 4. Motivo da exceção em observacoes (append, com carimbo) — SÓ depois da
-      // conversão dar certo, senão uma falha deixaria linhas duplicadas a cada
-      // nova tentativa.
+      // 3. Motivo da exceção em observacoes (append, com carimbo) — ANTES da
+      // conversão, e idempotente: se a marca já estiver lá (retentativa), não
+      // grava de novo.
       if (!file && motivoSemComprovante?.trim()) {
         const { data: card, error: readErr } = await supabase
           .from('consortium_cards')
@@ -102,16 +100,26 @@ export function useConfirmarContratacaoEmbracon() {
           .eq('id', cardId)
           .single();
         if (readErr) throw readErr;
-        const quem =
-          (user?.user_metadata as any)?.full_name || user?.email || 'usuário não identificado';
-        const quando = new Date().toLocaleString('pt-BR');
-        const linha = `[${quando}] Contratação confirmada SEM comprovante da Embracon por ${quem}. Motivo: ${motivoSemComprovante.trim()}`;
         const atual = (card as any)?.observacoes?.trim();
-        const { error: obsErr } = await supabase
-          .from('consortium_cards')
-          .update({ observacoes: atual ? `${atual}\n${linha}` : linha } as any)
-          .eq('id', cardId);
-        if (obsErr) throw obsErr;
+        if (!atual?.includes(MARCA_SEM_COMPROVANTE)) {
+          const quem =
+            (user?.user_metadata as any)?.full_name || user?.email || 'usuário não identificado';
+          const quando = new Date().toLocaleString('pt-BR');
+          const linha = `[${quando}] ${MARCA_SEM_COMPROVANTE} por ${quem}. Motivo: ${motivoSemComprovante.trim()}`;
+          const { error: obsErr } = await supabase
+            .from('consortium_cards')
+            .update({ observacoes: atual ? `${atual}\n${linha}` : linha } as any)
+            .eq('id', cardId);
+          if (obsErr) throw obsErr;
+        }
+      }
+
+      // 4. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
+      try {
+        await convert.mutateAsync({ cardId, dataContratacao });
+      } catch (e: any) {
+        // A própria mutation de conversão já mostrou o toast — não avisar de novo.
+        throw Object.assign(e instanceof Error ? e : new Error(String(e)), { silent: true });
       }
     },
     onSuccess: (_, variables) => {

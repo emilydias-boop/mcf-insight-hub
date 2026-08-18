@@ -147,3 +147,28 @@ cliente**; este é o retorno que a **Embracon nos manda**.
    ('2026-08-18'): apenas cotas com `data_contratacao` a partir dessa data são
    elegíveis ao selo (helper `elegivelSeloComprovante`), e só essas entram na consulta
    de comprovantes. O histórico anterior deixa de nascer 100% marcado.
+
+## Rodada 3 — auditoria do motivo, reservas órfãs e verificação de schema
+
+1. **Motivo antes da conversão (buraco de auditoria fechado).** Em `useConfirmarContratacaoEmbracon`,
+   o append do motivo em `observacoes` voltou para ANTES da conversão reserva → contratação, com
+   checagem de duplicidade pela marca fixa `Contratação confirmada SEM comprovante da Embracon`
+   (retentativa não duplica linha). Racional: falha na conversão deixa motivo sem contratação
+   (recuperável na retentativa); a ordem anterior deixava contratação sem justificativa, estado
+   irrecuperável porque `useConvertReservaToContratacao` bloqueia a reconversão.
+
+2. **Reservas órfãs (criadas por “+ Adicionar Cota”).** A fila da etapa 5 passou a listar TODAS as
+   reservas em aberto. As sem cadastro pendente vinculado vêm com selo **externa**
+   (`CotaReservada.origemFunil = false`) e **não contam no número da etapa 5**, que segue restrito à
+   origem no funil. O subtítulo da seção informa os dois conjuntos (N do funil + N externas).
+   Rótulos unificados para distinguir os conjuntos: “Fila de confirmação — todas as reservas em
+   aberto (ignora período)” × “Etapa 5 no período — reservas do funil já confirmadas”.
+
+3. **Verificação no banco (feita, não mais pressuposto).**
+   - `consortium_cards.data_reserva`: nullable, **sem DEFAULT**; nenhum trigger a preenche
+     (existem só `tg_log_card_activity`, `trg_enqueue_outbound_consorcio_webhook` e
+     `update_consortium_cards_updated_at`).
+   - `consortium_cards.tipo_registro`: NOT NULL com DEFAULT `'contratacao'`.
+   - `consortium_cards_datas_consistencia_check`:
+     `((tipo_registro='reserva' AND data_reserva IS NOT NULL) OR (tipo_registro='contratacao' AND data_contratacao IS NOT NULL))`
+     — **aceita** `tipo_registro='reserva'` com `data_contratacao` nula. **Nenhuma migration necessária.**

@@ -48,6 +48,8 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
   const [alvo, setAlvo] = useState<CotaReservada | null>(null);
 
   const confirmadas = useMemo(() => doPeriodo.filter((c) => !!c.data_contratacao), [doPeriodo]);
+  const filaFunil = useMemo(() => fila.filter((c) => c.origemFunil), [fila]);
+  const filaExternas = useMemo(() => fila.filter((c) => !c.origemFunil), [fila]);
   // Só consultamos comprovante das cotas confirmadas pelo fluxo novo.
   const { data: comComprovante } = useCotasComConfirmacaoEmbracon(
     confirmadas.filter(elegivelSeloComprovante).map((c) => c.id),
@@ -61,10 +63,18 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
       {/* Fila de trabalho — fora do filtro de período */}
       <Card>
         <CardHeader className="space-y-1">
-          <CardTitle className="text-base">Aguardando confirmação da Embracon ({fila.length})</CardTitle>
+          <CardTitle className="text-base">
+            Fila de confirmação — todas as reservas em aberto ({fila.length})
+          </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Cotas abertas como reserva e ainda sem retorno da administradora. Esta seção ignora o filtro de
-            período — uma reserva parada há semanas aparece aqui mesmo olhando o mês corrente.
+            Cotas abertas como reserva e ainda sem retorno da administradora. Esta seção <strong>ignora o
+            filtro de período</strong> — uma reserva parada há semanas aparece aqui mesmo olhando o mês
+            corrente.
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {filaFunil.length} com origem no funil (contam na etapa 5) e {filaExternas.length} externa
+            {filaExternas.length === 1 ? '' : 's'}, criadas por “+ Adicionar Cota” — estas aparecem aqui só
+            para poderem ser confirmadas e <strong>não entram no número da etapa 5</strong>.
           </p>
         </CardHeader>
         <CardContent>
@@ -91,7 +101,16 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                 <TableBody>
                   {fila.map((c) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.nome}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <span>{c.nome}</span>
+                          {!c.origemFunil && (
+                            <Badge variant="outline" className="whitespace-nowrap">
+                              externa
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         {c.grupo} / {c.cota}
                       </TableCell>
@@ -119,15 +138,18 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-2">
           <div className="space-y-1">
-            <CardTitle className="text-base">Confirmadas no período ({confirmadas.length})</CardTitle>
+            <CardTitle className="text-base">
+              Etapa 5 no período — reservas do funil já confirmadas ({confirmadas.length})
+            </CardTitle>
             <p className="text-xs text-muted-foreground">
               Reservas do período que a Embracon já confirmou. Respeita o filtro de período (data de reserva).
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Etapa 5 (Cadastradas) no período: {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} —{' '}
-              {confirmadas.length} confirmada{confirmadas.length === 1 ? '' : 's'} e{' '}
-              {doPeriodo.length - confirmadas.length} ainda aguardando confirmação. É este total que a bolinha da
-              etapa 5 exibe; a fila acima ignora o período e pode trazer reservas mais antigas.
+              Etapa 5 (Cadastradas) no período = {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} com
+              origem no funil reservadas no período: {confirmadas.length} confirmada
+              {confirmadas.length === 1 ? '' : 's'} + {doPeriodo.length - confirmadas.length} em aberto. É este
+              total que a bolinha da etapa 5 exibe. Já a <strong>fila acima</strong> é outro conjunto: todas as
+              reservas em aberto de qualquer data, incluindo as externas.
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
