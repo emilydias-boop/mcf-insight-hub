@@ -165,13 +165,15 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
   return useQuery({
     queryKey: ['consorcio-pending-registrations', statuses.slice().sort().join(',')],
     queryFn: async (): Promise<EnrichedPendingRegistration[]> => {
-      const { data, error } = await supabase
-        .from('consorcio_pending_registrations')
-        .select(PENDING_REGISTRATION_LIST_SELECT)
-        .in('status', statuses)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('consorcio_pending_registrations')
+          .select(PENDING_REGISTRATION_LIST_SELECT)
+          .in('status', statuses)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
       const rows = (data || []) as any[];
 
       // Documentos anexados por cadastro pendente (selo de pendência).
@@ -249,18 +251,25 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       const cnpjs = Array.from(new Set(rows.map((r) => r.cnpj).filter(Boolean))) as string[];
       const cotasCountByDoc = new Map<string, number>();
       if (cpfs.length || cnpjs.length) {
-        const { data: cards } = await supabase
-          .from('consortium_cards')
-          .select('cpf, cnpj')
-          .or(
-            [
-              cpfs.length ? `cpf.in.(${cpfs.map((c) => `"${c}"`).join(',')})` : '',
-              cnpjs.length ? `cnpj.in.(${cnpjs.map((c) => `"${c}"`).join(',')})` : '',
-            ]
-              .filter(Boolean)
-              .join(','),
-          );
-        (cards || []).forEach((c: any) => {
+        // Quebrado em lotes + paginado: `.or(... in ...)` estoura tanto o tamanho
+        // da URL quanto o teto de 1000 linhas por resposta.
+        const cardsCpf = await fetchAllByIds<any>(cpfs, (lote, from, to) =>
+          supabase
+            .from('consortium_cards')
+            .select('cpf, cnpj')
+            .in('cpf', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
+        const cardsCnpj = await fetchAllByIds<any>(cnpjs, (lote, from, to) =>
+          supabase
+            .from('consortium_cards')
+            .select('cpf, cnpj')
+            .in('cnpj', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
+        [...cardsCpf, ...cardsCnpj].forEach((c: any) => {
           const k = c.cpf || c.cnpj;
           if (k) cotasCountByDoc.set(k, (cotasCountByDoc.get(k) || 0) + 1);
         });

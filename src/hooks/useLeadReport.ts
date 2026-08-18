@@ -927,19 +927,18 @@ export function useConsorcioCardDealLinks(cardIds?: string[]) {
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Map<string, string>> => {
       const map = new Map<string, string>();
-      const CHUNK = 200;
-      for (let i = 0; i < ids.length; i += CHUNK) {
-        const slice = ids.slice(i, i + CHUNK);
-        const { data, error } = await supabase
+      const rows = await fetchAllByIds<any>(ids, (lote, from, to) =>
+        supabase
           .from('consorcio_pending_registrations')
           .select('consortium_card_id, deal_id')
-          .in('consortium_card_id', slice)
-          .not('deal_id', 'is', null);
-        if (error) throw error;
-        for (const r of ((data || []) as any[])) {
-          if (r.consortium_card_id && r.deal_id && !map.has(r.consortium_card_id)) {
-            map.set(r.consortium_card_id, r.deal_id);
-          }
+          .in('consortium_card_id', lote)
+          .not('deal_id', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
+      for (const r of rows) {
+        if (r.consortium_card_id && r.deal_id && !map.has(r.consortium_card_id)) {
+          map.set(r.consortium_card_id, r.deal_id);
         }
       }
       return map;
