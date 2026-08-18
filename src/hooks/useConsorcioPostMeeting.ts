@@ -412,10 +412,14 @@ export function useProposals() {
         .filter(Boolean) as string[];
       const cardsWithDocs = new Set<string>();
       if (cardIds.length > 0) {
-        const { data: docs } = await supabase
-          .from('consortium_documents')
-          .select('card_id')
-          .in('card_id', cardIds);
+        const docs = await fetchAllByIds<any>(cardIds, (lote, from, to) =>
+          supabase
+            .from('consortium_documents')
+            .select('card_id')
+            .in('card_id', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (docs || []).forEach(d => {
           if (d.card_id) cardsWithDocs.add(d.card_id);
         });
@@ -431,9 +435,10 @@ export function useProposals() {
       // Critério único compartilhado com a aba de Cadastros (usePendingRegistrations).
       let regsWithDocs = new Set<string>();
       if (dealIds.length > 0) {
-        const { data: pendingRegs } = await supabase
-          .from('consorcio_pending_registrations')
-          .select(`
+        const pendingRegs = await fetchAllByIds<any>(dealIds, (lote, from, to) =>
+          supabase
+            .from('consorcio_pending_registrations')
+            .select(`
             id,
             deal_id,
             consortium_card_id,
@@ -452,7 +457,10 @@ export function useProposals() {
             renda,
             faturamento_mensal
           `)
-          .in('deal_id', dealIds);
+            .in('deal_id', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (pendingRegs || []).forEach(pr => {
           if (pr.deal_id) {
             if (!pendingRegistrationsByDeal[pr.deal_id]) pendingRegistrationsByDeal[pr.deal_id] = [];
