@@ -9,6 +9,7 @@ import {
   useConsorcioCotasReservadas,
   useConsorcioReservasAguardando,
   useCotasComConfirmacaoEmbracon,
+  elegivelSeloComprovante,
   diasParados,
   medianDias,
   medianDiasBase,
@@ -157,7 +158,7 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span>{c.nome}</span>
-                          {comComprovante && !comComprovante.has(c.id) && (
+                          {elegivelSeloComprovante(c) && comComprovante && !comComprovante.has(c.id) && (
                             <Badge
                               variant="outline"
                               className="border-amber-500/40 text-amber-600 dark:text-amber-500"
