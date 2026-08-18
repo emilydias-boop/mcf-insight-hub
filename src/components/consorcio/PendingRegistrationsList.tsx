@@ -316,6 +316,31 @@ export function PendingRegistrationsList({
           <FolderOpen className="h-5 w-5" />
           {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
+          {variant === 'pendentes' && maisAntigoFila != null && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={`cursor-help text-[10px] tabular-nums ${
+                    maisAntigoFila > 15
+                      ? 'border-destructive/60 bg-destructive/10 text-destructive'
+                      : maisAntigoFila >= 8
+                        ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  mais antigo: {maisAntigoFila} dia{maisAntigoFila === 1 ? '' : 's'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px]">
+                <p className="text-xs">
+                  Cadastro aguardando abertura de cota há mais tempo no período, contado da data em
+                  "Solicitado em". Semáforo igual ao de "Dias parados" da etapa 5: âmbar a partir de 8
+                  dias, vermelho acima de 15.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
