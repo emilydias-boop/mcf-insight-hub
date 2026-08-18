@@ -308,6 +308,22 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const handleCondicaoChange = (v: string) => {
     plano.setCondicao(v || 'convencional');
   };
+  /**
+   * Troca o modo de abertura a partir do seletor no topo. Além de atualizar os
+   * dois espelhos (estado + ref lidos no submit), reavalia a validação dos
+   * campos grupo/cota: em Reserva eles deixam de ser obrigatórios, então um
+   * erro já marcado precisa sumir imediatamente (senão a tela mente).
+   */
+  const handleModoChange = (v: 'reserva' | 'contratacao') => {
+    setModo(v);
+    modoAbertura.current = v;
+    if (v === 'reserva') {
+      form.clearErrors(['grupo', 'cota']);
+    } else {
+      // Em "já contratada" revalida para exibir erro se ainda estiver vazio.
+      form.trigger(['grupo', 'cota']);
+    }
+  };
 
   useEffect(() => {
     if (!open || !focusPlano) return;
