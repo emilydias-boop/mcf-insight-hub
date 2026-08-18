@@ -230,9 +230,11 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
+  // Os KPIs respeitam os MESMOS filtros da tabela, incluindo o recorte rápido
+  // Do funil / Externas (antes eles só recebiam as datas e divergiam do grid).
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({
-    startDate: resolvedDateRange.startDate,
-    endDate: resolvedDateRange.endDate,
+    ...filters,
+    funil: onlyDoFunil ? 'funil' : onlyExternas ? 'externas' : undefined,
   });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
@@ -560,16 +562,24 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
 
       {/* KPIs */}
       <div className="space-y-4">
-        {/* Bloco 1 — Globais (valor das cotas + comissões geradas) */}
+        {/*
+          4 cards, 4 significados. Cada um diz seu eixo de data no subtítulo
+          porque as janelas são diferentes (created_at, data_pagamento,
+          data_contratacao) — somar "Cartas Novas + Cartas Subidas" é dupla
+          contagem, a mesma carta pode aparecer nas duas.
+        */}
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Globais</p>
+          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+            Comissão das cartas do período
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />
-                  Cartas Novas
+                  Cadastros sem cota aberta
                 </CardTitle>
+                <p className="text-[11px] text-muted-foreground">Crédito · por data do cadastro</p>
               </CardHeader>
               <CardContent>
                 {summaryLoading ? (
@@ -583,9 +593,31 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Cartas Subidas
+                  <TrendingUp className="h-4 w-4" />
+                  Comissão a gerar (cadastros)
                 </CardTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  Estimativa dos cadastros sem cota · por data do cadastro
+                </p>
+              </CardHeader>
+              <CardContent>
+                {summaryLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-blue-500">{formatCurrency(summary?.comissaoPrevistaNovas || 0)}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Crédito com 1ª parcela baixada
+                </CardTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  Baixa manual da parcela 1 · por data de pagamento
+                </p>
               </CardHeader>
               <CardContent>
                 {summaryLoading ? (
@@ -600,119 +632,27 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
-                  Comissão Prevista (Cartas Novas)
+                  Comissão recebida
                 </CardTitle>
+                <p className="text-[11px] text-muted-foreground">
+                  Parcelas pagas das cartas · por data de contratação
+                </p>
               </CardHeader>
               <CardContent>
                 {summaryLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
-                  <p className="text-2xl font-bold text-blue-500">{formatCurrency(summary?.comissaoPrevistaNovas || 0)}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Comissão Realizada (Cartas Subidas)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(summary?.comissaoRealizadaSubidas || 0)}</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Bloco 2 — Líquidos do mês */}
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Líquidos do Mês</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Comissão Total
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <p className="text-2xl font-bold">{formatCurrency(summary?.comissaoTotal || 0)}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Comissão Recebida
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(summary?.comissaoRecebida || 0)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Comissão Prevista
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(summary?.comissaoPendente || 0)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Cartas Feitas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-12" />
-                ) : (
-                  <p className="text-2xl font-bold">{summary?.totalCartas || 0}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Select / Parcelinha
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {summaryLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <p className="text-2xl font-bold">
-                    {summary?.cartasSelect || 0} / {summary?.cartasParcelinha || 0}
-                  </p>
+                  <>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(summary?.comissaoRecebida || 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      de {formatCurrency(summary?.comissaoTotal || 0)} · falta receber{' '}
+                      <span className="text-orange-600 font-medium">
+                        {formatCurrency(summary?.comissaoPendente || 0)}
+                      </span>
+                    </p>
+                  </>
                 )}
               </CardContent>
             </Card>
