@@ -391,12 +391,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     };
     const cleanCotaData = Object.fromEntries(
       Object.entries(rawCotaData).map(([k, v]) => [k, v === '' ? null : v])
-    );
+    ) as Parameters<typeof openCota.mutateAsync>[0]['cotaData'];
 
     await openCota.mutateAsync({
       registrationId,
       registration: { ...registration, ...clienteData },
-      cotaData: cleanCotaData as any,
+      cotaData: cleanCotaData,
       clienteData,
     });
 
