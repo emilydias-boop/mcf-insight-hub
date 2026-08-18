@@ -542,7 +542,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
           )}
           <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
             <Database className="h-4 w-4 mr-2" />
-            Cadastros
+            Configurações
           </Button>
           <Button
             variant="outline"
