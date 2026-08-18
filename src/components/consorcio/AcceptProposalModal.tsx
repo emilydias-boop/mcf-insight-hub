@@ -372,6 +372,7 @@ export function AcceptProposalModal({
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <CloserR1NoteBlock dealId={dealId} />
                 {tipoPessoa === 'pf' ? (
                   <>
                     <div className="flex items-center justify-between">
