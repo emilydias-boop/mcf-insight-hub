@@ -329,7 +329,6 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
         origem_label: formatOrigemLabel(
           originName,
           r.aceite_date || r.created_at?.slice(0, 10),
-          r.vendedor_name,
         ),
           closer_name: closerName,
           sdr_name: sdrName,
@@ -977,8 +976,9 @@ export function useOpenCota() {
         e_transferencia: cotaData.e_transferencia,
         transferido_de: cotaData.transferido_de,
         observacoes: cotaData.observacoes,
-        // Objetivo capturado no aceite precisa chegar ao card (antes era descartado).
-        objetivo: (registration as any).objetivo || undefined,
+        // Objetivo: vale o que está na tela de Abertura de Cota no submit; sem isso,
+        // cai no que foi capturado no aceite.
+        objetivo: (cotaData as any).objetivo || (registration as any).objetivo || undefined,
         produto_embracon: cotaData.produto_codigo,
         condicao_pagamento: cotaData.condicao_pagamento,
         inclui_seguro_vida: cotaData.inclui_seguro,

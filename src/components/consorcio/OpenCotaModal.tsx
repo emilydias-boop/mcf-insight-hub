@@ -370,6 +370,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
       parcela_1a_12a: calculoParcela?.parcela1a12,
       parcela_demais: calculoParcela?.parcelaDemais,
+      // O objetivo que vale é o que está na tela no momento do submit.
+      objetivo: plano.valores.objetivo ?? null,
       parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
     };
     const cleanCotaData = Object.fromEntries(
@@ -445,8 +447,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         email: data.cliente_email || null,
         endereco_completo: data.cliente_endereco || null,
         endereco_cep: data.cliente_cep || null,
-        renda: data.cliente_renda || null,
-        patrimonio: data.cliente_patrimonio || null,
+        renda: numOuNull(data.cliente_renda),
+        patrimonio: numOuNull(data.cliente_patrimonio),
         pix: data.cliente_pix || null,
         // cota
         valor_credito: numOuNull(data.valor_credito),

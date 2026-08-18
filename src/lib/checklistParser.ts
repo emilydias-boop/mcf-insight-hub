@@ -133,18 +133,21 @@ export function parseChecklistPJ(text: string): Partial<ChecklistPJData> {
     const cpfs: string[] = [];
     const nomes: string[] = [];
     partes.forEach(parte => {
-      // Formatos aceitos: "000.000.000-00", "Nome - 000.000.000-00", "Nome: X" + "CPF: Y"
-      const comNomeECpf = parte.match(/^(.*?)\s*[-–—:]\s*([\d.\-\s]{11,})$/);
+      // Formatos aceitos: "000.000.000-00", "Nome - 000.000.000-00", "Nome: X" + "CPF: Y".
+      // Os ramos rotulados ("Nome:" / "CPF:") são testados ANTES do pareado e o
+      // separador do pareado NÃO inclui ':' — senão "CPF: 111..." casaria como
+      // nome="CPF".
       const soNome = parte.match(/^nome:\s*(.+)$/i);
       const soCpf = parte.match(/^cpf:\s*(.+)$/i);
-      if (comNomeECpf) {
-        nomes.push(comNomeECpf[1].replace(/^nome:\s*/i, '').trim());
-        cpfs.push(comNomeECpf[2].trim());
-      } else if (soNome) {
+      const comNomeECpf = parte.match(/^(.*?)\s*[-–—]\s*([\d.\-\s]{11,})$/);
+      if (soNome) {
         nomes.push(soNome[1].trim());
       } else if (soCpf) {
         cpfs.push(soCpf[1].trim());
         if (nomes.length < cpfs.length - 1) nomes.push('');
+      } else if (comNomeECpf) {
+        nomes.push(comNomeECpf[1].trim());
+        cpfs.push(comNomeECpf[2].trim());
       } else if (/\d/.test(parte)) {
         cpfs.push(parte);
       } else {

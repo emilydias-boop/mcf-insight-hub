@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { Loader2, Plus, Trash2, Upload, FileText, X } from 'lucide-react';
 import {
   Dialog,
@@ -73,45 +71,9 @@ function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
-const pfSchema = z.object({
-  tipo_pessoa: z.literal('pf'),
-  nome_completo: z.string().min(1, 'Nome é obrigatório'),
-  rg: z.string().min(1, 'RG é obrigatório'),
-  cpf: z.string().min(1, 'CPF é obrigatório').refine(validateCpf, 'CPF inválido'),
-  cpf_conjuge: z.string().optional(),
-  profissao: z.string().min(1, 'Profissão é obrigatória'),
-  telefone: z.string().min(1, 'Telefone é obrigatório'),
-  email: z.string().email('Email inválido'),
-  endereco_completo: z.string().min(1, 'Endereço é obrigatório'),
-  endereco_cep: z.string().min(8, 'CEP é obrigatório'),
-  renda: z.number().positive('Renda é obrigatória'),
-  patrimonio: z.number().min(0, 'Patrimônio é obrigatório'),
-  pix: z.string().min(1, 'Chave PIX é obrigatória'),
-});
-
-const pjSchema = z.object({
-  tipo_pessoa: z.literal('pj'),
-  razao_social: z.string().min(1, 'Razão social é obrigatória'),
-  cnpj: z.string().min(1, 'CNPJ é obrigatório').refine(validateCnpj, 'CNPJ inválido'),
-  natureza_juridica: z.string().min(1, 'Natureza jurídica é obrigatória'),
-  inscricao_estadual: z.string().min(1, 'Inscrição estadual é obrigatória'),
-  data_fundacao: z.string().min(1, 'Data de fundação é obrigatória'),
-  telefone_comercial: z.string().min(1, 'Telefone é obrigatório'),
-  email_comercial: z.string().email('Email inválido'),
-  endereco_comercial: z.string().min(1, 'Endereço é obrigatório'),
-  endereco_comercial_cep: z.string().min(8, 'CEP é obrigatório'),
-  num_funcionarios: z.number().min(0, 'Número de funcionários é obrigatório'),
-  faturamento_mensal: z.number().positive('Faturamento é obrigatório'),
-  socios: z.array(z.object({
-    nome: z.string().min(1, 'Nome do sócio é obrigatório'),
-    cpf: z.string().min(1, 'CPF do sócio é obrigatório'),
-    renda: z.number().min(0, 'Renda é obrigatória'),
-  })).min(1, 'Pelo menos um sócio é obrigatório'),
-});
-
-const formSchema = z.discriminatedUnion('tipo_pessoa', [pfSchema, pjSchema]);
-
-type FormData = z.infer<typeof formSchema>;
+// A validação desta tela é feita pelas `rules` de cada campo (react-hook-form) e pelo
+// `checklistOk`. Não há zodResolver aqui — schema zod foi removido para não ficar
+// código morto divergindo das regras reais.
 
 interface AcceptProposalModalProps {
   open: boolean;
@@ -137,6 +99,8 @@ export function AcceptProposalModal({
   const [checklistText, setChecklistText] = useState('');
   const [showChecklistPJ, setShowChecklistPJ] = useState(false);
   const [checklistTextPJ, setChecklistTextPJ] = useState('');
+  // Sinaliza que o check-list colado não trouxe nome de sócio (campo é obrigatório).
+  const [checklistSemNomeSocio, setChecklistSemNomeSocio] = useState(false);
   const [pfDocuments, setPfDocuments] = useState<File[]>([]);
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
@@ -537,6 +501,7 @@ export function AcceptProposalModal({
                             validCpfs.forEach((cpf, i) => {
                               addSocio({ nome: nomes[i] || '', cpf: formatCpf(cpf), renda: rendaPorSocio });
                             });
+                            setChecklistSemNomeSocio(validCpfs.some((_, i) => !(nomes[i] || '').trim()));
                           }
                           setShowChecklistPJ(false);
                           setChecklistTextPJ('');
@@ -616,7 +581,16 @@ export function AcceptProposalModal({
                       {socioFields.map((field, index) => (
                         <div key={field.id} className="flex gap-3 items-end">
                           <FormField control={form.control} name={`socios.${index}.nome`} rules={{ required: 'Nome obrigatório' }} render={({ field }) => (
-                            <FormItem className="flex-1"><FormLabel>Nome do Sócio *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem className="flex-1">
+                              <FormLabel>Nome do Sócio *</FormLabel>
+                              <FormControl><Input {...field} /></FormControl>
+                              {checklistSemNomeSocio && !String(field.value || '').trim() && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  o check-list não trouxe o nome — preencha
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
                           )} />
                           <FormField control={form.control} name={`socios.${index}.cpf`} rules={{ required: 'CPF obrigatório' }} render={({ field }) => (
                             <FormItem className="flex-1"><FormLabel>CPF do Sócio *</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatCpf(e.target.value))} /></FormControl><FormMessage /></FormItem>
