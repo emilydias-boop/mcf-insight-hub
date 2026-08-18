@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw, FileSignature } from 'lucide-react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +55,7 @@ import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
 
@@ -144,11 +144,19 @@ export function PendingRegistrationsList({
   const [addOpen, setAddOpen] = useState(false);
   const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
-  const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
-  const { field, dir, toggle } = useTableSortUrl<PendingSortField>({
+  const [filtersState, setFiltersState] = useState<PendingFiltersState>(defaultPendingFilters);
+  const { field, dir, toggle, q, setQ } = useTableSortUrl<PendingSortField>({
     campos: PENDING_SORT_FIELDS,
     inicial: { field: 'created_at', dir: 'desc' },
+    sufixo: 'Pe',
   });
+  // A busca desta aba vive no `?qPe=`, como nas outras abas; os demais filtros
+  // continuam locais.
+  const filters = useMemo<PendingFiltersState>(() => ({ ...filtersState, search: q }), [filtersState, q]);
+  const setFilters = (next: PendingFiltersState) => {
+    if (next.search !== filters.search) setQ(next.search);
+    setFiltersState({ ...next, search: '' });
+  };
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
@@ -156,7 +164,7 @@ export function PendingRegistrationsList({
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
 
-  // filtrar → ordenar → paginar. O default (`solicitado_em` desc) reproduz a
+  // filtrar → ordenar → paginar. O default (`created_at` desc) reproduz a
   // ordem em que a lista já abria.
   const filtered = useMemo(
     () => ordenarPor(applyPendingFilters(registrations, filters), PENDING_EXTRATORES[field], dir),
@@ -315,37 +323,13 @@ export function PendingRegistrationsList({
           </div>
         )}
 
-        {filtered.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 mt-3 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Itens por página:</span>
-              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                <SelectTrigger className="h-8 w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 25, 50, 100].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="ml-2">
-                {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, filtered.length)} de {filtered.length}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Página {safePage + 1} de {totalPages}
-              </span>
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          page={safePage}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
 
         {openId && (
           <OpenCotaModal
