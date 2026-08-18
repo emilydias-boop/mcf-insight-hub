@@ -68,8 +68,14 @@ interface Step {
   rateBaseIndex?: number;
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
-  /** Selo clicável abaixo do número (estoque atual / recorte). */
-  badge?: { label: string; filter?: FunilQuickFilter; tooltip: string } | null;
+  /** Selos clicáveis abaixo do número (estoque atual / recorte). */
+  badges?: Array<{
+    label: string;
+    filter?: FunilQuickFilter;
+    tooltip: string;
+    tone?: 'default' | 'amber';
+    icon?: boolean;
+  }> | null;
   /** Mini-blocos de composição exibidos dentro do card da etapa. */
   breakdown?: Array<{ label: string; value: number; filter?: FunilQuickFilter; tooltip?: string }> | null;
 }
@@ -141,6 +147,11 @@ export function FunilConsorcioTimeline({
   const cadastradasCount = loadingReservadas ? null : (reservadas?.length ?? 0);
   const medianaReserva = medianDias(reservadas || []);
 
+  const pct = (n: number, total: number) =>
+    total > 0
+      ? `${((n / total) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+      : '—';
+
   // Etapa 6 — composição das cotas contratadas no período.
   const cotas = ownCards.data ?? [];
   const cotasTotal = ownCards.isLoading ? null : cotas.length;
@@ -154,6 +165,23 @@ export function FunilConsorcioTimeline({
       label: 'R1 Agendadas',
       hint: 'agendadas para o período',
       count: loadingR1 ? null : (r1?.agendadas ?? 0),
+      badges: r1
+        ? [
+            {
+              label: `No-show ${r1.noShow} · ${pct(r1.noShow, r1.agendadas)}`,
+              filter: 'no-show' as FunilQuickFilter,
+              tooltip: 'Clique para ver só os no-shows do período, com a quebra por motivo.',
+            },
+            {
+              label: `Sem desfecho ${r1.semDesfecho} · ${pct(r1.semDesfecho, r1.agendadas)}`,
+              filter: 'sem-desfecho' as FunilQuickFilter,
+              tone: 'amber' as const,
+              icon: true,
+              tooltip:
+                'Reuniões que já passaram e continuam sem status — não entram nem em realizadas nem em no-show. Clique para abrir a fila de trabalho.',
+            },
+          ]
+        : null,
     },
     {
       key: 'r1-realizadas',
@@ -166,14 +194,14 @@ export function FunilConsorcioTimeline({
       label: 'Cartas Negociadas',
       hint: 'criadas no período',
       count: loadingProposals ? null : negociadas,
-      badge:
+      badges:
         !loadingProposals && naoAceitas > 0
-          ? {
+          ? [{
               label: `${naoAceitas} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
-              filter: 'nao-aceitas',
+              filter: 'nao-aceitas' as FunilQuickFilter,
               tooltip:
                 'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. Clique para filtrar a lista.',
-            }
+            }]
           : null,
     },
     {
@@ -181,14 +209,14 @@ export function FunilConsorcioTimeline({
       label: 'Cadastros Pendentes',
       hint: 'criados no período',
       count: pendentesCount,
-      badge:
+      badges:
         aguardandoAbertura > 0
-          ? {
+          ? [{
               label: `${aguardandoAbertura} aguardando abertura`,
-              filter: 'aguardando-abertura',
+              filter: 'aguardando-abertura' as FunilQuickFilter,
               tooltip:
                 'Estoque atual: cadastros criados no período que hoje continuam aguardando abertura de cota. Clique para filtrar a lista.',
-            }
+            }]
           : null,
     },
     {
@@ -199,17 +227,17 @@ export function FunilConsorcioTimeline({
       rateBaseIndex: 3,
       rateTooltip:
         'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
-      badge:
+      badges:
         cadastradasCount != null
-          ? {
+          ? [{
               label:
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
                   : '—',
-              filter: 'reservadas',
+              filter: 'reservadas' as FunilQuickFilter,
               tooltip:
                 'Mediana de dias entre a reserva e a confirmação da Embracon, considerando apenas cotas cujas datas caíram em dias diferentes (as gravadas no mesmo instante ficam fora para não puxar a mediana a 0). Clique para abrir a fila de reservas aguardando confirmação.',
-            }
+            }]
           : null,
     },
     {
@@ -221,14 +249,14 @@ export function FunilConsorcioTimeline({
       rateBaseIndex: 3,
       rateTooltip:
         'Calculada sobre os cadastros do período: cotas originadas no funil ÷ cadastros criados. A etapa Cadastradas usa a data de reserva, um eixo diferente, e por isso não entra nesta conta. As cotas externas não vieram de reunião e ficam fora do numerador.',
-      badge:
+      badges:
         cotasFunil && cotasFunil > 0
-          ? {
+          ? [{
               label: `${cotasFunil} do funil`,
-              filter: 'do-funil',
+              filter: 'do-funil' as FunilQuickFilter,
               tooltip:
                 'Cotas com cadastro pendente vinculado — nasceram no funil. Clique para filtrar a lista.',
-            }
+            }]
           : null,
       breakdown:
         cotasTotal != null && cotasFunil != null && cotasExternas != null
@@ -279,11 +307,6 @@ export function FunilConsorcioTimeline({
   const OVER_100_TOOLTIP =
     'A etapa seguinte tem mais registros que a anterior — provável travessia de mês ou origem fora do funil.';
 
-  const pct = (n: number, total: number) =>
-    total > 0
-      ? `${((n / total) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
-      : '—';
-
   return (
     <TooltipProvider delayDuration={150}>
       <Card className="border-border/60 bg-card/60 p-4">
@@ -299,34 +322,35 @@ export function FunilConsorcioTimeline({
           <ConsorcioPeriodFilter value={period} onChange={onPeriodChange} />
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <ol className="flex min-w-[820px] items-start gap-0">
+        <div className="overflow-x-auto px-1 py-3">
+          <ol className="flex min-w-[820px] items-stretch gap-0">
             {steps.map((step, i) => {
               const isActive = i === activeIndex;
               const isDone = activeIndex === -1 ? false : i < activeIndex;
               const conv = i > 0 ? rate(i) : null;
               const Icon = STEP_ICONS[i] ?? CalendarClock;
-              const showHealth = i === 1 && r1;
               return (
                 <li key={step.key} className="flex flex-1 items-start">
                   {i > 0 && (
-                    <div className="relative mt-5 h-1 flex-1 rounded-full bg-muted">
-                      <div
-                        className={cn(
-                          'absolute inset-y-0 left-0 rounded-full bg-primary/70 transition-all',
-                          activeIndex === -1 ? 'w-0' : i <= activeIndex ? 'w-full' : 'w-0'
-                        )}
-                      />
+                    <div className="relative flex h-12 flex-1 items-center">
+                      <div className="relative z-0 h-1 w-full rounded-full bg-muted">
+                        <div
+                          className={cn(
+                            'absolute inset-y-0 left-0 rounded-full bg-primary/70 transition-all',
+                            activeIndex === -1 ? 'w-0' : i <= activeIndex ? 'w-full' : 'w-0'
+                          )}
+                        />
+                      </div>
                       {conv &&
                         (conv.over100 || step.rateTooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span
                                 className={cn(
-                                  'absolute -top-4 left-1/2 hidden -translate-x-1/2 cursor-help items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-medium md:flex',
+                                  'absolute left-1/2 top-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 cursor-help items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-medium md:flex',
                                   conv.over100
                                     ? 'border-destructive/60 bg-destructive/10 text-destructive'
-                                    : 'border-border bg-background text-muted-foreground',
+                                    : 'border-border bg-card text-muted-foreground',
                                 )}
                               >
                                 {conv.over100 && <AlertTriangle className="h-3 w-3" />}
@@ -340,151 +364,125 @@ export function FunilConsorcioTimeline({
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          <span className="absolute -top-4 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
+                          <span className="absolute left-1/2 top-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:block">
                             {conv.label}
                           </span>
                         ))}
-                      {showHealth && (
-                        <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 flex-col items-center gap-1 md:flex">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => onQuickFilter?.('no-show')}
-                                className="whitespace-nowrap rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-                              >
-                                No-show {r1!.noShow} · {pct(r1!.noShow, r1!.agendadas)}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[260px]">
-                              <p className="text-xs">
-                                Clique para ver só os no-shows do período, com a quebra por motivo.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => onQuickFilter?.('sem-desfecho')}
-                                className="flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
-                              >
-                                <AlertTriangle className="h-3 w-3" />
-                                Sem desfecho {r1!.semDesfecho} · {pct(r1!.semDesfecho, r1!.agendadas)}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[260px]">
-                              <p className="text-xs">
-                                Reuniões que já passaram e continuam sem status — não entram nem em
-                                realizadas nem em no-show. Clique para abrir a fila de trabalho.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
+                    </div>
+                  )}
+                  <div className="flex w-[112px] shrink-0 flex-col items-center md:w-[132px]">
+                    <button
+                      type="button"
+                      onClick={() => onTabChange(step.key)}
+                      aria-current={isActive ? 'step' : undefined}
+                      className="group flex w-full flex-col items-center gap-1 text-center"
+                    >
+                      {/* faixa de altura fixa (48px) — mantém a linha sempre no mesmo eixo */}
+                      <span className="relative z-10 flex h-12 items-center justify-center">
+                        <span
+                          className={cn(
+                            'flex items-center justify-center rounded-full border-2 transition-all',
+                            isActive
+                              ? 'h-12 w-12 border-primary bg-primary text-primary-foreground shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]'
+                              : isDone
+                                ? 'h-10 w-10 border-primary/50 bg-primary/25 text-primary'
+                                : 'h-10 w-10 border-border bg-muted/40 text-muted-foreground group-hover:border-primary/40'
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          'text-[11px] font-semibold leading-tight',
+                          isActive ? 'text-primary' : 'text-foreground/80'
+                        )}
+                      >
+                        {step.label}
+                      </span>
+                      <span
+                        className={cn(
+                          'text-[18px] font-bold leading-none tracking-tight tabular-nums',
+                          isActive ? 'text-foreground' : 'text-muted-foreground'
+                        )}
+                      >
+                        {step.count == null ? '—' : step.count.toLocaleString('pt-BR')}
+                      </span>
+                      <span className="hidden text-[10px] text-muted-foreground md:block">
+                        {step.hint}
+                      </span>
+                    </button>
+
+                    {/* faixa de selos com altura reservada — mantém as bases alinhadas */}
+                    <div className="mt-1.5 flex min-h-[42px] w-full flex-col items-center gap-1">
+                      {(step.badges ?? []).map((badge) => (
+                        <Tooltip key={badge.label}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => badge.filter && onQuickFilter?.(badge.filter)}
+                              className={cn(
+                                'flex max-w-full items-center justify-center gap-1 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+                                badge.tone === 'amber'
+                                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                  : 'border-border bg-card text-muted-foreground',
+                                badge.filter
+                                  ? badge.tone === 'amber'
+                                    ? 'hover:bg-amber-500/20'
+                                    : 'hover:border-primary/50 hover:text-foreground'
+                                  : 'cursor-default',
+                              )}
+                            >
+                              {badge.icon && <AlertTriangle className="h-3 w-3 shrink-0" />}
+                              <span className="truncate">{badge.label}</span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[260px]">
+                            <p className="text-xs">{badge.tooltip}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                      {step.breakdown && (
+                        <div className="w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
+                          {step.breakdown.map((b) => {
+                            const row = (
+                              <>
+                                <span className="text-muted-foreground">{b.label}</span>
+                                <span className="font-semibold tabular-nums text-foreground">
+                                  {b.value.toLocaleString('pt-BR')}
+                                </span>
+                              </>
+                            );
+                            if (!b.filter) {
+                              return (
+                                <div
+                                  key={b.label}
+                                  className="flex items-center justify-between gap-1 px-0.5 text-[10px] leading-tight"
+                                >
+                                  {row}
+                                </div>
+                              );
+                            }
+                            return (
+                              <Tooltip key={b.label}>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => onQuickFilter?.(b.filter!)}
+                                    className="flex w-full items-center justify-between gap-1 rounded px-0.5 text-[10px] leading-tight transition-colors hover:bg-primary/10 hover:text-foreground"
+                                  >
+                                    {row}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[260px]">
+                                  <p className="text-xs">{b.tooltip}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  )}
-                  <div className="flex w-[112px] shrink-0 flex-col items-center gap-1 md:w-[132px]">
-                  <button
-                    type="button"
-                    onClick={() => onTabChange(step.key)}
-                    aria-current={isActive ? 'step' : undefined}
-                    className="group flex w-full flex-col items-center gap-1 text-center"
-                  >
-                    <span
-                      className={cn(
-                        'flex items-center justify-center rounded-full border-2 transition-all',
-                        isActive
-                          ? 'h-12 w-12 border-primary bg-primary text-primary-foreground shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]'
-                          : isDone
-                            ? 'h-10 w-10 border-primary/50 bg-primary/25 text-primary'
-                            : 'h-10 w-10 border-border bg-muted/40 text-muted-foreground group-hover:border-primary/40'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span
-                      className={cn(
-                        'text-[11px] font-semibold leading-tight',
-                        isActive ? 'text-primary' : 'text-foreground/80'
-                      )}
-                    >
-                      {step.label}
-                    </span>
-                    <span
-                      className={cn(
-                        'text-[18px] font-bold leading-none tracking-tight tabular-nums',
-                        isActive ? 'text-foreground' : 'text-muted-foreground'
-                      )}
-                    >
-                      {step.count == null ? '—' : step.count.toLocaleString('pt-BR')}
-                    </span>
-                    <span className="hidden text-[10px] text-muted-foreground md:block">
-                      {step.hint}
-                    </span>
-                  </button>
-                  {step.badge && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            step.badge?.filter && onQuickFilter?.(step.badge.filter)
-                          }
-                          className={`max-w-full truncate rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors ${
-                            step.badge.filter
-                              ? 'hover:border-primary/50 hover:text-foreground'
-                              : 'cursor-default'
-                          }`}
-                        >
-                          {step.badge.label}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-[260px]">
-                        <p className="text-xs">{step.badge.tooltip}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {step.breakdown && (
-                    <div className="mt-1 w-full space-y-0.5 rounded-md border border-border/60 bg-muted/30 px-1.5 py-1">
-                      {step.breakdown.map((b) => {
-                        const row = (
-                          <>
-                            <span className="text-muted-foreground">{b.label}</span>
-                            <span className="font-semibold tabular-nums text-foreground">
-                              {b.value.toLocaleString('pt-BR')}
-                            </span>
-                          </>
-                        );
-                        if (!b.filter) {
-                          return (
-                            <div
-                              key={b.label}
-                              className="flex items-center justify-between gap-1 text-[10px] leading-tight"
-                            >
-                              {row}
-                            </div>
-                          );
-                        }
-                        return (
-                          <Tooltip key={b.label}>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                onClick={() => onQuickFilter?.(b.filter!)}
-                                className="flex w-full items-center justify-between gap-1 rounded px-0.5 text-[10px] leading-tight transition-colors hover:bg-primary/10 hover:text-foreground"
-                              >
-                                {row}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[260px]">
-                              <p className="text-xs">{b.tooltip}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-                  )}
                   </div>
                 </li>
               );
@@ -492,26 +490,6 @@ export function FunilConsorcioTimeline({
           </ol>
         </div>
 
-        {/* Mobile: os selos de saúde da etapa R1 ficam empilhados abaixo da timeline */}
-        {r1 && (
-          <div className="mt-3 flex flex-wrap gap-2 md:hidden">
-            <button
-              type="button"
-              onClick={() => onQuickFilter?.('no-show')}
-              className="whitespace-nowrap rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground"
-            >
-              No-show {r1.noShow} · {pct(r1.noShow, r1.agendadas)}
-            </button>
-            <button
-              type="button"
-              onClick={() => onQuickFilter?.('sem-desfecho')}
-              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
-            >
-              <AlertTriangle className="h-3 w-3" />
-              Sem desfecho {r1.semDesfecho} · {pct(r1.semDesfecho, r1.agendadas)}
-            </button>
-          </div>
-        )}
       </Card>
     </TooltipProvider>
   );
