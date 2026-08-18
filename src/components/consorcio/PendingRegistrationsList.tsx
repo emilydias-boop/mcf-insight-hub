@@ -47,7 +47,10 @@ import {
   PendingRegistrationsFilters,
   applyPendingFilters,
   defaultPendingFilters,
+  isPendingStatusFilter,
+  DEFAULT_PENDING_STATUS_FILTER,
   type PendingFiltersState,
+  type PendingStatusFilter,
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
@@ -60,11 +63,22 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
-  cadastrada: 'Cadastrada',
+  cadastrada: 'Enviada à Embracon',
   cota_aberta: 'Cota aberta',
   vinculada: 'Vinculada',
   declinada: 'Declinada',
 };
+
+/** `aguardando_abertura` e `cadastrada` ainda não têm cota — é a fila de trabalho. */
+const SEM_COTA = ['aguardando_abertura', 'cadastrada'];
+
+/** Dias corridos desde uma data ISO (nulo quando a data não existe). */
+function diasDesde(iso?: string | null): number | null {
+  if (!iso) return null;
+  const base = new Date(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - base.getTime()) / 86400000));
+}
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
