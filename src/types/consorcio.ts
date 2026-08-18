@@ -5,7 +5,7 @@ export type TipoContrato = 'normal' | 'intercalado' | 'intercalado_impar';
 export type OrigemConsorcio = string;
 export type EstadoCivil = 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
 export type TipoServidor = 'estadual' | 'federal' | 'municipal';
-export type TipoDocumento = 'cnh' | 'rg' | 'contrato_social' | 'cartao_cnpj' | 'comprovante_residencia' | 'outro';
+export type TipoDocumento = 'cnh' | 'rg' | 'contrato_social' | 'cartao_cnpj' | 'comprovante_residencia' | 'confirmacao_embracon' | 'outro';
 export type TipoParcela = 'cliente' | 'empresa';
 export type StatusParcela = 'pendente' | 'pago' | 'atrasado';
 export type CategoriaConsorcio = 'inside' | 'life';
@@ -285,6 +285,10 @@ export const TIPO_DOCUMENTO_OPTIONS = [
   { value: 'contrato_social', label: 'Contrato Social' },
   { value: 'cartao_cnpj', label: 'Cartão CNPJ' },
   { value: 'comprovante_residencia', label: 'Comprovante de Residência' },
+  // Retorno da administradora confirmando o cadastro da cota. NÃO confundir com o
+  // "Comprovante de Cadastro" (consorcio_termos, tipo comprovante_cadastro), que é
+  // o documento que a MCF gera e envia ao cliente.
+  { value: 'confirmacao_embracon', label: 'Confirmação Embracon' },
   { value: 'outro', label: 'Outro' },
 ] as const;
 

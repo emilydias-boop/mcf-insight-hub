@@ -111,6 +111,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const planoHidratado = useRef(false);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Abertura como reserva x já contratada — sem default: o operador escolhe no
+   * clique. O valor é lido pelo onSubmit logo depois da validação.
+   */
+  const modoAbertura = useRef<'reserva' | 'contratacao'>('contratacao');
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
@@ -367,6 +372,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     // Sanitizar: remover strings vazias de campos date antes de enviar
     const rawCotaData = {
       ...data,
+      // Reserva: a data informada vale como data de reserva e a contratação fica em aberto.
+      tipo_registro: modoAbertura.current,
+      data_reserva: modoAbertura.current === 'reserva' ? data.data_contratacao : null,
       produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
       parcela_1a_12a: calculoParcela?.parcela1a12,
       parcela_demais: calculoParcela?.parcelaDemais,
@@ -996,15 +1004,43 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
               </CardContent>
             </Card>
 
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        {readOnly ? 'Fechar' : 'Cancelar'}
-                      </Button>
-                      {!readOnly && (
-                        <Button type="submit" disabled={openCota.isPending}>
-                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Confirmar Abertura da Cota
+                    <div className="space-y-2 pt-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                          {readOnly ? 'Fechar' : 'Cancelar'}
                         </Button>
+                        {!readOnly && (
+                          <>
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              disabled={openCota.isPending}
+                              onClick={() => { modoAbertura.current = 'reserva'; }}
+                            >
+                              {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Abrir como reserva
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={openCota.isPending}
+                              onClick={() => { modoAbertura.current = 'contratacao'; }}
+                            >
+                              {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Abrir já contratada
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      {!readOnly && (
+                        <div className="space-y-1 text-right text-xs text-muted-foreground">
+                          <p>
+                            Reserva = enviado à Embracon, aguardando confirmação. Já contratada = a Embracon
+                            confirmou e você tem o comprovante em mãos.
+                          </p>
+                          <p className="text-amber-600 dark:text-amber-500">
+                            A cota aberta como reserva só entra na etapa Cotas quando for confirmada.
+                          </p>
+                        </div>
                       )}
                     </div>
             </form>

@@ -120,6 +120,27 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const queryClient = useQueryClient();
   const { data: comprovantesByCard = {} } = useComprovantesByCard();
 
+  /**
+   * Abre o documento anexado. O bucket é privado, então geramos uma URL assinada
+   * na hora (mesmo padrão do upload); a `storage_url` gravada serve de fallback.
+   */
+  const abrirDocumento = async (doc: { storage_path?: string; storage_url?: string }) => {
+    if (doc.storage_path) {
+      const { data, error } = await supabase.storage
+        .from("consorcio-documents")
+        .createSignedUrl(doc.storage_path, 60 * 60);
+      if (!error && data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener");
+        return;
+      }
+    }
+    if (doc.storage_url) {
+      window.open(doc.storage_url, "_blank", "noopener");
+      return;
+    }
+    toast.error("Documento sem arquivo vinculado");
+  };
+
   // Check inadimplência (apenas alerta visual — auto-cancelamento removido para evitar
   // cancelamentos indevidos de cotas cadastradas retroativamente).
   const deveCancelar = card?.installments ? deveSerCancelado(card.installments) : false;
@@ -689,7 +710,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                                       <p className="text-sm text-muted-foreground capitalize">{doc.tipo}</p>
                                     </div>
                                   </div>
-                                  <Button variant="outline" size="sm">
+                                  <Button variant="outline" size="sm" onClick={() => abrirDocumento(doc)}>
                                     Visualizar
                                   </Button>
                                 </div>
