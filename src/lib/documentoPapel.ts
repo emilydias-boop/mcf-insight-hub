@@ -5,85 +5,120 @@
  *
  * Importante: o conteúdo armazenado dos documentos continua sendo **markdown**.
  * Este módulo é só apresentação — nada aqui participa do `conteudo_hash`.
+ *
+ * Identidade visual: verde-limão #B3F302, grafite #101010, branco. Display em
+ * Nasalization (sempre caixa alta, o subset embutido só tem maiúsculas) e texto
+ * em Poppins. O logo e a fonte vêm embutidos de `marcaAtivos` para não haver
+ * corrida de rede antes do `window.print()`.
  */
+
+import { FONTE_MARCA_CSS, LOGO_MCF_VERDE } from '@/lib/marcaAtivos';
 
 export const EMPRESA_RAZAO_SOCIAL = 'VMX Participações e Empreendimentos Ltda';
 export const EMPRESA_CNPJ = '39.662.160/0001-31';
 
-export const PAPEL_CSS = `
+export const PAPEL_CSS = `${FONTE_MARCA_CSS}
 /* Tinta explícita: nada dentro do papel pode herdar os tokens de tema da
    aplicação (que é escura por padrão). Redefinir as variáveis aqui é a rede de
    segurança para qualquer componente do design system que entre no papel. */
 .papel{
-  --background:60 20% 99%;--foreground:60 3% 10%;
-  --card:60 20% 99%;--card-foreground:60 3% 10%;
-  --popover:60 20% 99%;--popover-foreground:60 3% 10%;
-  --muted:60 6% 94%;--muted-foreground:0 0% 40%;
-  --primary:219 53% 26%;--primary-foreground:0 0% 100%;
-  --secondary:60 6% 94%;--secondary-foreground:60 3% 10%;
-  --accent:60 6% 94%;--accent-foreground:60 3% 10%;
+  --background:60 20% 99%;--foreground:0 0% 10%;
+  --card:60 20% 99%;--card-foreground:0 0% 10%;
+  --popover:60 20% 99%;--popover-foreground:0 0% 10%;
+  --muted:60 6% 96%;--muted-foreground:0 0% 42%;
+  --primary:0 0% 6%;--primary-foreground:0 0% 100%;
+  --secondary:60 6% 96%;--secondary-foreground:0 0% 10%;
+  --accent:74 98% 48%;--accent-foreground:0 0% 6%;
   --destructive:0 72% 42%;--destructive-foreground:0 0% 100%;
-  --border:47 8% 88%;--input:47 8% 88%;--ring:219 53% 26%;
+  --border:220 10% 88%;--input:220 10% 88%;--ring:74 98% 48%;
 }
-.papel{background:#fcfcfb;color:#1a1a19;font-size:13px;line-height:1.62;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
-.papel h1{font-size:17px;margin:0 0 3px;color:#1f3864;letter-spacing:.02em}
-.papel h2{font-size:12px;margin:26px 0 9px;color:#1f3864;text-transform:uppercase;
-  letter-spacing:.07em;border-bottom:1.5px solid #1f3864;padding-bottom:4px}
-.papel h3{font-size:12px;margin:18px 0 7px;color:#1f3864}
+/* As faixas grafite e as barras verdes SÃO a identidade: sem isto o Chrome
+   descarta os fundos quando "Gráficos de plano de fundo" está desligado. */
+.papel{background:#fcfcfb;color:#1a1c20;font-size:13px;line-height:1.62;
+  font-family:'Poppins',-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+.papel h1{background:#101010;color:#fff;font-family:'Nasalization',Impact,sans-serif;
+  font-size:20px;line-height:1.24;letter-spacing:.005em;text-transform:uppercase;
+  font-weight:400;margin:0 0 20px;padding:4px 18px 18px}
+.papel h2{font-size:10.5px;margin:24px 0 10px;color:#101010;text-transform:uppercase;
+  letter-spacing:.08em;font-weight:600;border:0;border-left:3px solid #B3F302;
+  background:#f6f7f5;padding:7px 11px}
+.papel h3{font-size:11.5px;margin:18px 0 7px;color:#101010;font-weight:600}
 .papel p{margin:0 0 11px;text-align:justify}
 .papel ul,.papel ol{margin:0 0 12px;padding-left:22px}
 .papel ul{list-style:disc}
 .papel ol{list-style:decimal}
 .papel li{margin:0 0 5px}
 
+/* Cabeçalho: a faixa \`.brand\` e o \`h1\` são irmãos no DOM, mas os dois têm
+   fundo grafite e margem zero entre eles — leem como um bloco único. */
 .papel .brand{display:flex;justify-content:space-between;align-items:flex-start;
-  border-bottom:2.5px solid #1f3864;padding-bottom:14px;margin-bottom:22px}
-.papel .brand .logo{font-weight:800;font-size:19px;color:#1f3864;letter-spacing:-.02em}
-.papel .brand .logo small{display:block;font-size:9.5px;font-weight:500;color:#666;
-  letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
-.papel .brand .meta{text-align:right;font-size:10.5px;color:#666;line-height:1.6}
-.papel .sub{font-size:11px;color:#666;margin:0 0 4px}
+  background:#101010;border:0;padding:16px 18px 10px;margin:0}
+.papel .brand .logo{font-size:0;line-height:0}
+.papel .brand .logo img{height:32px;width:auto;display:block}
+.papel .brand .logo small{display:block;font-size:8.5px;font-weight:500;color:#9aa0aa;
+  letter-spacing:.16em;text-transform:uppercase;margin-top:7px;line-height:1.4}
+.papel .brand .meta{text-align:right;font-size:9px;color:#9aa0aa;line-height:1.75;
+  letter-spacing:.01em;white-space:nowrap}
+.papel .sub{font-size:8.5px;color:#b9bec7;letter-spacing:.14em;text-transform:uppercase;margin:9px 0 0}
 
-.papel .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 26px;margin:0 0 6px}
-.papel .kv > div{display:flex;gap:7px;font-size:12.5px;border-bottom:1px dotted #d5d5d0;padding-bottom:4px}
-.papel .kv b{color:#555;font-weight:600;min-width:112px;font-size:11.5px}
+/* Rótulo em cima, valor embaixo — igual ao PDF institucional. */
+.papel .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:0 28px;margin:0 0 10px}
+.papel .kv > div{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  border-bottom:1px solid #e2e5ea;padding:8px 0;font-size:12.5px}
+.papel .kv b{color:#8b9099;font-weight:500;min-width:0;font-size:8.5px;
+  letter-spacing:.1em;text-transform:uppercase;line-height:1.4}
+.papel .kv > div > span{color:#1a1c20;font-weight:500;font-size:12.5px;line-height:1.45}
 .papel .kv .full{grid-column:1/-1}
 
 .papel table.doc{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:12px}
-.papel table.doc th{background:#1f3864;color:#fff;text-align:left;padding:7px 10px;
-  font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.papel table.doc th{background:#101010;color:#fff;text-align:left;padding:8px 10px;
+  font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600}
 .papel table.doc td{padding:7px 10px;border-bottom:1px solid #e4e4df}
-.papel table.doc tr:nth-child(even) td{background:#f4f4f0}
+.papel table.doc tr:nth-child(even) td{background:#f6f7f5}
+/* Linha de total: marcada em \`TermoMarkdown\` quando a 1ª célula é "Total". */
+.papel table.doc tr.tot td{background:#eef7cc;border-top:1.5px solid #B3F302;
+  border-bottom:0;font-weight:600;color:#101010}
 
 .papel .tag{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:2px 7px}
-.papel .tag.mcf{background:#dbeafe;color:#1e40af}
-.papel .tag.cli{background:#e8e8e3;color:#555}
+.papel .tag.mcf{background:#eef7cc;color:#101010;border:1px solid #cfe86b}
+.papel .tag.cli{background:#eef0f3;color:#4a4f57}
 .papel .tag.pg{background:#d7f5d7;color:#166534}
 .papel .tag.pend{background:#fef0c7;color:#92400e}
 .papel .tag.err{background:#fee2e2;color:#991b1b}
 
-.papel .assin{border:2px solid #1f3864;border-radius:8px;padding:18px 20px;margin-top:18px;background:#f7f9ff}
-.papel .assin h3{margin:0 0 12px;font-size:12px;color:#1f3864;text-transform:uppercase;letter-spacing:.06em}
+.papel .assin{border:1px solid #d8dbe0;border-left:3px solid #B3F302;border-radius:8px;
+  padding:18px 20px;margin-top:18px;background:#fbfcf6}
+.papel .assin h3{margin:0 0 12px;font-size:10.5px;color:#101010;
+  text-transform:uppercase;letter-spacing:.08em}
 .papel .chk{display:flex;gap:9px;align-items:flex-start;font-size:11.5px;color:#444;line-height:1.5;margin:12px 0 14px}
 
-.papel .cert{border-top:2px solid #1f3864;margin-top:26px;padding-top:16px}
-.papel .cert .hashline{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#444;
-  word-break:break-all;background:#f0f0eb;padding:7px 9px;border-radius:5px;margin-top:7px}
+.papel .cert{border:1px solid #d8dbe0;border-left:3px solid #B3F302;border-radius:8px;
+  background:#f6f7f5;margin-top:24px;padding:14px 16px}
+.papel .cert h3{margin:0 0 6px;font-size:10.5px;color:#101010;
+  text-transform:uppercase;letter-spacing:.08em}
+.papel .cert .hashline{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:#4a4f57;
+  word-break:break-all;background:#ecefe4;padding:7px 9px;border-radius:5px;margin-top:9px}
 .papel .legal{font-size:9.5px;color:#777;line-height:1.55;margin-top:12px}
+
+/* Rodapé institucional — filete verde + assinatura da marca. */
+.papel .rodape-doc{margin-top:28px;padding-top:10px;border-top:2px solid #B3F302;
+  font-size:8.5px;color:#8b9099;letter-spacing:.08em;text-transform:uppercase;text-align:left}
 
 .papel .tl{position:relative;padding-left:26px}
 .papel .tl::before{content:"";position:absolute;left:7px;top:5px;bottom:5px;width:2px;background:#d5d5d0}
 .papel .ev{position:relative;padding-bottom:16px}
 .papel .ev::before{content:"";position:absolute;left:-23px;top:4px;width:11px;height:11px;
-  border-radius:50%;background:#1f3864;border:2px solid #fcfcfb}
+  border-radius:50%;background:#101010;border:2px solid #fcfcfb}
 .papel .ev.warn::before{background:#fab219}
 .papel .ev.ok::before{background:#166534}
 .papel .ev .when{font-size:10.5px;color:#777;font-weight:600}
 .papel .ev .what{font-size:12.5px;font-weight:700;margin:1px 0 2px}
 .papel .ev .who{font-size:11.5px;color:#555}
 
-.papel .tarja{background:#e8484a;color:#fff;font-weight:800;font-size:11px;letter-spacing:.05em;
+.papel .tarja{background:#101010;color:#B3F302;border-left:4px solid #B3F302;
+  font-weight:800;font-size:11px;letter-spacing:.05em;
   padding:9px 14px;border-radius:6px;margin-bottom:18px;text-transform:uppercase}
 
 /* Texto secundário e blocos — substituem text-muted-foreground / border-border. */
