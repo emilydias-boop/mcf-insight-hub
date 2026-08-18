@@ -161,7 +161,6 @@ export interface ConsorcioSummary {
   valorCartasNovas: number;       // cartas sem nenhuma parcela paga (feitas pelos closers)
   valorCartasSubidas: number;     // cartas com a 1ª parcela já paga (nós subimos)
   comissaoPrevistaNovas: number;  // comissão a gerar pelas cartas novas
-  comissaoRealizadaSubidas: number; // comissão já paga das cartas subidas
 }
 
 export interface CreateConsorcioCardInput {

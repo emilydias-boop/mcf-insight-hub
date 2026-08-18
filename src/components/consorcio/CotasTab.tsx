@@ -329,13 +329,15 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
 
   const uniqueGrupos = useMemo(() => {
     if (!cards) return [];
-    const grupos = [...new Set(cards.map(c => c.grupo))];
+    // Reservas podem nascer sem grupo: nulos/vazios fora da lista de opções
+    // (SelectItem com valor vazio quebra o filtro).
+    const grupos = [...new Set(cards.map(c => c.grupo).filter((g): g is string => !!g && String(g).trim() !== ''))];
     return grupos.sort((a, b) => Number(a) - Number(b));
   }, [cards]);
 
   const uniqueVencimentos = useMemo(() => {
     if (!cards) return [];
-    const dias = [...new Set(cards.map(c => c.dia_vencimento))];
+    const dias = [...new Set(cards.map(c => c.dia_vencimento).filter((d): d is number => d != null))];
     return dias.sort((a, b) => a - b);
   }, [cards]);
 
