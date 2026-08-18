@@ -40,8 +40,20 @@ export function useConfirmarContratacaoEmbracon() {
         throw new Error('Anexe a confirmação da Embracon ou informe o motivo da confirmação sem comprovante.');
       }
 
-      // 1. Documento (quando houver)
+      // 1. Documento (quando houver) — idempotente: se já existe um
+      // 'confirmacao_embracon' para o card (tentativa anterior que falhou depois
+      // do upload), não gera duplicata.
       if (file) {
+        const { data: jaExiste, error: checkErr } = await supabase
+          .from('consortium_documents')
+          .select('id')
+          .eq('card_id', cardId)
+          .eq('tipo', 'confirmacao_embracon')
+          .limit(1);
+        if (checkErr) throw checkErr;
+        if (jaExiste && jaExiste.length > 0) {
+          // documento já anexado numa tentativa anterior — segue para a conversão
+        } else {
         const ext = file.name.split('.').pop();
         const path = `${cardId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -60,6 +72,7 @@ export function useConfirmarContratacaoEmbracon() {
           uploaded_by: user?.id,
         } as any);
         if (docErr) throw docErr;
+        }
       }
 
       // 2. Contrato Embracon — nunca apaga o que já existe
@@ -71,7 +84,12 @@ export function useConfirmarContratacaoEmbracon() {
         if (error) throw error;
       }
 
-      // 3. Motivo da exceção em observacoes (append, com carimbo)
+      // 3. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
+      await convert.mutateAsync({ cardId, dataContratacao });
+
+      // 4. Motivo da exceção em observacoes (append, com carimbo) — SÓ depois da
+      // conversão dar certo, senão uma falha deixaria linhas duplicadas a cada
+      // nova tentativa.
       if (!file && motivoSemComprovante?.trim()) {
         const { data: card, error: readErr } = await supabase
           .from('consortium_cards')
@@ -90,17 +108,13 @@ export function useConfirmarContratacaoEmbracon() {
           .eq('id', cardId);
         if (obsErr) throw obsErr;
       }
-
-      // 4. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
-      await convert.mutateAsync({ cardId, dataContratacao });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['consorcio-reservas-aguardando'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-reservadas'] });
       queryClient.invalidateQueries({ queryKey: ['cotas-confirmacao-embracon'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-documents', variables.cardId] });
-      toast.success('Contratação confirmada — a cota passa a contar na etapa Cotas.');
     },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao confirmar contratação'),
+    // Toast de sucesso/erro fica com o `useConvertReservaToContratacao` (evita aviso duplo).
   });
 }
