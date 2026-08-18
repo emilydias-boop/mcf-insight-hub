@@ -282,10 +282,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       vencimento: (c) => calcularProximoVencimento(c.dia_vencimento),
       tipo_produto: (c) => c.tipo_produto || '',
       objetivo: (c) => c.objetivo || '',
-      origem: (c) =>
-        origemOptions.find((o) => o.name === c.origem)?.label ||
-        ORIGEM_OPTIONS.find((o) => o.value === c.origem)?.label ||
-        c.origem || '',
+      origem: (c) => resolveOrigemLabel(c.origem, origemOptions),
       status: (c) => RANK_STATUS[c.status] ?? 9,
       responsavel: (c) => getFirstTwoNames(c.vendedor_name),
       origem_funil: (c) => funnelCardIds?.get(c.id) || '',
@@ -305,7 +302,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       const v = (c.vendedor_name || '').trim() || 'sem vendedor';
       byVendedor.set(v, (byVendedor.get(v) || 0) + 1);
       const o = (c.origem || '').trim() || 'sem origem';
-      const label = ORIGEM_OPTIONS.find((x) => x.value === o)?.label || o;
+      const label = c.origem ? resolveOrigemLabel(c.origem, origemOptions) : o;
       byOrigem.set(label, (byOrigem.get(label) || 0) + 1);
     });
     const fmt = (m: Map<string, number>) =>
@@ -314,7 +311,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         .map(([k, v]) => `${k} ${v}`)
         .join(' · ');
     return { vendedores: fmt(byVendedor), origens: fmt(byOrigem) };
-  }, [onlyExternas, sortedCards]);
+  }, [onlyExternas, sortedCards, origemOptions]);
 
   const totalPages = Math.ceil((displayCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
