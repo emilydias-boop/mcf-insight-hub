@@ -112,15 +112,17 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
   /**
-   * Abertura como reserva x já contratada — sem default: o operador escolhe no
-   * clique. O valor é lido pelo onSubmit logo depois da validação.
+   * Abertura como reserva x já contratada — default RESERVA: é o caminho novo e
+   * o mais comum (o número da Embracon quase nunca está em mãos na hora do
+   * cadastro). O modo é escolhido num seletor no topo da seção "Dados da Cota",
+   * não no rodapé. `modoAbertura` é lido pelo onSubmit logo depois da validação.
    */
-  const modoAbertura = useRef<'reserva' | 'contratacao'>('contratacao');
+  const modoAbertura = useRef<'reserva' | 'contratacao'>('reserva');
   /**
-   * Espelho em estado do modo, para o rótulo da data não mentir: em "reserva" o
-   * valor digitado é gravado em `data_reserva`, não em `data_contratacao`.
+   * Espelho em estado do modo: em "reserva" o valor digitado é gravado em
+   * `data_reserva`, não em `data_contratacao`, e grupo/cota viram opcionais.
    */
-  const [modo, setModo] = useState<'reserva' | 'contratacao'>('contratacao');
+  const [modo, setModo] = useState<'reserva' | 'contratacao'>('reserva');
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
