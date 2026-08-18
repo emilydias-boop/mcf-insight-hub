@@ -111,6 +111,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const planoHidratado = useRef(false);
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Abertura como reserva x já contratada — sem default: o operador escolhe no
+   * clique. O valor é lido pelo onSubmit logo depois da validação.
+   */
+  const modoAbertura = useRef<'reserva' | 'contratacao'>('contratacao');
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
@@ -367,6 +372,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     // Sanitizar: remover strings vazias de campos date antes de enviar
     const rawCotaData = {
       ...data,
+      // Reserva: a data informada vale como data de reserva e a contratação fica em aberto.
+      tipo_registro: modoAbertura.current,
+      data_reserva: modoAbertura.current === 'reserva' ? data.data_contratacao : null,
       produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
       parcela_1a_12a: calculoParcela?.parcela1a12,
       parcela_demais: calculoParcela?.parcelaDemais,
