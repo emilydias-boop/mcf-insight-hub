@@ -9,6 +9,7 @@ import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
+import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 
 export interface PendingRegistration {
   id: string;
