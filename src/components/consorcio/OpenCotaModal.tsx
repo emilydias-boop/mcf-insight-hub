@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
+import { parseChecklistPF } from '@/lib/checklistParser';
+import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -136,8 +137,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklistText, setChecklistText] = useState('');
-  const [showChecklistPJ, setShowChecklistPJ] = useState(false);
-  const [checklistTextPJ, setChecklistTextPJ] = useState('');
 
   const form = useForm({
     defaultValues: {
@@ -497,6 +496,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             <fieldset disabled={readOnly} className="contents">
             <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
             <DuplicateWarningBanner matches={duplicateMatches} isLoading={dupLoading} />
+            <CloserR1NoteBlock dealId={registration.deal_id} />
             {/* Editable client data */}
             <Card>
               <CardHeader className="pb-3">
