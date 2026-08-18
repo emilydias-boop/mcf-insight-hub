@@ -354,7 +354,7 @@ export function FunilConsorcioTimeline({
                                 className={cn(
                                   'absolute left-1/2 top-1/2 z-20 hidden -translate-x-1/2 -translate-y-1/2 cursor-help items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-medium md:flex',
                                   conv.over100
-                                    ? 'border-destructive/60 bg-destructive/10 text-destructive'
+                                    ? 'border-destructive/60 bg-card text-destructive'
                                     : 'border-border bg-card text-muted-foreground',
                                 )}
                               >
