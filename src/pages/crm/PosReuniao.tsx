@@ -28,8 +28,10 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useProposals, useExcluirProposta,
   useProposalHasPendingRegistration,
+  isAguardandoRetornoSemValor,
   type Proposal,
 } from '@/hooks/useConsorcioPostMeeting';
+import { StickyNote } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, Info } from 'lucide-react';
