@@ -1098,6 +1098,16 @@ export function useEditarProposta() {
       proposal_details?: string;
       origem_lead?: string;
     }) => {
+      // Detalhes anteriores: usados para saber se a observação do cadastro pendente
+      // ainda é a cópia automática (e portanto pode ser ressincronizada).
+      const { data: anterior } = await supabase
+        .from('consorcio_proposals')
+        .select('proposal_details')
+        .eq('id', params.proposal_id)
+        .maybeSingle();
+      const detalhesAnteriores = String((anterior as any)?.proposal_details || '').trim();
+      const detalhesNovos = String(params.proposal_details ?? '').trim();
+
       const { error } = await supabase
         .from('consorcio_proposals')
         .update({
@@ -1109,12 +1119,33 @@ export function useEditarProposta() {
         })
         .eq('id', params.proposal_id);
       if (error) throw error;
+
+      // Ressincroniza observacoes dos cadastros pendentes que ainda não abriram cota,
+      // sem NUNCA sobrescrever observação escrita à mão pela operação.
+      if (detalhesNovos !== detalhesAnteriores) {
+        const { data: regs } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('id, observacoes, consortium_card_id')
+          .eq('proposal_id', params.proposal_id);
+        const alvos = (regs || []).filter((r: any) => {
+          if (r.consortium_card_id) return false; // cota já aberta: não mexe
+          const atual = String(r.observacoes || '').trim();
+          return atual === '' || atual === detalhesAnteriores;
+        });
+        for (const r of alvos) {
+          await supabase
+            .from('consorcio_pending_registrations')
+            .update({ observacoes: detalhesNovos || null } as any)
+            .eq('id', (r as any).id);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Proposta atualizada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-realizado-by-closer'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro ao atualizar: ' + e.message),
   });

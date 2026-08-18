@@ -28,7 +28,8 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useProposals, useExcluirProposta,
   useProposalHasPendingRegistration,
-  isAguardandoRetornoSemValor,
+  isPropostaSemValor,
+  labelPropostaSemValor,
   type Proposal,
 } from '@/hooks/useConsorcioPostMeeting';
 import { StickyNote } from 'lucide-react';
@@ -299,7 +300,7 @@ function PropostasTab({
           </div>
         )}
         <TotalCreditoSummary
-          propostas={propostas.filter(p => !isAguardandoRetornoSemValor(p))}
+          propostas={propostas.filter(p => !isPropostaSemValor(p))}
           title="Crédito Contratado — Cartas Negociadas"
           className="mb-4"
         />
@@ -384,13 +385,13 @@ function PropostasTab({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">
-                      {isAguardandoRetornoSemValor(p) ? (
+                      {isPropostaSemValor(p) ? (
                         <Badge
                           variant="outline"
                           className="text-xs border-amber-500 text-amber-600"
-                          title="Proposta registrada sem valor/prazo — aguardando retorno do cliente"
+                          title="Proposta registrada sem valor de crédito — não conta como carta negociada"
                         >
-                          Aguardando retorno
+                          {labelPropostaSemValor(p)}
                         </Badge>
                       ) : (
                         <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
@@ -436,8 +437,8 @@ function PropostasTab({
                       <>
                         <Button
                           size="sm"
-                          disabled={isAguardandoRetornoSemValor(p)}
-                          title={isAguardandoRetornoSemValor(p) ? 'Registre valor e prazo antes de cadastrar' : undefined}
+                          disabled={isPropostaSemValor(p)}
+                          title={isPropostaSemValor(p) ? 'Registre valor e prazo antes de cadastrar' : undefined}
                           onClick={() => setAcceptTarget(p)}
                         >
                           <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
@@ -531,7 +532,7 @@ function PropostasTab({
             proposalId={acceptTarget.id}
             dealId={acceptTarget.deal_id}
             contactName={acceptTarget.contact_name || acceptTarget.deal_name}
-            vendedorName=""
+            vendedorName={acceptTarget.closer_name || ""}
           />
         )}
 
