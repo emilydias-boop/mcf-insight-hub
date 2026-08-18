@@ -71,6 +71,7 @@ import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
 import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
 import { useConsorcioCardDealLinks } from '@/hooks/useLeadReport';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { resolveOrigemLabel } from '@/lib/consorcioOrigem';
 import {
   useConsorcioCategoriaOptions,
   useConsorcioOrigemOptions,
