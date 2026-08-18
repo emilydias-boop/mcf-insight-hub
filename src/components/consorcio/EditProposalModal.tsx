@@ -59,6 +59,7 @@ export function EditProposalModal({
     if (open) {
       setValorCredito(initialValorCredito ? numberToBRL(initialValorCredito) : '');
       setPrazoMeses(initialPrazoMeses ? String(initialPrazoMeses) : '');
+      setPrazoOutro(!!initialPrazoMeses && !PRAZO_OPTIONS.some(o => o.value === Number(initialPrazoMeses)));
       setTipoProduto(initialTipoProduto || '');
       setDetails(initialDetails || '');
       setOrigemLead(initialOrigemLead || '');

@@ -73,7 +73,7 @@ export function ProposalModal({ open, onOpenChange, dealId, dealName, contactNam
     }, {
       onSuccess: () => {
         onOpenChange(false);
-        setDetails(''); setValorCredito(''); setPrazoMeses(''); setTipoProduto(''); setOrigemLead('');
+        setDetails(''); setValorCredito(''); setPrazoMeses(''); setPrazoOutro(false); setTipoProduto(''); setOrigemLead('');
       },
     });
   };
