@@ -795,6 +795,35 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
               </CardHeader>
               <CardContent>
                   <div className="space-y-4">
+                    {/* Modo de abertura no TOPO: Reserva (default) x Já contratada.
+                        Define se grupo/cota são obrigatórios e o rótulo da data. */}
+                    {!readOnly && (
+                      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                        <Label className="text-sm font-semibold">Modo de abertura</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleModoChange('reserva')}
+                            className={`text-left rounded-md border p-2 transition-colors ${modo === 'reserva' ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted/50'}`}
+                          >
+                            <span className="text-sm font-medium">Reserva</span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              Cadastro enviado à Embracon, ainda sem grupo e cota.
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleModoChange('contratacao')}
+                            className={`text-left rounded-md border p-2 transition-colors ${modo === 'contratacao' ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted/50'}`}
+                          >
+                            <span className="text-sm font-medium">Já contratada</span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              Grupo e cota já vieram da Embracon (comprovante em mãos).
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {/* Categoria + Grupo + Cota */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="categoria" rules={{ required: 'Obrigatório' }} render={({ field }) => (
