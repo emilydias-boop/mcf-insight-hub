@@ -578,6 +578,14 @@ export function useDeletePendingRegistration() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (registrationId: string) => {
+      // 0. Guardar a proposta vinculada: sem devolvê-la para 'pendente', ela fica
+      //    'aceita' sem cota e `documentos_pendentes` alarma para sempre.
+      const { data: regRow } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, proposal_id')
+        .eq('id', registrationId)
+        .maybeSingle();
+
       // 1. Remover docs vinculados ao pending
       const { data: docs } = await supabase
         .from('consortium_documents')
@@ -598,10 +606,24 @@ export function useDeletePendingRegistration() {
         .delete()
         .eq('id', registrationId);
       if (error) throw error;
+
+      // 4. Devolver a proposta para 'pendente' (volta a ser trabalhável)
+      if ((regRow as any)?.proposal_id) {
+        await supabase
+          .from('consorcio_proposals')
+          .update({
+            status: 'pendente',
+            aceite_at: null,
+            aceite_by: null,
+          } as any)
+          .eq('id', (regRow as any).proposal_id);
+      }
     },
     onSuccess: () => {
-      toast.success('Cadastro pendente excluído');
+      toast.success('Cadastro pendente excluído — carta devolvida para "pendente"');
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposal-has-pending'] });
     },
     onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
   });
