@@ -454,6 +454,21 @@ export function useCreatePendingRegistration() {
 
       const { documents, ...registrationData } = input;
 
+      // 0. Rede de segurança: nunca criar um SEGUNDO cadastro para a mesma proposta.
+      //    Duplicidade infla a etapa 4, quebra o "Destinada 1/N" e re-dispara
+      //    e-mail/WhatsApp + webhook do Make para o cliente.
+      const { data: existentes, error: existErr } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, status')
+        .eq('proposal_id', input.proposal_id);
+      if (existErr) throw existErr;
+      const jaExiste = (existentes || []).some((r: any) => r.status !== 'excluida');
+      if (jaExiste) {
+        throw new Error(
+          'Esta carta já possui cadastro em Cadastros Pendentes. Abra o cadastro existente em vez de criar outro.',
+        );
+      }
+
       // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
       const { error: proposalError } = await supabase
         .from('consorcio_proposals')
