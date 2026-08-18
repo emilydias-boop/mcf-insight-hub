@@ -6,9 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Send, XCircle, CheckCircle, RotateCcw, FileText, Loader2, Search, CalendarIcon, ChevronLeft, ChevronRight, Download, Trash2, Pencil, Radio } from 'lucide-react';
+import { XCircle, CheckCircle, FileText, Loader2, Search, Download, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -40,8 +38,6 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
-import { toast } from 'sonner';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
@@ -224,6 +220,7 @@ function PropostasTab({
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PropostaSortField>({
     campos: PROPOSTA_SORT_FIELDS,
     inicial: { field: 'meeting_date', dir: 'desc' },
+    sufixo: 'Ca',
   });
   const [searchTerm, setSearchTerm] = useState(q);
   const termo = useDebounce(searchTerm, 300);
@@ -249,11 +246,20 @@ function PropostasTab({
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
     if (termo.trim()) {
       const term = termo.toLowerCase();
+      // Valor: comparamos também sem pontuação, para "50.000" e "50.000,00"
+      // acharem o valor cru (50000) — é assim que a pessoa lê o número na tela.
+      const semPont = (s: string) => s.replace(/[.,\s]/g, '');
+      const termNum = semPont(term);
       list = list.filter(p =>
-        `${p.contact_name || p.deal_name || ''} ${p.closer_name || ''} ${p.tipo_produto || ''} ${p.valor_credito ?? ''} ${p.prazo_meses ?? ''}`
-          .toLowerCase()
-          .includes(term),
-      );
+      {
+        const hay = `${p.contact_name || p.deal_name || ''} ${p.closer_name || ''} ${p.tipo_produto || ''} ${p.valor_credito ?? ''} ${p.prazo_meses ?? ''}`.toLowerCase();
+        if (hay.includes(term)) return true;
+        const valorFmt = p.valor_credito != null
+          ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(Number(p.valor_credito))
+          : '';
+        const hayNum = semPont(`${p.valor_credito ?? ''} ${valorFmt} ${p.prazo_meses ?? ''}`);
+        return !!termNum && hayNum.includes(termNum);
+      });
     }
     // filtrar → buscar → ordenar (paginação abaixo)
     return ordenarPor(list, PROPOSTA_EXTRATORES[field], dir);
@@ -273,7 +279,6 @@ function PropostasTab({
   const [viewTarget, setViewTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
-  const excluir = useExcluirProposta();
 
   if (isLoading) return <LoadingState />;
 
