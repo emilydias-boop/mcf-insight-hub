@@ -230,6 +230,17 @@ export interface Proposal {
   owner_id?: string;
 }
 
+/**
+ * Proposta criada apenas para marcar "aguardando retorno" do cliente: não tem
+ * valor de crédito definido ainda. Não conta como carta negociada.
+ */
+export function isAguardandoRetornoSemValor(p: {
+  aguardando_retorno?: boolean | null;
+  valor_credito?: number | null;
+}) {
+  return !!p.aguardando_retorno && !(Number(p.valor_credito) > 0);
+}
+
 export interface SemSucessoDeal {
   deal_id: string;
   deal_name: string;
