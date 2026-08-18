@@ -224,7 +224,7 @@ const App = () => (
               
               {/* BU Consórcio */}
               <Route path="consorcio/bi-consorcio" element={<ResourceGuard resource="crm"><BIConsorcio /></ResourceGuard>} />
-              <Route path="consorcio" element={<Navigate to="/consorcio/crm/pos-reuniao" replace />} />
+              <Route path="consorcio" element={<Navigate to="/consorcio/crm/venda-consorcio" replace />} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
@@ -239,6 +239,8 @@ const App = () => (
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
+                {/* Rota nova; a antiga "pos-reuniao" segue válida (links compartilhados com query string). */}
+                <Route path="venda-consorcio" element={<PosReuniao />} />
                 <Route path="pos-reuniao" element={<PosReuniao />} />
                 <Route path="consultas" element={<ConsorcioConsultas />} />
                 {/* Gate único: avaliado dentro do componente (liderança + SDR/Closer dono). */}

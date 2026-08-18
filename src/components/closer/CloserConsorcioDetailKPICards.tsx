@@ -146,7 +146,7 @@ export function CloserConsorcioDetailKPICards({ metrics, teamAverages, isLoading
         value={m.propostas_enviadas}
         average={teamAverages.avgPropostas}
         icon={FileText}
-        tooltip="Conta proposta criada na aba Pós-Reunião + stage PROPOSTA ENVIADA (Viver de Aluguel). Fluxo Efeito Alavanca não possui etapa de proposta."
+        tooltip="Conta proposta criada na aba Venda Consórcio + stage PROPOSTA ENVIADA (Viver de Aluguel). Fluxo Efeito Alavanca não possui etapa de proposta."
       />
       <KPICard
         title="Produtos Fechados"

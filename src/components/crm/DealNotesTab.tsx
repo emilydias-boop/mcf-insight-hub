@@ -67,7 +67,7 @@ const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string;
   reschedule: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', color: 'text-yellow-600', label: 'Reagendamento' },
   call: { bg: 'bg-green-500/10', border: 'border-green-500/30', color: 'text-green-600', label: 'Ligação' },
   qualification: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', color: 'text-purple-600', label: 'Qualificação' },
-  closer: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', color: 'text-indigo-600', label: 'Pós-Reunião' },
+  closer: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', color: 'text-indigo-600', label: 'Venda Consórcio' },
   ai_call_summary: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', color: 'text-fuchsia-600', label: 'Resumo IA' },
 };
 
@@ -329,7 +329,7 @@ export const DealNotesTab = ({ dealUuid, dealClintId, contactId }: DealNotesTabP
               if (note.type === 'scheduling' && note.meetingType) {
                 label = `${note.meetingType}${note.closerName ? `: ${note.closerName}` : ''}`;
               } else if (note.type === 'closer' && note.closerName) {
-                label = `Pós-Reunião: ${note.closerName}`;
+                label = `Venda Consórcio: ${note.closerName}`;
               } else if (note.type === 'call' && note.outcome) {
                 label = `Ligação - ${note.outcome}`;
               }

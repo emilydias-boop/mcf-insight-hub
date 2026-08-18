@@ -61,7 +61,7 @@ export function CloserPendingDocsAlert() {
 
   const handleGo = () => {
     setOpen(false);
-    navigate('/consorcio/crm/pos-reuniao?tab=propostas');
+    navigate('/consorcio/crm/venda-consorcio?tab=propostas');
   };
 
   return (
