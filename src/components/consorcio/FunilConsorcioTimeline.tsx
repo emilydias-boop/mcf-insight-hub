@@ -3,7 +3,7 @@ import { CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet, AlertTriang
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProposals } from '@/hooks/useConsorcioPostMeeting';
+import { useProposals, isAguardandoRetornoSemValor } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
