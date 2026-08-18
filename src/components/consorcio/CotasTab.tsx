@@ -162,16 +162,29 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
-  const [searchTerm, setSearchTerm] = useState<string>(
-    () => new URLSearchParams(window.location.search).get('q') || '',
-  );
-  // A busca é server-side: o campo responde na hora, a query espera 300ms.
-  const searchAplicado = useDebounce(searchTerm, 300);
-  const { field, dir, toggle, q, setQ } = useTableSortUrl<CotasSortField>({
+  const { field, dir, setSort, q, setQ } = useTableSortUrl<CotasSortField>({
     campos: COTAS_SORT_FIELDS,
     inicial: { field: 'padrao', dir: 'desc' },
+    sufixo: 'Co',
   });
+  // Inicializa só pelo `q` desta aba (`qCo`), nunca pelo que sobrou de outra.
+  const [searchTerm, setSearchTerm] = useState<string>(q);
+  // A busca é server-side: o campo responde na hora, a query espera 300ms.
+  const searchAplicado = useDebounce(searchTerm, 300);
   useEffect(() => { setQ(searchAplicado); /* eslint-disable-next-line */ }, [searchAplicado]);
+
+  /**
+   * Nesta aba o ciclo da coluna ativa é asc → desc → padrão (os três níveis),
+   * porque o default de três níveis é o único que vale a pena recuperar.
+   */
+  const toggle = useCallback(
+    (f: CotasSortField) => {
+      if (f !== field) return setSort(f, 'asc');
+      if (dir === 'asc') return setSort(f, 'desc');
+      return setSort('padrao', 'desc');
+    },
+    [field, dir, setSort],
+  );
 
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
