@@ -31,8 +31,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   usePendingRegistrations,
   useDeletePendingRegistration,
-  useMarkPendingAsCadastrada,
-  useUnmarkPendingCadastrada,
   useDeclinePendingRegistration,
   useUndeclinePendingRegistration,
   type EnrichedPendingRegistration,
@@ -64,27 +62,17 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
-  cadastrada: 'Enviada à Embracon',
   cota_aberta: 'Cota aberta',
   vinculada: 'Vinculada',
   declinada: 'Declinada',
 };
 
-/** `aguardando_abertura` e `cadastrada` ainda não têm cota — é a fila de trabalho. */
-const SEM_COTA = ['aguardando_abertura', 'cadastrada'];
-
-/** Dias corridos desde uma data ISO (nulo quando a data não existe). */
-function diasDesde(iso?: string | null): number | null {
-  if (!iso) return null;
-  const base = new Date(iso);
-  if (Number.isNaN(base.getTime())) return null;
-  return Math.max(0, Math.floor((Date.now() - base.getTime()) / 86400000));
-}
+/** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
+const SEM_COTA = ['aguardando_abertura'];
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
   aguardando_abertura: 1,
-  cadastrada: 2,
   cota_aberta: 3,
   vinculada: 4,
   declinada: 5,
@@ -114,7 +102,7 @@ const PENDING_EXTRATORES: Record<PendingSortField, (r: EnrichedPendingRegistrati
 };
 
 export interface PendingRegistrationsListProps {
-  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
+  variant?: 'pendentes' | 'declinadas';
   /** Período global do funil — eixo: aceite_date ?? created_at. */
   range?: { startDate?: Date; endDate?: Date };
   /** Selo da timeline: mostrar só o estoque atual em `aguardando_abertura`. */
@@ -129,8 +117,7 @@ export function PendingRegistrationsList({
   onClearQuickFilter,
 }: PendingRegistrationsListProps = {}) {
   const statuses =
-    variant === 'cadastradas' ? ['cadastrada']
-    : variant === 'declinadas' ? ['declinada']
+    variant === 'declinadas' ? ['declinada']
     // Etapa 4 mede EVENTO: todos os cadastros criados no período,
     // independente do status atual.
     : [...PENDING_REGISTRATION_ALL_STATUSES];
@@ -163,7 +150,7 @@ export function PendingRegistrationsList({
   const [searchParams, setSearchParams] = useSearchParams();
   const stParam = searchParams.get('stPe');
   const statusFilter: PendingStatusFilter =
-    // Abas com status fixo (cadastradas/declinadas) não recortam por status.
+    // Abas com status fixo (declinadas) não recortam por status.
     variant !== 'pendentes'
       ? 'todos'
       : onlyAguardandoAbertura
@@ -208,8 +195,6 @@ export function PendingRegistrationsList({
   };
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
-  const markCadastrada = useMarkPendingAsCadastrada();
-  const unmarkCadastrada = useUnmarkPendingCadastrada();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
 
@@ -258,12 +243,10 @@ export function PendingRegistrationsList({
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     const sheetName =
-      variant === 'cadastradas' ? 'Cadastradas'
-      : variant === 'declinadas' ? 'Cartas Declinadas'
+      variant === 'declinadas' ? 'Cartas Declinadas'
       : 'Cadastros Pendentes';
     const fileSlug =
-      variant === 'cadastradas' ? 'cadastradas'
-      : variant === 'declinadas' ? 'cartas-declinadas'
+      variant === 'declinadas' ? 'cartas-declinadas'
       : 'cadastros-pendentes';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
@@ -291,7 +274,7 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'cadastradas' ? 'Cadastradas' : variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -319,11 +302,9 @@ export function PendingRegistrationsList({
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {registrations.length === 0
-              ? variant === 'cadastradas'
-                ? 'Nenhuma cota marcada como cadastrada.'
-                : variant === 'declinadas'
-                  ? 'Nenhuma carta declinada.'
-                  : 'Nenhum cadastro pendente de abertura.'
+              ? variant === 'declinadas'
+                ? 'Nenhuma carta declinada.'
+                : 'Nenhum cadastro pendente de abertura.'
               : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
         ) : (
@@ -358,14 +339,12 @@ export function PendingRegistrationsList({
                     onView={() => setViewId(reg.id)}
                     onLink={() => setLinkTarget(reg)}
                     onDelete={() => setDeleteTarget(reg)}
-                    onMarkCadastrada={() => markCadastrada.mutate(reg.id)}
-                    onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
                     onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
                     onUndecline={() => undeclineMut.mutate(reg.id)}
                     termos={termosByPending[reg.id] || []}
                     onGerarTermo={() => setTermoTarget(reg)}
                     onVerTermos={() => setTermoPanelTarget(reg)}
-                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
+                    isMarking={undeclineMut.isPending}
                   />
                 ))}
               </TableBody>
