@@ -116,6 +116,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * clique. O valor é lido pelo onSubmit logo depois da validação.
    */
   const modoAbertura = useRef<'reserva' | 'contratacao'>('contratacao');
+  /**
+   * Espelho em estado do modo, para o rótulo da data não mentir: em "reserva" o
+   * valor digitado é gravado em `data_reserva`, não em `data_contratacao`.
+   */
+  const [modo, setModo] = useState<'reserva' | 'contratacao'>('contratacao');
 
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
