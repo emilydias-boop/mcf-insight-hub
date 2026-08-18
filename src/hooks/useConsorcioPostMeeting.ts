@@ -3,6 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
+import {
+  PAGE_SIZE,
+  CHUNK_SIZE,
+  MAX_PAGES,
+  isRangeExhausted,
+  fetchAllPages,
+  fetchAllByIds,
+} from '@/lib/supabasePaginacao';
 
 // Stage IDs
 const CONSORCIO_STAGE_IDS = {
@@ -36,40 +44,8 @@ const SEM_SUCESSO_IDS = [
 // Helpers robustos contra o limite de 1000 linhas do PostgREST
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 1000;
-const CHUNK_SIZE = 200;
-const MAX_PAGES = 50; // guarda contra loop infinito
-
-/** PostgREST devolve 416/PGRST103 quando o offset passa do total — isso é "fim da lista", não erro. */
-function isRangeExhausted(error: any) {
-  const code = error?.code || '';
-  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-  return (
-    code === 'PGRST103' ||
-    code === '416' ||
-    msg.includes('range not satisfiable') ||
-    msg.includes('requested range')
-  );
-}
-
-/** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
-async function fetchAllPages<T = any>(
-  build: (from: number, to: number) => any
-): Promise<T[]> {
-  const all: T[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await build(from, from + PAGE_SIZE - 1);
-    if (error) {
-      if (isRangeExhausted(error)) break; // offset além do total: acabou
-      throw error;
-    }
-    const rows = (data || []) as T[];
-    all.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
-  }
-  return all;
-}
+// Os helpers de paginação vivem em '@/lib/supabasePaginacao'.
+export { PAGE_SIZE, CHUNK_SIZE, MAX_PAGES, isRangeExhausted, fetchAllPages, fetchAllByIds };
 
 export interface DealMeetingInfo {
   date: string;
