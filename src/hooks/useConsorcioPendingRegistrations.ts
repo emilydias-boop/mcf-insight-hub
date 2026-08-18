@@ -939,6 +939,15 @@ export function useOpenCota() {
     }) => {
       const { registration, cotaData, registrationId, clienteData } = params;
 
+      // Abertura como RESERVA: a cota foi enviada à Embracon e ainda não voltou
+      // confirmada. Nesse caso a data base do cronograma é a data de reserva,
+      // `data_contratacao` fica nula (é ela que faz a cota contar na etapa Cotas)
+      // e as parcelas nascem com status 'previsto'.
+      const isReserva = cotaData.tipo_registro === 'reserva';
+      const baseDateStr = isReserva
+        ? (cotaData.data_reserva || cotaData.data_contratacao)
+        : cotaData.data_contratacao;
+
       // 0. Update client data on pending registration if provided
       if (clienteData) {
         // Zero é valor legítimo em renda/patrimônio (mesmo espírito do numOuNull()
@@ -971,7 +980,9 @@ export function useOpenCota() {
         tipo_produto: cotaData.tipo_produto as any,
         tipo_contrato: (cotaData.tipo_contrato || 'normal') as any,
         parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
-        data_contratacao: cotaData.data_contratacao,
+        tipo_registro: isReserva ? 'reserva' : 'contratacao',
+        data_contratacao: isReserva ? null : cotaData.data_contratacao,
+        data_reserva: isReserva ? (cotaData.data_reserva || cotaData.data_contratacao) : (cotaData.data_reserva ?? null),
         dia_vencimento: cotaData.dia_vencimento,
         inicio_segunda_parcela: (cotaData.inicio_segunda_parcela || 'automatico') as any,
         origem: cotaData.origem,
@@ -1044,7 +1055,7 @@ export function useOpenCota() {
       }
 
       // 4. Generate installments
-      const [year, month, day] = cotaData.data_contratacao.split('-').map(Number);
+      const [year, month, day] = String(baseDateStr).split('-').map(Number);
       const dataContratacao = new Date(year, month - 1, day);
       const inicioSegunda = cotaData.inicio_segunda_parcela || 'automatico';
       let offsetSegundaParcela: number;
@@ -1094,7 +1105,7 @@ export function useOpenCota() {
           valor_parcela: cotaData.valor_credito / cotaData.prazo_meses,
           valor_comissao: valorComissao,
           data_vencimento: dataVencimento.toISOString().split('T')[0],
-          status: 'pendente',
+          status: isReserva ? 'previsto' : 'pendente',
         });
       }
 
@@ -1134,7 +1145,7 @@ export function useOpenCota() {
         parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
         dia_vencimento: cotaData.dia_vencimento,
         inicio_segunda_parcela: cotaData.inicio_segunda_parcela || 'automatico',
-        data_contratacao: cotaData.data_contratacao,
+        data_contratacao: isReserva ? null : cotaData.data_contratacao,
         origem: cotaData.origem,
         origem_detalhe: cotaData.origem_detalhe || null,
         vendedor_id: cotaData.vendedor_id || null,
