@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 
 /**
  * Funil R1 do Consórcio (etapas 1 e 2 do Funil Pós-Reunião).
@@ -60,12 +61,6 @@ export function r1StatusShortLabel(status: string): string {
   }
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
 export function useConsorcioR1Funnel(
   range: { startDate?: Date; endDate?: Date },
   options?: { enabled?: boolean },
@@ -95,15 +90,19 @@ export function useConsorcioR1Funnel(
       (activeClosers || []).forEach((c: any) => closerName.set(c.id, c.name));
       const closerIds = new Set<string>(closerName.keys());
 
-      // 2) Slots R1 do período
-      let slotQuery = supabase
-        .from('meeting_slots')
-        .select('id, scheduled_at, status, closer_id')
-        .eq('meeting_type', 'r1');
-      if (startIso) slotQuery = slotQuery.gte('scheduled_at', startIso);
-      if (endIso) slotQuery = slotQuery.lte('scheduled_at', endIso);
-      const { data: slots, error: slotErr } = await slotQuery.order('scheduled_at', { ascending: false });
-      if (slotErr) throw slotErr;
+      // 2) Slots R1 do período (paginado: sem .range() o PostgREST trunca em 1000)
+      const slots = await fetchAllPages<any>((from, to) => {
+        let slotQuery = supabase
+          .from('meeting_slots')
+          .select('id, scheduled_at, status, closer_id')
+          .eq('meeting_type', 'r1');
+        if (startIso) slotQuery = slotQuery.gte('scheduled_at', startIso);
+        if (endIso) slotQuery = slotQuery.lte('scheduled_at', endIso);
+        return slotQuery
+          .order('scheduled_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to);
+      });
 
       const validSlots = (slots || []).filter(
         (s: any) =>
@@ -120,19 +119,21 @@ export function useConsorcioR1Funnel(
 
       const slotById = new Map<string, any>(validSlots.map((s: any) => [s.id, s]));
 
-      // 3) Participantes dos slots (lotes de 200 ids)
-      const rows: any[] = [];
-      for (const ids of chunk(Array.from(slotById.keys()), 200)) {
-        const { data, error } = await supabase
-          .from('meeting_slot_attendees')
-          .select(
-            'id, meeting_slot_id, deal_id, contact_id, attendee_name, attendee_phone, status, closer_notes, notes, is_partner, parent_attendee_id, outcome_reason, outcome_reason_note',
-          )
-          .in('meeting_slot_id', ids)
-          .eq('is_partner', false);
-        if (error) throw error;
-        rows.push(...(data || []));
-      }
+      // 3) Participantes dos slots (lotes de 200 ids, com paginação dentro do lote:
+      //    um slot pode ter vários participantes, então 200 ids passam de 1000 linhas)
+      const rows = await fetchAllByIds<any>(
+        Array.from(slotById.keys()),
+        (lote, from, to) =>
+          supabase
+            .from('meeting_slot_attendees')
+            .select(
+              'id, meeting_slot_id, deal_id, contact_id, attendee_name, attendee_phone, status, closer_notes, notes, is_partner, parent_attendee_id, outcome_reason, outcome_reason_note',
+            )
+            .in('meeting_slot_id', lote)
+            .eq('is_partner', false)
+            .order('id', { ascending: true })
+            .range(from, to),
+      );
 
       const now = Date.now();
       const participants: R1FunnelParticipant[] = rows.map((a) => {
