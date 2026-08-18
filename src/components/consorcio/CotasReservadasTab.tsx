@@ -101,8 +101,16 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                 <TableBody>
                   {fila.map((c) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.nome}</TableCell>
-                      {null}
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <span>{c.nome}</span>
+                          {!c.origemFunil && (
+                            <Badge variant="outline" className="whitespace-nowrap">
+                              externa
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-center">
                         {c.grupo} / {c.cota}
                       </TableCell>
