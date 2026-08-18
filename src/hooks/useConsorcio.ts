@@ -14,6 +14,7 @@ import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalcula
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
 import { toast } from 'sonner';
+import { fetchAllPages } from '@/lib/supabasePaginacao';
 
 interface ConsorcioFilters {
   startDate?: Date;
@@ -57,48 +58,51 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}, options?: { en
     queryKey: ['consortium-cards', filters],
     enabled: options?.enabled !== false,
     queryFn: async () => {
-      let query = supabase
-        .from('consortium_cards')
-        .select(`${CONSORCIO_CARD_LIST_SELECT}, consortium_installments(valor_comissao)`)
-        .order('created_at', { ascending: false });
+      // Paginado: o teto de 1000 linhas do PostgREST conta LINHAS DO RESULTADO.
+      // O embed de parcelas continua igual — paginamos as linhas de consortium_cards.
+      const data = await fetchAllPages<any>((from, to) => {
+        let query = supabase
+          .from('consortium_cards')
+          .select(`${CONSORCIO_CARD_LIST_SELECT}, consortium_installments(valor_comissao)`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true });
 
-      if (filters.startDate) {
-        query = query.gte('data_contratacao', filters.startDate.toISOString().split('T')[0]);
-      }
-      if (filters.endDate) {
-        query = query.lte('data_contratacao', filters.endDate.toISOString().split('T')[0]);
-      }
-      if (filters.status && filters.status !== 'todos') {
-        query = query.eq('status', filters.status);
-      }
-      if (filters.tipoProduto && filters.tipoProduto !== 'todos') {
-        query = query.eq('tipo_produto', filters.tipoProduto);
-      }
-      if (filters.vendedorId) {
-        query = query.eq('vendedor_id', filters.vendedorId);
-      }
-      if (filters.categoria) {
-        query = query.eq('categoria', filters.categoria);
-      }
-      if (filters.search) {
-        query = query.or(`nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`);
-      }
-      if (filters.diaVencimento) {
-        query = query.eq('dia_vencimento', filters.diaVencimento);
-      }
-      if (filters.grupo) {
-        query = query.eq('grupo', filters.grupo);
-      }
-      if (filters.origem) {
-        query = query.eq('origem', filters.origem);
-      }
-      if (filters.objetivo) {
-        query = query.eq('objetivo', filters.objetivo);
-      }
+        if (filters.startDate) {
+          query = query.gte('data_contratacao', filters.startDate.toISOString().split('T')[0]);
+        }
+        if (filters.endDate) {
+          query = query.lte('data_contratacao', filters.endDate.toISOString().split('T')[0]);
+        }
+        if (filters.status && filters.status !== 'todos') {
+          query = query.eq('status', filters.status);
+        }
+        if (filters.tipoProduto && filters.tipoProduto !== 'todos') {
+          query = query.eq('tipo_produto', filters.tipoProduto);
+        }
+        if (filters.vendedorId) {
+          query = query.eq('vendedor_id', filters.vendedorId);
+        }
+        if (filters.categoria) {
+          query = query.eq('categoria', filters.categoria);
+        }
+        if (filters.search) {
+          query = query.or(`nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`);
+        }
+        if (filters.diaVencimento) {
+          query = query.eq('dia_vencimento', filters.diaVencimento);
+        }
+        if (filters.grupo) {
+          query = query.eq('grupo', filters.grupo);
+        }
+        if (filters.origem) {
+          query = query.eq('origem', filters.origem);
+        }
+        if (filters.objetivo) {
+          query = query.eq('objetivo', filters.objetivo);
+        }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
+        return query.range(from, to);
+      });
       
       // Calculate total commission from installments for each card
       const cardsWithCommission = (data || []).map((card: any) => {

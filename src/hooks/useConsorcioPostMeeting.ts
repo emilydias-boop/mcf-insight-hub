@@ -3,6 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
+import {
+  PAGE_SIZE,
+  CHUNK_SIZE,
+  MAX_PAGES,
+  isRangeExhausted,
+  fetchAllPages,
+  fetchAllByIds,
+} from '@/lib/supabasePaginacao';
 
 // Stage IDs
 const CONSORCIO_STAGE_IDS = {
@@ -36,40 +44,8 @@ const SEM_SUCESSO_IDS = [
 // Helpers robustos contra o limite de 1000 linhas do PostgREST
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 1000;
-const CHUNK_SIZE = 200;
-const MAX_PAGES = 50; // guarda contra loop infinito
-
-/** PostgREST devolve 416/PGRST103 quando o offset passa do total — isso é "fim da lista", não erro. */
-function isRangeExhausted(error: any) {
-  const code = error?.code || '';
-  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
-  return (
-    code === 'PGRST103' ||
-    code === '416' ||
-    msg.includes('range not satisfiable') ||
-    msg.includes('requested range')
-  );
-}
-
-/** Busca todas as páginas de um builder (contorna o limite default de 1000 linhas). */
-async function fetchAllPages<T = any>(
-  build: (from: number, to: number) => any
-): Promise<T[]> {
-  const all: T[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await build(from, from + PAGE_SIZE - 1);
-    if (error) {
-      if (isRangeExhausted(error)) break; // offset além do total: acabou
-      throw error;
-    }
-    const rows = (data || []) as T[];
-    all.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
-  }
-  return all;
-}
+// Os helpers de paginação vivem em '@/lib/supabasePaginacao'.
+export { PAGE_SIZE, CHUNK_SIZE, MAX_PAGES, isRangeExhausted, fetchAllPages, fetchAllByIds };
 
 export interface DealMeetingInfo {
   date: string;
@@ -436,10 +412,14 @@ export function useProposals() {
         .filter(Boolean) as string[];
       const cardsWithDocs = new Set<string>();
       if (cardIds.length > 0) {
-        const { data: docs } = await supabase
-          .from('consortium_documents')
-          .select('card_id')
-          .in('card_id', cardIds);
+        const docs = await fetchAllByIds<any>(cardIds, (lote, from, to) =>
+          supabase
+            .from('consortium_documents')
+            .select('card_id')
+            .in('card_id', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (docs || []).forEach(d => {
           if (d.card_id) cardsWithDocs.add(d.card_id);
         });
@@ -455,9 +435,10 @@ export function useProposals() {
       // Critério único compartilhado com a aba de Cadastros (usePendingRegistrations).
       let regsWithDocs = new Set<string>();
       if (dealIds.length > 0) {
-        const { data: pendingRegs } = await supabase
-          .from('consorcio_pending_registrations')
-          .select(`
+        const pendingRegs = await fetchAllByIds<any>(dealIds, (lote, from, to) =>
+          supabase
+            .from('consorcio_pending_registrations')
+            .select(`
             id,
             deal_id,
             consortium_card_id,
@@ -476,7 +457,10 @@ export function useProposals() {
             renda,
             faturamento_mensal
           `)
-          .in('deal_id', dealIds);
+            .in('deal_id', lote)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (pendingRegs || []).forEach(pr => {
           if (pr.deal_id) {
             if (!pendingRegistrationsByDeal[pr.deal_id]) pendingRegistrationsByDeal[pr.deal_id] = [];
@@ -618,9 +602,10 @@ export function useSemSucesso() {
   return useQuery({
     queryKey: ['consorcio-sem-sucesso'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -629,20 +614,25 @@ export function useSemSucesso() {
           crm_contacts (name, phone, email),
           crm_origins (name)
         `)
-        .in('stage_id', SEM_SUCESSO_IDS)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('stage_id', SEM_SUCESSO_IDS)
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
 
       const dealIds = (data || []).map(d => d.id);
       let proposalsByDeal: Record<string, { id: string; motivo_recusa: string | null }> = {};
       if (dealIds.length > 0) {
-        const { data: proposals } = await supabase
-          .from('consorcio_proposals')
-          .select('id, deal_id, motivo_recusa')
-          .in('deal_id', dealIds)
-          .eq('status', 'recusada');
+        const proposals = await fetchAllByIds<any>(dealIds, (lote, from, to) =>
+          supabase
+            .from('consorcio_proposals')
+            .select('id, deal_id, motivo_recusa')
+            .in('deal_id', lote)
+            .eq('status', 'recusada')
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (proposals || []).forEach(p => {
           if (p.deal_id) proposalsByDeal[p.deal_id] = { id: p.id, motivo_recusa: p.motivo_recusa };
         });

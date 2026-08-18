@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 
 /**
  * Cotas que nasceram DENTRO do funil: existe um `consorcio_pending_registrations`
@@ -14,11 +15,16 @@ export function useConsorcioCotasOrigem() {
     queryKey: ['consorcio-cotas-origem-funil'],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Map<string, string>> => {
-      const { data, error } = await supabase
-        .from('consorcio_pending_registrations')
-        .select('consortium_card_id, nome_completo, razao_social')
-        .not('consortium_card_id', 'is', null);
-      if (error) throw error;
+      // Paginado: passando de 1000 vínculos, cotas do funil seriam classificadas
+      // como "externas" em silêncio (contadores e filtros da timeline errados).
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('consorcio_pending_registrations')
+          .select('consortium_card_id, nome_completo, razao_social')
+          .not('consortium_card_id', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
       const map = new Map<string, string>();
       (data || []).forEach((r: any) => {
         if (!r.consortium_card_id) return;
@@ -43,17 +49,19 @@ export function useConsorcioCardCreators(cardIds: string[]) {
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Map<string, string>> => {
       const map = new Map<string, string>();
-      for (let i = 0; i < cardIds.length; i += 200) {
-        const { data, error } = await supabase
+      // Log de atividade é 1-para-N: pagina dentro de cada lote de ids.
+      const rows = await fetchAllByIds<any>(cardIds, (lote, from, to) =>
+        supabase
           .from('consortium_card_activity_log')
           .select('card_id, actor_name, created_at')
-          .in('card_id', cardIds.slice(i, i + 200))
-          .order('created_at', { ascending: true });
-        if (error) throw error;
-        (data || []).forEach((l: any) => {
-          if (l.card_id && l.actor_name && !map.has(l.card_id)) map.set(l.card_id, l.actor_name);
-        });
-      }
+          .in('card_id', lote)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
+      rows.forEach((l: any) => {
+        if (l.card_id && l.actor_name && !map.has(l.card_id)) map.set(l.card_id, l.actor_name);
+      });
       return map;
     },
   });
@@ -134,14 +142,18 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
       const funnelIds = funnelLinks ?? new Map<string, string>();
       if (funnelIds.size === 0) return [];
 
-      let q = supabase
-        .from('consortium_cards')
-        .select(CARD_RESERVA_SELECT)
-        .not('data_reserva', 'is', null);
-      if (start) q = q.gte('data_reserva', start);
-      if (end) q = q.lte('data_reserva', end);
-      const { data, error } = await q.order('data_reserva', { ascending: false });
-      if (error) throw error;
+      const data = await fetchAllPages<any>((from, to) => {
+        let q = supabase
+          .from('consortium_cards')
+          .select(CARD_RESERVA_SELECT)
+          .not('data_reserva', 'is', null);
+        if (start) q = q.gte('data_reserva', start);
+        if (end) q = q.lte('data_reserva', end);
+        return q
+          .order('data_reserva', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to);
+      });
 
       return (data || []).filter((c: any) => funnelIds.has(c.id)).map((c: any) => mapCard(c, true));
     },
@@ -224,15 +236,16 @@ export function useCotasComConfirmacaoEmbracon(cardIds: string[]) {
     staleTime: 60 * 1000,
     queryFn: async (): Promise<Set<string>> => {
       const set = new Set<string>();
-      for (let i = 0; i < cardIds.length; i += 200) {
-        const { data, error } = await supabase
+      const rows = await fetchAllByIds<any>(cardIds, (lote, from, to) =>
+        supabase
           .from('consortium_documents')
           .select('card_id')
           .eq('tipo', 'confirmacao_embracon')
-          .in('card_id', cardIds.slice(i, i + 200));
-        if (error) throw error;
-        (data || []).forEach((d: any) => d.card_id && set.add(d.card_id));
-      }
+          .in('card_id', lote)
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
+      rows.forEach((d: any) => d.card_id && set.add(d.card_id));
       return set;
     },
   });
