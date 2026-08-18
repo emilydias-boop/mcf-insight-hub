@@ -147,6 +147,11 @@ export function FunilConsorcioTimeline({
   const cadastradasCount = loadingReservadas ? null : (reservadas?.length ?? 0);
   const medianaReserva = medianDias(reservadas || []);
 
+  const pct = (n: number, total: number) =>
+    total > 0
+      ? `${((n / total) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+      : '—';
+
   // Etapa 6 — composição das cotas contratadas no período.
   const cotas = ownCards.data ?? [];
   const cotasTotal = ownCards.isLoading ? null : cotas.length;
@@ -301,11 +306,6 @@ export function FunilConsorcioTimeline({
 
   const OVER_100_TOOLTIP =
     'A etapa seguinte tem mais registros que a anterior — provável travessia de mês ou origem fora do funil.';
-
-  const pct = (n: number, total: number) =>
-    total > 0
-      ? `${((n / total) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
-      : '—';
 
   return (
     <TooltipProvider delayDuration={150}>
