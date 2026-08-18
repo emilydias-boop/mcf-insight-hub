@@ -643,9 +643,10 @@ export default function ReunioesEquipe() {
     const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
     const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
     const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
-    // Contratos que vieram totalmente fora do funil (sem contato no CRM ou sem
-    // reunião). Não têm closer, então entram apenas no total do time.
-    const outsideForaFunilCount = outsideForaDoFunil?.length ?? 0;
+    // Outside = venda de contrato que não passou pelo time (fora do MCF Pay e
+    // fora dos links CLS de closer). É a lista completa do período: não soma
+    // com o cálculo antigo de "pagou antes da R1".
+    const outsideCount = outsideForaDoFunil?.length ?? 0;
     // Taxa de Conversão usa exatamente o mesmo número exibido no card Contratos,
     // para as duas informações nunca divergirem. O Outside foi retirado do
     // cálculo por decisão do gestor — ele não aparece no card e não deve inflar
@@ -664,9 +665,7 @@ export default function ReunioesEquipe() {
       // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
       // órfãs sem deal NÃO entram em nenhum KPI/total.
       totalContratos: totalContratosCard,
-      totalOutside: contractsFromClosers.outside + outsideForaFunilCount,
-      outsideForaFunil: outsideForaFunilCount,
-      outsideAtribuido: contractsFromClosers.outside,
+      totalOutside: outsideCount,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
@@ -1001,8 +1000,6 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
-        outsideForaFunil={enrichedKPIs.outsideForaFunil}
-        outsideAtribuido={enrichedKPIs.outsideAtribuido}
       />
 
       <RefundDetailsDialog
