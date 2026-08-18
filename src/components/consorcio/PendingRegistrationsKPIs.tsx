@@ -1,27 +1,30 @@
 import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileClock, Layers, Wallet, CalendarRange, HandCoins } from 'lucide-react';
+import { FileClock, Layers, Wallet, CalendarRange, HandCoins, Activity } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import type { EnrichedPendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
 
 interface Props {
+  /**
+   * Conjunto do PERÍODO, com todos os status e ANTES do filtro de status:
+   * o card "No período" mede o evento; os demais medem a fila (sem cota).
+   */
   registrations: EnrichedPendingRegistration[];
   variant?: 'pendentes' | 'cadastradas' | 'declinadas';
 }
 
 const VARIANT_LABELS = {
   pendentes: {
-    cotas: 'Cotas a cadastrar',
-    cotasSub: 'pendentes de abertura',
+    cotas: 'Cotas sem cota aberta',
     credito: 'Crédito pendente',
-    creditoSub: 'valor total a cadastrar',
-    mes: 'Mês com maior déficit',
+    creditoSub: 'sem cota aberta',
+    mes: 'Mês com mais cadastros',
   },
   cadastradas: {
     cotas: 'Cotas cadastradas',
-    cotasSub: 'marcadas, aguardando abertura',
+    cotasSub: 'aguardando grupo/cota da Embracon',
     credito: 'Crédito cadastrado',
     creditoSub: 'valor total',
     mes: 'Mês com maior volume',
@@ -35,26 +38,37 @@ const VARIANT_LABELS = {
   },
 } as const;
 
+/** Registros que ainda NÃO viraram cota — a fila real de trabalho. */
+const SEM_COTA_STATUS = ['aguardando_abertura', 'cadastrada'];
+
 export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' }: Props) {
   const labels = VARIANT_LABELS[variant];
   const stats = useMemo(() => {
-    const totalCotas = registrations.length;
-    const totalParcelas = registrations.reduce(
+    const totalPeriodo = registrations.length;
+    // Nas abas de status fixo o próprio conjunto já é o recorte.
+    const fila =
+      variant === 'pendentes'
+        ? registrations.filter((r) => SEM_COTA_STATUS.includes(r.status) && !r.consortium_card_id)
+        : registrations;
+    const totalCotas = fila.length;
+    const aguardando = fila.filter((r) => r.status === 'aguardando_abertura').length;
+    const naEmbracon = fila.filter((r) => r.status === 'cadastrada').length;
+    const totalParcelas = fila.reduce(
       (s, r) => s + (r.parcelas_empresa?.length || 0),
       0,
     );
-    const totalCredito = registrations.reduce(
+    const totalCredito = fila.reduce(
       (s, r) => s + (Number(r.valor_credito) || 0),
       0,
     );
     // Entrada = apenas a 1ª parcela da cota (menor número entre as parcelas da empresa)
-    const totalEntrada = registrations.reduce((s, r) => {
+    const totalEntrada = fila.reduce((s, r) => {
       if (!r.parcelas_empresa?.length) return s;
       const primeira = [...r.parcelas_empresa].sort((a, b) => a.numero - b.numero)[0];
       return s + (Number(primeira?.valor) || 0);
     }, 0);
 
-    // Mês com maior déficit (mais cadastros pendentes)
+    // Mês com mais cadastros criados
     const byMonth = new Map<string, number>();
     registrations.forEach((r) => {
       const base = r.aceite_date || r.created_at?.slice(0, 10);
@@ -69,7 +83,7 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
       if (!topMonth || count > topMonth.count) topMonth = { key, count };
     });
     let topMonthLabel = '—';
-    let topMonthSub = 'Nenhum pendente';
+    let topMonthSub = 'Nenhum cadastro';
     if (topMonth) {
       const [y, m] = topMonth.key.split('-').map(Number);
       const dt = new Date(y, m - 1, 1);
@@ -78,27 +92,33 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
       topMonthSub = `${topMonth.count} cota${topMonth.count > 1 ? 's' : ''}`;
     }
 
-    return { totalCotas, totalParcelas, totalCredito, totalEntrada, topMonthLabel, topMonthSub };
-  }, [registrations]);
+    return {
+      totalPeriodo, totalCotas, aguardando, naEmbracon,
+      totalParcelas, totalCredito, totalEntrada, topMonthLabel, topMonthSub,
+    };
+  }, [registrations, variant]);
 
   const items = [
     {
       icon: FileClock,
       label: labels.cotas,
       value: String(stats.totalCotas),
-      sub: labels.cotasSub,
+      sub:
+        variant === 'pendentes'
+          ? `${stats.aguardando} aguardando abertura · ${stats.naEmbracon} na Embracon`
+          : (labels as { cotasSub?: string }).cotasSub ?? '',
     },
     {
       icon: Layers,
-      label: 'Parcelas (empresa)',
+      label: 'Parcelas (empresa) a cadastrar',
       value: String(stats.totalParcelas),
-      sub: 'a cadastrar',
+      sub: 'só cadastros sem cota aberta',
     },
     {
       icon: HandCoins,
       label: 'Entrada a pagar',
       value: formatCurrency(stats.totalEntrada),
-      sub: 'soma da 1ª parcela de cada cota',
+      sub: 'estimativa (crédito ÷ prazo)',
     },
     {
       icon: Wallet,
@@ -112,10 +132,18 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
       value: stats.topMonthLabel,
       sub: stats.topMonthSub,
     },
+    ...(variant === 'pendentes'
+      ? [{
+          icon: Activity,
+          label: 'No período',
+          value: String(stats.totalPeriodo),
+          sub: 'cadastros criados · todos os status',
+        }]
+      : []),
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
       {items.map((it) => (
         <Card key={it.label}>
           <CardContent className="p-4 flex items-start gap-3">

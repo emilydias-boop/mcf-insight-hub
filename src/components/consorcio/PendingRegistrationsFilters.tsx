@@ -11,8 +11,36 @@ import type { EnrichedPendingRegistration } from '@/hooks/useConsorcioPendingReg
 
 export type DatePreset = 'all' | 'today' | 'week' | 'month' | 'custom';
 
+/**
+ * Recorte de status da fila. O default é a fila real de trabalho: os dois
+ * status que ainda NÃO têm cota criada (`aguardando_abertura` + `cadastrada`).
+ */
+export type PendingStatusFilter =
+  | 'pendentes_cota'
+  | 'aguardando_abertura'
+  | 'cadastrada'
+  | 'com_cota'
+  | 'declinada'
+  | 'todos';
+
+export const PENDING_STATUS_FILTERS: { value: PendingStatusFilter; label: string; statuses: string[] | null }[] = [
+  { value: 'pendentes_cota', label: 'Pendentes de cota', statuses: ['aguardando_abertura', 'cadastrada'] },
+  { value: 'aguardando_abertura', label: 'Aguardando abertura', statuses: ['aguardando_abertura'] },
+  { value: 'cadastrada', label: 'Enviada à Embracon', statuses: ['cadastrada'] },
+  { value: 'com_cota', label: 'Já viraram cota', statuses: ['cota_aberta', 'vinculada'] },
+  { value: 'declinada', label: 'Declinadas', statuses: ['declinada'] },
+  { value: 'todos', label: 'Todos os status', statuses: null },
+];
+
+export const DEFAULT_PENDING_STATUS_FILTER: PendingStatusFilter = 'pendentes_cota';
+
+export function isPendingStatusFilter(v: string | null): v is PendingStatusFilter {
+  return !!v && PENDING_STATUS_FILTERS.some((o) => o.value === v);
+}
+
 export interface PendingFiltersState {
   search: string;
+  status: PendingStatusFilter;
   datePreset: DatePreset;
   dateFrom: Date | null;
   dateTo: Date | null;
@@ -26,6 +54,7 @@ export interface PendingFiltersState {
 
 export const defaultPendingFilters: PendingFiltersState = {
   search: '',
+  status: DEFAULT_PENDING_STATUS_FILTER,
   datePreset: 'all',
   dateFrom: null,
   dateTo: null,
@@ -41,9 +70,11 @@ interface Props {
   filters: PendingFiltersState;
   onChange: (f: PendingFiltersState) => void;
   registrations: EnrichedPendingRegistration[];
+  /** Abas com status fixo (cadastradas/declinadas) não mostram o recorte. */
+  showStatus?: boolean;
 }
 
-export function PendingRegistrationsFilters({ filters, onChange, registrations }: Props) {
+export function PendingRegistrationsFilters({ filters, onChange, registrations, showStatus = true }: Props) {
   const closers = useMemo(() => {
     const set = new Set<string>();
     registrations.forEach((r) => r.closer_name && set.add(r.closer_name));
@@ -60,6 +91,7 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
 
   const hasActive =
     filters.search ||
+    (showStatus && filters.status !== DEFAULT_PENDING_STATUS_FILTER) ||
     filters.datePreset !== 'all' ||
     filters.valorMin ||
     filters.valorMax ||
@@ -80,6 +112,19 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
             className="pl-8 h-9"
           />
         </div>
+
+        {showStatus && (
+          <Select value={filters.status} onValueChange={(v: PendingStatusFilter) => update({ status: v })}>
+            <SelectTrigger className="h-9 w-[190px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {PENDING_STATUS_FILTERS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         <Select value={filters.datePreset} onValueChange={(v: DatePreset) => update({ datePreset: v })}>
           <SelectTrigger className="h-9 w-[150px]">
@@ -140,7 +185,12 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
         </Select>
 
         {hasActive && (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => onChange(defaultPendingFilters)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9"
+            onClick={() => onChange({ ...defaultPendingFilters, status: showStatus ? DEFAULT_PENDING_STATUS_FILTER : filters.status })}
+          >
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}
@@ -206,12 +256,16 @@ export function applyPendingFilters(
   }
 
   const q = f.search.trim().toLowerCase();
+  const statusOpt = PENDING_STATUS_FILTERS.find((o) => o.value === f.status);
+  const statusAllowed = statusOpt?.statuses ?? null;
   const vMin = f.valorMin ? Number(f.valorMin) : null;
   const vMax = f.valorMax ? Number(f.valorMax) : null;
   const pMin = f.parcelasMin ? Number(f.parcelasMin) : null;
   const pMax = f.parcelasMax ? Number(f.parcelasMax) : null;
 
   return registrations.filter((r) => {
+    if (statusAllowed && !statusAllowed.includes(r.status)) return false;
+
     // Date filter (data solicitada = aceite_date || created_at)
     if (from || to) {
       const base = r.aceite_date

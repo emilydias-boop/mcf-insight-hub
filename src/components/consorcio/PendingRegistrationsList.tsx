@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw, FileSignature } from 'lucide-react';
@@ -47,7 +48,10 @@ import {
   PendingRegistrationsFilters,
   applyPendingFilters,
   defaultPendingFilters,
+  isPendingStatusFilter,
+  DEFAULT_PENDING_STATUS_FILTER,
   type PendingFiltersState,
+  type PendingStatusFilter,
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
@@ -60,11 +64,22 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
-  cadastrada: 'Cadastrada',
+  cadastrada: 'Enviada à Embracon',
   cota_aberta: 'Cota aberta',
   vinculada: 'Vinculada',
   declinada: 'Declinada',
 };
+
+/** `aguardando_abertura` e `cadastrada` ainda não têm cota — é a fila de trabalho. */
+const SEM_COTA = ['aguardando_abertura', 'cadastrada'];
+
+/** Dias corridos desde uma data ISO (nulo quando a data não existe). */
+function diasDesde(iso?: string | null): number | null {
+  if (!iso) return null;
+  const base = new Date(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - base.getTime()) / 86400000));
+}
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
@@ -144,6 +159,32 @@ export function PendingRegistrationsList({
   const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filtersState, setFiltersState] = useState<PendingFiltersState>(defaultPendingFilters);
+  // Status vive na URL (`stPe`), mesmo mecanismo de `ordPe`/`dirPe`/`q`.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stParam = searchParams.get('stPe');
+  const statusFilter: PendingStatusFilter =
+    // Abas com status fixo (cadastradas/declinadas) não recortam por status.
+    variant !== 'pendentes'
+      ? 'todos'
+      : onlyAguardandoAbertura
+        ? 'aguardando_abertura'
+        : isPendingStatusFilter(stParam)
+          ? stParam
+          : DEFAULT_PENDING_STATUS_FILTER;
+  const setStatusFilter = useCallback(
+    (v: PendingStatusFilter) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (v === DEFAULT_PENDING_STATUS_FILTER) next.delete('stPe');
+          else next.set('stPe', v);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PendingSortField>({
     campos: PENDING_SORT_FIELDS,
     inicial: { field: 'created_at', dir: 'desc' },
@@ -151,10 +192,19 @@ export function PendingRegistrationsList({
   });
   // A busca desta aba vive no `?qPe=`, como nas outras abas; os demais filtros
   // continuam locais.
-  const filters = useMemo<PendingFiltersState>(() => ({ ...filtersState, search: q }), [filtersState, q]);
+  const filters = useMemo<PendingFiltersState>(
+    () => ({ ...filtersState, search: q, status: statusFilter }),
+    [filtersState, q, statusFilter],
+  );
   const setFilters = (next: PendingFiltersState) => {
     if (next.search !== filters.search) setQ(next.search);
-    setFiltersState({ ...next, search: '' });
+    if (next.status !== filters.status) {
+      setStatusFilter(next.status);
+      // O filtro rápido da timeline e o Select são a mesma coisa: mudar o Select
+      // desfaz o atalho para não brigarem.
+      if (onlyAguardandoAbertura) onClearQuickFilter?.();
+    }
+    setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
@@ -234,8 +284,9 @@ export function PendingRegistrationsList({
       filters={filters}
       onChange={setFilters}
       registrations={registrations}
+      showStatus={variant === 'pendentes'}
     />
-    <PendingRegistrationsKPIs registrations={filtered} variant={variant} />
+    <PendingRegistrationsKPIs registrations={registrations} variant={variant} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
@@ -497,6 +548,9 @@ function RegistrationRow({
     : '—';
 
   const termoAssinado = termos.find((t) => t.status === 'assinado');
+  // `cadastrada` = enviado à Embracon, esperando grupo/cota voltarem.
+  const semCota = SEM_COTA.includes(reg.status);
+  const diasEmbracon = reg.status === 'cadastrada' ? diasDesde(reg.cadastrada_at) : null;
   const termoPendente = termos.find((t) => t.status === 'pendente');
   const termoBadge = termoAssinado
     ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
@@ -588,6 +642,22 @@ function RegistrationRow({
           <Badge variant={reg.status === 'aguardando_abertura' ? 'outline' : 'secondary'}>
             {STATUS_LABELS[reg.status] || reg.status}
           </Badge>
+          {diasEmbracon != null && (
+            <div className="mt-1">
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${
+                  diasEmbracon >= 10
+                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                    : diasEmbracon >= 5
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'text-muted-foreground'
+                }`}
+              >
+                na Embracon há {diasEmbracon} dia{diasEmbracon === 1 ? '' : 's'}
+              </Badge>
+            </div>
+          )}
         </TableCell>
       )}
       {variant === 'declinadas' && (
@@ -604,7 +674,7 @@ function RegistrationRow({
       )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
+          {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
             <Button size="sm" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
             </Button>
@@ -656,12 +726,17 @@ function RegistrationRow({
                   {termos.length ? 'Termo de Adesão' : 'Gerar Termo de Adesão'}
                 </DropdownMenuItem>
               )}
-              {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
+              {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
               )}
-              {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
+              {variant === 'pendentes' && reg.status === 'cadastrada' && (
+                <DropdownMenuItem onClick={onUnmarkCadastrada} disabled={isMarking}>
+                  <Undo2 className="h-4 w-4 mr-2" /> Voltar para aguardando abertura
+                </DropdownMenuItem>
+              )}
+              {variant === 'pendentes' && semCota && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
