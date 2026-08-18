@@ -123,7 +123,7 @@ export function AcceptProposalModal({
     queryFn: async () => {
       const { data } = await supabase
         .from('consorcio_proposals')
-        .select('valor_credito, prazo_meses, proposal_details, crm_deals (crm_contacts (phone, email))')
+        .select('valor_credito, prazo_meses, proposal_details, tipo_produto, origem_lead, crm_deals (crm_contacts (phone, email))')
         .eq('id', proposalId)
         .maybeSingle();
       return data;
@@ -293,6 +293,10 @@ export function AcceptProposalModal({
       inicio_segunda_parcela: plano.valores.inicio_segunda_parcela,
       objetivo: plano.valores.objetivo,
       inclui_seguro: incluiSeguro,
+      // Vêm da proposta: `tipo_produto` decide o produto e a comissão de TODAS as
+      // parcelas no "Abrir cota"; `origem` é o crédito da origem do lead.
+      tipo_produto: (proposal as any)?.tipo_produto || undefined,
+      origem: (proposal as any)?.origem_lead || undefined,
       observacoes: proposal?.proposal_details?.trim() || undefined,
       ...cleanData,
     });
