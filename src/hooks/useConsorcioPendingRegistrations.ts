@@ -615,6 +615,9 @@ export function useDeletePendingRegistration() {
             status: 'pendente',
             aceite_at: null,
             aceite_by: null,
+            // aceite_date também precisa sair: senão a proposta volta a
+            // 'pendente' carregando data de aceite antiga.
+            aceite_date: null,
           } as any)
           .eq('id', (regRow as any).proposal_id);
       }
@@ -906,8 +909,9 @@ export function useOpenCota() {
       registration: PendingRegistration;
       cotaData: {
         categoria: string;
-        grupo: string;
-        cota: string;
+        /** Reserva pode nascer sem grupo/cota (a Embracon devolve depois). */
+        grupo: string | null;
+        cota: string | null;
         valor_credito: number;
         prazo_meses: number;
         tipo_produto: string;
