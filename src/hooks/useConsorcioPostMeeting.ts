@@ -589,10 +589,15 @@ export function useProposals() {
           return closerNameByEmail[String(ownerId).toLowerCase()] || ownerId;
         })(),
         owner_id: (p.crm_deals as any)?.owner_id || '',
-        documentos_pendentes:
-          p.status === 'aceita' &&
-          !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&
-          !(p.deal_id && dealsWithDocs.has(p.deal_id)),
+        // Critério único: a proposta está com documento pendente se QUALQUER
+        // cadastro pendente dela estiver sem documento (próprio registro ou card
+        // vinculado). Sem cadastro pendente, cai no documento do card.
+        documentos_pendentes: (() => {
+          if (p.status !== 'aceita') return false;
+          const regs = (p.deal_id && pendingRegistrationsByDeal[p.deal_id]) || [];
+          if (regs.length > 0) return regs.some((r: any) => !regsWithDocs.has(r.id));
+          return !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id));
+        })(),
         completa:
           p.status === 'aceita' &&
           !!p.consortium_card_id &&
