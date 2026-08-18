@@ -53,6 +53,7 @@ import {
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
+import { diasParados } from '@/hooks/useConsorcioCotasOrigem';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
@@ -69,6 +70,36 @@ const STATUS_LABELS: Record<string, string> = {
 
 /** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
 const SEM_COTA = ['aguardando_abertura'];
+
+/**
+ * Idade do cadastro na fila: hoje − (aceite_date ?? created_at) — a mesma data
+ * que a coluna "Solicitado em" exibe. `null` quando as duas datas faltam.
+ */
+function idadeFilaDias(reg: { aceite_date?: string | null; created_at?: string | null }): number | null {
+  const base = reg.aceite_date || (reg.created_at ? String(reg.created_at).slice(0, 10) : null);
+  if (!base) return null;
+  return diasParados(base);
+}
+
+/**
+ * Semáforo de idade da fila. Usa OS MESMOS limiares do "Dias parados" da etapa 5
+ * (neutro até 7, âmbar de 8 a 15, vermelho acima de 15) para não existirem dois
+ * semáforos com cortes diferentes na mesma tela.
+ */
+function IdadeFilaBadge({ dias }: { dias: number | null }) {
+  if (dias == null) return null;
+  const tom =
+    dias > 15
+      ? 'border-destructive/60 bg-destructive/10 text-destructive'
+      : dias >= 8
+        ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+        : 'border-border text-muted-foreground';
+  return (
+    <Badge variant="outline" className={`mt-1 text-[10px] tabular-nums ${tom}`}>
+      {dias}d parado{dias === 1 ? '' : 's'}
+    </Badge>
+  );
+}
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
