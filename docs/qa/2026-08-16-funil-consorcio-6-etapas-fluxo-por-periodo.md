@@ -199,3 +199,23 @@ Nenhuma taxa acima de 100%.
 | `3355c54d` | taxas contra a etapa 4; alerta de taxa >100% |
 
 Publicado em produção em 16/08/2026.
+
+---
+
+## Exceção documentada (2026-08-16 → atualização Pós-Reunião)
+
+**Etapa 3 — Cartas Negociadas:** propostas criadas apenas para marcar
+"aguardando retorno" do cliente (`aguardando_retorno = true` **e**
+`valor_credito = 0`) **não** contam na etapa 3 e **não** somam no card
+"Crédito Contratado — Cartas Negociadas".
+
+Motivo: essas linhas nascem sem valor/prazo (registro de follow-up, não de
+carta negociada) e inflavam a etapa com R$ 0,00.
+
+Comportamento na aba: a linha continua visível na lista, com badge âmbar
+**"Aguardando retorno"** no lugar do status "Pendente", botão **Cadastrar**
+desabilitado (tooltip "Registre valor e prazo antes de cadastrar") e o lápis
+de edição habilitado. Ao preencher valor/prazo, a proposta volta a contar
+normalmente na etapa 3 e no card.
+
+Nenhuma outra definição de contagem do funil de 6 etapas foi alterada.
