@@ -374,7 +374,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       ...data,
       // Reserva: a data informada vale como data de reserva e a contratação fica em aberto.
       tipo_registro: modoAbertura.current,
-      data_reserva: modoAbertura.current === 'reserva' ? data.data_contratacao : null,
+      // No caminho "já contratada" a chave é OMITIDA (não vai null) para não
+      // anular eventual default/trigger da coluna no banco.
+      ...(modoAbertura.current === 'reserva' ? { data_reserva: data.data_contratacao } : {}),
       produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
       parcela_1a_12a: calculoParcela?.parcela1a12,
       parcela_demais: calculoParcela?.parcelaDemais,
@@ -1011,19 +1013,28 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         </Button>
                         {!readOnly && (
                           <>
+                            {/* type="button": com submit, o Enter em qualquer campo
+                                dispararia o primeiro botão do DOM e criaria uma
+                                reserva silenciosamente. O modo só é decidido no clique. */}
                             <Button
-                              type="submit"
+                              type="button"
                               variant="secondary"
                               disabled={openCota.isPending}
-                              onClick={() => { modoAbertura.current = 'reserva'; }}
+                              onClick={() => {
+                                modoAbertura.current = 'reserva';
+                                form.handleSubmit(onSubmit, onInvalid)();
+                              }}
                             >
                               {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                               Abrir como reserva
                             </Button>
                             <Button
-                              type="submit"
+                              type="button"
                               disabled={openCota.isPending}
-                              onClick={() => { modoAbertura.current = 'contratacao'; }}
+                              onClick={() => {
+                                modoAbertura.current = 'contratacao';
+                                form.handleSubmit(onSubmit, onInvalid)();
+                              }}
                             >
                               {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                               Abrir já contratada

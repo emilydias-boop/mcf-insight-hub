@@ -982,7 +982,12 @@ export function useOpenCota() {
         parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
         tipo_registro: isReserva ? 'reserva' : 'contratacao',
         data_contratacao: isReserva ? null : cotaData.data_contratacao,
-        data_reserva: isReserva ? (cotaData.data_reserva || cotaData.data_contratacao) : (cotaData.data_reserva ?? null),
+        // Contratação: se não houver data de reserva informada, deixamos a chave
+        // UNDEFINED (o insert filtra undefined) em vez de mandar null explícito —
+        // null anularia qualquer default/trigger da coluna no banco.
+        data_reserva: isReserva
+          ? (cotaData.data_reserva || cotaData.data_contratacao)
+          : (cotaData.data_reserva || undefined),
         dia_vencimento: cotaData.dia_vencimento,
         inicio_segunda_parcela: (cotaData.inicio_segunda_parcela || 'automatico') as any,
         origem: cotaData.origem,

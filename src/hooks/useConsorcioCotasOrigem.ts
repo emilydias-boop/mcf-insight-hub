@@ -153,21 +153,51 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
  * aparecer mesmo com o filtro no mês corrente.
  */
 export function useConsorcioReservasAguardando() {
+  // Mesma restrição da etapa 5: só cotas com ORIGEM NO FUNIL. Sem isso a fila
+  // mostraria cotas externas e o número não bateria com a bolinha da timeline.
+  const { data: funnelLinks } = useConsorcioCotasOrigem();
+
   return useQuery({
-    queryKey: ['consorcio-reservas-aguardando'],
+    queryKey: ['consorcio-reservas-aguardando', funnelLinks?.size ?? 0],
+    enabled: !!funnelLinks,
     staleTime: 60 * 1000,
     queryFn: async (): Promise<CotaReservada[]> => {
-      const { data, error } = await supabase
-        .from('consortium_cards')
-        .select(CARD_RESERVA_SELECT)
-        .eq('tipo_registro', 'reserva')
-        .is('data_contratacao', null)
-        .not('data_reserva', 'is', null)
-        .order('data_reserva', { ascending: true });
-      if (error) throw error;
-      return (data || []).map(mapCard);
+      const funnelIds = funnelLinks ?? new Map<string, string>();
+      if (funnelIds.size === 0) return [];
+
+      // Paginação explícita: sem .range() o PostgREST corta no teto de linhas
+      // em silêncio e o contador da fila ficaria errado sem ninguém notar.
+      const PAGE = 1000;
+      const all: any[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('consortium_cards')
+          .select(CARD_RESERVA_SELECT)
+          .eq('tipo_registro', 'reserva')
+          .is('data_contratacao', null)
+          .not('data_reserva', 'is', null)
+          .order('data_reserva', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < PAGE) break;
+      }
+      return all.filter((c: any) => funnelIds.has(c.id)).map(mapCard);
     },
   });
+}
+
+/**
+ * Corte de entrada da rotina de confirmação com comprovante (etapa 5).
+ * Cotas confirmadas ANTES desta data nasceram sem o fluxo novo — marcá-las como
+ * "sem comprovante" faria a métrica nascer 100% falsa.
+ */
+export const CONFIRMACAO_EMBRACON_DESDE = '2026-08-18';
+
+/** A cota passou pelo fluxo novo? (só essas podem receber o selo âmbar) */
+export function elegivelSeloComprovante(cota: CotaReservada): boolean {
+  return !!cota.data_contratacao && cota.data_contratacao >= CONFIRMACAO_EMBRACON_DESDE;
 }
 
 /** Dias parados desde a reserva (hoje − data_reserva). */

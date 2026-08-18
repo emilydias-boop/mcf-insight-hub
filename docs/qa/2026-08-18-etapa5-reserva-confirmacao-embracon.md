@@ -113,3 +113,37 @@ cliente**; este é o retorno que a **Embracon nos manda**.
 - Repetir usando "Confirmar sem comprovante": selo âmbar "sem comprovante" na lista e
   linha nova em `observacoes` com data, usuário e motivo.
 - Aba Documentos do drawer: "Visualizar" abre o arquivo.
+
+## Revisão do commit 4acc6a00 — 6 ajustes
+
+1. **Enter não cria mais reserva silenciosa.** Os dois botões de abertura eram
+   `type="submit"` e o de reserva vinha primeiro no DOM, então Enter em qualquer
+   campo abria reserva. Ambos passaram a `type="button"`, cada um chamando
+   `form.handleSubmit(onSubmit, onInvalid)()` após fixar o modo — só o clique decide.
+2. **`data_reserva` não é mais enviada como `null` explícito.** Conferido no banco:
+   `consortium_cards.data_reserva` não tem default nem trigger, e a constraint
+   `consortium_cards_datas_consistencia_check` já aceita `tipo_registro='reserva'`
+   com `data_contratacao` nula (nenhuma migration necessária). Mesmo assim, no
+   caminho "abrir já contratada" a chave passou a ser **omitida** (undefined, que o
+   insert filtra) em vez de mandar null, para não anular default/trigger futuros.
+3. **Reserva não contamina dinheiro.** Parcelas com status `previsto` (cota ainda em
+   reserva) ficaram fora de:
+   - `useConsorcioPrevisaoMensal` (`.neq('status','previsto')`) — a Previsão de
+     Recebimento Mensal não projeta mais comissão de cota não confirmada;
+   - `useConsorcioPagamentos` (cálculo de `temAtraso`) — reserva parada não marca a
+     cota como inadimplente nos KPIs de cobrança nem no alerta do drawer.
+4. **Confirmação idempotente.** Antes de inserir o documento, o hook verifica se já
+   existe `confirmacao_embracon` para o card (retentativa não duplica). O append do
+   motivo em `observacoes` foi movido para **depois** da conversão bem-sucedida.
+   `handleConfirm` ganhou try/catch (modal fica aberto para nova tentativa) e o toast
+   duplicado saiu: sucesso é anunciado pela conversão, e o hook só avisa falhas
+   anteriores a ela.
+5. **Fila alinhada com a etapa 5.** `useConsorcioReservasAguardando` passou a
+   restringir a fila às cotas com **origem no funil** (mesmo recorte da etapa) e a
+   paginar com `.range()` de 1000 em 1000 — sem isso o PostgREST cortava em silêncio.
+   A aba passou a exibir a reconciliação do período (total da etapa 5 = confirmadas +
+   aguardando), deixando claro que a fila ignora o filtro de período de propósito.
+6. **Selo "sem comprovante" só do fluxo novo.** Corte em `CONFIRMACAO_EMBRACON_DESDE`
+   ('2026-08-18'): apenas cotas com `data_contratacao` a partir dessa data são
+   elegíveis ao selo (helper `elegivelSeloComprovante`), e só essas entram na consulta
+   de comprovantes. O histórico anterior deixa de nascer 100% marcado.

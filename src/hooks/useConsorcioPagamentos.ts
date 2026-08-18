@@ -185,7 +185,16 @@ export function useConsorcioPagamentos(
         if (!s) { s = { totalParcelas: 0, parcelasPagas: 0, temAtraso: false }; statsMap.set(row.card_id, s); }
         s.totalParcelas++;
         if (row.status === 'pago' || row.data_pagamento) s.parcelasPagas++;
-        if (row.status !== 'pago' && !row.data_pagamento && row.data_vencimento < hoje) s.temAtraso = true;
+        // Parcela 'previsto' = cota ainda em RESERVA (Embracon não confirmou).
+        // Não gera inadimplência: não há cobrança antes da confirmação.
+        if (
+          row.status !== 'pago' &&
+          row.status !== 'previsto' &&
+          !row.data_pagamento &&
+          row.data_vencimento < hoje
+        ) {
+          s.temAtraso = true;
+        }
       }
       return statsMap;
     },

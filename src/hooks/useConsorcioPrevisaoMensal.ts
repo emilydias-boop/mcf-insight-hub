@@ -45,6 +45,9 @@ export function useConsorcioPrevisaoMensal(
             consortium_cards!inner ( valor_credito, tipo_produto, status )
           `)
           .lte('numero_parcela', 12)
+          // Parcelas 'previsto' pertencem a cotas ainda em RESERVA: a Embracon não
+          // confirmou o cadastro, logo não há comissão a projetar.
+          .neq('status', 'previsto')
           .in('consortium_cards.status', ['ativo', 'contemplado'])
           .gte('data_vencimento', rangeStart)
           .lte('data_vencimento', rangeEnd)
