@@ -24,12 +24,14 @@ const VARIANT_LABELS = {
   },
   cadastradas: {
     cotas: 'Cotas cadastradas',
+    cotasSub: 'aguardando grupo/cota da Embracon',
     credito: 'Crédito cadastrado',
     creditoSub: 'valor total',
     mes: 'Mês com maior volume',
   },
   declinadas: {
     cotas: 'Cotas declinadas',
+    cotasSub: 'arquivadas',
     credito: 'Crédito declinado',
     creditoSub: 'valor total',
     mes: 'Mês com maior volume',
@@ -104,7 +106,7 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
       sub:
         variant === 'pendentes'
           ? `${stats.aguardando} aguardando abertura · ${stats.naEmbracon} na Embracon`
-          : 'valor total',
+          : (labels as { cotasSub?: string }).cotasSub ?? '',
     },
     {
       icon: Layers,
