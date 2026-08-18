@@ -160,6 +160,23 @@ export function FunilConsorcioTimeline({
       label: 'R1 Agendadas',
       hint: 'agendadas para o período',
       count: loadingR1 ? null : (r1?.agendadas ?? 0),
+      badges: r1
+        ? [
+            {
+              label: `No-show ${r1.noShow} · ${pct(r1.noShow, r1.agendadas)}`,
+              filter: 'no-show' as FunilQuickFilter,
+              tooltip: 'Clique para ver só os no-shows do período, com a quebra por motivo.',
+            },
+            {
+              label: `Sem desfecho ${r1.semDesfecho} · ${pct(r1.semDesfecho, r1.agendadas)}`,
+              filter: 'sem-desfecho' as FunilQuickFilter,
+              tone: 'amber' as const,
+              icon: true,
+              tooltip:
+                'Reuniões que já passaram e continuam sem status — não entram nem em realizadas nem em no-show. Clique para abrir a fila de trabalho.',
+            },
+          ]
+        : null,
     },
     {
       key: 'r1-realizadas',
@@ -172,14 +189,14 @@ export function FunilConsorcioTimeline({
       label: 'Cartas Negociadas',
       hint: 'criadas no período',
       count: loadingProposals ? null : negociadas,
-      badge:
+      badges:
         !loadingProposals && naoAceitas > 0
-          ? {
+          ? [{
               label: `${naoAceitas} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
-              filter: 'nao-aceitas',
+              filter: 'nao-aceitas' as FunilQuickFilter,
               tooltip:
                 'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. Clique para filtrar a lista.',
-            }
+            }]
           : null,
     },
     {
@@ -187,14 +204,14 @@ export function FunilConsorcioTimeline({
       label: 'Cadastros Pendentes',
       hint: 'criados no período',
       count: pendentesCount,
-      badge:
+      badges:
         aguardandoAbertura > 0
-          ? {
+          ? [{
               label: `${aguardandoAbertura} aguardando abertura`,
-              filter: 'aguardando-abertura',
+              filter: 'aguardando-abertura' as FunilQuickFilter,
               tooltip:
                 'Estoque atual: cadastros criados no período que hoje continuam aguardando abertura de cota. Clique para filtrar a lista.',
-            }
+            }]
           : null,
     },
     {
@@ -205,17 +222,17 @@ export function FunilConsorcioTimeline({
       rateBaseIndex: 3,
       rateTooltip:
         'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
-      badge:
+      badges:
         cadastradasCount != null
-          ? {
+          ? [{
               label:
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
                   : '—',
-              filter: 'reservadas',
+              filter: 'reservadas' as FunilQuickFilter,
               tooltip:
                 'Mediana de dias entre a reserva e a confirmação da Embracon, considerando apenas cotas cujas datas caíram em dias diferentes (as gravadas no mesmo instante ficam fora para não puxar a mediana a 0). Clique para abrir a fila de reservas aguardando confirmação.',
-            }
+            }]
           : null,
     },
     {
@@ -227,14 +244,14 @@ export function FunilConsorcioTimeline({
       rateBaseIndex: 3,
       rateTooltip:
         'Calculada sobre os cadastros do período: cotas originadas no funil ÷ cadastros criados. A etapa Cadastradas usa a data de reserva, um eixo diferente, e por isso não entra nesta conta. As cotas externas não vieram de reunião e ficam fora do numerador.',
-      badge:
+      badges:
         cotasFunil && cotasFunil > 0
-          ? {
+          ? [{
               label: `${cotasFunil} do funil`,
-              filter: 'do-funil',
+              filter: 'do-funil' as FunilQuickFilter,
               tooltip:
                 'Cotas com cadastro pendente vinculado — nasceram no funil. Clique para filtrar a lista.',
-            }
+            }]
           : null,
       breakdown:
         cotasTotal != null && cotasFunil != null && cotasExternas != null
