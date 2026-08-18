@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import { useEditarProposta } from '@/hooks/useConsorcioPostMeeting';
 
 interface EditProposalModalProps {
@@ -47,6 +48,8 @@ export function EditProposalModal({
 }: EditProposalModalProps) {
   const [valorCredito, setValorCredito] = useState('');
   const [prazoMeses, setPrazoMeses] = useState('');
+  // "Outro" libera o campo numérico para prazo fora do catálogo (ex.: 210).
+  const [prazoOutro, setPrazoOutro] = useState(false);
   const [tipoProduto, setTipoProduto] = useState('');
   const [details, setDetails] = useState('');
   const [origemLead, setOrigemLead] = useState('');
@@ -100,7 +103,30 @@ export function EditProposalModal({
           </div>
           <div>
             <Label>Prazo (meses)</Label>
-            <Input type="number" value={prazoMeses} onChange={e => setPrazoMeses(e.target.value)} placeholder="Ex: 200" />
+            <Select
+              value={prazoOutro ? 'outro' : (prazoMeses || '')}
+              onValueChange={v => {
+                if (v === 'outro') { setPrazoOutro(true); setPrazoMeses(''); }
+                else { setPrazoOutro(false); setPrazoMeses(v); }
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Selecione o prazo" /></SelectTrigger>
+              <SelectContent>
+                {PRAZO_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                ))}
+                <SelectItem value="outro">Outro (informar)</SelectItem>
+              </SelectContent>
+            </Select>
+            {prazoOutro && (
+              <Input
+                className="mt-2"
+                type="number"
+                value={prazoMeses}
+                onChange={e => setPrazoMeses(e.target.value)}
+                placeholder="Prazo em meses (fora do catálogo)"
+              />
+            )}
           </div>
           <div>
             <Label>Tipo de Produto</Label>
