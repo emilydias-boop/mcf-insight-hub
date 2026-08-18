@@ -12,21 +12,19 @@ import type { EnrichedPendingRegistration } from '@/hooks/useConsorcioPendingReg
 export type DatePreset = 'all' | 'today' | 'week' | 'month' | 'custom';
 
 /**
- * Recorte de status da fila. O default é a fila real de trabalho: os dois
- * status que ainda NÃO têm cota criada (`aguardando_abertura` + `cadastrada`).
+ * Recorte de status da fila. O default é a fila real de trabalho: o único
+ * status que ainda NÃO tem cota criada (`aguardando_abertura`).
  */
 export type PendingStatusFilter =
   | 'pendentes_cota'
   | 'aguardando_abertura'
-  | 'cadastrada'
   | 'com_cota'
   | 'declinada'
   | 'todos';
 
 export const PENDING_STATUS_FILTERS: { value: PendingStatusFilter; label: string; statuses: string[] | null }[] = [
-  { value: 'pendentes_cota', label: 'Pendentes de cota', statuses: ['aguardando_abertura', 'cadastrada'] },
+  { value: 'pendentes_cota', label: 'Pendentes de cota', statuses: ['aguardando_abertura'] },
   { value: 'aguardando_abertura', label: 'Aguardando abertura', statuses: ['aguardando_abertura'] },
-  { value: 'cadastrada', label: 'Enviada à Embracon', statuses: ['cadastrada'] },
   { value: 'com_cota', label: 'Já viraram cota', statuses: ['cota_aberta', 'vinculada'] },
   { value: 'declinada', label: 'Declinadas', statuses: ['declinada'] },
   { value: 'todos', label: 'Todos os status', statuses: null },

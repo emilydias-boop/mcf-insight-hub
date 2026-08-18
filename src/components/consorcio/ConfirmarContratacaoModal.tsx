@@ -33,6 +33,8 @@ export function ConfirmarContratacaoModal({
   const confirmar = useConfirmarContratacaoEmbracon();
   const [data, setData] = useState(hojeIso());
   const [contrato, setContrato] = useState('');
+  const [grupo, setGrupo] = useState('');
+  const [cotaNum, setCotaNum] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [semComprovante, setSemComprovante] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -41,10 +43,12 @@ export function ConfirmarContratacaoModal({
     if (!open) return;
     setData(hojeIso());
     setContrato(cota?.contrato_embracon || '');
+    setGrupo(cota?.grupo || '');
+    setCotaNum(cota?.cota || '');
     setFile(null);
     setSemComprovante(false);
     setMotivo('');
-  }, [open, cota?.id, cota?.contrato_embracon]);
+  }, [open, cota?.id, cota?.contrato_embracon, cota?.grupo, cota?.cota]);
 
   const handleConfirm = async () => {
     if (!cota) return;
@@ -60,11 +64,17 @@ export function ConfirmarContratacaoModal({
       toast.error('Descreva o motivo da confirmação sem comprovante (mínimo 10 caracteres)');
       return;
     }
+    if (!grupo.trim() || !cotaNum.trim()) {
+      toast.error('Informe o grupo e a cota devolvidos pela Embracon');
+      return;
+    }
     try {
       await confirmar.mutateAsync({
         cardId: cota.id,
         dataContratacao: data,
         contratoEmbracon: contrato,
+        grupo,
+        cota: cotaNum,
         file: semComprovante ? null : file,
         motivoSemComprovante: semComprovante ? motivo : null,
       });
@@ -83,7 +93,9 @@ export function ConfirmarContratacaoModal({
             <CheckCircle2 className="h-5 w-5" /> Confirmar contratação
           </DialogTitle>
           <DialogDescription>
-            {cota ? `${cota.nome} · Grupo ${cota.grupo} / Cota ${cota.cota}. ` : ''}
+            {cota
+              ? `${cota.nome}${cota.grupo || cota.cota ? ` · Grupo ${cota.grupo || '—'} / Cota ${cota.cota || '—'}` : ' · reserva sem grupo/cota'}. `
+              : ''}
             Ao confirmar, a cota sai da fila de reservas e passa a contar na etapa Cotas.
           </DialogDescription>
         </DialogHeader>
@@ -101,6 +113,27 @@ export function ConfirmarContratacaoModal({
                 value={contrato}
                 onChange={(e) => setContrato(e.target.value)}
                 placeholder="Nº do contrato"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="grupo-embracon">Grupo</Label>
+              <Input
+                id="grupo-embracon"
+                value={grupo}
+                onChange={(e) => setGrupo(e.target.value)}
+                placeholder="Grupo informado pela Embracon"
+              />
+            </div>
+            <div>
+              <Label htmlFor="cota-embracon">Cota</Label>
+              <Input
+                id="cota-embracon"
+                value={cotaNum}
+                onChange={(e) => setCotaNum(e.target.value)}
+                placeholder="Cota informada pela Embracon"
               />
             </div>
           </div>

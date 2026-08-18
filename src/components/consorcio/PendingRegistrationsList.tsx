@@ -31,8 +31,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   usePendingRegistrations,
   useDeletePendingRegistration,
-  useMarkPendingAsCadastrada,
-  useUnmarkPendingCadastrada,
   useDeclinePendingRegistration,
   useUndeclinePendingRegistration,
   type EnrichedPendingRegistration,
@@ -64,27 +62,17 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
-  cadastrada: 'Enviada à Embracon',
   cota_aberta: 'Cota aberta',
   vinculada: 'Vinculada',
   declinada: 'Declinada',
 };
 
-/** `aguardando_abertura` e `cadastrada` ainda não têm cota — é a fila de trabalho. */
-const SEM_COTA = ['aguardando_abertura', 'cadastrada'];
-
-/** Dias corridos desde uma data ISO (nulo quando a data não existe). */
-function diasDesde(iso?: string | null): number | null {
-  if (!iso) return null;
-  const base = new Date(iso);
-  if (Number.isNaN(base.getTime())) return null;
-  return Math.max(0, Math.floor((Date.now() - base.getTime()) / 86400000));
-}
+/** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
+const SEM_COTA = ['aguardando_abertura'];
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
   aguardando_abertura: 1,
-  cadastrada: 2,
   cota_aberta: 3,
   vinculada: 4,
   declinada: 5,
@@ -114,7 +102,7 @@ const PENDING_EXTRATORES: Record<PendingSortField, (r: EnrichedPendingRegistrati
 };
 
 export interface PendingRegistrationsListProps {
-  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
+  variant?: 'pendentes' | 'declinadas';
   /** Período global do funil — eixo: aceite_date ?? created_at. */
   range?: { startDate?: Date; endDate?: Date };
   /** Selo da timeline: mostrar só o estoque atual em `aguardando_abertura`. */
@@ -129,8 +117,7 @@ export function PendingRegistrationsList({
   onClearQuickFilter,
 }: PendingRegistrationsListProps = {}) {
   const statuses =
-    variant === 'cadastradas' ? ['cadastrada']
-    : variant === 'declinadas' ? ['declinada']
+    variant === 'declinadas' ? ['declinada']
     // Etapa 4 mede EVENTO: todos os cadastros criados no período,
     // independente do status atual.
     : [...PENDING_REGISTRATION_ALL_STATUSES];
@@ -163,7 +150,7 @@ export function PendingRegistrationsList({
   const [searchParams, setSearchParams] = useSearchParams();
   const stParam = searchParams.get('stPe');
   const statusFilter: PendingStatusFilter =
-    // Abas com status fixo (cadastradas/declinadas) não recortam por status.
+    // Abas com status fixo (declinadas) não recortam por status.
     variant !== 'pendentes'
       ? 'todos'
       : onlyAguardandoAbertura
@@ -208,8 +195,6 @@ export function PendingRegistrationsList({
   };
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
-  const markCadastrada = useMarkPendingAsCadastrada();
-  const unmarkCadastrada = useUnmarkPendingCadastrada();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
 
@@ -258,12 +243,10 @@ export function PendingRegistrationsList({
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     const sheetName =
-      variant === 'cadastradas' ? 'Cadastradas'
-      : variant === 'declinadas' ? 'Cartas Declinadas'
+      variant === 'declinadas' ? 'Cartas Declinadas'
       : 'Cadastros Pendentes';
     const fileSlug =
-      variant === 'cadastradas' ? 'cadastradas'
-      : variant === 'declinadas' ? 'cartas-declinadas'
+      variant === 'declinadas' ? 'cartas-declinadas'
       : 'cadastros-pendentes';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
@@ -291,7 +274,7 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'cadastradas' ? 'Cadastradas' : variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -319,11 +302,9 @@ export function PendingRegistrationsList({
         {filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
             {registrations.length === 0
-              ? variant === 'cadastradas'
-                ? 'Nenhuma cota marcada como cadastrada.'
-                : variant === 'declinadas'
-                  ? 'Nenhuma carta declinada.'
-                  : 'Nenhum cadastro pendente de abertura.'
+              ? variant === 'declinadas'
+                ? 'Nenhuma carta declinada.'
+                : 'Nenhum cadastro pendente de abertura.'
               : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
         ) : (
@@ -358,14 +339,12 @@ export function PendingRegistrationsList({
                     onView={() => setViewId(reg.id)}
                     onLink={() => setLinkTarget(reg)}
                     onDelete={() => setDeleteTarget(reg)}
-                    onMarkCadastrada={() => markCadastrada.mutate(reg.id)}
-                    onUnmarkCadastrada={() => unmarkCadastrada.mutate(reg.id)}
                     onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
                     onUndecline={() => undeclineMut.mutate(reg.id)}
                     termos={termosByPending[reg.id] || []}
                     onGerarTermo={() => setTermoTarget(reg)}
                     onVerTermos={() => setTermoPanelTarget(reg)}
-                    isMarking={markCadastrada.isPending || unmarkCadastrada.isPending || undeclineMut.isPending}
+                    isMarking={undeclineMut.isPending}
                   />
                 ))}
               </TableBody>
@@ -512,8 +491,6 @@ function RegistrationRow({
   onView,
   onLink,
   onDelete,
-  onMarkCadastrada,
-  onUnmarkCadastrada,
   onDecline,
   onUndecline,
   termos,
@@ -522,13 +499,11 @@ function RegistrationRow({
   isMarking,
 }: {
   reg: EnrichedPendingRegistration;
-  variant: 'pendentes' | 'cadastradas' | 'declinadas';
+  variant: 'pendentes' | 'declinadas';
   onOpen: () => void;
   onView: () => void;
   onLink: () => void;
   onDelete: () => void;
-  onMarkCadastrada: () => void;
-  onUnmarkCadastrada: () => void;
   onDecline: () => void;
   onUndecline: () => void;
   termos: ConsorcioTermo[];
@@ -548,9 +523,7 @@ function RegistrationRow({
     : '—';
 
   const termoAssinado = termos.find((t) => t.status === 'assinado');
-  // `cadastrada` = enviado à Embracon, esperando grupo/cota voltarem.
   const semCota = SEM_COTA.includes(reg.status);
-  const diasEmbracon = reg.status === 'cadastrada' ? diasDesde(reg.cadastrada_at) : null;
   const termoPendente = termos.find((t) => t.status === 'pendente');
   const termoBadge = termoAssinado
     ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
@@ -642,22 +615,6 @@ function RegistrationRow({
           <Badge variant={reg.status === 'aguardando_abertura' ? 'outline' : 'secondary'}>
             {STATUS_LABELS[reg.status] || reg.status}
           </Badge>
-          {diasEmbracon != null && (
-            <div className="mt-1">
-              <Badge
-                variant="outline"
-                className={`text-[10px] ${
-                  diasEmbracon >= 10
-                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
-                    : diasEmbracon >= 5
-                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'text-muted-foreground'
-                }`}
-              >
-                na Embracon há {diasEmbracon} dia{diasEmbracon === 1 ? '' : 's'}
-              </Badge>
-            </div>
-          )}
         </TableCell>
       )}
       {variant === 'declinadas' && (
@@ -677,27 +634,6 @@ function RegistrationRow({
           {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
             <Button size="sm" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
-            </Button>
-          )}
-          {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onMarkCadastrada}
-              disabled={isMarking}
-              className="border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700"
-            >
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Cadastrada
-            </Button>
-          )}
-          {variant === 'cadastradas' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onUnmarkCadastrada}
-              disabled={isMarking}
-            >
-              <Undo2 className="h-3 w-3 mr-1" /> Devolver
             </Button>
           )}
           {variant === 'declinadas' && (
@@ -729,11 +665,6 @@ function RegistrationRow({
               {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
-                </DropdownMenuItem>
-              )}
-              {variant === 'pendentes' && reg.status === 'cadastrada' && (
-                <DropdownMenuItem onClick={onUnmarkCadastrada} disabled={isMarking}>
-                  <Undo2 className="h-4 w-4 mr-2" /> Voltar para aguardando abertura
                 </DropdownMenuItem>
               )}
               {variant === 'pendentes' && semCota && (

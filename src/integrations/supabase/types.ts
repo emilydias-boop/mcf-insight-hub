@@ -5170,7 +5170,7 @@ export type Database = {
           cnpj: string | null
           condicao_pagamento: string | null
           contrato_embracon: string | null
-          cota: string
+          cota: string | null
           cpf: string | null
           cpf_conjuge: string | null
           created_at: string
@@ -5200,7 +5200,7 @@ export type Database = {
           endereco_rua: string | null
           estado_civil: string | null
           faturamento_mensal: number | null
-          grupo: string
+          grupo: string | null
           id: string
           inclui_seguro_vida: boolean | null
           inscricao_estadual: string | null
@@ -5249,7 +5249,7 @@ export type Database = {
           cnpj?: string | null
           condicao_pagamento?: string | null
           contrato_embracon?: string | null
-          cota: string
+          cota?: string | null
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
@@ -5279,7 +5279,7 @@ export type Database = {
           endereco_rua?: string | null
           estado_civil?: string | null
           faturamento_mensal?: number | null
-          grupo: string
+          grupo?: string | null
           id?: string
           inclui_seguro_vida?: boolean | null
           inscricao_estadual?: string | null
@@ -5328,7 +5328,7 @@ export type Database = {
           cnpj?: string | null
           condicao_pagamento?: string | null
           contrato_embracon?: string | null
-          cota?: string
+          cota?: string | null
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
@@ -5358,7 +5358,7 @@ export type Database = {
           endereco_rua?: string | null
           estado_civil?: string | null
           faturamento_mensal?: number | null
-          grupo?: string
+          grupo?: string | null
           id?: string
           inclui_seguro_vida?: boolean | null
           inscricao_estadual?: string | null

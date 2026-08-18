@@ -32,12 +32,17 @@ export function useConfirmarContratacaoEmbracon() {
       cardId,
       dataContratacao,
       contratoEmbracon,
+      grupo,
+      cota,
       file,
       motivoSemComprovante,
     }: {
       cardId: string;
       dataContratacao: string; // YYYY-MM-DD
       contratoEmbracon?: string | null;
+      /** Grupo/cota devolvidos pela Embracon (reserva pode ter nascido sem eles). */
+      grupo?: string | null;
+      cota?: string | null;
       file?: File | null;
       /** Obrigatório quando a confirmação é feita sem comprovante. */
       motivoSemComprovante?: string | null;
@@ -81,11 +86,15 @@ export function useConfirmarContratacaoEmbracon() {
         }
       }
 
-      // 2. Contrato Embracon — nunca apaga o que já existe
-      if (contratoEmbracon?.trim()) {
+      // 2. Contrato Embracon + grupo/cota — nunca apaga o que já existe
+      const identificacao: Record<string, string> = {};
+      if (contratoEmbracon?.trim()) identificacao.contrato_embracon = contratoEmbracon.trim();
+      if (grupo?.trim()) identificacao.grupo = grupo.trim();
+      if (cota?.trim()) identificacao.cota = cota.trim();
+      if (Object.keys(identificacao).length > 0) {
         const { error } = await supabase
           .from('consortium_cards')
-          .update({ contrato_embracon: contratoEmbracon.trim() } as any)
+          .update(identificacao as any)
           .eq('id', cardId);
         if (error) throw error;
       }
@@ -126,6 +135,7 @@ export function useConfirmarContratacaoEmbracon() {
       queryClient.invalidateQueries({ queryKey: ['consorcio-reservas-aguardando'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-reservadas'] });
       queryClient.invalidateQueries({ queryKey: ['cotas-confirmacao-embracon'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cards'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-documents', variables.cardId] });
     },
     // Sucesso é anunciado pelo `useConvertReservaToContratacao` (evita aviso duplo).

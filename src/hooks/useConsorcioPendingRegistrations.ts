@@ -629,56 +629,9 @@ export function useDeletePendingRegistration() {
   });
 }
 
-/** Marcar cadastro pendente como "Cadastrada" (move para aba Cadastradas). */
-export function useMarkPendingAsCadastrada() {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  return useMutation({
-    mutationFn: async (registrationId: string) => {
-      const { data, error } = await supabase
-        .from('consorcio_pending_registrations')
-        .update({
-          status: 'cadastrada',
-          cadastrada_at: new Date().toISOString(),
-          cadastrada_by: user?.id ?? null,
-        } as any)
-        .eq('id', registrationId)
-        .select('id, consortium_card_id, proposal_id')
-        .maybeSingle();
-      if (error) throw error;
-      // Webhook do Make NÃO é disparado aqui: o gatilho único é o cadastro
-      // dos dados da cota pelo Closer em "Cartas Negociadas".
-    },
-    onSuccess: () => {
-      toast.success('Marcado como enviado à Embracon');
-      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
-    },
-    onError: (e: any) => toast.error('Erro ao marcar como cadastrada: ' + e.message),
-  });
-}
-
-/** Reverter "Cadastrada" para "Aguardando abertura". */
-export function useUnmarkPendingCadastrada() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (registrationId: string) => {
-      const { error } = await supabase
-        .from('consorcio_pending_registrations')
-        .update({
-          status: 'aguardando_abertura',
-          cadastrada_at: null,
-          cadastrada_by: null,
-        } as any)
-        .eq('id', registrationId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Cadastro devolvido para pendentes');
-      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
-    },
-    onError: (e: any) => toast.error('Erro: ' + e.message),
-  });
-}
+// A fila de espera pela Embracon é única e vive na RESERVA da cota
+// (`consortium_cards.tipo_registro = 'reserva'`, etapa 5). O status
+// `cadastrada` do cadastro pendente foi removido junto com seus hooks.
 
 /**
  * Declinar um cadastro pendente: parceiro desistiu da aquisição.
