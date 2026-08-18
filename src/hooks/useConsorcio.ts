@@ -159,22 +159,57 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
   return useQuery({
     queryKey: ['consortium-summary', filters],
     queryFn: async () => {
-      let query = supabase.from('consortium_cards').select('id, valor_credito, tipo_produto');
-
-      if (filters.startDate) {
-        query = query.gte('data_contratacao', filters.startDate.toISOString().split('T')[0]);
+      // Recorte "Do funil" / "Externas": uma cota é "do funil" quando existe
+      // cadastro em consorcio_pending_registrations apontando para ela.
+      let funilCardIds: Set<string> | null = null;
+      if (filters.funil) {
+        const vinculos = await fetchAllPages<any>((from, to) =>
+          supabase
+            .from('consorcio_pending_registrations')
+            .select('consortium_card_id')
+            .not('consortium_card_id', 'is', null)
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
+        funilCardIds = new Set((vinculos || []).map((v: any) => v.consortium_card_id));
       }
-      if (filters.endDate) {
-        query = query.lte('data_contratacao', filters.endDate.toISOString().split('T')[0]);
-      }
-      if (filters.categoria) {
-        query = query.eq('categoria', filters.categoria);
-      }
+      const passaFunil = (id: string) => {
+        if (!funilCardIds) return true;
+        return filters.funil === 'funil' ? funilCardIds.has(id) : !funilCardIds.has(id);
+      };
 
-      const { data: cards, error: cardsError } = await query;
-      if (cardsError) throw cardsError;
+      // Paginado: sem .range() o PostgREST corta em 1000 linhas em silêncio e
+      // os cards de comissão erram junto (cardIds do RPC vinha truncado).
+      const cardsRaw = await fetchAllPages<any>((from, to) => {
+        let query = supabase
+          .from('consortium_cards')
+          .select('id, valor_credito, tipo_produto')
+          .order('id', { ascending: true });
 
-      const cardIds = cards?.map(c => c.id) || [];
+        if (filters.startDate) {
+          query = query.gte('data_contratacao', filters.startDate.toISOString().split('T')[0]);
+        }
+        if (filters.endDate) {
+          query = query.lte('data_contratacao', filters.endDate.toISOString().split('T')[0]);
+        }
+        if (filters.categoria) query = query.eq('categoria', filters.categoria);
+        if (filters.status && filters.status !== 'todos') query = query.eq('status', filters.status);
+        if (filters.tipoProduto && filters.tipoProduto !== 'todos') query = query.eq('tipo_produto', filters.tipoProduto);
+        if (filters.vendedorId) query = query.eq('vendedor_id', filters.vendedorId);
+        if (filters.diaVencimento) query = query.eq('dia_vencimento', filters.diaVencimento);
+        if (filters.grupo) query = query.eq('grupo', filters.grupo);
+        if (filters.origem) query = query.eq('origem', filters.origem);
+        if (filters.objetivo) query = query.eq('objetivo', filters.objetivo);
+        if (filters.search) {
+          query = query.or(
+            `nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`,
+          );
+        }
+        return query.range(from, to);
+      });
+
+      const cards = (cardsRaw || []).filter((c: any) => passaFunil(c.id));
+      const cardIds = cards.map((c: any) => c.id);
       
       // Use aggregation to avoid 1000 row limit
       // Fetch installments in batches to get accurate totals
@@ -193,19 +228,35 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
         comissaoPendente = Number(row?.comissao_pendente ?? 0);
       }
 
-      // === Cartas Novas: cotas pendentes de cadastro ===
-      // (registros em consorcio_pending_registrations ainda não vinculados a uma carta)
-      let pendingQuery = supabase
-        .from('consorcio_pending_registrations')
-        .select('id, valor_credito, tipo_produto, created_at')
-        .neq('status', 'vinculada');
-      if (filters.startDate) {
-        pendingQuery = pendingQuery.gte('created_at', filters.startDate.toISOString());
-      }
-      if (filters.endDate) {
-        pendingQuery = pendingQuery.lte('created_at', filters.endDate.toISOString());
-      }
-      const { data: pendingRegs } = await pendingQuery;
+      // === Cartas Novas: cadastros SEM cota aberta ===
+      // O fato objetivo é o VÍNCULO (consortium_card_id), não o status: existem
+      // dois caminhos que geram cota (useOpenCota → 'cota_aberta' e
+      // useLinkPendingToCard → 'vinculada'), então filtrar por status deixava
+      // passar cadastros que já viraram carta (e os declinados).
+      // Cadastro é sempre origem funil: no recorte "Externas" não há cartas novas.
+      const pendingRegs = filters.funil === 'externas'
+        ? []
+        : await fetchAllPages<any>((from, to) => {
+            let q = supabase
+              .from('consorcio_pending_registrations')
+              .select('id, valor_credito, tipo_produto, created_at')
+              .is('consortium_card_id', null)
+              .not('status', 'in', '("declinada","excluida")')
+              .order('id', { ascending: true });
+            if (filters.startDate) q = q.gte('created_at', filters.startDate.toISOString());
+            if (filters.endDate) q = q.lte('created_at', filters.endDate.toISOString());
+            if (filters.tipoProduto && filters.tipoProduto !== 'todos') q = q.eq('tipo_produto', filters.tipoProduto);
+            if (filters.vendedorId) q = q.eq('vendedor_id', filters.vendedorId);
+            if (filters.grupo) q = q.eq('grupo', filters.grupo);
+            if (filters.origem) q = q.eq('origem', filters.origem);
+            if (filters.objetivo) q = q.eq('objetivo', filters.objetivo);
+            if (filters.search) {
+              q = q.or(
+                `nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`,
+              );
+            }
+            return q.range(from, to);
+          });
 
       let valorCartasNovas = 0;
       let comissaoPrevistaNovas = 0;
@@ -221,27 +272,32 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
         }
       }
 
-      // === Cartas Subidas: 1ª parcela paga (status=pago) dentro do período ===
-      let subidasQuery = supabase
-        .from('consortium_installments')
-        .select('card_id, valor_comissao, data_pagamento, consortium_cards!inner(valor_credito, categoria)')
-        .eq('numero_parcela', 1)
-        .eq('status', 'pago');
-      if (filters.startDate) {
-        subidasQuery = subidasQuery.gte('data_pagamento', filters.startDate.toISOString().split('T')[0]);
-      }
-      if (filters.endDate) {
-        subidasQuery = subidasQuery.lte('data_pagamento', filters.endDate.toISOString().split('T')[0]);
-      }
-      if (filters.categoria) {
-        subidasQuery = subidasQuery.eq('consortium_cards.categoria', filters.categoria);
-      }
-      const { data: subidasRows } = await subidasQuery;
+      // === Cartas Subidas: baixa manual da 1ª parcela (status=pago) no período ===
+      const subidasRows = await fetchAllPages<any>((from, to) => {
+        let q = supabase
+          .from('consortium_installments')
+          .select('card_id, valor_comissao, data_pagamento, consortium_cards!inner(valor_credito, categoria)')
+          .eq('numero_parcela', 1)
+          .eq('status', 'pago')
+          .order('id', { ascending: true });
+        if (filters.startDate) q = q.gte('data_pagamento', filters.startDate.toISOString().split('T')[0]);
+        if (filters.endDate) q = q.lte('data_pagamento', filters.endDate.toISOString().split('T')[0]);
+        if (filters.categoria) q = q.eq('consortium_cards.categoria', filters.categoria);
+        if (filters.status && filters.status !== 'todos') q = q.eq('consortium_cards.status', filters.status);
+        if (filters.tipoProduto && filters.tipoProduto !== 'todos') q = q.eq('consortium_cards.tipo_produto', filters.tipoProduto);
+        if (filters.vendedorId) q = q.eq('consortium_cards.vendedor_id', filters.vendedorId);
+        if (filters.diaVencimento) q = q.eq('consortium_cards.dia_vencimento', filters.diaVencimento);
+        if (filters.grupo) q = q.eq('consortium_cards.grupo', filters.grupo);
+        if (filters.origem) q = q.eq('consortium_cards.origem', filters.origem);
+        if (filters.objetivo) q = q.eq('consortium_cards.objetivo', filters.objetivo);
+        return q.range(from, to);
+      });
 
       const subidasCards = new Set<string>();
       let valorCartasSubidas = 0;
       let comissaoRealizadaSubidas = 0;
       for (const r of (subidasRows || []) as any[]) {
+        if (!passaFunil(r.card_id)) continue;
         if (!subidasCards.has(r.card_id)) {
           subidasCards.add(r.card_id);
           valorCartasSubidas += Number(r.consortium_cards?.valor_credito || 0);
@@ -250,13 +306,13 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       }
 
       const summary: ConsorcioSummary = {
-        totalCartas: cards?.length || 0,
-        totalCredito: cards?.reduce((acc, c) => acc + Number(c.valor_credito), 0) || 0,
+        totalCartas: cards.length,
+        totalCredito: cards.reduce((acc: number, c: any) => acc + Number(c.valor_credito), 0),
         comissaoTotal,
         comissaoRecebida,
         comissaoPendente,
-        cartasSelect: cards?.filter(c => c.tipo_produto === 'select').length || 0,
-        cartasParcelinha: cards?.filter(c => c.tipo_produto === 'parcelinha').length || 0,
+        cartasSelect: cards.filter((c: any) => c.tipo_produto === 'select').length,
+        cartasParcelinha: cards.filter((c: any) => c.tipo_produto === 'parcelinha').length,
         valorCartasNovas,
         valorCartasSubidas,
         comissaoPrevistaNovas,
