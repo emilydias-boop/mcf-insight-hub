@@ -581,7 +581,16 @@ export function AcceptProposalModal({
                       {socioFields.map((field, index) => (
                         <div key={field.id} className="flex gap-3 items-end">
                           <FormField control={form.control} name={`socios.${index}.nome`} rules={{ required: 'Nome obrigatório' }} render={({ field }) => (
-                            <FormItem className="flex-1"><FormLabel>Nome do Sócio *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem className="flex-1">
+                              <FormLabel>Nome do Sócio *</FormLabel>
+                              <FormControl><Input {...field} /></FormControl>
+                              {checklistSemNomeSocio && !String(field.value || '').trim() && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  o check-list não trouxe o nome — preencha
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
                           )} />
                           <FormField control={form.control} name={`socios.${index}.cpf`} rules={{ required: 'CPF obrigatório' }} render={({ field }) => (
                             <FormItem className="flex-1"><FormLabel>CPF do Sócio *</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatCpf(e.target.value))} /></FormControl><FormMessage /></FormItem>
