@@ -13,9 +13,6 @@ import { ConsorcioPagamentosTab } from '@/components/consorcio/pagamentos/Consor
 import { BoletoUploadDialog } from '@/components/consorcio/pagamentos/BoletoUploadDialog';
 import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoReviewDialog';
 import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
-import { useConsorcioCobrancaAlerts } from '@/hooks/useCobrancaAlerts';
-import { CobrancaAlertPanel } from '@/components/shared/CobrancaAlertPanel';
-import { CobrancaHistoryPanel } from '@/components/shared/CobrancaHistoryPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, User, Building2 } from 'lucide-react';
@@ -40,18 +37,6 @@ export default function ConsorcioPagamentosPage() {
     MONTH_OPTIONS.find((o) => o.value === '0') ||
     MONTH_OPTIONS[0];
   const { data: reviewBoletos = [] } = useBoletosReview();
-  const { data: consorcioAlerts = [], isLoading: loadingAlerts } = useConsorcioCobrancaAlerts();
-
-  const alertItems = consorcioAlerts.map(a => ({
-    id: a.installment_id,
-    label: a.nome_completo,
-    sublabel: [a.grupo, a.cota].filter(Boolean).join('/') || undefined,
-    numero_parcela: a.numero_parcela,
-    valor: a.valor_parcela,
-    data_vencimento: a.data_vencimento,
-    dias_para_vencer: a.dias_para_vencer,
-    priority: a.priority,
-  }));
 
   const monthRange = {
     start: format(selectedMonth.start, 'yyyy-MM-dd'),
@@ -60,13 +45,6 @@ export default function ConsorcioPagamentosPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <CobrancaAlertPanel
-        alerts={alertItems}
-        isLoading={loadingAlerts}
-        type="consorcio"
-        title="Parcelas com Vencimento Próximo"
-      />
-      <CobrancaHistoryPanel type="consorcio" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">💳 Pagamentos Consórcio</h1>
