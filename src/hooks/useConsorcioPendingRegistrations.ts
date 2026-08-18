@@ -397,6 +397,10 @@ export interface CreatePendingRegistrationInput {
   valor_credito?: number;
   prazo_meses?: number;
   observacoes?: string;
+  /** Tipo de produto vendido (select | parcelinha) — base do cálculo de comissão. */
+  tipo_produto?: string;
+  /** Origem do lead declarada na proposta (grava `name` do catálogo). */
+  origem?: string;
   // Dados do plano (Termo de Adesão)
   credito_id?: string;
   produto_codigo?: string;
