@@ -229,7 +229,13 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        {c.grupo} / {c.cota}
+                        {c.grupo || c.cota ? (
+                          <>{c.grupo || '—'} / {c.cota || '—'}</>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                            sem grupo/cota
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium">{formatCurrency(c.valor_credito)}</TableCell>
                       <TableCell className="whitespace-nowrap">{fmt(c.data_reserva)}</TableCell>
