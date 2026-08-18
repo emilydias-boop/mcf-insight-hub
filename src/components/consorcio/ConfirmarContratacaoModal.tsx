@@ -60,14 +60,19 @@ export function ConfirmarContratacaoModal({
       toast.error('Descreva o motivo da confirmação sem comprovante (mínimo 10 caracteres)');
       return;
     }
-    await confirmar.mutateAsync({
-      cardId: cota.id,
-      dataContratacao: data,
-      contratoEmbracon: contrato,
-      file: semComprovante ? null : file,
-      motivoSemComprovante: semComprovante ? motivo : null,
-    });
-    onOpenChange(false);
+    try {
+      await confirmar.mutateAsync({
+        cardId: cota.id,
+        dataContratacao: data,
+        contratoEmbracon: contrato,
+        file: semComprovante ? null : file,
+        motivoSemComprovante: semComprovante ? motivo : null,
+      });
+      onOpenChange(false);
+    } catch {
+      // Erro já é avisado pela mutation de conversão; o modal fica aberto para
+      // nova tentativa (o fluxo é idempotente e não duplica documento/motivo).
+    }
   };
 
   return (
