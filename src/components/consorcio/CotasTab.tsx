@@ -948,10 +948,9 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const origemConfig = origemOptions.find(o => o.name === card.origem) 
-                            || ORIGEM_OPTIONS.find(o => o.value === card.origem);
-                          return origemConfig ? (
-                            <span className="text-sm">{origemConfig.label}</span>
+                          const label = resolveOrigemLabel(card.origem, origemOptions);
+                          return label ? (
+                            <span className="text-sm">{label}</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           );
