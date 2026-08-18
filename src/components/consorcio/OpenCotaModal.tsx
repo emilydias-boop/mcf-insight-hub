@@ -1004,15 +1004,43 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
               </CardContent>
             </Card>
 
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                        {readOnly ? 'Fechar' : 'Cancelar'}
-                      </Button>
-                      {!readOnly && (
-                        <Button type="submit" disabled={openCota.isPending}>
-                          {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          Confirmar Abertura da Cota
+                    <div className="space-y-2 pt-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                          {readOnly ? 'Fechar' : 'Cancelar'}
                         </Button>
+                        {!readOnly && (
+                          <>
+                            <Button
+                              type="submit"
+                              variant="secondary"
+                              disabled={openCota.isPending}
+                              onClick={() => { modoAbertura.current = 'reserva'; }}
+                            >
+                              {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Abrir como reserva
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={openCota.isPending}
+                              onClick={() => { modoAbertura.current = 'contratacao'; }}
+                            >
+                              {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Abrir já contratada
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      {!readOnly && (
+                        <div className="space-y-1 text-right text-xs text-muted-foreground">
+                          <p>
+                            Reserva = enviado à Embracon, aguardando confirmação. Já contratada = a Embracon
+                            confirmou e você tem o comprovante em mãos.
+                          </p>
+                          <p className="text-amber-600 dark:text-amber-500">
+                            A cota aberta como reserva só entra na etapa Cotas quando for confirmada.
+                          </p>
+                        </div>
                       )}
                     </div>
             </form>
