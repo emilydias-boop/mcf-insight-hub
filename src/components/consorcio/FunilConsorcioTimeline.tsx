@@ -106,6 +106,8 @@ export function FunilConsorcioTimeline({
       (proposals || []).filter(
         (p: any) =>
           !p.carta_excluida &&
+          // "Aguardando retorno" sem valor ainda não é carta negociada.
+          !isAguardandoRetornoSemValor(p) &&
           isInPeriod(p.proposal_date || p.created_at, range),
       ),
     [proposals, period.startDate, period.endDate],
