@@ -213,6 +213,10 @@ export interface Proposal {
   tipo_produto: string;
   origem_lead?: string | null;
   status: string;
+  aguardando_retorno?: boolean;
+  aguardando_retorno_until?: string | null;
+  /** Nota da R1 (closer_notes/notes de meeting_slot_attendees), somente leitura. */
+  closer_notes?: string;
   aceite_date: string | null;
   motivo_recusa: string | null;
   consortium_card_id: string | null;
@@ -398,6 +402,8 @@ export function useProposals() {
           tipo_produto,
           origem_lead,
           status,
+          aguardando_retorno,
+          aguardando_retorno_until,
           aceite_date,
           motivo_recusa,
           consortium_card_id,
@@ -557,6 +563,11 @@ export function useProposals() {
         tipo_produto: p.tipo_produto || '',
         origem_lead: (p as any).origem_lead || '',
         status: p.status || 'pendente',
+        aguardando_retorno: !!(p as any).aguardando_retorno,
+        aguardando_retorno_until: (p as any).aguardando_retorno_until || null,
+        closer_notes: (p.deal_id
+          ? (meetingByDeal[p.deal_id]?.closer_notes || meetingByDeal[p.deal_id]?.notes || '')
+          : ''),
         aceite_date: p.aceite_date,
         motivo_recusa: p.motivo_recusa,
         consortium_card_id: p.consortium_card_id,
