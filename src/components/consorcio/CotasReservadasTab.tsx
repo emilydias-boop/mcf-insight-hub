@@ -27,15 +27,21 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 const fmt = (d?: string | null) => (d ? format(new Date(`${d}T00:00:00`), 'dd/MM/yyyy') : '—');
 
 const num = (v: unknown) => {
-  const n = Number(String(v ?? '').replace(/\D/g, ''));
+  const s = String(v ?? '').replace(/\D/g, '');
+  if (!s) return null;
+  const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
 
-/** Grupo e cota são texto no banco, mas ordenam como número. */
+/**
+ * Grupo e cota são texto no banco, mas ordenam como número.
+ * Sem grupo E sem cota devolve `null` — o comparador manda vazio para o fim.
+ */
 const grupoCota = (c: CotaReservada) => {
-  const g = num(c.grupo) ?? 0;
-  const ct = num(c.cota) ?? 0;
-  return g * 1_000_000 + ct;
+  const g = num(c.grupo);
+  const ct = num(c.cota);
+  if (g === null && ct === null) return null;
+  return (g ?? 0) * 1_000_000 + (ct ?? 0);
 };
 
 const FILA_FIELDS = ['nome', 'grupo_cota', 'valor_credito', 'data_reserva', 'dias_parados', 'vendedor'] as const;

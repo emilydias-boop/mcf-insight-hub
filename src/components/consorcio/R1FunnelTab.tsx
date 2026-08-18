@@ -83,6 +83,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
   const { field, dir, toggle, q, setQ } = useTableSortUrl<R1SortField>({
     campos: R1_SORT_FIELDS,
     inicial: { field: 'scheduled_at', dir: 'desc' },
+    // Abas distintas (Agendadas/Realizadas) não podem compartilhar ?ord/?dir/?q.
+    sufixo: mode === 'realizadas' ? 'Re' : 'Ag',
   });
   const [search, setSearch] = useState(q);
   const buscaAplicada = useDebounce(search, 300);
