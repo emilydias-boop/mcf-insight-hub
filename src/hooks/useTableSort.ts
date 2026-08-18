@@ -21,23 +21,21 @@ export function useTableSort<T, F extends string>(
   toggle: (field: F) => void;
   setSort: (field: F, dir: SortDir) => void;
 } {
-  const [field, setField] = useState<F>(inicial.field);
-  const [dir, setDir] = useState<SortDir>(inicial.dir);
+  // Estado único: um updater não pode ter efeito colateral (StrictMode chama o
+  // updater duas vezes em dev e a direção inverteria duas vezes).
+  const [estado, setEstado] = useState<{ field: F; dir: SortDir }>(inicial);
+  const { field, dir } = estado;
 
   const toggle = useCallback((next: F) => {
-    setField((atual) => {
-      if (atual === next) {
-        setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return atual;
-      }
-      setDir('asc'); // campo novo começa em asc
-      return next;
-    });
+    setEstado((atual) =>
+      atual.field === next
+        ? { field: atual.field, dir: atual.dir === 'asc' ? 'desc' : 'asc' }
+        : { field: next, dir: 'asc' }, // campo novo começa em asc
+    );
   }, []);
 
   const setSort = useCallback((f: F, d: SortDir) => {
-    setField(f);
-    setDir(d);
+    setEstado({ field: f, dir: d });
   }, []);
 
   const sorted = useMemo(() => {

@@ -55,6 +55,9 @@ import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { useTableSortUrl } from '@/hooks/useTableSortUrl';
+import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
@@ -62,6 +65,38 @@ const STATUS_LABELS: Record<string, string> = {
   cota_aberta: 'Cota aberta',
   vinculada: 'Vinculada',
   declinada: 'Declinada',
+};
+
+/** Ordem de processo: o que exige ação primeiro em `asc`. */
+const RANK_STATUS: Record<string, number> = {
+  aguardando_abertura: 1,
+  cadastrada: 2,
+  cota_aberta: 3,
+  vinculada: 4,
+  declinada: 5,
+};
+
+const PENDING_SORT_FIELDS = [
+  'origem', 'nome', 'valor_credito', 'parcelas_empresa', 'valor_total_empresa',
+  'closer', 'sdr', 'cotas_existentes', 'destinada', 'solicitado_em', 'status',
+] as const;
+/** `created_at` é só o default (ordem em que a lista já abria), não é coluna. */
+type PendingSortField = (typeof PENDING_SORT_FIELDS)[number] | 'created_at';
+
+const PENDING_EXTRATORES: Record<PendingSortField, (r: EnrichedPendingRegistration) => unknown> = {
+  created_at: (r) => (r.created_at ? new Date(r.created_at) : null),
+  origem: (r) => r.origem_label || '',
+  nome: (r) => (r.tipo_pessoa === 'pf' ? r.nome_completo : r.razao_social) || '',
+  valor_credito: (r) => Number(r.valor_credito) || 0,
+  parcelas_empresa: (r) => r.parcelas_empresa.length,
+  valor_total_empresa: (r) => Number(r.valor_total_empresa) || 0,
+  closer: (r) => r.closer_name || '',
+  sdr: (r) => r.sdr_name || '',
+  cotas_existentes: (r) => r.cotas_existentes_count ?? 0,
+  destinada: (r) => r.parte_atual ?? 1,
+  solicitado_em: (r) =>
+    r.aceite_date ? new Date(`${r.aceite_date}T00:00:00`) : r.created_at ? new Date(r.created_at) : null,
+  status: (r) => RANK_STATUS[r.status] ?? 9,
 };
 
 export interface PendingRegistrationsListProps {
@@ -110,6 +145,10 @@ export function PendingRegistrationsList({
   const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filters, setFilters] = useState<PendingFiltersState>(defaultPendingFilters);
+  const { field, dir, toggle } = useTableSortUrl<PendingSortField>({
+    campos: PENDING_SORT_FIELDS,
+    inicial: { field: 'created_at', dir: 'desc' },
+  });
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
   const markCadastrada = useMarkPendingAsCadastrada();
@@ -117,9 +156,11 @@ export function PendingRegistrationsList({
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
 
+  // filtrar → ordenar → paginar. O default (`solicitado_em` desc) reproduz a
+  // ordem em que a lista já abria.
   const filtered = useMemo(
-    () => applyPendingFilters(registrations, filters),
-    [registrations, filters],
+    () => ordenarPor(applyPendingFilters(registrations, filters), PENDING_EXTRATORES[field], dir),
+    [registrations, filters, field, dir],
   );
 
   const [page, setPage] = useState(0);
@@ -131,7 +172,7 @@ export function PendingRegistrationsList({
     [filtered, safePage, pageSize],
   );
   // reset page when filters/pageSize change
-  useEffect(() => { setPage(0); }, [filters, pageSize]);
+  useEffect(() => { setPage(0); }, [filters, pageSize, field, dir]);
 
   const handleExport = async () => {
     const XLSX = await loadXLSX();
@@ -232,17 +273,19 @@ export function PendingRegistrationsList({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Nome / Razão Social</TableHead>
-                  <TableHead>Valor da Cota</TableHead>
-                  <TableHead>Parcelas (empresa)</TableHead>
-                  <TableHead>Total a pagar</TableHead>
-                  <TableHead>Closer</TableHead>
-                  <TableHead>SDR</TableHead>
-                  <TableHead className="text-center">Cotas existentes</TableHead>
-                  <TableHead className="text-center">Destinada</TableHead>
-                  <TableHead>Solicitado em</TableHead>
-                  {variant === 'pendentes' && <TableHead>Status</TableHead>}
+                  <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
+                  <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome / Razão Social</SortableTableHead>
+                  <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor da Cota</SortableTableHead>
+                  <SortableTableHead field="parcelas_empresa" active={field} dir={dir} onSort={toggle}>Parcelas (empresa)</SortableTableHead>
+                  <SortableTableHead field="valor_total_empresa" active={field} dir={dir} onSort={toggle}>Total a pagar</SortableTableHead>
+                  <SortableTableHead field="closer" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+                  <SortableTableHead field="sdr" active={field} dir={dir} onSort={toggle}>SDR</SortableTableHead>
+                  <SortableTableHead field="cotas_existentes" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cotas existentes</SortableTableHead>
+                  <SortableTableHead field="destinada" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Destinada</SortableTableHead>
+                  <SortableTableHead field="solicitado_em" active={field} dir={dir} onSort={toggle}>Solicitado em</SortableTableHead>
+                  {variant === 'pendentes' && (
+                    <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+                  )}
                   {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
