@@ -245,6 +245,7 @@ export function FunilConsorcioTimeline({
       label: 'Cadastros Pendentes',
       hint: 'criados no período',
       count: pendentesCount,
+      rateCohort: cadastrosDeCoorteAnterior,
       badges:
         aguardandoAbertura > 0
           ? [{
@@ -265,7 +266,20 @@ export function FunilConsorcioTimeline({
         'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
       badges:
         cadastradasCount != null
-          ? [{
+          ? [
+            ...(reservasEmAberto > 0
+              ? [{
+                  label: `${reservasEmAberto} reserva${reservasEmAberto === 1 ? '' : 's'} em aberto${
+                    reservasParadas15 > 0 ? ` · ${reservasParadas15} há +15 dias` : ''
+                  }`,
+                  filter: 'reservadas' as FunilQuickFilter,
+                  tone: (reservasParadas15 > 0 ? 'amber' : 'default') as 'amber' | 'default',
+                  icon: reservasParadas15 > 0,
+                  tooltip:
+                    'Estoque GLOBAL: todas as reservas abertas e ainda sem confirmação da Embracon, de qualquer data e incluindo cotas externas. NÃO entra na contagem da bolinha da etapa 5, que mede só as reservas do funil dentro do período — são conjuntos diferentes de propósito (estoque × fluxo). Clique para abrir a fila de confirmação.',
+                }]
+              : []),
+            {
               label:
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
@@ -273,7 +287,8 @@ export function FunilConsorcioTimeline({
               filter: 'reservadas' as FunilQuickFilter,
               tooltip:
                 'Mediana de dias entre a reserva e a confirmação da Embracon, considerando apenas cotas cujas datas caíram em dias diferentes (as gravadas no mesmo instante ficam fora para não puxar a mediana a 0). Clique para abrir a fila de reservas aguardando confirmação.',
-            }]
+            },
+          ]
           : null,
     },
     {
