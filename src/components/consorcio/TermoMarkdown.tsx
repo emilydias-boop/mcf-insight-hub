@@ -199,13 +199,16 @@ export function TermoMarkdown({
           </tr>
         </thead>
         <tbody>
-          {body.map((row, r) => (
-            <tr key={r}>
+          {body.map((row, r) => {
+            const ehTotal = (row[0] || '').replace(/\*\*/g, '').trim().toLowerCase() === 'total';
+            return (
+            <tr key={r} className={ehTotal ? 'tot' : undefined}>
               {row.map((c, i) => (
                 <td key={i}>{cell(c, `${key}-${r}-${i}`)}</td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>,
     );

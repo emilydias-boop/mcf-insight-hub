@@ -199,6 +199,9 @@ export function escreverImpressao(win: Window, opts: AbrirParaImpressaoOpts): vo
   win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(opts.titulo)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>html,body{margin:0;padding:0;background:#fcfcfb}
 body{padding:22px}
 @media print{body{padding:0}}
@@ -208,8 +211,12 @@ ${PAPEL_PAGE_CSS}</style></head>
 ${opts.avisoTopo ? `<div class="tarja">${escapeHtml(opts.avisoTopo)}</div>` : ''}
 ${papelBrandHtml({ subtitulo: opts.subtitulo })}
 ${opts.corpoHtml}
+<p class="rodape-doc">MCF Capital · documento gerado eletronicamente</p>
 </div>
-<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},250);};</script>
+<script>window.onload=function(){var feito=false;
+var go=function(){if(feito)return;feito=true;window.focus();window.print();};
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(go,150);});setTimeout(go,3000);}
+else{setTimeout(go,250);}};</script>
 </body></html>`);
   win.document.close();
 }
