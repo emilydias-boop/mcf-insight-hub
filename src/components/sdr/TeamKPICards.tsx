@@ -39,10 +39,6 @@ interface TeamKPICardsProps {
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   onRefundClick?: () => void;
   orphanRefundsCount?: number;
-  /** Contratos fora do funil (sem contato/reunião) — somam só no total do time. */
-  outsideForaFunil?: number;
-  /** Contratos pagos antes da R1 — atribuídos ao closer da R1. */
-  outsideAtribuido?: number;
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
@@ -65,8 +61,6 @@ export function TeamKPICards({
   onRefundClick,
   orphanRefundsCount = 0,
   segmentTotals = null,
-  outsideForaFunil = 0,
-  outsideAtribuido = 0,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -186,8 +180,7 @@ export function TeamKPICards({
       icon: ExternalLink,
       color: "text-rose-400",
       bgColor: "bg-rose-400/10",
-      tooltip: "Contratos pagos sem R1 anterior. Fato consumado no período. Soma: fora do funil (sem contato/reunião) + pagou antes da R1 (atribuído ao closer).",
-      subline: `${outsideForaFunil} fora do funil · ${outsideAtribuido} pagou antes da R1`,
+      tooltip: "Venda de contrato que não passou pelo time: fora do MCF Pay e fora dos links de closer (CLS). Inclui vendas de Live e Lançamento. Um mesmo contrato pode aparecer aqui e também no card Contratos quando o closer atendeu o lead depois — são leituras diferentes: canal x esforço.",
     }]),
     {
       title: "Reembolsos",
