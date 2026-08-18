@@ -689,7 +689,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                                       <p className="text-sm text-muted-foreground capitalize">{doc.tipo}</p>
                                     </div>
                                   </div>
-                                  <Button variant="outline" size="sm">
+                                  <Button variant="outline" size="sm" onClick={() => abrirDocumento(doc)}>
                                     Visualizar
                                   </Button>
                                 </div>
