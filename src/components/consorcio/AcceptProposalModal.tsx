@@ -184,7 +184,6 @@ export function AcceptProposalModal({
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
   const canSubmit = checklistOk && docsOk;
 
-  // Pré-preenche valor do crédito e prazo com o que veio da proposta
   useEffect(() => {
     // Estado do aviso de nome de sócio não sobrevive a abrir/fechar o modal.
     setChecklistSemNomeSocio(false);
