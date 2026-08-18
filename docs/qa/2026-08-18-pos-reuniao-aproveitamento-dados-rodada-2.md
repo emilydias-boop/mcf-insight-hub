@@ -124,3 +124,50 @@ operação). Rollback = reverter os arquivos citados; não há mudança de banco
 - [ ] Itens 1 a 9 conferidos em preview
 - [ ] Contagens do funil comparadas antes/depois
 - [ ] Publicação autorizada pelo gestor
+
+## Revisão do commit b5ea249e — 7 ajustes (18/08/2026)
+
+**A. Parser PJ gravava sócio com nome "CPF" (grave).** Em `parseChecklistPJ`, o `:`
+saiu da classe de separadores do formato "Nome - CPF" e os ramos rotulados
+("Nome:" / "CPF:") passaram a ser testados ANTES do pareado. Antes, o trecho
+`CPF: 111.111.111-11` casava como nome="CPF". Conferido nos dois formatos
+("João Silva - 111.111.111-11" e "Nome: X / CPF: Y") e no formato só-CPFs.
+
+**B. Selo "documento pendente" que nunca apagava (grave).** Em `useProposals`, o
+cálculo de `documentos_pendentes` passa a ignorar cadastros pendentes com status
+`declinada` ou `excluida`. Só cadastro ativo decide se falta documento.
+
+**C. Paginação em `fetchPendingRegsWithDocs`.** As duas consultas a
+`consortium_documents` agora usam chunk de ids (200) + paginação de 1000 linhas,
+igual ao resto do fluxo. Acima de 1000 documentos nada mais desaparece da resposta.
+
+**D. Objetivo da tela de Abertura de Cota.** O `objetivo` escolhido no próprio
+OpenCotaModal entra no `cotaData` no submit e tem prioridade sobre o do cadastro
+pendente ao gravar `consortium_cards.objetivo`.
+
+**E. Zero preservado também ao salvar a edição do pendente.**
+`handleSavePendingEdit` usa `numOuNull` para renda e patrimônio (antes `|| null`
+transformava 0 em null nesse caminho).
+
+**F. Limpeza.** Removido o alias `isAguardandoRetornoSemValor` (todos os call sites
+já usam `isPropostaSemValor`). No AcceptProposalModal, o schema zod
+(`pfSchema`/`pjSchema`/`formSchema`) era código morto — o `useForm` nunca recebeu
+`zodResolver` — e foi removido junto dos imports. A validação real segue nas `rules`
+de cada campo e no `checklistOk`.
+
+**G. Vendedor não altera o rótulo de origem.** `formatOrigemLabel` deixou de receber
+`vendedor_name` como fallback do rótulo; com o vendedor agora preenchido (item 3), o
+texto de origem continua igual ao de antes. O vendedor segue gravado no campo próprio.
+
+**H. Ajuda no "Nome do Sócio".** O campo continua obrigatório, mas quando o
+"Colar Check-list" não traz nome, o campo vazio exibe "o check-list não trouxe o
+nome — preencha".
+
+### Testes desta revisão
+1. Check-list `Nome: A, CPF: 1, Nome: B, CPF: 2` → nomes [A, B], sem "CPF".
+2. Cadastro declinado sem documento → proposta aceita perde o selo de documento pendente.
+3. Base com >1000 documentos → nenhum cadastro com documento aparece como faltando.
+4. Trocar objetivo na abertura da cota → valor gravado em `consortium_cards.objetivo`.
+5. Salvar edição do pendente com renda 0 → grava 0, não null.
+6. Rótulo de origem de cadastro vindo do funil idêntico ao anterior.
+7. Colar check-list PJ sem nomes → ajuda âmbar nos campos vazios.
