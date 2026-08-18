@@ -454,12 +454,15 @@ export function useProposals() {
         .filter(Boolean) as string[];
       const dealsWithDocs = new Set<string>();
       const pendingRegistrationsByDeal: Record<string, any[]> = {};
+      // Critério único compartilhado com a aba de Cadastros (usePendingRegistrations).
+      let regsWithDocs = new Set<string>();
       if (dealIds.length > 0) {
         const { data: pendingRegs } = await supabase
           .from('consorcio_pending_registrations')
           .select(`
             id,
             deal_id,
+            consortium_card_id,
             tipo_pessoa,
             nome_completo,
             razao_social,
@@ -475,34 +478,23 @@ export function useProposals() {
             faturamento_mensal
           `)
           .in('deal_id', dealIds);
-        const pendingIdToDeal = new Map<string, string>();
         (pendingRegs || []).forEach(pr => {
-          if (pr.id && pr.deal_id) pendingIdToDeal.set(pr.id, pr.deal_id);
           if (pr.deal_id) {
             if (!pendingRegistrationsByDeal[pr.deal_id]) pendingRegistrationsByDeal[pr.deal_id] = [];
             pendingRegistrationsByDeal[pr.deal_id].push(pr);
           }
         });
-        const pendingIds = Array.from(pendingIdToDeal.keys());
-        if (pendingIds.length > 0) {
-          const { data: pendingDocs } = await supabase
-            .from('consortium_documents')
-            .select('pending_registration_id')
-            .in('pending_registration_id', pendingIds);
-          (pendingDocs || []).forEach(d => {
-            const dealId = d.pending_registration_id
-              ? pendingIdToDeal.get(d.pending_registration_id)
-              : undefined;
-            if (dealId) dealsWithDocs.add(dealId);
-          });
-        }
+        regsWithDocs = await fetchPendingRegsWithDocs((pendingRegs || []) as any[]);
+        (pendingRegs || []).forEach(pr => {
+          if (pr.deal_id && regsWithDocs.has(pr.id)) dealsWithDocs.add(pr.deal_id);
+        });
       }
 
       // Helper: pending registration has checklist filled and documents attached
       const hasCompletePendingRegistration = (dealId: string) => {
         const regs = pendingRegistrationsByDeal[dealId] || [];
         return regs.some(pr => {
-          const hasDocs = dealsWithDocs.has(dealId);
+          const hasDocs = regsWithDocs.has(pr.id);
           if (!hasDocs) return false;
           if (pr.tipo_pessoa === 'pj') {
             return !!(
