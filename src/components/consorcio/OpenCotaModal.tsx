@@ -780,11 +780,21 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <FormMessage />
                         </FormItem>
                       )} />
-                      <FormField control={form.control} name="grupo" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Grupo *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      {/* Reserva: grupo/cota só chegam quando a Embracon responde,
+                          então são opcionais nesse modo. Contratação exige os dois. */}
+                      <FormField control={form.control} name="grupo" rules={{ required: modo === 'reserva' ? false : 'Obrigatório' }} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{modo === 'reserva' ? 'Grupo' : 'Grupo *'}</FormLabel>
+                          <FormControl><Input {...field} placeholder={modo === 'reserva' ? 'Só quando a Embracon responder' : undefined} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )} />
-                      <FormField control={form.control} name="cota" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Cota *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormField control={form.control} name="cota" rules={{ required: modo === 'reserva' ? false : 'Obrigatório' }} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{modo === 'reserva' ? 'Cota' : 'Cota *'}</FormLabel>
+                          <FormControl><Input {...field} placeholder={modo === 'reserva' ? 'Só quando a Embracon responder' : undefined} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )} />
                     </div>
 
