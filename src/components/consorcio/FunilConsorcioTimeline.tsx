@@ -168,17 +168,22 @@ export function FunilConsorcioTimeline({
       badges: r1
         ? [
             {
-              label: `No-show ${r1.noShow} · ${pct(r1.noShow, r1.agendadas)}`,
+              label: `No-show ${r1.noShow}`,
               filter: 'no-show' as FunilQuickFilter,
-              tooltip: 'Clique para ver só os no-shows do período, com a quebra por motivo.',
+              tooltip: `No-show do período: ${r1.noShow} de ${r1.agendadas} agendadas (${pct(
+                r1.noShow,
+                r1.agendadas,
+              )}). Clique para ver só os no-shows, com a quebra por motivo.`,
             },
             {
-              label: `Sem desfecho ${r1.semDesfecho} · ${pct(r1.semDesfecho, r1.agendadas)}`,
+              label: `Sem desfecho ${r1.semDesfecho}`,
               filter: 'sem-desfecho' as FunilQuickFilter,
               tone: 'amber' as const,
               icon: true,
-              tooltip:
-                'Reuniões que já passaram e continuam sem status — não entram nem em realizadas nem em no-show. Clique para abrir a fila de trabalho.',
+              tooltip: `Reuniões sem desfecho: ${r1.semDesfecho} de ${r1.agendadas} agendadas (${pct(
+                r1.semDesfecho,
+                r1.agendadas,
+              )}). Já passaram e continuam sem status — não entram nem em realizadas nem em no-show. Clique para abrir a fila de trabalho.`,
             },
           ]
         : null,
