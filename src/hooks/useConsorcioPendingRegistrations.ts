@@ -458,6 +458,8 @@ export function useCreatePendingRegistration() {
         .select('id, status')
         .eq('proposal_id', input.proposal_id);
       if (existErr) throw existErr;
+      // 'excluida' é status legado e hoje inalcançável (o CHECK da coluna não o
+      // aceita mais); a leitura fica só para linhas históricas.
       const jaExiste = (existentes || []).some((r: any) => r.status !== 'excluida');
       if (jaExiste) {
         throw new Error(

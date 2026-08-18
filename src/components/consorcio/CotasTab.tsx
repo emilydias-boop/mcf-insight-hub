@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus,
@@ -70,7 +70,7 @@ import { GerarComprovanteModal } from '@/components/consorcio/GerarComprovanteMo
 import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
 import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
 import { useConsorcioCardDealLinks } from '@/hooks/useLeadReport';
-import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { STATUS_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import { resolveOrigemLabel } from '@/lib/consorcioOrigem';
 import {
   useConsorcioCategoriaOptions,
