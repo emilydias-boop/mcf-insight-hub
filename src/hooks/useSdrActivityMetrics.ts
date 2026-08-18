@@ -368,9 +368,11 @@ export function useSdrActivityMetrics(
         } else if (status === 'S') {
           const duration = sonaxDurationSeconds(ev.duracao_chamada);
           if (duration <= 0) {
-            // Duração ausente/placeholder malformado, mas status confirma que atendeu.
-            metrics.effectiveCalls++;
-            metrics.answeredCalls++;
+            // Duração zero com status "atendido" é caixa postal ou queda
+            // imediata — nunca conversa. Antes contava como efetiva e inflava
+            // o painel. Entra em não atendida, como as demais curtas.
+            metrics.voicemailCalls++;
+            metrics.notAnsweredCalls++;
           } else if (duration <= thresholds.ringDropMax) {
             // Atendeu e desligou na hora — não é conversa.
             metrics.ringDropCalls++;

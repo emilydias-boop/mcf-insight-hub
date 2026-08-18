@@ -38,7 +38,9 @@ function classifySonaxEvent(
   if (status === 'N') return 'not_answered';
   if (status === 'S') {
     const duration = sonaxDurationSeconds(duracaoChamada);
-    if (duration <= 0) return 'effective';
+    // Duração zero com status "atendido" é caixa postal ou queda imediata —
+    // nunca conversa. Antes caía em 'effective' e inflava as Efetivas.
+    if (duration <= 0) return 'voicemail';
     if (duration <= thresholds.ringDropMax) return 'ring_drop';
     if (duration <= thresholds.voicemailMax) return 'voicemail';
     if (duration <= thresholds.effectiveMax) return 'effective';
