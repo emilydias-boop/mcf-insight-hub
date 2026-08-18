@@ -216,7 +216,7 @@ function PropostasTab({
   onClearQuickFilter?: () => void;
 }) {
   const { data: allPropostas = [], isLoading } = useProposals();
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente' | 'recusada'>('all');
   const [closerFilter, setCloserFilter] = useState('all');
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PropostaSortField>({
     campos: PROPOSTA_SORT_FIELDS,
@@ -244,6 +244,7 @@ function PropostasTab({
     if (onlyNaoAceitas) list = list.filter(p => p.status !== 'aceita');
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
+    else if (statusFilter === 'recusada') list = list.filter(p => p.status === 'recusada');
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
     if (termo.trim()) {
       const term = termo.toLowerCase();
@@ -336,6 +337,7 @@ function PropostasTab({
               <SelectItem value="all">Todos Status</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
               <SelectItem value="documento-pendente">Documento pendente</SelectItem>
+              <SelectItem value="recusada">Recusada</SelectItem>
             </SelectContent>
           </Select>
         </div>

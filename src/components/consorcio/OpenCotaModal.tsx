@@ -539,9 +539,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">Dados do Cliente</CardTitle>
-                  {registration.tipo_pessoa === 'pf' && (
-                    <Button type="button" variant="outline" size="sm" onClick={() => setShowChecklist(!showChecklist)}>
-                      {showChecklist ? 'Fechar' : '📋 Colar Check-list'}
+                  {/* Saída de exceção: só aparece quando o cadastro chegou sem os dados
+                      básicos (cota aberta sem aceite/check-list já preenchido). No fluxo
+                      normal os campos vêm do aceite e o atalho só polui a tela. */}
+                  {registration.tipo_pessoa === 'pf' &&
+                    (!registration.cpf || !registration.endereco_completo) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => setShowChecklist(!showChecklist)}
+                    >
+                      {showChecklist ? 'Fechar' : 'Colar check-list'}
                     </Button>
                   )}
                 </div>

@@ -10,6 +10,8 @@ import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
 import {
   useConsorcioCotasOrigem,
   useConsorcioCotasReservadas,
+  useConsorcioReservasAguardando,
+  diasParados,
   medianDias,
 } from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
@@ -65,6 +67,11 @@ interface Step {
   rateCount?: number | null;
   /** Índice da etapa usada como denominador da taxa (default: etapa anterior). */
   rateBaseIndex?: number;
+  /**
+   * Registros desta etapa que vieram de coorte anterior (evento em mês diferente
+   * da etapa base). Explica taxa > 100% sem precisar de alarme.
+   */
+  rateCohort?: number;
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
   /** Selos clicáveis abaixo do número (estoque atual / recorte). */
@@ -103,6 +110,9 @@ export function FunilConsorcioTimeline({
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: reservadas, isLoading: loadingReservadas } = useConsorcioCotasReservadas(range);
+  // Estoque GLOBAL de reservas em aberto (ignora o período de propósito) — sinal
+  // que antes só existia dentro da aba 5.
+  const { data: reservasAbertas } = useConsorcioReservasAguardando();
 
   // Etapa 3 — TODAS as propostas criadas no período (evento, não status).
   // Eixo de data: proposal_date ?? created_at (convenção do BIConsorcio).
@@ -145,6 +155,28 @@ export function FunilConsorcioTimeline({
   // gravadas no mesmo instante, a etapa 5 vira espelho da etapa 6.
   const cadastradasCount = loadingReservadas ? null : (reservadas?.length ?? 0);
   const medianaReserva = medianDias(reservadas || []);
+
+  const reservasEmAberto = reservasAbertas?.length ?? 0;
+  const reservasParadas15 = (reservasAbertas || []).filter((c) => {
+    const d = diasParados(c.data_reserva);
+    return d != null && d > 15;
+  }).length;
+
+  /**
+   * Cadastros do período cujo aceite caiu em mês diferente da proposta vinculada:
+   * travessia de coorte. É a explicação normal para a etapa 4 ficar maior que a 3.
+   */
+  const cadastrosDeCoorteAnterior = useMemo(() => {
+    if (!cadastrosPeriodo || !proposals) return 0;
+    const porId = new Map((proposals as any[]).map((p) => [p.id, p]));
+    const ym = (v?: string | null) => (v ? String(v).slice(0, 7) : null);
+    return cadastrosPeriodo.filter((r: any) => {
+      const p = r.proposal_id ? porId.get(r.proposal_id) : null;
+      const mesProposta = ym(p?.proposal_date || p?.created_at);
+      const mesCadastro = ym(r.aceite_date || r.created_at);
+      return !!mesProposta && !!mesCadastro && mesProposta !== mesCadastro;
+    }).length;
+  }, [cadastrosPeriodo, proposals]);
 
   const pct = (n: number, total: number) =>
     total > 0
@@ -213,6 +245,7 @@ export function FunilConsorcioTimeline({
       label: 'Cadastros Pendentes',
       hint: 'criados no período',
       count: pendentesCount,
+      rateCohort: cadastrosDeCoorteAnterior,
       badges:
         aguardandoAbertura > 0
           ? [{
@@ -233,7 +266,20 @@ export function FunilConsorcioTimeline({
         'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
       badges:
         cadastradasCount != null
-          ? [{
+          ? [
+            ...(reservasEmAberto > 0
+              ? [{
+                  label: `${reservasEmAberto} reserva${reservasEmAberto === 1 ? '' : 's'} em aberto${
+                    reservasParadas15 > 0 ? ` · ${reservasParadas15} há +15 dias` : ''
+                  }`,
+                  filter: 'reservadas' as FunilQuickFilter,
+                  tone: (reservasParadas15 > 0 ? 'amber' : 'default') as 'amber' | 'default',
+                  icon: reservasParadas15 > 0,
+                  tooltip:
+                    'Estoque GLOBAL: todas as reservas abertas e ainda sem confirmação da Embracon, de qualquer data e incluindo cotas externas. NÃO entra na contagem da bolinha da etapa 5, que mede só as reservas do funil dentro do período — são conjuntos diferentes de propósito (estoque × fluxo). Clique para abrir a fila de confirmação.',
+                }]
+              : []),
+            {
               label:
                 medianaReserva != null
                   ? `${medianaReserva} dia${medianaReserva === 1 ? '' : 's'} até contratar`
@@ -241,7 +287,8 @@ export function FunilConsorcioTimeline({
               filter: 'reservadas' as FunilQuickFilter,
               tooltip:
                 'Mediana de dias entre a reserva e a confirmação da Embracon, considerando apenas cotas cujas datas caíram em dias diferentes (as gravadas no mesmo instante ficam fora para não puxar a mediana a 0). Clique para abrir a fila de reservas aguardando confirmação.',
-            }]
+            },
+          ]
           : null,
     },
     {
@@ -291,25 +338,32 @@ export function FunilConsorcioTimeline({
    * Taxa de conversão que chega na etapa `i`.
    * O denominador é a etapa anterior, salvo quando a etapa declara `rateBaseIndex`
    * (etapas 5 e 6 medem contra a etapa 4 — os eixos de data são diferentes).
-   * `over100` marca a rede de segurança: funil não pode crescer da esquerda p/ direita.
+   * `over100` só marca alarme quando a etapa cresce ALÉM do que a travessia de
+   * coorte (`rateCohort`) explica. Taxa acima de 100% explicada por cadastro de
+   * mês anterior é normal e sai em tom neutro, com nota.
    */
-  const rate = (i: number): { label: string; over100: boolean } | null => {
+  const rate = (i: number): { label: string; over100: boolean; nota: string | null } | null => {
     const baseIdx = steps[i]?.rateBaseIndex ?? i - 1;
     const prev = steps[baseIdx]?.count;
     const curr = steps[i]?.rateCount !== undefined ? steps[i]?.rateCount : steps[i]?.count;
     if (prev == null || curr == null || prev === 0) return null;
     const value = (curr / prev) * 100;
+    const coorte = steps[i]?.rateCohort ?? 0;
+    const excedente = curr - prev;
     return {
       label: `${value.toLocaleString('pt-BR', {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       })}%`,
-      over100: value > 100,
+      over100: value > 100 && excedente > coorte,
+      nota: value > 100 && coorte > 0 ? `+${coorte} de meses anteriores` : null,
     };
   };
 
   const OVER_100_TOOLTIP =
     'A etapa seguinte tem mais registros que a anterior — provável travessia de mês ou origem fora do funil.';
+  const COORTE_TOOLTIP =
+    'Acima de 100% por travessia de mês: parte dos cadastros do período veio de cartas negociadas em meses anteriores. Não é erro de dado.';
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -346,7 +400,7 @@ export function FunilConsorcioTimeline({
                         />
                       </div>
                       {conv &&
-                        (conv.over100 || step.rateTooltip ? (
+                        (conv.over100 || conv.nota || step.rateTooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span
@@ -359,11 +413,18 @@ export function FunilConsorcioTimeline({
                               >
                                 {conv.over100 && <AlertTriangle className="h-3 w-3" />}
                                 {conv.label}
+                                {!conv.over100 && conv.nota && (
+                                  <span className="text-muted-foreground/80">· {conv.nota}</span>
+                                )}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-[260px]">
                               <p className="text-xs">
-                                {conv.over100 ? OVER_100_TOOLTIP : step.rateTooltip}
+                                {conv.over100
+                                  ? OVER_100_TOOLTIP
+                                  : conv.nota
+                                    ? COORTE_TOOLTIP
+                                    : step.rateTooltip}
                               </p>
                             </TooltipContent>
                           </Tooltip>

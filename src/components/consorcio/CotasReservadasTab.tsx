@@ -181,14 +181,9 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Cotas abertas como reserva e ainda sem retorno da administradora. Esta seção <strong>ignora o
-            filtro de período</strong> — uma reserva parada há semanas aparece aqui mesmo olhando o mês
-            corrente.
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {filaFunil.length} com origem no funil (contam na etapa 5) e {filaExternas.length} externa
-            {filaExternas.length === 1 ? '' : 's'}, criadas por “+ Adicionar Cota” — estas aparecem aqui só
-            para poderem ser confirmadas e <strong>não entram no número da etapa 5</strong>.
+            Reservas sem retorno da administradora · <strong>ignora o filtro de período</strong> ·{' '}
+            {filaFunil.length} do funil e {filaExternas.length} externa
+            {filaExternas.length === 1 ? '' : 's'} (externas não contam na etapa 5).
           </p>
         </CardHeader>
         <CardContent>

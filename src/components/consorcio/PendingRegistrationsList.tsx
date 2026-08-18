@@ -53,6 +53,7 @@ import {
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
+import { diasParados } from '@/hooks/useConsorcioCotasOrigem';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
@@ -69,6 +70,36 @@ const STATUS_LABELS: Record<string, string> = {
 
 /** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
 const SEM_COTA = ['aguardando_abertura'];
+
+/**
+ * Idade do cadastro na fila: hoje − (aceite_date ?? created_at) — a mesma data
+ * que a coluna "Solicitado em" exibe. `null` quando as duas datas faltam.
+ */
+function idadeFilaDias(reg: { aceite_date?: string | null; created_at?: string | null }): number | null {
+  const base = reg.aceite_date || (reg.created_at ? String(reg.created_at).slice(0, 10) : null);
+  if (!base) return null;
+  return diasParados(base);
+}
+
+/**
+ * Semáforo de idade da fila. Usa OS MESMOS limiares do "Dias parados" da etapa 5
+ * (neutro até 7, âmbar de 8 a 15, vermelho acima de 15) para não existirem dois
+ * semáforos com cortes diferentes na mesma tela.
+ */
+function IdadeFilaBadge({ dias }: { dias: number | null }) {
+  if (dias == null) return null;
+  const tom =
+    dias > 15
+      ? 'border-destructive/60 bg-destructive/10 text-destructive'
+      : dias >= 8
+        ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+        : 'border-border text-muted-foreground';
+  return (
+    <Badge variant="outline" className={`mt-1 text-[10px] tabular-nums ${tom}`}>
+      {dias}d parado{dias === 1 ? '' : 's'}
+    </Badge>
+  );
+}
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
@@ -194,6 +225,15 @@ export function PendingRegistrationsList({
     setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
+
+  /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
+  const maisAntigoFila = useMemo(() => {
+    const idades = registrations
+      .filter((r) => r.status === 'aguardando_abertura')
+      .map((r) => idadeFilaDias(r))
+      .filter((d): d is number => d != null);
+    return idades.length ? Math.max(...idades) : null;
+  }, [registrations]);
   const deleteMut = useDeletePendingRegistration();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
@@ -276,6 +316,31 @@ export function PendingRegistrationsList({
           <FolderOpen className="h-5 w-5" />
           {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
+          {variant === 'pendentes' && maisAntigoFila != null && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={`cursor-help text-[10px] tabular-nums ${
+                    maisAntigoFila > 15
+                      ? 'border-destructive/60 bg-destructive/10 text-destructive'
+                      : maisAntigoFila >= 8
+                        ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  mais antigo: {maisAntigoFila} dia{maisAntigoFila === 1 ? '' : 's'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px]">
+                <p className="text-xs">
+                  Cadastro aguardando abertura de cota há mais tempo no período, contado da data em
+                  "Solicitado em". Semáforo igual ao de "Dias parados" da etapa 5: âmbar a partir de 8
+                  dias, vermelho acima de 15.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
@@ -606,9 +671,16 @@ function RegistrationRow({
         {reg.total_destinado > 1 ? `${reg.parte_atual}/${reg.total_destinado}` : '1/1'}
       </TableCell>
       <TableCell className="text-sm whitespace-nowrap">
-        {reg.aceite_date
-          ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
-          : format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+        <div className="flex flex-col items-start">
+          <span>
+            {reg.aceite_date
+              ? format(new Date(reg.aceite_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+              : reg.created_at
+                ? format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })
+                : '—'}
+          </span>
+          {reg.status === 'aguardando_abertura' && <IdadeFilaBadge dias={idadeFilaDias(reg)} />}
+        </div>
       </TableCell>
       {variant === 'pendentes' && (
         <TableCell className="text-sm">

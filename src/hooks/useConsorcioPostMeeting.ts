@@ -400,7 +400,10 @@ export function useProposals() {
           created_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
-          .in('status', ['pendente', 'aceita'])
+          // 'recusada' entra na leitura para a etapa 3 do funil não ENCOLHER com o
+          // tempo (proposta recusada continua sendo carta negociada no mês dela).
+          // A lista de Cartas Negociadas mostra o desfecho na coluna Status.
+          .in('status', ['pendente', 'aceita', 'recusada'])
           .order('created_at', { ascending: false })
           .order('id', { ascending: true })
           .range(from, to)
