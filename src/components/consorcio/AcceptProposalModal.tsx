@@ -99,6 +99,8 @@ export function AcceptProposalModal({
   const [checklistText, setChecklistText] = useState('');
   const [showChecklistPJ, setShowChecklistPJ] = useState(false);
   const [checklistTextPJ, setChecklistTextPJ] = useState('');
+  // Sinaliza que o check-list colado não trouxe nome de sócio (campo é obrigatório).
+  const [checklistSemNomeSocio, setChecklistSemNomeSocio] = useState(false);
   const [pfDocuments, setPfDocuments] = useState<File[]>([]);
   const [pjDocContratoSocial, setPjDocContratoSocial] = useState<File | null>(null);
   const [pjDocRgSocios, setPjDocRgSocios] = useState<File | null>(null);
@@ -499,6 +501,7 @@ export function AcceptProposalModal({
                             validCpfs.forEach((cpf, i) => {
                               addSocio({ nome: nomes[i] || '', cpf: formatCpf(cpf), renda: rendaPorSocio });
                             });
+                            setChecklistSemNomeSocio(validCpfs.some((_, i) => !(nomes[i] || '').trim()));
                           }
                           setShowChecklistPJ(false);
                           setChecklistTextPJ('');
