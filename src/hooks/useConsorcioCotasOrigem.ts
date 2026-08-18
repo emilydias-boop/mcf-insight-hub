@@ -133,46 +133,92 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
 
       let q = supabase
         .from('consortium_cards')
-        .select(
-          'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, data_reserva, data_contratacao, vendedor_name',
-        )
+        .select(CARD_RESERVA_SELECT)
         .not('data_reserva', 'is', null);
       if (start) q = q.gte('data_reserva', start);
       if (end) q = q.lte('data_reserva', end);
       const { data, error } = await q.order('data_reserva', { ascending: false });
       if (error) throw error;
 
-      return (data || [])
-        .filter((c: any) => funnelIds.has(c.id))
-        .map((c: any) => {
-          const dias =
-            c.data_contratacao && c.data_reserva
-              ? Math.round(
-                  (new Date(`${c.data_contratacao}T00:00:00`).getTime() -
-                    new Date(`${c.data_reserva}T00:00:00`).getTime()) /
-                    86400000,
-                )
-              : null;
-          return {
-            id: c.id,
-            nome: (c.tipo_pessoa === 'pj' ? c.razao_social : c.nome_completo) || '—',
-            grupo: c.grupo,
-            cota: c.cota,
-            valor_credito: Number(c.valor_credito) || 0,
-            data_reserva: c.data_reserva,
-            data_contratacao: c.data_contratacao,
-            dias,
-            vendedor_name: c.vendedor_name || null,
-          };
-        });
+      return (data || []).filter((c: any) => funnelIds.has(c.id)).map(mapCard);
     },
   });
 }
 
-/** Mediana de dias entre reserva e contratação (null quando não há dados). */
+/**
+ * Fila de trabalho da etapa 5: cotas abertas como RESERVA e ainda sem confirmação
+ * da Embracon (`data_contratacao` nula).
+ *
+ * IGNORA o filtro de período de propósito — uma reserva parada há 40 dias precisa
+ * aparecer mesmo com o filtro no mês corrente.
+ */
+export function useConsorcioReservasAguardando() {
+  return useQuery({
+    queryKey: ['consorcio-reservas-aguardando'],
+    staleTime: 60 * 1000,
+    queryFn: async (): Promise<CotaReservada[]> => {
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select(CARD_RESERVA_SELECT)
+        .eq('tipo_registro', 'reserva')
+        .is('data_contratacao', null)
+        .not('data_reserva', 'is', null)
+        .order('data_reserva', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(mapCard);
+    },
+  });
+}
+
+/** Dias parados desde a reserva (hoje − data_reserva). */
+export function diasParados(dataReserva?: string | null): number | null {
+  if (!dataReserva) return null;
+  const hoje = new Date();
+  const hojeIso = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+  return diasEntre(dataReserva, hojeIso);
+}
+
+/**
+ * Cotas confirmadas que têm o documento "Confirmação Embracon" anexado.
+ * Serve para o selo âmbar "sem comprovante" na seção de confirmadas.
+ */
+export function useCotasComConfirmacaoEmbracon(cardIds: string[]) {
+  const key = cardIds.slice().sort().join(',');
+  return useQuery({
+    queryKey: ['cotas-confirmacao-embracon', key],
+    enabled: cardIds.length > 0,
+    staleTime: 60 * 1000,
+    queryFn: async (): Promise<Set<string>> => {
+      const set = new Set<string>();
+      for (let i = 0; i < cardIds.length; i += 200) {
+        const { data, error } = await supabase
+          .from('consortium_documents')
+          .select('card_id')
+          .eq('tipo', 'confirmacao_embracon')
+          .in('card_id', cardIds.slice(i, i + 200));
+        if (error) throw error;
+        (data || []).forEach((d: any) => d.card_id && set.add(d.card_id));
+      }
+      return set;
+    },
+  });
+}
+
+/**
+ * Mediana de dias entre reserva e contratação.
+ *
+ * Só entram cotas que REALMENTE passaram por reserva → confirmação (datas em dias
+ * diferentes). Cotas com as duas datas no mesmo instante puxavam a mediana para 0
+ * e enganavam a leitura.
+ */
 export function medianDias(items: CotaReservada[]): number | null {
-  const vals = items.map((i) => i.dias).filter((d): d is number => d != null).sort((a, b) => a - b);
+  const vals = medianDiasBase(items).map((i) => i.dias as number).sort((a, b) => a - b);
   if (vals.length === 0) return null;
   const mid = Math.floor(vals.length / 2);
   return vals.length % 2 ? vals[mid] : Math.round((vals[mid - 1] + vals[mid]) / 2);
+}
+
+/** Cotas elegíveis ao cálculo da mediana (expostas para exibir "N no cálculo"). */
+export function medianDiasBase(items: CotaReservada[]): CotaReservada[] {
+  return items.filter((i) => i.dias != null && i.dias > 0);
 }
