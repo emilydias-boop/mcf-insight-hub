@@ -162,11 +162,15 @@ export function PendingRegistrationsList({
   // Status vive na URL (`stPe`), mesmo mecanismo de `ordPe`/`dirPe`/`q`.
   const [searchParams, setSearchParams] = useSearchParams();
   const stParam = searchParams.get('stPe');
-  const statusFilter: PendingStatusFilter = onlyAguardandoAbertura
-    ? 'aguardando_abertura'
-    : isPendingStatusFilter(stParam)
-      ? stParam
-      : DEFAULT_PENDING_STATUS_FILTER;
+  const statusFilter: PendingStatusFilter =
+    // Abas com status fixo (cadastradas/declinadas) não recortam por status.
+    variant !== 'pendentes'
+      ? 'todos'
+      : onlyAguardandoAbertura
+        ? 'aguardando_abertura'
+        : isPendingStatusFilter(stParam)
+          ? stParam
+          : DEFAULT_PENDING_STATUS_FILTER;
   const setStatusFilter = useCallback(
     (v: PendingStatusFilter) => {
       setSearchParams(
@@ -280,6 +284,7 @@ export function PendingRegistrationsList({
       filters={filters}
       onChange={setFilters}
       registrations={registrations}
+      showStatus={variant === 'pendentes'}
     />
     <PendingRegistrationsKPIs registrations={registrations} variant={variant} />
     <Card>
