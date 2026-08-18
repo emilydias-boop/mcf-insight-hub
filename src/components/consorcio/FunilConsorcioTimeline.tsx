@@ -19,7 +19,6 @@ const STEP_ICONS: LucideIcon[] = [CalendarClock, CheckCheck, Mail, Inbox, BadgeC
 /** Todos os status possíveis de um cadastro pendente (etapa 4 mede evento, não status). */
 export const PENDING_REGISTRATION_ALL_STATUSES = [
   'aguardando_abertura',
-  'cadastrada',
   'cota_aberta',
   'vinculada',
   'declinada',
