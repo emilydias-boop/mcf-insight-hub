@@ -68,8 +68,14 @@ interface Step {
   rateBaseIndex?: number;
   /** Tooltip da taxa de conversão que chega nesta etapa. */
   rateTooltip?: string;
-  /** Selo clicável abaixo do número (estoque atual / recorte). */
-  badge?: { label: string; filter?: FunilQuickFilter; tooltip: string } | null;
+  /** Selos clicáveis abaixo do número (estoque atual / recorte). */
+  badges?: Array<{
+    label: string;
+    filter?: FunilQuickFilter;
+    tooltip: string;
+    tone?: 'default' | 'amber';
+    icon?: boolean;
+  }> | null;
   /** Mini-blocos de composição exibidos dentro do card da etapa. */
   breakdown?: Array<{ label: string; value: number; filter?: FunilQuickFilter; tooltip?: string }> | null;
 }
