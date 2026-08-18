@@ -109,7 +109,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     
     { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
     { key: 'meus-no-shows', to: `${basePath}/meus-no-shows`, label: 'Meus No-Shows', icon: ShieldAlert },
-    { key: 'pos-reuniao', to: `${basePath}/pos-reuniao`, label: 'Pós-Reunião', icon: ClipboardCheck },
+    { key: 'pos-reuniao', to: `${basePath}/venda-consorcio`, label: 'Venda Consórcio', icon: ClipboardCheck, aliasTo: `${basePath}/pos-reuniao` },
     { key: 'consultas', to: `${basePath}/consultas`, label: 'Consultas', icon: Search },
     { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
@@ -166,9 +166,11 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
           <nav className="flex gap-3 overflow-x-auto pb-1">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const aliasTo = (item as { aliasTo?: string }).aliasTo;
               const isActive = item.end
                 ? location.pathname === item.to
-                : location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+                : location.pathname === item.to || location.pathname.startsWith(item.to + '/')
+                  || (!!aliasTo && (location.pathname === aliasTo || location.pathname.startsWith(aliasTo + '/')));
 
               return (
                 <NavLink

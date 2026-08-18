@@ -1221,11 +1221,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Envie uma proposta ou marque como Sem Sucesso na aba Pós-Reunião.
+                      Envie uma proposta ou marque como Sem Sucesso na aba Venda Consórcio.
                     </p>
-                    <Button size="sm" variant="outline" onClick={() => navigate('/consorcio/crm/pos-reuniao')}>
+                    <Button size="sm" variant="outline" onClick={() => navigate('/consorcio/crm/venda-consorcio')}>
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Ir para Pós-Reunião
+                      Ir para Venda Consórcio
                     </Button>
                   </div>
                 )}
