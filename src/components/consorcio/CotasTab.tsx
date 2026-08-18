@@ -77,6 +77,10 @@ import {
   useConsorcioTipoOptions,
 } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { useTableSortUrl } from '@/hooks/useTableSortUrl';
+import { useDebounce } from '@/hooks/useDebounce';
+import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -134,6 +138,23 @@ interface CotasTabProps {
   onClearQuickFilter?: () => void;
 }
 
+/** Ordem de processo dos status, para ordenar por etapa e não por alfabeto. */
+const RANK_STATUS: Record<string, number> = {
+  pendente: 1,
+  ativa: 2,
+  contemplada: 3,
+  quitada: 4,
+  cancelada: 5,
+};
+
+const COTAS_SORT_FIELDS = [
+  'nome', 'grupo', 'cota', 'valor_credito', 'data_reserva', 'data_contratacao', 'vencimento',
+  'tipo_produto', 'objetivo', 'origem', 'status', 'responsavel', 'origem_funil',
+  'criada_por', 'criada_em', 'comissao',
+] as const;
+/** `padrao` = ordenação atual em três níveis; não é coluna clicável. */
+type CotasSortField = (typeof COTAS_SORT_FIELDS)[number] | 'padrao';
+
 export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter }: CotasTabProps) {
   const { role } = useAuth();
   const canRecalculate = role === 'admin' || role === 'coordenador';
@@ -141,7 +162,17 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(
+    () => new URLSearchParams(window.location.search).get('q') || '',
+  );
+  // A busca é server-side: o campo responde na hora, a query espera 300ms.
+  const searchAplicado = useDebounce(searchTerm, 300);
+  const { field, dir, toggle, q, setQ } = useTableSortUrl<CotasSortField>({
+    campos: COTAS_SORT_FIELDS,
+    inicial: { field: 'padrao', dir: 'desc' },
+  });
+  useEffect(() => { setQ(searchAplicado); /* eslint-disable-next-line */ }, [searchAplicado]);
+
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
   const [origemFilter, setOrigemFilter] = useState<string>('todos');
@@ -177,7 +208,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     status: statusFilter !== 'todos' ? statusFilter : undefined,
     tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
     vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
-    search: searchTerm || undefined,
+    search: searchAplicado || undefined,
     diaVencimento: vencimentoFilter !== 'todos' ? Number(vencimentoFilter) : undefined,
     grupo: grupoFilter !== 'todos' ? grupoFilter : undefined,
     origem: origemFilter !== 'todos' ? origemFilter : undefined,
@@ -196,7 +227,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const comprovantesAtivos = (cardId: string) =>
     (comprovantesByCard[cardId] || []).filter((t) => t.status !== 'cancelado');
 
-  // Sort cards: Data de Contratação (desc) -> Cota (desc) -> Grupo (asc)
+  // Ordenação padrão (3 níveis): Data de Contratação desc → Cota desc → Grupo asc.
   const sortedCards = useMemo(() => {
     if (!cards) return [];
     let base = cards;
@@ -221,6 +252,37 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     useMemo(() => sortedCards.map((c: any) => c.id), [sortedCards]),
   );
 
+  /**
+   * Ordenação escolhida pelo usuário. Enquanto o campo é `padrao`, mantemos a
+   * ordem de três níveis acima — `useTableSort` é de campo único e achataria o default.
+   */
+  const displayCards = useMemo(() => {
+    if (field === 'padrao') return sortedCards;
+    const extratores: Record<Exclude<CotasSortField, 'padrao'>, (c: any) => unknown> = {
+      nome: (c) => (c.tipo_pessoa === 'pf' ? c.nome_completo : c.razao_social) || '',
+      grupo: (c) => c.grupo,
+      cota: (c) => c.cota,
+      valor_credito: (c) => Number(c.valor_credito) || 0,
+      data_reserva: (c) => (c.data_reserva ? parseDateWithoutTimezone(c.data_reserva) : null),
+      data_contratacao: (c) => (c.data_contratacao ? parseDateWithoutTimezone(c.data_contratacao) : null),
+      // Coluna calculada: ordena pela data que a tela mostra.
+      vencimento: (c) => calcularProximoVencimento(c.dia_vencimento),
+      tipo_produto: (c) => c.tipo_produto || '',
+      objetivo: (c) => c.objetivo || '',
+      origem: (c) =>
+        origemOptions.find((o) => o.name === c.origem)?.label ||
+        ORIGEM_OPTIONS.find((o) => o.value === c.origem)?.label ||
+        c.origem || '',
+      status: (c) => RANK_STATUS[c.status] ?? 9,
+      responsavel: (c) => getFirstTwoNames(c.vendedor_name),
+      origem_funil: (c) => funnelCardIds?.get(c.id) || '',
+      criada_por: (c) => creators?.get(c.id) || '',
+      criada_em: (c) => (c.created_at ? new Date(c.created_at) : null),
+      comissao: (c) => Number(c.valor_comissao_total) || 0,
+    };
+    return ordenarPor(sortedCards, extratores[field], dir);
+  }, [sortedCards, field, dir, origemOptions, funnelCardIds, creators]);
+
   /** Quebra nominal das cotas externas (para cobrança da equipe). */
   const externasBreakdown = useMemo(() => {
     if (!onlyExternas) return null;
@@ -241,11 +303,11 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     return { vendedores: fmt(byVendedor), origens: fmt(byOrigem) };
   }, [onlyExternas, sortedCards]);
 
-  const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
+  const totalPages = Math.ceil((displayCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return sortedCards.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedCards, currentPage, itemsPerPage]);
+    return displayCards.slice(startIndex, startIndex + itemsPerPage);
+  }, [displayCards, currentPage, itemsPerPage]);
 
   // Só os cards efetivamente exibidos na página — evita varrer a tabela inteira.
   const { data: cardDealLinks } = useConsorcioCardDealLinks(
@@ -266,7 +328,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, range?.startDate, range?.endDate, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, range?.startDate, range?.endDate, itemsPerPage, searchAplicado, vencimentoFilter, grupoFilter, origemFilter, objetivoFilter, field, dir]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -339,7 +401,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   };
 
   const handleExportCSV = () => {
-    if (!sortedCards || sortedCards.length === 0) return;
+    if (!displayCards || displayCards.length === 0) return;
 
     const esc = (v: any) => {
       if (v === null || v === undefined || v === '') return '';
@@ -372,7 +434,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       'Origem no Funil', 'Criada Por', 'Criada Em',
     ];
 
-    const rows = sortedCards.map((card: any, index) => {
+    const rows = displayCards.map((card: any, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
       const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
@@ -796,22 +858,22 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12 text-center">Nº</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead className="text-center">Grupo</TableHead>
-                <TableHead className="text-center">Cota</TableHead>
-                <TableHead className="text-right">Valor Crédito</TableHead>
-                <TableHead>DT Reserva</TableHead>
-                <TableHead>DT Contratação</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Objetivo</TableHead>
-                <TableHead>Origem</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Responsável</TableHead>
-                <TableHead>Origem no funil</TableHead>
-                <TableHead>Criada por</TableHead>
-                <TableHead>Criada em</TableHead>
-                <TableHead className="text-right">Comissão</TableHead>
+                <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome</SortableTableHead>
+                <SortableTableHead field="grupo" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Grupo</SortableTableHead>
+                <SortableTableHead field="cota" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cota</SortableTableHead>
+                <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle} className="text-right" align="right">Valor Crédito</SortableTableHead>
+                <SortableTableHead field="data_reserva" active={field} dir={dir} onSort={toggle}>DT Reserva</SortableTableHead>
+                <SortableTableHead field="data_contratacao" active={field} dir={dir} onSort={toggle}>DT Contratação</SortableTableHead>
+                <SortableTableHead field="vencimento" active={field} dir={dir} onSort={toggle}>Vencimento</SortableTableHead>
+                <SortableTableHead field="tipo_produto" active={field} dir={dir} onSort={toggle}>Tipo</SortableTableHead>
+                <SortableTableHead field="objetivo" active={field} dir={dir} onSort={toggle}>Objetivo</SortableTableHead>
+                <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
+                <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+                <SortableTableHead field="responsavel" active={field} dir={dir} onSort={toggle}>Responsável</SortableTableHead>
+                <SortableTableHead field="origem_funil" active={field} dir={dir} onSort={toggle}>Origem no funil</SortableTableHead>
+                <SortableTableHead field="criada_por" active={field} dir={dir} onSort={toggle}>Criada por</SortableTableHead>
+                <SortableTableHead field="criada_em" active={field} dir={dir} onSort={toggle}>Criada em</SortableTableHead>
+                <SortableTableHead field="comissao" active={field} dir={dir} onSort={toggle} className="text-right" align="right">Comissão</SortableTableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -830,7 +892,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
                   const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
                   // Descending number: total - (page offset + index)
-                  const orderNumber = sortedCards.length - ((currentPage - 1) * itemsPerPage + index);
+                  const orderNumber = displayCards.length - ((currentPage - 1) * itemsPerPage + index);
 
                   return (
                     <TableRow 
@@ -1008,7 +1070,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         </CardContent>
       </Card>
       {/* Pagination */}
-      {sortedCards.length > 0 && (
+      {displayCards.length > 0 && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Select 
@@ -1029,7 +1091,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">
-              Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, sortedCards.length)} de {sortedCards.length} registros
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, displayCards.length)} de {displayCards.length} registros
             </span>
           </div>
           {totalPages > 1 && (

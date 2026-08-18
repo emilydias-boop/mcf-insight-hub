@@ -15,6 +15,8 @@ export function useTableSortUrl<F extends string>(opts: {
   inicial: { field: F; dir: SortDir };
   /** true quando esta aba é a visível — abas inativas não escrevem na URL */
   ativa?: boolean;
+  /** sufixo dos parâmetros, para telas com DUAS tabelas (`ordA`/`dirA`/`qA`) */
+  sufixo?: string;
 }): {
   field: F;
   dir: SortDir;
@@ -23,11 +25,14 @@ export function useTableSortUrl<F extends string>(opts: {
   q: string;
   setQ: (valor: string) => void;
 } {
-  const { campos, inicial, ativa = true } = opts;
+  const { campos, inicial, ativa = true, sufixo = '' } = opts;
   const [searchParams, setSearchParams] = useSearchParams();
+  const kOrd = `ord${sufixo}`;
+  const kDir = `dir${sufixo}`;
+  const kQ = `q${sufixo}`;
 
-  const ordParam = searchParams.get('ord');
-  const dirParam = searchParams.get('dir');
+  const ordParam = searchParams.get(kOrd);
+  const dirParam = searchParams.get(kDir);
 
   const field = useMemo<F>(
     () => (ordParam && (campos as readonly string[]).includes(ordParam) ? (ordParam as F) : inicial.field),
@@ -36,7 +41,7 @@ export function useTableSortUrl<F extends string>(opts: {
   );
   const dir: SortDir = dirParam === 'asc' || dirParam === 'desc' ? dirParam : inicial.dir;
 
-  const q = searchParams.get('q') || '';
+  const q = searchParams.get(kQ) || '';
 
   const escrever = useCallback(
     (mudancas: Record<string, string | null>) => {
@@ -54,9 +59,9 @@ export function useTableSortUrl<F extends string>(opts: {
     (f: F, d: SortDir) => {
       if (!ativa) return;
       const ehDefault = f === inicial.field && d === inicial.dir;
-      escrever({ ord: ehDefault ? null : f, dir: ehDefault ? null : d });
+      escrever({ [kOrd]: ehDefault ? null : f, [kDir]: ehDefault ? null : d });
     },
-    [ativa, escrever, inicial.field, inicial.dir],
+    [ativa, escrever, inicial.field, inicial.dir, kOrd, kDir],
   );
 
   const toggle = useCallback(
@@ -70,9 +75,9 @@ export function useTableSortUrl<F extends string>(opts: {
   const setQ = useCallback(
     (valor: string) => {
       if (!ativa) return;
-      escrever({ q: valor.trim() ? valor : null });
+      escrever({ [kQ]: valor.trim() ? valor : null });
     },
-    [ativa, escrever],
+    [ativa, escrever, kQ],
   );
 
   return { field, dir, toggle, setSort, q, setQ };

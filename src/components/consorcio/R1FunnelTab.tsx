@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, CalendarCheck, CheckCircle, Loader2, Search, Send, X, XCircle } from 'lucide-react';
@@ -25,6 +25,11 @@ import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReasonLabel, NO_REASON_LABEL } from '@/lib/meetingOutcomeReasons';
 import { cn } from '@/lib/utils';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { useTableSortUrl } from '@/hooks/useTableSortUrl';
+import { useDebounce } from '@/hooks/useDebounce';
+import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 interface R1FunnelTabProps {
   mode: 'agendadas' | 'realizadas';
@@ -45,13 +50,45 @@ const QUICK_FILTER_LABEL: Record<string, string> = {
   'no-show': 'Somente no-show',
 };
 
+/** Ordem de processo: o que exige ação primeiro em `asc`. */
+const RANK_STATUS: Record<string, number> = {
+  scheduled: 1,
+  no_show: 2,
+  completed: 3,
+  contract_paid: 4,
+};
+
+const R1_SORT_FIELDS = [
+  'lead_name', 'lead_phone', 'scheduled_at', 'closer_name', 'status', 'outcome_reason', 'closer_notes',
+] as const;
+type R1SortField = (typeof R1_SORT_FIELDS)[number];
+
+const R1_EXTRATORES: Record<R1SortField, (p: R1FunnelParticipant) => unknown> = {
+  lead_name: (p) => p.lead_name,
+  lead_phone: (p) => p.lead_phone,
+  scheduled_at: (p) => (p.scheduled_at ? new Date(p.scheduled_at) : null),
+  closer_name: (p) => p.closer_name,
+  // "sem desfecho" no topo em asc — são as linhas que pedem ação.
+  status: (p) => (p.sem_desfecho ? 0 : RANK_STATUS[p.status] ?? 9),
+  outcome_reason: (p) => getReasonLabel(p.outcome_reason) || '',
+  closer_notes: (p) => p.closer_notes || p.notes || '',
+};
+
 export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilter }: R1FunnelTabProps) {
   const { data, isLoading } = useConsorcioR1Funnel(range);
   const { data: proposals = [] } = useProposals();
   const { role } = useAuth();
   const updateStatus = useUpdateAttendeeAndSlotStatus();
-  const [search, setSearch] = useState('');
   const [closerFilter, setCloserFilter] = useState('all');
+  const { field, dir, toggle, q, setQ } = useTableSortUrl<R1SortField>({
+    campos: R1_SORT_FIELDS,
+    inicial: { field: 'scheduled_at', dir: 'desc' },
+  });
+  const [search, setSearch] = useState(q);
+  const buscaAplicada = useDebounce(search, 300);
+  useEffect(() => { setQ(buscaAplicada); /* eslint-disable-next-line */ }, [buscaAplicada]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [proposalTarget, setProposalTarget] = useState<R1FunnelParticipant | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<R1FunnelParticipant | null>(null);
@@ -80,17 +117,31 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     [base],
   );
 
-  const rows = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  const filtradas = useMemo(() => {
+    const term = buscaAplicada.trim().toLowerCase();
     return base.filter(p => {
       if (closerFilter !== 'all' && p.closer_name !== closerFilter) return false;
       if (term) {
-        const hay = `${p.lead_name} ${p.lead_phone}`.toLowerCase();
+        const hay = `${p.lead_name} ${p.lead_phone} ${p.closer_name || ''}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
     });
-  }, [base, search, closerFilter]);
+  }, [base, buscaAplicada, closerFilter]);
+
+  // Ordem: filtrar → buscar → ordenar → paginar.
+  const rows = useMemo(
+    () => ordenarPor(filtradas, R1_EXTRATORES[field], dir),
+    [filtradas, field, dir],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageRows = useMemo(
+    () => rows.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [rows, safePage, pageSize],
+  );
+  useEffect(() => { setPage(0); }, [field, dir, buscaAplicada, closerFilter, pageSize, mode, quickFilter]);
 
   // Quebra por motivo dos no-shows do período (só quando o filtro está ativo)
   const reasonBreakdown = useMemo(() => {
@@ -157,7 +208,7 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
             <div className="relative w-60">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar nome ou telefone..."
+                placeholder="Buscar nome, telefone ou closer..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9 h-9"
@@ -221,20 +272,20 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Lead</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Data / Hora</TableHead>
-                    <TableHead>Closer</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Motivo</TableHead>
-                    <TableHead>Nota do Closer</TableHead>
+                    <SortableTableHead field="lead_name" active={field} dir={dir} onSort={toggle}>Lead</SortableTableHead>
+                    <SortableTableHead field="lead_phone" active={field} dir={dir} onSort={toggle}>Telefone</SortableTableHead>
+                    <SortableTableHead field="scheduled_at" active={field} dir={dir} onSort={toggle}>Data / Hora</SortableTableHead>
+                    <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+                    <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+                    <SortableTableHead field="outcome_reason" active={field} dir={dir} onSort={toggle}>Motivo</SortableTableHead>
+                    <SortableTableHead field="closer_notes" active={field} dir={dir} onSort={toggle}>Nota do Closer</SortableTableHead>
                     {(mode === 'realizadas' || showActions) && (
                       <TableHead className="text-right">Ações</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map(p => {
+                  {pageRows.map(p => {
                     const short = r1StatusShortLabel(p.status);
                     const jaTemCarta = p.deal_id ? dealsWithProposal.has(p.deal_id) : false;
                     const reasonLabel = getReasonLabel(p.outcome_reason);
@@ -385,6 +436,14 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
               </Table>
             </div>
           )}
+
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            total={rows.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
 
           {proposalTarget?.deal_id && (
             <ProposalModal

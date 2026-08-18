@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import {
@@ -16,8 +18,54 @@ import {
   type CotaReservada,
 } from '@/hooks/useConsorcioCotasOrigem';
 import { ConfirmarContratacaoModal } from './ConfirmarContratacaoModal';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { useTableSortUrl } from '@/hooks/useTableSortUrl';
+import { useDebounce } from '@/hooks/useDebounce';
+import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 const fmt = (d?: string | null) => (d ? format(new Date(`${d}T00:00:00`), 'dd/MM/yyyy') : '—');
+
+const num = (v: unknown) => {
+  const n = Number(String(v ?? '').replace(/\D/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Grupo e cota são texto no banco, mas ordenam como número. */
+const grupoCota = (c: CotaReservada) => {
+  const g = num(c.grupo) ?? 0;
+  const ct = num(c.cota) ?? 0;
+  return g * 1_000_000 + ct;
+};
+
+const FILA_FIELDS = ['nome', 'grupo_cota', 'valor_credito', 'data_reserva', 'dias_parados', 'vendedor'] as const;
+type FilaField = (typeof FILA_FIELDS)[number];
+const FILA_EXTRATORES: Record<FilaField, (c: CotaReservada) => unknown> = {
+  nome: (c) => c.nome,
+  grupo_cota: grupoCota,
+  valor_credito: (c) => Number(c.valor_credito) || 0,
+  data_reserva: (c) => (c.data_reserva ? new Date(`${c.data_reserva}T00:00:00`) : null),
+  dias_parados: (c) => diasParados(c.data_reserva),
+  vendedor: (c) => c.vendedor_name || '',
+};
+
+const PERIODO_FIELDS = [
+  'nome', 'grupo_cota', 'valor_credito', 'data_reserva', 'data_contratacao', 'dias', 'vendedor',
+] as const;
+type PeriodoField = (typeof PERIODO_FIELDS)[number];
+const PERIODO_EXTRATORES: Record<PeriodoField, (c: CotaReservada) => unknown> = {
+  nome: (c) => c.nome,
+  grupo_cota: grupoCota,
+  valor_credito: (c) => Number(c.valor_credito) || 0,
+  data_reserva: (c) => (c.data_reserva ? new Date(`${c.data_reserva}T00:00:00`) : null),
+  data_contratacao: (c) => (c.data_contratacao ? new Date(`${c.data_contratacao}T00:00:00`) : null),
+  dias: (c) => c.dias,
+  vendedor: (c) => c.vendedor_name || '',
+};
+
+const casaBusca = (c: CotaReservada, term: string) =>
+  !term ||
+  `${c.nome || ''} ${c.grupo || ''} ${c.cota || ''} ${c.vendedor_name || ''}`.toLowerCase().includes(term);
 
 /** Semáforo dos dias parados: neutro até 7, âmbar de 8 a 15, vermelho acima de 15. */
 function DiasParados({ dias }: { dias: number | null }) {
@@ -47,9 +95,58 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
   const { data: fila = [], isLoading: loadingFila } = useConsorcioReservasAguardando();
   const [alvo, setAlvo] = useState<CotaReservada | null>(null);
 
+  // ── Tabela A: fila de confirmação (params ordA/dirA/qA)
+  const sortA = useTableSortUrl<FilaField>({
+    campos: FILA_FIELDS,
+    inicial: { field: 'data_reserva', dir: 'asc' },
+    sufixo: 'A',
+  });
+  const [buscaA, setBuscaA] = useState(sortA.q);
+  const termoA = useDebounce(buscaA, 300);
+  useEffect(() => { sortA.setQ(termoA); /* eslint-disable-next-line */ }, [termoA]);
+  const [pageA, setPageA] = useState(0);
+  const [pageSizeA, setPageSizeA] = useState(25);
+
+  // ── Tabela B: etapa 5 no período (params ordB/dirB/qB)
+  const sortB = useTableSortUrl<PeriodoField>({
+    campos: PERIODO_FIELDS,
+    inicial: { field: 'data_reserva', dir: 'desc' },
+    sufixo: 'B',
+  });
+  const [buscaB, setBuscaB] = useState(sortB.q);
+  const termoB = useDebounce(buscaB, 300);
+  useEffect(() => { sortB.setQ(termoB); /* eslint-disable-next-line */ }, [termoB]);
+  const [pageB, setPageB] = useState(0);
+  const [pageSizeB, setPageSizeB] = useState(25);
+
   const confirmadas = useMemo(() => doPeriodo.filter((c) => !!c.data_contratacao), [doPeriodo]);
   const filaFunil = useMemo(() => fila.filter((c) => c.origemFunil), [fila]);
   const filaExternas = useMemo(() => fila.filter((c) => !c.origemFunil), [fila]);
+
+  // filtrar → buscar → ordenar → paginar
+  const filaRows = useMemo(() => {
+    const term = termoA.trim().toLowerCase();
+    return ordenarPor(fila.filter((c) => casaBusca(c, term)), FILA_EXTRATORES[sortA.field], sortA.dir);
+  }, [fila, termoA, sortA.field, sortA.dir]);
+  const totalPagesA = Math.max(1, Math.ceil(filaRows.length / pageSizeA));
+  const safePageA = Math.min(pageA, totalPagesA - 1);
+  const filaPage = useMemo(
+    () => filaRows.slice(safePageA * pageSizeA, (safePageA + 1) * pageSizeA),
+    [filaRows, safePageA, pageSizeA],
+  );
+  useEffect(() => { setPageA(0); }, [termoA, sortA.field, sortA.dir, pageSizeA]);
+
+  const confirmadasRows = useMemo(() => {
+    const term = termoB.trim().toLowerCase();
+    return ordenarPor(confirmadas.filter((c) => casaBusca(c, term)), PERIODO_EXTRATORES[sortB.field], sortB.dir);
+  }, [confirmadas, termoB, sortB.field, sortB.dir]);
+  const totalPagesB = Math.max(1, Math.ceil(confirmadasRows.length / pageSizeB));
+  const safePageB = Math.min(pageB, totalPagesB - 1);
+  const confirmadasPage = useMemo(
+    () => confirmadasRows.slice(safePageB * pageSizeB, (safePageB + 1) * pageSizeB),
+    [confirmadasRows, safePageB, pageSizeB],
+  );
+  useEffect(() => { setPageB(0); }, [termoB, sortB.field, sortB.dir, pageSizeB]);
   // Só consultamos comprovante das cotas confirmadas pelo fluxo novo.
   const { data: comComprovante } = useCotasComConfirmacaoEmbracon(
     confirmadas.filter(elegivelSeloComprovante).map((c) => c.id),
@@ -63,9 +160,20 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
       {/* Fila de trabalho — fora do filtro de período */}
       <Card>
         <CardHeader className="space-y-1">
-          <CardTitle className="text-base">
-            Fila de confirmação — todas as reservas em aberto ({fila.length})
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">
+              Fila de confirmação — todas as reservas em aberto ({fila.length})
+            </CardTitle>
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar nome, grupo, cota ou vendedor..."
+                value={buscaA}
+                onChange={(e) => setBuscaA(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground">
             Cotas abertas como reserva e ainda sem retorno da administradora. Esta seção <strong>ignora o
             filtro de período</strong> — uma reserva parada há semanas aparece aqui mesmo olhando o mês
@@ -80,26 +188,29 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
         <CardContent>
           {loadingFila ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
-          ) : fila.length === 0 ? (
+          ) : filaRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma reserva aguardando confirmação.
+              {fila.length === 0
+                ? 'Nenhuma reserva aguardando confirmação.'
+                : 'Nenhuma reserva corresponde à busca.'}
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead className="text-center">Grupo / Cota</TableHead>
-                    <TableHead className="text-right">Valor do Crédito</TableHead>
-                    <TableHead>Data de Reserva</TableHead>
-                    <TableHead className="text-center">Dias parados</TableHead>
-                    <TableHead>Vendedor</TableHead>
+                    <SortableTableHead field="nome" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle}>Nome</SortableTableHead>
+                    <SortableTableHead field="grupo_cota" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle} className="text-center" align="center">Grupo / Cota</SortableTableHead>
+                    <SortableTableHead field="valor_credito" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle} className="text-right" align="right">Valor do Crédito</SortableTableHead>
+                    <SortableTableHead field="data_reserva" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle}>Data de Reserva</SortableTableHead>
+                    <SortableTableHead field="dias_parados" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle} className="text-center" align="center">Dias parados</SortableTableHead>
+                    <SortableTableHead field="vendedor" active={sortA.field} dir={sortA.dir} onSort={sortA.toggle}>Vendedor</SortableTableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fila.map((c) => (
+                  {filaPage.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -130,6 +241,14 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              page={safePageA}
+              pageSize={pageSizeA}
+              total={filaRows.length}
+              onPageChange={setPageA}
+              onPageSizeChange={setPageSizeA}
+            />
+            </>
           )}
         </CardContent>
       </Card>
@@ -153,6 +272,15 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar nome, grupo, cota ou vendedor..."
+                value={buscaB}
+                onChange={(e) => setBuscaB(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
             <Badge variant="outline" className="whitespace-nowrap">
               {mediana != null ? `Mediana: ${mediana} dia${mediana === 1 ? '' : 's'} até contratar` : 'Mediana: —'}
             </Badge>
@@ -165,26 +293,29 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
         <CardContent>
           {isLoading ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
-          ) : confirmadas.length === 0 ? (
+          ) : confirmadasRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma cota confirmada no período com origem no funil.
+              {confirmadas.length === 0
+                ? 'Nenhuma cota confirmada no período com origem no funil.'
+                : 'Nenhuma cota corresponde à busca.'}
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead className="text-center">Grupo / Cota</TableHead>
-                    <TableHead className="text-right">Valor do Crédito</TableHead>
-                    <TableHead>Data de Reserva</TableHead>
-                    <TableHead>Data de Contratação</TableHead>
-                    <TableHead className="text-center">Dias</TableHead>
-                    <TableHead>Vendedor</TableHead>
+                    <SortableTableHead field="nome" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle}>Nome</SortableTableHead>
+                    <SortableTableHead field="grupo_cota" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle} className="text-center" align="center">Grupo / Cota</SortableTableHead>
+                    <SortableTableHead field="valor_credito" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle} className="text-right" align="right">Valor do Crédito</SortableTableHead>
+                    <SortableTableHead field="data_reserva" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle}>Data de Reserva</SortableTableHead>
+                    <SortableTableHead field="data_contratacao" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle}>Data de Contratação</SortableTableHead>
+                    <SortableTableHead field="dias" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle} className="text-center" align="center">Dias</SortableTableHead>
+                    <SortableTableHead field="vendedor" active={sortB.field} dir={sortB.dir} onSort={sortB.toggle}>Vendedor</SortableTableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {confirmadas.map((c) => (
+                  {confirmadasPage.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -212,6 +343,14 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              page={safePageB}
+              pageSize={pageSizeB}
+              total={confirmadasRows.length}
+              onPageChange={setPageB}
+              onPageSizeChange={setPageSizeB}
+            />
+            </>
           )}
         </CardContent>
       </Card>

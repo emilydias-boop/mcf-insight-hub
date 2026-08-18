@@ -42,6 +42,11 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { toast } from 'sonner';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { useTableSortUrl } from '@/hooks/useTableSortUrl';
+import { useDebounce } from '@/hooks/useDebounce';
+import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { CotasTab } from '@/components/consorcio/CotasTab';
@@ -176,6 +181,34 @@ export default function PosReuniao() {
 
 
 // ─── Propostas Tab ───────────────────────────────────────────
+/** Ordem de processo: o que exige ação primeiro em `asc`. */
+const rankPropostaStatus = (p: Proposal): number => {
+  if (isPropostaSemValor(p)) return 1;                     // sem valor / aguardando retorno
+  if ((p as any).documentos_pendentes) return 2;           // documento pendente
+  if (p.status === 'pendente') return 3;
+  if (p.status === 'aceita') return 4;                     // cadastrada
+  return 5;
+};
+
+const PROPOSTA_SORT_FIELDS = [
+  'contato', 'created_at', 'meeting_date', 'valor_credito', 'prazo_meses',
+  'tipo_produto', 'status', 'closer_name',
+] as const;
+/** `meeting_date_desc` é só o default de hoje (Data Reunião desc), não é coluna. */
+type PropostaSortField = (typeof PROPOSTA_SORT_FIELDS)[number];
+
+const PROPOSTA_EXTRATORES: Record<PropostaSortField, (p: Proposal) => unknown> = {
+  contato: (p) => p.contact_name || p.deal_name || '',
+  // A coluna "Data Proposta" exibe created_at — ordenamos pelo que ela exibe.
+  created_at: (p) => (p.created_at ? new Date(p.created_at) : null),
+  meeting_date: (p) => ((p as any).meeting_date ? new Date((p as any).meeting_date) : null),
+  valor_credito: (p) => Number(p.valor_credito) || 0,
+  prazo_meses: (p) => Number(p.prazo_meses) || 0,
+  tipo_produto: (p) => p.tipo_produto || '',
+  status: rankPropostaStatus,
+  closer_name: (p) => p.closer_name || '',
+};
+
 function PropostasTab({
   range,
   onlyNaoAceitas,
@@ -187,8 +220,16 @@ function PropostasTab({
 }) {
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
   const [closerFilter, setCloserFilter] = useState('all');
+  const { field, dir, toggle, q, setQ } = useTableSortUrl<PropostaSortField>({
+    campos: PROPOSTA_SORT_FIELDS,
+    inicial: { field: 'meeting_date', dir: 'desc' },
+  });
+  const [searchTerm, setSearchTerm] = useState(q);
+  const termo = useDebounce(searchTerm, 300);
+  useEffect(() => { setQ(termo); /* eslint-disable-next-line */ }, [termo]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const closerOptions = useMemo(() => {
     const names = [...new Set(allPropostas.map(p => p.closer_name).filter(Boolean))];
@@ -206,12 +247,25 @@ function PropostasTab({
     if (statusFilter === 'pendente') list = list.filter(p => p.status === 'pendente');
     else if (statusFilter === 'documento-pendente') list = list.filter(p => p.documentos_pendentes);
     if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      list = list.filter(p => (p.contact_name || p.deal_name || '').toLowerCase().includes(term));
+    if (termo.trim()) {
+      const term = termo.toLowerCase();
+      list = list.filter(p =>
+        `${p.contact_name || p.deal_name || ''} ${p.closer_name || ''} ${p.tipo_produto || ''} ${p.valor_credito ?? ''} ${p.prazo_meses ?? ''}`
+          .toLowerCase()
+          .includes(term),
+      );
     }
-    return list;
-  }, [allPropostas, statusFilter, closerFilter, searchTerm, onlyNaoAceitas, range.startDate, range.endDate]);
+    // filtrar → buscar → ordenar (paginação abaixo)
+    return ordenarPor(list, PROPOSTA_EXTRATORES[field], dir);
+  }, [allPropostas, statusFilter, closerFilter, termo, onlyNaoAceitas, range.startDate, range.endDate, field, dir]);
+
+  const totalPages = Math.max(1, Math.ceil(propostas.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageRows = useMemo(
+    () => propostas.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [propostas, safePage, pageSize],
+  );
+  useEffect(() => { setPage(0); }, [termo, field, dir, pageSize, statusFilter, closerFilter, onlyNaoAceitas]);
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -234,7 +288,7 @@ function PropostasTab({
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por contato..."
+              placeholder="Buscar contato, closer, produto, valor..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="pl-9 h-8"
@@ -310,19 +364,19 @@ function PropostasTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Contato</TableHead>
-                <TableHead>Data Proposta</TableHead>
-                <TableHead>Data Reunião</TableHead>
-                <TableHead>Valor Crédito</TableHead>
-                <TableHead>Prazo</TableHead>
-                <TableHead>Produto</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Closer</TableHead>
+                <SortableTableHead field="contato" active={field} dir={dir} onSort={toggle}>Contato</SortableTableHead>
+                <SortableTableHead field="created_at" active={field} dir={dir} onSort={toggle}>Data Proposta</SortableTableHead>
+                <SortableTableHead field="meeting_date" active={field} dir={dir} onSort={toggle}>Data Reunião</SortableTableHead>
+                <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor Crédito</SortableTableHead>
+                <SortableTableHead field="prazo_meses" active={field} dir={dir} onSort={toggle}>Prazo</SortableTableHead>
+                <SortableTableHead field="tipo_produto" active={field} dir={dir} onSort={toggle}>Produto</SortableTableHead>
+                <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+                <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {propostas.map(p => {
+              {pageRows.map(p => {
                 const proposalDate = p.created_at ? new Date(p.created_at) : null;
                 const daysOverdue = proposalDate && p.documentos_pendentes
                   ? Math.max(0, Math.floor((Date.now() - proposalDate.getTime()) / (1000 * 60 * 60 * 24)))
@@ -512,6 +566,14 @@ function PropostasTab({
             </TableBody>
           </Table>
         )}
+
+        <TablePagination
+          page={safePage}
+          pageSize={pageSize}
+          total={propostas.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
 
         {semSucessoTarget && (
           <SemSucessoModal
