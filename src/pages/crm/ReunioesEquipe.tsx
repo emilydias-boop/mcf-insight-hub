@@ -44,6 +44,7 @@ import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { usePendentesDrilldown } from "@/hooks/usePendentesDrilldown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
+import { useOutsideForaDoFunil } from "@/hooks/useOutsideForaDoFunil";
 
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
@@ -407,6 +408,12 @@ export default function ReunioesEquipe() {
   // — usado para a média individual entre Closers nos cards de Taxa.
   const { data: closerBreakdown } = useCloserBreakdownMetrics(start, end, "incorporador");
 
+  // Contratos que entraram totalmente fora do funil no período (sem contato no
+  // CRM ou contato sem reunião). Não têm closer possível — somam só no total
+  // do time, nunca na tabela por closer. O caso "pagou antes da R1" continua
+  // vindo do useR1CloserMetrics (campo outside).
+  const { data: outsideForaDoFunil } = useOutsideForaDoFunil(start, end, 'incorporador');
+
   // Fetch pending meetings for today (only used when preset is "today")
   const { data: pendentesHoje } = useMeetingsPendentesHoje('incorporador');
 
@@ -636,6 +643,9 @@ export default function ReunioesEquipe() {
     const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
     const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
     const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+    // Contratos que vieram totalmente fora do funil (sem contato no CRM ou sem
+    // reunião). Não têm closer, então entram apenas no total do time.
+    const outsideForaFunilCount = outsideForaDoFunil?.length ?? 0;
     // Taxa de Conversão usa exatamente o mesmo número exibido no card Contratos,
     // para as duas informações nunca divergirem. O Outside foi retirado do
     // cálculo por decisão do gestor — ele não aparece no card e não deve inflar
@@ -654,7 +664,9 @@ export default function ReunioesEquipe() {
       // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
       // órfãs sem deal NÃO entram em nenhum KPI/total.
       totalContratos: totalContratosCard,
-      totalOutside: contractsFromClosers.outside,
+      totalOutside: contractsFromClosers.outside + outsideForaFunilCount,
+      outsideForaFunil: outsideForaFunilCount,
+      outsideAtribuido: contractsFromClosers.outside,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
         ? (totalNoShows / totalR1Agendada) * 100
@@ -663,7 +675,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals, outsideForaDoFunil]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -989,6 +1001,8 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
+        outsideForaFunil={enrichedKPIs.outsideForaFunil}
+        outsideAtribuido={enrichedKPIs.outsideAtribuido}
       />
 
       <RefundDetailsDialog
