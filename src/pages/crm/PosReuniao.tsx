@@ -298,7 +298,11 @@ function PropostasTab({
             </Button>
           </div>
         )}
-        <TotalCreditoSummary propostas={propostas} title="Crédito Contratado — Cartas Negociadas" className="mb-4" />
+        <TotalCreditoSummary
+          propostas={propostas.filter(p => !isAguardandoRetornoSemValor(p))}
+          title="Crédito Contratado — Cartas Negociadas"
+          className="mb-4"
+        />
         {propostas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>
         ) : (
@@ -329,7 +333,27 @@ function PropostasTab({
                   onClick={() => setSelectedDealId(p.deal_id)}
                 >
                   <TableCell className="font-medium">
-                    {p.contact_name || p.deal_name}
+                    <div className="flex items-center gap-2">
+                      <span>{p.contact_name || p.deal_name}</span>
+                      {p.closer_notes && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={e => e.stopPropagation()}
+                              className="text-amber-600"
+                              aria-label="Nota do closer na R1"
+                            >
+                              <StickyNote className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm whitespace-pre-wrap text-xs">
+                            <p className="font-semibold mb-1">Nota do closer na R1</p>
+                            {p.closer_notes}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {proposalDate ? (
@@ -360,9 +384,19 @@ function PropostasTab({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">
-                      <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
-                        {p.status === 'aceita' ? 'Cadastrada' : p.status}
-                      </Badge>
+                      {isAguardandoRetornoSemValor(p) ? (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-500 text-amber-600"
+                          title="Proposta registrada sem valor/prazo — aguardando retorno do cliente"
+                        >
+                          Aguardando retorno
+                        </Badge>
+                      ) : (
+                        <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
+                          {p.status === 'aceita' ? 'Cadastrada' : p.status}
+                        </Badge>
+                      )}
                       {p.documentos_pendentes && (
                         <Badge
                           variant="destructive"
@@ -402,6 +436,8 @@ function PropostasTab({
                       <>
                         <Button
                           size="sm"
+                          disabled={isAguardandoRetornoSemValor(p)}
+                          title={isAguardandoRetornoSemValor(p) ? 'Registre valor e prazo antes de cadastrar' : undefined}
                           onClick={() => setAcceptTarget(p)}
                         >
                           <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
