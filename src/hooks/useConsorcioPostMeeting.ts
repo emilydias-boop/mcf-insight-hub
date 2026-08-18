@@ -602,9 +602,10 @@ export function useSemSucesso() {
   return useQuery({
     queryKey: ['consorcio-sem-sucesso'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_deals')
-        .select(`
+      const data = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('crm_deals')
+          .select(`
           id,
           name,
           origin_id,
@@ -613,20 +614,25 @@ export function useSemSucesso() {
           crm_contacts (name, phone, email),
           crm_origins (name)
         `)
-        .in('stage_id', SEM_SUCESSO_IDS)
-        .in('origin_id', CONSORCIO_ORIGIN_IDS)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+          .in('stage_id', SEM_SUCESSO_IDS)
+          .in('origin_id', CONSORCIO_ORIGIN_IDS)
+          .order('updated_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
 
       const dealIds = (data || []).map(d => d.id);
       let proposalsByDeal: Record<string, { id: string; motivo_recusa: string | null }> = {};
       if (dealIds.length > 0) {
-        const { data: proposals } = await supabase
-          .from('consorcio_proposals')
-          .select('id, deal_id, motivo_recusa')
-          .in('deal_id', dealIds)
-          .eq('status', 'recusada');
+        const proposals = await fetchAllByIds<any>(dealIds, (lote, from, to) =>
+          supabase
+            .from('consorcio_proposals')
+            .select('id, deal_id, motivo_recusa')
+            .in('deal_id', lote)
+            .eq('status', 'recusada')
+            .order('id', { ascending: true })
+            .range(from, to),
+        );
         (proposals || []).forEach(p => {
           if (p.deal_id) proposalsByDeal[p.deal_id] = { id: p.id, motivo_recusa: p.motivo_recusa };
         });
