@@ -971,9 +971,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
-                              {(origemOptions.length > 0 ? origemOptions : ORIGEM_OPTIONS).map((o: any) => (
-                                <SelectItem key={o.value || o.id} value={o.value || o.id}>{o.label || o.nome}</SelectItem>
-                              ))}
+                              {/* Grava SEMPRE o `name` do catálogo (fallback: slug legado).
+                                  Gravar o `id` deixava a cota invisível ao filtro de Origem. */}
+                              {(origemOptions.length > 0 ? origemOptions : ORIGEM_OPTIONS).map((o: any) => {
+                                const valor = o.name || o.value;
+                                return (
+                                  <SelectItem key={o.id || valor} value={valor}>
+                                    {o.label || valor}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                           <FormMessage />
