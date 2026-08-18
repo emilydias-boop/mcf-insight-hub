@@ -102,6 +102,7 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   vendedor_name_cota,
   vendedor_id,
   proposal_id,
+  deal_id,
   created_at,
   vendedor_name,
   aceite_date,
@@ -326,12 +327,12 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           tipo_contrato: r.tipo_contrato,
           parcelas_pagas_empresa: r.parcelas_pagas_empresa,
           tipo_produto: r.tipo_produto || null,
-        origem_label: formatOrigemLabel(
-          originName,
-          r.aceite_date || r.created_at?.slice(0, 10),
-          // Cadastros manuais não têm deal: "Origem / Parceiro" fica em vendedor_name.
-          r.deal_id ? null : r.vendedor_name,
-        ),
+          origem_label: formatOrigemLabel(
+            originName,
+            r.aceite_date || r.created_at?.slice(0, 10),
+            // Cadastros manuais não têm deal: "Origem / Parceiro" fica em vendedor_name.
+            r.deal_id ? null : r.vendedor_name,
+          ),
           closer_name: closerName,
           sdr_name: sdrName,
           parcelas_empresa: parcelas,
