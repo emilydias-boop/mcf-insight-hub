@@ -391,12 +391,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     };
     const cleanCotaData = Object.fromEntries(
       Object.entries(rawCotaData).map(([k, v]) => [k, v === '' ? null : v])
-    );
+    ) as Parameters<typeof openCota.mutateAsync>[0]['cotaData'];
 
     await openCota.mutateAsync({
       registrationId,
       registration: { ...registration, ...clienteData },
-      cotaData: cleanCotaData as any,
+      cotaData: cleanCotaData,
       clienteData,
     });
 
@@ -557,36 +557,6 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                 </div>
               </CardHeader>
               <CardContent>
-                {showChecklist && registration.tipo_pessoa === 'pf' && (
-                  <div className="space-y-2 p-3 border rounded-md bg-muted/30 mb-4">
-                    <Label className="text-xs text-muted-foreground">Cole o texto do check-list abaixo:</Label>
-                    <Textarea
-                      value={checklistText}
-                      onChange={e => setChecklistText(e.target.value)}
-                      rows={6}
-                      placeholder={"Nome Completo: ...\nRG: ...\nCPF: ...\nCPF Cônjuge: ...\nEndereço Residencial: ...\nCEP: ...\nTelefone: ...\nE-mail: ...\nProfissão: ...\nRenda: R$ ...\nPatrimônio: R$ ...\nChave Pix: ..."}
-                    />
-                    <Button type="button" size="sm" onClick={() => {
-                      const parsed = parseChecklistPF(checklistText);
-                      if (parsed.nome_completo) form.setValue('cliente_nome', parsed.nome_completo);
-                      if (parsed.rg) form.setValue('cliente_rg', parsed.rg);
-                      if (parsed.cpf) form.setValue('cliente_cpf', formatCpf(parsed.cpf));
-                      if (parsed.cpf_conjuge) form.setValue('cliente_cpf_conjuge', formatCpf(parsed.cpf_conjuge));
-                      if (parsed.endereco_completo) form.setValue('cliente_endereco', parsed.endereco_completo);
-                      if (parsed.endereco_cep) form.setValue('cliente_cep', formatCep(parsed.endereco_cep));
-                      if (parsed.telefone) form.setValue('cliente_telefone', formatPhone(parsed.telefone));
-                      if (parsed.email) form.setValue('cliente_email', parsed.email);
-                      if (parsed.profissao) form.setValue('cliente_profissao', parsed.profissao);
-                      if (parsed.renda) form.setValue('cliente_renda', parsed.renda);
-                      if (parsed.patrimonio) form.setValue('cliente_patrimonio', parsed.patrimonio);
-                      if (parsed.pix) form.setValue('cliente_pix', parsed.pix);
-                      setShowChecklist(false);
-                      setChecklistText('');
-                    }}>
-                      Preencher Campos
-                    </Button>
-                  </div>
-                )}
                 {registration.tipo_pessoa === 'pf' ? (
                   <div className="grid grid-cols-3 gap-3">
                     <FormField control={form.control} name="cliente_nome" rules={{ required: 'Obrigatório' }} render={({ field }) => (
@@ -655,6 +625,39 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       )}
                     </div>
                   </>
+                )}
+
+                {/* Atalho de exceção: fica DEPOIS dos campos, recolhido por padrão,
+                    para nunca competir com o que já veio preenchido do aceite. */}
+                {showChecklist && registration.tipo_pessoa === 'pf' && (
+                  <div className="space-y-2 p-3 border rounded-md bg-muted/30 mt-4">
+                    <Label className="text-xs text-muted-foreground">Cole o texto do check-list abaixo:</Label>
+                    <Textarea
+                      value={checklistText}
+                      onChange={e => setChecklistText(e.target.value)}
+                      rows={6}
+                      placeholder={"Nome Completo: ...\nRG: ...\nCPF: ...\nCPF Cônjuge: ...\nEndereço Residencial: ...\nCEP: ...\nTelefone: ...\nE-mail: ...\nProfissão: ...\nRenda: R$ ...\nPatrimônio: R$ ...\nChave Pix: ..."}
+                    />
+                    <Button type="button" size="sm" variant="secondary" onClick={() => {
+                      const parsed = parseChecklistPF(checklistText);
+                      if (parsed.nome_completo) form.setValue('cliente_nome', parsed.nome_completo);
+                      if (parsed.rg) form.setValue('cliente_rg', parsed.rg);
+                      if (parsed.cpf) form.setValue('cliente_cpf', formatCpf(parsed.cpf));
+                      if (parsed.cpf_conjuge) form.setValue('cliente_cpf_conjuge', formatCpf(parsed.cpf_conjuge));
+                      if (parsed.endereco_completo) form.setValue('cliente_endereco', parsed.endereco_completo);
+                      if (parsed.endereco_cep) form.setValue('cliente_cep', formatCep(parsed.endereco_cep));
+                      if (parsed.telefone) form.setValue('cliente_telefone', formatPhone(parsed.telefone));
+                      if (parsed.email) form.setValue('cliente_email', parsed.email);
+                      if (parsed.profissao) form.setValue('cliente_profissao', parsed.profissao);
+                      if (parsed.renda) form.setValue('cliente_renda', parsed.renda);
+                      if (parsed.patrimonio) form.setValue('cliente_patrimonio', parsed.patrimonio);
+                      if (parsed.pix) form.setValue('cliente_pix', parsed.pix);
+                      setShowChecklist(false);
+                      setChecklistText('');
+                    }}>
+                      Preencher Campos
+                    </Button>
+                  </div>
                 )}
 
                 <div className="mt-4 space-y-3">

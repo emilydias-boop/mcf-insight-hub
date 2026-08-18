@@ -130,12 +130,25 @@ export function useConfirmarContratacaoEmbracon() {
         // A própria mutation de conversão já mostrou o toast — não avisar de novo.
         throw Object.assign(e instanceof Error ? e : new Error(String(e)), { silent: true });
       }
+
+      // 5. Propagar identificação para o cadastro pendente vinculado. A reserva
+      // pode ter nascido sem grupo/cota; sem isso o cadastro fica com grupo,
+      // cota e data_contratacao nulos para sempre ("Ver detalhes" e Termo de
+      // Adesão mostrariam dados vazios).
+      const propagar: Record<string, string> = { ...identificacao };
+      propagar.data_contratacao = dataContratacao;
+      const { error: regErr } = await supabase
+        .from('consorcio_pending_registrations')
+        .update(propagar as any)
+        .eq('consortium_card_id', cardId);
+      if (regErr) throw Object.assign(regErr, { silent: false });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['consorcio-reservas-aguardando'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-reservadas'] });
       queryClient.invalidateQueries({ queryKey: ['cotas-confirmacao-embracon'] });
-      queryClient.invalidateQueries({ queryKey: ['consorcio-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-documents', variables.cardId] });
     },
     // Sucesso é anunciado pelo `useConvertReservaToContratacao` (evita aviso duplo).
