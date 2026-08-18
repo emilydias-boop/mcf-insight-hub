@@ -397,6 +397,10 @@ export interface CreatePendingRegistrationInput {
   valor_credito?: number;
   prazo_meses?: number;
   observacoes?: string;
+  /** Tipo de produto vendido (select | parcelinha) — base do cálculo de comissão. */
+  tipo_produto?: string;
+  /** Origem do lead declarada na proposta (grava `name` do catálogo). */
+  origem?: string;
   // Dados do plano (Termo de Adesão)
   credito_id?: string;
   produto_codigo?: string;
@@ -449,6 +453,21 @@ export function useCreatePendingRegistration() {
       }
 
       const { documents, ...registrationData } = input;
+
+      // 0. Rede de segurança: nunca criar um SEGUNDO cadastro para a mesma proposta.
+      //    Duplicidade infla a etapa 4, quebra o "Destinada 1/N" e re-dispara
+      //    e-mail/WhatsApp + webhook do Make para o cliente.
+      const { data: existentes, error: existErr } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, status')
+        .eq('proposal_id', input.proposal_id);
+      if (existErr) throw existErr;
+      const jaExiste = (existentes || []).some((r: any) => r.status !== 'excluida');
+      if (jaExiste) {
+        throw new Error(
+          'Esta carta já possui cadastro em Cadastros Pendentes. Abra o cadastro existente em vez de criar outro.',
+        );
+      }
 
       // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
       const { error: proposalError } = await supabase
@@ -559,6 +578,14 @@ export function useDeletePendingRegistration() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (registrationId: string) => {
+      // 0. Guardar a proposta vinculada: sem devolvê-la para 'pendente', ela fica
+      //    'aceita' sem cota e `documentos_pendentes` alarma para sempre.
+      const { data: regRow } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('id, proposal_id')
+        .eq('id', registrationId)
+        .maybeSingle();
+
       // 1. Remover docs vinculados ao pending
       const { data: docs } = await supabase
         .from('consortium_documents')
@@ -579,10 +606,24 @@ export function useDeletePendingRegistration() {
         .delete()
         .eq('id', registrationId);
       if (error) throw error;
+
+      // 4. Devolver a proposta para 'pendente' (volta a ser trabalhável)
+      if ((regRow as any)?.proposal_id) {
+        await supabase
+          .from('consorcio_proposals')
+          .update({
+            status: 'pendente',
+            aceite_at: null,
+            aceite_by: null,
+          } as any)
+          .eq('id', (regRow as any).proposal_id);
+      }
     },
     onSuccess: () => {
-      toast.success('Cadastro pendente excluído');
+      toast.success('Cadastro pendente excluído — carta devolvida para "pendente"');
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposal-has-pending'] });
     },
     onError: (e: any) => toast.error('Erro ao excluir: ' + e.message),
   });

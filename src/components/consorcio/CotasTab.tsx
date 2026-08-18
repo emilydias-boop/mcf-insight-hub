@@ -71,6 +71,7 @@ import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
 import { useComprovantesByCard } from '@/hooks/useConsorcioTermos';
 import { useConsorcioCardDealLinks } from '@/hooks/useLeadReport';
 import { STATUS_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { resolveOrigemLabel } from '@/lib/consorcioOrigem';
 import {
   useConsorcioCategoriaOptions,
   useConsorcioOrigemOptions,
@@ -282,10 +283,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       vencimento: (c) => calcularProximoVencimento(c.dia_vencimento),
       tipo_produto: (c) => c.tipo_produto || '',
       objetivo: (c) => c.objetivo || '',
-      origem: (c) =>
-        origemOptions.find((o) => o.name === c.origem)?.label ||
-        ORIGEM_OPTIONS.find((o) => o.value === c.origem)?.label ||
-        c.origem || '',
+      origem: (c) => resolveOrigemLabel(c.origem, origemOptions),
       status: (c) => RANK_STATUS[c.status] ?? 9,
       responsavel: (c) => getFirstTwoNames(c.vendedor_name),
       origem_funil: (c) => funnelCardIds?.get(c.id) || '',
@@ -305,7 +303,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
       const v = (c.vendedor_name || '').trim() || 'sem vendedor';
       byVendedor.set(v, (byVendedor.get(v) || 0) + 1);
       const o = (c.origem || '').trim() || 'sem origem';
-      const label = ORIGEM_OPTIONS.find((x) => x.value === o)?.label || o;
+      const label = c.origem ? resolveOrigemLabel(c.origem, origemOptions) : o;
       byOrigem.set(label, (byOrigem.get(label) || 0) + 1);
     });
     const fmt = (m: Map<string, number>) =>
@@ -314,7 +312,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         .map(([k, v]) => `${k} ${v}`)
         .join(' · ');
     return { vendedores: fmt(byVendedor), origens: fmt(byOrigem) };
-  }, [onlyExternas, sortedCards]);
+  }, [onlyExternas, sortedCards, origemOptions]);
 
   const totalPages = Math.ceil((displayCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
@@ -450,14 +448,13 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     const rows = displayCards.map((card: any, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
-      const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
 
       return [
         index + 1,
         card.status,
         card.tipo_pessoa === 'pf' ? 'PF' : 'PJ',
         card.categoria === 'inside' ? 'Inside' : 'Life',
-        origemConfig?.label || card.origem,
+        resolveOrigemLabel(card.origem, origemOptions),
         card.origem_detalhe,
         card.tipo_produto,
         card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '',
@@ -951,10 +948,9 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const origemConfig = origemOptions.find(o => o.name === card.origem) 
-                            || ORIGEM_OPTIONS.find(o => o.value === card.origem);
-                          return origemConfig ? (
-                            <span className="text-sm">{origemConfig.label}</span>
+                          const label = resolveOrigemLabel(card.origem, origemOptions);
+                          return label ? (
+                            <span className="text-sm">{label}</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           );

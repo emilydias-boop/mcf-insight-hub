@@ -26,6 +26,7 @@ import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import {
   useProposals, useExcluirProposta,
   useProposalHasPendingRegistration,
+  useProposalIdsWithPendingRegistration,
   isPropostaSemValor,
   labelPropostaSemValor,
   type Proposal,
@@ -280,6 +281,23 @@ function PropostasTab({
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
 
+  // Quais cartas já têm cadastro em Cadastros Pendentes. Sem isso, "Inserir Dados"
+  // cria um SEGUNDO cadastro e re-dispara e-mail/WhatsApp + webhook para o cliente.
+  const idsAceitasSemCota = useMemo(
+    () => pageRows.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
+    [pageRows],
+  );
+  const { data: comCadastro } = useProposalIdsWithPendingRegistration(idsAceitasSemCota);
+  const [, setSearchParamsProp] = useSearchParams();
+  const irParaCadastro = (p: Proposal) => {
+    setSearchParamsProp(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', 'pendentes');
+      next.set('qPe', p.contact_name || p.deal_name || '');
+      return next;
+    });
+  };
+
   if (isLoading) return <LoadingState />;
 
   const formatCurrency = (v: number) =>
@@ -509,15 +527,26 @@ function PropostasTab({
                     )}
                     {p.status === 'aceita' && !p.consortium_card_id && (
                       <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={p.cadastro_completo}
-                          title={p.cadastro_completo ? 'Cadastro já preenchido e documento anexado' : undefined}
-                          onClick={() => setAcceptTarget(p)}
-                        >
-                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
-                        </Button>
+                        {comCadastro?.has(p.id) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            title="Esta carta já possui cadastro em Cadastros Pendentes — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
+                            onClick={() => irParaCadastro(p)}
+                          >
+                            <FileText className="h-3 w-3 mr-1" /> Abrir cadastro
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={p.cadastro_completo}
+                            title={p.cadastro_completo ? 'Cadastro já preenchido e documento anexado' : undefined}
+                            onClick={() => setAcceptTarget(p)}
+                          >
+                            <FileText className="h-3 w-3 mr-1" /> Inserir Dados
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
                           <FileText className="h-3 w-3 mr-1" /> Ver Dados
                         </Button>

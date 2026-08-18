@@ -1037,6 +1037,38 @@ export function useProposalHasPendingRegistration(proposal: { id: string; deal_i
   });
 }
 
+/**
+ * Versão em lote: retorna o conjunto de `proposal_id` que já possuem cadastro
+ * pendente (não excluído). Usada no grid de Cartas Negociadas para impedir que
+ * "Inserir Dados" crie um SEGUNDO cadastro (mensagem duplicada ao cliente).
+ */
+export function useProposalIdsWithPendingRegistration(proposalIds: string[]) {
+  const key = [...proposalIds].sort().join(',');
+  return useQuery({
+    queryKey: ['consorcio-proposals-with-pending', key],
+    enabled: proposalIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const set = new Set<string>();
+      const chunkSize = 200;
+      for (let i = 0; i < proposalIds.length; i += chunkSize) {
+        const chunk = proposalIds.slice(i, i + chunkSize);
+        const { data, error } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('proposal_id, status')
+          .in('proposal_id', chunk);
+        if (error) throw error;
+        for (const r of data || []) {
+          if ((r as any).status !== 'excluida' && (r as any).proposal_id) {
+            set.add((r as any).proposal_id as string);
+          }
+        }
+      }
+      return set;
+    },
+  });
+}
+
 // Lista de Cartas Excluídas (log)
 export interface DeletedProposalLog {
   id: string;
