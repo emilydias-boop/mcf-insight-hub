@@ -1107,32 +1107,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         {!readOnly && (
                           <>
                             {/* type="button": com submit, o Enter em qualquer campo
-                                dispararia o primeiro botão do DOM e criaria uma
-                                reserva silenciosamente. O modo só é decidido no clique. */}
+                                dispararia o primeiro botão do DOM. O modo já foi
+                                escolhido no seletor do topo (modoAbertura.current). */}
                             <Button
                               type="button"
-                              variant="secondary"
+                              variant={modo === 'reserva' ? 'secondary' : 'default'}
                               disabled={openCota.isPending}
-                              onClick={() => {
-                                modoAbertura.current = 'reserva';
-                                setModo('reserva');
-                                form.handleSubmit(onSubmit, onInvalid)();
-                              }}
+                              onClick={() => form.handleSubmit(onSubmit, onInvalid)()}
                             >
                               {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Abrir como reserva
-                            </Button>
-                            <Button
-                              type="button"
-                              disabled={openCota.isPending}
-                              onClick={() => {
-                                modoAbertura.current = 'contratacao';
-                                setModo('contratacao');
-                                form.handleSubmit(onSubmit, onInvalid)();
-                              }}
-                            >
-                              {openCota.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Abrir já contratada
+                              {modo === 'reserva' ? 'Abrir como reserva' : 'Abrir já contratada'}
                             </Button>
                           </>
                         )}
