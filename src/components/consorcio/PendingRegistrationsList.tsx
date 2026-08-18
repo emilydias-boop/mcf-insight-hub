@@ -548,6 +548,9 @@ function RegistrationRow({
     : '—';
 
   const termoAssinado = termos.find((t) => t.status === 'assinado');
+  // `cadastrada` = enviado à Embracon, esperando grupo/cota voltarem.
+  const semCota = SEM_COTA.includes(reg.status);
+  const diasEmbracon = reg.status === 'cadastrada' ? diasDesde(reg.cadastrada_at) : null;
   const termoPendente = termos.find((t) => t.status === 'pendente');
   const termoBadge = termoAssinado
     ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
@@ -639,6 +642,22 @@ function RegistrationRow({
           <Badge variant={reg.status === 'aguardando_abertura' ? 'outline' : 'secondary'}>
             {STATUS_LABELS[reg.status] || reg.status}
           </Badge>
+          {diasEmbracon != null && (
+            <div className="mt-1">
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${
+                  diasEmbracon >= 10
+                    ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                    : diasEmbracon >= 5
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'text-muted-foreground'
+                }`}
+              >
+                na Embracon há {diasEmbracon} dia{diasEmbracon === 1 ? '' : 's'}
+              </Badge>
+            </div>
+          )}
         </TableCell>
       )}
       {variant === 'declinadas' && (
@@ -655,7 +674,7 @@ function RegistrationRow({
       )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
-          {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
+          {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
             <Button size="sm" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
             </Button>
@@ -707,12 +726,17 @@ function RegistrationRow({
                   {termos.length ? 'Termo de Adesão' : 'Gerar Termo de Adesão'}
                 </DropdownMenuItem>
               )}
-              {variant !== 'declinadas' && (variant !== 'pendentes' || reg.status === 'aguardando_abertura') && (
+              {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
               )}
-              {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
+              {variant === 'pendentes' && reg.status === 'cadastrada' && (
+                <DropdownMenuItem onClick={onUnmarkCadastrada} disabled={isMarking}>
+                  <Undo2 className="h-4 w-4 mr-2" /> Voltar para aguardando abertura
+                </DropdownMenuItem>
+              )}
+              {variant === 'pendentes' && semCota && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
