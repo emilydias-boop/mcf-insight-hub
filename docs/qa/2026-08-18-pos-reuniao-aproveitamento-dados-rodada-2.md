@@ -171,3 +171,36 @@ nome — preencha".
 5. Salvar edição do pendente com renda 0 → grava 0, não null.
 6. Rótulo de origem de cadastro vindo do funil idêntico ao anterior.
 7. Colar check-list PJ sem nomes → ajuda âmbar nos campos vazios.
+## Revisão do commit 66a465b — 4 ajustes
+
+**1. Origem dos cadastros manuais restaurada.** O item G acima removeu o 3º
+argumento de `formatOrigemLabel`, e com isso os cadastros criados pelo
+`AddPendingRegistrationModal` (onde "Origem / Parceiro" é salvo em `vendedor_name`
+e normalmente não existe deal) passaram a exibir "Sem origem". O fallback voltou,
+mas condicionado: 3º argumento = `r.deal_id ? null : r.vendedor_name`. Cadastro
+vindo do funil mantém o rótulo de antes; o manual volta a mostrar o parceiro na
+coluna Origem, no filtro e no export XLSX.
+
+**2. Parser PJ — ordem dos ramos.** O formato "Nome: João Silva - 111.111.111-11"
+caía no ramo "só nome" e perdia o CPF. Agora o prefixo "Nome:" é retirado antes do
+pareamento e o ramo pareado é testado primeiro, mas só quando o trecho tem 11+
+dígitos (senão "Nome: João Silva" seria lido como pareado). Formatos verificados:
+`João Silva - 111.111.111-11`, `Nome: João Silva / CPF: 111.111.111-11`,
+`Nome: João Silva - 111.111.111-11`, lista só de CPFs e lista só de nomes.
+
+**3. Aviso de nome de sócio não fica preso.** `checklistSemNomeSocio` é zerado a
+cada nova colagem e a cada abertura/fechamento do modal, além de já desaparecer
+por campo assim que o nome é digitado.
+
+**4. Objetivo volta para o cadastro pendente.** O `pendingUpdate` do passo 6 de
+`useOpenCota` passou a gravar `objetivo` (o da tela de abertura tem prioridade
+sobre o do aceite), evitando que o Termo de Adesão — gerado a partir do pendente —
+saia com o objetivo antigo.
+
+### Testes desta revisão
+1. Cadastro manual com parceiro → coluna Origem mostra "Parceiro · Mês/Ano".
+2. Cadastro vindo do funil → rótulo inalterado.
+3. Os quatro formatos de sócio do parser (conferidos fora do app).
+4. Reabrir o modal de aceite → aviso âmbar não aparece sem colagem.
+5. Trocar objetivo na abertura da cota → grava no card e no cadastro pendente.
+6. Typecheck limpo; nenhum arquivo importa `isAguardandoRetornoSemValor`.
