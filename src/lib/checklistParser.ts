@@ -139,15 +139,23 @@ export function parseChecklistPJ(text: string): Partial<ChecklistPJData> {
       // nome="CPF".
       const soNome = parte.match(/^nome:\s*(.+)$/i);
       const soCpf = parte.match(/^cpf:\s*(.+)$/i);
-      const comNomeECpf = parte.match(/^(.*?)\s*[-–—]\s*([\d.\-\s]{11,})$/);
-      if (soNome) {
+      // Pareado ("Nome - CPF"): testado ANTES dos ramos rotulados, mas só quando
+      // o trecho tem dígitos suficientes para um CPF — senão "Nome: João Silva"
+      // seria tratado como pareado. O prefixo "Nome:" sai antes do pareamento
+      // para suportar "Nome: João Silva - 111.111.111-11".
+      const semPrefixoNome = parte.replace(/^nome:\s*/i, '');
+      const temDigitosDeCpf = (semPrefixoNome.match(/\d/g) || []).length >= 11;
+      const comNomeECpf = temDigitosDeCpf
+        ? semPrefixoNome.match(/^(.*?)\s*[-–—]\s*([\d.\-\s]{11,})$/)
+        : null;
+      if (comNomeECpf) {
+        nomes.push(comNomeECpf[1].trim());
+        cpfs.push(comNomeECpf[2].trim());
+      } else if (soNome) {
         nomes.push(soNome[1].trim());
       } else if (soCpf) {
         cpfs.push(soCpf[1].trim());
         if (nomes.length < cpfs.length - 1) nomes.push('');
-      } else if (comNomeECpf) {
-        nomes.push(comNomeECpf[1].trim());
-        cpfs.push(comNomeECpf[2].trim());
       } else if (/\d/.test(parte)) {
         cpfs.push(parte);
       } else {

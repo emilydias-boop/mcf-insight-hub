@@ -329,6 +329,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
         origem_label: formatOrigemLabel(
           originName,
           r.aceite_date || r.created_at?.slice(0, 10),
+          // Cadastros manuais não têm deal: "Origem / Parceiro" fica em vendedor_name.
+          r.deal_id ? null : r.vendedor_name,
         ),
           closer_name: closerName,
           sdr_name: sdrName,
@@ -1137,6 +1139,9 @@ export function useOpenCota() {
         e_transferencia: cotaData.e_transferencia || false,
         transferido_de: cotaData.transferido_de || null,
         observacoes: cotaData.observacoes || null,
+        // Objetivo escolhido na Abertura de Cota também volta para o cadastro
+        // pendente — o Termo de Adesão é gerado a partir dele.
+        objetivo: (cotaData as any).objetivo || (registration as any).objetivo || null,
       };
       const { error: pendingUpdateError } = await supabase
         .from('consorcio_pending_registrations')
