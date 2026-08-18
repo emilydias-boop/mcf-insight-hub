@@ -15495,7 +15495,10 @@ export type Database = {
           contrato_em: string
           customer_email: string
           customer_name: string
-          motivo: string
+          net_value: number
+          offer_name: string
+          source: string
+          transaction_id: string
         }[]
       }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
