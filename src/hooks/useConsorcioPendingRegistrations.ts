@@ -109,7 +109,6 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   aceite_date,
   motivo_declinio,
   declinada_at,
-  cadastrada_at,
   consortium_card_id,
   deal:crm_deals!deal_id(
     contact:crm_contacts!contact_id(name, email, phone),
@@ -157,8 +156,6 @@ export interface EnrichedPendingRegistration {
   total_destinado: number;
   motivo_declinio?: string | null;
   declinada_at?: string | null;
-  /** Quando o cadastro foi marcado como enviado à Embracon (status `cadastrada`). */
-  cadastrada_at?: string | null;
   /** Cota já criada/vinculada — nulo significa que ainda não virou cota. */
   consortium_card_id?: string | null;
   /** Checklist de dados do cadastro incompleto (campos obrigatórios faltando). */
@@ -357,7 +354,6 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           total_destinado: totalDestinado,
           motivo_declinio: r.motivo_declinio ?? null,
           declinada_at: r.declinada_at ?? null,
-          cadastrada_at: r.cadastrada_at ?? null,
           consortium_card_id: r.consortium_card_id ?? null,
           checklist_incompleto: isChecklistIncompleto(r),
           documentos_faltando: !regsWithDocs.has(r.id),

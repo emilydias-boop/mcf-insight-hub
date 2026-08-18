@@ -295,14 +295,12 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
 
       const subidasCards = new Set<string>();
       let valorCartasSubidas = 0;
-      let comissaoRealizadaSubidas = 0;
       for (const r of (subidasRows || []) as any[]) {
         if (!passaFunil(r.card_id)) continue;
         if (!subidasCards.has(r.card_id)) {
           subidasCards.add(r.card_id);
           valorCartasSubidas += Number(r.consortium_cards?.valor_credito || 0);
         }
-        comissaoRealizadaSubidas += Number(r.valor_comissao || 0);
       }
 
       const summary: ConsorcioSummary = {
@@ -316,7 +314,6 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
         valorCartasNovas,
         valorCartasSubidas,
         comissaoPrevistaNovas,
-        comissaoRealizadaSubidas,
       };
 
       return summary;
