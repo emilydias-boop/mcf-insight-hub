@@ -235,15 +235,27 @@ export interface Proposal {
 }
 
 /**
- * Proposta criada apenas para marcar "aguardando retorno" do cliente: não tem
- * valor de crédito definido ainda. Não conta como carta negociada.
+ * Proposta ainda PENDENTE e sem valor de crédito registrado (nulo ou 0).
+ * Cobre tanto o caminho "aguardando retorno" quanto qualquer outro caminho que
+ * crie proposta sem valor. Não conta como carta negociada, não entra no card de
+ * crédito e não pode ser cadastrada.
  */
-export function isAguardandoRetornoSemValor(p: {
+export function isPropostaSemValor(p: {
+  status?: string | null;
   aguardando_retorno?: boolean | null;
   valor_credito?: number | null;
 }) {
-  return !!p.aguardando_retorno && !(Number(p.valor_credito) > 0);
+  const pendente = !p.status || p.status === 'pendente';
+  return pendente && !(Number(p.valor_credito) > 0);
 }
+
+/** Texto do selo âmbar: distingue "aguardando retorno" de proposta sem valor. */
+export function labelPropostaSemValor(p: { aguardando_retorno?: boolean | null }) {
+  return p.aguardando_retorno ? 'Aguardando retorno' : 'Sem valor registrado';
+}
+
+/** @deprecated use isPropostaSemValor — mantido para compatibilidade de imports. */
+export const isAguardandoRetornoSemValor = isPropostaSemValor;
 
 export interface SemSucessoDeal {
   deal_id: string;
