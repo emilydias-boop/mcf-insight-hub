@@ -225,6 +225,15 @@ export function PendingRegistrationsList({
     setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
+
+  /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
+  const maisAntigoFila = useMemo(() => {
+    const idades = registrations
+      .filter((r) => r.status === 'aguardando_abertura')
+      .map((r) => idadeFilaDias(r))
+      .filter((d): d is number => d != null);
+    return idades.length ? Math.max(...idades) : null;
+  }, [registrations]);
   const deleteMut = useDeletePendingRegistration();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
