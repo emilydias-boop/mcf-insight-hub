@@ -138,15 +138,18 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-2">
           <div className="space-y-1">
-            <CardTitle className="text-base">Confirmadas no período ({confirmadas.length})</CardTitle>
+            <CardTitle className="text-base">
+              Etapa 5 no período — reservas do funil já confirmadas ({confirmadas.length})
+            </CardTitle>
             <p className="text-xs text-muted-foreground">
               Reservas do período que a Embracon já confirmou. Respeita o filtro de período (data de reserva).
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Etapa 5 (Cadastradas) no período: {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} —{' '}
-              {confirmadas.length} confirmada{confirmadas.length === 1 ? '' : 's'} e{' '}
-              {doPeriodo.length - confirmadas.length} ainda aguardando confirmação. É este total que a bolinha da
-              etapa 5 exibe; a fila acima ignora o período e pode trazer reservas mais antigas.
+              Etapa 5 (Cadastradas) no período = {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} com
+              origem no funil reservadas no período: {confirmadas.length} confirmada
+              {confirmadas.length === 1 ? '' : 's'} + {doPeriodo.length - confirmadas.length} em aberto. É este
+              total que a bolinha da etapa 5 exibe. Já a <strong>fila acima</strong> é outro conjunto: todas as
+              reservas em aberto de qualquer data, incluindo as externas.
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
