@@ -255,9 +255,6 @@ export function labelPropostaSemValor(p: { aguardando_retorno?: boolean | null }
   return p.aguardando_retorno ? 'Aguardando retorno' : 'Sem valor registrado';
 }
 
-/** @deprecated use isPropostaSemValor — mantido para compatibilidade de imports. */
-export const isAguardandoRetornoSemValor = isPropostaSemValor;
-
 export interface SemSucessoDeal {
   deal_id: string;
   deal_name: string;
@@ -464,6 +461,7 @@ export function useProposals() {
             id,
             deal_id,
             consortium_card_id,
+            status,
             tipo_pessoa,
             nome_completo,
             razao_social,
@@ -594,7 +592,10 @@ export function useProposals() {
         // vinculado). Sem cadastro pendente, cai no documento do card.
         documentos_pendentes: (() => {
           if (p.status !== 'aceita') return false;
-          const regs = (p.deal_id && pendingRegistrationsByDeal[p.deal_id]) || [];
+          // Cadastros declinados/excluídos não podem manter o selo aceso para sempre.
+          const regs = ((p.deal_id && pendingRegistrationsByDeal[p.deal_id]) || []).filter(
+            (r: any) => !['declinada', 'excluida'].includes(String(r.status || '').toLowerCase()),
+          );
           if (regs.length > 0) return regs.some((r: any) => !regsWithDocs.has(r.id));
           return !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id));
         })(),
