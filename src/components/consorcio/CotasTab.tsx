@@ -230,9 +230,11 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
+  // Os KPIs respeitam os MESMOS filtros da tabela, incluindo o recorte rápido
+  // Do funil / Externas (antes eles só recebiam as datas e divergiam do grid).
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({
-    startDate: resolvedDateRange.startDate,
-    endDate: resolvedDateRange.endDate,
+    ...filters,
+    funil: onlyDoFunil ? 'funil' : onlyExternas ? 'externas' : undefined,
   });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
