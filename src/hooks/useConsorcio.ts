@@ -28,6 +28,8 @@ interface ConsorcioFilters {
   grupo?: string;
   origem?: string;
   objetivo?: 'auto' | 'imovel';
+  /** Recorte rápido da aba Cotas: só cotas vindas do funil ou só externas. */
+  funil?: 'funil' | 'externas';
 }
 
 const CONSORCIO_CARD_LIST_SELECT = `
