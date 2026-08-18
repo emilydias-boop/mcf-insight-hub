@@ -186,6 +186,11 @@ export function AcceptProposalModal({
 
   // Pré-preenche valor do crédito e prazo com o que veio da proposta
   useEffect(() => {
+    // Estado do aviso de nome de sócio não sobrevive a abrir/fechar o modal.
+    setChecklistSemNomeSocio(false);
+  }, [open]);
+
+  useEffect(() => {
     if (!proposal) return;
     if (!valorCreditoStr && proposal.valor_credito) {
       plano.setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
