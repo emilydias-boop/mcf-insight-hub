@@ -114,6 +114,10 @@ export function useConfirmarContratacaoEmbracon() {
       queryClient.invalidateQueries({ queryKey: ['cotas-confirmacao-embracon'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-documents', variables.cardId] });
     },
-    // Toast de sucesso/erro fica com o `useConvertReservaToContratacao` (evita aviso duplo).
+    // Sucesso é anunciado pelo `useConvertReservaToContratacao` (evita aviso duplo).
+    // Aqui só avisamos falhas que ocorrem ANTES da conversão (upload/documento).
+    onError: (e: any) => {
+      if (!e?.__convertToastShown) toast.error(e?.message || 'Erro ao confirmar contratação');
+    },
   });
 }
