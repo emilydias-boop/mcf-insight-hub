@@ -143,7 +143,7 @@ export function useConsorcioCotasReservadas(range: { startDate?: Date; endDate?:
       const { data, error } = await q.order('data_reserva', { ascending: false });
       if (error) throw error;
 
-      return (data || []).filter((c: any) => funnelIds.has(c.id)).map(mapCard);
+      return (data || []).filter((c: any) => funnelIds.has(c.id)).map((c: any) => mapCard(c, true));
     },
   });
 }
