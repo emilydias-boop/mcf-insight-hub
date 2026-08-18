@@ -154,19 +154,22 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       cliente_patrimonio: 0,
       cliente_pix: '',
       // Cota data
-      categoria: 'inside',
+      // Estes 6 campos NÃO têm default: sem valor no cadastro pendente o operador
+      // precisa escolher explicitamente (antes o formulário carimbava em silêncio
+      // inside/200/select/convencional/dia 15/valor 0).
+      categoria: '',
       grupo: '',
       cota: '',
-      valor_credito: 0,
-      prazo_meses: 200,
-      tipo_produto: 'select',
+      valor_credito: null as number | null,
+      prazo_meses: null as number | null,
+      tipo_produto: '',
       produto_codigo: '',
-      condicao_pagamento: 'convencional',
+      condicao_pagamento: '',
       inclui_seguro: false,
       empresa_paga_parcelas: 'nao',
       tipo_contrato: 'normal',
       parcelas_pagas_empresa: 0,
-      dia_vencimento: 15,
+      dia_vencimento: null as number | null,
       inicio_segunda_parcela: 'automatico',
       data_contratacao: new Date().toISOString().split('T')[0],
       origem: '',
@@ -198,6 +201,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       // Populate cota fields if already saved (so view/edit shows real values).
       // No modo de edição do cadastro pendente, campo sem valor no registro fica VAZIO —
       // nunca com o default do formulário, para o "Salvar" não carimbar dados inventados.
+      // No modo de edição/visualização, campo sem valor volta ao "vazio" declarado.
+      // No modo de abertura os defaults dos 6 campos críticos já são vazios (ver
+      // defaultValues), então não há carimbo silencioso.
       const setCota = (name: any, value: any, vazio: any) => {
         if (value != null && value !== '') form.setValue(name, value);
         else if (isViewMode) form.setValue(name, vazio);
@@ -234,6 +240,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const tipoProduto = form.watch('tipo_produto');
   const condicaoPagamento = form.watch('condicao_pagamento');
   const incluiSeguro = form.watch('inclui_seguro');
+  /**
+   * Prazo vindo da proposta pode estar fora do catálogo (ex.: 210, porque a proposta
+   * aceita prazo livre). Injetamos uma opção dinâmica para o dado não se perder.
+   */
+  const prazoOptions = useMemo(() => {
+    const base = PRAZO_OPTIONS.map(o => ({ value: Number(o.value), label: o.label }));
+    const atual = Number(prazoMeses);
+    if (atual > 0 && !base.some(o => o.value === atual)) {
+      return [...base, { value: atual, label: `${atual} meses (fora do catálogo)` }]
+        .sort((a, b) => a.value - b.value);
+    }
+    return base;
+  }, [prazoMeses]);
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
 
@@ -241,7 +260,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   // Prazo e condição NÃO são duplicados aqui: o hook lê e escreve direto no formulário desta tela.
   const plano = useDadosPlano({
     prazo: prazoMeses ? String(prazoMeses) : '',
-    condicao: condicaoPagamento || 'convencional',
+    condicao: condicaoPagamento || '',
     setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any), { shouldValidate: true }),
     setCondicao: (v) => form.setValue('condicao_pagamento', v, { shouldValidate: true }),
   });
@@ -340,8 +359,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       email: data.cliente_email || null,
       endereco_completo: data.cliente_endereco || null,
       endereco_cep: data.cliente_cep || null,
-      renda: data.cliente_renda || null,
-      patrimonio: data.cliente_patrimonio || null,
+      renda: numOuNull(data.cliente_renda),
+      patrimonio: numOuNull(data.cliente_patrimonio),
       pix: data.cliente_pix || null,
     };
 
@@ -380,6 +399,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     prazo_meses: 'Prazo (meses)',
     tipo_produto: 'Tipo',
     dia_vencimento: 'Dia de Vencimento',
+    condicao_pagamento: 'Condição de Pagamento',
     data_contratacao: 'Data de Contratação',
     origem: 'Origem',
   };
@@ -732,8 +752,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormField control={form.control} name="categoria" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Categoria *</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                          <Select value={field.value || ''} onValueChange={field.onChange}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
                               {(categoriaOptions.length > 0 ? categoriaOptions : CATEGORIA_OPTIONS).map((o: any) => (
                                 <SelectItem key={o.value || o.id} value={o.value || o.id}>{o.label || o.nome}</SelectItem>
@@ -753,16 +773,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
                     {/* Valor + Prazo + Tipo */}
                     <div className="grid grid-cols-3 gap-3">
-                      <FormField control={form.control} name="valor_credito" rules={{ required: 'Obrigatório' }} render={({ field }) => (
+                      <FormField control={form.control} name="valor_credito" rules={{ required: 'Obrigatório', validate: (v: any) => Number(v) > 0 || 'Informe um valor maior que zero' }} render={({ field }) => (
                         <FormItem><FormLabel>Valor do Crédito *</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                       )} />
                       <FormField control={form.control} name="prazo_meses" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Prazo (meses) *</FormLabel>
                           <Select value={field.value ? String(field.value) : ''} onValueChange={v => handlePrazoChange(Number(v))}>
-                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
-                              {PRAZO_OPTIONS.map(o => (
+                              {prazoOptions.map(o => (
                                 <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
                               ))}
                             </SelectContent>
@@ -773,8 +793,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormField control={form.control} name="tipo_produto" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Tipo *</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                          <Select value={field.value || ''} onValueChange={field.onChange}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
                               <SelectItem value="select">Select</SelectItem>
                               <SelectItem value="parcelinha">Parcelinha</SelectItem>
@@ -793,11 +813,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           {produtoDetectado ? produtoDetectado.nome : 'Auto-detectado pelo valor'}
                         </p>
                       </div>
-                      <FormField control={form.control} name="condicao_pagamento" render={({ field }) => (
+                      <FormField control={form.control} name="condicao_pagamento" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Condição de Pagamento</FormLabel>
-                          <Select value={field.value} onValueChange={handleCondicaoChange}>
-                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                          <FormLabel>Condição de Pagamento *</FormLabel>
+                          <Select value={field.value || ''} onValueChange={handleCondicaoChange}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                             <SelectContent>
                               {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
                                 <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>

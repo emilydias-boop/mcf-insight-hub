@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 
 // Stage IDs
 const CONSORCIO_STAGE_IDS = {
@@ -235,15 +236,27 @@ export interface Proposal {
 }
 
 /**
- * Proposta criada apenas para marcar "aguardando retorno" do cliente: não tem
- * valor de crédito definido ainda. Não conta como carta negociada.
+ * Proposta ainda PENDENTE e sem valor de crédito registrado (nulo ou 0).
+ * Cobre tanto o caminho "aguardando retorno" quanto qualquer outro caminho que
+ * crie proposta sem valor. Não conta como carta negociada, não entra no card de
+ * crédito e não pode ser cadastrada.
  */
-export function isAguardandoRetornoSemValor(p: {
+export function isPropostaSemValor(p: {
+  status?: string | null;
   aguardando_retorno?: boolean | null;
   valor_credito?: number | null;
 }) {
-  return !!p.aguardando_retorno && !(Number(p.valor_credito) > 0);
+  const pendente = !p.status || p.status === 'pendente';
+  return pendente && !(Number(p.valor_credito) > 0);
 }
+
+/** Texto do selo âmbar: distingue "aguardando retorno" de proposta sem valor. */
+export function labelPropostaSemValor(p: { aguardando_retorno?: boolean | null }) {
+  return p.aguardando_retorno ? 'Aguardando retorno' : 'Sem valor registrado';
+}
+
+/** @deprecated use isPropostaSemValor — mantido para compatibilidade de imports. */
+export const isAguardandoRetornoSemValor = isPropostaSemValor;
 
 export interface SemSucessoDeal {
   deal_id: string;
@@ -442,12 +455,15 @@ export function useProposals() {
         .filter(Boolean) as string[];
       const dealsWithDocs = new Set<string>();
       const pendingRegistrationsByDeal: Record<string, any[]> = {};
+      // Critério único compartilhado com a aba de Cadastros (usePendingRegistrations).
+      let regsWithDocs = new Set<string>();
       if (dealIds.length > 0) {
         const { data: pendingRegs } = await supabase
           .from('consorcio_pending_registrations')
           .select(`
             id,
             deal_id,
+            consortium_card_id,
             tipo_pessoa,
             nome_completo,
             razao_social,
@@ -463,34 +479,23 @@ export function useProposals() {
             faturamento_mensal
           `)
           .in('deal_id', dealIds);
-        const pendingIdToDeal = new Map<string, string>();
         (pendingRegs || []).forEach(pr => {
-          if (pr.id && pr.deal_id) pendingIdToDeal.set(pr.id, pr.deal_id);
           if (pr.deal_id) {
             if (!pendingRegistrationsByDeal[pr.deal_id]) pendingRegistrationsByDeal[pr.deal_id] = [];
             pendingRegistrationsByDeal[pr.deal_id].push(pr);
           }
         });
-        const pendingIds = Array.from(pendingIdToDeal.keys());
-        if (pendingIds.length > 0) {
-          const { data: pendingDocs } = await supabase
-            .from('consortium_documents')
-            .select('pending_registration_id')
-            .in('pending_registration_id', pendingIds);
-          (pendingDocs || []).forEach(d => {
-            const dealId = d.pending_registration_id
-              ? pendingIdToDeal.get(d.pending_registration_id)
-              : undefined;
-            if (dealId) dealsWithDocs.add(dealId);
-          });
-        }
+        regsWithDocs = await fetchPendingRegsWithDocs((pendingRegs || []) as any[]);
+        (pendingRegs || []).forEach(pr => {
+          if (pr.deal_id && regsWithDocs.has(pr.id)) dealsWithDocs.add(pr.deal_id);
+        });
       }
 
       // Helper: pending registration has checklist filled and documents attached
       const hasCompletePendingRegistration = (dealId: string) => {
         const regs = pendingRegistrationsByDeal[dealId] || [];
         return regs.some(pr => {
-          const hasDocs = dealsWithDocs.has(dealId);
+          const hasDocs = regsWithDocs.has(pr.id);
           if (!hasDocs) return false;
           if (pr.tipo_pessoa === 'pj') {
             return !!(
@@ -584,10 +589,15 @@ export function useProposals() {
           return closerNameByEmail[String(ownerId).toLowerCase()] || ownerId;
         })(),
         owner_id: (p.crm_deals as any)?.owner_id || '',
-        documentos_pendentes:
-          p.status === 'aceita' &&
-          !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id)) &&
-          !(p.deal_id && dealsWithDocs.has(p.deal_id)),
+        // Critério único: a proposta está com documento pendente se QUALQUER
+        // cadastro pendente dela estiver sem documento (próprio registro ou card
+        // vinculado). Sem cadastro pendente, cai no documento do card.
+        documentos_pendentes: (() => {
+          if (p.status !== 'aceita') return false;
+          const regs = (p.deal_id && pendingRegistrationsByDeal[p.deal_id]) || [];
+          if (regs.length > 0) return regs.some((r: any) => !regsWithDocs.has(r.id));
+          return !(p.consortium_card_id && cardsWithDocs.has(p.consortium_card_id));
+        })(),
         completa:
           p.status === 'aceita' &&
           !!p.consortium_card_id &&
@@ -1088,6 +1098,16 @@ export function useEditarProposta() {
       proposal_details?: string;
       origem_lead?: string;
     }) => {
+      // Detalhes anteriores: usados para saber se a observação do cadastro pendente
+      // ainda é a cópia automática (e portanto pode ser ressincronizada).
+      const { data: anterior } = await supabase
+        .from('consorcio_proposals')
+        .select('proposal_details')
+        .eq('id', params.proposal_id)
+        .maybeSingle();
+      const detalhesAnteriores = String((anterior as any)?.proposal_details || '').trim();
+      const detalhesNovos = String(params.proposal_details ?? '').trim();
+
       const { error } = await supabase
         .from('consorcio_proposals')
         .update({
@@ -1099,12 +1119,33 @@ export function useEditarProposta() {
         })
         .eq('id', params.proposal_id);
       if (error) throw error;
+
+      // Ressincroniza observacoes dos cadastros pendentes que ainda não abriram cota,
+      // sem NUNCA sobrescrever observação escrita à mão pela operação.
+      if (detalhesNovos !== detalhesAnteriores) {
+        const { data: regs } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('id, observacoes, consortium_card_id')
+          .eq('proposal_id', params.proposal_id);
+        const alvos = (regs || []).filter((r: any) => {
+          if (r.consortium_card_id) return false; // cota já aberta: não mexe
+          const atual = String(r.observacoes || '').trim();
+          return atual === '' || atual === detalhesAnteriores;
+        });
+        for (const r of alvos) {
+          await supabase
+            .from('consorcio_pending_registrations')
+            .update({ observacoes: detalhesNovos || null } as any)
+            .eq('id', (r as any).id);
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Proposta atualizada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-realizado-by-closer'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
     },
     onError: (e: any) => toast.error('Erro ao atualizar: ' + e.message),
   });

@@ -103,6 +103,7 @@ const pjSchema = z.object({
   num_funcionarios: z.number().min(0, 'Número de funcionários é obrigatório'),
   faturamento_mensal: z.number().positive('Faturamento é obrigatório'),
   socios: z.array(z.object({
+    nome: z.string().min(1, 'Nome do sócio é obrigatório'),
     cpf: z.string().min(1, 'CPF do sócio é obrigatório'),
     renda: z.number().min(0, 'Renda é obrigatória'),
   })).min(1, 'Pelo menos um sócio é obrigatório'),
@@ -194,7 +195,7 @@ export function AcceptProposalModal({
       endereco_comercial_cep: '',
       num_funcionarios: 0,
       faturamento_mensal: 0,
-      socios: [{ cpf: '', renda: 0 }],
+      socios: [{ nome: '', cpf: '', renda: 0 }],
     },
   });
 
@@ -213,7 +214,7 @@ export function AcceptProposalModal({
         .every((k) => isFilled((watched as any)[k]))
       && Array.isArray((watched as any).socios)
       && (watched as any).socios.length > 0
-      && (watched as any).socios.every((s: any) => isFilled(s?.cpf));
+      && (watched as any).socios.every((s: any) => isFilled(s?.cpf) && isFilled(s?.nome));
   const docsOk = tipoPessoa === 'pf'
     ? pfDocuments.length > 0
     : !!(pjDocContratoSocial && pjDocRgSocios && pjDocCartaoCnpj);
@@ -530,10 +531,11 @@ export function AcceptProposalModal({
                           const validCpfs = (parsed.socios_cpfs || []).filter(c => /\d/.test(c));
                           if (validCpfs.length > 0) {
                             const rendaPorSocio = parsed.renda_socios ? Math.round((parsed.renda_socios / validCpfs.length) * 100) / 100 : 0;
+                            const nomes = parsed.socios_nomes || [];
                             // Remove existing socios (iterate backwards to avoid index shift / infinite loop)
                             for (let i = socioFields.length - 1; i >= 0; i--) removeSocio(i);
-                            validCpfs.forEach(cpf => {
-                              addSocio({ cpf: formatCpf(cpf), renda: rendaPorSocio });
+                            validCpfs.forEach((cpf, i) => {
+                              addSocio({ nome: nomes[i] || '', cpf: formatCpf(cpf), renda: rendaPorSocio });
                             });
                           }
                           setShowChecklistPJ(false);
@@ -613,6 +615,9 @@ export function AcceptProposalModal({
                     <div className="space-y-3">
                       {socioFields.map((field, index) => (
                         <div key={field.id} className="flex gap-3 items-end">
+                          <FormField control={form.control} name={`socios.${index}.nome`} rules={{ required: 'Nome obrigatório' }} render={({ field }) => (
+                            <FormItem className="flex-1"><FormLabel>Nome do Sócio *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                          )} />
                           <FormField control={form.control} name={`socios.${index}.cpf`} rules={{ required: 'CPF obrigatório' }} render={({ field }) => (
                             <FormItem className="flex-1"><FormLabel>CPF do Sócio *</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatCpf(e.target.value))} /></FormControl><FormMessage /></FormItem>
                           )} />
@@ -626,7 +631,7 @@ export function AcceptProposalModal({
                           )}
                         </div>
                       ))}
-                      <Button type="button" variant="outline" size="sm" onClick={() => addSocio({ cpf: '', renda: 0 })}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addSocio({ nome: '', cpf: '', renda: 0 })}>
                         <Plus className="h-3 w-3 mr-1" /> Adicionar Sócio
                       </Button>
                     </div>

@@ -9,6 +9,7 @@ import { calcularProximoDiaUtil } from '@/lib/businessDays';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
+import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 
 export interface PendingRegistration {
   id: string;
@@ -41,7 +42,7 @@ export interface PendingRegistration {
   endereco_comercial_cep: string | null;
   num_funcionarios: number | null;
   faturamento_mensal: number | null;
-  socios: Array<{ cpf: string; renda: number }>;
+  socios: Array<{ nome?: string; cpf: string; renda: number }>;
   // Meta
   vendedor_name: string | null;
   aceite_date: string | null;
@@ -106,6 +107,7 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   aceite_date,
   motivo_declinio,
   declinada_at,
+  consortium_card_id,
   deal:crm_deals!deal_id(
     contact:crm_contacts!contact_id(name, email, phone),
     owner_id,
@@ -130,7 +132,7 @@ export interface EnrichedPendingRegistration {
   telefone_comercial: string | null;
   email: string | null;
   email_comercial: string | null;
-  socios: Array<{ cpf: string; renda: number }> | null;
+  socios: Array<{ nome?: string; cpf: string; renda: number }> | null;
   vendedor_name: string | null;
   aceite_date: string | null;
   created_at: string;
@@ -171,18 +173,10 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       if (error) throw error;
       const rows = (data || []) as any[];
 
-      // Documentos anexados por cadastro pendente (para o selo de pendência).
-      const regIds = rows.map((r) => r.id).filter(Boolean) as string[];
-      const regsWithDocs = new Set<string>();
-      if (regIds.length) {
-        const { data: docs } = await supabase
-          .from('consortium_documents')
-          .select('pending_registration_id')
-          .in('pending_registration_id', regIds);
-        (docs || []).forEach((d: any) => {
-          if (d.pending_registration_id) regsWithDocs.add(d.pending_registration_id);
-        });
-      }
+      // Documentos anexados por cadastro pendente (selo de pendência).
+      // Critério único compartilhado com a aba de Cartas Negociadas (useProposals):
+      // docs do próprio pending_registration_id OU do card vinculado a ele.
+      const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
       const isChecklistIncompleto = (r: any) =>
         r.tipo_pessoa === 'pj'
@@ -419,7 +413,7 @@ export interface CreatePendingRegistrationInput {
   endereco_comercial_cep?: string;
   num_funcionarios?: number;
   faturamento_mensal?: number;
-  socios?: Array<{ cpf: string; renda: number }>;
+  socios?: Array<{ nome?: string; cpf: string; renda: number }>;
   // Documents
   documents?: Array<{ file: File; tipo: TipoDocumento }>;
 }
@@ -942,8 +936,15 @@ export function useOpenCota() {
 
       // 0. Update client data on pending registration if provided
       if (clienteData) {
+        // Zero é valor legítimo em renda/patrimônio (mesmo espírito do numOuNull()
+        // usado na edição do cadastro pendente). Só descartamos string vazia e undefined.
+        const NUMERICOS_COM_ZERO = ['renda', 'patrimonio'];
         const cleanClientData = Object.fromEntries(
-          Object.entries(clienteData).filter(([_, v]) => v !== '' && v !== undefined && v !== 0)
+          Object.entries(clienteData).filter(([k, v]) => {
+            if (v === '' || v === undefined) return false;
+            if (v === 0) return NUMERICOS_COM_ZERO.includes(k);
+            return true;
+          })
         );
         if (Object.keys(cleanClientData).length > 0) {
           const { error: clientUpdateError } = await supabase
@@ -976,6 +977,8 @@ export function useOpenCota() {
         e_transferencia: cotaData.e_transferencia,
         transferido_de: cotaData.transferido_de,
         observacoes: cotaData.observacoes,
+        // Objetivo capturado no aceite precisa chegar ao card (antes era descartado).
+        objetivo: (registration as any).objetivo || undefined,
         produto_embracon: cotaData.produto_codigo,
         condicao_pagamento: cotaData.condicao_pagamento,
         inclui_seguro_vida: cotaData.inclui_seguro,
@@ -1005,7 +1008,7 @@ export function useOpenCota() {
         email_comercial: registration.email_comercial || undefined,
         faturamento_mensal: registration.faturamento_mensal || undefined,
         num_funcionarios: registration.num_funcionarios || undefined,
-        partners: registration.socios?.map(s => ({ nome: '', cpf: s.cpf, renda: s.renda })),
+        partners: registration.socios?.map(s => ({ nome: (s as any).nome || '', cpf: s.cpf, renda: s.renda })),
       };
 
       // Sanitize empty strings

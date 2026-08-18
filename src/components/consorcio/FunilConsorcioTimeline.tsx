@@ -3,7 +3,7 @@ import { CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet, AlertTriang
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProposals, isAguardandoRetornoSemValor } from '@/hooks/useConsorcioPostMeeting';
+import { useProposals, isPropostaSemValor } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
@@ -106,8 +106,8 @@ export function FunilConsorcioTimeline({
       (proposals || []).filter(
         (p: any) =>
           !p.carta_excluida &&
-          // "Aguardando retorno" sem valor ainda não é carta negociada.
-          !isAguardandoRetornoSemValor(p) &&
+          // Proposta pendente sem valor de crédito ainda não é carta negociada.
+          !isPropostaSemValor(p) &&
           isInPeriod(p.proposal_date || p.created_at, range),
       ),
     [proposals, period.startDate, period.endDate],
