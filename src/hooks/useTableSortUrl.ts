@@ -45,14 +45,21 @@ export function useTableSortUrl<F extends string>(opts: {
 
   const escrever = useCallback(
     (mudancas: Record<string, string | null>) => {
-      const next = new URLSearchParams(searchParams);
-      Object.entries(mudancas).forEach(([k, v]) => {
-        if (v === null || v === '') next.delete(k);
-        else next.set(k, v);
-      });
-      setSearchParams(next, { replace: true });
+      // Forma de updater: duas tabelas na mesma tela podem escrever no mesmo
+      // flush — partir sempre do valor mais recente evita que uma apague a outra.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          Object.entries(mudancas).forEach(([k, v]) => {
+            if (v === null || v === '') next.delete(k);
+            else next.set(k, v);
+          });
+          return next;
+        },
+        { replace: true },
+      );
     },
-    [searchParams, setSearchParams],
+    [setSearchParams],
   );
 
   const setSort = useCallback(
