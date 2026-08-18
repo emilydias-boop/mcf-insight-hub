@@ -244,7 +244,7 @@ ${PAPEL_PAGE_CSS}
           </p>
         )}
 
-        <p className="legal">
+        <p className="rodape-doc">
           MCF Capital · documento gerado eletronicamente
           {isComprovante ? '' : ' · assinatura eletrônica com validade jurídica'}
         </p>
