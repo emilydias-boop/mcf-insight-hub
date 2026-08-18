@@ -70,9 +70,11 @@ interface Props {
   filters: PendingFiltersState;
   onChange: (f: PendingFiltersState) => void;
   registrations: EnrichedPendingRegistration[];
+  /** Abas com status fixo (cadastradas/declinadas) não mostram o recorte. */
+  showStatus?: boolean;
 }
 
-export function PendingRegistrationsFilters({ filters, onChange, registrations }: Props) {
+export function PendingRegistrationsFilters({ filters, onChange, registrations, showStatus = true }: Props) {
   const closers = useMemo(() => {
     const set = new Set<string>();
     registrations.forEach((r) => r.closer_name && set.add(r.closer_name));
@@ -89,7 +91,7 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
 
   const hasActive =
     filters.search ||
-    filters.status !== DEFAULT_PENDING_STATUS_FILTER ||
+    (showStatus && filters.status !== DEFAULT_PENDING_STATUS_FILTER) ||
     filters.datePreset !== 'all' ||
     filters.valorMin ||
     filters.valorMax ||
@@ -111,16 +113,18 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
           />
         </div>
 
-        <Select value={filters.status} onValueChange={(v: PendingStatusFilter) => update({ status: v })}>
-          <SelectTrigger className="h-9 w-[190px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            {PENDING_STATUS_FILTERS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {showStatus && (
+          <Select value={filters.status} onValueChange={(v: PendingStatusFilter) => update({ status: v })}>
+            <SelectTrigger className="h-9 w-[190px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {PENDING_STATUS_FILTERS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         <Select value={filters.datePreset} onValueChange={(v: DatePreset) => update({ datePreset: v })}>
           <SelectTrigger className="h-9 w-[150px]">
@@ -181,7 +185,12 @@ export function PendingRegistrationsFilters({ filters, onChange, registrations }
         </Select>
 
         {hasActive && (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => onChange(defaultPendingFilters)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9"
+            onClick={() => onChange({ ...defaultPendingFilters, status: showStatus ? DEFAULT_PENDING_STATUS_FILTER : filters.status })}
+          >
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}
