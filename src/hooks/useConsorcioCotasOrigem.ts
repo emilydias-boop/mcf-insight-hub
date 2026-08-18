@@ -69,6 +69,35 @@ export interface CotaReservada {
   data_contratacao: string | null;
   dias: number | null;
   vendedor_name: string | null;
+  tipo_registro: 'reserva' | 'contratacao' | null;
+  contrato_embracon: string | null;
+}
+
+const CARD_RESERVA_SELECT =
+  'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, data_reserva, data_contratacao, vendedor_name, tipo_registro, contrato_embracon';
+
+/** Dias corridos entre duas datas YYYY-MM-DD (null quando falta alguma). */
+function diasEntre(de?: string | null, ate?: string | null): number | null {
+  if (!de || !ate) return null;
+  return Math.round(
+    (new Date(`${ate}T00:00:00`).getTime() - new Date(`${de}T00:00:00`).getTime()) / 86400000,
+  );
+}
+
+function mapCard(c: any): CotaReservada {
+  return {
+    id: c.id,
+    nome: (c.tipo_pessoa === 'pj' ? c.razao_social : c.nome_completo) || '—',
+    grupo: c.grupo,
+    cota: c.cota,
+    valor_credito: Number(c.valor_credito) || 0,
+    data_reserva: c.data_reserva,
+    data_contratacao: c.data_contratacao,
+    dias: diasEntre(c.data_reserva, c.data_contratacao),
+    vendedor_name: c.vendedor_name || null,
+    tipo_registro: c.tipo_registro ?? null,
+    contrato_embracon: c.contrato_embracon ?? null,
+  };
 }
 
 /**
