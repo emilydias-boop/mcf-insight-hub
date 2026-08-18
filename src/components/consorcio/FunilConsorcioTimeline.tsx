@@ -338,25 +338,32 @@ export function FunilConsorcioTimeline({
    * Taxa de conversão que chega na etapa `i`.
    * O denominador é a etapa anterior, salvo quando a etapa declara `rateBaseIndex`
    * (etapas 5 e 6 medem contra a etapa 4 — os eixos de data são diferentes).
-   * `over100` marca a rede de segurança: funil não pode crescer da esquerda p/ direita.
+   * `over100` só marca alarme quando a etapa cresce ALÉM do que a travessia de
+   * coorte (`rateCohort`) explica. Taxa acima de 100% explicada por cadastro de
+   * mês anterior é normal e sai em tom neutro, com nota.
    */
-  const rate = (i: number): { label: string; over100: boolean } | null => {
+  const rate = (i: number): { label: string; over100: boolean; nota: string | null } | null => {
     const baseIdx = steps[i]?.rateBaseIndex ?? i - 1;
     const prev = steps[baseIdx]?.count;
     const curr = steps[i]?.rateCount !== undefined ? steps[i]?.rateCount : steps[i]?.count;
     if (prev == null || curr == null || prev === 0) return null;
     const value = (curr / prev) * 100;
+    const coorte = steps[i]?.rateCohort ?? 0;
+    const excedente = curr - prev;
     return {
       label: `${value.toLocaleString('pt-BR', {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
       })}%`,
-      over100: value > 100,
+      over100: value > 100 && excedente > coorte,
+      nota: value > 100 && coorte > 0 ? `+${coorte} de meses anteriores` : null,
     };
   };
 
   const OVER_100_TOOLTIP =
     'A etapa seguinte tem mais registros que a anterior — provável travessia de mês ou origem fora do funil.';
+  const COORTE_TOOLTIP =
+    'Acima de 100% por travessia de mês: parte dos cadastros do período veio de cartas negociadas em meses anteriores. Não é erro de dado.';
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -393,7 +400,7 @@ export function FunilConsorcioTimeline({
                         />
                       </div>
                       {conv &&
-                        (conv.over100 || step.rateTooltip ? (
+                        (conv.over100 || conv.nota || step.rateTooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span
@@ -406,11 +413,18 @@ export function FunilConsorcioTimeline({
                               >
                                 {conv.over100 && <AlertTriangle className="h-3 w-3" />}
                                 {conv.label}
+                                {!conv.over100 && conv.nota && (
+                                  <span className="text-muted-foreground/80">· {conv.nota}</span>
+                                )}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-[260px]">
                               <p className="text-xs">
-                                {conv.over100 ? OVER_100_TOOLTIP : step.rateTooltip}
+                                {conv.over100
+                                  ? OVER_100_TOOLTIP
+                                  : conv.nota
+                                    ? COORTE_TOOLTIP
+                                    : step.rateTooltip}
                               </p>
                             </TooltipContent>
                           </Tooltip>
