@@ -448,14 +448,13 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
     const rows = displayCards.map((card: any, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
       const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
-      const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
 
       return [
         index + 1,
         card.status,
         card.tipo_pessoa === 'pf' ? 'PF' : 'PJ',
         card.categoria === 'inside' ? 'Inside' : 'Life',
-        origemConfig?.label || card.origem,
+        resolveOrigemLabel(card.origem, origemOptions),
         card.origem_detalhe,
         card.tipo_produto,
         card.objetivo === 'auto' ? 'Auto' : card.objetivo === 'imovel' ? 'Imóvel' : '',
