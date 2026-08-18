@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, CheckCircle2, Undo2, Ban, RotateCcw, FileSignature } from 'lucide-react';
@@ -158,6 +159,28 @@ export function PendingRegistrationsList({
   const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filtersState, setFiltersState] = useState<PendingFiltersState>(defaultPendingFilters);
+  // Status vive na URL (`stPe`), mesmo mecanismo de `ordPe`/`dirPe`/`q`.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stParam = searchParams.get('stPe');
+  const statusFilter: PendingStatusFilter = onlyAguardandoAbertura
+    ? 'aguardando_abertura'
+    : isPendingStatusFilter(stParam)
+      ? stParam
+      : DEFAULT_PENDING_STATUS_FILTER;
+  const setStatusFilter = useCallback(
+    (v: PendingStatusFilter) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (v === DEFAULT_PENDING_STATUS_FILTER) next.delete('stPe');
+          else next.set('stPe', v);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PendingSortField>({
     campos: PENDING_SORT_FIELDS,
     inicial: { field: 'created_at', dir: 'desc' },
@@ -165,10 +188,19 @@ export function PendingRegistrationsList({
   });
   // A busca desta aba vive no `?qPe=`, como nas outras abas; os demais filtros
   // continuam locais.
-  const filters = useMemo<PendingFiltersState>(() => ({ ...filtersState, search: q }), [filtersState, q]);
+  const filters = useMemo<PendingFiltersState>(
+    () => ({ ...filtersState, search: q, status: statusFilter }),
+    [filtersState, q, statusFilter],
+  );
   const setFilters = (next: PendingFiltersState) => {
     if (next.search !== filters.search) setQ(next.search);
-    setFiltersState({ ...next, search: '' });
+    if (next.status !== filters.status) {
+      setStatusFilter(next.status);
+      // O filtro rápido da timeline e o Select são a mesma coisa: mudar o Select
+      // desfaz o atalho para não brigarem.
+      if (onlyAguardandoAbertura) onClearQuickFilter?.();
+    }
+    setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
   const deleteMut = useDeletePendingRegistration();
@@ -249,7 +281,7 @@ export function PendingRegistrationsList({
       onChange={setFilters}
       registrations={registrations}
     />
-    <PendingRegistrationsKPIs registrations={filtered} variant={variant} />
+    <PendingRegistrationsKPIs registrations={registrations} variant={variant} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
