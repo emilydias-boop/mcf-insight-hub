@@ -909,6 +909,9 @@ export function useOpenCota() {
         dia_vencimento: number;
         inicio_segunda_parcela?: string;
         data_contratacao: string;
+        /** 'reserva' = enviada à Embracon, aguardando confirmação. */
+        tipo_registro?: 'reserva' | 'contratacao';
+        data_reserva?: string | null;
         origem: string;
         origem_detalhe?: string;
         vendedor_id?: string;
