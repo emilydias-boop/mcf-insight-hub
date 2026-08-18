@@ -61,7 +61,12 @@ export const PAPEL_CSS = `${FONTE_MARCA_CSS}
   letter-spacing:.16em;text-transform:uppercase;margin-top:7px;line-height:1.4}
 .papel .brand .meta{text-align:right;font-size:9px;color:#9aa0aa;line-height:1.75;
   letter-spacing:.01em;white-space:nowrap}
-.papel .sub{font-size:8.5px;color:#b9bec7;letter-spacing:.14em;text-transform:uppercase;margin:9px 0 0}
+/* Nota de apoio — usada no corpo do Relatório do Lead. */
+.papel .sub{font-size:10.5px;color:#6b7078;letter-spacing:normal;
+  text-transform:none;line-height:1.55;margin:0 0 6px}
+/* Kicker do cabeçalho: só dentro da faixa grafite. */
+.papel .brand .sub{font-size:8.5px;color:#b9bec7;letter-spacing:.14em;
+  text-transform:uppercase;line-height:1.4;margin:9px 0 0}
 
 /* Rótulo em cima, valor embaixo — igual ao PDF institucional. */
 .papel .kv{display:grid;grid-template-columns:repeat(2,1fr);gap:0 28px;margin:0 0 10px}
