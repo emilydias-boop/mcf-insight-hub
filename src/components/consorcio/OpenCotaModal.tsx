@@ -934,9 +934,34 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         </FormItem>
                       )} />
                       <FormField control={form.control} name="data_contratacao" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Data de Contratação *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem>
+                          <FormLabel>
+                            {modo === 'reserva' ? 'Data da Reserva *' : 'Data de Contratação *'}
+                          </FormLabel>
+                          <FormControl><Input type="date" {...field} /></FormControl>
+                          <p className="text-[11px] text-muted-foreground">
+                            {modo === 'reserva'
+                              ? 'Data do envio à Embracon (gravada em Data da reserva). Base do cronograma.'
+                              : 'Data em que a Embracon confirmou a contratação. Base do cronograma.'}
+                          </p>
+                          <FormMessage />
+                        </FormItem>
                       )} />
                     </div>
+                    {!readOnly && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-sm">Modo de abertura *</Label>
+                          <Select value={modo} onValueChange={(v: 'reserva' | 'contratacao') => { setModo(v); modoAbertura.current = v; }}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="contratacao">Já contratada (Embracon confirmou)</SelectItem>
+                              <SelectItem value="reserva">Reserva (aguardando confirmação)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Origem + Vendedor */}
                     <div className="grid grid-cols-3 gap-3">
@@ -1027,6 +1052,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                               disabled={openCota.isPending}
                               onClick={() => {
                                 modoAbertura.current = 'reserva';
+                                setModo('reserva');
                                 form.handleSubmit(onSubmit, onInvalid)();
                               }}
                             >
@@ -1038,6 +1064,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                               disabled={openCota.isPending}
                               onClick={() => {
                                 modoAbertura.current = 'contratacao';
+                                setModo('contratacao');
                                 form.handleSubmit(onSubmit, onInvalid)();
                               }}
                             >
