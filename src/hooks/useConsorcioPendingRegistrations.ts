@@ -6,6 +6,7 @@ import { CreateConsorcioCardInput, TipoDocumento } from '@/types/consorcio';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
