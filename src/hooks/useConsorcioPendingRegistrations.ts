@@ -106,6 +106,7 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   aceite_date,
   motivo_declinio,
   declinada_at,
+  consortium_card_id,
   deal:crm_deals!deal_id(
     contact:crm_contacts!contact_id(name, email, phone),
     owner_id,
@@ -171,18 +172,10 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       if (error) throw error;
       const rows = (data || []) as any[];
 
-      // Documentos anexados por cadastro pendente (para o selo de pendência).
-      const regIds = rows.map((r) => r.id).filter(Boolean) as string[];
-      const regsWithDocs = new Set<string>();
-      if (regIds.length) {
-        const { data: docs } = await supabase
-          .from('consortium_documents')
-          .select('pending_registration_id')
-          .in('pending_registration_id', regIds);
-        (docs || []).forEach((d: any) => {
-          if (d.pending_registration_id) regsWithDocs.add(d.pending_registration_id);
-        });
-      }
+      // Documentos anexados por cadastro pendente (selo de pendência).
+      // Critério único compartilhado com a aba de Cartas Negociadas (useProposals):
+      // docs do próprio pending_registration_id OU do card vinculado a ele.
+      const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
       const isChecklistIncompleto = (r: any) =>
         r.tipo_pessoa === 'pj'
