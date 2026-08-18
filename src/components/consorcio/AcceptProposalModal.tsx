@@ -480,6 +480,9 @@ export function AcceptProposalModal({
                         />
                         <Button type="button" size="sm" onClick={() => {
                           const parsed = parseChecklistPJ(checklistTextPJ);
+                          // Zera o aviso a cada nova colagem — só volta se o parser
+                          // realmente não trouxer nome de sócio.
+                          setChecklistSemNomeSocio(false);
                           if (parsed.razao_social) form.setValue('razao_social', parsed.razao_social);
                           if (parsed.cnpj) form.setValue('cnpj', formatCnpj(parsed.cnpj));
                           if (parsed.natureza_juridica) form.setValue('natureza_juridica', parsed.natureza_juridica);
