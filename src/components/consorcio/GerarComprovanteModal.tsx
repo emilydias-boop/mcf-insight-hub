@@ -59,7 +59,20 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
-      return { card: card as any, parcelas: (parcelas || []) as unknown as ComprovanteParcela[] };
+      // `consortium_cards` não tem coluna deal_id: o vínculo com o negócio vive no
+      // cadastro pendente que originou a cota.
+      const { data: pend } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('deal_id')
+        .eq('consortium_card_id', cardId)
+        .not('deal_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      return {
+        card: card as any,
+        parcelas: (parcelas || []) as unknown as ComprovanteParcela[],
+        dealId: (pend as any)?.deal_id ?? null,
+      };
     },
   });
 
@@ -128,7 +141,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
     const termo = await createTermo.mutateAsync({
       tipo: 'comprovante_cadastro',
       cardId: card.id,
-      dealId: card.deal_id ?? null,
+      dealId: data?.dealId ?? null,
       modeloId: modelo.id,
       modeloVersao: modelo.versao,
       dados,
