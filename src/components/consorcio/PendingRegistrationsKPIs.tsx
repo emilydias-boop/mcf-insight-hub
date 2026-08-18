@@ -12,7 +12,7 @@ interface Props {
    * o card "No período" mede o evento; os demais medem a fila (sem cota).
    */
   registrations: EnrichedPendingRegistration[];
-  variant?: 'pendentes' | 'cadastradas' | 'declinadas';
+  variant?: 'pendentes' | 'declinadas';
 }
 
 const VARIANT_LABELS = {
@@ -21,13 +21,6 @@ const VARIANT_LABELS = {
     credito: 'Crédito pendente',
     creditoSub: 'sem cota aberta',
     mes: 'Mês com mais cadastros',
-  },
-  cadastradas: {
-    cotas: 'Cotas cadastradas',
-    cotasSub: 'aguardando grupo/cota da Embracon',
-    credito: 'Crédito cadastrado',
-    creditoSub: 'valor total',
-    mes: 'Mês com maior volume',
   },
   declinadas: {
     cotas: 'Cotas declinadas',
@@ -39,7 +32,7 @@ const VARIANT_LABELS = {
 } as const;
 
 /** Registros que ainda NÃO viraram cota — a fila real de trabalho. */
-const SEM_COTA_STATUS = ['aguardando_abertura', 'cadastrada'];
+const SEM_COTA_STATUS = ['aguardando_abertura'];
 
 export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' }: Props) {
   const labels = VARIANT_LABELS[variant];
@@ -52,7 +45,6 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
         : registrations;
     const totalCotas = fila.length;
     const aguardando = fila.filter((r) => r.status === 'aguardando_abertura').length;
-    const naEmbracon = fila.filter((r) => r.status === 'cadastrada').length;
     const totalParcelas = fila.reduce(
       (s, r) => s + (r.parcelas_empresa?.length || 0),
       0,
@@ -93,7 +85,7 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
     }
 
     return {
-      totalPeriodo, totalCotas, aguardando, naEmbracon,
+      totalPeriodo, totalCotas, aguardando,
       totalParcelas, totalCredito, totalEntrada, topMonthLabel, topMonthSub,
     };
   }, [registrations, variant]);
@@ -105,7 +97,7 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
       value: String(stats.totalCotas),
       sub:
         variant === 'pendentes'
-          ? `${stats.aguardando} aguardando abertura · ${stats.naEmbracon} na Embracon`
+          ? `${stats.aguardando} aguardando abertura`
           : (labels as { cotasSub?: string }).cotasSub ?? '',
     },
     {
