@@ -39,6 +39,7 @@ import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
+import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 
 // Formatting functions
