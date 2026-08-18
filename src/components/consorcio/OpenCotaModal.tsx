@@ -201,9 +201,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       // Populate cota fields if already saved (so view/edit shows real values).
       // No modo de edição do cadastro pendente, campo sem valor no registro fica VAZIO —
       // nunca com o default do formulário, para o "Salvar" não carimbar dados inventados.
+      // No modo de edição/visualização, campo sem valor volta ao "vazio" declarado.
+      // No modo de abertura os defaults dos 6 campos críticos já são vazios (ver
+      // defaultValues), então não há carimbo silencioso.
       const setCota = (name: any, value: any, vazio: any) => {
         if (value != null && value !== '') form.setValue(name, value);
-        else form.setValue(name, vazio);
+        else if (isViewMode) form.setValue(name, vazio);
       };
       setCota('valor_credito', registration.valor_credito != null ? Number(registration.valor_credito) : null, null);
       setCota('prazo_meses', registration.prazo_meses != null ? Number(registration.prazo_meses) : null, null);
