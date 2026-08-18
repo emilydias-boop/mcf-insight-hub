@@ -163,11 +163,11 @@ export function escapeHtml(v: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Cabeçalho institucional — logotipo em texto, sem arquivo de imagem. */
+/** Cabeçalho institucional — logotipo em imagem (data URL embutida). */
 export function papelBrandHtml(opts: { subtitulo?: string } = {}): string {
   const data = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   return `<div class="brand">
-  <div><div class="logo">MCF CAPITAL<small>Minha Casa Financiada</small></div>${
+  <div><div class="logo"><img src="${LOGO_MCF_VERDE}" alt="MCF Capital"><small>Minha Casa Financiada</small></div>${
     opts.subtitulo ? `<div class="sub">${escapeHtml(opts.subtitulo)}</div>` : ''
   }</div>
   <div class="meta">${escapeHtml(EMPRESA_RAZAO_SOCIAL)}<br>
