@@ -168,6 +168,22 @@ Deno.serve(async (req) => {
       .select('id').single();
 
     const valorCredito = parseMonetaryValue(payload.valor_credito);
+
+    // Origem: valida contra o catálogo (`name`) — se não bater, cai em 'outros'.
+    // Gravar valor livre/UUID deixava a cota invisível ao filtro de Origem.
+    let origemNormalizada = 'outros';
+    const origemBruta = (payload.origem || '').trim();
+    if (origemBruta) {
+      const { data: origens } = await supabase
+        .from('consorcio_origem_options')
+        .select('name');
+      const nomes = new Set((origens || []).map((o: any) => String(o.name)));
+      if (nomes.has(origemBruta)) {
+        origemNormalizada = origemBruta;
+      } else {
+        console.warn('[webhook-consorcio] origem fora do catálogo, usando "outros":', origemBruta);
+      }
+    }
     const prazoMeses = payload.prazo_meses || 180;
     const tipoProduto: TipoProduto = payload.tipo_produto || 'select';
     const tipoContrato: TipoContrato = payload.tipo_contrato || 'normal';
@@ -187,7 +203,7 @@ Deno.serve(async (req) => {
       data_contratacao: dataContratacao,
       dia_vencimento: diaVencimento,
       categoria: payload.categoria || 'inside',
-      origem: payload.origem || 'outros',
+      origem: origemNormalizada,
       origem_detalhe: payload.origem_detalhe,
       tipo_pessoa: payload.tipo_pessoa,
       nome_completo: payload.nome_completo,
