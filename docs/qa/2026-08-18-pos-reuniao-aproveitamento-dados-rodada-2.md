@@ -1,13 +1,13 @@
-# Pós-Reunião — aproveitamento de dados entre etapas (rodada 2)
+# Venda Consórcio (antiga Pós-Reunião) — aproveitamento de dados entre etapas (rodada 2)
 
 - **Data:** 18/08/2026
 - **Solicitante:** Grimaldo Neto
-- **Módulo/BU:** BU Consórcio — CRM Consórcio → Pós-Reunião / Cadastros
+- **Módulo/BU:** BU Consórcio — CRM Consórcio → Venda Consórcio / Cadastros
 - **Status:** implementado, aguardando conferência do gestor (não publicado)
 
 ## Contexto e objetivo
 
-Segunda rodada da auditoria do fluxo Pós-Reunião: fechar perdas de dado entre as
+Segunda rodada da auditoria do fluxo Venda Consórcio: fechar perdas de dado entre as
 etapas (proposta → aceite → cadastro pendente → abertura de cota) e eliminar
 defaults silenciosos. Nada de origem/`origem_lead` foi alterado (frente própria por
 decisão do gestor) e as definições de contagem do funil de 6 etapas seguem as da QA

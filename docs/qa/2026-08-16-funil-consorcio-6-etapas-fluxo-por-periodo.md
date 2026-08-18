@@ -4,7 +4,7 @@ Data: 2026-08-16
 
 ## Contexto
 
-O Pós-Reunião do Consórcio tinha 7 abas planas sem noção de funil, e o Controle Consórcio era uma página separada com outras 8. Esta entrega consolidou tudo numa timeline de 6 etapas com filtro de período único, e depois corrigiu três defeitos de medição que faziam o funil crescer da esquerda para a direita.
+O Venda Consórcio (antiga Pós-Reunião) do Consórcio tinha 7 abas planas sem noção de funil, e o Controle Consórcio era uma página separada com outras 8. Esta entrega consolidou tudo numa timeline de 6 etapas com filtro de período único, e depois corrigiu três defeitos de medição que faziam o funil crescer da esquerda para a direita.
 
 Definições ditadas pelo CEO (são a régua oficial):
 
@@ -20,7 +20,7 @@ Definições ditadas pelo CEO (são a régua oficial):
 ## Reorganização de telas
 
 - `/consorcio` (Controle Consórcio) **deixou de existir**. Rota substituída por redirect EXATO para `/consorcio/crm/pos-reuniao` (nunca `consorcio/*` — há 5 rotas irmãs: `bi-consorcio`, `fechamento`, `painel-equipe`, `pagamentos`, `crm`).
-- Cotas, Cadastros Pendentes e Cadastradas migraram integralmente para o Pós-Reunião, com KPIs, filtros, CSV de 66 colunas, modais e o `ConsorcioConfigModal`.
+- Cotas, Cadastros Pendentes e Cadastradas migraram integralmente para o Venda Consórcio, com KPIs, filtros, CSV de 66 colunas, modais e o `ConsorcioConfigModal`.
 - Cartas Declinadas, Contemplação, Grupos, Previsão e Indicações foram para `/consorcio/crm/consultas` (9 abas, dois grupos separados visualmente).
 - `Index.tsx` da BU virou `src/components/consorcio/CotasTab.tsx`. Item "Controle Consorcio" removido da sidebar; `BU_CONFIG.consorcio.href` de `Home.tsx` repontado (corrige também o botão "Ir para minha área").
 - Deep-link `?tab=` e `?periodo=&de=&ate=` em todas as telas.
@@ -202,7 +202,7 @@ Publicado em produção em 16/08/2026.
 
 ---
 
-## Exceção documentada (2026-08-16 → atualização Pós-Reunião)
+## Exceção documentada (2026-08-16 → atualização Venda Consórcio)
 
 **Etapa 3 — Cartas Negociadas:** propostas criadas apenas para marcar
 "aguardando retorno" do cliente (`aguardando_retorno = true` **e**
