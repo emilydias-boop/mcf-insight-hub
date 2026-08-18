@@ -157,7 +157,7 @@ export function AcceptProposalModal({
     queryFn: async () => {
       const { data } = await supabase
         .from('consorcio_proposals')
-        .select('valor_credito, prazo_meses, proposal_details')
+        .select('valor_credito, prazo_meses, proposal_details, crm_deals (crm_contacts (phone, email))')
         .eq('id', proposalId)
         .maybeSingle();
       return data;
@@ -225,6 +225,18 @@ export function AcceptProposalModal({
       plano.setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
     }
     if (!prazo && proposal.prazo_meses) plano.setPrazo(String(proposal.prazo_meses));
+    // Aproveita telefone/e-mail do contato do negócio, sem sobrescrever o que o operador já digitou
+    const contato = (proposal as any)?.crm_deals?.crm_contacts;
+    const phone = contato?.phone || '';
+    const email = contato?.email || '';
+    if (phone) {
+      if (!form.getValues('telefone')) form.setValue('telefone', phone);
+      if (!form.getValues('telefone_comercial')) form.setValue('telefone_comercial', phone);
+    }
+    if (email) {
+      if (!form.getValues('email')) form.setValue('email', email);
+      if (!form.getValues('email_comercial')) form.setValue('email_comercial', email);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposal]);
 
