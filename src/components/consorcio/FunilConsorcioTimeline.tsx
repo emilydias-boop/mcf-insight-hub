@@ -208,7 +208,7 @@ export function FunilConsorcioTimeline({
                   : '—',
               filter: 'reservadas',
               tooltip:
-                'Mediana de dias entre a reserva e a contratação das cotas do período. Mediana 0 indica que reserva e contratação foram gravadas no mesmo dia — nesse caso a etapa espelha as Cotas. Clique para ver a lista das cotas reservadas no período.',
+                'Mediana de dias entre a reserva e a confirmação da Embracon, considerando apenas cotas cujas datas caíram em dias diferentes (as gravadas no mesmo instante ficam fora para não puxar a mediana a 0). Clique para abrir a fila de reservas aguardando confirmação.',
             }
           : null,
     },
