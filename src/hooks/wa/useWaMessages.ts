@@ -81,6 +81,7 @@ export function useWaMessages(conversationId: string | null) {
       return (data ?? []) as WaMessage[];
     },
     enabled: !!conversationId,
+    staleTime: 10_000,
   });
 
   const markReadRef = useRef<() => void>(() => {});
@@ -164,22 +165,8 @@ export function useWaMessages(conversationId: string | null) {
         .is('read_at', null)
         .select('id');
       if (updateError) throw updateError;
-      if (!updated || updated.length === 0) return;
-
-      // recontagem em vez de zerar: um inbound que chegou no meio da operação continua contando
-      const { count, error: countError } = await supabase
-        .from('wa_messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('conversation_id', conversationId)
-        .eq('direction', 'inbound')
-        .is('read_at', null);
-      if (countError) throw countError;
-
-      const { error: convError } = await supabase
-        .from('wa_conversations')
-        .update({ unread_count: count ?? 0 })
-        .eq('id', conversationId);
-      if (convError) throw convError;
+      // unread_count é recalculado por trigger no banco a partir de read_at
+      return updated ?? [];
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
@@ -194,7 +181,9 @@ export function useWaMessages(conversationId: string | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, markRead.isPending]);
 
-  markReadRef.current = markReadNow;
+  useEffect(() => {
+    markReadRef.current = markReadNow;
+  }, [markReadNow]);
 
   return { ...query, sendMessage, markRead };
 }
