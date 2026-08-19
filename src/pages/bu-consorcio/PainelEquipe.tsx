@@ -295,6 +295,7 @@ export default function ConsorcioPainelEquipe() {
   const {
     teamKPIs,
     bySDR,
+    sdrUnassigned,
     allMeetings,
     allMeetingsRaw,
     isLoading,
@@ -385,7 +386,7 @@ export default function ConsorcioPainelEquipe() {
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
   // Closer metrics filtered by BU consorcio
-  const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD);
+  const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
   
   const { data: outsideData } = useSdrOutsideMetrics(start, end);
 
@@ -415,7 +416,8 @@ export default function ConsorcioPainelEquipe() {
       ? metrics.reduce((s, m) => s + (produtosFechadosByCloser.get(m.closer_id) || 0), 0)
       : 0;
     return {
-      sdrCount: metrics.length,
+      // A linha "Não atribuído" não é uma pessoa — não entra na contagem.
+      sdrCount: metrics.filter(m => !m.is_unassigned).length,
       totalAgendamentos,
       totalRealizadas,
       totalNoShows,
@@ -542,6 +544,10 @@ export default function ConsorcioPainelEquipe() {
     ...pipelineFilteredKPIs,
     totalOutside: allowedOriginNames ? 0 : (outsideData?.totalOutside || 0),
   }), [pipelineFilteredKPIs, outsideData, allowedOriginNames]);
+
+  // Linha "Não atribuído" da aba SDRs: só faz sentido no caminho da RPC
+  // (com funil selecionado as métricas são recalculadas no front).
+  const sdrUnassignedRow = allowedOriginNames ? null : sdrUnassigned;
 
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
@@ -871,7 +877,9 @@ export default function ConsorcioPainelEquipe() {
               <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
                 Closers
-                <span className="text-[10px] sm:text-xs text-muted-foreground">({closerMetrics?.length || 0})</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
+                  ({(closerMetrics || []).filter(m => !m.is_unassigned).length})
+                </span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -888,6 +896,7 @@ export default function ConsorcioPainelEquipe() {
                 sdrDiasUteisMap={sdrDiasUteisMap}
                 propostasEnviadasBySdr={propostasData}
                 propostasFechadasBySdr={produtosFechadosBySdr}
+                unassigned={sdrUnassignedRow}
               />
               <div className="mt-6 px-0 sm:px-0">
                 <SdrActivityMetricsTable startDate={start} endDate={end} squad="consorcio" />

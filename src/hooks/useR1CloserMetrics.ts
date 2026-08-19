@@ -73,7 +73,26 @@ export interface R1CloserMetric {
   r2_agendada: number;
   reembolsos: number;
   reembolsos_valor: number;
+  /** Linha sintética "Não atribuído" (não é um closer real). */
+  is_unassigned?: boolean;
+  /** Quebra por motivo do descarte (só na linha "Não atribuído"). */
+  unassigned_reasons?: Record<UnassignedReason, number>;
 }
+
+export const UNASSIGNED_CLOSER_ID = '__nao_atribuido__';
+
+export type UnassignedReason =
+  | 'sem_closer'
+  | 'closer_desconhecido'
+  | 'sem_negocio'
+  | 'closer_inativo';
+
+export const UNASSIGNED_REASON_LABELS: Record<UnassignedReason, string> = {
+  sem_closer: 'sem closer designado',
+  closer_desconhecido: 'closer inexistente no cadastro',
+  sem_negocio: 'participante sem negócio',
+  closer_inativo: 'closer inativo no período',
+};
 
 export type IcpSegmentFilter = 'all' | 'A' | 'B';
 
@@ -81,10 +100,13 @@ export function useR1CloserMetrics(
   startDate: Date,
   endDate: Date,
   bu: string = 'incorporador',
-  segment: IcpSegmentFilter = 'all'
+  segment: IcpSegmentFilter = 'all',
+  /** Quando true, acrescenta ao fim a linha sintética "Não atribuído" com as
+   *  reuniões que antes eram descartadas em silêncio. */
+  includeUnassigned = false,
 ) {
   return useQuery({
-    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment],
+    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment, includeUnassigned],
     queryFn: async (): Promise<R1CloserMetric[]> => {
       // Filtro ICP (aditivo): com 'all' nada muda no comportamento existente.
       const segmentActive = segment === 'A' || segment === 'B';
@@ -114,6 +136,15 @@ export function useR1CloserMetrics(
         .eq('bu', bu);
 
       if (closersError) throw closersError;
+
+      // Ids de closers de TODAS as BUs — usado só para distinguir
+      // "reunião de outra BU" (fora do escopo deste painel, descartada de
+      // propósito) de "closer inexistente no cadastro" (dado perdido, vai
+      // para a linha "Não atribuído").
+      const { data: allClosersIds } = await supabase
+        .from('closers')
+        .select('id');
+      const knownCloserIds = new Set((allClosersIds || []).map((c: any) => c.id as string));
 
       // Active R1 closers — initialized with zeros so they always appear in the table.
       const r1Closers = closers?.filter(
@@ -724,48 +755,103 @@ export function useR1CloserMetrics(
       // Realizada: 1x per deal if at least one attendee has final status
       const closerDealMap = new Map<string, Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>>();
 
+      // ========== BUCKET "NÃO ATRIBUÍDO" ==========
+      // Antes, cada um destes casos era um `return` mudo. Agora vira linha visível.
+      const unassigned = { r1_agendada: 0, r1_realizada: 0, noshow: 0 };
+      const unassignedReasons: Record<UnassignedReason, number> = {
+        sem_closer: 0, closer_desconhecido: 0, sem_negocio: 0, closer_inativo: 0,
+      };
+      const unassignedDealMap = new Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>();
+      const addUnassigned = (
+        reason: UnassignedReason,
+        dealId: string | null | undefined,
+        day: string,
+        status: string,
+      ) => {
+        unassignedReasons[reason] += 1;
+        if (!dealId) {
+          // Sem negócio vinculado não há como deduplicar: conta 1 individualmente.
+          unassigned.r1_agendada += 1;
+          if (realizadaStatuses.includes(status)) unassigned.r1_realizada += 1;
+          else if (status === 'no_show') unassigned.noshow += 1;
+          return;
+        }
+        const key = `${reason}:${dealId}`;
+        if (!unassignedDealMap.has(key)) {
+          unassignedDealMap.set(key, { days: new Set(), realized: false, noshow: false });
+        }
+        const entry = unassignedDealMap.get(key)!;
+        entry.days.add(day);
+        if (realizadaStatuses.includes(status)) entry.realized = true;
+        if (status === 'no_show') entry.noshow = true;
+      };
+
       meetings?.forEach(meeting => {
         const closerId = meeting.closer_id;
-        if (!closerId) return;
+        const day = format(new Date(meeting.scheduled_at), 'yyyy-MM-dd');
+        const knownCloser = closerId ? closers?.find(c => c.id === closerId) : null;
+        // Reunião de closer de OUTRA BU: fora do escopo deste painel — segue
+        // descartada (não é dado perdido, é recorte por BU).
+        if (closerId && !knownCloser && knownCloserIds.has(closerId)) return;
+
+        const slotReason: UnassignedReason | null = !closerId
+          ? 'sem_closer'
+          : (!knownCloser ? 'closer_desconhecido' : null);
+
+        if (slotReason) {
+          meeting.meeting_slot_attendees?.forEach(att => {
+            if ((att as any).is_partner) return;
+            if (!allowedAgendadaStatuses.includes(att.status)) return;
+            addUnassigned(slotReason, att.deal_id, day, att.status);
+          });
+          return;
+        }
 
         // Ensure metric exists
-        let metric = metricsMap.get(closerId);
+        let metric = metricsMap.get(closerId!);
         if (!metric) {
-          const closerInfo = closers?.find(c => c.id === closerId);
-          if (!closerInfo) return;
+          const closerInfo = knownCloser!;
           metric = {
-            closer_id: closerId,
+            closer_id: closerId!,
             closer_name: closerInfo.name,
             closer_color: closerInfo.color || null,
             r1_agendada: 0,
-            agendamentos: agendamentosByCloser.get(closerId) || 0,
+            agendamentos: agendamentosByCloser.get(closerId!) || 0,
             r1_realizada: 0,
             noshow: 0,
-            contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
-            outside: outsideByCloser.get(closerId) || 0,
-            r2_agendada: r2CountByCloser.get(closerId) || 0,
-            reembolsos: refundByCloser.get(closerId) || 0,
-            reembolsos_valor: refundValueByCloser.get(closerId) || 0,
+            contrato_pago: (contractsByCloser.get(closerId!) || 0) + (manualByCloser.get(closerId!) || 0),
+            outside: outsideByCloser.get(closerId!) || 0,
+            r2_agendada: r2CountByCloser.get(closerId!) || 0,
+            reembolsos: refundByCloser.get(closerId!) || 0,
+            reembolsos_valor: refundValueByCloser.get(closerId!) || 0,
           };
-          metricsMap.set(closerId, metric);
+          metricsMap.set(closerId!, metric);
         }
 
         meeting.meeting_slot_attendees?.forEach(att => {
           if ((att as any).is_partner) return;
-          if (!att.deal_id) return;
           const status = att.status;
           if (!allowedAgendadaStatuses.includes(status)) return;
+          if (!att.deal_id) {
+            addUnassigned('sem_negocio', null, day, status);
+            return;
+          }
 
-          const day = format(new Date(meeting.scheduled_at), 'yyyy-MM-dd');
-
-          if (!closerDealMap.has(closerId)) closerDealMap.set(closerId, new Map());
-          const dealMap = closerDealMap.get(closerId)!;
+          if (!closerDealMap.has(closerId!)) closerDealMap.set(closerId!, new Map());
+          const dealMap = closerDealMap.get(closerId!)!;
           if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false, noshow: false });
           const entry = dealMap.get(att.deal_id)!;
           entry.days.add(day);
           if (realizadaStatuses.includes(status)) entry.realized = true;
           if (status === 'no_show') entry.noshow = true;
         });
+      });
+
+      // Dedup do bucket "Não atribuído" com a MESMA régua (cap 2 por deal/dia)
+      unassignedDealMap.forEach(({ days, realized, noshow }) => {
+        unassigned.r1_agendada += days.size >= 2 ? 2 : 1;
+        if (realized) unassigned.r1_realizada += 1;
+        else if (noshow) unassigned.noshow += 1;
       });
 
       // Apply deduplicated metrics
@@ -787,9 +873,42 @@ export function useR1CloserMetrics(
         (closers || []).filter(c => c.is_active !== true).map(c => c.id)
       );
 
-      return Array.from(metricsMap.values())
-        .filter(m => !(isLivePeriod && inactiveCloserIds.has(m.closer_id)))
-        .sort((a, b) => b.r1_agendada - a.r1_agendada);
+      const kept: R1CloserMetric[] = [];
+      Array.from(metricsMap.values()).forEach(m => {
+        if (isLivePeriod && inactiveCloserIds.has(m.closer_id)) {
+          // Não desaparece mais: migra para "Não atribuído" com o motivo.
+          unassigned.r1_agendada += m.r1_agendada;
+          unassigned.r1_realizada += m.r1_realizada;
+          unassigned.noshow += m.noshow;
+          unassignedReasons.closer_inativo += m.r1_agendada;
+          return;
+        }
+        kept.push(m);
+      });
+
+      const rows = kept.sort((a, b) => b.r1_agendada - a.r1_agendada);
+
+      const unassignedTotal = unassigned.r1_agendada + unassigned.r1_realizada + unassigned.noshow;
+      if (includeUnassigned && unassignedTotal > 0) {
+        rows.push({
+          closer_id: UNASSIGNED_CLOSER_ID,
+          closer_name: 'Não atribuído',
+          closer_color: null,
+          r1_agendada: unassigned.r1_agendada,
+          agendamentos: 0,
+          r1_realizada: unassigned.r1_realizada,
+          noshow: unassigned.noshow,
+          contrato_pago: 0,
+          outside: 0,
+          r2_agendada: 0,
+          reembolsos: 0,
+          reembolsos_valor: 0,
+          is_unassigned: true,
+          unassigned_reasons: unassignedReasons,
+        });
+      }
+
+      return rows;
     },
     staleTime: 30000,
   });

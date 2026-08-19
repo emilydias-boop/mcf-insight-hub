@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { SdrSummaryRow, SdrUnassignedBucket } from "@/hooks/useTeamMeetingsData";
 import { ChevronRight, FileText } from "lucide-react";
 
 interface ConsorcioSdrSummaryTableProps {
@@ -16,6 +16,8 @@ interface ConsorcioSdrSummaryTableProps {
   sdrDiasUteisMap?: Map<string, number>;
   propostasEnviadasBySdr?: Map<string, number>;
   propostasFechadasBySdr?: Map<string, number>;
+  /** Métricas devolvidas pela RPC cujo agendador o front não reconhece. */
+  unassigned?: SdrUnassignedBucket | null;
 }
 
 export function ConsorcioSdrSummaryTable({
@@ -27,12 +29,13 @@ export function ConsorcioSdrSummaryTable({
   sdrDiasUteisMap,
   propostasEnviadasBySdr,
   propostasFechadasBySdr,
+  unassigned = null,
 }: ConsorcioSdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   // Total derivado do MESMO array renderizado (respeita filtro de SDR aplicado).
-  const totals = data.reduce(
+  const baseTotals = data.reduce(
     (acc, row) => {
       const email = row.sdrEmail.toLowerCase();
       return {
@@ -47,6 +50,18 @@ export function ConsorcioSdrSummaryTable({
     },
     { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, fechadasPipeline: 0, fechadasAgenda: 0 }
   );
+  // O Total inclui a linha "Não atribuído" para fechar com o card do topo.
+  const totals = {
+    ...baseTotals,
+    agendamentos: baseTotals.agendamentos + (unassigned?.agendamentos || 0),
+    r1Agendada: baseTotals.r1Agendada + (unassigned?.r1Agendada || 0),
+    r1Realizada: baseTotals.r1Realizada + (unassigned?.r1Realizada || 0),
+    noShows: baseTotals.noShows + (unassigned?.noShows || 0),
+    fechadasAgenda: baseTotals.fechadasAgenda + (unassigned?.contratos || 0),
+  };
+  const unassignedTooltip = unassigned
+    ? `Linhas devolvidas pelas métricas da agenda cujo agendador não está na lista de SDRs/Closers do Consórcio${unassigned.emails.length ? `: ${unassigned.emails.join(', ')}` : ''}.\nCobre apenas o que é visível nesta camada — reuniões que a consulta de origem nunca devolveu não aparecem aqui.`
+    : '';
   // Taxa agregada (Σ fechadas-agenda ÷ Σ realizadas), não média das taxas.
   const totalTaxaVenda = totals.r1Realizada > 0
     ? (totals.fechadasAgenda / totals.r1Realizada) * 100
@@ -227,6 +242,23 @@ export function ConsorcioSdrSummaryTable({
                 </TableRow>
               );
             })}
+
+            {/* Não atribuído: só o que a fonte devolveu e esta tela não soube atribuir */}
+            {unassigned && (
+              <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
+                <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{unassigned.agendamentos}</TableCell>
+                <TableCell className="text-center">{unassigned.r1Agendada}</TableCell>
+                <TableCell className="text-center">{unassigned.r1Realizada}</TableCell>
+                <TableCell className="text-center">{unassigned.noShows}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{unassigned.contratos}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            )}
 
             {/* Linha de Total — soma das linhas exibidas acima */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border hover:bg-muted/30">

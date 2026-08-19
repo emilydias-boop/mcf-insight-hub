@@ -4,6 +4,7 @@ import { useSdrMetricsFromAgenda, SdrAgendaMetrics } from "./useSdrMetricsFromAg
 import { useSdrMeetingsFromAgenda } from "./useSdrMeetingsFromAgenda";
 import { useSdrsFromSquad } from "./useSdrsFromSquad";
 import { useSdrsForSquadInPeriod } from "./useSdrsForSquadInPeriod";
+import { useClosersFromBu } from "./useClosersFromBu";
 
 export interface TeamKPIs {
   sdrCount: number;
@@ -34,6 +35,17 @@ export interface SdrSummaryRow {
   currentSquad?: string | null;
 }
 
+/** Linhas que a RPC devolveu e o front descartou por não reconhecer o agendador.
+ *  Só cobre o que é visível nesta camada (o que a RPC nunca devolveu é invisível aqui). */
+export interface SdrUnassignedBucket {
+  agendamentos: number;
+  r1Agendada: number;
+  r1Realizada: number;
+  noShows: number;
+  contratos: number;
+  emails: string[];
+}
+
 interface TeamMeetingsParams {
   startDate: Date | null;
   endDate: Date | null;
@@ -48,6 +60,10 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   const sdrsInPeriodQuery = useSdrsForSquadInPeriod(squad, startDate, endDate);
   // Also fetch current squad members to support "today" preset (allSdrsWithZeros, etc.)
   const sdrsQuery = useSdrsFromSquad(squad);
+  // Consórcio: closer que agenda R1 também é agendador válido (decisão do dono do
+  // processo — o agendamento é creditado a quem agendou, não pode sumir).
+  const isConsorcio = squad === 'consorcio';
+  const closersQuery = useClosersFromBu(squad, isConsorcio);
 
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad, segment);
@@ -83,6 +99,48 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
 
   const validSdrEmails = useMemo(() => new Set(sdrMetaMap.keys()), [sdrMetaMap]);
 
+  // União: SDRs do squad (atuais + históricos) ∪ closers ativos da BU (só Consórcio).
+  const validBookerEmails = useMemo(() => {
+    const set = new Set(validSdrEmails);
+    if (isConsorcio) {
+      (closersQuery.data || []).forEach(c => {
+        const email = c.email?.trim().toLowerCase();
+        if (email) set.add(email);
+      });
+    }
+    return set;
+  }, [validSdrEmails, closersQuery.data, isConsorcio]);
+
+  const closerNameByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    (closersQuery.data || []).forEach(c => {
+      const email = c.email?.trim().toLowerCase();
+      if (email) map.set(email, c.name);
+    });
+    return map;
+  }, [closersQuery.data]);
+
+  // Métricas devolvidas pela RPC cujo agendador o front não reconhece.
+  const sdrUnassigned = useMemo((): SdrUnassignedBucket | null => {
+    const metrics = metricsQuery.data?.metrics || [];
+    if (validBookerEmails.size === 0) return null; // sem metadados: nada é descartado
+    const bucket: SdrUnassignedBucket = {
+      agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0, emails: [],
+    };
+    metrics.forEach((m: SdrAgendaMetrics) => {
+      const e = m.sdr_email?.toLowerCase();
+      if (e && validBookerEmails.has(e)) return;
+      bucket.agendamentos += m.agendamentos ?? 0;
+      bucket.r1Agendada += m.r1_agendada ?? 0;
+      bucket.r1Realizada += m.r1_realizada ?? 0;
+      bucket.noShows += m.no_shows ?? 0;
+      bucket.contratos += m.contratos ?? 0;
+      if (e) bucket.emails.push(e);
+    });
+    const total = bucket.agendamentos + bucket.r1Agendada + bucket.r1Realizada + bucket.noShows + bucket.contratos;
+    return total > 0 ? bucket : null;
+  }, [metricsQuery.data, validBookerEmails]);
+
   // Build summary rows per SDR - filtered to SDRs that belong/belonged to the squad
   const bySDR = useMemo((): SdrSummaryRow[] => {
     const metrics = metricsQuery.data?.metrics || [];
@@ -95,12 +153,13 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
 
     // Union of all emails: SDRs that belong/belonged to the squad + SDRs that have metrics
     const allEmails = new Set<string>();
-    if (validSdrEmails.size > 0) {
+    if (validSdrEmails.size > 0 || validBookerEmails.size > 0) {
       validSdrEmails.forEach(e => allEmails.add(e));
       // Also include metrics emails that are part of the valid set (filter by squad membership)
       metrics.forEach((m: SdrAgendaMetrics) => {
         const e = m.sdr_email?.toLowerCase();
-        if (e && validSdrEmails.has(e)) allEmails.add(e);
+        // União SDR ∪ closer: quem agendou aparece como linha própria.
+        if (e && validBookerEmails.has(e)) allEmails.add(e);
       });
     } else {
       // No squad metadata available — fall back to whatever metrics return
@@ -116,6 +175,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
         const meta = sdrMetaMap.get(emailLower);
         const sdrEmail = m?.sdr_email || emailLower;
         const sdrName = meta?.name
+          || closerNameByEmail.get(emailLower)
           || sdrEmail.split('@')[0]
           || 'Desconhecido';
 
@@ -141,7 +201,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
         if (a.isExSquad !== b.isExSquad) return a.isExSquad ? 1 : -1;
         return b.agendamentos - a.agendamentos;
       });
-  }, [metricsQuery.data, sdrMetaMap, validSdrEmails]);
+  }, [metricsQuery.data, sdrMetaMap, validSdrEmails, validBookerEmails, closerNameByEmail]);
 
   // Calculate team KPIs from FILTERED SDRs only
   const teamKPIs = useMemo((): TeamKPIs => {
@@ -151,29 +211,33 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
     const totalNoShows = bySDR.reduce((sum, s) => sum + s.noShows, 0);
     const totalContratos = bySDR.reduce((sum, s) => sum + s.contratos, 0);
     const totalSemStatus = bySDR.reduce((sum, s) => sum + (s.semStatus || 0), 0);
+    // Consórcio: o card tem que fechar com a tabela, que agora exibe a linha
+    // "Não atribuído". Incorporador segue idêntico (nenhum número alterado).
+    const u = isConsorcio ? sdrUnassigned : null;
 
-    const taxaConversao = totalRealizadas > 0
-      ? (totalContratos / totalRealizadas) * 100
-      : 0;
+    const agendamentos = totalAgendamentos + (u?.agendamentos || 0);
+    const realizadas = totalRealizadas + (u?.r1Realizada || 0);
+    const noShows = totalNoShows + (u?.noShows || 0);
+    const contratos = totalContratos + (u?.contratos || 0);
+    const totalR1Agendada = bySDR.reduce((sum, s) => sum + s.r1Agendada, 0) + (u?.r1Agendada || 0);
+
+    const taxaConversao = realizadas > 0 ? (contratos / realizadas) * 100 : 0;
     // Taxa de No-Show usa R1 Agendada como base (reuniões que deveriam ocorrer)
-    const totalR1Agendada = bySDR.reduce((sum, s) => sum + s.r1Agendada, 0);
-    const taxaNoShow = totalR1Agendada > 0
-      ? (totalNoShows / totalR1Agendada) * 100
-      : 0;
+    const taxaNoShow = totalR1Agendada > 0 ? (noShows / totalR1Agendada) * 100 : 0;
 
     return {
       sdrCount: bySDR.length,
-      totalAgendamentos,
-      totalRealizadas,
-      totalNoShows,
-      totalContratos,
+      totalAgendamentos: agendamentos,
+      totalRealizadas: realizadas,
+      totalNoShows: noShows,
+      totalContratos: contratos,
       totalOutside: 0, // Will be enriched by useSdrOutsideMetrics in the page
       totalR1Agendada,
       totalSemStatus,
       taxaConversao,
       taxaNoShow,
     };
-  }, [bySDR]);
+  }, [bySDR, sdrUnassigned, isConsorcio]);
 
   // Helper to deduplicate meetings by deal_id (keep first occurrence)
   const deduplicateMeetings = (meetings: MeetingV2[]): MeetingV2[] => {
@@ -211,10 +275,11 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
   return {
     teamKPIs,
     bySDR,
+    sdrUnassigned: isConsorcio ? sdrUnassigned : null,
     allMeetings,
     allMeetingsRaw,
     getMeetingsForSDR,
-    isLoading: sdrsQuery.isLoading || sdrsInPeriodQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading,
+    isLoading: sdrsQuery.isLoading || sdrsInPeriodQuery.isLoading || metricsQuery.isLoading || meetingsQuery.isLoading || (isConsorcio && closersQuery.isLoading),
     error: sdrsQuery.error || sdrsInPeriodQuery.error || metricsQuery.error || meetingsQuery.error,
     refetch: () => {
       sdrsQuery.refetch();
