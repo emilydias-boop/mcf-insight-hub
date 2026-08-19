@@ -11,16 +11,59 @@ export const WA_STATUS_COLOR: Record<string, string> = {
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MIN_MS = 60 * 1000;
 
-/** Janela de 24h da Meta calculada a partir de last_inbound_at (fonte do backend). */
-export function get24hWindow(lastInboundAt: string | null | undefined) {
-  if (!lastInboundAt) return { open: false, hoursLeft: 0, lastInboundAt: null as Date | null };
+export interface Wa24hWindow {
+  open: boolean;
+  /** horas cheias restantes (floor) */
+  hoursLeft: number;
+  /** minutos cheios restantes (floor) */
+  minutesLeft: number;
+  /** faltando menos de 5 minutos */
+  critical: boolean;
+  label: string;
+  lastInboundAt: Date | null;
+}
+
+/**
+ * Janela de 24h da Meta calculada a partir de last_inbound_at (fonte do backend).
+ * `now` deve vir de um tick (useNow) para a UI reavaliar com o passar do tempo.
+ */
+export function get24hWindow(
+  lastInboundAt: string | null | undefined,
+  now: number = Date.now(),
+): Wa24hWindow {
+  if (!lastInboundAt) {
+    return {
+      open: false,
+      hoursLeft: 0,
+      minutesLeft: 0,
+      critical: false,
+      label: 'janela fechada',
+      lastInboundAt: null,
+    };
+  }
   const last = new Date(lastInboundAt);
-  const elapsed = Date.now() - last.getTime();
-  const remaining = WINDOW_MS - elapsed;
+  const remaining = WINDOW_MS - (now - last.getTime());
+  if (remaining <= 0) {
+    return {
+      open: false,
+      hoursLeft: 0,
+      minutesLeft: 0,
+      critical: false,
+      label: 'janela fechada',
+      lastInboundAt: last,
+    };
+  }
+  const hoursLeft = Math.floor(remaining / HOUR_MS);
+  const minutesLeft = Math.floor(remaining / MIN_MS);
   return {
-    open: remaining > 0,
-    hoursLeft: remaining > 0 ? Math.max(1, Math.ceil(remaining / (60 * 60 * 1000))) : 0,
+    open: true,
+    hoursLeft,
+    minutesLeft,
+    critical: remaining < 5 * MIN_MS,
+    label: hoursLeft >= 1 ? `janela ${hoursLeft}h` : `janela ${Math.max(1, minutesLeft)}min`,
     lastInboundAt: last,
   };
 }
