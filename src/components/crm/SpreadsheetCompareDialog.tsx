@@ -573,15 +573,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
-      const elsewhere = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
+      const elsewhere = elsewhereRows;
       if (elsewhere.length > 0) {
         setBatchProgress({ current: 2, total: 3 });
         if (assignMode === 'distribute') {
           const groups = new Map<string, typeof elsewhere>();
           elsewhere.forEach((r, i) => {
-            const sdr = sdrList[i % sdrList.length];
-            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
-            groups.get(sdr.email)!.push(r);
+            const email = assignmentSequence[i];
+            if (!email) return;
+            if (!groups.has(email)) groups.set(email, []);
+            groups.get(email)!.push(r);
           });
           for (const [email, leads] of groups) {
             const sdr = sdrList.find(s => s.email === email)!;
@@ -631,15 +632,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
 
       // 3. not_found → create contact + deal
-      const notFound = results.filter(r => r.matchStatus === 'not_found');
+      const notFound = notFoundRows;
       if (notFound.length > 0) {
         setBatchProgress({ current: 3, total: 3 });
         if (assignMode === 'distribute') {
           const groups = new Map<string, typeof notFound>();
           notFound.forEach((r, i) => {
-            const sdr = sdrList[i % sdrList.length];
-            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
-            groups.get(sdr.email)!.push(r);
+            const email = assignmentSequence[elsewhere.length + i];
+            if (!email) return;
+            if (!groups.has(email)) groups.set(email, []);
+            groups.get(email)!.push(r);
           });
           for (const [email, leads] of groups) {
             const sdr = sdrList.find(s => s.email === email)!;
@@ -678,7 +680,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
         }
       }
 
-      const distributionMsg = assignMode === 'distribute' ? ` (distribuídos entre ${sdrList.length} SDRs)` : '';
+      const distributionMsg = assignMode === 'distribute'
+        ? ` (distribuídos entre ${sdrList.length} destinatários conforme a configuração da pipeline)`
+        : '';
       const parts = [];
       if (updatedCount > 0) parts.push(`${updatedCount} atualizados`);
       if (createdCount > 0) parts.push(`${createdCount} criados`);
@@ -690,7 +694,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       setIsImporting(false);
       setBatchProgress(null);
     }
-  }, [activeOriginId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
+  }, [activeOriginId, selectedOwner, assignMode, distributionTargets, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
 
   // Counts
   const counts = useMemo(() => {
