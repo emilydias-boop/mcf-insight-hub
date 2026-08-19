@@ -14721,6 +14721,7 @@ export type Database = {
           deal_id: string
           fato: string
           meeting_day: string
+          origin_name: string
           sdr_email: string
           sdr_name: string
         }[]
