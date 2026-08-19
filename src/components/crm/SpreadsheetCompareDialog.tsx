@@ -1119,9 +1119,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                   </Select>
                 ) : (
                   <div className="text-xs text-muted-foreground">
-                    {consorcioSdrs?.length
-                      ? `${consorcioSdrs.length} SDRs de ${buLabel}: ${consorcioSdrs.map(s => s.name.split(' ')[0]).join(', ')}`
-                      : 'Carregando SDRs...'}
+                    {loadingDistribution
+                      ? 'Carregando distribuição da pipeline...'
+                      : distributionTargets?.length
+                        ? `${distributionTargets.length} destinatário(s) configurado(s) em ${buLabel}: ${distributionTargets.map(t => `${t.name.split(' ')[0]} ${t.weight}%`).join(' · ')}`
+                        : 'Nenhuma distribuição configurada para esta pipeline'}
                   </div>
                 )}
                 <Button
@@ -1150,8 +1152,29 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                 {selectedStageId && selectedStageId !== '__default__' && pipelineStages && (
                   <p>• Estágio: <strong>{pipelineStages.find((s: any) => s.id === selectedStageId)?.stage_name}</strong></p>
                 )}
-                {assignMode === 'distribute' && consorcioSdrs && (
-                  <p>• Distribuição round-robin entre {consorcioSdrs.length} SDRs</p>
+                {assignMode === 'distribute' && distributionPreview.length > 0 && (
+                  <p>
+                    • Divisão ponderada ({counts.elsewhere + counts.notFound} leads):{' '}
+                    <strong>{distributionPreview.map(p => `${p.name.split(' ')[0]}: ${p.count}`).join(' · ')}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Aviso: distribuição degenerada */}
+            {distributionBlocked && (
+              <div className="text-xs p-3 rounded border border-destructive/40 bg-destructive/10 text-destructive space-y-1">
+                {(distributionTargets?.length ?? 0) === 1 ? (
+                  <p>
+                    <strong>Só há 1 destinatário configurado ({distributionTargets![0].name})</strong> — todos os{' '}
+                    {counts.elsewhere + counts.notFound} leads iriam para essa pessoa. Configure a distribuição desta
+                    pipeline (CRM → Configurações → Distribuição de Leads) ou escolha um responsável único.
+                  </p>
+                ) : (
+                  <p>
+                    <strong>Não há distribuição configurada para esta pipeline.</strong> Configure em CRM →
+                    Configurações → Distribuição de Leads, ou use o modo "SDR único".
+                  </p>
                 )}
               </div>
             )}
