@@ -70,7 +70,7 @@ export default function CheckinInbox() {
 }
 
 function ConversationPane({ conversation }: { conversation: WaConversation }) {
-  const { data: messages = [], sendMessage, markRead } = useWaMessages(conversation.id);
+  const { data: messages = [], sendMessage, sendMedia, markRead } = useWaMessages(conversation.id);
   const updateConversation = useUpdateWaConversation();
   const [forceTemplateMode, setForceTemplateMode] = useState(false);
   const now = useNow(60_000);
@@ -106,6 +106,24 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
     }
   };
 
+  const handleSendMedia = async (input: {
+    file: File | Blob;
+    filename?: string;
+    mediaType?: string;
+    caption?: string;
+    durationSeconds?: number;
+  }): Promise<boolean> => {
+    try {
+      await sendMedia.mutateAsync(input);
+      return true;
+    } catch (err) {
+      if (err instanceof WaSendError && err.code === 'janela_fechada') {
+        setForceTemplateMode(true);
+      }
+      return false;
+    }
+  };
+
   return (
     <ConversationThread
       conversation={conversation}
@@ -118,10 +136,11 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
       <MessageComposer
         conversation={conversation}
         now={now}
-        sending={sendMessage.isPending}
+        sending={sendMessage.isPending || sendMedia.isPending}
         forceTemplateMode={forceTemplateMode}
         onSendFree={handleSendFree}
         onSendTemplate={handleSendTemplate}
+        onSendMedia={handleSendMedia}
       />
     </ConversationThread>
   );
