@@ -169,7 +169,13 @@ export function MessageComposer({
       const ok = await onSendFree(body);
       if (ok) setText('');
     };
-    const hasAttachment = !!file || !!recorder.result;
+    const audioBlocked = !!recorder.result?.conversionFailed;
+    const hasAttachment = !!file || (!!recorder.result && !audioBlocked);
+    const stopRecording = () => {
+      void recorder.stop().catch(() => {
+        /* erro já exibido pelo hook via `error` */
+      });
+    };
     return (
       <div className="p-3 border-t space-y-2">
         {critical && (
@@ -198,8 +204,14 @@ export function MessageComposer({
           <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm">
             <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
             <span className="font-medium">Gravando… {formatDuration(recorder.elapsed) || '0:00'}</span>
+            {recorder.remaining <= recorder.warnRemaining && (
+              <span className="text-xs font-medium text-destructive">
+                resta {formatDuration(recorder.remaining) || '0:00'} (máx.{' '}
+                {Math.round(recorder.maxSeconds / 60)} min)
+              </span>
+            )}
             <div className="flex-1" />
-            <Button variant="outline" size="sm" onClick={() => void recorder.stop()}>
+            <Button variant="outline" size="sm" onClick={stopRecording}>
               <Square className="h-3.5 w-3.5 mr-1.5" /> Parar
             </Button>
             <Button variant="ghost" size="icon" onClick={recorder.discard}>
@@ -215,10 +227,26 @@ export function MessageComposer({
         {recorder.result && (
           <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
             <audio controls src={recorder.result.url} className="h-9 flex-1 min-w-0" />
-            <span className="text-xs text-muted-foreground shrink-0">
-              {formatDuration(recorder.result.durationSeconds)} ·{' '}
-              {recorder.result.encoding === 'ogg' ? 'OGG' : 'MP3'}
-            </span>
+            {audioBlocked ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-medium text-destructive">
+                  Conversão falhou — áudio preservado
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sending || recorder.processing}
+                  onClick={() => void recorder.retryEncode()}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground shrink-0">
+                {formatDuration(recorder.result.durationSeconds)} ·{' '}
+                {recorder.result.encoding === 'ogg' ? 'OGG' : 'MP3'}
+              </span>
+            )}
             <Button variant="ghost" size="icon" onClick={recorder.discard} disabled={sending}>
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -238,7 +266,7 @@ export function MessageComposer({
           size="icon"
           className="h-[52px] w-[52px] shrink-0"
           title="Anexar arquivo"
-          disabled={sending || recorder.recording || !!recorder.result}
+          disabled={sending || recorder.recording || recorder.processing || !!recorder.result}
           onClick={() => fileInputRef.current?.click()}
         >
           <Paperclip className="h-5 w-5" />
@@ -250,7 +278,7 @@ export function MessageComposer({
           className="h-[52px] w-[52px] shrink-0"
           title={recorder.recording ? 'Parar gravação' : 'Gravar áudio'}
           disabled={sending || !!file || recorder.processing || !!recorder.result}
-          onClick={() => (recorder.recording ? void recorder.stop() : void recorder.start())}
+          onClick={() => (recorder.recording ? stopRecording() : void recorder.start())}
         >
           {recorder.recording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </Button>
