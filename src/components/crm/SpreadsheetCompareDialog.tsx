@@ -796,8 +796,23 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     }
   };
 
+  // Prévia da divisão (leads que efetivamente recebem owner)
+  const distributionPreview = useMemo(() => {
+    const total = counts.elsewhere + counts.notFound;
+    if (assignMode !== 'distribute' || !distributionTargets?.length || total <= 0) return [];
+    const allocation = allocateByWeight(distributionTargets, total);
+    return distributionTargets.map(t => ({
+      name: t.name,
+      weight: t.weight,
+      count: allocation.get(t.email) || 0,
+    }));
+  }, [assignMode, distributionTargets, counts.elsewhere, counts.notFound]);
+
+  const distributionBlocked =
+    assignMode === 'distribute' && !loadingDistribution && (distributionTargets?.length ?? 0) < 2;
+
   const canImport = assignMode === 'distribute'
-    ? (consorcioSdrs?.length ?? 0) > 0
+    ? (distributionTargets?.length ?? 0) >= 2
     : !!selectedOwner;
 
   return (
