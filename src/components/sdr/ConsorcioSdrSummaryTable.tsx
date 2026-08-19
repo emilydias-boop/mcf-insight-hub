@@ -250,6 +250,29 @@ export function ConsorcioSdrSummaryTable({
               );
             })}
 
+            {/* SDR com cota contratada no período, mas sem atividade de agenda */}
+            {extraSdrs.map(([email, qtd]) => (
+              <TableRow
+                key={`extra-${email}`}
+                className="hover:bg-muted/20"
+                title="SDR com cota contratada no período, mas sem reunião agendada/realizada dentro da janela — a cota é dele, a atividade caiu em outro período."
+              >
+                <TableCell className="font-medium">
+                  {sdrNames?.get(email.toLowerCase()) || email}
+                  <span className="ml-2 text-xs text-muted-foreground italic">sem atividade no período</span>
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{qtd}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            ))}
+
             {/* Não atribuído: só o que a fonte devolveu e esta tela não soube atribuir */}
             {cotasSemVinculo > 0 && (
               <TableRow
