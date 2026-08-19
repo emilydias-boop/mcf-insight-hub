@@ -84,20 +84,49 @@ export function LeadTagsManager({
   ) => {
     if (!dealId || dealId.startsWith("manual-")) return;
     setSaving(true);
-    const mergedFields = {
-      ...((customFields as Record<string, unknown>) || {}),
-      primary_tag: nextPrimary,
-    };
-    const { error } = await supabase
+    const { error: tagsError } = await supabase
       .from("crm_deals")
-      .update({
-        tags: nextTags as any,
-        custom_fields: mergedFields as any,
-      })
+      .update({ tags: nextTags as any })
       .eq("id", dealId);
+    if (tagsError) {
+      setSaving(false);
+      toast.error("Erro ao atualizar tags: " + tagsError.message);
+      return;
+    }
+
+    let fieldsError: { message: string } | null = null;
+    if (nextPrimary) {
+      // Merge atômico no banco — não usa o snapshot da prop.
+      const { error } = await supabase.rpc("crm_deal_merge_custom_fields", {
+        _deal_id: dealId,
+        _patch: { primary_tag: nextPrimary } as any,
+      });
+      fieldsError = error;
+    } else {
+      // Remoção precisa gravar a ausência da chave; a RPC ignora null.
+      // Lê o estado fresco do banco (não a prop) para minimizar a janela de race.
+      const { data: atual, error: readError } = await supabase
+        .from("crm_deals")
+        .select("custom_fields")
+        .eq("id", dealId)
+        .maybeSingle();
+      if (readError) {
+        fieldsError = readError;
+      } else {
+        const fresh = {
+          ...(((atual?.custom_fields as Record<string, unknown>) || {})),
+        };
+        delete fresh.primary_tag;
+        const { error } = await supabase
+          .from("crm_deals")
+          .update({ custom_fields: fresh as any })
+          .eq("id", dealId);
+        fieldsError = error;
+      }
+    }
     setSaving(false);
-    if (error) {
-      toast.error("Erro ao atualizar tags: " + error.message);
+    if (fieldsError) {
+      toast.error("Erro ao atualizar tag principal: " + fieldsError.message);
       return;
     }
     qc.invalidateQueries({ queryKey: ["crm-deal", dealId] });
