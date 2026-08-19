@@ -826,8 +826,8 @@ export default function ConsorcioPainelEquipe() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os SDRs</SelectItem>
-                {(activeSdrsList || []).map(sdr => (
-                  <SelectItem key={sdr.email} value={sdr.email}>{sdr.name}</SelectItem>
+                {sdrSelectOptions.map(opt => (
+                  <SelectItem key={opt.email} value={opt.email}>{opt.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -847,7 +847,7 @@ export default function ConsorcioPainelEquipe() {
       {/* KPI Cards */}
       <TeamKPICards
         kpis={activeTab === "closers" ? closerKPIs : enrichedKPIs}
-        isLoading={activeTab === "closers" ? closerLoading : isLoading}
+        isLoading={activeTab === "closers" ? (closerLoading || fatosLoading) : fatosLoading}
         hideAgendamentos={activeTab === "closers"}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
@@ -876,7 +876,7 @@ export default function ConsorcioPainelEquipe() {
                 <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
                 Closers
                 <span className="text-[10px] sm:text-xs text-muted-foreground">
-                  ({(closerMetrics || []).filter(m => !m.is_unassigned).length})
+                  ({closerRows.length})
                 </span>
               </TabsTrigger>
             </TabsList>
@@ -887,7 +887,7 @@ export default function ConsorcioPainelEquipe() {
             <>
               <ConsorcioSdrSummaryTable
                 data={filteredBySDR}
-                isLoading={isLoading}
+                isLoading={fatosLoading}
                 disableNavigation={isRestrictedRole}
                 sdrMetaMap={sdrMetaMap}
                 diasUteisNoPeriodo={diasUteisNoPeriodo}
@@ -902,8 +902,8 @@ export default function ConsorcioPainelEquipe() {
             </>
           ) : (
             <ConsorcioCloserSummaryTable
-              data={closerMetrics}
-              isLoading={closerLoading}
+              data={closerRows}
+              isLoading={closerLoading || fatosLoading}
               propostasEnviadasByCloser={propostasByCloser}
               propostasFechadasByCloser={produtosFechadosByCloser}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
