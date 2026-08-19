@@ -83,13 +83,13 @@ export const UNASSIGNED_CLOSER_ID = '__nao_atribuido__';
 
 export type UnassignedReason =
   | 'sem_closer'
-  | 'outra_bu'
+  | 'closer_desconhecido'
   | 'sem_negocio'
   | 'closer_inativo';
 
 export const UNASSIGNED_REASON_LABELS: Record<UnassignedReason, string> = {
   sem_closer: 'sem closer designado',
-  outra_bu: 'closer de outra BU',
+  closer_desconhecido: 'closer inexistente no cadastro',
   sem_negocio: 'participante sem negócio',
   closer_inativo: 'closer inativo no período',
 };
@@ -136,6 +136,15 @@ export function useR1CloserMetrics(
         .eq('bu', bu);
 
       if (closersError) throw closersError;
+
+      // Ids de closers de TODAS as BUs — usado só para distinguir
+      // "reunião de outra BU" (fora do escopo deste painel, descartada de
+      // propósito) de "closer inexistente no cadastro" (dado perdido, vai
+      // para a linha "Não atribuído").
+      const { data: allClosersIds } = await supabase
+        .from('closers')
+        .select('id');
+      const knownCloserIds = new Set((allClosersIds || []).map((c: any) => c.id as string));
 
       // Active R1 closers — initialized with zeros so they always appear in the table.
       const r1Closers = closers?.filter(
@@ -750,7 +759,7 @@ export function useR1CloserMetrics(
       // Antes, cada um destes casos era um `return` mudo. Agora vira linha visível.
       const unassigned = { r1_agendada: 0, r1_realizada: 0, noshow: 0 };
       const unassignedReasons: Record<UnassignedReason, number> = {
-        sem_closer: 0, outra_bu: 0, sem_negocio: 0, closer_inativo: 0,
+        sem_closer: 0, closer_desconhecido: 0, sem_negocio: 0, closer_inativo: 0,
       };
       const unassignedDealMap = new Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>();
       const addUnassigned = (
@@ -781,10 +790,13 @@ export function useR1CloserMetrics(
         const closerId = meeting.closer_id;
         const day = format(new Date(meeting.scheduled_at), 'yyyy-MM-dd');
         const knownCloser = closerId ? closers?.find(c => c.id === closerId) : null;
-        // Motivo de descarte no nível do slot (sem closer / closer de outra BU)
+        // Reunião de closer de OUTRA BU: fora do escopo deste painel — segue
+        // descartada (não é dado perdido, é recorte por BU).
+        if (closerId && !knownCloser && knownCloserIds.has(closerId)) return;
+
         const slotReason: UnassignedReason | null = !closerId
           ? 'sem_closer'
-          : (!knownCloser ? 'outra_bu' : null);
+          : (!knownCloser ? 'closer_desconhecido' : null);
 
         if (slotReason) {
           meeting.meeting_slot_attendees?.forEach(att => {
