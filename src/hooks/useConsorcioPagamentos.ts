@@ -317,9 +317,15 @@ export function useConsorcioPagamentos(
         result = result.filter(r => r.cobranca_status === filters.cobrancaStatus);
       }
     }
+    if (filters.filtroBoleto && filters.filtroBoleto !== 'todos') {
+      const set = boletoIds ?? new Set<string>();
+      result = filters.filtroBoleto === 'com_boleto'
+        ? result.filter(r => set.has(r.id))
+        : result.filter(r => !set.has(r.id));
+    }
 
     return result;
-  }, [tipoFilteredData, filters]);
+  }, [tipoFilteredData, filters, boletoIds]);
 
   // KPIs - based on filteredData so they follow all active filters
   const kpis = useMemo((): PagamentosKPIData => {
