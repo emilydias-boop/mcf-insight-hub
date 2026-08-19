@@ -69,12 +69,25 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
     el.scrollTop = el.scrollHeight;
   }, [conversation.id]);
 
-  // mensagem nova: só rola se o operador já estava perto do fim ANTES do commit
+  // mensagem nova: própria sempre rola; inbound só se já estava perto do fim
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    if (wasNearBottomRef.current) el.scrollTop = el.scrollHeight;
+    const last = messages[messages.length - 1];
+    const isOwn = last?.direction === 'outbound';
+    if (isOwn || wasNearBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // altura do container pode mudar sem scroll (composer -> modo template)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handleScroll = () => {
     const el = scrollRef.current;

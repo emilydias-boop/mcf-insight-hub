@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Info, Send } from 'lucide-react';
+import { Copy, Info, Send } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -140,6 +140,32 @@ export function MessageComposer({
 
   return (
     <div className="border-t bg-muted/30">
+      {text.trim() && (
+        <div className="mx-3 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs space-y-2">
+          <div className="font-medium">
+            A janela fechou — envie um template aprovado para reabrir a conversa. Você havia escrito:
+          </div>
+          <div className="whitespace-pre-wrap break-words rounded bg-background border p-2">{text}</div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(text);
+                  toast.success('Texto copiado');
+                } catch {
+                  toast.error('Não foi possível copiar');
+                }
+              }}
+            >
+              <Copy className="h-3.5 w-3.5 mr-2" />
+              Copiar texto
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="px-3 pt-3 flex items-start gap-2 text-xs text-muted-foreground">
         <Info className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
         <div>
