@@ -31,6 +31,35 @@ export function ConsorcioSdrSummaryTable({
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Total derivado do MESMO array renderizado (respeita filtro de SDR aplicado).
+  const totals = data.reduce(
+    (acc, row) => {
+      const email = row.sdrEmail.toLowerCase();
+      return {
+        agendamentos: acc.agendamentos + (row.agendamentos || 0),
+        r1Agendada: acc.r1Agendada + (row.r1Agendada || 0),
+        r1Realizada: acc.r1Realizada + (row.r1Realizada || 0),
+        noShows: acc.noShows + (row.noShows || 0),
+        propostas: acc.propostas + (propostasEnviadasBySdr?.get(email) || 0),
+        fechadasPipeline: acc.fechadasPipeline + (propostasFechadasBySdr?.get(email) || 0),
+        fechadasAgenda: acc.fechadasAgenda + (row.contratos || 0),
+      };
+    },
+    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, fechadasPipeline: 0, fechadasAgenda: 0 }
+  );
+  // Taxa agregada (Σ fechadas-agenda ÷ Σ realizadas), não média das taxas.
+  const totalTaxaVenda = totals.r1Realizada > 0
+    ? (totals.fechadasAgenda / totals.r1Realizada) * 100
+    : 0;
+  const totalTaxaVendaColor = totalTaxaVenda >= 20
+    ? 'text-green-400'
+    : totalTaxaVenda >= 10
+      ? 'text-amber-400'
+      : 'text-red-400';
+  const totalNoShowPct = totals.r1Agendada > 0
+    ? (totals.noShows / totals.r1Agendada) * 100
+    : 0;
+
   const handleRowClick = (sdrEmail: string) => {
     const params = new URLSearchParams(searchParams);
     navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
@@ -198,6 +227,52 @@ export function ConsorcioSdrSummaryTable({
                 </TableRow>
               );
             })}
+
+            {/* Linha de Total — soma das linhas exibidas acima */}
+            <TableRow className="bg-muted/30 font-semibold border-t-2 border-border hover:bg-muted/30">
+              <TableCell className="text-foreground">Total</TableCell>
+              <TableCell />
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                  {totals.agendamentos}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                  {totals.r1Agendada}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="text-green-400">{totals.r1Realizada}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <div className="flex flex-col items-center">
+                  <span className="text-red-400">{totals.noShows}</span>
+                  {totals.r1Agendada > 0 && (
+                    <span className="text-xs text-muted-foreground">({totalNoShowPct.toFixed(1)}%)</span>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
+                  {totals.propostas}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
+                  {totals.fechadasPipeline}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                  {totals.fechadasAgenda}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={`font-medium ${totalTaxaVendaColor}`}>{totalTaxaVenda.toFixed(1)}%</span>
+              </TableCell>
+              {!disableNavigation && <TableCell />}
+            </TableRow>
           </TableBody>
         </Table>
       </div>

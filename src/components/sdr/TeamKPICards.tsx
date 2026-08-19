@@ -39,6 +39,8 @@ interface TeamKPICardsProps {
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   onRefundClick?: () => void;
   orphanRefundsCount?: number;
+  /** Esconde o card "Agendamentos" (ex.: aba Closers — closer não agenda). */
+  hideAgendamentos?: boolean;
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
@@ -60,6 +62,7 @@ export function TeamKPICards({
   taxaNoShowBreakdown,
   onRefundClick,
   orphanRefundsCount = 0,
+  hideAgendamentos = false,
   segmentTotals = null,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
@@ -109,7 +112,7 @@ export function TeamKPICards({
       bgColor: "bg-sky-500/10",
       tooltip: "Reuniões agendadas para hoje que ainda não aconteceram"
     }] : []),
-    {
+    ...(hideAgendamentos ? [] : [{
       title: "Agendamentos",
       value: kpis.totalAgendamentos,
       icon: Calendar,
@@ -118,7 +121,7 @@ export function TeamKPICards({
       tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
       segLine: segLineFor('agendamentos'),
-    },
+    }]),
     {
       title: "R1 Agendada",
       value: kpis.totalR1Agendada,
@@ -214,6 +217,7 @@ export function TeamKPICards({
 
   // Tailwind precisa de classes estáticas — mapa seguro por contagem
   const lgColsClass: Record<number, string> = {
+    4: "lg:grid-cols-4",
     5: "lg:grid-cols-5",
     6: "lg:grid-cols-6",
     7: "lg:grid-cols-7",
