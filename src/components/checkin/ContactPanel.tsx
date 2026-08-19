@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ClipboardCheck, ExternalLink, StickyNote, User } from 'lucide-react';
+import { CalendarPlus, ClipboardCheck, ExternalLink, StickyNote, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,7 @@ import { CallHistorySection } from '@/components/crm/CallHistorySection';
 import { useQualificationNote } from '@/hooks/useQualificationNote';
 import { AddNoteDialog } from './AddNoteDialog';
 import { QualifyLeadDialog } from './QualifyLeadDialog';
+import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -56,6 +57,7 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
   const { data: qualNote } = useQualificationNote(dealId || '');
   const [noteOpen, setNoteOpen] = useState(false);
   const [qualifyOpen, setQualifyOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const customFields = (deal?.custom_fields as Record<string, any> | null) || null;
   const refreshDeal = () => {
@@ -143,7 +145,7 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 border-t pt-3">
+          <div className="grid grid-cols-3 gap-2 border-t pt-3">
             <Button variant="outline" size="sm" onClick={() => setNoteOpen(true)}>
               <StickyNote className="h-3.5 w-3.5 mr-1.5" />
               Nota
@@ -151,6 +153,10 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
             <Button variant="outline" size="sm" onClick={() => setQualifyOpen(true)}>
               <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" />
               Qualificar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}>
+              <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
+              Agendar R1
             </Button>
           </div>
           {qualNote && (
@@ -186,10 +192,18 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
             open={qualifyOpen}
             onOpenChange={setQualifyOpen}
           />
+          <QuickScheduleModal
+            open={scheduleOpen}
+            onOpenChange={setScheduleOpen}
+            prefilledDealId={dealId}
+            prefilledNotes={`Agendamento de R1 a partir da conversa de WhatsApp com ${
+              deal?.crm_contacts?.name?.trim() || conversation.contact_name?.trim() || formatPhone(conversation.phone_e164)
+            }.`}
+          />
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2 border-t pt-3">
+          <div className="grid grid-cols-3 gap-2 border-t pt-3">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -208,6 +222,17 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
                     <Button variant="outline" size="sm" disabled className="w-full">
                       <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" />
                       Qualificar
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Sem negócio vinculado a este número</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button variant="outline" size="sm" disabled className="w-full">
+                      <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
+                      Agendar R1
                     </Button>
                   </span>
                 </TooltipTrigger>
