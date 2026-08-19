@@ -958,6 +958,8 @@ export default function ConsorcioPainelEquipe() {
               isLoading={closerLoading || fatosLoading}
               propostasEnviadasByCloser={propostasByCloser}
               propostasFechadasByCloser={produtosFechadosByCloser}
+              fechadasAgendaByCloser={fechadasAgendaByCloser}
+              agendaUnassigned={fatos.closerUnassigned}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
