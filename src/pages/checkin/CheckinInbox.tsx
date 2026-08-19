@@ -6,6 +6,7 @@ import { ConversationList } from '@/components/checkin/ConversationList';
 import { ConversationThread } from '@/components/checkin/ConversationThread';
 import { MessageComposer } from '@/components/checkin/MessageComposer';
 import { ContactPanel } from '@/components/checkin/ContactPanel';
+import { useNow } from '@/hooks/wa/useNow';
 
 export default function CheckinInbox() {
   const { hasAnyRole } = useAuth();
@@ -72,6 +73,7 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
   const { data: messages = [], sendMessage, markRead } = useWaMessages(conversation.id);
   const updateConversation = useUpdateWaConversation();
   const [forceTemplateMode, setForceTemplateMode] = useState(false);
+  const now = useNow(60_000);
 
   useEffect(() => {
     markRead.mutate();
@@ -108,12 +110,14 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
     <ConversationThread
       conversation={conversation}
       messages={messages}
+      now={now}
       onStatusChange={(status) =>
         updateConversation.mutate({ id: conversation.id, patch: { status } })
       }
     >
       <MessageComposer
         conversation={conversation}
+        now={now}
         sending={sendMessage.isPending}
         forceTemplateMode={forceTemplateMode}
         onSendFree={handleSendFree}

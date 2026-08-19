@@ -49,6 +49,7 @@ function humanize(name: string): string {
 export function useCheckinTemplates() {
   return useQuery({
     queryKey: ['checkin_templates', 'whatsapp_approved'],
+    staleTime: 5 * 60_000,
     queryFn: async (): Promise<CheckinTemplate[]> => {
       const { data, error } = await supabase
         .from('automation_templates')

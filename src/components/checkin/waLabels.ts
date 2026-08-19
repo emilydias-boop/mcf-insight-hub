@@ -58,12 +58,18 @@ export function get24hWindow(
   }
   const hoursLeft = Math.floor(remaining / HOUR_MS);
   const minutesLeft = Math.floor(remaining / MIN_MS);
+  const label =
+    hoursLeft >= 1
+      ? `janela ${hoursLeft}h`
+      : minutesLeft >= 1
+        ? `janela ${minutesLeft}min`
+        : 'janela expirando';
   return {
     open: true,
     hoursLeft,
     minutesLeft,
     critical: remaining < 5 * MIN_MS,
-    label: hoursLeft >= 1 ? `janela ${hoursLeft}h` : `janela ${Math.max(1, minutesLeft)}min`,
+    label,
     lastInboundAt: last,
   };
 }
