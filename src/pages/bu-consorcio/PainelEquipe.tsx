@@ -67,6 +67,7 @@ import { useConsorcioSummary } from "@/hooks/useConsorcio";
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
+const EMPTY_FATOS: ConsorcioFatoRow[] = [];
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
