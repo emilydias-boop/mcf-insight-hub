@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 import { useCheckinTemplates, CheckinTemplateVariable } from '@/hooks/checkin/useCheckinTemplates';
 import { WaConversation } from '@/hooks/wa/useWaConversations';
 import { get24hWindow } from './waLabels';
-import { useNow } from '@/hooks/wa/useNow';
 
 /**
  * As fontes product_name / purchase_date não existem no modelo de conversa por pessoa,
@@ -42,6 +41,7 @@ function previewWithVars(
 
 interface Props {
   conversation: WaConversation;
+  now: number;
   sending: boolean;
   forceTemplateMode?: boolean;
   /** resolve para true quando o envio foi bem-sucedido */
@@ -51,6 +51,7 @@ interface Props {
 
 export function MessageComposer({
   conversation,
+  now,
   sending,
   forceTemplateMode,
   onSendFree,
@@ -61,8 +62,10 @@ export function MessageComposer({
   const [vars, setVars] = useState<Record<string, string>>({});
   const { data: templates = [], isLoading: loadingTpls } = useCheckinTemplates();
 
-  const now = useNow(60_000);
-  const { open: windowOpen, lastInboundAt } = get24hWindow(conversation.last_inbound_at, now);
+  const { open: windowOpen, critical, label: windowLabel, lastInboundAt } = get24hWindow(
+    conversation.last_inbound_at,
+    now,
+  );
   const canSendFree = windowOpen && !forceTemplateMode;
 
   const selectedTpl = useMemo(
@@ -80,9 +83,9 @@ export function MessageComposer({
       initial[String(v.index)] = resolveVarSource(v, conversation);
     }
     setVars(initial);
-    // depende do id da conversa: o objeto muda a cada refetch/realtime e apagaria o que o operador digitou
+    // depende de tplId (string) e do id da conversa: objetos derivados mudam a cada refetch
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTpl, conversation.id]);
+  }, [tplId, conversation.id]);
 
   if (canSendFree) {
     const submit = async () => {
@@ -92,7 +95,14 @@ export function MessageComposer({
       if (ok) setText('');
     };
     return (
-      <div className="p-3 border-t flex gap-2 items-end">
+      <div className="p-3 border-t space-y-2">
+        {critical && (
+          <div className="flex items-center gap-2 text-xs text-destructive font-medium">
+            <Info className="h-4 w-4 shrink-0" />
+            A janela de 24h está fechando ({windowLabel}). Depois disso só será possível enviar template aprovado.
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -109,6 +119,7 @@ export function MessageComposer({
         <Button onClick={submit} disabled={!text.trim() || sending} size="lg" className="h-[52px] px-4">
           <Send className="h-5 w-5" />
         </Button>
+        </div>
       </div>
     );
   }

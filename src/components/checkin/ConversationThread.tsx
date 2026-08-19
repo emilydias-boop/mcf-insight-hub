@@ -10,7 +10,6 @@ import { WaConversation } from '@/hooks/wa/useWaConversations';
 import type { WaConversationStatus } from '@/hooks/wa/useWaConversations';
 import { WaMessage } from '@/hooks/wa/useWaMessages';
 import { WA_STATUS_OPTIONS, formatPhone, get24hWindow } from './waLabels';
-import { useNow } from '@/hooks/wa/useNow';
 
 function DeliveryIndicator({ message }: { message: WaMessage }) {
   const status = message.status;
@@ -52,22 +51,36 @@ function DeliveryIndicator({ message }: { message: WaMessage }) {
 interface Props {
   conversation: WaConversation;
   messages: WaMessage[];
+  now: number;
   onStatusChange: (status: WaConversationStatus) => void;
   children?: ReactNode; // composer
 }
 
-export function ConversationThread({ conversation, messages, onStatusChange, children }: Props) {
+export function ConversationThread({ conversation, messages, now, onStatusChange, children }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const now = useNow(60_000);
+  const wasNearBottomRef = useRef(true);
   const windowInfo = get24hWindow(conversation.last_inbound_at, now);
 
+  // primeiro render / troca de conversa: sempre ao fim
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // só rola sozinho se o operador já estiver perto do fim
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
+    wasNearBottomRef.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, [conversation.id]);
+
+  // mensagem nova: só rola se o operador já estava perto do fim ANTES do commit
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (wasNearBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   return (
     <Card className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -107,7 +120,11 @@ export function ConversationThread({ conversation, messages, onStatusChange, chi
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/20"
+      >
         {messages.length === 0 && (
           <div className="text-center text-base text-muted-foreground py-8">
             Nenhuma mensagem ainda. Envie a primeira!
