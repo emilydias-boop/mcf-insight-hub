@@ -40,7 +40,12 @@ import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSum
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { useConsorcioAgendaFatos, useConsorcioAgendaDerived } from "@/hooks/useConsorcioAgendaFatos";
+import {
+  useConsorcioAgendaFatos,
+  useConsorcioAgendaDerived,
+  useConsorcioAgendaTotais,
+  sumConsorcioTotais,
+} from "@/hooks/useConsorcioAgendaFatos";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
