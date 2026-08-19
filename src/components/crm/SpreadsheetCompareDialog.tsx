@@ -18,12 +18,72 @@ import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealSt
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
 import { BusinessUnit, BU_OPTIONS } from '@/hooks/useMyBU';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
 type AssignMode = 'single' | 'distribute';
+
+interface DistributionTarget {
+  email: string;
+  id: string;
+  name: string;
+  weight: number;
+}
+
+/**
+ * Distribui `total` leads entre os destinatários respeitando os percentuais
+ * configurados (maior resto). Retorna um mapa email -> quantidade.
+ */
+function allocateByWeight(targets: DistributionTarget[], total: number): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!targets.length || total <= 0) return result;
+
+  const sum = targets.reduce((acc, t) => acc + (t.weight > 0 ? t.weight : 0), 0);
+  const weights = sum > 0
+    ? targets.map(t => (t.weight > 0 ? t.weight : 0) / sum)
+    : targets.map(() => 1 / targets.length);
+
+  const exact = weights.map(w => w * total);
+  const base = exact.map(v => Math.floor(v));
+  let remaining = total - base.reduce((a, b) => a + b, 0);
+
+  const order = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+
+  let k = 0;
+  while (remaining > 0 && order.length) {
+    base[order[k % order.length].i] += 1;
+    remaining -= 1;
+    k += 1;
+  }
+
+  targets.forEach((t, i) => {
+    if (base[i] > 0) result.set(t.email, (result.get(t.email) || 0) + base[i]);
+  });
+  return result;
+}
+
+/**
+ * Sequência achatada de emails (intercalada) coerente com a alocação ponderada.
+ */
+function buildAssignmentSequence(targets: DistributionTarget[], total: number): string[] {
+  const allocation = allocateByWeight(targets, total);
+  const remaining = targets.map(t => ({ email: t.email, left: allocation.get(t.email) || 0 }));
+  const seq: string[] = [];
+  while (seq.length < total) {
+    let best = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].left <= 0) continue;
+      if (best === -1 || remaining[i].left > remaining[best].left) best = i;
+    }
+    if (best === -1) break;
+    seq.push(remaining[best].email);
+    remaining[best].left -= 1;
+  }
+  return seq;
+}
 
 const COLUMN_KEYS = ['name', 'email', 'phone'] as const;
 type ColumnKey = typeof COLUMN_KEYS[number];
