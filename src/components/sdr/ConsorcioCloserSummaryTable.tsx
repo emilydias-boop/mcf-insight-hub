@@ -188,6 +188,22 @@ export function ConsorcioCloserSummaryTable({
             })}
 
             {/* Não atribuído: reuniões sem closer identificável nesta BU */}
+            {cotasSemCloser > 0 && (
+              <TableRow
+                className="italic text-muted-foreground hover:bg-muted/20"
+                title="Cotas contratadas cujo vendedor não corresponde a nenhum closer cadastrado nesta BU."
+              >
+                <TableCell className="font-normal underline decoration-dotted">Sem vendedor identificado</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{cotasSemCloser}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {onCloserClick && <TableCell />}
+              </TableRow>
+            )}
+
             {unassignedRow && (
               <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
                 <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
