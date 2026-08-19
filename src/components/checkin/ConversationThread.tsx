@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -222,6 +222,9 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
         {messages.map((m) => {
           const outbound = m.direction === 'outbound';
           const failed = outbound && m.status === 'failed';
+          const hasMedia = !!m.media_path;
+          // quando é mídia sem legenda o backend grava rótulos como "[imagem]"
+          const caption = hasMedia ? (isMediaPlaceholder(m.body) ? null : m.body) : m.body;
           return (
             <div key={m.id} className={`flex ${outbound ? 'justify-end' : 'justify-start'}`}>
               <div
@@ -236,7 +239,12 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
                 {outbound && m.sent_by_name && (
                   <div className="text-xs font-medium opacity-70 mb-1">{m.sent_by_name}</div>
                 )}
-                <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                {hasMedia && (
+                  <div className={caption ? 'mb-2' : ''}>
+                    <MediaBlock message={m} />
+                  </div>
+                )}
+                {caption && <div className="whitespace-pre-wrap break-words">{caption}</div>}
                 {failed && m.error_message && (
                   <div className="mt-2 text-xs text-destructive font-medium break-words">
                     Falha no envio: {m.error_message}

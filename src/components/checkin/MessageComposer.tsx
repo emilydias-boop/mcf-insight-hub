@@ -1,16 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Copy, Info, Send } from 'lucide-react';
+import { Copy, Info, Loader2, Mic, Paperclip, Send, Square, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { useCheckinTemplates, CheckinTemplateVariable } from '@/hooks/checkin/useCheckinTemplates';
 import { WaConversation } from '@/hooks/wa/useWaConversations';
 import { get24hWindow } from './waLabels';
+import { useAudioRecorder } from '@/hooks/wa/useAudioRecorder';
+import {
+  WA_MEDIA_ACCEPT_ATTR,
+  formatBytes,
+  formatDuration,
+  validateWaMedia,
+} from '@/lib/waMedia';
 
 /**
  * As fontes product_name / purchase_date não existem no modelo de conversa por pessoa,
@@ -47,6 +54,13 @@ interface Props {
   /** resolve para true quando o envio foi bem-sucedido */
   onSendFree: (body: string) => Promise<boolean>;
   onSendTemplate: (contentSid: string, vars: Record<string, string>) => Promise<boolean>;
+  onSendMedia: (input: {
+    file: File | Blob;
+    filename?: string;
+    mediaType?: string;
+    caption?: string;
+    durationSeconds?: number;
+  }) => Promise<boolean>;
 }
 
 export function MessageComposer({
@@ -56,11 +70,45 @@ export function MessageComposer({
   forceTemplateMode,
   onSendFree,
   onSendTemplate,
+  onSendMedia,
 }: Props) {
   const [text, setText] = useState('');
   const [tplId, setTplId] = useState<string>('');
   const [vars, setVars] = useState<Record<string, string>>({});
   const { data: templates = [], isLoading: loadingTpls } = useCheckinTemplates();
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recorder = useAudioRecorder();
+
+  useEffect(() => {
+    if (!file || !file.type.startsWith('image/')) {
+      setFilePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  useEffect(() => {
+    if (recorder.error) toast.error(recorder.error);
+  }, [recorder.error]);
+
+  const pickFile = (f: File | null | undefined) => {
+    if (!f) return;
+    const invalid = validateWaMedia(f);
+    if (invalid) {
+      toast.error(invalid);
+      return;
+    }
+    setFile(f);
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const { open: windowOpen, critical, label: windowLabel, lastInboundAt } = get24hWindow(
     conversation.last_inbound_at,
@@ -89,11 +137,35 @@ export function MessageComposer({
 
   if (canSendFree) {
     const submit = async () => {
+      if (recorder.result) {
+        const audio = recorder.result;
+        const ok = await onSendMedia({
+          file: audio.blob,
+          filename: `audio-${Date.now()}.${audio.encoding === 'ogg' ? 'ogg' : 'mp3'}`,
+          mediaType: audio.mediaType,
+          caption: text.trim() || undefined,
+          durationSeconds: audio.durationSeconds,
+        });
+        if (ok) {
+          recorder.discard();
+          setText('');
+        }
+        return;
+      }
+      if (file) {
+        const ok = await onSendMedia({ file, caption: text.trim() || undefined });
+        if (ok) {
+          clearFile();
+          setText('');
+        }
+        return;
+      }
       if (!text.trim()) return;
       const body = text.trim();
       const ok = await onSendFree(body);
       if (ok) setText('');
     };
+    const hasAttachment = !!file || !!recorder.result;
     return (
       <div className="p-3 border-t space-y-2">
         {critical && (
@@ -102,11 +174,86 @@ export function MessageComposer({
             A janela de 24h está fechando ({windowLabel}). Depois disso só será possível enviar template aprovado.
           </div>
         )}
+        {file && (
+          <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            {filePreview ? (
+              <img src={filePreview} alt={file.name} className="h-10 w-10 rounded object-cover" />
+            ) : (
+              <Paperclip className="h-5 w-5 text-muted-foreground" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm truncate">{file.name}</div>
+              <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={clearFile} disabled={sending}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {recorder.recording && (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm">
+            <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
+            <span className="font-medium">Gravando… {formatDuration(recorder.elapsed) || '0:00'}</span>
+            <div className="flex-1" />
+            <Button variant="outline" size="sm" onClick={() => void recorder.stop()}>
+              <Square className="h-3.5 w-3.5 mr-1.5" /> Parar
+            </Button>
+            <Button variant="ghost" size="icon" onClick={recorder.discard}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {recorder.processing && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Convertendo áudio…
+          </div>
+        )}
+        {recorder.result && (
+          <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+            <audio controls src={recorder.result.url} className="h-9 flex-1 min-w-0" />
+            <span className="text-xs text-muted-foreground shrink-0">
+              {formatDuration(recorder.result.durationSeconds)} ·{' '}
+              {recorder.result.encoding === 'ogg' ? 'OGG' : 'MP3'}
+            </span>
+            <Button variant="ghost" size="icon" onClick={recorder.discard} disabled={sending}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="flex gap-2 items-end">
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept={WA_MEDIA_ACCEPT_ATTR}
+          onChange={(e) => pickFile(e.target.files?.[0])}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-[52px] w-[52px] shrink-0"
+          title="Anexar arquivo"
+          disabled={sending || recorder.recording || !!recorder.result}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip className="h-5 w-5" />
+        </Button>
+        <Button
+          type="button"
+          variant={recorder.recording ? 'destructive' : 'outline'}
+          size="icon"
+          className="h-[52px] w-[52px] shrink-0"
+          title={recorder.recording ? 'Parar gravação' : 'Gravar áudio'}
+          disabled={sending || !!file || recorder.processing || !!recorder.result}
+          onClick={() => (recorder.recording ? void recorder.stop() : void recorder.start())}
+        >
+          {recorder.recording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        </Button>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Digite sua mensagem…"
+          placeholder={hasAttachment ? 'Legenda (opcional)…' : 'Digite sua mensagem…'}
           rows={2}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -116,7 +263,12 @@ export function MessageComposer({
           }}
           className="resize-none text-base min-h-[52px]"
         />
-        <Button onClick={submit} disabled={!text.trim() || sending} size="lg" className="h-[52px] px-4">
+        <Button
+          onClick={submit}
+          disabled={(!text.trim() && !hasAttachment) || sending || recorder.recording}
+          size="lg"
+          className="h-[52px] px-4"
+        >
           <Send className="h-5 w-5" />
         </Button>
         </div>
