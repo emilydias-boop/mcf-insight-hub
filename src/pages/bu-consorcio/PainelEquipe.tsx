@@ -425,6 +425,17 @@ export default function ConsorcioPainelEquipe() {
   const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
+  // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
+  // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
+  // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
+  const { data: fatosDayRows = [] } = useConsorcioAgendaFatos(dayStart, dayEnd);
+  const { data: fatosWeekRows = [] } = useConsorcioAgendaFatos(weekStartDate, weekEndDate);
+  const { data: fatosMonthRows = [] } = useConsorcioAgendaFatos(monthStartDate, monthEndDate);
+
+  const fatosDay = useConsorcioAgendaDerived({ rows: fatosDayRows, allowedOriginNames });
+  const fatosWeek = useConsorcioAgendaDerived({ rows: fatosWeekRows, allowedOriginNames });
+  const fatosMonth = useConsorcioAgendaDerived({ rows: fatosMonthRows, allowedOriginNames });
+
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
   
@@ -599,37 +610,37 @@ export default function ConsorcioPainelEquipe() {
   );
 
   const dayValues = useMemo(() => ({
-    agendamento: dayKPIs?.totalAgendamentos || 0,
-    r1Agendada: dayKPIs?.totalR1Agendada || 0,
-    r1Realizada: dayKPIs?.totalRealizadas || 0,
-    noShow: dayKPIs?.totalNoShows || 0,
+    agendamento: fatosDay.sdrTotals.agendamentos,
+    r1Agendada: fatosDay.sdrTotals.r1Agendada,
+    r1Realizada: fatosDay.sdrTotals.r1Realizada,
+    noShow: fatosDay.sdrTotals.noShows,
     contrato: dayKPIs?.totalContratos || 0,
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [fatosDay, dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
-    agendamento: weekKPIs?.totalAgendamentos || 0,
-    r1Agendada: weekKPIs?.totalR1Agendada || 0,
-    r1Realizada: weekKPIs?.totalRealizadas || 0,
-    noShow: weekKPIs?.totalNoShows || 0,
+    agendamento: fatosWeek.sdrTotals.agendamentos,
+    r1Agendada: fatosWeek.sdrTotals.r1Agendada,
+    r1Realizada: fatosWeek.sdrTotals.r1Realizada,
+    noShow: fatosWeek.sdrTotals.noShows,
     contrato: weekKPIs?.totalContratos || 0,
     r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+  }), [fatosWeek, weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
 
   const monthValues = useMemo(() => ({
-    agendamento: monthKPIs?.totalAgendamentos || 0,
-    r1Agendada: monthKPIs?.totalR1Agendada || 0,
-    r1Realizada: monthKPIs?.totalRealizadas || 0,
-    noShow: monthKPIs?.totalNoShows || 0,
+    agendamento: fatosMonth.sdrTotals.agendamentos,
+    r1Agendada: fatosMonth.sdrTotals.r1Agendada,
+    r1Realizada: fatosMonth.sdrTotals.r1Realizada,
+    noShow: fatosMonth.sdrTotals.noShows,
     contrato: monthKPIs?.totalContratos || 0,
     r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
+  }), [fatosMonth, monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
 
   // Build Consórcio goals matrix rows combining agenda + pipeline metrics
   const consorcioGoalsRows = useMemo((): ConsorcioMetricRow[] => {
