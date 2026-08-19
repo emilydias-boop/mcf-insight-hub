@@ -214,12 +214,56 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     enabled: !!activeOriginId && open,
   });
 
-  // SDRs do squad da pipeline de destino (fallback: activeBU > consorcio)
+  // SDRs do squad da pipeline de destino (usado apenas para rótulo informativo)
   const distributionSquad: BusinessUnit =
     (destinationBU || (activeBU as BusinessUnit) || 'consorcio') as BusinessUnit;
-  const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
   const buLabel = (BU_OPTIONS.find(o => o.value === distributionSquad)?.label || distributionSquad)
     .replace(/^BU\s*-\s*/, '');
+
+  // Destinatários da distribuição: SEMPRE a configuração da pipeline de destino
+  // (lead_distribution_config), nunca derivada da tabela `sdr`.
+  const {
+    data: distributionTargets,
+    isLoading: loadingDistribution,
+  } = useQuery({
+    queryKey: ['import-distribution-targets', activeOriginId],
+    enabled: !!activeOriginId && open,
+    queryFn: async (): Promise<DistributionTarget[]> => {
+      if (!activeOriginId) return [];
+      const { data: dist, error } = await supabase
+        .from('lead_distribution_config')
+        .select('user_email, user_name, percentage')
+        .eq('origin_id', activeOriginId)
+        .eq('is_active', true)
+        .gt('percentage', 0);
+      if (error) throw error;
+      const rows = (dist || []).filter(d => d.user_email?.trim());
+      if (!rows.length) return [];
+
+      const emails = rows.map(r => r.user_email!.trim());
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('email', emails);
+
+      const byEmail = new Map<string, { id: string; full_name: string | null }>();
+      (profilesData || []).forEach(p => {
+        if (p.email) byEmail.set(p.email.toLowerCase(), { id: p.id, full_name: p.full_name });
+      });
+
+      return rows.flatMap(r => {
+        const email = r.user_email!.trim();
+        const profile = byEmail.get(email.toLowerCase());
+        if (!profile) return [];
+        return [{
+          email,
+          id: profile.id,
+          name: profile.full_name || r.user_name || email,
+          weight: Number(r.percentage) || 0,
+        }];
+      });
+    },
+  });
 
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
