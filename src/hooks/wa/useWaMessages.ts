@@ -239,8 +239,18 @@ export function useWaMessages(conversationId: string | null) {
       const { data, error } = await supabase.functions.invoke('twilio-wa-send', { body: payload });
       const failure = await extractFunctionError(error, data);
       if (failure) {
-        // não deixa arquivo órfão no bucket quando o envio falha
-        await supabase.storage.from(WA_MEDIA_BUCKET).remove([path]);
+        // O Twilio busca a signed URL DEPOIS da resposta da função: só apagamos o arquivo
+        // quando a falha é comprovadamente anterior ao envio (validação / 4xx).
+        // Em 5xx, timeout ou erro desconhecido, mantemos o arquivo — órfão custa storage,
+        // mídia quebrada custa o cliente.
+        if (isPreSendFailure(failure)) {
+          const { error: removeError } = await supabase.storage
+            .from(WA_MEDIA_BUCKET)
+            .remove([path]);
+          if (removeError) {
+            console.warn('[wa] falha ao remover mídia não enviada', path, removeError.message);
+          }
+        }
         throw failure;
       }
       return data;
