@@ -877,7 +877,9 @@ export default function ConsorcioPainelEquipe() {
               <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                 <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
                 Closers
-                <span className="text-[10px] sm:text-xs text-muted-foreground">({closerMetrics?.length || 0})</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
+                  ({(closerMetrics || []).filter(m => !m.is_unassigned).length})
+                </span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
