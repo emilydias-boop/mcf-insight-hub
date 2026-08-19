@@ -53,11 +53,10 @@ interface Props {
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
   bulkMode: boolean;
-  filtroBoleto: string;
   tipoFilter?: 'cliente' | 'empresa';
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
   const updateCobranca = useUpdateCobrancaStatus();
   const [confirmPayRow, setConfirmPayRow] = useState<PagamentoRow | null>(null);
