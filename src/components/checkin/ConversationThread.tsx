@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -6,8 +7,10 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, Check, CheckCheck, Clock } from 'lucide-react';
 import { WaConversation } from '@/hooks/wa/useWaConversations';
+import type { WaConversationStatus } from '@/hooks/wa/useWaConversations';
 import { WaMessage } from '@/hooks/wa/useWaMessages';
 import { WA_STATUS_OPTIONS, formatPhone, get24hWindow } from './waLabels';
+import { useNow } from '@/hooks/wa/useNow';
 
 function DeliveryIndicator({ message }: { message: WaMessage }) {
   const status = message.status;
@@ -49,18 +52,21 @@ function DeliveryIndicator({ message }: { message: WaMessage }) {
 interface Props {
   conversation: WaConversation;
   messages: WaMessage[];
-  onStatusChange: (status: string) => void;
-  children?: React.ReactNode; // composer
+  onStatusChange: (status: WaConversationStatus) => void;
+  children?: ReactNode; // composer
 }
 
 export function ConversationThread({ conversation, messages, onStatusChange, children }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const windowInfo = get24hWindow(conversation.last_inbound_at);
+  const now = useNow(60_000);
+  const windowInfo = get24hWindow(conversation.last_inbound_at, now);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const el = scrollRef.current;
+    if (!el) return;
+    // só rola sozinho se o operador já estiver perto do fim
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   return (
@@ -78,14 +84,19 @@ export function ConversationThread({ conversation, messages, onStatusChange, chi
           <Badge
             variant="outline"
             className={
-              windowInfo.open
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+              !windowInfo.open
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                : windowInfo.critical
+                  ? 'bg-destructive/15 text-destructive'
+                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
             }
           >
-            {windowInfo.open ? `janela ${windowInfo.hoursLeft}h` : 'janela fechada'}
+            {windowInfo.label}
           </Badge>
-          <Select value={conversation.status} onValueChange={onStatusChange}>
+          <Select
+            value={conversation.status}
+            onValueChange={(v) => onStatusChange(v as WaConversationStatus)}
+          >
             <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WA_STATUS_OPTIONS.map((s) => (
