@@ -39,6 +39,8 @@ interface TeamKPICardsProps {
   taxaNoShowBreakdown?: { sdrAvg: number; closerAvg: number } | null;
   onRefundClick?: () => void;
   orphanRefundsCount?: number;
+  /** Esconde o card "Agendamentos" (ex.: aba Closers — closer não agenda). */
+  hideAgendamentos?: boolean;
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
