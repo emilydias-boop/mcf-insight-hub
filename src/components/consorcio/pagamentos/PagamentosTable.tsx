@@ -72,10 +72,8 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     }
   });
 
-  // Apply boleto filter
-  const filteredData = filtroBoleto === 'todos' ? data
-    : filtroBoleto === 'com_boleto' ? data.filter(r => boletoMap.has(r.id))
-    : data.filter(r => !boletoMap.has(r.id));
+  // O filtro de boleto é aplicado no hook (vale para tabela e export).
+  const filteredData = data;
 
   // All visible rows are selectable (bulk cobrança status). WhatsApp action filters by boleto internally.
   const selectableIds = filteredData.map(r => r.id);

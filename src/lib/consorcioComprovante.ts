@@ -99,6 +99,18 @@ export function comprovanteDocumentoCliente(card: ComprovanteSourceCard): string
   return (card.tipo_pessoa === 'pj' ? card.cnpj : card.cpf) || card.cpf || card.cnpj || '';
 }
 
+/** Telefone de contato conforme PF/PJ. Vazio quando não há dado. */
+export function comprovanteTelefoneCliente(card: ComprovanteSourceCard): string {
+  return (card.tipo_pessoa === 'pj' ? card.telefone_comercial : card.telefone)
+    || card.telefone || card.telefone_comercial || '';
+}
+
+/** E-mail de contato conforme PF/PJ. Vazio quando não há dado. */
+export function comprovanteEmailCliente(card: ComprovanteSourceCard): string {
+  return (card.tipo_pessoa === 'pj' ? card.email_comercial : card.email)
+    || card.email || card.email_comercial || '';
+}
+
 function enderecoCliente(card: ComprovanteSourceCard): string {
   const pj = card.tipo_pessoa === 'pj';
   const rua = (pj ? card.endereco_comercial_rua : card.endereco_rua) || card.endereco_rua;
@@ -187,8 +199,8 @@ export function montarDadosComprovante(
   return {
     cliente_nome: comprovanteNomeCliente(card) || '—',
     cliente_documento: comprovanteDocumentoCliente(card) || '—',
-    cliente_telefone: (card.tipo_pessoa === 'pj' ? card.telefone_comercial : card.telefone) || card.telefone || '—',
-    cliente_email: (card.tipo_pessoa === 'pj' ? card.email_comercial : card.email) || card.email || '—',
+    cliente_telefone: comprovanteTelefoneCliente(card) || '—',
+    cliente_email: comprovanteEmailCliente(card) || '—',
     cliente_endereco: enderecoCliente(card),
     administradora: ADMINISTRADORA_CONSORCIO,
     produto: card.produto_embracon || card.tipo_produto || '—',
