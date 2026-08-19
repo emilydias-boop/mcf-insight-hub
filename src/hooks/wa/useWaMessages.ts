@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -33,27 +33,34 @@ export class WaSendError extends Error {
   }
 }
 
-async function extractFunctionError(error: any, data: any): Promise<WaSendError | null> {
+function errMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+async function extractFunctionError(error: unknown, data: unknown): Promise<WaSendError | null> {
+  const FALLBACK = 'Erro ao enviar mensagem via WhatsApp';
   // supabase.functions.invoke devolve FunctionsHttpError em 4xx, com o Response em .context
-  const res: Response | undefined = error?.context instanceof Response ? error.context : undefined;
+  const context = (error as { context?: unknown } | null)?.context;
+  const res: Response | undefined = context instanceof Response ? context : undefined;
   if (res) {
-    let payload: any = null;
+    let payload: { error?: string; message?: string } | null = null;
     try {
-      payload = await res.clone().json();
+      payload = (await res.clone().json()) as { error?: string; message?: string };
     } catch {
       /* corpo não-JSON */
     }
     return new WaSendError(
-      payload?.message ?? payload?.error ?? error.message ?? 'Erro ao enviar mensagem via WhatsApp',
+      payload?.message ?? payload?.error ?? errMessage(error, FALLBACK),
       payload?.error,
       res.status,
     );
   }
   if (error) {
-    return new WaSendError(error.message ?? 'Erro ao enviar mensagem via WhatsApp');
+    return new WaSendError(errMessage(error, FALLBACK));
   }
-  if (data?.error) {
-    return new WaSendError(data.message ?? data.error, data.error);
+  const payload = data as { error?: string; message?: string } | null;
+  if (payload?.error) {
+    return new WaSendError(payload.message ?? payload.error, payload.error);
   }
   return null;
 }
@@ -76,6 +83,8 @@ export function useWaMessages(conversationId: string | null) {
     enabled: !!conversationId,
   });
 
+  const markReadRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     if (!conversationId) return;
     const channel = supabase
@@ -88,9 +97,14 @@ export function useWaMessages(conversationId: string | null) {
           table: 'wa_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
+        (payload) => {
           qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
           qc.invalidateQueries({ queryKey: ['wa-conversations'] });
+          // conversa aberta: mensagem nova do cliente já entra como lida
+          const row = payload.new as { direction?: string; read_at?: string | null } | null;
+          if (payload.eventType !== 'DELETE' && row?.direction === 'inbound' && !row.read_at) {
+            markReadRef.current();
+          }
         },
       )
       .subscribe();
@@ -121,11 +135,15 @@ export function useWaMessages(conversationId: string | null) {
       if (failure) throw failure;
       return data;
     },
-    onError: (err: any) => {
-      toast.error(err?.message ?? 'Erro ao enviar mensagem via WhatsApp');
+    onError: (err: unknown) => {
+      toast.error(errMessage(err, 'Erro ao enviar mensagem via WhatsApp'));
       if (err instanceof WaSendError && err.code === 'janela_fechada') {
         // a conversa mudou de estado no servidor: recarrega para a UI cair no modo template
         qc.invalidateQueries({ queryKey: ['wa-conversations'] });
+      }
+      if (err instanceof WaSendError && err.code === 'template_nao_aprovado') {
+        // o template pode ter sido desaprovado desde o carregamento da lista
+        qc.invalidateQueries({ queryKey: ['checkin_templates', 'whatsapp_approved'] });
       }
     },
     onSuccess: () => {
@@ -138,16 +156,45 @@ export function useWaMessages(conversationId: string | null) {
     mutationFn: async () => {
       if (!conversationId) return;
       const nowIso = new Date().toISOString();
-      await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('wa_messages')
         .update({ read_at: nowIso })
         .eq('conversation_id', conversationId)
         .eq('direction', 'inbound')
+        .is('read_at', null)
+        .select('id');
+      if (updateError) throw updateError;
+      if (!updated || updated.length === 0) return;
+
+      // recontagem em vez de zerar: um inbound que chegou no meio da operação continua contando
+      const { count, error: countError } = await supabase
+        .from('wa_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('conversation_id', conversationId)
+        .eq('direction', 'inbound')
         .is('read_at', null);
-      await supabase.from('wa_conversations').update({ unread_count: 0 }).eq('id', conversationId);
+      if (countError) throw countError;
+
+      const { error: convError } = await supabase
+        .from('wa_conversations')
+        .update({ unread_count: count ?? 0 })
+        .eq('id', conversationId);
+      if (convError) throw convError;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
       qc.invalidateQueries({ queryKey: ['wa-conversations'] });
     },
+    onError: (err: unknown) =>
+      toast.error(errMessage(err, 'Não foi possível marcar as mensagens como lidas')),
   });
+
+  const markReadNow = useCallback(() => {
+    if (!markRead.isPending) markRead.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, markRead.isPending]);
+
+  markReadRef.current = markReadNow;
 
   return { ...query, sendMessage, markRead };
 }
