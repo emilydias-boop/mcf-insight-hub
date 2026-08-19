@@ -19,6 +19,10 @@ interface ConsorcioSdrSummaryTableProps {
   cotasBySdr?: Map<string, number>;
   /** Cotas contratadas sem vínculo com lead — linha própria. */
   cotasSemVinculo?: number;
+  /** Nome exibível por e-mail (para SDR com cota mas sem atividade na agenda). */
+  sdrNames?: Map<string, string>;
+  /** Quando um SDR está filtrado, restringe as linhas extras a esse e-mail. */
+  sdrFilterEmail?: string | null;
   /** Métricas devolvidas pela RPC cujo agendador o front não reconhece. */
   unassigned?: SdrUnassignedBucket | null;
 }
@@ -33,10 +37,21 @@ export function ConsorcioSdrSummaryTable({
   propostasEnviadasBySdr,
   cotasBySdr,
   cotasSemVinculo = 0,
+  sdrNames,
+  sdrFilterEmail = null,
   unassigned = null,
 }: ConsorcioSdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // SDRs que têm cota contratada no período mas nenhuma atividade de agenda —
+  // sem isto a linha some em silêncio e o Total não fecha com o card do topo.
+  const emailsNaTabela = new Set(data.map((r) => r.sdrEmail.toLowerCase()));
+  const extraSdrs = Array.from(cotasBySdr?.entries() || [])
+    .filter(([email, qtd]) => qtd > 0 && !emailsNaTabela.has(email.toLowerCase()))
+    .filter(([email]) => !sdrFilterEmail || email.toLowerCase() === sdrFilterEmail.toLowerCase())
+    .sort((a, b) => b[1] - a[1]);
+  const extraCotas = extraSdrs.reduce((s, [, qtd]) => s + qtd, 0);
 
   // Total derivado do MESMO array renderizado (respeita filtro de SDR aplicado).
   const baseTotals = data.reduce(
@@ -60,7 +75,7 @@ export function ConsorcioSdrSummaryTable({
     r1Agendada: baseTotals.r1Agendada + (unassigned?.r1Agendada || 0),
     r1Realizada: baseTotals.r1Realizada + (unassigned?.r1Realizada || 0),
     noShows: baseTotals.noShows + (unassigned?.noShows || 0),
-    cotas: baseTotals.cotas + cotasSemVinculo,
+    cotas: baseTotals.cotas + cotasSemVinculo + extraCotas,
   };
   const unassignedTooltip = unassigned
     ? `Linhas devolvidas pelas métricas da agenda cujo agendador não está na lista de SDRs/Closers do Consórcio${unassigned.emails.length ? `: ${unassigned.emails.join(', ')}` : ''}.\nCobre apenas o que é visível nesta camada — reuniões que a consulta de origem nunca devolveu não aparecem aqui.`
@@ -234,6 +249,29 @@ export function ConsorcioSdrSummaryTable({
                 </TableRow>
               );
             })}
+
+            {/* SDR com cota contratada no período, mas sem atividade de agenda */}
+            {extraSdrs.map(([email, qtd]) => (
+              <TableRow
+                key={`extra-${email}`}
+                className="hover:bg-muted/20"
+                title="SDR com cota contratada no período, mas sem reunião agendada/realizada dentro da janela — a cota é dele, a atividade caiu em outro período."
+              >
+                <TableCell className="font-medium">
+                  {sdrNames?.get(email.toLowerCase()) || email}
+                  <span className="ml-2 text-xs text-muted-foreground italic">sem atividade no período</span>
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">0</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{qtd}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            ))}
 
             {/* Não atribuído: só o que a fonte devolveu e esta tela não soube atribuir */}
             {cotasSemVinculo > 0 && (

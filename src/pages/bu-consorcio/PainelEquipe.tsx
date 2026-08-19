@@ -939,6 +939,8 @@ export default function ConsorcioPainelEquipe() {
                 propostasEnviadasBySdr={propostasData}
                 cotasBySdr={cotasContratadas?.bySdr}
                 cotasSemVinculo={cotasContratadas?.semVinculo || 0}
+                sdrNames={cotasContratadas?.sdrNames}
+                sdrFilterEmail={sdrFilter === "all" ? null : sdrFilter}
                 unassigned={sdrUnassignedRow}
               />
               <div className="mt-6 px-0 sm:px-0">
