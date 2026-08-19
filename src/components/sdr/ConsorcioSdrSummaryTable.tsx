@@ -236,6 +236,24 @@ export function ConsorcioSdrSummaryTable({
             })}
 
             {/* Não atribuído: só o que a fonte devolveu e esta tela não soube atribuir */}
+            {cotasSemVinculo > 0 && (
+              <TableRow
+                className="italic text-muted-foreground hover:bg-muted/20"
+                title="Cotas contratadas que não têm cadastro pendente com negócio vinculado — não há SDR a quem atribuir."
+              >
+                <TableCell className="font-normal underline decoration-dotted">Sem vínculo com lead</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{cotasSemVinculo}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {!disableNavigation && <TableCell />}
+              </TableRow>
+            )}
+
             {unassigned && (
               <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
                 <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
