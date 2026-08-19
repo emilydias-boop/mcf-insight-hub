@@ -428,13 +428,23 @@ export default function ConsorcioPainelEquipe() {
   // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
   // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
   // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
-  const { data: fatosDayRows = [] } = useConsorcioAgendaFatos(dayStart, dayEnd);
-  const { data: fatosWeekRows = [] } = useConsorcioAgendaFatos(weekStartDate, weekEndDate);
-  const { data: fatosMonthRows = [] } = useConsorcioAgendaFatos(monthStartDate, monthEndDate);
+  // Agregação feita no BANCO (poucas linhas por funil), não linha a linha.
+  const { data: totaisDayRows } = useConsorcioAgendaTotais(dayStart, dayEnd);
+  const { data: totaisWeekRows } = useConsorcioAgendaTotais(weekStartDate, weekEndDate);
+  const { data: totaisMonthRows } = useConsorcioAgendaTotais(monthStartDate, monthEndDate);
 
-  const fatosDay = useConsorcioAgendaDerived({ rows: fatosDayRows, allowedOriginNames });
-  const fatosWeek = useConsorcioAgendaDerived({ rows: fatosWeekRows, allowedOriginNames });
-  const fatosMonth = useConsorcioAgendaDerived({ rows: fatosMonthRows, allowedOriginNames });
+  const fatosDayTotals = useMemo(
+    () => sumConsorcioTotais(totaisDayRows, allowedOriginNames),
+    [totaisDayRows, allowedOriginNames],
+  );
+  const fatosWeekTotals = useMemo(
+    () => sumConsorcioTotais(totaisWeekRows, allowedOriginNames),
+    [totaisWeekRows, allowedOriginNames],
+  );
+  const fatosMonthTotals = useMemo(
+    () => sumConsorcioTotais(totaisMonthRows, allowedOriginNames),
+    [totaisMonthRows, allowedOriginNames],
+  );
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
