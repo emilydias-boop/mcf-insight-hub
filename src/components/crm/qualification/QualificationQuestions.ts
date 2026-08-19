@@ -57,9 +57,10 @@ export function answersToSummary(
 ): string {
   const dateStr = new Date().toLocaleDateString('pt-BR');
   const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const channelLabel = channel === 'call' ? 'Ligação' : 'WhatsApp';
   const lines: string[] = [];
-  lines.push(`📋 QUALIFICAÇÃO (${channelLabel}) — ${dateStr} às ${timeStr}`);
+  const channelLabel =
+    channel === 'call' ? ' (Ligação)' : channel === 'whatsapp' ? ' (WhatsApp)' : '';
+  lines.push(`📋 QUALIFICAÇÃO${channelLabel} — ${dateStr} às ${timeStr}`);
   if (sdrName) lines.push(`Por: ${sdrName}`);
   lines.push('');
   for (const q of QUALIFICATION_QUESTIONS) {
