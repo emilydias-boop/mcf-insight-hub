@@ -112,7 +112,7 @@ export function TeamKPICards({
       bgColor: "bg-sky-500/10",
       tooltip: "Reuniões agendadas para hoje que ainda não aconteceram"
     }] : []),
-    {
+    ...(hideAgendamentos ? [] : [{
       title: "Agendamentos",
       value: kpis.totalAgendamentos,
       icon: Calendar,
@@ -121,7 +121,7 @@ export function TeamKPICards({
       tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
       segLine: segLineFor('agendamentos'),
-    },
+    }]),
     {
       title: "R1 Agendada",
       value: kpis.totalR1Agendada,
