@@ -15,7 +15,10 @@ interface ConsorcioSdrSummaryTableProps {
   diasUteisNoPeriodo?: number;
   sdrDiasUteisMap?: Map<string, number>;
   propostasEnviadasBySdr?: Map<string, number>;
-  propostasFechadasBySdr?: Map<string, number>;
+  /** Cotas contratadas (consortium_cards, tipo_registro='contratacao') por SDR. */
+  cotasBySdr?: Map<string, number>;
+  /** Cotas contratadas sem vínculo com lead — linha própria. */
+  cotasSemVinculo?: number;
   /** Métricas devolvidas pela RPC cujo agendador o front não reconhece. */
   unassigned?: SdrUnassignedBucket | null;
 }
@@ -28,7 +31,8 @@ export function ConsorcioSdrSummaryTable({
   diasUteisNoPeriodo,
   sdrDiasUteisMap,
   propostasEnviadasBySdr,
-  propostasFechadasBySdr,
+  cotasBySdr,
+  cotasSemVinculo = 0,
   unassigned = null,
 }: ConsorcioSdrSummaryTableProps) {
   const navigate = useNavigate();
@@ -44,11 +48,10 @@ export function ConsorcioSdrSummaryTable({
         r1Realizada: acc.r1Realizada + (row.r1Realizada || 0),
         noShows: acc.noShows + (row.noShows || 0),
         propostas: acc.propostas + (propostasEnviadasBySdr?.get(email) || 0),
-        fechadasPipeline: acc.fechadasPipeline + (propostasFechadasBySdr?.get(email) || 0),
-        fechadasAgenda: acc.fechadasAgenda + (row.contratos || 0),
+        cotas: acc.cotas + (cotasBySdr?.get(email) || 0),
       };
     },
-    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, fechadasPipeline: 0, fechadasAgenda: 0 }
+    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, cotas: 0 }
   );
   // O Total inclui a linha "Não atribuído" para fechar com o card do topo.
   const totals = {
@@ -57,14 +60,14 @@ export function ConsorcioSdrSummaryTable({
     r1Agendada: baseTotals.r1Agendada + (unassigned?.r1Agendada || 0),
     r1Realizada: baseTotals.r1Realizada + (unassigned?.r1Realizada || 0),
     noShows: baseTotals.noShows + (unassigned?.noShows || 0),
-    fechadasAgenda: baseTotals.fechadasAgenda + (unassigned?.contratos || 0),
+    cotas: baseTotals.cotas + cotasSemVinculo,
   };
   const unassignedTooltip = unassigned
     ? `Linhas devolvidas pelas métricas da agenda cujo agendador não está na lista de SDRs/Closers do Consórcio${unassigned.emails.length ? `: ${unassigned.emails.join(', ')}` : ''}.\nCobre apenas o que é visível nesta camada — reuniões que a consulta de origem nunca devolveu não aparecem aqui.`
     : '';
-  // Taxa agregada (Σ fechadas-agenda ÷ Σ realizadas), não média das taxas.
+  // Taxa agregada (Σ cotas contratadas ÷ Σ R1 realizadas), não média das taxas.
   const totalTaxaVenda = totals.r1Realizada > 0
-    ? (totals.fechadasAgenda / totals.r1Realizada) * 100
+    ? (totals.cotas / totals.r1Realizada) * 100
     : 0;
   const totalTaxaVendaColor = totalTaxaVenda >= 20
     ? 'text-green-400'
@@ -118,21 +121,15 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Negócios em estágio de fechamento, atribuídos ao dono atual do negócio."
+                title="Cotas efetivamente contratadas (Controle Consórcio, tipo de registro 'contratação'), pela data de contratação. Atribuídas ao SDR que agendou a R1 do lead."
               >
-                Fechadas (pipeline)
+                Cotas Contratadas
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Fechamentos registrados na agenda, atribuídos ao SDR que agendou. É a fonte do card Propostas Fechadas."
+                title="Cotas Contratadas ÷ R1 Realizada, no período."
               >
-                Fechadas (agenda)
-              </TableHead>
-              <TableHead
-                className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Fechadas (agenda) ÷ R1 Realizada."
-              >
-                Taxa Venda
+                Cotas / R1 Realiz.
               </TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
@@ -146,11 +143,11 @@ export function ConsorcioSdrSummaryTable({
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const propostas = propostasEnviadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
-              const fechadas = propostasFechadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const cotas = cotasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
 
-              // Taxa Venda = Contratos / R1 Realizada
+              // Cotas / R1 Realizada
               const taxaVenda = row.r1Realizada > 0
-                ? (row.contratos / row.r1Realizada) * 100
+                ? (cotas / row.r1Realizada) * 100
                 : 0;
               const taxaVendaColor = taxaVenda >= 20
                 ? 'text-green-400'
@@ -222,13 +219,8 @@ export function ConsorcioSdrSummaryTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
-                      {fechadas}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                      {row.contratos}
+                      {cotas}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
@@ -254,7 +246,6 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">{unassigned.noShows}</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{unassigned.contratos}</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {!disableNavigation && <TableCell />}
               </TableRow>
@@ -291,13 +282,8 @@ export function ConsorcioSdrSummaryTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
-                  {totals.fechadasPipeline}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                  {totals.fechadasAgenda}
+                  {totals.cotas}
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
