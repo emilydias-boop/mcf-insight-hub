@@ -73,7 +73,26 @@ export interface R1CloserMetric {
   r2_agendada: number;
   reembolsos: number;
   reembolsos_valor: number;
+  /** Linha sintética "Não atribuído" (não é um closer real). */
+  is_unassigned?: boolean;
+  /** Quebra por motivo do descarte (só na linha "Não atribuído"). */
+  unassigned_reasons?: Record<UnassignedReason, number>;
 }
+
+export const UNASSIGNED_CLOSER_ID = '__nao_atribuido__';
+
+export type UnassignedReason =
+  | 'sem_closer'
+  | 'outra_bu'
+  | 'sem_negocio'
+  | 'closer_inativo';
+
+export const UNASSIGNED_REASON_LABELS: Record<UnassignedReason, string> = {
+  sem_closer: 'sem closer designado',
+  outra_bu: 'closer de outra BU',
+  sem_negocio: 'participante sem negócio',
+  closer_inativo: 'closer inativo no período',
+};
 
 export type IcpSegmentFilter = 'all' | 'A' | 'B';
 
@@ -81,10 +100,13 @@ export function useR1CloserMetrics(
   startDate: Date,
   endDate: Date,
   bu: string = 'incorporador',
-  segment: IcpSegmentFilter = 'all'
+  segment: IcpSegmentFilter = 'all',
+  /** Quando true, acrescenta ao fim a linha sintética "Não atribuído" com as
+   *  reuniões que antes eram descartadas em silêncio. */
+  includeUnassigned = false,
 ) {
   return useQuery({
-    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment],
+    queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment, includeUnassigned],
     queryFn: async (): Promise<R1CloserMetric[]> => {
       // Filtro ICP (aditivo): com 'all' nada muda no comportamento existente.
       const segmentActive = segment === 'A' || segment === 'B';
