@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
-import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
+import { computePendentesBreakdown, isNoShowStatus } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
@@ -495,9 +495,15 @@ export default function ConsorcioPainelEquipe() {
       // período para reuniões FORA dele não aparecem (subcontagem possível).
       const bookedAt = (m as any).booked_at ? new Date((m as any).booked_at) : null;
       if (bookedAt && start && end && bookedAt >= start && bookedAt <= end) row.agendamentos++;
-      if (status.includes('realizada')) row.r1Realizada++;
-      if (status.includes('no-show') || status.includes('no show')) row.noShows++;
-      if (status.includes('contrato') || status.includes('contract')) row.contratos++;
+      // Os status vindos da RPC get_sdr_meetings_from_agenda são os valores
+      // canônicos de meeting_slot_attendees.status: completed, no_show,
+      // invited, rescheduled, contract_paid, cancelled. Comparar com rótulos
+      // em português ('realizada', 'no-show') nunca casava e zerava a coluna.
+      // Consórcio: realizada = SOMENTE 'completed' (contract_paid não entra —
+      // docs/qa/2026-08-16-funil-consorcio-6-etapas-fluxo-por-periodo.md).
+      if (status === 'completed') row.r1Realizada++;
+      if (isNoShowStatus(status)) row.noShows++;
+      if (status === 'contract_paid' || status.includes('contrato')) row.contratos++;
     });
     
     // Ordenação única em todos os presets: R1 Agendada desc → R1 Realizada desc → nome asc

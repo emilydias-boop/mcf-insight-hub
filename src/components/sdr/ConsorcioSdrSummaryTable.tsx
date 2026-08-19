@@ -69,11 +69,27 @@ export function ConsorcioSdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">
                 <span className="inline-flex items-center gap-1">
                   <FileText className="h-3.5 w-3.5" />
-                  Proposta Env.
+                  Prop. Env.
                 </span>
               </TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Proposta Fech.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Venda</TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Negócios em estágio de fechamento, atribuídos ao dono atual do negócio."
+              >
+                Fechadas (pipeline)
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Fechamentos registrados na agenda, atribuídos ao SDR que agendou. É a fonte do card Propostas Fechadas."
+              >
+                Fechadas (agenda)
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Fechadas (agenda) ÷ R1 Realizada."
+              >
+                Taxa Venda
+              </TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
@@ -164,6 +180,11 @@ export function ConsorcioSdrSummaryTable({
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30">
                       {fechadas}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                      {row.contratos}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
