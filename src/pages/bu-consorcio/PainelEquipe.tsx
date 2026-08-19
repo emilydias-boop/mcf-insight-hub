@@ -33,8 +33,7 @@ import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
-import { useConsorcioProdutosFechadosBySdr } from "@/hooks/useConsorcioProdutosFechadosBySdr";
-import { useConsorcioProdutosFechadosByCloser } from "@/hooks/useConsorcioProdutosFechadosByCloser";
+import { useConsorcioCotasContratadas } from "@/hooks/useConsorcioCotasContratadas";
 import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
@@ -468,8 +467,8 @@ export default function ConsorcioPainelEquipe() {
   const pipelineMetrics = useConsorcioPipelineMetrics();
   const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
-  const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
-  const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end, BU_SQUAD);
+  // Cotas Contratadas — única métrica de venda fechada do Consórcio.
+  const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
@@ -516,9 +515,9 @@ export default function ConsorcioPainelEquipe() {
 
   const closerKPIs = useMemo(() => {
     const t = fatos.closerTotals;
-    // Mesma base de fatos dos demais números (fechamento atribuído ao closer do
-    // slot), para o card e o Total da tabela nunca divergirem do lado SDR.
-    const totalContratos = t.contratos;
+    // Venda fechada = Cotas Contratadas (mesma fonte do card e do Total da tabela,
+    // idêntica nas duas abas).
+    const totalContratos = cotasContratadas?.total || 0;
     return {
       sdrCount: closerRows.length,
       totalAgendamentos: t.agendamentos,
@@ -530,14 +529,7 @@ export default function ConsorcioPainelEquipe() {
       taxaConversao: t.r1Realizada > 0 ? (totalContratos / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [fatos]);
-
-  // Fechamentos da agenda por closer (fonte do card "Propostas Fechadas").
-  const fechadasAgendaByCloser = useMemo(() => {
-    const m = new Map<string, number>();
-    fatos.byCloser.forEach((agg, id) => m.set(id, agg.contratos));
-    return m;
-  }, [fatos]);
+  }, [fatos, cotasContratadas]);
 
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -582,13 +574,13 @@ export default function ConsorcioPainelEquipe() {
       totalAgendamentos: t.agendamentos,
       totalRealizadas: t.r1Realizada,
       totalNoShows: t.noShows,
-      totalContratos: t.contratos,
+      totalContratos: cotasContratadas?.total || 0,
       totalOutside: 0,
       totalR1Agendada: t.r1Agendada,
-      taxaConversao: t.r1Realizada > 0 ? (t.contratos / t.r1Realizada) * 100 : 0,
+      taxaConversao: t.r1Realizada > 0 ? ((cotasContratadas?.total || 0) / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [fatos]);
+  }, [fatos, cotasContratadas]);
 
   const enrichedKPIs = useMemo(() => ({
     ...pipelineFilteredKPIs,
@@ -945,7 +937,8 @@ export default function ConsorcioPainelEquipe() {
                 diasUteisNoPeriodo={diasUteisNoPeriodo}
                 sdrDiasUteisMap={sdrDiasUteisMap}
                 propostasEnviadasBySdr={propostasData}
-                propostasFechadasBySdr={produtosFechadosBySdr}
+                cotasBySdr={cotasContratadas?.bySdr}
+                cotasSemVinculo={cotasContratadas?.semVinculo || 0}
                 unassigned={sdrUnassignedRow}
               />
               <div className="mt-6 px-0 sm:px-0">
@@ -957,8 +950,8 @@ export default function ConsorcioPainelEquipe() {
               data={closerRows}
               isLoading={closerLoading || fatosLoading}
               propostasEnviadasByCloser={propostasByCloser}
-              propostasFechadasByCloser={produtosFechadosByCloser}
-              fechadasAgendaByCloser={fechadasAgendaByCloser}
+              cotasByCloser={cotasContratadas?.byCloser}
+              cotasSemCloser={cotasContratadas?.semCloser || 0}
               agendaUnassigned={fatos.closerUnassigned}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
