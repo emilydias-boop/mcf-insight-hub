@@ -217,6 +217,7 @@ export function TeamKPICards({
 
   // Tailwind precisa de classes estáticas — mapa seguro por contagem
   const lgColsClass: Record<number, string> = {
+    4: "lg:grid-cols-4",
     5: "lg:grid-cols-5",
     6: "lg:grid-cols-6",
     7: "lg:grid-cols-7",
