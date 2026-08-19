@@ -13667,7 +13667,7 @@ export type Database = {
       }
       wa_messages: {
         Row: {
-          body: string
+          body: string | null
           conversation_id: string
           created_at: string
           delivered_at: string | null
@@ -13675,6 +13675,11 @@ export type Database = {
           error_message: string | null
           external_status: string | null
           id: string
+          media_duration_seconds: number | null
+          media_filename: string | null
+          media_path: string | null
+          media_size_bytes: number | null
+          media_type: string | null
           read_at: string | null
           sent_by_name: string | null
           sent_by_user_id: string | null
@@ -13682,7 +13687,7 @@ export type Database = {
           twilio_message_sid: string | null
         }
         Insert: {
-          body: string
+          body?: string | null
           conversation_id: string
           created_at?: string
           delivered_at?: string | null
@@ -13690,6 +13695,11 @@ export type Database = {
           error_message?: string | null
           external_status?: string | null
           id?: string
+          media_duration_seconds?: number | null
+          media_filename?: string | null
+          media_path?: string | null
+          media_size_bytes?: number | null
+          media_type?: string | null
           read_at?: string | null
           sent_by_name?: string | null
           sent_by_user_id?: string | null
@@ -13697,7 +13707,7 @@ export type Database = {
           twilio_message_sid?: string | null
         }
         Update: {
-          body?: string
+          body?: string | null
           conversation_id?: string
           created_at?: string
           delivered_at?: string | null
@@ -13705,6 +13715,11 @@ export type Database = {
           error_message?: string | null
           external_status?: string | null
           id?: string
+          media_duration_seconds?: number | null
+          media_filename?: string | null
+          media_path?: string | null
+          media_size_bytes?: number | null
+          media_type?: string | null
           read_at?: string | null
           sent_by_name?: string | null
           sent_by_user_id?: string | null
@@ -15585,6 +15600,7 @@ export type Database = {
         }[]
       }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
+      phone_key_br: { Args: { _raw: string }; Returns: string }
       recalc_automation_queue_for_deal: {
         Args: {
           p_anchor_kind: string
@@ -15653,6 +15669,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_can_access_conversation: {
+        Args: { _conversation_id: string }
+        Returns: boolean
+      }
       wa_deal_contact: {
         Args: { _deal_id: string }
         Returns: {
@@ -15663,6 +15683,15 @@ export type Database = {
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
         Returns: string
+      }
+      wa_match_lead_by_phone: {
+        Args: { p_phone: string }
+        Returns: {
+          contact_id: string
+          contatos_encontrados: number
+          deal_id: string
+          negocios_encontrados: number
+        }[]
       }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }
