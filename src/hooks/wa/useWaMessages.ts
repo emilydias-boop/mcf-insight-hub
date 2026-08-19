@@ -45,6 +45,26 @@ function errMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/** Códigos que o backend só devolve ANTES de entregar a mídia ao Twilio. */
+const PRE_SEND_ERROR_CODES = new Set([
+  'midia_invalida',
+  'midia_com_template',
+  'janela_fechada',
+  'conversa_nao_encontrada',
+  'template_nao_aprovado',
+  'parametros_invalidos',
+  'midia_nao_encontrada',
+]);
+
+/**
+ * true quando a falha aconteceu antes do envio — aí o arquivo pode ser apagado.
+ * 5xx / timeout / erro sem status ficam de fora: o Twilio ainda pode buscar a mídia.
+ */
+function isPreSendFailure(failure: WaSendError): boolean {
+  if (failure.code && PRE_SEND_ERROR_CODES.has(failure.code)) return true;
+  return typeof failure.status === 'number' && failure.status >= 400 && failure.status < 500;
+}
+
 async function extractFunctionError(error: unknown, data: unknown): Promise<WaSendError | null> {
   const FALLBACK = 'Erro ao enviar mensagem via WhatsApp';
   // supabase.functions.invoke devolve FunctionsHttpError em 4xx, com o Response em .context
