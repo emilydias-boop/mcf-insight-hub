@@ -1312,6 +1312,13 @@ export type Database = {
             referencedRelation: "automation_templates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "automation_flows_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wa_templates"
+            referencedColumns: ["id"]
+          },
         ]
       }
       automation_logs: {
@@ -1412,6 +1419,13 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "automation_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wa_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1642,6 +1656,13 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "automation_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wa_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -13649,9 +13670,12 @@ export type Database = {
           body: string
           conversation_id: string
           created_at: string
+          delivered_at: string | null
           direction: string
           error_message: string | null
+          external_status: string | null
           id: string
+          read_at: string | null
           sent_by_name: string | null
           sent_by_user_id: string | null
           status: string | null
@@ -13661,9 +13685,12 @@ export type Database = {
           body: string
           conversation_id: string
           created_at?: string
+          delivered_at?: string | null
           direction: string
           error_message?: string | null
+          external_status?: string | null
           id?: string
+          read_at?: string | null
           sent_by_name?: string | null
           sent_by_user_id?: string | null
           status?: string | null
@@ -13673,9 +13700,12 @@ export type Database = {
           body?: string
           conversation_id?: string
           created_at?: string
+          delivered_at?: string | null
           direction?: string
           error_message?: string | null
+          external_status?: string | null
           id?: string
+          read_at?: string | null
           sent_by_name?: string | null
           sent_by_user_id?: string | null
           status?: string | null
@@ -13690,42 +13720,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      wa_templates: {
-        Row: {
-          body_preview: string | null
-          content_sid: string
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          name: string
-          updated_at: string
-          variables: Json
-        }
-        Insert: {
-          body_preview?: string | null
-          content_sid: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name: string
-          updated_at?: string
-          variables?: Json
-        }
-        Update: {
-          body_preview?: string | null
-          content_sid?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          name?: string
-          updated_at?: string
-          variables?: Json
-        }
-        Relationships: []
       }
       webhook_configs: {
         Row: {
@@ -14549,6 +14543,48 @@ export type Database = {
           qtd: number | null
           reason: string | null
           status: Database["public"]["Enums"]["automation_status"] | null
+        }
+        Relationships: []
+      }
+      wa_templates: {
+        Row: {
+          body_preview: string | null
+          category: string | null
+          content_sid: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          is_active: boolean | null
+          language: string | null
+          name: string | null
+          updated_at: string | null
+          variables: string[] | null
+        }
+        Insert: {
+          body_preview?: string | null
+          category?: string | null
+          content_sid?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          name?: string | null
+          updated_at?: string | null
+          variables?: never
+        }
+        Update: {
+          body_preview?: string | null
+          category?: string | null
+          content_sid?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          name?: string | null
+          updated_at?: string | null
+          variables?: never
         }
         Relationships: []
       }
@@ -15612,6 +15648,13 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      wa_deal_contact: {
+        Args: { _deal_id: string }
+        Returns: {
+          contact_name: string
+          phone: string
+        }[]
       }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
