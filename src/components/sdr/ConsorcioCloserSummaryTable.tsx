@@ -16,9 +16,10 @@ interface ConsorcioCloserSummaryTableProps {
   isLoading?: boolean;
   onCloserClick?: (closerId: string) => void;
   propostasEnviadasByCloser?: Map<string, number>;
-  propostasFechadasByCloser?: Map<string, number>;
-  /** Fechamentos registrados na AGENDA (mesma base dos demais fatos), por closer. */
-  fechadasAgendaByCloser?: Map<string, number>;
+  /** Cotas contratadas (consortium_cards, tipo_registro='contratacao') por closer. */
+  cotasByCloser?: Map<string, number>;
+  /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
+  cotasSemCloser?: number;
   /** Fatos da agenda sem closer identificável. */
   agendaUnassigned?: {
     r1Agendada: number;
@@ -33,8 +34,8 @@ export function ConsorcioCloserSummaryTable({
   isLoading,
   onCloserClick,
   propostasEnviadasByCloser,
-  propostasFechadasByCloser,
-  fechadasAgendaByCloser,
+  cotasByCloser,
+  cotasSemCloser = 0,
   agendaUnassigned,
 }: ConsorcioCloserSummaryTableProps) {
   if (isLoading) {
@@ -70,16 +71,16 @@ export function ConsorcioCloserSummaryTable({
       r1_agendada: acc.r1_agendada + row.r1_agendada,
       r1_realizada: acc.r1_realizada + row.r1_realizada,
       noshow: acc.noshow + row.noshow,
-      fechadasAgenda: acc.fechadasAgenda + (fechadasAgendaByCloser?.get(row.closer_id) || 0),
+      cotas: acc.cotas + (cotasByCloser?.get(row.closer_id) || 0),
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, fechadasAgenda: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, cotas: 0 }
   );
 
   const totals = {
     r1_agendada: baseTotals.r1_agendada + (unassignedRow?.r1_agendada || 0),
     r1_realizada: baseTotals.r1_realizada + (unassignedRow?.r1_realizada || 0),
     noshow: baseTotals.noshow + (unassignedRow?.noshow || 0),
-    fechadasAgenda: baseTotals.fechadasAgenda + (unassignedRow?.contratos || 0),
+    cotas: baseTotals.cotas + cotasSemCloser,
   };
 
   const totalPropostas = data.reduce(
@@ -87,13 +88,8 @@ export function ConsorcioCloserSummaryTable({
     0
   );
 
-  const totalPropostasFechadas = data.reduce(
-    (acc, row) => acc + (propostasFechadasByCloser?.get(row.closer_id) || 0),
-    0
-  );
-
   const totalTaxaVenda = totals.r1_realizada > 0
-    ? (totals.fechadasAgenda / totals.r1_realizada) * 100
+    ? (totals.cotas / totals.r1_realizada) * 100
     : 0;
 
   const getTaxaColor = (taxa: number, thresholds: { green: number; amber: number }) => {
@@ -116,24 +112,27 @@ export function ConsorcioCloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Proposta Env.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Proposta Fech.</TableHead>
               <TableHead
-                className="text-muted-foreground text-center font-medium"
-                title="Fechamentos registrados na agenda, atribuídos ao closer da reunião. É a fonte do card Propostas Fechadas."
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Cotas efetivamente contratadas (Controle Consórcio, tipo de registro 'contratação'), pela data de contratação. Atribuídas ao vendedor da cota."
               >
-                Fechadas (agenda)
+                Cotas Contratadas
               </TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Venda</TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Cotas Contratadas ÷ R1 Realizada, no período."
+              >
+                Cotas / R1 Realiz.
+              </TableHead>
               {onCloserClick && <TableHead className="w-8" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {closerRows.map((row) => {
               const propostas = propostasEnviadasByCloser?.get(row.closer_id) || 0;
-              const propostasFechadas = propostasFechadasByCloser?.get(row.closer_id) || 0;
-              const fechadasAgenda = fechadasAgendaByCloser?.get(row.closer_id) || 0;
+              const cotas = cotasByCloser?.get(row.closer_id) || 0;
               const taxaVenda = row.r1_realizada > 0
-                ? (fechadasAgenda / row.r1_realizada) * 100
+                ? (cotas / row.r1_realizada) * 100
                 : 0;
               const noshowPct = row.r1_agendada > 0
                 ? (row.noshow / row.r1_agendada) * 100
@@ -170,12 +169,9 @@ export function ConsorcioCloserSummaryTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
-                      {propostasFechadas}
+                    <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                      {cotas}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-green-400 font-medium">{fechadasAgenda}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${getTaxaColor(taxaVenda, { green: 20, amber: 10 })}`}>
@@ -200,7 +196,6 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">{unassignedRow.noshow}</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{unassignedRow.contratos}</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {onCloserClick && <TableCell />}
               </TableRow>
@@ -233,12 +228,9 @@ export function ConsorcioCloserSummaryTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
-                  {totalPropostasFechadas}
+                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                  {totals.cotas}
                 </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-green-400">{totals.fechadasAgenda}</span>
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${getTaxaColor(totalTaxaVenda, { green: 20, amber: 10 })}`}>
