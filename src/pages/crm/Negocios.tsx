@@ -1322,7 +1322,16 @@ const Negocios = () => {
       <DealDetailsDrawer
         dealId={crossPipelineDealId}
         open={crossPipelineDrawerOpen}
-        onOpenChange={setCrossPipelineDrawerOpen}
+        onOpenChange={(open) => {
+          setCrossPipelineDrawerOpen(open);
+          if (!open) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('deal')) {
+              url.searchParams.delete('deal');
+              window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+            }
+          }
+        }}
       />
     </div>
   );
