@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
-import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
+import { computePendentesBreakdown, isNoShowStatus } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
