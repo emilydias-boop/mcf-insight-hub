@@ -111,6 +111,68 @@ export function useConsorcioAgendaDerived({
   sdrEmailFilter,
   nameByEmail,
 }: DerivedParams): ConsorcioAgendaDerived {
+  return useMemoDerived({ rows, allowedOriginNames, sdrEmailFilter, nameByEmail });
+}
+
+interface TotaisRow {
+  origin_name: string | null;
+  agendamentos: number;
+  r1_agendada: number;
+  r1_realizada: number;
+  no_shows: number;
+  contratos: number;
+}
+
+/**
+ * Versão AGREGADA da mesma base de fatos: o banco devolve apenas os totais por
+ * funil (poucas linhas), não a lista linha a linha. Usada pela tabela "Metas da
+ * Equipe" nas três janelas (Dia/Semana/Mês) para não trazer milhares de linhas
+ * nem reprocessá-las a cada render.
+ */
+export function useConsorcioAgendaTotais(startDate: Date | null, endDate: Date | null) {
+  return useQuery({
+    queryKey: [
+      "consorcio-agenda-totais",
+      startDate ? format(startDate, "yyyy-MM-dd") : null,
+      endDate ? format(endDate, "yyyy-MM-dd") : null,
+    ],
+    queryFn: async (): Promise<TotaisRow[]> => {
+      if (!startDate || !endDate) return [];
+      const { data, error } = await supabase.rpc("get_agenda_totais_consorcio" as any, {
+        start_date: format(startDate, "yyyy-MM-dd"),
+        end_date: format(endDate, "yyyy-MM-dd"),
+      });
+      if (error) throw error;
+      return (data as unknown as TotaisRow[]) || [];
+    },
+    enabled: !!startDate && !!endDate,
+    staleTime: 60000,
+  });
+}
+
+/** Soma os totais respeitando o filtro de funil (origin_name). Sem custo por linha de reunião. */
+export function sumConsorcioTotais(
+  rows: TotaisRow[] | undefined,
+  allowedOriginNames: Set<string> | null,
+): ConsorcioAgendaAgg {
+  const agg = emptyAgg();
+  (rows || []).forEach(r => {
+    if (allowedOriginNames && !allowedOriginNames.has((r.origin_name || "").toLowerCase())) return;
+    agg.agendamentos += r.agendamentos || 0;
+    agg.r1Agendada += r.r1_agendada || 0;
+    agg.r1Realizada += r.r1_realizada || 0;
+    agg.noShows += r.no_shows || 0;
+    agg.contratos += r.contratos || 0;
+  });
+  return agg;
+}
+
+function useMemoDerived({
+  rows,
+  allowedOriginNames,
+  sdrEmailFilter,
+  nameByEmail,
+}: DerivedParams): ConsorcioAgendaDerived {
   return useMemo(() => {
     const filtered = allowedOriginNames
       ? rows.filter(r => allowedOriginNames.has((r.origin_name || "").toLowerCase()))

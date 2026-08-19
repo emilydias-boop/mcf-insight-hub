@@ -40,7 +40,13 @@ import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSum
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { useConsorcioAgendaFatos, useConsorcioAgendaDerived } from "@/hooks/useConsorcioAgendaFatos";
+import {
+  useConsorcioAgendaFatos,
+  useConsorcioAgendaDerived,
+  useConsorcioAgendaTotais,
+  sumConsorcioTotais,
+} from "@/hooks/useConsorcioAgendaFatos";
+import type { ConsorcioFatoRow } from "@/hooks/useConsorcioAgendaFatos";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -62,6 +68,7 @@ import { useConsorcioSummary } from "@/hooks/useConsorcio";
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
+const EMPTY_FATOS: ConsorcioFatoRow[] = [];
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
@@ -329,7 +336,10 @@ export default function ConsorcioPainelEquipe() {
   // A BU da reunião vem do closer do slot (bu='consorcio'), nunca do squad de
   // quem agendou. A mesma lista deduplicada alimenta cards, tabela de SDRs e
   // tabela de Closers (agrupada por sdr_email e por closer_id).
-  const { data: fatosRows = [], isLoading: fatosLoading } = useConsorcioAgendaFatos(start, end);
+  const { data: fatosData, isLoading: fatosLoading } = useConsorcioAgendaFatos(start, end);
+  // Referência estável: o default `= []` criava um array novo a cada render e
+  // fazia a derivação inteira recalcular (e trocar de identidade) sem parar.
+  const fatosRows = fatosData ?? EMPTY_FATOS;
 
   const nameByEmail = useMemo(() => {
     const map = new Map<string, string>();
@@ -428,13 +438,23 @@ export default function ConsorcioPainelEquipe() {
   // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
   // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
   // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
-  const { data: fatosDayRows = [] } = useConsorcioAgendaFatos(dayStart, dayEnd);
-  const { data: fatosWeekRows = [] } = useConsorcioAgendaFatos(weekStartDate, weekEndDate);
-  const { data: fatosMonthRows = [] } = useConsorcioAgendaFatos(monthStartDate, monthEndDate);
+  // Agregação feita no BANCO (poucas linhas por funil), não linha a linha.
+  const { data: totaisDayRows } = useConsorcioAgendaTotais(dayStart, dayEnd);
+  const { data: totaisWeekRows } = useConsorcioAgendaTotais(weekStartDate, weekEndDate);
+  const { data: totaisMonthRows } = useConsorcioAgendaTotais(monthStartDate, monthEndDate);
 
-  const fatosDay = useConsorcioAgendaDerived({ rows: fatosDayRows, allowedOriginNames });
-  const fatosWeek = useConsorcioAgendaDerived({ rows: fatosWeekRows, allowedOriginNames });
-  const fatosMonth = useConsorcioAgendaDerived({ rows: fatosMonthRows, allowedOriginNames });
+  const fatosDayTotals = useMemo(
+    () => sumConsorcioTotais(totaisDayRows, allowedOriginNames),
+    [totaisDayRows, allowedOriginNames],
+  );
+  const fatosWeekTotals = useMemo(
+    () => sumConsorcioTotais(totaisWeekRows, allowedOriginNames),
+    [totaisWeekRows, allowedOriginNames],
+  );
+  const fatosMonthTotals = useMemo(
+    () => sumConsorcioTotais(totaisMonthRows, allowedOriginNames),
+    [totaisMonthRows, allowedOriginNames],
+  );
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
@@ -610,37 +630,37 @@ export default function ConsorcioPainelEquipe() {
   );
 
   const dayValues = useMemo(() => ({
-    agendamento: fatosDay.sdrTotals.agendamentos,
-    r1Agendada: fatosDay.sdrTotals.r1Agendada,
-    r1Realizada: fatosDay.sdrTotals.r1Realizada,
-    noShow: fatosDay.sdrTotals.noShows,
+    agendamento: fatosDayTotals.agendamentos,
+    r1Agendada: fatosDayTotals.r1Agendada,
+    r1Realizada: fatosDayTotals.r1Realizada,
+    noShow: fatosDayTotals.noShows,
     contrato: dayKPIs?.totalContratos || 0,
     r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosDay, dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [fatosDayTotals, dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
-    agendamento: fatosWeek.sdrTotals.agendamentos,
-    r1Agendada: fatosWeek.sdrTotals.r1Agendada,
-    r1Realizada: fatosWeek.sdrTotals.r1Realizada,
-    noShow: fatosWeek.sdrTotals.noShows,
+    agendamento: fatosWeekTotals.agendamentos,
+    r1Agendada: fatosWeekTotals.r1Agendada,
+    r1Realizada: fatosWeekTotals.r1Realizada,
+    noShow: fatosWeekTotals.noShows,
     contrato: weekKPIs?.totalContratos || 0,
     r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosWeek, weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+  }), [fatosWeekTotals, weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
 
   const monthValues = useMemo(() => ({
-    agendamento: fatosMonth.sdrTotals.agendamentos,
-    r1Agendada: fatosMonth.sdrTotals.r1Agendada,
-    r1Realizada: fatosMonth.sdrTotals.r1Realizada,
-    noShow: fatosMonth.sdrTotals.noShows,
+    agendamento: fatosMonthTotals.agendamentos,
+    r1Agendada: fatosMonthTotals.r1Agendada,
+    r1Realizada: fatosMonthTotals.r1Realizada,
+    noShow: fatosMonthTotals.noShows,
     contrato: monthKPIs?.totalContratos || 0,
     r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosMonth, monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
+  }), [fatosMonthTotals, monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
 
   // Build Consórcio goals matrix rows combining agenda + pipeline metrics
   const consorcioGoalsRows = useMemo((): ConsorcioMetricRow[] => {
