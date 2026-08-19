@@ -271,7 +271,6 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         bulkMode={bulkMode}
-        filtroBoleto={filters.filtroBoleto}
         tipoFilter={tipoFilter}
       />
 
