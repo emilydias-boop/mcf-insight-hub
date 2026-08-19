@@ -8,15 +8,18 @@ import { CONSORCIO_FECHAMENTO_STAGE_IDS } from "@/lib/consorcioStages";
  *  (a) deal_produtos_adquiridos (cota cadastrada via fluxo)
  *  (b) Deals moved to stages: PRODUTOS FECHADOS / VENDA REALIZADA / CONTRATO PAGO / VENDA REALIZADA 50K
  * Mapping: crm_deals.owner_id (email) → closers.email, fallback meeting_slot_attendees.
+ * Escopo: apenas closers da BU informada (default 'consorcio') — sem isso o total
+ * incluía negócios de closers do Incorporador.
  * Returns Map<closerId, count>
  */
-export function useConsorcioProdutosFechadosByCloser(startDate: Date, endDate: Date) {
+export function useConsorcioProdutosFechadosByCloser(startDate: Date, endDate: Date, bu: string = 'consorcio') {
   return useQuery({
-    queryKey: ["consorcio-produtos-fechados-by-closer-v2", startDate.toISOString(), endDate.toISOString()],
+    queryKey: ["consorcio-produtos-fechados-by-closer-v3", startDate.toISOString(), endDate.toISOString(), bu],
     queryFn: async () => {
       const { data: closers, error: closersError } = await supabase
         .from("closers")
         .select("id, email")
+        .eq("bu", bu)
         .eq("is_active", true);
       if (closersError) throw closersError;
 
