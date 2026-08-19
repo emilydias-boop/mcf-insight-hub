@@ -1557,7 +1557,14 @@ export function useCreateMeeting() {
               'Limite de reagendamentos atingido. Pedido de aprovação enviado ao gestor.',
           );
         }
-        throw new Error(data.error || 'Erro ao agendar reunião');
+        // Códigos não mapeados (ex.: duplicate_active_booking) precisam chegar
+        // legíveis na tela — prioriza a mensagem do servidor sobre o código cru.
+        throw new Error(
+          data.message ||
+            (data.error === 'duplicate_active_booking'
+              ? 'Este lead já tem um agendamento ativo.'
+              : `Erro ao agendar reunião (${data.error ?? 'desconhecido'})`),
+        );
       }
       
       if (error) {
