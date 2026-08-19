@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,6 +26,21 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
   const [answers, setAnswers] = useState<QualificationAnswers>({});
   const [paraR1, setParaR1] = useState(true);
   const save = useSaveQualificationNote();
+  const { data: sdrName } = useQuery({
+    queryKey: ['qualify-dialog-sdr-name'],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .maybeSingle();
+      return data?.full_name ?? userData.user?.email ?? null;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
   const { valid } = validateAnswers(answers);
 
@@ -32,7 +49,7 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
       toast.error('Responda todas as perguntas com pelo menos 15 caracteres.');
       return;
     }
-    const summary = answersToSummary(answers, undefined, 'whatsapp');
+    const summary = answersToSummary(answers, sdrName ?? undefined, 'whatsapp');
     save.mutate(
       {
         dealId,

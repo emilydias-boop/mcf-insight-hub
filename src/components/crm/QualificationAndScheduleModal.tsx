@@ -179,7 +179,7 @@ export function QualificationAndScheduleModal({
       // Resumo agora derivado das respostas do questionário
       const summary =
         Object.keys(answers).length > 0
-          ? answersToSummary(answers, userName)
+          ? answersToSummary(answers, userName, contactChannel)
           : leadSummary || generateQualificationSummary(qualificationData, userName);
       setLeadSummary(summary);
 

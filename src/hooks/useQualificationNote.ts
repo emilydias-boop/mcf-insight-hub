@@ -49,39 +49,20 @@ export const useSaveQualificationNote = () => {
         if (profile?.full_name) sdrName = profile.full_name;
       }
       
-      // 1. Salvar nos custom_fields do deal — MERGE, nunca substituição.
-      // Substituir apagava dados do webhook (complete_phone, source, origem, primary_tag...).
-      const { data: atual, error: readError } = await supabase
-        .from('crm_deals')
-        .select('custom_fields')
-        .eq('id', dealId)
-        .single();
-      if (readError) throw readError;
-
-      // String vazia do formato legado não pode sobrescrever valor real existente.
-      const qualificationDataLimpo = Object.fromEntries(
-        Object.entries((qualificationData ?? {}) as Record<string, unknown>).filter(
-          ([, v]) => v !== '' && v !== null && v !== undefined,
-        ),
-      );
-
-      const { error: updateError } = await supabase
-        .from('crm_deals')
-        .update({
-          custom_fields: {
-            ...((atual?.custom_fields as Record<string, unknown>) ?? {}),
-            ...qualificationDataLimpo,
-            leadSummary: summary,
-            qualification_saved: true,
-            qualification_date: new Date().toISOString(),
-            qualification_channel: channel ?? null,
-            qualification_answers: answers ?? null,
-            whatsapp_print_url: whatsappPrintUrl ?? null,
-          },
-        })
-        .eq('id', dealId);
-      
-      if (updateError) throw updateError;
+      // 1. Merge atômico no banco — a RPC ignora null/'' e nunca sobrescreve valor real.
+      const { error: mergeError } = await supabase.rpc('crm_deal_merge_custom_fields', {
+        _deal_id: dealId,
+        _patch: {
+          ...(qualificationData ?? {}),
+          leadSummary: summary,
+          qualification_saved: true,
+          qualification_date: new Date().toISOString(),
+          qualification_channel: channel,
+          qualification_answers: answers,
+          whatsapp_print_url: whatsappPrintUrl,
+        } as any,
+      });
+      if (mergeError) throw mergeError;
       
       // 2. Criar nota de qualificação no deal_activities
       const { data, error } = await supabase

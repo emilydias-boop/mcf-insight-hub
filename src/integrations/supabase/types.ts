@@ -14704,6 +14704,10 @@ export type Database = {
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
+      crm_deal_merge_custom_fields: {
+        Args: { _deal_id: string; _patch: Json }
+        Returns: Json
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
