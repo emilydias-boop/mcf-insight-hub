@@ -14712,6 +14712,19 @@ export type Database = {
           email: string
         }[]
       }
+      get_agenda_fatos_consorcio: {
+        Args: { end_date: string; start_date: string }
+        Returns: {
+          attendee_status: string
+          closer_id: string
+          closer_name: string
+          deal_id: string
+          fato: string
+          meeting_day: string
+          sdr_email: string
+          sdr_name: string
+        }[]
+      }
       get_all_hubla_transactions: {
         Args: {
           p_end_date?: string
