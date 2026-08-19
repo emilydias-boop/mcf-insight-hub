@@ -53,11 +53,10 @@ interface Props {
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
   bulkMode: boolean;
-  filtroBoleto: string;
   tipoFilter?: 'cliente' | 'empresa';
 }
 
-export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, filtroBoleto, tipoFilter }: Props) {
+export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, totalItems, onPageChange, onPageSizeChange, onViewDetail, selectedIds, onSelectionChange, bulkMode, tipoFilter }: Props) {
   const payInstallment = usePayInstallment();
   const updateCobranca = useUpdateCobrancaStatus();
   const [confirmPayRow, setConfirmPayRow] = useState<PagamentoRow | null>(null);
@@ -72,10 +71,8 @@ export function PagamentosTable({ data, isLoading, page, pageSize, totalPages, t
     }
   });
 
-  // Apply boleto filter
-  const filteredData = filtroBoleto === 'todos' ? data
-    : filtroBoleto === 'com_boleto' ? data.filter(r => boletoMap.has(r.id))
-    : data.filter(r => !boletoMap.has(r.id));
+  // O filtro de boleto é aplicado no hook (vale para tabela e export).
+  const filteredData = data;
 
   // All visible rows are selectable (bulk cobrança status). WhatsApp action filters by boleto internally.
   const selectableIds = filteredData.map(r => r.id);

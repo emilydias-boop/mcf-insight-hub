@@ -29,6 +29,10 @@ export interface PagamentoRow {
   vendedor_name: string | null;
   origem: string | null;
   tipo_produto: string | null;
+  telefone: string | null;
+  telefone_comercial: string | null;
+  email: string | null;
+  email_comercial: string | null;
   // Computed
   status_calculado: StatusParcela;
   situacao_cota: SituacaoCota;
@@ -120,7 +124,8 @@ export function useConsorcioPagamentos(
             cobranca_status, cobranca_status_updated_at,
             consortium_cards!inner (
               nome_completo, razao_social, tipo_pessoa, grupo, cota, 
-              status, vendedor_name, origem, tipo_produto
+              status, vendedor_name, origem, tipo_produto,
+              telefone, telefone_comercial, email, email_comercial
             )
           `)
           .order('data_vencimento', { ascending: true });
@@ -205,6 +210,31 @@ export function useConsorcioPagamentos(
 
   const isLoading = isLoadingMain || isLoadingStats;
 
+  // Installment ids that have a boleto — needed so the "Boleto" filter applies
+  // to the whole set (table AND export), not just the visible page.
+  const installmentIds = useMemo(() => (rawData || []).map((i: any) => i.id as string), [rawData]);
+
+  const { data: boletoIds } = useQuery({
+    queryKey: ['consorcio-pagamentos-boleto-ids', selectedMonth?.start, selectedMonth?.end, installmentIds.length],
+    queryFn: async () => {
+      const found = new Set<string>();
+      const batchSize = 200;
+      for (let i = 0; i < installmentIds.length; i += batchSize) {
+        const batch = installmentIds.slice(i, i + batchSize);
+        const { data, error } = await supabase
+          .from('consorcio_boletos')
+          .select('installment_id')
+          .in('installment_id', batch);
+        if (error) throw error;
+        for (const b of data || []) if (b.installment_id) found.add(b.installment_id);
+      }
+      return found;
+    },
+    enabled: installmentIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+
   // Process: compute statuses and flatten
   const processedData = useMemo(() => {
     if (!rawData) return [];
@@ -223,6 +253,10 @@ export function useConsorcioPagamentos(
         vendedor_name: card?.vendedor_name,
         origem: card?.origem,
         tipo_produto: card?.tipo_produto,
+        telefone: card?.telefone ?? null,
+        telefone_comercial: card?.telefone_comercial ?? null,
+        email: card?.email ?? null,
+        email_comercial: card?.email_comercial ?? null,
         status_calculado,
         cliente_nome: card?.tipo_pessoa === 'pj' ? (card?.razao_social || 'Sem nome') : (card?.nome_completo || 'Sem nome'),
         situacao_cota: '' as SituacaoCota,
@@ -283,9 +317,15 @@ export function useConsorcioPagamentos(
         result = result.filter(r => r.cobranca_status === filters.cobrancaStatus);
       }
     }
+    if (filters.filtroBoleto && filters.filtroBoleto !== 'todos') {
+      const set = boletoIds ?? new Set<string>();
+      result = filters.filtroBoleto === 'com_boleto'
+        ? result.filter(r => set.has(r.id))
+        : result.filter(r => !set.has(r.id));
+    }
 
     return result;
-  }, [tipoFilteredData, filters]);
+  }, [tipoFilteredData, filters, boletoIds]);
 
   // KPIs - based on filteredData so they follow all active filters
   const kpis = useMemo((): PagamentosKPIData => {
