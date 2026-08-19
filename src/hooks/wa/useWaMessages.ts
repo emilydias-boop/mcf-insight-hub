@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { resolveMediaType, safeFileName, validateWaMedia } from '@/lib/waMedia';
+
+export const WA_MEDIA_BUCKET = 'wa-media';
 
 export type WaMessageStatus = 'sent' | 'delivered' | 'read' | 'failed' | 'received';
 
@@ -19,6 +22,11 @@ export interface WaMessage {
   read_at: string | null;
   external_status: string | null;
   created_at: string;
+  media_path: string | null;
+  media_type: string | null;
+  media_size_bytes: number | null;
+  media_filename: string | null;
+  media_duration_seconds: number | null;
 }
 
 /** Erro de envio já traduzido a partir do corpo da resposta da edge function. */
