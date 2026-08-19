@@ -513,25 +513,18 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     }
 
     // Determine SDR list based on assign mode
-    let sdrList: Array<{ email: string; id: string; name: string }> = [];
+    let sdrList: DistributionTarget[] = [];
 
     if (assignMode === 'distribute') {
-      if (!consorcioSdrs?.length) {
-        toast.error(`Nenhum SDR de ${buLabel} encontrado`);
+      if (!distributionTargets?.length) {
+        toast.error('Não há distribuição de leads configurada para esta pipeline. Configure em CRM → Configurações → Distribuição de Leads (origem de destino).');
         return;
       }
-      // Resolve real profile IDs from profiles table (sdr.id ≠ profiles.id)
-      const sdrEmails = consorcioSdrs.filter(s => s.email).map(s => s.email!);
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .in('email', sdrEmails);
-      
-      if (!profilesData?.length) {
-        toast.error('Não foi possível resolver os perfis dos SDRs');
+      if (distributionTargets.length < 2) {
+        toast.error(`Só há 1 destinatário configurado (${distributionTargets[0].name}) — todos os leads iriam para essa pessoa. Ajuste a distribuição da pipeline ou escolha um responsável único.`);
         return;
       }
-      sdrList = profilesData.map(p => ({ email: p.email || '', id: p.id, name: p.full_name || p.email || '' }));
+      sdrList = distributionTargets;
     } else {
       if (!selectedOwner) {
         toast.error('Selecione um SDR/Closer');
@@ -539,8 +532,15 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
       const user = availableUsers?.find((u: any) => u.email === selectedOwner);
       if (!user) return;
-      sdrList = [{ email: user.email, id: user.id, name: user.full_name || user.email }];
+      sdrList = [{ email: user.email, id: user.id, name: user.full_name || user.email, weight: 100 }];
     }
+
+    // Sequência ponderada única para TODAS as linhas que receberão owner
+    const elsewhereRows = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
+    const notFoundRows = results.filter(r => r.matchStatus === 'not_found');
+    const assignmentSequence = assignMode === 'distribute'
+      ? buildAssignmentSequence(sdrList, elsewhereRows.length + notFoundRows.length)
+      : [];
 
     setIsImporting(true);
     setBatchProgress({ current: 0, total: 3 });
