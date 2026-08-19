@@ -4,9 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ClipboardCheck, ExternalLink, StickyNote, User } from 'lucide-react';
+import { ClipboardCheck, ExternalLink, StickyNote, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,8 +56,6 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
   const { data: qualNote } = useQualificationNote(dealId || '');
   const [noteOpen, setNoteOpen] = useState(false);
   const [qualifyOpen, setQualifyOpen] = useState(false);
-  const [callsOpen, setCallsOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const customFields = (deal?.custom_fields as Record<string, any> | null) || null;
   const refreshDeal = () => {
