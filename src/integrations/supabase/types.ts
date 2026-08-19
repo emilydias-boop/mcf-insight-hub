@@ -14726,6 +14726,17 @@ export type Database = {
           sdr_name: string
         }[]
       }
+      get_agenda_totais_consorcio: {
+        Args: { end_date: string; start_date: string }
+        Returns: {
+          agendamentos: number
+          contratos: number
+          no_shows: number
+          origin_name: string
+          r1_agendada: number
+          r1_realizada: number
+        }[]
+      }
       get_all_hubla_transactions: {
         Args: {
           p_end_date?: string
