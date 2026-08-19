@@ -45,6 +45,26 @@ function errMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/** Códigos que o backend só devolve ANTES de entregar a mídia ao Twilio. */
+const PRE_SEND_ERROR_CODES = new Set([
+  'midia_invalida',
+  'midia_com_template',
+  'janela_fechada',
+  'conversa_nao_encontrada',
+  'template_nao_aprovado',
+  'parametros_invalidos',
+  'midia_nao_encontrada',
+]);
+
+/**
+ * true quando a falha aconteceu antes do envio — aí o arquivo pode ser apagado.
+ * 5xx / timeout / erro sem status ficam de fora: o Twilio ainda pode buscar a mídia.
+ */
+function isPreSendFailure(failure: WaSendError): boolean {
+  if (failure.code && PRE_SEND_ERROR_CODES.has(failure.code)) return true;
+  return typeof failure.status === 'number' && failure.status >= 400 && failure.status < 500;
+}
+
 async function extractFunctionError(error: unknown, data: unknown): Promise<WaSendError | null> {
   const FALLBACK = 'Erro ao enviar mensagem via WhatsApp';
   // supabase.functions.invoke devolve FunctionsHttpError em 4xx, com o Response em .context
@@ -239,8 +259,18 @@ export function useWaMessages(conversationId: string | null) {
       const { data, error } = await supabase.functions.invoke('twilio-wa-send', { body: payload });
       const failure = await extractFunctionError(error, data);
       if (failure) {
-        // não deixa arquivo órfão no bucket quando o envio falha
-        await supabase.storage.from(WA_MEDIA_BUCKET).remove([path]);
+        // O Twilio busca a signed URL DEPOIS da resposta da função: só apagamos o arquivo
+        // quando a falha é comprovadamente anterior ao envio (validação / 4xx).
+        // Em 5xx, timeout ou erro desconhecido, mantemos o arquivo — órfão custa storage,
+        // mídia quebrada custa o cliente.
+        if (isPreSendFailure(failure)) {
+          const { error: removeError } = await supabase.storage
+            .from(WA_MEDIA_BUCKET)
+            .remove([path]);
+          if (removeError) {
+            console.warn('[wa] falha ao remover mídia não enviada', path, removeError.message);
+          }
+        }
         throw failure;
       }
       return data;
