@@ -297,7 +297,13 @@ export function MessageComposer({
         />
         <Button
           onClick={submit}
-          disabled={(!text.trim() && !hasAttachment) || sending || recorder.recording}
+          disabled={
+            (!text.trim() && !hasAttachment) ||
+            sending ||
+            recorder.recording ||
+            recorder.processing ||
+            audioBlocked
+          }
           size="lg"
           className="h-[52px] px-4"
         >
