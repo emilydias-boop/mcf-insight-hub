@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
-import { computePendentesBreakdown, isNoShowStatus } from "@/lib/pendentesBreakdown";
+import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
@@ -565,7 +565,7 @@ export default function ConsorcioPainelEquipe() {
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
     return sdrs.map(sdr => ({
-      sdrEmail: sdr.email,
+      sdrEmail: (sdr.email || '').toLowerCase(),
       sdrName: sdr.name,
       agendamentos: 0,
       r1Agendada: 0,
