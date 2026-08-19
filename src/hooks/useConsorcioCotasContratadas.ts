@@ -9,6 +9,8 @@ export interface ConsorcioCotasContratadas {
   byCloser: Map<string, number>;
   /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou). */
   bySdr: Map<string, number>;
+  /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
+  sdrNames: Map<string, string>;
   /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo com lead). */
   semVinculo: number;
   /** Cotas cujo vendedor não casou com nenhum closer da BU. */
@@ -19,6 +21,7 @@ const EMPTY: ConsorcioCotasContratadas = {
   total: 0,
   byCloser: new Map(),
   bySdr: new Map(),
+  sdrNames: new Map(),
   semVinculo: 0,
   semCloser: 0,
 };
@@ -180,7 +183,20 @@ export function useConsorcioCotasContratadas(
         else semVinculo++;
       });
 
-      return { total, byCloser, bySdr, semVinculo, semCloser };
+      // Nomes dos SDRs atribuídos (inclui quem não teve atividade na agenda do período).
+      const sdrNames = new Map<string, string>();
+      const sdrEmails = Array.from(bySdr.keys());
+      if (sdrEmails.length > 0) {
+        const { data: sdrProfiles } = await supabase
+          .from("profiles")
+          .select("email, full_name")
+          .in("email", sdrEmails);
+        (sdrProfiles || []).forEach((p: any) => {
+          if (p.email) sdrNames.set(String(p.email).toLowerCase(), p.full_name || String(p.email));
+        });
+      }
+
+      return { total, byCloser, bySdr, sdrNames, semVinculo, semCloser };
     },
     enabled: !!startDate && !!endDate,
     staleTime: 30000,
