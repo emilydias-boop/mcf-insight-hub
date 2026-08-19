@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useCheckinTemplates, CheckinTemplateVariable } from '@/hooks/checkin/useCheckinTemplates';
 import { WaConversation } from '@/hooks/wa/useWaConversations';
 import { get24hWindow } from './waLabels';
+import { useNow } from '@/hooks/wa/useNow';
 
 /**
  * As fontes product_name / purchase_date não existem no modelo de conversa por pessoa,
@@ -43,8 +44,9 @@ interface Props {
   conversation: WaConversation;
   sending: boolean;
   forceTemplateMode?: boolean;
-  onSendFree: (body: string) => Promise<any>;
-  onSendTemplate: (contentSid: string, vars: Record<string, string>) => Promise<any>;
+  /** resolve para true quando o envio foi bem-sucedido */
+  onSendFree: (body: string) => Promise<boolean>;
+  onSendTemplate: (contentSid: string, vars: Record<string, string>) => Promise<boolean>;
 }
 
 export function MessageComposer({
@@ -59,7 +61,8 @@ export function MessageComposer({
   const [vars, setVars] = useState<Record<string, string>>({});
   const { data: templates = [], isLoading: loadingTpls } = useCheckinTemplates();
 
-  const { open: windowOpen, lastInboundAt } = get24hWindow(conversation.last_inbound_at);
+  const now = useNow(60_000);
+  const { open: windowOpen, lastInboundAt } = get24hWindow(conversation.last_inbound_at, now);
   const canSendFree = windowOpen && !forceTemplateMode;
 
   const selectedTpl = useMemo(
@@ -77,14 +80,16 @@ export function MessageComposer({
       initial[String(v.index)] = resolveVarSource(v, conversation);
     }
     setVars(initial);
-  }, [selectedTpl, conversation]);
+    // depende do id da conversa: o objeto muda a cada refetch/realtime e apagaria o que o operador digitou
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTpl, conversation.id]);
 
   if (canSendFree) {
     const submit = async () => {
       if (!text.trim()) return;
       const body = text.trim();
-      setText('');
-      await onSendFree(body);
+      const ok = await onSendFree(body);
+      if (ok) setText('');
     };
     return (
       <div className="p-3 border-t flex gap-2 items-end">
@@ -116,7 +121,8 @@ export function MessageComposer({
         return;
       }
     }
-    await onSendTemplate(selectedTpl.content_sid, vars);
+    const ok = await onSendTemplate(selectedTpl.content_sid, vars);
+    if (!ok) return;
     setTplId('');
     setVars({});
   };

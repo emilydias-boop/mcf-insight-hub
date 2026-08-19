@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type WaConversationStatus = 'aberta' | 'aguardando_cliente' | 'resolvida';
 
@@ -26,11 +27,20 @@ export interface WaConversation {
 
 export type WaScope = 'mine' | 'all';
 
+/** Campos que a tela realmente altera. */
+export interface WaConversationPatch {
+  status?: WaConversationStatus;
+  assigned_to?: string | null;
+}
+
 export function useWaConversations(scope: WaScope = 'mine') {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
 
   const query = useQuery({
-    queryKey: ['wa-conversations', scope],
+    queryKey: ['wa-conversations', scope, uid],
+    staleTime: 15_000,
     queryFn: async () => {
       let q = supabase
         .from('wa_conversations')
@@ -40,8 +50,6 @@ export function useWaConversations(scope: WaScope = 'mine') {
         .limit(500);
 
       if (scope === 'mine') {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth.user?.id;
         if (!uid) return [] as WaConversation[];
         q = q.eq('assigned_to', uid);
       }
@@ -54,7 +62,7 @@ export function useWaConversations(scope: WaScope = 'mine') {
 
   useEffect(() => {
     const channel = supabase
-      .channel('wa-conversations-list')
+      .channel(`wa-conversations-${scope}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_conversations' }, () => {
         qc.invalidateQueries({ queryKey: ['wa-conversations'] });
       })
@@ -62,7 +70,7 @@ export function useWaConversations(scope: WaScope = 'mine') {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [qc]);
+  }, [qc, scope]);
 
   return query;
 }
@@ -70,13 +78,14 @@ export function useWaConversations(scope: WaScope = 'mine') {
 export function useUpdateWaConversation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, any> }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: WaConversationPatch }) => {
       const { error } = await supabase.from('wa_conversations').update(patch).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['wa-conversations'] });
     },
-    onError: (err: any) => toast.error(err.message ?? 'Erro ao atualizar conversa'),
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar conversa'),
   });
 }

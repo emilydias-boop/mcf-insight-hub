@@ -8,8 +8,8 @@ import { MessageComposer } from '@/components/checkin/MessageComposer';
 import { ContactPanel } from '@/components/checkin/ContactPanel';
 
 export default function CheckinInbox() {
-  const { role } = useAuth();
-  const canSeeAll = role === 'admin' || role === 'manager';
+  const { hasAnyRole } = useAuth();
+  const canSeeAll = hasAnyRole('admin', 'manager');
 
   const [scope, setScope] = useState<WaScope>('mine');
   const { data: conversations = [], isLoading } = useWaConversations(scope);
@@ -30,10 +30,11 @@ export default function CheckinInbox() {
   }, [conversations, search, statusFilter]);
 
   useEffect(() => {
-    if (!selectedId && filtered.length > 0) setSelectedId(filtered[0].id);
+    if (filtered.length === 0) return;
+    if (!filtered.some((c) => c.id === selectedId)) setSelectedId(filtered[0].id);
   }, [filtered, selectedId]);
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+  const selected = filtered.find((c) => c.id === selectedId) ?? null;
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-3">
@@ -78,27 +79,28 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id]);
 
-  const handleSendFree = async (body: string) => {
+  const handleSendFree = async (body: string): Promise<boolean> => {
     try {
-      return await sendMessage.mutateAsync({ body });
+      await sendMessage.mutateAsync({ body });
+      return true;
     } catch (err) {
       if (err instanceof WaSendError && err.code === 'janela_fechada') {
         setForceTemplateMode(true);
       }
-      return undefined;
+      return false;
     }
   };
 
   const handleSendTemplate = async (
     template_sid: string,
     template_variables: Record<string, string>,
-  ) => {
+  ): Promise<boolean> => {
     try {
-      const res = await sendMessage.mutateAsync({ template_sid, template_variables });
+      await sendMessage.mutateAsync({ template_sid, template_variables });
       setForceTemplateMode(false);
-      return res;
+      return true;
     } catch {
-      return undefined;
+      return false;
     }
   };
 
