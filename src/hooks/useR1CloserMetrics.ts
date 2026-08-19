@@ -150,6 +150,15 @@ export function useR1CloserMetrics(
       // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
       const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid', 'refunded', 'rescheduled'];
 
+      // Régua de "realizada": no Consórcio o termo "contrato pago" não existe no
+      // vocabulário do processo (decisão do CEO registrada em
+      // docs/qa/2026-08-16-funil-consorcio-6-etapas-fluxo-por-periodo.md):
+      // realizada = apenas 'completed'. Nas demais BUs mantém-se a régua
+      // histórica (completed | contract_paid | refunded).
+      const realizadaStatuses = bu === 'consorcio'
+        ? ['completed']
+        : ['completed', 'contract_paid', 'refunded'];
+
       // Fetch R1 meeting slots with attendees in the period
       const { data: meetings, error: meetingsError } = await supabase
         .from('meeting_slots')
@@ -754,7 +763,7 @@ export function useR1CloserMetrics(
           if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false, noshow: false });
           const entry = dealMap.get(att.deal_id)!;
           entry.days.add(day);
-          if (['completed', 'contract_paid', 'refunded'].includes(status)) entry.realized = true;
+          if (realizadaStatuses.includes(status)) entry.realized = true;
           if (status === 'no_show') entry.noshow = true;
         });
       });
