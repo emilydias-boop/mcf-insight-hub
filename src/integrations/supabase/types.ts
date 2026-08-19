@@ -13578,41 +13578,59 @@ export type Database = {
       }
       wa_conversations: {
         Row: {
+          assigned_at: string | null
+          assigned_reason: string | null
+          assigned_to: string | null
           contact_name: string | null
           created_at: string
           created_by: string | null
           deal_id: string | null
+          first_contact_at: string | null
           id: string
           last_direction: string | null
+          last_inbound_at: string | null
           last_message_at: string | null
           last_message_preview: string | null
           phone_e164: string
+          status: string
           unread_count: number
           updated_at: string
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_reason?: string | null
+          assigned_to?: string | null
           contact_name?: string | null
           created_at?: string
           created_by?: string | null
           deal_id?: string | null
+          first_contact_at?: string | null
           id?: string
           last_direction?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           phone_e164: string
+          status?: string
           unread_count?: number
           updated_at?: string
         }
         Update: {
+          assigned_at?: string | null
+          assigned_reason?: string | null
+          assigned_to?: string | null
           contact_name?: string | null
           created_at?: string
           created_by?: string | null
           deal_id?: string | null
+          first_contact_at?: string | null
           id?: string
           last_direction?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           phone_e164?: string
+          status?: string
           unread_count?: number
           updated_at?: string
         }
@@ -15595,6 +15613,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_get_or_create_conversation: {
+        Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
+        Returns: string
+      }
+      wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }
     Enums: {
       activity_task_status: "pending" | "done" | "canceled"
