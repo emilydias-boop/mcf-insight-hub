@@ -349,6 +349,21 @@ export default function ConsorcioPainelEquipe() {
     nameByEmail,
   });
 
+  // Seletor de SDR: cadastro do squad ∪ quem realmente agendou no período
+  // (inclui closers que agendaram e SDRs de outros squads).
+  const sdrSelectOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    (activeSdrsList || []).forEach(s => {
+      if (s.email) map.set(s.email.toLowerCase(), s.name);
+    });
+    fatos.bookerNames.forEach((name, email) => {
+      if (!map.has(email)) map.set(email, name);
+    });
+    return Array.from(map.entries())
+      .map(([email, name]) => ({ email, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeSdrsList, fatos.bookerNames]);
+
   const sdrMetaMap = useMemo(() => {
     const map = new Map<string, number>();
     if (allSdrsData) {
