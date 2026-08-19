@@ -92,7 +92,7 @@ export const useSaveQualificationNote = () => {
           description: summary,
           user_id: userId,
           metadata: {
-            qualification_data: qualificationData,
+            qualification_data: qualificationData ?? null,
             para_r1: paraR1,
             sdr_name: sdrName,
             qualified_at: new Date().toISOString(),
