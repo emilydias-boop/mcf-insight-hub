@@ -36,7 +36,7 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
     save.mutate(
       {
         dealId,
-        qualificationData: {} as any,
+        
         summary,
         answers,
         channel: 'whatsapp',

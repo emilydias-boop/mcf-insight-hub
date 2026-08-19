@@ -6,7 +6,8 @@ import type { QualificationAnswers } from '@/components/crm/qualification/Qualif
 
 interface SaveQualificationNoteParams {
   dealId: string;
-  qualificationData: QualificationDataType;
+  /** Formato legado de campos de qualificação. Omitir quando não se aplica. */
+  qualificationData?: QualificationDataType;
   summary: string;
   paraR1?: boolean;
   /** Novo formato: canal + respostas estruturadas + anexo do WhatsApp */
@@ -48,12 +49,28 @@ export const useSaveQualificationNote = () => {
         if (profile?.full_name) sdrName = profile.full_name;
       }
       
-      // 1. Salvar nos custom_fields do deal
+      // 1. Salvar nos custom_fields do deal — MERGE, nunca substituição.
+      // Substituir apagava dados do webhook (complete_phone, source, origem, primary_tag...).
+      const { data: atual, error: readError } = await supabase
+        .from('crm_deals')
+        .select('custom_fields')
+        .eq('id', dealId)
+        .single();
+      if (readError) throw readError;
+
+      // String vazia do formato legado não pode sobrescrever valor real existente.
+      const qualificationDataLimpo = Object.fromEntries(
+        Object.entries((qualificationData ?? {}) as Record<string, unknown>).filter(
+          ([, v]) => v !== '' && v !== null && v !== undefined,
+        ),
+      );
+
       const { error: updateError } = await supabase
         .from('crm_deals')
         .update({
           custom_fields: {
-            ...qualificationData,
+            ...((atual?.custom_fields as Record<string, unknown>) ?? {}),
+            ...qualificationDataLimpo,
             leadSummary: summary,
             qualification_saved: true,
             qualification_date: new Date().toISOString(),
@@ -75,7 +92,7 @@ export const useSaveQualificationNote = () => {
           description: summary,
           user_id: userId,
           metadata: {
-            qualification_data: qualificationData,
+            qualification_data: qualificationData ?? null,
             para_r1: paraR1,
             sdr_name: sdrName,
             qualified_at: new Date().toISOString(),
