@@ -334,7 +334,10 @@ export default function ConsorcioPainelEquipe() {
   // A BU da reunião vem do closer do slot (bu='consorcio'), nunca do squad de
   // quem agendou. A mesma lista deduplicada alimenta cards, tabela de SDRs e
   // tabela de Closers (agrupada por sdr_email e por closer_id).
-  const { data: fatosRows = [], isLoading: fatosLoading } = useConsorcioAgendaFatos(start, end);
+  const { data: fatosData, isLoading: fatosLoading } = useConsorcioAgendaFatos(start, end);
+  // Referência estável: o default `= []` criava um array novo a cada render e
+  // fazia a derivação inteira recalcular (e trocar de identidade) sem parar.
+  const fatosRows = fatosData ?? EMPTY_FATOS;
 
   const nameByEmail = useMemo(() => {
     const map = new Map<string, string>();
