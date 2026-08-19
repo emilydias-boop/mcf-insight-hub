@@ -2154,6 +2154,33 @@ export type Database = {
           },
         ]
       }
+      bkp_redistribuicao_consorcio_20260819: {
+        Row: {
+          backup_em: string | null
+          clint_id: string | null
+          created_at: string | null
+          id: string | null
+          owner_id: string | null
+          owner_profile_id: string | null
+        }
+        Insert: {
+          backup_em?: string | null
+          clint_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+        }
+        Update: {
+          backup_em?: string | null
+          clint_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+        }
+        Relationships: []
+      }
       bu_catalog: {
         Row: {
           code: string

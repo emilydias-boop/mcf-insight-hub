@@ -18,12 +18,72 @@ import { DealStatus, getDealStatusLabel, getDealStatusColor } from '@/lib/dealSt
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useSdrsFromSquad } from '@/hooks/useSdrsFromSquad';
 import { BusinessUnit, BU_OPTIONS } from '@/hooks/useMyBU';
 
 type Step = 'upload' | 'mapping' | 'results';
 type StatusFilter = 'all' | 'found_in_current' | 'found_elsewhere' | 'not_found';
 type AssignMode = 'single' | 'distribute';
+
+interface DistributionTarget {
+  email: string;
+  id: string;
+  name: string;
+  weight: number;
+}
+
+/**
+ * Distribui `total` leads entre os destinatários respeitando os percentuais
+ * configurados (maior resto). Retorna um mapa email -> quantidade.
+ */
+function allocateByWeight(targets: DistributionTarget[], total: number): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!targets.length || total <= 0) return result;
+
+  const sum = targets.reduce((acc, t) => acc + (t.weight > 0 ? t.weight : 0), 0);
+  const weights = sum > 0
+    ? targets.map(t => (t.weight > 0 ? t.weight : 0) / sum)
+    : targets.map(() => 1 / targets.length);
+
+  const exact = weights.map(w => w * total);
+  const base = exact.map(v => Math.floor(v));
+  let remaining = total - base.reduce((a, b) => a + b, 0);
+
+  const order = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+
+  let k = 0;
+  while (remaining > 0 && order.length) {
+    base[order[k % order.length].i] += 1;
+    remaining -= 1;
+    k += 1;
+  }
+
+  targets.forEach((t, i) => {
+    if (base[i] > 0) result.set(t.email, (result.get(t.email) || 0) + base[i]);
+  });
+  return result;
+}
+
+/**
+ * Sequência achatada de emails (intercalada) coerente com a alocação ponderada.
+ */
+function buildAssignmentSequence(targets: DistributionTarget[], total: number): string[] {
+  const allocation = allocateByWeight(targets, total);
+  const remaining = targets.map(t => ({ email: t.email, left: allocation.get(t.email) || 0 }));
+  const seq: string[] = [];
+  while (seq.length < total) {
+    let best = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].left <= 0) continue;
+      if (best === -1 || remaining[i].left > remaining[best].left) best = i;
+    }
+    if (best === -1) break;
+    seq.push(remaining[best].email);
+    remaining[best].left -= 1;
+  }
+  return seq;
+}
 
 const COLUMN_KEYS = ['name', 'email', 'phone'] as const;
 type ColumnKey = typeof COLUMN_KEYS[number];
@@ -214,12 +274,56 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     enabled: !!activeOriginId && open,
   });
 
-  // SDRs do squad da pipeline de destino (fallback: activeBU > consorcio)
+  // SDRs do squad da pipeline de destino (usado apenas para rótulo informativo)
   const distributionSquad: BusinessUnit =
     (destinationBU || (activeBU as BusinessUnit) || 'consorcio') as BusinessUnit;
-  const { data: consorcioSdrs } = useSdrsFromSquad(distributionSquad);
   const buLabel = (BU_OPTIONS.find(o => o.value === distributionSquad)?.label || distributionSquad)
     .replace(/^BU\s*-\s*/, '');
+
+  // Destinatários da distribuição: SEMPRE a configuração da pipeline de destino
+  // (lead_distribution_config), nunca derivada da tabela `sdr`.
+  const {
+    data: distributionTargets,
+    isLoading: loadingDistribution,
+  } = useQuery({
+    queryKey: ['import-distribution-targets', activeOriginId],
+    enabled: !!activeOriginId && open,
+    queryFn: async (): Promise<DistributionTarget[]> => {
+      if (!activeOriginId) return [];
+      const { data: dist, error } = await supabase
+        .from('lead_distribution_config')
+        .select('user_email, user_name, percentage')
+        .eq('origin_id', activeOriginId)
+        .eq('is_active', true)
+        .gt('percentage', 0);
+      if (error) throw error;
+      const rows = (dist || []).filter(d => d.user_email?.trim());
+      if (!rows.length) return [];
+
+      const emails = rows.map(r => r.user_email!.trim());
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('email', emails);
+
+      const byEmail = new Map<string, { id: string; full_name: string | null }>();
+      (profilesData || []).forEach(p => {
+        if (p.email) byEmail.set(p.email.toLowerCase(), { id: p.id, full_name: p.full_name });
+      });
+
+      return rows.flatMap(r => {
+        const email = r.user_email!.trim();
+        const profile = byEmail.get(email.toLowerCase());
+        if (!profile) return [];
+        return [{
+          email,
+          id: profile.id,
+          name: profile.full_name || r.user_name || email,
+          weight: Number(r.percentage) || 0,
+        }];
+      });
+    },
+  });
 
   // Query available SDRs/Closers
   const { data: availableUsers, isLoading: loadingUsers } = useQuery({
@@ -409,25 +513,18 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     }
 
     // Determine SDR list based on assign mode
-    let sdrList: Array<{ email: string; id: string; name: string }> = [];
+    let sdrList: DistributionTarget[] = [];
 
     if (assignMode === 'distribute') {
-      if (!consorcioSdrs?.length) {
-        toast.error(`Nenhum SDR de ${buLabel} encontrado`);
+      if (!distributionTargets?.length) {
+        toast.error('Não há distribuição de leads configurada para esta pipeline. Configure em CRM → Configurações → Distribuição de Leads (origem de destino).');
         return;
       }
-      // Resolve real profile IDs from profiles table (sdr.id ≠ profiles.id)
-      const sdrEmails = consorcioSdrs.filter(s => s.email).map(s => s.email!);
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .in('email', sdrEmails);
-      
-      if (!profilesData?.length) {
-        toast.error('Não foi possível resolver os perfis dos SDRs');
+      if (distributionTargets.length < 2) {
+        toast.error(`Só há 1 destinatário configurado (${distributionTargets[0].name}) — todos os leads iriam para essa pessoa. Ajuste a distribuição da pipeline ou escolha um responsável único.`);
         return;
       }
-      sdrList = profilesData.map(p => ({ email: p.email || '', id: p.id, name: p.full_name || p.email || '' }));
+      sdrList = distributionTargets;
     } else {
       if (!selectedOwner) {
         toast.error('Selecione um SDR/Closer');
@@ -435,8 +532,15 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
       const user = availableUsers?.find((u: any) => u.email === selectedOwner);
       if (!user) return;
-      sdrList = [{ email: user.email, id: user.id, name: user.full_name || user.email }];
+      sdrList = [{ email: user.email, id: user.id, name: user.full_name || user.email, weight: 100 }];
     }
+
+    // Sequência ponderada única para TODAS as linhas que receberão owner
+    const elsewhereRows = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
+    const notFoundRows = results.filter(r => r.matchStatus === 'not_found');
+    const assignmentSequence = assignMode === 'distribute'
+      ? buildAssignmentSequence(sdrList, elsewhereRows.length + notFoundRows.length)
+      : [];
 
     setIsImporting(true);
     setBatchProgress({ current: 0, total: 3 });
@@ -469,15 +573,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
 
       // 2. found_elsewhere → create deal with existing contact_id
-      const elsewhere = results.filter(r => r.matchStatus === 'found_elsewhere' && r.contactId);
+      const elsewhere = elsewhereRows;
       if (elsewhere.length > 0) {
         setBatchProgress({ current: 2, total: 3 });
         if (assignMode === 'distribute') {
           const groups = new Map<string, typeof elsewhere>();
           elsewhere.forEach((r, i) => {
-            const sdr = sdrList[i % sdrList.length];
-            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
-            groups.get(sdr.email)!.push(r);
+            const email = assignmentSequence[i];
+            if (!email) return;
+            if (!groups.has(email)) groups.set(email, []);
+            groups.get(email)!.push(r);
           });
           for (const [email, leads] of groups) {
             const sdr = sdrList.find(s => s.email === email)!;
@@ -527,15 +632,16 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       }
 
       // 3. not_found → create contact + deal
-      const notFound = results.filter(r => r.matchStatus === 'not_found');
+      const notFound = notFoundRows;
       if (notFound.length > 0) {
         setBatchProgress({ current: 3, total: 3 });
         if (assignMode === 'distribute') {
           const groups = new Map<string, typeof notFound>();
           notFound.forEach((r, i) => {
-            const sdr = sdrList[i % sdrList.length];
-            if (!groups.has(sdr.email)) groups.set(sdr.email, []);
-            groups.get(sdr.email)!.push(r);
+            const email = assignmentSequence[elsewhere.length + i];
+            if (!email) return;
+            if (!groups.has(email)) groups.set(email, []);
+            groups.get(email)!.push(r);
           });
           for (const [email, leads] of groups) {
             const sdr = sdrList.find(s => s.email === email)!;
@@ -574,7 +680,9 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
         }
       }
 
-      const distributionMsg = assignMode === 'distribute' ? ` (distribuídos entre ${sdrList.length} SDRs)` : '';
+      const distributionMsg = assignMode === 'distribute'
+        ? ` (distribuídos entre ${sdrList.length} destinatários conforme a configuração da pipeline)`
+        : '';
       const parts = [];
       if (updatedCount > 0) parts.push(`${updatedCount} atualizados`);
       if (createdCount > 0) parts.push(`${createdCount} criados`);
@@ -586,7 +694,7 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
       setIsImporting(false);
       setBatchProgress(null);
     }
-  }, [activeOriginId, selectedOwner, assignMode, consorcioSdrs, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
+  }, [activeOriginId, selectedOwner, assignMode, distributionTargets, availableUsers, results, bulkTransfer, customTag, selectedStageId]);
 
   // Counts
   const counts = useMemo(() => {
@@ -688,8 +796,23 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
     }
   };
 
+  // Prévia da divisão (leads que efetivamente recebem owner)
+  const distributionPreview = useMemo(() => {
+    const total = counts.elsewhere + counts.notFound;
+    if (assignMode !== 'distribute' || !distributionTargets?.length || total <= 0) return [];
+    const allocation = allocateByWeight(distributionTargets, total);
+    return distributionTargets.map(t => ({
+      name: t.name,
+      weight: t.weight,
+      count: allocation.get(t.email) || 0,
+    }));
+  }, [assignMode, distributionTargets, counts.elsewhere, counts.notFound]);
+
+  const distributionBlocked =
+    assignMode === 'distribute' && !loadingDistribution && (distributionTargets?.length ?? 0) < 2;
+
   const canImport = assignMode === 'distribute'
-    ? (consorcioSdrs?.length ?? 0) > 0
+    ? (distributionTargets?.length ?? 0) >= 2
     : !!selectedOwner;
 
   return (
@@ -996,9 +1119,11 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                   </Select>
                 ) : (
                   <div className="text-xs text-muted-foreground">
-                    {consorcioSdrs?.length
-                      ? `${consorcioSdrs.length} SDRs de ${buLabel}: ${consorcioSdrs.map(s => s.name.split(' ')[0]).join(', ')}`
-                      : 'Carregando SDRs...'}
+                    {loadingDistribution
+                      ? 'Carregando distribuição da pipeline...'
+                      : distributionTargets?.length
+                        ? `${distributionTargets.length} destinatário(s) configurado(s) em ${buLabel}: ${distributionTargets.map(t => `${t.name.split(' ')[0]} ${t.weight}%`).join(' · ')}`
+                        : 'Nenhuma distribuição configurada para esta pipeline'}
                   </div>
                 )}
                 <Button
@@ -1027,8 +1152,29 @@ export function SpreadsheetCompareDialog({ open, onOpenChange, deals, originId, 
                 {selectedStageId && selectedStageId !== '__default__' && pipelineStages && (
                   <p>• Estágio: <strong>{pipelineStages.find((s: any) => s.id === selectedStageId)?.stage_name}</strong></p>
                 )}
-                {assignMode === 'distribute' && consorcioSdrs && (
-                  <p>• Distribuição round-robin entre {consorcioSdrs.length} SDRs</p>
+                {assignMode === 'distribute' && distributionPreview.length > 0 && (
+                  <p>
+                    • Divisão ponderada ({counts.elsewhere + counts.notFound} leads):{' '}
+                    <strong>{distributionPreview.map(p => `${p.name.split(' ')[0]}: ${p.count}`).join(' · ')}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Aviso: distribuição degenerada */}
+            {distributionBlocked && (
+              <div className="text-xs p-3 rounded border border-destructive/40 bg-destructive/10 text-destructive space-y-1">
+                {(distributionTargets?.length ?? 0) === 1 ? (
+                  <p>
+                    <strong>Só há 1 destinatário configurado ({distributionTargets![0].name})</strong> — todos os{' '}
+                    {counts.elsewhere + counts.notFound} leads iriam para essa pessoa. Configure a distribuição desta
+                    pipeline (CRM → Configurações → Distribuição de Leads) ou escolha um responsável único.
+                  </p>
+                ) : (
+                  <p>
+                    <strong>Não há distribuição configurada para esta pipeline.</strong> Configure em CRM →
+                    Configurações → Distribuição de Leads, ou use o modo "SDR único".
+                  </p>
                 )}
               </div>
             )}
