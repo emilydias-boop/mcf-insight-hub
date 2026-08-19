@@ -397,7 +397,7 @@ export default function ConsorcioPainelEquipe() {
   const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   const { data: produtosFechadosBySdr } = useConsorcioProdutosFechadosBySdr(start, end);
-  const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end);
+  const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // KPIs derivados da tabela de Closers para consistência quando aba Closers ativa
@@ -410,8 +410,9 @@ export default function ConsorcioPainelEquipe() {
     const totalAgendamentos = metrics.reduce((s, m) => s + (m.agendamentos || 0), 0);
     const totalRealizadas = metrics.reduce((s, m) => s + m.r1_realizada, 0);
     const totalNoShows = metrics.reduce((s, m) => s + m.noshow, 0);
+    // Soma apenas os closers EXIBIDOS na tabela, para card e Total baterem.
     const totalContratos = produtosFechadosByCloser
-      ? Array.from(produtosFechadosByCloser.values()).reduce((s, v) => s + v, 0)
+      ? metrics.reduce((s, m) => s + (produtosFechadosByCloser.get(m.closer_id) || 0), 0)
       : 0;
     return {
       sdrCount: metrics.length,
@@ -843,6 +844,7 @@ export default function ConsorcioPainelEquipe() {
       <TeamKPICards
         kpis={activeTab === "closers" ? closerKPIs : enrichedKPIs}
         isLoading={activeTab === "closers" ? closerLoading : isLoading}
+        hideAgendamentos={activeTab === "closers"}
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
