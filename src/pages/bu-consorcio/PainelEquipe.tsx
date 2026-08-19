@@ -40,6 +40,7 @@ import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSum
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { useConsorcioAgendaFatos, useConsorcioAgendaDerived } from "@/hooks/useConsorcioAgendaFatos";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -324,6 +325,30 @@ export default function ConsorcioPainelEquipe() {
   const { data: allSdrsData } = useSdrsAll();
   const { data: activeSdrsList } = useSdrsFromSquad(BU_SQUAD);
 
+  // ===== Fonte única do painel: fatos da agenda do Consórcio =====
+  // A BU da reunião vem do closer do slot (bu='consorcio'), nunca do squad de
+  // quem agendou. A mesma lista deduplicada alimenta cards, tabela de SDRs e
+  // tabela de Closers (agrupada por sdr_email e por closer_id).
+  const { data: fatosRows = [], isLoading: fatosLoading } = useConsorcioAgendaFatos(start, end);
+
+  const nameByEmail = useMemo(() => {
+    const map = new Map<string, string>();
+    (activeSdrsList || []).forEach(s => {
+      if (s.email) map.set(s.email.toLowerCase(), s.name);
+    });
+    (allSdrsData || []).forEach(s => {
+      if (s.email && !map.has(s.email.toLowerCase())) map.set(s.email.toLowerCase(), s.name);
+    });
+    return map;
+  }, [activeSdrsList, allSdrsData]);
+
+  const fatos = useConsorcioAgendaDerived({
+    rows: fatosRows,
+    allowedOriginNames,
+    sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    nameByEmail,
+  });
+
   const sdrMetaMap = useMemo(() => {
     const map = new Map<string, number>();
     if (allSdrsData) {
@@ -401,33 +426,66 @@ export default function ConsorcioPainelEquipe() {
   const { data: produtosFechadosByCloser } = useConsorcioProdutosFechadosByCloser(start, end, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
-  // KPIs derivados da tabela de Closers para consistência quando aba Closers ativa
+  // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
+  // closer_id). As colunas que não são de agenda (outside, R2, reembolsos) seguem
+  // vindo de useR1CloserMetrics.
+  const closerRows = useMemo(() => {
+    const base = (closerMetrics || []).filter(m => !m.is_unassigned);
+    const seen = new Set<string>();
+    const rows = base.map(m => {
+      seen.add(m.closer_id);
+      const agg = fatos.byCloser.get(m.closer_id);
+      return {
+        ...m,
+        agendamentos: agg?.agendamentos ?? 0,
+        r1_agendada: agg?.r1Agendada ?? 0,
+        r1_realizada: agg?.r1Realizada ?? 0,
+        noshow: agg?.noShows ?? 0,
+      };
+    });
+    // Closers presentes nos fatos que não estão na lista base (ex.: inativos)
+    fatos.byCloser.forEach((agg, closerId) => {
+      if (seen.has(closerId)) return;
+      rows.push({
+        closer_id: closerId,
+        closer_name: fatos.closerNames.get(closerId) || 'Closer',
+        closer_color: null,
+        agendamentos: agg.agendamentos,
+        r1_agendada: agg.r1Agendada,
+        r1_realizada: agg.r1Realizada,
+        noshow: agg.noShows,
+        contrato_pago: 0,
+        outside: 0,
+        r2_agendada: 0,
+        reembolsos: 0,
+        reembolsos_valor: 0,
+      } as typeof rows[number]);
+    });
+    return rows.sort((a, b) => {
+      if (b.r1_agendada !== a.r1_agendada) return b.r1_agendada - a.r1_agendada;
+      if (b.r1_realizada !== a.r1_realizada) return b.r1_realizada - a.r1_realizada;
+      return a.closer_name.localeCompare(b.closer_name);
+    });
+  }, [closerMetrics, fatos]);
+
   const closerKPIs = useMemo(() => {
-    const metrics = closerMetrics || [];
-    // "R1 Agendada" = reuniões marcadas PARA o período (scheduled_at).
-    // "Agendamento" = ato de agendar (booked_at) no período — desde 2026-08-16
-    // useR1CloserMetrics traz o campo `agendamentos` (eixo booked_at).
-    const totalR1Agendada = metrics.reduce((s, m) => s + m.r1_agendada, 0);
-    const totalAgendamentos = metrics.reduce((s, m) => s + (m.agendamentos || 0), 0);
-    const totalRealizadas = metrics.reduce((s, m) => s + m.r1_realizada, 0);
-    const totalNoShows = metrics.reduce((s, m) => s + m.noshow, 0);
+    const t = fatos.closerTotals;
     // Soma apenas os closers EXIBIDOS na tabela, para card e Total baterem.
     const totalContratos = produtosFechadosByCloser
-      ? metrics.reduce((s, m) => s + (produtosFechadosByCloser.get(m.closer_id) || 0), 0)
+      ? closerRows.reduce((s, m) => s + (produtosFechadosByCloser.get(m.closer_id) || 0), 0)
       : 0;
     return {
-      // A linha "Não atribuído" não é uma pessoa — não entra na contagem.
-      sdrCount: metrics.filter(m => !m.is_unassigned).length,
-      totalAgendamentos,
-      totalRealizadas,
-      totalNoShows,
+      sdrCount: closerRows.length,
+      totalAgendamentos: t.agendamentos,
+      totalRealizadas: t.r1Realizada,
+      totalNoShows: t.noShows,
       totalContratos,
       totalOutside: 0,
-      totalR1Agendada,
-      taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
-      taxaNoShow: totalR1Agendada > 0 ? (totalNoShows / totalR1Agendada) * 100 : 0,
+      totalR1Agendada: t.r1Agendada,
+      taxaConversao: t.r1Realizada > 0 ? (totalContratos / t.r1Realizada) * 100 : 0,
+      taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [closerMetrics, produtosFechadosByCloser]);
+  }, [fatos, closerRows, produtosFechadosByCloser]);
 
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -460,94 +518,34 @@ export default function ConsorcioPainelEquipe() {
     return allMeetings.filter(m => matchesPipeline(m.origin_name));
   }, [allMeetings, allowedOriginNames]);
 
-  // Re-derive SDR metrics from pipeline-filtered meetings
-  const pipelineFilteredBySDR = useMemo((): SdrSummaryRow[] => {
-    if (!allowedOriginNames) return bySDR; // No filter, use original data
-    
-    // Re-aggregate from filtered meetings
-    const sdrMap = new Map<string, SdrSummaryRow>();
-    pipelineFilteredMeetings.forEach(m => {
-      const email = m.intermediador?.toLowerCase() || '';
-      if (!email) return;
-      
-      if (!sdrMap.has(email)) {
-        const sdrName = activeSdrsList?.find(s => s.email?.toLowerCase() === email)?.name 
-          || m.intermediador?.split('@')[0] || 'Desconhecido';
-        sdrMap.set(email, {
-          sdrEmail: m.intermediador,
-          sdrName,
-          agendamentos: 0,
-          r1Agendada: 0,
-          r1Realizada: 0,
-          noShows: 0,
-          contratos: 0,
-        });
-      }
-      
-      const row = sdrMap.get(email)!;
-      const status = (m.status_atual || '').toLowerCase();
-      // 2026-08-16 — mudança de critério: antes só contava quando o status ainda
-      // era "agendada" (`status.includes('agendada')`); agora é incondicional,
-      // igual às RPCs get_sdr_metrics_from_agenda*: uma reunião realizada, com
-      // no-show ou com contrato pago TAMBÉM foi agendada. Isso faz R1 Agendada
-      // subir nesta visão em relação ao número exibido antes desta data.
-      row.r1Agendada++;
-      // "Agendamento" = ato de agendar. A RPC traz booked_at por linha, então
-      // contamos aqui pelo eixo correto. Ressalva conhecida: o universo de
-      // linhas vem filtrado por scheduled_at, logo agendamentos feitos no
-      // período para reuniões FORA dele não aparecem (subcontagem possível).
-      const bookedAt = (m as any).booked_at ? new Date((m as any).booked_at) : null;
-      if (bookedAt && start && end && bookedAt >= start && bookedAt <= end) row.agendamentos++;
-      // Os status vindos da RPC get_sdr_meetings_from_agenda são os valores
-      // canônicos de meeting_slot_attendees.status: completed, no_show,
-      // invited, rescheduled, contract_paid, cancelled. Comparar com rótulos
-      // em português ('realizada', 'no-show') nunca casava e zerava a coluna.
-      // Consórcio: realizada = SOMENTE 'completed' (contract_paid não entra —
-      // docs/qa/2026-08-16-funil-consorcio-6-etapas-fluxo-por-periodo.md).
-      if (status === 'completed') row.r1Realizada++;
-      if (isNoShowStatus(status)) row.noShows++;
-      if (status === 'contract_paid' || status.includes('contrato')) row.contratos++;
-    });
-    
-    // Ordenação única em todos os presets: R1 Agendada desc → R1 Realizada desc → nome asc
-    return Array.from(sdrMap.values()).sort((a, b) => {
-      if (b.r1Agendada !== a.r1Agendada) return b.r1Agendada - a.r1Agendada;
-      if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
-      return a.sdrName.localeCompare(b.sdrName);
-    });
-  }, [bySDR, pipelineFilteredMeetings, allowedOriginNames, activeSdrsList, start, end]);
+  // Lado SDR: agrupamento por sdr_email da MESMA lista deduplicada de fatos.
+  // O filtro de funil (origin_name) e o filtro de SDR já são aplicados dentro do
+  // hook derivado — nada é recalculado por caminho paralelo.
+  const pipelineFilteredBySDR = fatos.bySdr;
 
-  // Re-derive KPIs from pipeline-filtered data
   const pipelineFilteredKPIs = useMemo(() => {
-    if (!allowedOriginNames) return teamKPIs; // No filter
-    
-    const data = pipelineFilteredBySDR;
-    const totalRealizadas = data.reduce((sum, s) => sum + s.r1Realizada, 0);
-    const totalNoShows = data.reduce((sum, s) => sum + s.noShows, 0);
-    const totalContratos = data.reduce((sum, s) => sum + s.contratos, 0);
-    const totalR1Agendada = data.reduce((sum, s) => sum + s.r1Agendada, 0);
-    
+    const t = fatos.sdrTotals;
     return {
-      sdrCount: data.length,
-      totalAgendamentos: data.reduce((sum, s) => sum + s.agendamentos, 0),
-      totalRealizadas,
-      totalNoShows,
-      totalContratos,
+      sdrCount: fatos.bySdr.length,
+      totalAgendamentos: t.agendamentos,
+      totalRealizadas: t.r1Realizada,
+      totalNoShows: t.noShows,
+      totalContratos: t.contratos,
       totalOutside: 0,
-      totalR1Agendada,
-      taxaConversao: totalRealizadas > 0 ? (totalContratos / totalRealizadas) * 100 : 0,
-      taxaNoShow: totalR1Agendada > 0 ? (totalNoShows / totalR1Agendada) * 100 : 0,
+      totalR1Agendada: t.r1Agendada,
+      taxaConversao: t.r1Realizada > 0 ? (t.contratos / t.r1Realizada) * 100 : 0,
+      taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [teamKPIs, pipelineFilteredBySDR, allowedOriginNames]);
+  }, [fatos]);
 
   const enrichedKPIs = useMemo(() => ({
     ...pipelineFilteredKPIs,
     totalOutside: allowedOriginNames ? 0 : (outsideData?.totalOutside || 0),
   }), [pipelineFilteredKPIs, outsideData, allowedOriginNames]);
 
-  // Linha "Não atribuído" da aba SDRs: só faz sentido no caminho da RPC
-  // (com funil selecionado as métricas são recalculadas no front).
-  const sdrUnassignedRow = allowedOriginNames ? null : sdrUnassigned;
+  // Linha "Não atribuído" da aba SDRs: fatos com booked_by nulo. Continua
+  // aparecendo também com funil selecionado (a mesma base é filtrada por origem).
+  const sdrUnassignedRow = fatos.sdrUnassigned;
 
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
