@@ -168,13 +168,13 @@ export function TeamKPICards({
         : undefined,
     }] : []),
     {
-      title: isConsorcio ? "Propostas Fechadas" : "Contratos",
+      title: isConsorcio ? "Cotas Contratadas" : "Contratos",
       value: kpis.totalContratos || 0,
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
-        ? "Propostas fechadas via R1 (contract_paid_at no período). Fato consumado."
+        ? "Cotas efetivamente contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). É a mesma base do Total das tabelas de SDRs e Closers."
         : "Cauções do período com negócio no CRM (régua caucoes_efetivas), somando Lead A + Lead B. Transações sem negócio vinculado NÃO entram neste total — ficam apenas no diagnóstico 'Não atribuído' da tabela.",
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
