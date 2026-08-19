@@ -9,11 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight } from "lucide-react";
-import {
-  R1CloserMetric,
-  UNASSIGNED_REASON_LABELS,
-  UnassignedReason,
-} from "@/hooks/useR1CloserMetrics";
+import { R1CloserMetric } from "@/hooks/useR1CloserMetrics";
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
