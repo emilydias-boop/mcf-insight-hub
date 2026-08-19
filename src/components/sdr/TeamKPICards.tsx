@@ -118,7 +118,9 @@ export function TeamKPICards({
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
+      tooltip: isConsorcio
+        ? "Agendamentos feitos no período (data do agendamento), enquanto R1 Agendada conta reuniões marcadas para o período (data da reunião). Por serem eixos diferentes, os dois números não precisam ser iguais."
+        : "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
       segLine: segLineFor('agendamentos'),
     }]),
