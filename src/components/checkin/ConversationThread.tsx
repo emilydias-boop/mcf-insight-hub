@@ -6,10 +6,86 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, Check, CheckCheck, Clock } from 'lucide-react';
+import { Download, FileText, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { WaConversation } from '@/hooks/wa/useWaConversations';
 import type { WaConversationStatus } from '@/hooks/wa/useWaConversations';
-import { WaMessage } from '@/hooks/wa/useWaMessages';
+import { WaMessage, useWaMediaUrl } from '@/hooks/wa/useWaMessages';
 import { WA_STATUS_OPTIONS, formatPhone, get24hWindow } from './waLabels';
+import {
+  formatBytes,
+  formatDuration,
+  isMediaPlaceholder,
+  mediaKindFromType,
+} from '@/lib/waMedia';
+
+function MediaBlock({ message }: { message: WaMessage }) {
+  const { data: url, isLoading, isError } = useWaMediaUrl(message.media_path);
+  const [zoom, setZoom] = useState(false);
+  const kind = mediaKindFromType(message.media_type ?? '');
+  const name = message.media_filename ?? 'arquivo';
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-xs opacity-80 py-2">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> carregando anexo…
+      </div>
+    );
+  }
+  if (isError || !url) {
+    return <div className="text-xs opacity-80 py-2">Não foi possível carregar o anexo.</div>;
+  }
+
+  if (kind === 'image') {
+    return (
+      <>
+        <button type="button" onClick={() => setZoom(true)} className="block">
+          <img
+            src={url}
+            alt={name}
+            className="rounded-lg max-h-52 max-w-full object-cover cursor-zoom-in"
+          />
+        </button>
+        <Dialog open={zoom} onOpenChange={setZoom}>
+          <DialogContent className="max-w-3xl p-2">
+            <img src={url} alt={name} className="w-full h-auto rounded" />
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  if (kind === 'audio') {
+    return (
+      <div className="flex items-center gap-2">
+        <audio controls src={url} className="h-9 max-w-[240px]" />
+        {message.media_duration_seconds ? (
+          <span className="text-xs opacity-80">{formatDuration(message.media_duration_seconds)}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (kind === 'video') {
+    return <video controls src={url} className="rounded-lg max-h-60 max-w-full" />;
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-background/60 p-2 text-foreground">
+      <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <div className="text-sm truncate max-w-[180px]">{name}</div>
+        <div className="text-xs text-muted-foreground">{formatBytes(message.media_size_bytes)}</div>
+      </div>
+      <Button asChild variant="ghost" size="icon" className="shrink-0">
+        <a href={url} target="_blank" rel="noreferrer" download={name}>
+          <Download className="h-4 w-4" />
+        </a>
+      </Button>
+    </div>
+  );
+}
 
 function DeliveryIndicator({ message }: { message: WaMessage }) {
   const status = message.status;
