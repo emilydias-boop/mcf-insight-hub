@@ -193,5 +193,87 @@ export function useWaMessages(conversationId: string | null) {
     markReadRef.current = markReadNow;
   }, [markReadNow]);
 
-  return { ...query, sendMessage, markRead };
+  const sendMedia = useMutation({
+    mutationFn: async (input: {
+      file: File | Blob;
+      /** nome do arquivo (obrigatório quando `file` é Blob de gravação) */
+      filename?: string;
+      /** MIME já resolvido (gravação de áudio); se ausente, deduzimos do File */
+      mediaType?: string;
+      caption?: string;
+      durationSeconds?: number;
+    }) => {
+      if (!conversationId) throw new WaSendError('Conversa não selecionada');
+
+      const filename = safeFileName(
+        input.filename ?? (input.file instanceof File ? input.file.name : 'arquivo'),
+      );
+      const asFile =
+        input.file instanceof File
+          ? input.file
+          : new File([input.file], filename, { type: input.mediaType ?? input.file.type });
+      const mediaType = input.mediaType ?? resolveMediaType(asFile);
+
+      const invalid = validateWaMedia(
+        new File([asFile], filename, { type: mediaType }),
+      );
+      if (invalid) throw new WaSendError(invalid, 'midia_invalida');
+
+      const path = `${conversationId}/${Date.now()}-${filename}`;
+      const { error: uploadError } = await supabase.storage
+        .from(WA_MEDIA_BUCKET)
+        .upload(path, asFile, { contentType: mediaType, upsert: false });
+      if (uploadError) {
+        throw new WaSendError(uploadError.message || 'Falha ao enviar o arquivo ao storage');
+      }
+
+      const payload: Record<string, unknown> = {
+        conversation_id: conversationId,
+        media_path: path,
+        media_type: mediaType,
+        media_filename: filename,
+      };
+      if (input.durationSeconds) payload.media_duration_seconds = input.durationSeconds;
+      if (input.caption?.trim()) payload.body = input.caption.trim();
+
+      const { data, error } = await supabase.functions.invoke('twilio-wa-send', { body: payload });
+      const failure = await extractFunctionError(error, data);
+      if (failure) {
+        // não deixa arquivo órfão no bucket quando o envio falha
+        await supabase.storage.from(WA_MEDIA_BUCKET).remove([path]);
+        throw failure;
+      }
+      return data;
+    },
+    onError: (err: unknown) => {
+      toast.error(errMessage(err, 'Erro ao enviar arquivo via WhatsApp'));
+      if (err instanceof WaSendError && err.code === 'janela_fechada') {
+        qc.invalidateQueries({ queryKey: ['wa-conversations'] });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
+      qc.invalidateQueries({ queryKey: ['wa-conversations'] });
+    },
+  });
+
+  return { ...query, sendMessage, sendMedia, markRead };
+}
+
+/** Signed URL (1h) gerada sob demanda por mensagem; nunca persistida além disso. */
+export function useWaMediaUrl(mediaPath: string | null | undefined) {
+  return useQuery({
+    queryKey: ['wa-media-url', mediaPath],
+    queryFn: async () => {
+      if (!mediaPath) return null;
+      const { data, error } = await supabase.storage
+        .from(WA_MEDIA_BUCKET)
+        .createSignedUrl(mediaPath, 3600);
+      if (error) throw error;
+      return data?.signedUrl ?? null;
+    },
+    enabled: !!mediaPath,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 45 * 60 * 1000,
+  });
 }
