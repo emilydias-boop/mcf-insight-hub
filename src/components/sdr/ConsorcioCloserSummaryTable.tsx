@@ -9,7 +9,11 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronRight } from "lucide-react";
-import { R1CloserMetric } from "@/hooks/useR1CloserMetrics";
+import {
+  R1CloserMetric,
+  UNASSIGNED_REASON_LABELS,
+  UnassignedReason,
+} from "@/hooks/useR1CloserMetrics";
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
@@ -44,6 +48,9 @@ export function ConsorcioCloserSummaryTable({
     );
   }
 
+  const closerRows = data.filter(row => !row.is_unassigned);
+  const unassignedRow = data.find(row => row.is_unassigned) || null;
+
   const totals = data.reduce(
     (acc, row) => ({
       r1_agendada: acc.r1_agendada + row.r1_agendada,
@@ -73,6 +80,15 @@ export function ConsorcioCloserSummaryTable({
     return "text-red-400";
   };
 
+  const unassignedTooltip = unassignedRow
+    ? [
+        'Reuniões que não puderam ser atribuídas a um closer desta BU:',
+        ...(Object.entries(unassignedRow.unassigned_reasons || {}) as [UnassignedReason, number][])
+          .filter(([, n]) => n > 0)
+          .map(([reason, n]) => `• ${UNASSIGNED_REASON_LABELS[reason]}: ${n}`),
+      ].join('\n')
+    : '';
+
   return (
     <div className="rounded-md border border-border overflow-hidden">
       <div className="overflow-x-auto">
@@ -90,7 +106,7 @@ export function ConsorcioCloserSummaryTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row) => {
+            {closerRows.map((row) => {
               const propostas = propostasEnviadasByCloser?.get(row.closer_id) || 0;
               const propostasFechadas = propostasFechadasByCloser?.get(row.closer_id) || 0;
               const taxaVenda = row.r1_realizada > 0
@@ -148,6 +164,20 @@ export function ConsorcioCloserSummaryTable({
                 </TableRow>
               );
             })}
+
+            {/* Não atribuído: reuniões sem closer identificável nesta BU */}
+            {unassignedRow && (
+              <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
+                <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
+                <TableCell className="text-center">{unassignedRow.r1_agendada}</TableCell>
+                <TableCell className="text-center">{unassignedRow.r1_realizada}</TableCell>
+                <TableCell className="text-center">{unassignedRow.noshow}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {onCloserClick && <TableCell />}
+              </TableRow>
+            )}
 
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
