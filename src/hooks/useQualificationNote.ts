@@ -6,7 +6,8 @@ import type { QualificationAnswers } from '@/components/crm/qualification/Qualif
 
 interface SaveQualificationNoteParams {
   dealId: string;
-  qualificationData: QualificationDataType;
+  /** Formato legado de campos de qualificação. Omitir quando não se aplica. */
+  qualificationData?: QualificationDataType;
   summary: string;
   paraR1?: boolean;
   /** Novo formato: canal + respostas estruturadas + anexo do WhatsApp */
