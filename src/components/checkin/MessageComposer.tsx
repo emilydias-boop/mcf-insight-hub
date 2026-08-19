@@ -139,6 +139,10 @@ export function MessageComposer({
     const submit = async () => {
       if (recorder.result) {
         const audio = recorder.result;
+        if (audio.conversionFailed) {
+          toast.error('O áudio não foi convertido para MP3. Tente converter novamente antes de enviar.');
+          return;
+        }
         const ok = await onSendMedia({
           file: audio.blob,
           filename: `audio-${Date.now()}.${audio.encoding === 'ogg' ? 'ogg' : 'mp3'}`,
