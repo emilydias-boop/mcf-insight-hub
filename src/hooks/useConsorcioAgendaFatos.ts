@@ -95,6 +95,8 @@ export interface ConsorcioAgendaDerived {
   sdrUnassigned: SdrUnassignedBucket | null;
   byCloser: Map<string, ConsorcioAgendaAgg>;
   closerNames: Map<string, string>;
+  /** Fatos sem closer identificável (defensivo — o escopo da RPC exige closer). */
+  closerUnassigned: ConsorcioAgendaAgg | null;
   /** Totais do lado SDR (inclui "Não atribuído"). */
   sdrTotals: ConsorcioAgendaAgg;
   /** Totais do lado Closer. */
@@ -185,6 +187,7 @@ function useMemoDerived({
     };
     const byCloser = new Map<string, ConsorcioAgendaAgg>();
     const closerNames = new Map<string, string>();
+    const closerUnassignedAgg = emptyAgg();
     // Todos os agendadores presentes nos fatos, independente do filtro de SDR
     // (alimenta o seletor "Todos os SDRs").
     const allBookers = new Map<string, string>();
@@ -221,6 +224,8 @@ function useMemoDerived({
         if (row.closer_name && !closerNames.has(row.closer_id)) {
           closerNames.set(row.closer_id, row.closer_name);
         }
+      } else {
+        bump(closerUnassignedAgg, row.fato);
       }
     });
 
@@ -265,13 +270,22 @@ function useMemoDerived({
         contratos: sdrUnassigned.contratos,
       }] : []),
     ]);
-    const closerTotals = sum(Array.from(byCloser.values()));
+    const closerUnassignedTotal =
+      closerUnassignedAgg.agendamentos + closerUnassignedAgg.r1Agendada +
+      closerUnassignedAgg.r1Realizada + closerUnassignedAgg.noShows + closerUnassignedAgg.contratos;
+    const closerUnassigned = closerUnassignedTotal > 0 ? closerUnassignedAgg : null;
+
+    const closerTotals = sum([
+      ...Array.from(byCloser.values()),
+      ...(closerUnassigned ? [closerUnassigned] : []),
+    ]);
 
     return {
       bySdr,
       sdrUnassigned,
       byCloser,
       closerNames,
+      closerUnassigned,
       sdrTotals,
       closerTotals,
       bookerEmails: Array.from(allBookers.keys()),

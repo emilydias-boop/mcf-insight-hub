@@ -516,10 +516,9 @@ export default function ConsorcioPainelEquipe() {
 
   const closerKPIs = useMemo(() => {
     const t = fatos.closerTotals;
-    // Soma apenas os closers EXIBIDOS na tabela, para card e Total baterem.
-    const totalContratos = produtosFechadosByCloser
-      ? closerRows.reduce((s, m) => s + (produtosFechadosByCloser.get(m.closer_id) || 0), 0)
-      : 0;
+    // Mesma base de fatos dos demais números (fechamento atribuído ao closer do
+    // slot), para o card e o Total da tabela nunca divergirem do lado SDR.
+    const totalContratos = t.contratos;
     return {
       sdrCount: closerRows.length,
       totalAgendamentos: t.agendamentos,
@@ -531,7 +530,14 @@ export default function ConsorcioPainelEquipe() {
       taxaConversao: t.r1Realizada > 0 ? (totalContratos / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [fatos, closerRows, produtosFechadosByCloser]);
+  }, [fatos]);
+
+  // Fechamentos da agenda por closer (fonte do card "Propostas Fechadas").
+  const fechadasAgendaByCloser = useMemo(() => {
+    const m = new Map<string, number>();
+    fatos.byCloser.forEach((agg, id) => m.set(id, agg.contratos));
+    return m;
+  }, [fatos]);
 
   // Consórcio team targets
   const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
@@ -952,6 +958,8 @@ export default function ConsorcioPainelEquipe() {
               isLoading={closerLoading || fatosLoading}
               propostasEnviadasByCloser={propostasByCloser}
               propostasFechadasByCloser={produtosFechadosByCloser}
+              fechadasAgendaByCloser={fechadasAgendaByCloser}
+              agendaUnassigned={fatos.closerUnassigned}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
                 params.set("preset", datePreset);
