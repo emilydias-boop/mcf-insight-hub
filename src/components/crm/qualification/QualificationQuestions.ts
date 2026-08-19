@@ -50,11 +50,16 @@ export function validateAnswers(answers: QualificationAnswers): { valid: boolean
   return { valid: missing.length === 0, missing };
 }
 
-export function answersToSummary(answers: QualificationAnswers, sdrName?: string): string {
+export function answersToSummary(
+  answers: QualificationAnswers,
+  sdrName?: string,
+  channel?: 'whatsapp' | 'call'
+): string {
   const dateStr = new Date().toLocaleDateString('pt-BR');
   const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const channelLabel = channel === 'call' ? 'Ligação' : 'WhatsApp';
   const lines: string[] = [];
-  lines.push(`📋 QUALIFICAÇÃO (WhatsApp) — ${dateStr} às ${timeStr}`);
+  lines.push(`📋 QUALIFICAÇÃO (${channelLabel}) — ${dateStr} às ${timeStr}`);
   if (sdrName) lines.push(`Por: ${sdrName}`);
   lines.push('');
   for (const q of QUALIFICATION_QUESTIONS) {

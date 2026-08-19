@@ -360,6 +360,15 @@ const Negocios = () => {
   // State para abrir drawer de deal cross-pipeline
   const [crossPipelineDealId, setCrossPipelineDealId] = useState<string | null>(null);
   const [crossPipelineDrawerOpen, setCrossPipelineDrawerOpen] = useState(false);
+
+  // Deep link: /crm/negocios?deal=<uuid> abre o drawer do negócio
+  useEffect(() => {
+    const dealParam = new URLSearchParams(window.location.search).get('deal');
+    if (dealParam) {
+      setCrossPipelineDealId(dealParam);
+      setCrossPipelineDrawerOpen(true);
+    }
+  }, []);
   
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
@@ -1313,7 +1322,16 @@ const Negocios = () => {
       <DealDetailsDrawer
         dealId={crossPipelineDealId}
         open={crossPipelineDrawerOpen}
-        onOpenChange={setCrossPipelineDrawerOpen}
+        onOpenChange={(open) => {
+          setCrossPipelineDrawerOpen(open);
+          if (!open) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('deal')) {
+              url.searchParams.delete('deal');
+              window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+            }
+          }
+        }}
       />
     </div>
   );

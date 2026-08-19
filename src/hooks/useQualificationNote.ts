@@ -13,6 +13,8 @@ interface SaveQualificationNoteParams {
   channel?: 'whatsapp' | 'call';
   answers?: QualificationAnswers;
   whatsappPrintUrl?: string | null;
+  /** Metadata extra opcional (ex.: conversation_id da thread de WhatsApp) */
+  extraMetadata?: Record<string, unknown> | null;
 }
 
 /**
@@ -30,6 +32,7 @@ export const useSaveQualificationNote = () => {
       channel,
       answers,
       whatsappPrintUrl,
+      extraMetadata,
     }: SaveQualificationNoteParams) => {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
@@ -79,6 +82,7 @@ export const useSaveQualificationNote = () => {
             channel: channel ?? null,
             answers: answers ?? null,
             whatsapp_print_url: whatsappPrintUrl ?? null,
+            ...(extraMetadata ?? {}),
           },
         })
         .select()
