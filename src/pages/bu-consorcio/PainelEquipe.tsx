@@ -46,6 +46,7 @@ import {
   useConsorcioAgendaTotais,
   sumConsorcioTotais,
 } from "@/hooks/useConsorcioAgendaFatos";
+import type { ConsorcioFatoRow } from "@/hooks/useConsorcioAgendaFatos";
 
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
