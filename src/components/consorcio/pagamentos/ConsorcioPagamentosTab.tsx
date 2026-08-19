@@ -13,6 +13,7 @@ import { useUpdateCobrancaStatus } from '@/hooks/useUpdateCobrancaStatus';
 import type { CobrancaStatus } from '@/hooks/useConsorcioPagamentos';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { comprovanteTelefoneCliente, comprovanteEmailCliente } from '@/lib/consorcioComprovante';
 
 interface Props {
   selectedMonth: { start: string; end: string };
@@ -36,7 +37,9 @@ const SITUACAO_LABELS: Record<string, string> = {
 
 const csvCell = (value: unknown) => {
   const s = value === null || value === undefined ? '' : String(value);
-  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  // Excel/Sheets interpretam valores iniciados por = + - @ como fórmula (CSV injection).
+  const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+  return /[;"\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
 const toIsoDate = (value?: string | null) => {
@@ -79,10 +82,13 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
       return;
     }
 
-    const header = 'id_parcela;cliente;grupo;cota;numero_parcela;valor;vencimento;data_pagamento;status;situacao_cota';
+    const header = 'id_parcela;cliente;telefone;email;tipo;grupo;cota;numero_parcela;valor;vencimento;data_pagamento;status;situacao_cota';
     const lines = allData.map(r => [
       r.id,
       r.cliente_nome,
+      comprovanteTelefoneCliente(r),
+      comprovanteEmailCliente(r),
+      r.tipo === 'empresa' ? 'Empresa' : r.tipo === 'cliente' ? 'Cliente' : (r.tipo ?? ''),
       r.grupo,
       r.cota,
       r.numero_parcela,
@@ -96,11 +102,11 @@ export function ConsorcioPagamentosTab({ selectedMonth, tipoFilter }: Props) {
     const csv = '\uFEFF' + [header, ...lines].join('\r\n') + '\r\n';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const today = new Date();
-    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const mesRef = String(selectedMonth?.start ?? '').slice(0, 7);
+    const sufixo = [tipoFilter, mesRef].filter(Boolean).join('_');
     const link = document.createElement('a');
     link.href = url;
-    link.download = `pagamentos_consorcio_${stamp}.csv`;
+    link.download = `pagamentos_consorcio${sufixo ? `_${sufixo}` : ''}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
