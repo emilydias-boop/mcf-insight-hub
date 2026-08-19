@@ -425,6 +425,17 @@ export default function ConsorcioPainelEquipe() {
   const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
+  // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
+  // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
+  // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
+  const { data: fatosDayRows = [] } = useConsorcioAgendaFatos(dayStart, dayEnd);
+  const { data: fatosWeekRows = [] } = useConsorcioAgendaFatos(weekStartDate, weekEndDate);
+  const { data: fatosMonthRows = [] } = useConsorcioAgendaFatos(monthStartDate, monthEndDate);
+
+  const fatosDay = useConsorcioAgendaDerived({ rows: fatosDayRows, allowedOriginNames });
+  const fatosWeek = useConsorcioAgendaDerived({ rows: fatosWeekRows, allowedOriginNames });
+  const fatosMonth = useConsorcioAgendaDerived({ rows: fatosMonthRows, allowedOriginNames });
+
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
   
