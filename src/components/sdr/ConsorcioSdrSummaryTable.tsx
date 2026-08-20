@@ -22,6 +22,8 @@ interface ConsorcioSdrSummaryTableProps {
   cotasBySdr?: Map<string, number>;
   /** Clientes distintos que contrataram ao menos uma cota, por SDR. */
   clientesBySdr?: Map<string, number>;
+  /** Clientes distintos em TODO o conjunto filtrado (não é a soma das linhas). */
+  totalClientesDistintos?: number;
   /** Soma de valor_credito das cotas contratadas, por SDR. */
   creditoBySdr?: Map<string, number>;
   /** Cotas contratadas sem vínculo com lead — linha própria. */
@@ -51,6 +53,7 @@ export function ConsorcioSdrSummaryTable({
   propostasEnviadasBySdr,
   cotasBySdr,
   clientesBySdr,
+  totalClientesDistintos = 0,
   creditoBySdr,
   cotasSemVinculo = 0,
   clientesSemVinculo = 0,
@@ -104,7 +107,10 @@ export function ConsorcioSdrSummaryTable({
     r1Realizada: baseTotals.r1Realizada + (unassigned?.r1Realizada || 0),
     noShows: baseTotals.noShows + (unassigned?.noShows || 0),
     cotas: baseTotals.cotas + cotasSemVinculo + extraCotas,
-    clientes: baseTotals.clientes + clientesSemVinculo + extraClientes,
+    // Contagem de PESSOAS não é somável: o Total usa o distinct global do
+    // conjunto filtrado, calculado uma única vez pelo hook. Somar as linhas
+    // contaria duas vezes o cliente presente em mais de uma atribuição.
+    clientes: totalClientesDistintos,
     credito: baseTotals.credito + creditoSemVinculo + extraCredito,
   };
   const unassignedTooltip = unassigned
