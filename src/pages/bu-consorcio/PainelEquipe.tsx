@@ -522,6 +522,8 @@ export default function ConsorcioPainelEquipe() {
     // Venda fechada = Cotas Contratadas (mesma fonte do card e do Total da tabela,
     // idêntica nas duas abas).
     const totalContratos = cotasContratadas?.total || 0;
+    // Conversão por PESSOA: distinct global de clientes ÷ R1 realizadas.
+    const vendasRealizadas = cotasContratadas?.totalClientes || 0;
     return {
       sdrCount: closerRows.length,
       totalAgendamentos: t.agendamentos,
@@ -530,7 +532,7 @@ export default function ConsorcioPainelEquipe() {
       totalContratos,
       totalOutside: 0,
       totalR1Agendada: t.r1Agendada,
-      taxaConversao: t.r1Realizada > 0 ? (totalContratos / t.r1Realizada) * 100 : 0,
+      taxaConversao: t.r1Realizada > 0 ? (vendasRealizadas / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
   }, [fatos, cotasContratadas]);
@@ -581,7 +583,7 @@ export default function ConsorcioPainelEquipe() {
       totalContratos: cotasContratadas?.total || 0,
       totalOutside: 0,
       totalR1Agendada: t.r1Agendada,
-      taxaConversao: t.r1Realizada > 0 ? ((cotasContratadas?.total || 0) / t.r1Realizada) * 100 : 0,
+      taxaConversao: t.r1Realizada > 0 ? ((cotasContratadas?.totalClientes || 0) / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
   }, [fatos, cotasContratadas]);
@@ -969,6 +971,7 @@ export default function ConsorcioPainelEquipe() {
                 propostasEnviadasBySdr={propostasData}
                 cotasBySdr={cotasContratadas?.bySdr}
                 clientesBySdr={cotasContratadas?.clientesBySdr}
+                totalClientesDistintos={cotasContratadas?.totalClientes || 0}
                 creditoBySdr={cotasContratadas?.creditoBySdr}
                 cotasSemVinculo={cotasContratadas?.semVinculo || 0}
                 clientesSemVinculo={cotasContratadas?.clientesSemVinculo || 0}
@@ -990,6 +993,7 @@ export default function ConsorcioPainelEquipe() {
               propostasEnviadasByCloser={propostasByCloser}
               cotasByCloser={cotasContratadas?.byCloser}
               clientesByCloser={cotasContratadas?.clientesByCloser}
+              totalClientesDistintos={cotasContratadas?.totalClientes || 0}
               creditoByCloser={cotasContratadas?.creditoByCloser}
               cotasSemCloser={cotasContratadas?.semCloser || 0}
               clientesSemCloser={cotasContratadas?.clientesSemCloser || 0}
