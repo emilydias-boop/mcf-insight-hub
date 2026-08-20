@@ -188,8 +188,10 @@ function CriarDisparoDialog({
   };
   const handleOriginChange = (v: string) => {
     setOriginId(v);
+    setStageId('');
     invalidarPublico();
   };
+
   const handleLimiteChange = (v: string) => {
     setLimite(v);
     invalidarPublico();
