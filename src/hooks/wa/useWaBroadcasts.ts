@@ -184,6 +184,27 @@ export function useWaBroadcast(id: string | undefined) {
   return query;
 }
 
+/** Quantos alvos a tabela lista por página — a lista é truncada de propósito. */
+export const TARGETS_PAGE_SIZE = 1000;
+
+/** Total real de alvos no banco para o filtro atual (agregado no servidor). */
+export function useWaTargetsTotal(broadcastId: string | undefined, status: string = 'all') {
+  return useQuery({
+    queryKey: ['wa-broadcast-targets-total', broadcastId, status],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<number> => {
+      let q = supabase
+        .from('wa_broadcast_targets')
+        .select('id', { count: 'exact', head: true })
+        .eq('broadcast_id', broadcastId!);
+      if (status !== 'all') q = q.eq('status', status);
+      const { count, error } = await q;
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
 /** Alvos do disparo, com realtime para acompanhar a entrega. */
 export function useWaBroadcastTargets(broadcastId: string | undefined, status: string = 'all') {
   const qc = useQueryClient();
@@ -200,7 +221,7 @@ export function useWaBroadcastTargets(broadcastId: string | undefined, status: s
         .eq('broadcast_id', broadcastId!)
         .order('enviado_em', { ascending: false, nullsFirst: false })
         .order('contact_name', { ascending: true })
-        .limit(1000);
+        .limit(TARGETS_PAGE_SIZE);
       if (status !== 'all') q = q.eq('status', status);
       const { data, error } = await q;
       if (error) throw error;
@@ -222,6 +243,7 @@ export function useWaBroadcastTargets(broadcastId: string | undefined, status: s
         },
         () => {
           qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+          qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-total', broadcastId] });
           qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
         },
       )
