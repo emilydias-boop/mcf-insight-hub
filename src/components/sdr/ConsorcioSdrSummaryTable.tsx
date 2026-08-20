@@ -423,13 +423,13 @@ export function ConsorcioSdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                  {totals.cotas}
+                <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
+                  {totals.clientes}
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
-                  {totals.clientes}
+                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                  {totals.cotas}
                 </Badge>
               </TableCell>
               <TableCell className="text-center whitespace-nowrap">
