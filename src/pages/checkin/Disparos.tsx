@@ -235,16 +235,24 @@ export default function Disparos() {
 function CriarDisparoDialog({
   open,
   onOpenChange,
+  rascunho,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  rascunho?: WaBroadcast | null;
 }) {
   const navigate = useNavigate();
+  const { hasAnyRole } = useAuth();
   const { data: templates = [] } = useWaTemplates();
+  const { data: busDisponiveis = [] } = useWaBusDisponiveis();
   const criar = useCreateWaBroadcast();
   const atualizar = useUpdateWaBroadcast();
   const montar = useMontarPublico();
   const iniciar = useIniciarBroadcast();
+
+  // a função devolve vazio para quem não é admin/manager, mas o gate da UI não
+  // depende só disso
+  const podeUsarBu = (hasAnyRole('admin', 'manager') && busDisponiveis.length > 0) || false;
 
   const [step, setStep] = useState(1);
   const [nome, setNome] = useState('');
@@ -253,9 +261,34 @@ function CriarDisparoDialog({
   const [stageId, setStageId] = useState('');
   const [originId, setOriginId] = useState('');
   const [limite, setLimite] = useState('');
+  const [escopo, setEscopo] = useState<WaBroadcastEscopo>('minha_carteira');
+  const [bu, setBu] = useState('');
   const [jaMontou, setJaMontou] = useState(false);
   const [bloqueado, setBloqueado] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  /** quando o público em banco foi montado — só quando um rascunho é reaberto */
+  const [publicoMontadoEm, setPublicoMontadoEm] = useState<string | null>(null);
+
+  /** Reabrir rascunho: recarrega template, escopo, BU, filtros e limite. */
+  useEffect(() => {
+    if (!open || !rascunho) return;
+    setBroadcast(rascunho);
+    setNome(rascunho.nome ?? '');
+    setTemplate(
+      rascunho.content_sid
+        ? (templates.find((t) => t.content_sid === rascunho.content_sid) ?? null)
+        : null,
+    );
+    setEscopo((rascunho.escopo as WaBroadcastEscopo) ?? 'minha_carteira');
+    setBu(rascunho.bu ?? '');
+    setStageId(rascunho.filtro?.stage_id ?? '');
+    setOriginId(rascunho.filtro?.origin_id ?? '');
+    setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
+    const temAlvos = (rascunho.total_alvos ?? 0) > 0;
+    setJaMontou(temAlvos);
+    setPublicoMontadoEm(temAlvos ? rascunho.updated_at : null);
+    setStep(rascunho.content_sid ? 2 : 1);
+  }, [open, rascunho, templates]);
 
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
   const {
@@ -274,11 +307,14 @@ function CriarDisparoDialog({
 
 
   /**
-   * Qualquer mudança de filtro ou limite invalida o público já montado: o
-   * limite só é persistido dentro do handleMontar, então seguir sem remontar
+   * Qualquer mudança de filtro, escopo ou limite invalida o público já montado:
+   * o limite só é persistido dentro do handleMontar, então seguir sem remontar
    * dispararia para a base inteira depois de um "Testar com 10".
    */
-  const invalidarPublico = () => setJaMontou(false);
+  const invalidarPublico = () => {
+    setJaMontou(false);
+    setPublicoMontadoEm(null);
+  };
   const handleStageChange = (v: string) => {
     setStageId(v);
     invalidarPublico();
@@ -289,10 +325,26 @@ function CriarDisparoDialog({
     invalidarPublico();
   };
 
+  const handleEscopoChange = (v: WaBroadcastEscopo) => {
+    setEscopo(v);
+    if (v === 'minha_carteira') setBu('');
+    // filtros de origem/estágio são da carteira de quem dispara: não valem na BU
+    if (v === 'bu') {
+      setOriginId('');
+      setStageId('');
+    }
+    invalidarPublico();
+  };
+  const handleBuChange = (v: string) => {
+    setBu(v);
+    invalidarPublico();
+  };
+
   const handleLimiteChange = (v: string) => {
     setLimite(v);
     invalidarPublico();
   };
+
 
   const templateAtual = useMemo(
     () => template ?? templates.find((t) => t.content_sid === broadcast?.content_sid) ?? null,
