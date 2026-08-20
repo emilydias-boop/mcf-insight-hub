@@ -323,8 +323,8 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
-                <TableCell className="text-center">{qtd}</TableCell>
                 <TableCell className="text-center">{clientesBySdr?.get(email.toLowerCase()) || 0}</TableCell>
+                <TableCell className="text-center">{qtd}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {(creditoBySdr?.get(email.toLowerCase()) || 0) > 0
                     ? brl(creditoBySdr!.get(email.toLowerCase())!)
