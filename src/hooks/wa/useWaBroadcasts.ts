@@ -662,7 +662,7 @@ export function useControlarBroadcast() {
   return { pausar, retomar, cancelar, isPending: agindo };
 }
 
-}
+
 
 /** Estágios e origens para os filtros opcionais do público. */
 export function useCrmStageOptions() {
