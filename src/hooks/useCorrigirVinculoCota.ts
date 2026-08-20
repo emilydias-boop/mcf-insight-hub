@@ -58,6 +58,27 @@ function digits(v?: string | null): string {
   return (v || "").replace(/\D/g, "");
 }
 
+/** Remove acentos para comparação/label — o ilike do Postgres é sensível a acento. */
+function semAcento(v: string): string {
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+const DEAL_SELECT =
+  "id, name, contact_id, is_archived, created_at, crm_origins(name, display_name), crm_stages(stage_name), crm_contacts(id, name, email, phone)";
+
+function mapDeal(d: any, casa: boolean): LeadVinculoMatch {
+  const ct = d.crm_contacts || {};
+  return {
+    dealId: d.id,
+    contactName: ct.name || d.name || null,
+    email: ct.email || null,
+    telefone: ct.phone || null,
+    originName: d.crm_origins?.display_name || d.crm_origins?.name || null,
+    stageName: d.crm_stages?.stage_name || null,
+    casaTitular: casa,
+  };
+}
+
 /**
  * Seletor de lead do modal de correção.
  * Padrão: só leads cujo contato casa com CPF/CNPJ, telefone (9 dígitos finais)
@@ -84,57 +105,75 @@ export function useLeadsParaVinculo(
 
       const telSuffix = digits(titular.telefone).slice(-9);
       const email = (titular.email || "").trim().toLowerCase();
+      const nomeTitular = (titular.nome || "").trim();
 
-      const ors: string[] = [];
+      // 1) contatos que casam (e-mail / telefone / nome)
+      const orsContato: string[] = [];
+      // 2) o nome do lead também vive em `crm_deals.name` — muitos deals não têm contato
+      const orsDealNome: string[] = [];
+
       if (buscaAmpla) {
-        const like = `%${term}%`;
-        ors.push(`name.ilike.${like}`, `email.ilike.${like}`);
         const d = digits(term);
-        if (d.length >= 4) ors.push(`phone.ilike.%${d}%`);
+        for (const t of new Set([term, semAcento(term)])) {
+          orsContato.push(`name.ilike.%${t}%`, `email.ilike.%${t}%`);
+          orsDealNome.push(`name.ilike.%${t}%`);
+        }
+        if (d.length >= 4) orsContato.push(`phone.ilike.%${d}%`);
       } else {
-        if (email) ors.push(`email.ilike.${email}`);
-        if (telSuffix.length >= 8) ors.push(`phone.ilike.%${telSuffix}%`);
-        if (titular.nome) ors.push(`name.ilike.%${titular.nome.trim()}%`);
+        if (email) orsContato.push(`email.ilike.${email}`);
+        if (telSuffix.length >= 8) orsContato.push(`phone.ilike.%${telSuffix}%`);
+        if (nomeTitular) {
+          for (const t of new Set([nomeTitular, semAcento(nomeTitular)])) {
+            orsContato.push(`name.ilike.%${t}%`);
+            orsDealNome.push(`name.ilike.%${t}%`);
+          }
+        }
       }
-      if (ors.length === 0) return [];
+      if (orsContato.length === 0) return [];
 
       const { data: contacts, error } = await supabase
         .from("crm_contacts")
         .select("id, name, email, phone")
         .eq("is_archived", false)
-        .or(ors.join(","))
+        .or(orsContato.join(","))
         .limit(40);
       if (error) throw error;
       const contactIds = (contacts || []).map((c: any) => c.id);
-      if (contactIds.length === 0) return [];
-      const contactById = new Map<string, any>();
-      (contacts || []).forEach((c: any) => contactById.set(c.id, c));
 
-      const { data: deals } = await supabase
-        .from("crm_deals")
-        .select("id, contact_id, origin_id, stage_id, created_at, crm_origins(name, display_name), crm_stages(name)")
-        .in("contact_id", contactIds)
-        .order("created_at", { ascending: false })
-        .limit(60);
+      const [porContato, porNomeDeal] = await Promise.all([
+        contactIds.length
+          ? supabase
+              .from("crm_deals")
+              .select(DEAL_SELECT)
+              .eq("is_archived", false)
+              .in("contact_id", contactIds)
+              .order("created_at", { ascending: false })
+              .limit(60)
+          : Promise.resolve({ data: [] as any[] } as any),
+        orsDealNome.length
+          ? supabase
+              .from("crm_deals")
+              .select(DEAL_SELECT)
+              .eq("is_archived", false)
+              .or(orsDealNome.join(","))
+              .order("created_at", { ascending: false })
+              .limit(60)
+          : Promise.resolve({ data: [] as any[] } as any),
+      ]);
+      if (porContato.error) throw porContato.error;
+      if (porNomeDeal.error) throw porNomeDeal.error;
 
       const out: LeadVinculoMatch[] = [];
       const vistos = new Set<string>();
-      (deals || []).forEach((d: any) => {
-        const c = contactById.get(d.contact_id) || {};
-        const casa =
-          (!!email && String(c.email || "").toLowerCase() === email) ||
-          (telSuffix.length >= 8 && digits(c.phone).endsWith(telSuffix));
+      const casaCom = (ct: any) =>
+        (!!email && String(ct?.email || "").toLowerCase() === email) ||
+        (telSuffix.length >= 8 && digits(ct?.phone).endsWith(telSuffix));
+
+      for (const d of [...(porContato.data || []), ...(porNomeDeal.data || [])] as any[]) {
+        if (vistos.has(String(d.id))) continue;
         vistos.add(String(d.id));
-        out.push({
-          dealId: d.id,
-          contactName: c.name || null,
-          email: c.email || null,
-          telefone: c.phone || null,
-          originName: d.crm_origins?.display_name || d.crm_origins?.name || null,
-          stageName: d.crm_stages?.name || null,
-          casaTitular: casa,
-        });
-      });
+        out.push(mapDeal(d, casaCom(d.crm_contacts)));
+      }
 
       // Reforço por CPF/CNPJ: leads já vinculados a outras cotas do MESMO documento.
       const doc = digits(titular.cpf) || digits(titular.cnpj);
@@ -152,18 +191,12 @@ export function useLeadsParaVinculo(
         if (extraIds.length > 0) {
           const { data: extraDeals } = await supabase
             .from("crm_deals")
-            .select("id, name, crm_origins(name, display_name), crm_stages(name), crm_contacts(name, email, phone)")
+            .select(DEAL_SELECT)
             .in("id", extraIds);
           (extraDeals || []).forEach((d: any) => {
-            out.push({
-              dealId: d.id,
-              contactName: d.crm_contacts?.name || d.name || null,
-              email: d.crm_contacts?.email || null,
-              telefone: d.crm_contacts?.phone || null,
-              originName: d.crm_origins?.display_name || d.crm_origins?.name || null,
-              stageName: d.crm_stages?.name || null,
-              casaTitular: true,
-            });
+            if (vistos.has(String(d.id))) return;
+            vistos.add(String(d.id));
+            out.push(mapDeal(d, true));
           });
         }
       }
