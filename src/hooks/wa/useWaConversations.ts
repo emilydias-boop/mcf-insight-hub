@@ -79,8 +79,15 @@ export function useUpdateWaConversation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: WaConversationPatch }) => {
-      const { error } = await supabase.from('wa_conversations').update(patch).eq('id', id);
+      const { data, error } = await supabase
+        .from('wa_conversations')
+        .update(patch)
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Não foi possível atualizar a conversa (sem permissão ou já alterada).');
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['wa-conversations'] });

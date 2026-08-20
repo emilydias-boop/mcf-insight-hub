@@ -16069,6 +16069,10 @@ export type Database = {
           quantidade: number
         }[]
       }
+      wa_broadcast_validar_escopo: {
+        Args: { _broadcast_id: string }
+        Returns: undefined
+      }
       wa_can_access_conversation: {
         Args: { _conversation_id: string }
         Returns: boolean

@@ -422,8 +422,17 @@ export function useUpdateWaBroadcast() {
         >
       >;
     }) => {
-      const { error } = await supabase.from('wa_broadcasts').update(patch).eq('id', id);
+      const { data, error } = await supabase
+        .from('wa_broadcasts')
+        .update(patch)
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Não foi possível salvar o disparo (sem permissão ou o disparo já saiu de rascunho).',
+        );
+      }
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['wa-broadcast', vars.id] });
@@ -728,7 +737,8 @@ export function useWaBusDisponiveis() {
     queryFn: async (): Promise<WaBroadcastBuDisponivel[]> => {
       const { data, error } = await supabase.rpc('wa_broadcast_bus_disponiveis');
       if (error) throw error;
-      return (data ?? []) as WaBroadcastBuDisponivel[];
+      // Guarda: BU vazia derruba o <SelectItem value=""> do Radix e a tela inteira.
+      return ((data ?? []) as WaBroadcastBuDisponivel[]).filter((b) => !!b.bu?.trim());
     },
   });
 }
