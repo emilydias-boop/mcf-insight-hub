@@ -102,34 +102,66 @@ export function useConsorcioCotasContratadas(
 
       const dealIds = [...new Set(Array.from(cardToDeal.values()))];
 
-      // Origem + dono do negócio (origem alimenta o filtro de funil)
+      // Origem do deal (alimenta o filtro de funil)
       const dealOrigin = new Map<string, string>();
-      const dealOwner = new Map<string, string>();
       if (dealIds.length > 0) {
         const { data: deals, error: dealsError } = await supabase
           .from("crm_deals")
-          .select("id, owner_id, origin_id, crm_origins(name)")
+          .select("id, origin_id, crm_origins(name)")
           .in("id", dealIds);
         if (dealsError) throw dealsError;
         (deals || []).forEach((d: any) => {
           const originName = d.crm_origins?.name;
           if (originName) dealOrigin.set(d.id, String(originName).toLowerCase());
-          if (d.owner_id) dealOwner.set(d.id, String(d.owner_id).toLowerCase());
         });
       }
 
-      // Quem agendou a R1 do deal
+      // Closers da BU: definem tanto o lado closer quanto quais reuniões contam
+      // para a atribuição do SDR.
+      const { data: closers, error: closersError } = await supabase
+        .from("closers")
+        .select("id, name")
+        .eq("bu", bu);
+      if (closersError) throw closersError;
+      const closerByName = new Map<string, string>();
+      const buCloserIds = new Set<string>();
+      (closers || []).forEach((c: any) => {
+        buCloserIds.add(String(c.id));
+        const key = nameKey(c.name);
+        if (key && !closerByName.has(key)) closerByName.set(key, c.id);
+      });
+
+      // Quem agendou a PRIMEIRA reunião desta BU para o deal.
       const dealBooker = new Map<string, string>();
       if (dealIds.length > 0) {
         const { data: attendees, error: attError } = await supabase
           .from("meeting_slot_attendees")
-          .select("deal_id, booked_by, booked_at, created_at")
+          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
           .in("deal_id", dealIds)
           .not("booked_by", "is", null)
-          .neq("status", "cancelled");
+          .not("status", "in", "(cancelled,invited,no_show)");
         if (attError) throw attError;
 
-        const bookerIds = [...new Set((attendees || []).map((a: any) => a.booked_by).filter(Boolean))];
+        // Só reuniões conduzidas por closer desta BU definem o SDR.
+        const slotIds = [...new Set((attendees || []).map((a: any) => a.meeting_slot_id).filter(Boolean))];
+        const slotCloser = new Map<string, string>();
+        if (slotIds.length > 0) {
+          const { data: slots, error: slotsError } = await supabase
+            .from("meeting_slots")
+            .select("id, closer_id")
+            .in("id", slotIds);
+          if (slotsError) throw slotsError;
+          (slots || []).forEach((s: any) => {
+            if (s.closer_id) slotCloser.set(String(s.id), String(s.closer_id));
+          });
+        }
+
+        const buAttendees = (attendees || []).filter((a: any) => {
+          const closerId = a.meeting_slot_id ? slotCloser.get(String(a.meeting_slot_id)) : undefined;
+          return !!closerId && buCloserIds.has(closerId);
+        });
+
+        const bookerIds = [...new Set(buAttendees.map((a: any) => a.booked_by).filter(Boolean))];
         const emailById = new Map<string, string>();
         if (bookerIds.length > 0) {
           const { data: profs } = await supabase
@@ -140,8 +172,8 @@ export function useConsorcioCotasContratadas(
             if (p.email) emailById.set(p.id, String(p.email).toLowerCase());
           });
         }
-        // O primeiro agendamento define o SDR da cota.
-        const sorted = [...(attendees || [])].sort((a: any, b: any) =>
+        // O primeiro agendamento da BU define o SDR da cota.
+        const sorted = [...buAttendees].sort((a: any, b: any) =>
           String(a.booked_at || a.created_at || "").localeCompare(String(b.booked_at || b.created_at || "")),
         );
         sorted.forEach((a: any) => {
@@ -150,18 +182,6 @@ export function useConsorcioCotasContratadas(
           if (email) dealBooker.set(a.deal_id, email);
         });
       }
-
-      // Vendedor da cota → closer da BU
-      const { data: closers, error: closersError } = await supabase
-        .from("closers")
-        .select("id, name")
-        .eq("bu", bu);
-      if (closersError) throw closersError;
-      const closerByName = new Map<string, string>();
-      (closers || []).forEach((c: any) => {
-        const key = nameKey(c.name);
-        if (key && !closerByName.has(key)) closerByName.set(key, c.id);
-      });
 
       const byCloser = new Map<string, number>();
       const bySdr = new Map<string, number>();
@@ -182,7 +202,8 @@ export function useConsorcioCotasContratadas(
         if (closerId) byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
         else semCloser++;
 
-        const sdrEmail = dealId ? dealBooker.get(dealId) || dealOwner.get(dealId) : undefined;
+        // Sem fallback em owner_id: sem agendador desta BU → "Não atribuído".
+        const sdrEmail = dealId ? dealBooker.get(dealId) : undefined;
         if (sdrEmail) bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
         else semVinculo++;
       });
