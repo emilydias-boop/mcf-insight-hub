@@ -32,6 +32,7 @@ import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
+import { CadastroSemLeadAlerta } from "@/components/sdr/CadastroSemLeadAlerta";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
 import { useConsorcioCotasContratadas } from "@/hooks/useConsorcioCotasContratadas";
 import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
@@ -960,6 +961,13 @@ export default function ConsorcioPainelEquipe() {
           </Tabs>
         </CardHeader>
         <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
+          <div className="px-3 sm:px-0 pb-3">
+            <CadastroSemLeadAlerta
+              cotas={cotasContratadas?.cadastroSemLead || 0}
+              credito={cotasContratadas?.creditoCadastroSemLead || 0}
+              items={cotasContratadas?.cadastroSemLeadItems || []}
+            />
+          </div>
           {activeTab === "sdrs" ? (
             <>
               <ConsorcioSdrSummaryTable
