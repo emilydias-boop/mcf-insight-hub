@@ -45,7 +45,7 @@ const BASE_DAY_SUFFIXES = [
   'agendamento', 'r1_agendada', 'r1_realizada', 'noshow',
   'contrato', 'r2_agendada', 'r2_realizada', 'venda_realizada',
   // Consórcio-specific suffixes
-  'proposta_enviada', 'aguardando_doc', 'carta_fechada', 'aporte',
+  'proposta_enviada', 'cota_contratada', 'aguardando_doc', 'carta_fechada', 'aporte',
 ];
 
 function buildDayToWeekMapping(prefix: string): Record<string, string> {

@@ -469,6 +469,10 @@ export default function ConsorcioPainelEquipe() {
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
   const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
+  // Metas da Equipe: MESMA fonte, só mudando a janela (Dia / Semana / Mês).
+  const { data: cotasDay } = useConsorcioCotasContratadas(dayStart, dayEnd, allowedOriginNames, BU_SQUAD);
+  const { data: cotasWeek } = useConsorcioCotasContratadas(weekStartDate, weekEndDate, allowedOriginNames, BU_SQUAD);
+  const { data: cotasMonth } = useConsorcioCotasContratadas(monthStartDate, monthEndDate, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
@@ -696,6 +700,13 @@ export default function ConsorcioPainelEquipe() {
         week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
         month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
       },
+      // Cotas Contratadas — mesma fonte do card e da coluna das tabelas.
+      {
+        label: 'Cotas Contratadas',
+        day: { value: cotasDay?.total || 0, target: getDayTargetValue('cota_contratada_dia') },
+        week: { value: cotasWeek?.total || 0, target: getTargetValue('cota_contratada_semana') },
+        month: { value: cotasMonth?.total || 0, target: getTargetValue('cota_contratada_mes') },
+      },
       // Produtos Fechados (dynamic from DB)
       ...produtosFechados.products.map((prod) => ({
         label: prod.label,
@@ -705,7 +716,7 @@ export default function ConsorcioPainelEquipe() {
         month: { value: prod.month, target: 0 },
       })),
     ];
-  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, consorcioWeekdayOverrides, todayDow, produtosFechados]);
+  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, consorcioWeekdayOverrides, todayDow, produtosFechados, cotasDay, cotasWeek, cotasMonth]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);

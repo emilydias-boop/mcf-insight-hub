@@ -2154,6 +2154,30 @@ export type Database = {
           },
         ]
       }
+      bkp_profiles_squad_20260819: {
+        Row: {
+          backup_em: string | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          squad: string[] | null
+        }
+        Insert: {
+          backup_em?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          squad?: string[] | null
+        }
+        Update: {
+          backup_em?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          squad?: string[] | null
+        }
+        Relationships: []
+      }
       bkp_redistribuicao_consorcio_20260819: {
         Row: {
           backup_em: string | null
