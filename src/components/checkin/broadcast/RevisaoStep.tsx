@@ -79,9 +79,14 @@ export function RevisaoStep({ broadcast, template, pendentes, sampleName, onBloq
           <AlertTitle>
             {problemaLabel(p.problema)} · {p.quantidade}
           </AlertTitle>
-          <AlertDescription>{p.detalhe} — envio bloqueado.</AlertDescription>
+          <AlertDescription>
+            {p.problema === 'variavel_sem_valor'
+              ? `${p.detalhe} — este template exige um dado individual por pessoa que o disparo em massa não tem como preencher. Escolha um template que use só o nome, ou envie pelo inbox, conversa por conversa.`
+              : `${p.detalhe} — envio bloqueado.`}
+          </AlertDescription>
         </Alert>
       ))}
+
 
       {avisos.map((p) => (
         <Alert key={p.problema + p.detalhe}>

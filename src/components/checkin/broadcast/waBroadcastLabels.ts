@@ -28,11 +28,14 @@ export function motivoLabel(motivo: string): string {
   return MOTIVO_IGNORADO_LABEL[motivo] ?? motivo.replace(/_/g, ' ');
 }
 
-/** Problemas que impedem o envio — não são aviso. */
+/**
+ * Problemas que impedem o envio — não são aviso. Definição ÚNICA: o wizard e o
+ * "retomar" importam daqui, para não divergirem.
+ */
 export const PROBLEMAS_BLOQUEANTES = new Set(['variavel_sem_valor', 'template_nao_aprovado']);
 
 export const PROBLEMA_LABEL: Record<string, string> = {
-  variavel_sem_valor: 'Variável do template sem valor',
+  variavel_sem_valor: 'Template não pode ser usado em disparo em massa',
   template_nao_aprovado: 'Template não aprovado pela Meta',
   nome_invalido: 'Nome cadastrado é o telefone',
   sem_alvos: 'Nenhum alvo elegível',
@@ -42,6 +45,24 @@ export const PROBLEMA_LABEL: Record<string, string> = {
 export function problemaLabel(problema: string): string {
   return PROBLEMA_LABEL[problema] ?? problema.replace(/_/g, ' ');
 }
+
+/** Variáveis que o disparo em massa sabe preencher a partir do lead. */
+export const VARIAVEIS_SUPORTADAS = new Set(['nome', '1', 'name', 'first_name']);
+
+/** Variáveis do template que o disparo em massa não tem como preencher. */
+export function variaveisNaoSuportadas(variables: string[] | null | undefined): string[] {
+  return (variables ?? []).filter((v) => !VARIAVEIS_SUPORTADAS.has(String(v).toLowerCase()));
+}
+
+/** Por que este template não serve para disparo em massa (null = serve). */
+export function motivoTemplateIndisponivel(
+  variables: string[] | null | undefined,
+): string | null {
+  const faltando = variaveisNaoSuportadas(variables);
+  if (faltando.length === 0) return null;
+  return `Este template exige ${faltando.map((v) => `{{${v}}}`).join(', ')}, um dado individual por pessoa que o disparo em massa não tem como preencher. Use-o em conversa individual no inbox.`;
+}
+
 
 function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? fullName;
