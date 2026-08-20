@@ -7,9 +7,10 @@ import { ConversationThread } from '@/components/checkin/ConversationThread';
 import { MessageComposer } from '@/components/checkin/MessageComposer';
 import { ContactPanel } from '@/components/checkin/ContactPanel';
 import { useNow } from '@/hooks/wa/useNow';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Megaphone } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function CheckinInbox() {
   const { hasAnyRole } = useAuth();
@@ -20,6 +21,11 @@ export default function CheckinInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  /** Conversa pedida por deep link (?conversa=), ex. vinda de um disparo. */
+  const [alvoDeepLink, setAlvoDeepLink] = useState<string | null>(
+    () => searchParams.get('conversa'),
+  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -34,9 +40,55 @@ export default function CheckinInbox() {
   }, [conversations, search, statusFilter]);
 
   useEffect(() => {
+    if (alvoDeepLink) return; // o deep link decide a seleção até ser resolvido
     if (filtered.length === 0) return;
     if (!filtered.some((c) => c.id === selectedId)) setSelectedId(filtered[0].id);
-  }, [filtered, selectedId]);
+  }, [filtered, selectedId, alvoDeepLink]);
+
+  /**
+   * Resolve o ?conversa=: se a conversa não aparece na lista atual, ajusta o
+   * escopo e limpa filtros até conseguir mostrá-la. Cair na conversa errada é
+   * pior que não navegar.
+   */
+  useEffect(() => {
+    if (!alvoDeepLink || isLoading) return;
+
+    const naLista = conversations.some((c) => c.id === alvoDeepLink);
+    if (!naLista) {
+      if (scope !== 'all' && canSeeAll) {
+        setScope('all');
+        return;
+      }
+      toast.error('Não foi possível abrir essa conversa — ela não está disponível para você.');
+      setAlvoDeepLink(null);
+      searchParams.delete('conversa');
+      setSearchParams(searchParams, { replace: true });
+      return;
+    }
+
+    if (!filtered.some((c) => c.id === alvoDeepLink)) {
+      // está no escopo, mas escondida pelos filtros da lista
+      if (statusFilter !== 'all') setStatusFilter('all');
+      if (search) setSearch('');
+      return;
+    }
+
+    setSelectedId(alvoDeepLink);
+    setAlvoDeepLink(null);
+    searchParams.delete('conversa');
+    setSearchParams(searchParams, { replace: true });
+  }, [
+    alvoDeepLink,
+    isLoading,
+    conversations,
+    filtered,
+    scope,
+    canSeeAll,
+    statusFilter,
+    search,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
 

@@ -24,16 +24,30 @@ interface Props {
   isLoading: boolean;
   status: string;
   onStatusChange: (v: string) => void;
+  /** Total real no banco para o filtro atual; a lista abaixo é paginada. */
+  total?: number;
+  pageSize?: number;
 }
 
 const badgeVariant = (status: string) =>
   status === 'falha' ? 'destructive' : status === 'enviado' ? 'default' : 'secondary';
 
-export function TargetsTable({ targets, isLoading, status, onStatusChange }: Props) {
+export function TargetsTable({
+  targets,
+  isLoading,
+  status,
+  onStatusChange,
+  total,
+  pageSize,
+}: Props) {
+  const truncado = total != null && pageSize != null && total > targets.length;
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{targets.length} alvo(s) listado(s)</p>
+        <p className="text-sm text-muted-foreground">
+          {total != null ? `${total} alvo(s) no total` : `${targets.length} alvo(s) listado(s)`}
+          {truncado && ` · mostrando os ${targets.length} primeiros (lista paginada)`}
+        </p>
         <Select value={status} onValueChange={onStatusChange}>
           <SelectTrigger className="w-48">
             <SelectValue />

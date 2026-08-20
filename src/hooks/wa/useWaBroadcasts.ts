@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -84,6 +84,7 @@ export function useWaTemplates() {
       const { data, error } = await supabase
         .from('wa_templates')
         .select('content_sid, name, body_preview, variables, category')
+        .eq('is_active', true)
         .order('name');
       if (error) throw error;
       return (data ?? [])
@@ -183,6 +184,27 @@ export function useWaBroadcast(id: string | undefined) {
   return query;
 }
 
+/** Quantos alvos a tabela lista por página — a lista é truncada de propósito. */
+export const TARGETS_PAGE_SIZE = 1000;
+
+/** Total real de alvos no banco para o filtro atual (agregado no servidor). */
+export function useWaTargetsTotal(broadcastId: string | undefined, status: string = 'all') {
+  return useQuery({
+    queryKey: ['wa-broadcast-targets-total', broadcastId, status],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<number> => {
+      let q = supabase
+        .from('wa_broadcast_targets')
+        .select('id', { count: 'exact', head: true })
+        .eq('broadcast_id', broadcastId!);
+      if (status !== 'all') q = q.eq('status', status);
+      const { count, error } = await q;
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
 /** Alvos do disparo, com realtime para acompanhar a entrega. */
 export function useWaBroadcastTargets(broadcastId: string | undefined, status: string = 'all') {
   const qc = useQueryClient();
@@ -199,7 +221,7 @@ export function useWaBroadcastTargets(broadcastId: string | undefined, status: s
         .eq('broadcast_id', broadcastId!)
         .order('enviado_em', { ascending: false, nullsFirst: false })
         .order('contact_name', { ascending: true })
-        .limit(1000);
+        .limit(TARGETS_PAGE_SIZE);
       if (status !== 'all') q = q.eq('status', status);
       const { data, error } = await q;
       if (error) throw error;
@@ -221,6 +243,7 @@ export function useWaBroadcastTargets(broadcastId: string | undefined, status: s
         },
         () => {
           qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+          qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-total', broadcastId] });
           qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
         },
       )
@@ -250,24 +273,47 @@ export function useWaTargetsCount(broadcastId: string | undefined, status: WaTar
   });
 }
 
-/** Contagem de ignorados por motivo — o número agregado esconde o problema. */
+/** Motivos conhecidos de ignorado — o resto cai em "outro". */
+export const MOTIVOS_IGNORADO = [
+  'optout',
+  'cooldown',
+  'nome_invalido',
+  'limite_marketing_do_destinatario',
+] as const;
+
+/**
+ * Contagem de ignorados por motivo — agregada NO SERVIDOR (`count: 'exact'`),
+ * uma chamada por motivo. Antes baixávamos 5.000 linhas e somávamos no
+ * cliente, o que dava número errado em disparo grande sem avisar ninguém.
+ */
 export function useWaIgnoradosPorMotivo(broadcastId: string | undefined) {
   return useQuery({
     queryKey: ['wa-broadcast-ignorados', broadcastId],
     enabled: !!broadcastId,
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase
-        .from('wa_broadcast_targets')
-        .select('motivo_ignorado')
-        .eq('broadcast_id', broadcastId!)
-        .eq('status', 'ignorado')
-        .limit(5000);
-      if (error) throw error;
+      const base = () =>
+        supabase
+          .from('wa_broadcast_targets')
+          .select('id', { count: 'exact', head: true })
+          .eq('broadcast_id', broadcastId!)
+          .eq('status', 'ignorado');
+
+      const [totalRes, ...porMotivo] = await Promise.all([
+        base(),
+        ...MOTIVOS_IGNORADO.map((m) => base().eq('motivo_ignorado', m)),
+      ]);
+      if (totalRes.error) throw totalRes.error;
+
       const acc: Record<string, number> = {};
-      for (const row of data ?? []) {
-        const key = row.motivo_ignorado ?? 'outro';
-        acc[key] = (acc[key] ?? 0) + 1;
-      }
+      let somaConhecidos = 0;
+      porMotivo.forEach((res, i) => {
+        if (res.error) throw res.error;
+        const n = res.count ?? 0;
+        somaConhecidos += n;
+        if (n > 0) acc[MOTIVOS_IGNORADO[i]] = n;
+      });
+      const outros = (totalRes.count ?? 0) - somaConhecidos;
+      if (outros > 0) acc.outro = outros;
       return acc;
     },
   });
@@ -387,7 +433,11 @@ export function useMontarPublico() {
       qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-total', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
+      // público novo invalida qualquer validação anterior: autorizar envio com
+      // validação de outro público é o pior erro possível aqui
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-validacao', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-sample-name', broadcastId] });
     },
     onError: (err) => toast.error(errMsg(err, 'Erro ao montar público')),
@@ -398,6 +448,10 @@ export function useValidarBroadcast(broadcastId: string | undefined, enabled = t
   return useQuery({
     queryKey: ['wa-broadcast-validacao', broadcastId],
     enabled: !!broadcastId && enabled,
+    // envio é irreversível: a validação nunca pode vir de cache
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<WaValidacaoItem[]> => {
       const { data, error } = await supabase.rpc('wa_broadcast_validar', {
         _broadcast_id: broadcastId!,
@@ -430,16 +484,37 @@ export function useIgnorarNomeInvalido() {
   });
 }
 
+/** Roda a validação server-side e devolve só os problemas bloqueantes. */
+const BLOQUEANTES = new Set(['variavel_sem_valor', 'template_nao_aprovado']);
+
+async function validarBloqueantes(broadcastId: string): Promise<WaValidacaoItem[]> {
+  const { data, error } = await supabase.rpc('wa_broadcast_validar', {
+    _broadcast_id: broadcastId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as WaValidacaoItem[]).filter((p) => BLOQUEANTES.has(p.problema));
+}
+
 /** Marca como enviando e dispara o primeiro lote. O cron segue sozinho depois. */
 export function useIniciarBroadcast() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (broadcastId: string) => {
-      const { error } = await supabase
+      // guarda de status: só um rascunho pode iniciar. Sem isso, um retry
+      // reescreve o iniciado_em de um disparo em andamento — ou ressuscita
+      // um cancelado.
+      const { data, error } = await supabase
         .from('wa_broadcasts')
         .update({ status: 'enviando', iniciado_em: new Date().toISOString() })
-        .eq('id', broadcastId);
+        .eq('id', broadcastId)
+        .eq('status', 'rascunho')
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Este disparo não está mais em rascunho — recarregue a tela para ver o status atual.',
+        );
+      }
       const { error: fnError } = await supabase.functions.invoke('wa-broadcast-dispatch', {
         body: { broadcast_id: broadcastId },
       });
@@ -459,12 +534,45 @@ export function useIniciarBroadcast() {
 
 export function useControlarBroadcast() {
   const update = useUpdateWaBroadcast();
+  const [retomando, setRetomando] = useState(false);
+
+  /**
+   * Retomar revalida antes: se o sistema pausou por taxa de falha ou por
+   * limite da conta, voltar para `enviando` sem checar nada é reabrir o
+   * problema. Também chama o dispatch uma vez, para não esperar o cron.
+   */
+  const retomar = async (id: string) => {
+    setRetomando(true);
+    try {
+      const bloqueantes = await validarBloqueantes(id);
+      if (bloqueantes.length > 0) {
+        toast.error(
+          `Não é possível retomar: ${bloqueantes.map((p) => p.detalhe).join(' · ')}`,
+        );
+        return;
+      }
+      await update.mutateAsync({ id, patch: { status: 'enviando' } });
+      const { error } = await supabase.functions.invoke('wa-broadcast-dispatch', {
+        body: { broadcast_id: id },
+      });
+      if (error) {
+        toast.warning('Disparo retomado. O próximo lote sai no próximo ciclo automático.');
+      } else {
+        toast.success('Disparo retomado');
+      }
+    } catch (err) {
+      toast.error(errMsg(err, 'Erro ao retomar disparo'));
+    } finally {
+      setRetomando(false);
+    }
+  };
+
   return {
     pausar: (id: string) => update.mutateAsync({ id, patch: { status: 'pausado' } }),
-    retomar: (id: string) => update.mutateAsync({ id, patch: { status: 'enviando' } }),
+    retomar,
     cancelar: (id: string, motivo: string) =>
       update.mutateAsync({ id, patch: { status: 'cancelado', motivo_cancelamento: motivo } }),
-    isPending: update.isPending,
+    isPending: update.isPending || retomando,
   };
 }
 

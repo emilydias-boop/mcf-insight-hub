@@ -19,6 +19,8 @@ import {
   useControlarBroadcast,
   useWaBroadcast,
   useWaBroadcastTargets,
+  useWaTargetsTotal,
+  TARGETS_PAGE_SIZE,
 } from '@/hooks/wa/useWaBroadcasts';
 import { TargetsTable } from '@/components/checkin/broadcast/TargetsTable';
 import {
@@ -33,6 +35,7 @@ export default function DisparoDetalhe() {
   const { data: broadcast, isLoading } = useWaBroadcast(id);
   const [statusFilter, setStatusFilter] = useState('all');
   const { data: targets = [], isLoading: loadingTargets } = useWaBroadcastTargets(id, statusFilter);
+  const { data: totalTargets } = useWaTargetsTotal(id, statusFilter);
   const controlar = useControlarBroadcast();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -79,17 +82,25 @@ export default function DisparoDetalhe() {
             {BROADCAST_STATUS_LABEL[broadcast.status] ?? broadcast.status}
           </Badge>
           {podeControlar && broadcast.status === 'enviando' && (
-            <Button variant="outline" onClick={() => controlar.pausar(broadcast.id)}>
+            <Button
+              variant="outline"
+              onClick={() => controlar.pausar(broadcast.id)}
+              disabled={controlar.isPending}
+            >
               <Pause className="mr-2 h-4 w-4" /> Pausar
             </Button>
           )}
           {podeControlar && broadcast.status === 'pausado' && (
-            <Button onClick={() => controlar.retomar(broadcast.id)}>
+            <Button onClick={() => controlar.retomar(broadcast.id)} disabled={controlar.isPending}>
               <Play className="mr-2 h-4 w-4" /> Retomar
             </Button>
           )}
           {podeControlar && ['enviando', 'pausado', 'aguardando'].includes(broadcast.status) && (
-            <Button variant="destructive" onClick={() => setCancelOpen(true)}>
+            <Button
+              variant="destructive"
+              onClick={() => setCancelOpen(true)}
+              disabled={controlar.isPending}
+            >
               <Ban className="mr-2 h-4 w-4" /> Cancelar
             </Button>
           )}
@@ -134,6 +145,8 @@ export default function DisparoDetalhe() {
         isLoading={loadingTargets}
         status={statusFilter}
         onStatusChange={setStatusFilter}
+        total={totalTargets}
+        pageSize={TARGETS_PAGE_SIZE}
       />
 
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
