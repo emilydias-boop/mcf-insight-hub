@@ -13666,6 +13666,157 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_broadcast_targets: {
+        Row: {
+          broadcast_id: string
+          contact_name: string | null
+          conversation_id: string | null
+          created_at: string
+          deal_id: string | null
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          message_id: string | null
+          motivo_ignorado: string | null
+          owner_profile_id: string | null
+          phone_e164: string
+          phone_key: string | null
+          status: string
+          tentativas: number
+          twilio_message_sid: string | null
+          variaveis: Json
+        }
+        Insert: {
+          broadcast_id: string
+          contact_name?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          message_id?: string | null
+          motivo_ignorado?: string | null
+          owner_profile_id?: string | null
+          phone_e164: string
+          phone_key?: string | null
+          status?: string
+          tentativas?: number
+          twilio_message_sid?: string | null
+          variaveis?: Json
+        }
+        Update: {
+          broadcast_id?: string
+          contact_name?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          message_id?: string | null
+          motivo_ignorado?: string | null
+          owner_profile_id?: string | null
+          phone_e164?: string
+          phone_key?: string | null
+          status?: string
+          tentativas?: number
+          twilio_message_sid?: string | null
+          variaveis?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_broadcast_targets_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "wa_broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_broadcast_targets_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "wa_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_broadcast_targets_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "wa_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_broadcasts: {
+        Row: {
+          cancelado_em: string | null
+          cancelado_por: string | null
+          concluido_em: string | null
+          content_sid: string
+          created_at: string
+          criado_por: string
+          filtro: Json
+          id: string
+          iniciado_em: string | null
+          motivo_cancelamento: string | null
+          nome: string
+          status: string
+          template_nome: string | null
+          template_preview: string | null
+          total_alvos: number
+          total_enviados: number
+          total_falhas: number
+          total_ignorados: number
+          updated_at: string
+          variaveis_fixas: Json
+        }
+        Insert: {
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          concluido_em?: string | null
+          content_sid: string
+          created_at?: string
+          criado_por: string
+          filtro?: Json
+          id?: string
+          iniciado_em?: string | null
+          motivo_cancelamento?: string | null
+          nome: string
+          status?: string
+          template_nome?: string | null
+          template_preview?: string | null
+          total_alvos?: number
+          total_enviados?: number
+          total_falhas?: number
+          total_ignorados?: number
+          updated_at?: string
+          variaveis_fixas?: Json
+        }
+        Update: {
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          concluido_em?: string | null
+          content_sid?: string
+          created_at?: string
+          criado_por?: string
+          filtro?: Json
+          id?: string
+          iniciado_em?: string | null
+          motivo_cancelamento?: string | null
+          nome?: string
+          status?: string
+          template_nome?: string | null
+          template_preview?: string | null
+          total_alvos?: number
+          total_enviados?: number
+          total_falhas?: number
+          total_ignorados?: number
+          updated_at?: string
+          variaveis_fixas?: Json
+        }
+        Relationships: []
+      }
       wa_conversations: {
         Row: {
           assigned_at: string | null
@@ -13804,6 +13955,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      wa_send_budget: {
+        Row: {
+          atualizado_em: string
+          id: boolean
+          pausar_se_falha_percentual: number
+          ritmo_por_minuto: number
+          teto_diario: number
+          teto_por_usuario_diario: number
+        }
+        Insert: {
+          atualizado_em?: string
+          id?: boolean
+          pausar_se_falha_percentual?: number
+          ritmo_por_minuto?: number
+          teto_diario?: number
+          teto_por_usuario_diario?: number
+        }
+        Update: {
+          atualizado_em?: string
+          id?: boolean
+          pausar_se_falha_percentual?: number
+          ritmo_por_minuto?: number
+          teto_diario?: number
+          teto_por_usuario_diario?: number
+        }
+        Relationships: []
       }
       webhook_configs: {
         Row: {
@@ -15772,10 +15950,12 @@ export type Database = {
           phone: string
         }[]
       }
+      wa_enviados_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
         Returns: string
       }
+      wa_is_opted_out: { Args: { _phone: string }; Returns: boolean }
       wa_match_lead_by_phone: {
         Args: { p_phone: string }
         Returns: {
@@ -15784,6 +15964,10 @@ export type Database = {
           deal_id: string
           negocios_encontrados: number
         }[]
+      }
+      wa_register_opt_out: {
+        Args: { _motivo?: string; _phone: string }
+        Returns: undefined
       }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }

@@ -28,3 +28,4 @@
 - [Webhook Lead Reentry](mem://features/webhook-lead-reentry-stage-move) — Reentrada move deal existente p/ Novo Lead ou Anamnese Completa, com 3 travas de cliente pago.
 - [Twilio SDR Cutoff](mem://business-logic/twilio-sdr-cutoff-visibility) — Ligações Twilio de SDR após 14/08/2026 01:36 UTC ficam invisíveis via call_is_visible; closers intactos.
 - [Documentos do Consórcio](mem://features/consorcio-documentos-cliente) — Termo de Adesão e Comprovante de Cadastro compartilham tabelas, rota pública e edge function.
+- [Atribuição Cotas por Cliente](mem://business-logic/consorcio-atribuicao-por-cliente) — SDR = último agendamento, atribuição por cliente, alerta de cadastro sem lead.

@@ -19,6 +19,7 @@ import { useMonthLock } from "@/hooks/useMonthLock";
 import {
   useCorrigirVinculoCota,
   useCotaTitular,
+  useCotasArrastadas,
   useLeadsParaVinculo,
   type LeadVinculoMatch,
 } from "@/hooks/useCorrigirVinculoCota";
@@ -46,6 +47,7 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   const [outrasCotas, setOutrasCotas] = useState<number | null>(null);
 
   const { data: titular, isLoading: loadingTitular } = useCotaTitular(open ? item?.cardId ?? null : null);
+  const { data: arrastadas } = useCotasArrastadas(open ? item?.cardId ?? null : null);
   const { data: leads = [], isFetching } = useLeadsParaVinculo(titular, termo, buscaAmpla, open);
   const corrigir = useCorrigirVinculoCota();
 
@@ -108,6 +110,20 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
               {titular?.telefone ? ` · ${titular.telefone}` : ""}
               {titular?.email ? ` · ${titular.email}` : ""}
             </div>
+          </div>
+        )}
+
+        {!!arrastadas?.cotas && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            Este cliente tem mais {arrastadas.cotas} cota{arrastadas.cotas === 1 ? "" : "s"} (
+            {arrastadas.credito.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+              maximumFractionDigits: 0,
+            })}
+            ) que passarão a ser creditadas ao SDR deste lead. A atribuição é por cliente: um
+            vínculo errado move todas.
           </div>
         )}
 

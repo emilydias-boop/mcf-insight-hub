@@ -240,6 +240,12 @@ export function ResiduoDetalheModal(props: Props) {
                         <TableCell className="text-xs">
                           <span className="inline-flex items-center gap-2">
                             {i.motivo}
+                            {i.atribuidoA && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Resultado já atribuído a {i.atribuidoA} por outra cota do mesmo
+                                cliente — falta o vínculo desta cota.
+                              </Badge>
+                            )}
                             {i.ajuste && <SeloAutoria ajuste={i.ajuste} />}
                           </span>
                         </TableCell>
