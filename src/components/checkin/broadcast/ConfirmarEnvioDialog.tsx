@@ -15,7 +15,8 @@ import { Loader2 } from 'lucide-react';
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  destinatarios: number;
+  /** null = contagem indisponível. Nesse caso o envio fica bloqueado. */
+  destinatarios: number | null;
   sending: boolean;
   onConfirm: () => void;
 }
@@ -28,14 +29,15 @@ export function ConfirmarEnvioDialog({
   sending,
   onConfirm,
 }: Props) {
-  const exigeDigitacao = destinatarios > 50;
+  const indisponivel = destinatarios === null;
+  const exigeDigitacao = indisponivel || destinatarios > 50;
   const [valor, setValor] = useState('');
 
   useEffect(() => {
-    if (open) setValor('');
-  }, [open]);
+    setValor('');
+  }, [open, destinatarios]);
 
-  const liberado = !exigeDigitacao || valor.trim() === String(destinatarios);
+  const liberado = !indisponivel && (!exigeDigitacao || valor.trim() === String(destinatarios));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -43,12 +45,13 @@ export function ConfirmarEnvioDialog({
         <DialogHeader>
           <DialogTitle>Confirmar disparo</DialogTitle>
           <DialogDescription>
-            {destinatarios} pessoa(s) vão receber esta mensagem no WhatsApp. Disparo é irreversível —
-            não existe desfazer.
+            {indisponivel
+              ? 'Não foi possível confirmar quantas pessoas vão receber. O envio fica bloqueado até a contagem carregar — feche, recarregue e tente de novo.'
+              : `${destinatarios} pessoa(s) vão receber esta mensagem no WhatsApp. Disparo é irreversível — não existe desfazer.`}
           </DialogDescription>
         </DialogHeader>
 
-        {exigeDigitacao && (
+        {!indisponivel && exigeDigitacao && (
           <div className="space-y-2">
             <Label htmlFor="confirma-numero">Digite {destinatarios} para liberar o envio</Label>
             <Input
