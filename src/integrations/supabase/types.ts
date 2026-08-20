@@ -16005,6 +16005,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_broadcast_estagios_disponiveis: {
+        Args: { _origin_id?: string }
+        Returns: {
+          leads: number
+          nome: string
+          stage_id: string
+        }[]
+      }
       wa_broadcast_ignorar_nome_invalido: {
         Args: { _broadcast_id: string }
         Returns: number
@@ -16015,6 +16023,14 @@ export type Database = {
           elegiveis: number
           ignorados: number
           total: number
+        }[]
+      }
+      wa_broadcast_origens_disponiveis: {
+        Args: never
+        Returns: {
+          leads: number
+          nome: string
+          origin_id: string
         }[]
       }
       wa_broadcast_preencher_variaveis: {
