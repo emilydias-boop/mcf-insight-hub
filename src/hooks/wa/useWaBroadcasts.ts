@@ -386,6 +386,7 @@ export function useMontarPublico() {
     onSuccess: (_d, broadcastId) => {
       qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-sample-name', broadcastId] });
     },
@@ -421,6 +422,7 @@ export function useIgnorarNomeInvalido() {
       toast.success(`${qtd} alvo(s) movido(s) para ignorado`);
       qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-validacao', broadcastId] });
     },
