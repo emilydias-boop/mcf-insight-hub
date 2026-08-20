@@ -1,0 +1,502 @@
+import { useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+
+export type WaBroadcastStatus =
+  | 'rascunho'
+  | 'aguardando'
+  | 'enviando'
+  | 'pausado'
+  | 'concluido'
+  | 'cancelado';
+
+export type WaTargetStatus = 'pendente' | 'enviando' | 'enviado' | 'falha' | 'ignorado';
+
+export interface WaBroadcast {
+  id: string;
+  criado_por: string;
+  nome: string;
+  content_sid: string;
+  template_nome: string | null;
+  template_preview: string | null;
+  variaveis_fixas: Record<string, string>;
+  filtro: Record<string, string>;
+  status: WaBroadcastStatus;
+  total_alvos: number;
+  total_enviados: number;
+  total_falhas: number;
+  total_ignorados: number;
+  limite_alvos: number | null;
+  sender_number: string | null;
+  iniciado_em: string | null;
+  concluido_em: string | null;
+  motivo_cancelamento: string | null;
+  created_at: string;
+}
+
+export interface WaBroadcastTarget {
+  id: string;
+  broadcast_id: string;
+  phone_e164: string;
+  deal_id: string | null;
+  contact_name: string | null;
+  owner_profile_id: string | null;
+  variaveis: Record<string, string>;
+  status: WaTargetStatus;
+  motivo_ignorado: string | null;
+  erro: string | null;
+  enviado_em: string | null;
+  conversation_id: string | null;
+}
+
+export interface WaTemplateOption {
+  content_sid: string;
+  name: string;
+  body_preview: string | null;
+  variables: string[];
+  category: string | null;
+}
+
+export interface WaValidacaoItem {
+  problema: string;
+  detalhe: string;
+  quantidade: number;
+}
+
+export interface WaSendBudget {
+  teto_diario: number;
+  reserva_atendimento_diaria: number;
+  teto_por_usuario_diario: number;
+  ritmo_por_minuto: number;
+}
+
+const errMsg = (err: unknown, fallback: string) =>
+  err instanceof Error && err.message ? err.message : fallback;
+
+/** Templates aprovados disponíveis para disparo. */
+export function useWaTemplates() {
+  return useQuery({
+    queryKey: ['wa-templates', 'broadcast'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaTemplateOption[]> => {
+      const { data, error } = await supabase
+        .from('wa_templates')
+        .select('content_sid, name, body_preview, variables, category')
+        .order('name');
+      if (error) throw error;
+      return (data ?? [])
+        .filter((t) => !!t.content_sid && !!t.name)
+        .map((t) => ({
+          content_sid: t.content_sid as string,
+          name: t.name as string,
+          body_preview: t.body_preview ?? null,
+          variables: (t.variables ?? []) as string[],
+          category: t.category ?? null,
+        }));
+    },
+  });
+}
+
+export function useWaSendBudget() {
+  return useQuery({
+    queryKey: ['wa-send-budget'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaSendBudget | null> => {
+      const { data, error } = await supabase
+        .from('wa_send_budget')
+        .select('teto_diario, reserva_atendimento_diaria, teto_por_usuario_diario, ritmo_por_minuto')
+        .maybeSingle();
+      if (error) throw error;
+      return (data as WaSendBudget) ?? null;
+    },
+  });
+}
+
+/** Saldo de envios que ainda cabe hoje + quanto já saiu. */
+export function useWaSaldoHoje() {
+  return useQuery({
+    queryKey: ['wa-saldo-hoje'],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [saldo, enviados] = await Promise.all([
+        supabase.rpc('wa_saldo_disparo_hoje'),
+        supabase.rpc('wa_enviados_hoje', {}),
+      ]);
+      if (saldo.error) throw saldo.error;
+      if (enviados.error) throw enviados.error;
+      return {
+        saldo: Number(saldo.data ?? 0),
+        enviadosHoje: Number(enviados.data ?? 0),
+      };
+    },
+  });
+}
+
+export function useWaBroadcasts() {
+  return useQuery({
+    queryKey: ['wa-broadcasts'],
+    staleTime: 15_000,
+    queryFn: async (): Promise<WaBroadcast[]> => {
+      const { data, error } = await supabase
+        .from('wa_broadcasts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as unknown as WaBroadcast[];
+    },
+  });
+}
+
+export function useWaBroadcast(id: string | undefined) {
+  const qc = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['wa-broadcast', id],
+    enabled: !!id,
+    queryFn: async (): Promise<WaBroadcast | null> => {
+      const { data, error } = await supabase.from('wa_broadcasts').select('*').eq('id', id!).maybeSingle();
+      if (error) throw error;
+      return (data as unknown as WaBroadcast) ?? null;
+    },
+  });
+
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`wa-broadcast-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'wa_broadcasts', filter: `id=eq.${id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['wa-broadcast', id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, qc]);
+
+  return query;
+}
+
+/** Alvos do disparo, com realtime para acompanhar a entrega. */
+export function useWaBroadcastTargets(broadcastId: string | undefined, status: string = 'all') {
+  const qc = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['wa-broadcast-targets', broadcastId, status],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<WaBroadcastTarget[]> => {
+      let q = supabase
+        .from('wa_broadcast_targets')
+        .select(
+          'id, broadcast_id, phone_e164, deal_id, contact_name, owner_profile_id, variaveis, status, motivo_ignorado, erro, enviado_em, conversation_id',
+        )
+        .eq('broadcast_id', broadcastId!)
+        .order('enviado_em', { ascending: false, nullsFirst: false })
+        .order('contact_name', { ascending: true })
+        .limit(1000);
+      if (status !== 'all') q = q.eq('status', status);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as WaBroadcastTarget[];
+    },
+  });
+
+  useEffect(() => {
+    if (!broadcastId) return;
+    const channel = supabase
+      .channel(`wa-broadcast-targets-${broadcastId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wa_broadcast_targets',
+          filter: `broadcast_id=eq.${broadcastId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+          qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [broadcastId, qc]);
+
+  return query;
+}
+
+/** Contagem de ignorados por motivo — o número agregado esconde o problema. */
+export function useWaTargetsCount(broadcastId: string | undefined, status: WaTargetStatus) {
+  return useQuery({
+    queryKey: ['wa-broadcast-targets-count', broadcastId, status],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('wa_broadcast_targets')
+        .select('id', { count: 'exact', head: true })
+        .eq('broadcast_id', broadcastId!)
+        .eq('status', status);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/** Contagem de ignorados por motivo — o número agregado esconde o problema. */
+export function useWaIgnoradosPorMotivo(broadcastId: string | undefined) {
+  return useQuery({
+    queryKey: ['wa-broadcast-ignorados', broadcastId],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from('wa_broadcast_targets')
+        .select('motivo_ignorado')
+        .eq('broadcast_id', broadcastId!)
+        .eq('status', 'ignorado')
+        .limit(5000);
+      if (error) throw error;
+      const acc: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const key = row.motivo_ignorado ?? 'outro';
+        acc[key] = (acc[key] ?? 0) + 1;
+      }
+      return acc;
+    },
+  });
+}
+
+/** Um nome real da carteira do operador, para interpolar a prévia do template. */
+export function useWaSampleName(broadcastId: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['wa-sample-name', broadcastId, user?.id],
+    staleTime: 60_000,
+    queryFn: async (): Promise<string | null> => {
+      if (broadcastId) {
+        const { data } = await supabase
+          .from('wa_broadcast_targets')
+          .select('contact_name')
+          .eq('broadcast_id', broadcastId)
+          .eq('status', 'pendente')
+          .not('contact_name', 'is', null)
+          .limit(1);
+        const name = data?.[0]?.contact_name;
+        if (name) return name;
+      }
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('crm_deals')
+        .select('name')
+        .eq('owner_profile_id', user.id)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return data?.[0]?.name ?? null;
+    },
+  });
+}
+
+export function useCreateWaBroadcast() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: {
+      nome: string;
+      content_sid: string;
+      template_nome: string | null;
+      template_preview: string | null;
+    }) => {
+      if (!user?.id) throw new Error('Sessão expirada');
+      const { data, error } = await supabase
+        .from('wa_broadcasts')
+        .insert({
+          criado_por: user.id,
+          nome: input.nome,
+          content_sid: input.content_sid,
+          template_nome: input.template_nome,
+          template_preview: input.template_preview,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data as unknown as WaBroadcast;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wa-broadcasts'] }),
+    onError: (err) => toast.error(errMsg(err, 'Erro ao criar disparo')),
+  });
+}
+
+export function useUpdateWaBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<
+        Pick<
+          WaBroadcast,
+          | 'nome'
+          | 'content_sid'
+          | 'template_nome'
+          | 'template_preview'
+          | 'filtro'
+          | 'limite_alvos'
+          | 'status'
+          | 'motivo_cancelamento'
+          | 'iniciado_em'
+        >
+      >;
+    }) => {
+      const { error } = await supabase.from('wa_broadcasts').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['wa-broadcast', vars.id] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao salvar disparo')),
+  });
+}
+
+export function useMontarPublico() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (broadcastId: string) => {
+      const { data, error } = await supabase.rpc('wa_broadcast_montar_publico', {
+        _broadcast_id: broadcastId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row ?? { total: 0, elegiveis: 0, ignorados: 0 }) as {
+        total: number;
+        elegiveis: number;
+        ignorados: number;
+      };
+    },
+    onSuccess: (_d, broadcastId) => {
+      qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-sample-name', broadcastId] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao montar público')),
+  });
+}
+
+export function useValidarBroadcast(broadcastId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['wa-broadcast-validacao', broadcastId],
+    enabled: !!broadcastId && enabled,
+    queryFn: async (): Promise<WaValidacaoItem[]> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_validar', {
+        _broadcast_id: broadcastId!,
+      });
+      if (error) throw error;
+      return (data ?? []) as WaValidacaoItem[];
+    },
+  });
+}
+
+export function useIgnorarNomeInvalido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (broadcastId: string) => {
+      const { data, error } = await supabase.rpc('wa_broadcast_ignorar_nome_invalido', {
+        _broadcast_id: broadcastId,
+      });
+      if (error) throw error;
+      return Number(data ?? 0);
+    },
+    onSuccess: (qtd, broadcastId) => {
+      toast.success(`${qtd} alvo(s) movido(s) para ignorado`);
+      qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-validacao', broadcastId] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao ignorar nomes inválidos')),
+  });
+}
+
+/** Marca como enviando e dispara o primeiro lote. O cron segue sozinho depois. */
+export function useIniciarBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (broadcastId: string) => {
+      const { error } = await supabase
+        .from('wa_broadcasts')
+        .update({ status: 'enviando', iniciado_em: new Date().toISOString() })
+        .eq('id', broadcastId);
+      if (error) throw error;
+      const { error: fnError } = await supabase.functions.invoke('wa-broadcast-dispatch', {
+        body: { broadcast_id: broadcastId },
+      });
+      if (fnError) {
+        // o disparo já está em enviando; o cron pega no próximo minuto
+        toast.warning('Disparo iniciado. O primeiro lote sai no próximo ciclo automático.');
+      }
+    },
+    onSuccess: (_d, broadcastId) => {
+      qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+      qc.invalidateQueries({ queryKey: ['wa-saldo-hoje'] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao iniciar disparo')),
+  });
+}
+
+export function useControlarBroadcast() {
+  const update = useUpdateWaBroadcast();
+  return {
+    pausar: (id: string) => update.mutateAsync({ id, patch: { status: 'pausado' } }),
+    retomar: (id: string) => update.mutateAsync({ id, patch: { status: 'enviando' } }),
+    cancelar: (id: string, motivo: string) =>
+      update.mutateAsync({ id, patch: { status: 'cancelado', motivo_cancelamento: motivo } }),
+    isPending: update.isPending,
+  };
+}
+
+/** Estágios e origens para os filtros opcionais do público. */
+export function useCrmStageOptions() {
+  return useQuery({
+    queryKey: ['wa-broadcast-stage-options'],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_stages')
+        .select('id, stage_name, origin_id, stage_order')
+        .eq('is_active', true)
+        .order('stage_order');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useCrmOriginOptions() {
+  return useQuery({
+    queryKey: ['wa-broadcast-origin-options'],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name, is_archived')
+        .or('is_archived.is.null,is_archived.eq.false')
+        .order('name');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}

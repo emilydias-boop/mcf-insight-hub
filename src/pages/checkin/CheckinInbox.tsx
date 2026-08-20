@@ -7,6 +7,9 @@ import { ConversationThread } from '@/components/checkin/ConversationThread';
 import { MessageComposer } from '@/components/checkin/MessageComposer';
 import { ContactPanel } from '@/components/checkin/ContactPanel';
 import { useNow } from '@/hooks/wa/useNow';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Megaphone } from 'lucide-react';
 
 export default function CheckinInbox() {
   const { hasAnyRole } = useAuth();
@@ -38,7 +41,17 @@ export default function CheckinInbox() {
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-3">
+    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">MCF - Atendimento</h1>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/checkin/disparos">
+            <Megaphone className="mr-2 h-4 w-4" /> Disparos por template
+          </Link>
+        </Button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 gap-3">
       <ConversationList
         conversations={filtered}
         isLoading={isLoading}
@@ -64,6 +77,7 @@ export default function CheckinInbox() {
             Selecione uma conversa para começar
           </div>
         )}
+      </div>
       </div>
     </div>
   );

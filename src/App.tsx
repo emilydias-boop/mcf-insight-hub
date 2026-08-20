@@ -39,6 +39,8 @@ const TVIncorporadorEquipe = lazy(() => import("./pages/public/TVIncorporadorEqu
 const TVConsorcioEquipe = lazy(() => import("./pages/public/TVConsorcioEquipe"));
 const CheckinInbox = lazy(() => import("./pages/checkin/CheckinInbox"));
 const CustomerRoom = lazy(() => import("./pages/checkin/CustomerRoom"));
+const Disparos = lazy(() => import("./pages/checkin/Disparos"));
+const DisparoDetalhe = lazy(() => import("./pages/checkin/DisparoDetalhe"));
 const TermoAssinatura = lazy(() => import('./pages/public/TermoAssinatura'));
 const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoAccess"));
 
@@ -205,6 +207,8 @@ const App = () => (
             >
               <Route path="home" element={<Home />} />
               <Route path="checkin" element={<McfAtendimentoGuard><CheckinInbox /></McfAtendimentoGuard>} />
+              <Route path="checkin/disparos" element={<McfAtendimentoGuard><Disparos /></McfAtendimentoGuard>} />
+              <Route path="checkin/disparos/:id" element={<McfAtendimentoGuard><DisparoDetalhe /></McfAtendimentoGuard>} />
               <Route path="checkin/acesso" element={<RoleGuard allowedRoles={['admin', 'manager']}><McfAtendimentoAccess /></RoleGuard>} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
