@@ -7,11 +7,11 @@ export interface ConsorcioCotasContratadas {
   total: number;
   /** Cotas por closer_id (via vendedor da cota → closers da BU). */
   byCloser: Map<string, number>;
-  /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou). */
+  /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou a R1 da BU). */
   bySdr: Map<string, number>;
   /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
   sdrNames: Map<string, string>;
-  /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo com lead). */
+  /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo ou sem agendador da BU). */
   semVinculo: number;
   /** Cotas cujo vendedor não casou com nenhum closer da BU. */
   semCloser: number;
@@ -48,8 +48,12 @@ function nameKey(name?: string | null): string | null {
  * Fonte: `consortium_cards` com `tipo_registro = 'contratacao'`, eixo de data
  * `data_contratacao`. Atribuição:
  *  - Closer: vendedor da cota (`vendedor_name`) casado com `closers` da BU.
- *  - SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a R1
- *    (`meeting_slot_attendees.booked_by`), com fallback no dono do negócio.
+ *  - SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a
+ *    PRIMEIRA reunião conduzida por closer DESTA BU (`meeting_slots.closer_id`).
+ *    Reunião conduzida por closer de outra BU nunca define o SDR da cota, por
+ *    mais antiga que seja. Attendees `invited`, `no_show` e `cancelled` são
+ *    ignorados. Não há fallback no dono do negócio: sem agendador identificado
+ *    a cota vai para a linha "Não atribuído".
  *
  * Filtro de funil: aplicado pela origem do deal vinculado. Cota sem vínculo com
  * lead não tem origem — fica de fora quando há funil selecionado (conservador).
@@ -98,34 +102,66 @@ export function useConsorcioCotasContratadas(
 
       const dealIds = [...new Set(Array.from(cardToDeal.values()))];
 
-      // Origem + dono do negócio (origem alimenta o filtro de funil)
+      // Origem do deal (alimenta o filtro de funil)
       const dealOrigin = new Map<string, string>();
-      const dealOwner = new Map<string, string>();
       if (dealIds.length > 0) {
         const { data: deals, error: dealsError } = await supabase
           .from("crm_deals")
-          .select("id, owner_id, origin_id, crm_origins(name)")
+          .select("id, origin_id, crm_origins(name)")
           .in("id", dealIds);
         if (dealsError) throw dealsError;
         (deals || []).forEach((d: any) => {
           const originName = d.crm_origins?.name;
           if (originName) dealOrigin.set(d.id, String(originName).toLowerCase());
-          if (d.owner_id) dealOwner.set(d.id, String(d.owner_id).toLowerCase());
         });
       }
 
-      // Quem agendou a R1 do deal
+      // Closers da BU: definem tanto o lado closer quanto quais reuniões contam
+      // para a atribuição do SDR.
+      const { data: closers, error: closersError } = await supabase
+        .from("closers")
+        .select("id, name")
+        .eq("bu", bu);
+      if (closersError) throw closersError;
+      const closerByName = new Map<string, string>();
+      const buCloserIds = new Set<string>();
+      (closers || []).forEach((c: any) => {
+        buCloserIds.add(String(c.id));
+        const key = nameKey(c.name);
+        if (key && !closerByName.has(key)) closerByName.set(key, c.id);
+      });
+
+      // Quem agendou a PRIMEIRA reunião desta BU para o deal.
       const dealBooker = new Map<string, string>();
       if (dealIds.length > 0) {
         const { data: attendees, error: attError } = await supabase
           .from("meeting_slot_attendees")
-          .select("deal_id, booked_by, booked_at, created_at")
+          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
           .in("deal_id", dealIds)
           .not("booked_by", "is", null)
-          .neq("status", "cancelled");
+          .not("status", "in", "(cancelled,invited,no_show)");
         if (attError) throw attError;
 
-        const bookerIds = [...new Set((attendees || []).map((a: any) => a.booked_by).filter(Boolean))];
+        // Só reuniões conduzidas por closer desta BU definem o SDR.
+        const slotIds = [...new Set((attendees || []).map((a: any) => a.meeting_slot_id).filter(Boolean))];
+        const slotCloser = new Map<string, string>();
+        if (slotIds.length > 0) {
+          const { data: slots, error: slotsError } = await supabase
+            .from("meeting_slots")
+            .select("id, closer_id")
+            .in("id", slotIds);
+          if (slotsError) throw slotsError;
+          (slots || []).forEach((s: any) => {
+            if (s.closer_id) slotCloser.set(String(s.id), String(s.closer_id));
+          });
+        }
+
+        const buAttendees = (attendees || []).filter((a: any) => {
+          const closerId = a.meeting_slot_id ? slotCloser.get(String(a.meeting_slot_id)) : undefined;
+          return !!closerId && buCloserIds.has(closerId);
+        });
+
+        const bookerIds = [...new Set(buAttendees.map((a: any) => a.booked_by).filter(Boolean))];
         const emailById = new Map<string, string>();
         if (bookerIds.length > 0) {
           const { data: profs } = await supabase
@@ -136,8 +172,8 @@ export function useConsorcioCotasContratadas(
             if (p.email) emailById.set(p.id, String(p.email).toLowerCase());
           });
         }
-        // O primeiro agendamento define o SDR da cota.
-        const sorted = [...(attendees || [])].sort((a: any, b: any) =>
+        // O primeiro agendamento da BU define o SDR da cota.
+        const sorted = [...buAttendees].sort((a: any, b: any) =>
           String(a.booked_at || a.created_at || "").localeCompare(String(b.booked_at || b.created_at || "")),
         );
         sorted.forEach((a: any) => {
@@ -146,18 +182,6 @@ export function useConsorcioCotasContratadas(
           if (email) dealBooker.set(a.deal_id, email);
         });
       }
-
-      // Vendedor da cota → closer da BU
-      const { data: closers, error: closersError } = await supabase
-        .from("closers")
-        .select("id, name")
-        .eq("bu", bu);
-      if (closersError) throw closersError;
-      const closerByName = new Map<string, string>();
-      (closers || []).forEach((c: any) => {
-        const key = nameKey(c.name);
-        if (key && !closerByName.has(key)) closerByName.set(key, c.id);
-      });
 
       const byCloser = new Map<string, number>();
       const bySdr = new Map<string, number>();
@@ -178,7 +202,8 @@ export function useConsorcioCotasContratadas(
         if (closerId) byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
         else semCloser++;
 
-        const sdrEmail = dealId ? dealBooker.get(dealId) || dealOwner.get(dealId) : undefined;
+        // Sem fallback em owner_id: sem agendador desta BU → "Não atribuído".
+        const sdrEmail = dealId ? dealBooker.get(dealId) : undefined;
         if (sdrEmail) bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
         else semVinculo++;
       });
