@@ -542,47 +542,123 @@ export function useIniciarBroadcast() {
 }
 
 export function useControlarBroadcast() {
-  const update = useUpdateWaBroadcast();
-  const [retomando, setRetomando] = useState(false);
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const [agindo, setAgindo] = useState(false);
+
+  const invalidar = (id: string) => {
+    qc.invalidateQueries({ queryKey: ['wa-broadcast', id] });
+    qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+  };
 
   /**
-   * Retomar revalida antes: se o sistema pausou por taxa de falha ou por
-   * limite da conta, voltar para `enviando` sem checar nada é reabrir o
-   * problema. Também chama o dispatch uma vez, para não esperar o cron.
+   * Transição de status com guarda: com dois admins na tela, um cancela e o
+   * outro clica em "Retomar" num render obsoleto — sem `.eq('status', ...)` o
+   * cancelado voltaria para `enviando` e o dispatcher retomaria o envio.
    */
-  const retomar = async (id: string) => {
-    setRetomando(true);
+  const transicionar = async (
+    id: string,
+    de: WaBroadcastStatus[],
+    patch: Record<string, unknown>,
+  ) => {
+    const { data, error } = await supabase
+      .from('wa_broadcasts')
+      .update(patch)
+      .eq('id', id)
+      .in('status', de)
+      .select('id');
+    if (error) throw error;
+    invalidar(id);
+    return !!data && data.length > 0;
+  };
+
+  const pausar = async (id: string) => {
+    setAgindo(true);
     try {
-      const bloqueantes = await validarBloqueantes(id);
-      if (bloqueantes.length > 0) {
-        toast.error(
-          `Não é possível retomar: ${bloqueantes.map((p) => p.detalhe).join(' · ')}`,
-        );
+      const ok = await transicionar(id, ['enviando'], { status: 'pausado' });
+      if (!ok) {
+        toast.error('Este disparo não está mais enviando — recarregue para ver o status atual.');
         return;
       }
-      await update.mutateAsync({ id, patch: { status: 'enviando' } });
-      const { error } = await supabase.functions.invoke('wa-broadcast-dispatch', {
-        body: { broadcast_id: id },
-      });
-      if (error) {
-        toast.warning('Disparo retomado. O próximo lote sai no próximo ciclo automático.');
-      } else {
-        toast.success('Disparo retomado');
-      }
+      toast.success('Disparo pausado');
     } catch (err) {
-      toast.error(errMsg(err, 'Erro ao retomar disparo'));
+      toast.error(errMsg(err, 'Erro ao pausar disparo'));
     } finally {
-      setRetomando(false);
+      setAgindo(false);
     }
   };
 
-  return {
-    pausar: (id: string) => update.mutateAsync({ id, patch: { status: 'pausado' } }),
-    retomar,
-    cancelar: (id: string, motivo: string) =>
-      update.mutateAsync({ id, patch: { status: 'cancelado', motivo_cancelamento: motivo } }),
-    isPending: update.isPending || retomando,
+  const cancelar = async (id: string, motivo: string) => {
+    setAgindo(true);
+    try {
+      const ok = await transicionar(id, ['rascunho', 'aguardando', 'enviando', 'pausado'], {
+        status: 'cancelado',
+        motivo_cancelamento: motivo,
+        cancelado_em: new Date().toISOString(),
+        cancelado_por: user?.id ?? null,
+      });
+      if (!ok) {
+        toast.error('Este disparo já foi encerrado — recarregue para ver o status atual.');
+        return;
+      }
+      toast.success('Disparo cancelado');
+    } catch (err) {
+      toast.error(errMsg(err, 'Erro ao cancelar disparo'));
+    } finally {
+      setAgindo(false);
+    }
   };
+
+  /**
+   * Retomar revalida antes o que a validação sabe conferir (variável sem
+   * valor, nome inválido, template não aprovado) — ela NÃO sabe por que o
+   * sistema pausou. Por isso lemos a resposta do dispatch: se ele pausar de
+   * novo na mesma chamada (taxa de falha, limite), a tela mostra o motivo em
+   * vez de "retomado".
+   */
+  const retomar = async (id: string) => {
+    setAgindo(true);
+    try {
+      const bloqueantes = await validarBloqueantes(id);
+      if (bloqueantes.length > 0) {
+        toast.error(`Não é possível retomar: ${bloqueantes.map((p) => p.detalhe).join(' · ')}`);
+        return;
+      }
+      const ok = await transicionar(id, ['pausado'], { status: 'enviando' });
+      if (!ok) {
+        toast.error('Este disparo não está mais pausado — recarregue para ver o status atual.');
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('wa-broadcast-dispatch', {
+        body: { broadcast_id: id },
+      });
+      invalidar(id);
+      if (error) {
+        toast.warning('Disparo retomado. O próximo lote sai no próximo ciclo automático.');
+        return;
+      }
+      const res = (data ?? {}) as { pausado?: boolean; motivo?: string; concluido?: boolean };
+      if (res.pausado) {
+        toast.error(
+          `O sistema pausou o disparo de novo${res.motivo ? `: ${res.motivo}` : ''} — resolva a causa antes de retomar.`,
+        );
+        return;
+      }
+      if (res.concluido) {
+        toast.info('Este disparo já terminou — não há mais alvos pendentes.');
+        return;
+      }
+      toast.success('Disparo retomado');
+    } catch (err) {
+      toast.error(errMsg(err, 'Erro ao retomar disparo'));
+    } finally {
+      setAgindo(false);
+    }
+  };
+
+  return { pausar, retomar, cancelar, isPending: agindo };
+}
+
 }
 
 /** Estágios e origens para os filtros opcionais do público. */
