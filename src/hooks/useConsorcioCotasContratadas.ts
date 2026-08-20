@@ -2,6 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
+export interface CotaResiduoItem {
+  cardId: string;
+  cliente: string;
+  grupo: string | null;
+  cota: string | null;
+  dataContratacao: string | null;
+  valorCredito: number | null;
+  vendedorName: string | null;
+  dealId: string | null;
+  motivo: string;
+}
+
 export interface ConsorcioCotasContratadas {
   /** Total de cotas contratadas no período (após filtro de funil). */
   total: number;
@@ -15,6 +27,10 @@ export interface ConsorcioCotasContratadas {
   semVinculo: number;
   /** Cotas cujo vendedor não casou com nenhum closer da BU. */
   semCloser: number;
+  /** Detalhe das cotas sem SDR atribuível, com o motivo exato do dado faltante. */
+  semVinculoItems: CotaResiduoItem[];
+  /** Detalhe das cotas sem vendedor casado com closer da BU. */
+  semCloserItems: CotaResiduoItem[];
 }
 
 const EMPTY: ConsorcioCotasContratadas = {
@@ -24,6 +40,8 @@ const EMPTY: ConsorcioCotasContratadas = {
   sdrNames: new Map(),
   semVinculo: 0,
   semCloser: 0,
+  semVinculoItems: [],
+  semCloserItems: [],
 };
 
 /** Normaliza nome para casar "André Duarte" com "Andre dos Santos Duarte". */
@@ -78,7 +96,7 @@ export function useConsorcioCotasContratadas(
 
       const { data: cards, error: cardsError } = await supabase
         .from("consortium_cards")
-        .select("id, vendedor_name, data_contratacao")
+        .select("id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito")
         .eq("tipo_registro", "contratacao")
         .gte("data_contratacao", format(startDate, "yyyy-MM-dd"))
         .lte("data_contratacao", format(endDate, "yyyy-MM-dd"));
@@ -95,7 +113,9 @@ export function useConsorcioCotasContratadas(
       if (regsError) throw regsError;
 
       const cardToDeal = new Map<string, string>();
+      const cardsComCadastro = new Set<string>();
       (regs || []).forEach((r: any) => {
+        if (r.consortium_card_id) cardsComCadastro.add(r.consortium_card_id);
         if (r.consortium_card_id && r.deal_id && !cardToDeal.has(r.consortium_card_id)) {
           cardToDeal.set(r.consortium_card_id, r.deal_id);
         }
@@ -105,6 +125,7 @@ export function useConsorcioCotasContratadas(
 
       // Origem do deal (alimenta o filtro de funil)
       const dealOrigin = new Map<string, string>();
+      const dealsExistentes = new Set<string>();
       if (dealIds.length > 0) {
         const { data: deals, error: dealsError } = await supabase
           .from("crm_deals")
@@ -112,6 +133,7 @@ export function useConsorcioCotasContratadas(
           .in("id", dealIds);
         if (dealsError) throw dealsError;
         (deals || []).forEach((d: any) => {
+          dealsExistentes.add(String(d.id));
           const originName = d.crm_origins?.name;
           if (originName) dealOrigin.set(d.id, String(originName).toLowerCase());
         });
@@ -134,13 +156,15 @@ export function useConsorcioCotasContratadas(
 
       // Quem agendou a PRIMEIRA reunião desta BU para o deal.
       const dealBooker = new Map<string, string>();
+      // Diagnóstico por deal (alimenta a coluna "Motivo" do detalhamento).
+      const dealTemReuniaoBU = new Set<string>();
+      const dealTemReuniaoElegivel = new Set<string>();
+      const dealTemBooker = new Set<string>();
       if (dealIds.length > 0) {
         const { data: attendees, error: attError } = await supabase
           .from("meeting_slot_attendees")
           .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
-          .in("deal_id", dealIds)
-          .not("booked_by", "is", null)
-          .not("status", "in", "(cancelled,invited)");
+          .in("deal_id", dealIds);
         if (attError) throw attError;
 
         // Só reuniões conduzidas por closer desta BU definem o SDR.
@@ -157,10 +181,21 @@ export function useConsorcioCotasContratadas(
           });
         }
 
-        const buAttendees = (attendees || []).filter((a: any) => {
+        const buAttendeesAll = (attendees || []).filter((a: any) => {
           const closerId = a.meeting_slot_id ? slotCloser.get(String(a.meeting_slot_id)) : undefined;
           return !!closerId && buCloserIds.has(closerId);
         });
+        buAttendeesAll.forEach((a: any) => {
+          if (!a.deal_id) return;
+          dealTemReuniaoBU.add(a.deal_id);
+          if (a.status !== "cancelled" && a.status !== "invited") {
+            dealTemReuniaoElegivel.add(a.deal_id);
+            if (a.booked_by) dealTemBooker.add(a.deal_id);
+          }
+        });
+        const buAttendees = buAttendeesAll.filter(
+          (a: any) => a.booked_by && a.status !== "cancelled" && a.status !== "invited",
+        );
 
         const bookerIds = [...new Set(buAttendees.map((a: any) => a.booked_by).filter(Boolean))];
         const emailById = new Map<string, string>();
@@ -189,6 +224,20 @@ export function useConsorcioCotasContratadas(
       let total = 0;
       let semVinculo = 0;
       let semCloser = 0;
+      const semVinculoItems: CotaResiduoItem[] = [];
+      const semCloserItems: CotaResiduoItem[] = [];
+
+      const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => ({
+        cardId: card.id,
+        cliente: card.nome_completo || "—",
+        grupo: card.grupo ?? null,
+        cota: card.cota ?? null,
+        dataContratacao: card.data_contratacao ?? null,
+        valorCredito: card.valor_credito ?? null,
+        vendedorName: card.vendedor_name ?? null,
+        dealId,
+        motivo,
+      });
 
       cards.forEach((card) => {
         const dealId = cardToDeal.get(card.id);
@@ -201,12 +250,43 @@ export function useConsorcioCotasContratadas(
 
         const closerId = closerByName.get(nameKey(card.vendedor_name) || "");
         if (closerId) byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
-        else semCloser++;
+        else {
+          semCloser++;
+          const vendedor = (card.vendedor_name || "").trim();
+          semCloserItems.push(
+            baseItem(
+              card,
+              dealId ?? null,
+              vendedor
+                ? `Vendedor gravado como "${vendedor}", que não corresponde a nenhum closer cadastrado na BU Consórcio — corrigir a grafia na cota ou o cadastro do closer.`
+                : "Campo Vendedor está vazio na cota — preencher o vendedor no Controle Consórcio.",
+            ),
+          );
+        }
 
         // Sem fallback em owner_id: sem agendador desta BU → "Não atribuído".
         const sdrEmail = dealId ? dealBooker.get(dealId) : undefined;
         if (sdrEmail) bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
-        else semVinculo++;
+        else {
+          semVinculo++;
+          let motivo: string;
+          if (!cardsComCadastro.has(card.id)) {
+            motivo = "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.";
+          } else if (!dealId) {
+            motivo = "Cadastro pendente existe, mas sem lead vinculado (deal_id nulo) — vincular a cota ao negócio no CRM.";
+          } else if (!dealsExistentes.has(dealId)) {
+            motivo = "Cadastro aponta para um negócio que não existe mais no CRM — revincular a cota a um lead válido.";
+          } else if (!dealTemReuniaoBU.has(dealId)) {
+            motivo = "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.";
+          } else if (!dealTemReuniaoElegivel.has(dealId)) {
+            motivo = "As reuniões de consórcio do lead estão todas como convite/cancelada — atualizar o status do attendee.";
+          } else if (!dealTemBooker.has(dealId)) {
+            motivo = "Reunião de consórcio elegível, mas sem agendador registrado (booked_by nulo) — informar quem agendou.";
+          } else {
+            motivo = "Agendador registrado, mas sem e-mail no perfil — completar o cadastro do usuário.";
+          }
+          semVinculoItems.push(baseItem(card, dealId ?? null, motivo));
+        }
       });
 
       // Nomes dos SDRs atribuídos (inclui quem não teve atividade na agenda do período).
@@ -222,7 +302,15 @@ export function useConsorcioCotasContratadas(
         });
       }
 
-      return { total, byCloser, bySdr, sdrNames, semVinculo, semCloser };
+      const porData = (a: CotaResiduoItem, b: CotaResiduoItem) =>
+        String(b.dataContratacao || "").localeCompare(String(a.dataContratacao || ""));
+      semVinculoItems.sort(porData);
+      semCloserItems.sort(porData);
+
+      return {
+        total, byCloser, bySdr, sdrNames, semVinculo, semCloser,
+        semVinculoItems, semCloserItems,
+      };
     },
     enabled: !!startDate && !!endDate,
     staleTime: 30000,

@@ -595,6 +595,25 @@ export default function ConsorcioPainelEquipe() {
   // aparecendo também com funil selecionado (a mesma base é filtrada por origem).
   const sdrUnassignedRow = fatos.sdrUnassigned;
 
+  // Detalhe da linha "Não atribuído": os MESMOS fatos que produziram o número
+  // (base já filtrada por funil, sem agendador identificado).
+  const sdrUnassignedItems = useMemo(() => {
+    if (!sdrUnassignedRow) return [];
+    return fatosRows
+      .filter(r => (!allowedOriginNames || allowedOriginNames.has((r.origin_name || "").toLowerCase()))
+        && !(r.sdr_email || "").trim())
+      .map(r => ({
+        dealId: r.deal_id,
+        meetingDay: r.meeting_day,
+        closerName: r.closer_name,
+        attendeeStatus: r.attendee_status,
+        motivo: r.deal_id
+          ? "Reunião sem agendador registrado (booked_by nulo) — informar quem agendou no attendee."
+          : "Fato de agenda sem negócio vinculado e sem agendador — vincular a reunião a um lead do CRM.",
+      }))
+      .sort((a, b) => String(b.meetingDay).localeCompare(String(a.meetingDay)));
+  }, [sdrUnassignedRow, fatosRows, allowedOriginNames]);
+
   const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     const sdrs = activeSdrsList || [];
     return sdrs.map(sdr => ({
@@ -953,6 +972,8 @@ export default function ConsorcioPainelEquipe() {
                 sdrNames={cotasContratadas?.sdrNames}
                 sdrFilterEmail={sdrFilter === "all" ? null : sdrFilter}
                 unassigned={sdrUnassignedRow}
+                cotasSemVinculoItems={cotasContratadas?.semVinculoItems}
+                unassignedItems={sdrUnassignedItems}
               />
               <div className="mt-6 px-0 sm:px-0">
                 <SdrActivityMetricsTable startDate={start} endDate={end} squad="consorcio" />
@@ -965,6 +986,7 @@ export default function ConsorcioPainelEquipe() {
               propostasEnviadasByCloser={propostasByCloser}
               cotasByCloser={cotasContratadas?.byCloser}
               cotasSemCloser={cotasContratadas?.semCloser || 0}
+              cotasSemCloserItems={cotasContratadas?.semCloserItems}
               agendaUnassigned={fatos.closerUnassigned}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
                 const params = new URLSearchParams();
