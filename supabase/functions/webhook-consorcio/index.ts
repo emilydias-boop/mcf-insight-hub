@@ -276,15 +276,6 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Contador auditável de requisições sem o segredo (base da decisão da Fase 2).
-    if (authOutcome !== 'ok') {
-      await supabase.from('bu_webhook_logs').insert({
-        bu_type: 'consorcio',
-        event_type: `new_card.auth_${authOutcome}`,
-        payload: { fase: 1, modo: 'permissivo', auth: authOutcome, caller },
-        status: 'warning',
-      });
-    }
 
     const { data: logEntry } = await supabase
       .from('bu_webhook_logs')
