@@ -141,15 +141,15 @@ export function ConsorcioCloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
-              >
-                Cotas Contratadas
-              </TableHead>
-              <TableHead
-                className="text-muted-foreground text-center font-medium whitespace-nowrap"
                 title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. Cada cliente aparece em uma única linha, então as linhas somam o Total."
               >
                 Vendas Realizadas
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
+              >
+                Cotas Contratadas
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
