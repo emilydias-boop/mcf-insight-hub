@@ -1,3 +1,12 @@
+/**
+ * webhook-consorcio — entrada de cotas de consórcio.
+ *
+ * AUTENTICAÇÃO (modo estrito): todo integrador DEVE enviar o header
+ * `x-webhook-secret` com o valor do segredo `CONSORCIO_WEBHOOK_SECRET`
+ * (Project Settings → Secrets). Sem header, header errado, ou segredo
+ * não configurado no ambiente → 401, sem nenhuma escrita de negócio.
+ * Toda tentativa rejeitada é auditada em `bu_webhook_logs`.
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
@@ -38,8 +47,8 @@ function timingSafeEqual(a: string, b: string): boolean {
 type AuthOutcome = 'ok' | 'missing_header' | 'bad_secret' | 'secret_not_configured';
 
 /**
- * FASE 1 — modo PERMISSIVO: nunca rejeita, só identifica e registra.
- * A Fase 2 troca `permissive` por 401 quando o resultado não é 'ok'.
+ * FASE 2 — modo ESTRITO: qualquer resultado diferente de 'ok' devolve 401.
+ * Porta fechada por padrão: segredo ausente no ambiente também bloqueia.
  */
 function checkWebhookSecret(req: Request): AuthOutcome {
   const expected = Deno.env.get('CONSORCIO_WEBHOOK_SECRET');
