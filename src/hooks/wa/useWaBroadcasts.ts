@@ -433,7 +433,11 @@ export function useMontarPublico() {
       qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-targets-total', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-ignorados', broadcastId] });
+      // público novo invalida qualquer validação anterior: autorizar envio com
+      // validação de outro público é o pior erro possível aqui
+      qc.invalidateQueries({ queryKey: ['wa-broadcast-validacao', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-sample-name', broadcastId] });
     },
     onError: (err) => toast.error(errMsg(err, 'Erro ao montar público')),
@@ -444,6 +448,10 @@ export function useValidarBroadcast(broadcastId: string | undefined, enabled = t
   return useQuery({
     queryKey: ['wa-broadcast-validacao', broadcastId],
     enabled: !!broadcastId && enabled,
+    // envio é irreversível: a validação nunca pode vir de cache
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<WaValidacaoItem[]> => {
       const { data, error } = await supabase.rpc('wa_broadcast_validar', {
         _broadcast_id: broadcastId!,
