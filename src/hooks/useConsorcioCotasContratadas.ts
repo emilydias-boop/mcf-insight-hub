@@ -320,10 +320,11 @@ export function useConsorcioCotasContratadas(
       const sdrNames = new Map<string, string>();
       const sdrEmails = Array.from(bySdr.keys());
       if (sdrEmails.length > 0) {
-        const { data: sdrProfiles } = await supabase
+        const { data: sdrProfiles, error: sdrProfilesError } = await supabase
           .from("profiles")
           .select("email, full_name")
           .in("email", sdrEmails);
+        if (sdrProfilesError) throw sdrProfilesError;
         (sdrProfiles || []).forEach((p: any) => {
           if (p.email) sdrNames.set(String(p.email).toLowerCase(), p.full_name || String(p.email));
         });

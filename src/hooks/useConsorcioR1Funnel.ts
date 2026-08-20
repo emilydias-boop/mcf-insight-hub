@@ -142,10 +142,11 @@ export function useConsorcioR1Funnel(
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       // 1) Closers do Consórcio (ativos) + inativos com slot no período
-      const { data: activeClosers } = await supabase
+      const { data: activeClosers, error: closersError } = await supabase
         .from('closers')
         .select('id, name, is_active')
         .eq('bu', 'consorcio');
+      if (closersError) throw closersError;
 
       const closerName = new Map<string, string>();
       (activeClosers || []).forEach((c: any) => closerName.set(c.id, c.name));
