@@ -23,8 +23,15 @@ export type WaBroadcastEscopo = 'minha_carteira' | 'bu';
 export interface WaBroadcastBuDisponivel {
   bu: string;
   sdrs: number;
+  /** leads disparáveis: só quem tem dono ativo */
   leads: number;
+  /** leads cujo dono está bloqueado — ninguém para ler a resposta */
+  leads_sem_dono_ativo: number;
 }
+
+/** Abaixo disso a BU não é carteira comercial — é área da empresa no campo squad. */
+export const BU_VOLUME_MINIMO = 50;
+
 
 export interface WaBroadcast {
   id: string;
