@@ -281,6 +281,7 @@ export function ConsorcioCloserSummaryTable({
         descricao="Cotas contratadas no período (com o filtro de funil ativo) cujo vendedor não casa com nenhum closer da BU Consórcio. A coluna Motivo separa campo vazio de grafia divergente."
         items={cotasSemCloserItems}
         esperado={cotasSemCloser}
+        permitirCorrigirVendedor
       />
     </div>
   );

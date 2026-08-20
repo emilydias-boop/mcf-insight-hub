@@ -77,6 +77,7 @@ import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { useAttendeeChannels, CHANNEL_EMOJI, CHANNEL_BADGE_CLASS } from '@/hooks/useAttendeeChannels';
 import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { AgendadorEditor } from '@/components/crm/AgendadorEditor';
 import { QualificationHistorySection } from './qualification/QualificationHistorySection';
 
 const FOLLOWUP_CLOSER_STAGE_ID = 'c2d1b8f3-ae5a-4b2d-9f4c-3a6e7b9d0e02';
@@ -911,7 +912,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             <Separator />
 
             {/* SDR Info Section - Based on Selected Participant */}
-            {selectedParticipant && selectedParticipant.bookedByProfile && (
+            {selectedParticipant && (
               <>
                 <div className="bg-blue-500/10 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -925,11 +926,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <Badge variant="outline" className="text-xs">Sócio</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedParticipant.bookedByProfile.full_name || 'Não informado'}</span>
+                  <div className="flex items-start gap-2 text-sm">
+                    <User className="h-4 w-4 text-muted-foreground mt-1" />
+                    <AgendadorEditor
+                      attendeeId={selectedParticipant.id}
+                      nomeAtual={selectedParticipant.bookedByProfile?.full_name || null}
+                      bookedById={selectedParticipant.bookedBy || null}
+                    />
                   </div>
-                  {selectedParticipant.bookedByProfile.email && (
+                  {selectedParticipant.bookedByProfile?.email && (
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">{selectedParticipant.bookedByProfile.email}</span>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useClosersFromBu } from '@/hooks/useClosersFromBu';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -236,6 +237,37 @@ interface ConsorcioCardFormProps {
   onOpenChange: (open: boolean) => void;
   card?: ConsorcioCardWithDetails | null;
   duplicateFrom?: Partial<import('@/types/consorcio').ConsorcioCard> | null;
+}
+
+/**
+ * Aviso de atribuição: o Painel Comercial do Consórcio conta a cota para o
+ * closer casando `vendedor_name` com a lista de closers da BU. Vendedor em
+ * branco (ou fora dessa lista) cai em "Sem vendedor identificado".
+ */
+function VendedorAvisoPainel({ vendedorName }: { vendedorName?: string | null }) {
+  const { data: closers = [] } = useClosersFromBu('consorcio');
+  const chave = (n?: string | null) => {
+    if (!n) return null;
+    const partes = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+    if (partes.length === 0) return null;
+    return `${partes[0]}|${partes[partes.length - 1]}`;
+  };
+  if (!vendedorName) {
+    return (
+      <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+        Sem vendedor a cota entra como "Sem vendedor identificado" no Painel Comercial.
+      </p>
+    );
+  }
+  if (closers.length === 0) return null;
+  const casa = closers.some(c => chave(c.name) === chave(vendedorName));
+  if (casa) return null;
+  return (
+    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+      Este vendedor não consta como closer ativo do Consórcio — a cota não será somada a nenhum closer no Painel Comercial.
+    </p>
+  );
 }
 
 export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: ConsorcioCardFormProps) {
@@ -1734,6 +1766,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           )}
                         </SelectContent>
                       </Select>
+                      <VendedorAvisoPainel vendedorName={form.watch('vendedor_name')} />
                     </FormItem>
                   )}
                 />

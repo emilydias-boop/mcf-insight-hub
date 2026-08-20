@@ -84,6 +84,15 @@ export default function Agenda() {
   useEffect(() => {
     const openSchedule = searchParams.get('openSchedule');
     const closerIdParam = searchParams.get('closerId');
+    const dateParam = searchParams.get('date');
+    // ?date=YYYY-MM-DD posiciona a agenda no dia (deep-link de correção do agendador).
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      setSelectedDate(new Date(`${dateParam}T12:00:00`));
+      setViewMode('day');
+      const proximos = new URLSearchParams(searchParams);
+      proximos.delete('date');
+      setSearchParams(proximos, { replace: true });
+    }
     if (openSchedule === '1') {
       if (closerIdParam) setPreselectedCloserId(closerIdParam);
       setQuickScheduleOpen(true);

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Download, ExternalLink, Link2, ShieldCheck } from "lucide-react";
+import { Download, ExternalLink, Link2, ShieldCheck, UserCog } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/formatters";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
@@ -38,6 +38,8 @@ type Props =
       esperado: number;
       /** Habilita a coluna de correção do vínculo cota → lead. */
       permitirCorrigirVinculo?: boolean;
+      /** Habilita a ação de abrir a cota para corrigir o vendedor. */
+      permitirCorrigirVendedor?: boolean;
     }
   | {
       open: boolean;
@@ -99,6 +101,8 @@ function SeloAutoria({ ajuste }: { ajuste: NonNullable<CotaResiduoItem["ajuste"]
 export function ResiduoDetalheModal(props: Props) {
   const { open, onOpenChange, kind, titulo, descricao, items, esperado } = props;
   const permitirCorrigirVinculo = kind === "cota" && props.permitirCorrigirVinculo === true;
+  const permitirCorrigirVendedor = kind === "cota" && props.permitirCorrigirVendedor === true;
+  const temAcaoCota = permitirCorrigirVinculo || permitirCorrigirVendedor;
   const [corrigindo, setCorrigindo] = useState<CotaResiduoItem | null>(null);
 
   // Só rótulo: o número já vem da mesma fonte que produziu a linha clicada.
@@ -113,7 +117,8 @@ export function ResiduoDetalheModal(props: Props) {
     queryFn: async () => {
       const map = new Map<string, string>();
       if (dealIds.length === 0) return map;
-      const { data } = await supabase.from("crm_deals").select("id, name").in("id", dealIds);
+      const { data, error } = await supabase.from("crm_deals").select("id, name").in("id", dealIds);
+      if (error) throw error;
       (data || []).forEach((d: any) => map.set(String(d.id), d.name || "—"));
       return map;
     },
@@ -194,7 +199,7 @@ export function ResiduoDetalheModal(props: Props) {
                       <TableHead className="text-right">Valor do crédito</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Motivo</TableHead>
-                      {permitirCorrigirVinculo && <TableHead className="text-right">Ação</TableHead>}
+                      {temAcaoCota && <TableHead className="text-right">Ação</TableHead>}
                     </>
                   ) : (
                     <>
@@ -203,6 +208,7 @@ export function ResiduoDetalheModal(props: Props) {
                       <TableHead>Closer</TableHead>
                       <TableHead>Status do attendee</TableHead>
                       <TableHead>Motivo</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </>
                   )}
                 </TableRow>
@@ -237,12 +243,26 @@ export function ResiduoDetalheModal(props: Props) {
                             {i.ajuste && <SeloAutoria ajuste={i.ajuste} />}
                           </span>
                         </TableCell>
-                        {permitirCorrigirVinculo && (
+                        {temAcaoCota && (
                           <TableCell className="text-right">
-                            <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
-                              <Link2 className="h-3.5 w-3.5 mr-1" />
-                              Corrigir
-                            </Button>
+                            {permitirCorrigirVinculo ? (
+                              <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                                <Link2 className="h-3.5 w-3.5 mr-1" />
+                                Corrigir
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" asChild>
+                                <a
+                                  href={`/consorcio/crm/venda-consorcio?tab=cotas&editCard=${i.cardId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Abrir a cota para informar o vendedor"
+                                >
+                                  <UserCog className="h-3.5 w-3.5 mr-1" />
+                                  Corrigir vendedor
+                                </a>
+                              </Button>
+                            )}
                           </TableCell>
                         )}
                       </TableRow>
@@ -269,6 +289,19 @@ export function ResiduoDetalheModal(props: Props) {
                         <TableCell className="text-xs">{i.closerName || "—"}</TableCell>
                         <TableCell className="text-xs">{formatMeetingStatus(i.attendeeStatus)}</TableCell>
                         <TableCell className="text-xs">{i.motivo}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" asChild>
+                            <a
+                              href={`/consorcio/crm/agenda?date=${i.meetingDay}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir a reunião na Agenda R1 para informar quem agendou"
+                            >
+                              <UserCog className="h-3.5 w-3.5 mr-1" />
+                              Corrigir agendador
+                            </a>
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
               </TableBody>

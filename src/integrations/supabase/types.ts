@@ -14680,6 +14680,7 @@ export type Database = {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
       }
+      agendador_ajuste_info: { Args: { p_attendee_id: string }; Returns: Json }
       apply_no_show_approval_effects: {
         Args: { p_validation_id: string }
         Returns: undefined
@@ -14795,6 +14796,10 @@ export type Database = {
           p_deal_id: string
           p_registration_id?: string
         }
+        Returns: Json
+      }
+      corrigir_agendador_reuniao: {
+        Args: { p_attendee_id: string; p_booked_by: string }
         Returns: Json
       }
       crm_deal_merge_custom_fields: {
@@ -15582,6 +15587,14 @@ export type Database = {
           squad: string[]
         }[]
       }
+      listar_agendadores_disponiveis: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+        }[]
+      }
       lock_month: {
         Args: { _ano_mes: string; _reason: string }
         Returns: undefined
@@ -15609,6 +15622,7 @@ export type Database = {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
       }
+      nome_usuario: { Args: { p_id: string }; Returns: string }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
       oi_classify_origem: {

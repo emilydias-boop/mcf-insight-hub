@@ -346,12 +346,10 @@ export function useProfileName(userId: string | null | undefined) {
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<string | null> => {
       if (!userId) return null;
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name, email")
-        .eq("id", userId)
-        .maybeSingle();
-      return (data as any)?.full_name || (data as any)?.email || null;
+      // Via RPC: `profiles` é fechado por RLS para SDR/closer e o selo apareceria vazio.
+      const { data, error } = await (supabase as any).rpc("nome_usuario", { p_id: userId });
+      if (error) throw error;
+      return (data as string | null) || null;
     },
   });
 }

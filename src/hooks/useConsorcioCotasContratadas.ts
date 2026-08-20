@@ -215,10 +215,11 @@ export function useConsorcioCotasContratadas(
         const bookerIds = [...new Set(buAttendees.map((a: any) => a.booked_by).filter(Boolean))];
         const emailById = new Map<string, string>();
         if (bookerIds.length > 0) {
-          const { data: profs } = await supabase
+          const { data: profs, error: profsError } = await supabase
             .from("profiles")
             .select("id, email")
             .in("id", bookerIds);
+          if (profsError) throw profsError;
           (profs || []).forEach((p: any) => {
             if (p.email) emailById.set(p.id, String(p.email).toLowerCase());
           });
@@ -319,10 +320,11 @@ export function useConsorcioCotasContratadas(
       const sdrNames = new Map<string, string>();
       const sdrEmails = Array.from(bySdr.keys());
       if (sdrEmails.length > 0) {
-        const { data: sdrProfiles } = await supabase
+        const { data: sdrProfiles, error: sdrProfilesError } = await supabase
           .from("profiles")
           .select("email, full_name")
           .in("email", sdrEmails);
+        if (sdrProfilesError) throw sdrProfilesError;
         (sdrProfiles || []).forEach((p: any) => {
           if (p.email) sdrNames.set(String(p.email).toLowerCase(), p.full_name || String(p.email));
         });

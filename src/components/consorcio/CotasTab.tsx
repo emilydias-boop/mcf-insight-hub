@@ -1,4 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -203,6 +206,38 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
   const [recalcOpen, setRecalcOpen] = useState(false);
   const [comprovanteCard, setComprovanteCard] = useState<ConsorcioCard | null>(null);
   const [comprovantePanelCard, setComprovantePanelCard] = useState<ConsorcioCard | null>(null);
+
+  /**
+   * Deep-link de correção: `?editCard=<id>` abre a cota direto no formulário de
+   * edição (usado pelo modal de resíduos do Painel Comercial para corrigir o
+   * vendedor). O parâmetro é consumido uma vez e removido da URL.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editCardId = searchParams.get('editCard');
+  useEffect(() => {
+    if (!editCardId) return;
+    let cancelado = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select('*')
+        .eq('id', editCardId)
+        .maybeSingle();
+      if (error) {
+        toast.error(`Não foi possível abrir a cota: ${error.message}`);
+      } else if (!cancelado && data) {
+        setEditingCard(data as unknown as ConsorcioCard);
+        setFormOpen(true);
+      } else if (!cancelado) {
+        toast.error('Cota não encontrada.');
+      }
+      const proximos = new URLSearchParams(searchParams);
+      proximos.delete('editCard');
+      setSearchParams(proximos, { replace: true });
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCardId]);
 
   const { data: employees } = useConsorcioEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
