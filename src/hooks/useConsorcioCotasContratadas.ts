@@ -242,17 +242,28 @@ export function useConsorcioCotasContratadas(
       const semVinculoItems: CotaResiduoItem[] = [];
       const semCloserItems: CotaResiduoItem[] = [];
 
-      const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => ({
-        cardId: card.id,
-        cliente: card.nome_completo || "—",
-        grupo: card.grupo ?? null,
-        cota: card.cota ?? null,
-        dataContratacao: card.data_contratacao ?? null,
-        valorCredito: card.valor_credito ?? null,
-        vendedorName: card.vendedor_name ?? null,
-        dealId,
-        motivo,
-      });
+      const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => {
+        const reg = cardToReg.get(card.id);
+        return {
+          cardId: card.id,
+          cliente: card.nome_completo || "—",
+          grupo: card.grupo ?? null,
+          cota: card.cota ?? null,
+          dataContratacao: card.data_contratacao ?? null,
+          valorCredito: card.valor_credito ?? null,
+          vendedorName: card.vendedor_name ?? null,
+          dealId,
+          motivo,
+          pendingRegId: reg?.id ?? null,
+          ajuste: reg?.deal_vinculo_ajustado_em
+            ? {
+                porId: reg.deal_vinculo_ajustado_por ?? null,
+                em: reg.deal_vinculo_ajustado_em ?? null,
+                dealAnterior: reg.deal_vinculo_anterior ?? null,
+              }
+            : null,
+        };
+      };
 
       cards.forEach((card) => {
         const dealId = cardToDeal.get(card.id);
