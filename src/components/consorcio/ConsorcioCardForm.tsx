@@ -1734,6 +1734,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           )}
                         </SelectContent>
                       </Select>
+                      <VendedorAvisoPainel vendedorName={form.watch('vendedor_name')} />
                     </FormItem>
                   )}
                 />
