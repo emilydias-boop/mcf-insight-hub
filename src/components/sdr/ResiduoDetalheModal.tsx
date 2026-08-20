@@ -292,7 +292,7 @@ export function ResiduoDetalheModal(props: Props) {
                         <TableCell className="text-right">
                           <Button size="sm" variant="outline" asChild>
                             <a
-                              href={`/consorcio/crm/agenda-r1?date=${i.meetingDay}`}
+                              href={`/consorcio/crm/agenda?date=${i.meetingDay}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Abrir a reunião na Agenda R1 para informar quem agendou"
