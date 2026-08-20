@@ -929,6 +929,7 @@ export default function ConsorcioPainelEquipe() {
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
         semStatus={semStatusCount}
+        totalVendasRealizadas={cotasContratadas?.totalClientes || 0}
         pendentesBreakdown={computePendentesBreakdown(
           allowedOriginNames
             ? (meetingsWithCancelled || []).filter(m => matchesPipeline(m.origin_name))

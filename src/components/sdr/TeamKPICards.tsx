@@ -9,6 +9,7 @@ import {
   Clock,
   ExternalLink,
   AlertCircle,
+  Users,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -41,6 +42,9 @@ interface TeamKPICardsProps {
   orphanRefundsCount?: number;
   /** Esconde o card "Agendamentos" (ex.: aba Closers — closer não agenda). */
   hideAgendamentos?: boolean;
+  /** Consórcio: clientes distintos que contrataram no período (Vendas Realizadas).
+   *  Mesmo totalClientes global usado no Total das abas — sem query nova. */
+  totalVendasRealizadas?: number;
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
@@ -63,6 +67,7 @@ export function TeamKPICards({
   onRefundClick,
   orphanRefundsCount = 0,
   hideAgendamentos = false,
+  totalVendasRealizadas,
   segmentTotals = null,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
@@ -179,6 +184,17 @@ export function TeamKPICards({
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
     },
+    // Consórcio: Vendas Realizadas (pessoas) imediatamente após Cotas Contratadas
+    // para o contraste cartas × pessoas ficar óbvio na leitura. Mesmo totalClientes
+    // global — sem query nova, mesma fonte do Total das abas.
+    ...(isConsorcio ? [{
+      title: "Vendas Realizadas",
+      value: totalVendasRealizadas ?? 0,
+      icon: Users,
+      color: "text-lime-500",
+      bgColor: "bg-lime-500/10",
+      tooltip: "Clientes distintos que contrataram ao menos uma cota no período. Um cliente que contrata várias cotas conta uma vez. É o numerador da Conversão Vendas / R1.",
+    }] : []),
     ...(isConsorcio ? [] : [{
       title: "Outside",
       value: kpis.totalOutside || 0,
