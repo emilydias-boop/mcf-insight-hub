@@ -29,6 +29,22 @@ export interface ConsorcioCotasContratadas {
   byCloser: Map<string, number>;
   /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou a R1 da BU). */
   bySdr: Map<string, number>;
+  /** Clientes distintos (identidade do titular da cota) por closer_id. */
+  clientesByCloser: Map<string, number>;
+  /** Clientes distintos por e-mail de SDR. */
+  clientesBySdr: Map<string, number>;
+  /** Soma de valor_credito por closer_id. */
+  creditoByCloser: Map<string, number>;
+  /** Soma de valor_credito por e-mail de SDR. */
+  creditoBySdr: Map<string, number>;
+  /** Clientes distintos / crédito das linhas residuais. */
+  clientesSemVinculo: number;
+  creditoSemVinculo: number;
+  clientesSemCloser: number;
+  creditoSemCloser: number;
+  /** Clientes distintos e crédito do período inteiro (base do card). */
+  totalClientes: number;
+  totalCredito: number;
   /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
   sdrNames: Map<string, string>;
   /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo ou sem agendador da BU). */
@@ -45,6 +61,16 @@ const EMPTY: ConsorcioCotasContratadas = {
   total: 0,
   byCloser: new Map(),
   bySdr: new Map(),
+  clientesByCloser: new Map(),
+  clientesBySdr: new Map(),
+  creditoByCloser: new Map(),
+  creditoBySdr: new Map(),
+  clientesSemVinculo: 0,
+  creditoSemVinculo: 0,
+  clientesSemCloser: 0,
+  creditoSemCloser: 0,
+  totalClientes: 0,
+  totalCredito: 0,
   sdrNames: new Map(),
   semVinculo: 0,
   semCloser: 0,
@@ -66,6 +92,25 @@ function nameKey(name?: string | null): string | null {
   const first = clean[0];
   const last = clean[clean.length - 1];
   return `${first}|${last}`;
+}
+
+/**
+ * Identidade da PESSOA titular da cota — base da contagem de clientes.
+ * Uma pessoa pode contratar várias cotas; a conversão do comercial é por
+ * pessoa atendida, não por cota. Documento (CPF/CNPJ) tem prioridade; sem
+ * documento, cai no nome normalizado (sem acento, caixa alta, espaços
+ * colapsados) para que a cota órfã não deixe de contar.
+ */
+function clienteKey(card: any): string {
+  const doc = String(card.cpf || "").replace(/\D/g, "") || String(card.cnpj || "").replace(/\D/g, "");
+  if (doc) return `doc:${doc}`;
+  const nome = String(card.nome_completo || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return nome ? `nome:${nome}` : `card:${card.id}`;
 }
 
 /**
