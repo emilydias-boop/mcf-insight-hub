@@ -23,6 +23,8 @@ interface ConsorcioCloserSummaryTableProps {
   cotasByCloser?: Map<string, number>;
   /** Clientes distintos que contrataram ao menos uma cota, por closer. */
   clientesByCloser?: Map<string, number>;
+  /** Clientes distintos em TODO o conjunto filtrado (não é a soma das linhas). */
+  totalClientesDistintos?: number;
   /** Soma de valor_credito das cotas contratadas, por closer. */
   creditoByCloser?: Map<string, number>;
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
@@ -48,6 +50,7 @@ export function ConsorcioCloserSummaryTable({
   propostasEnviadasByCloser,
   cotasByCloser,
   clientesByCloser,
+  totalClientesDistintos = 0,
   creditoByCloser,
   cotasSemCloser = 0,
   clientesSemCloser = 0,
@@ -102,7 +105,9 @@ export function ConsorcioCloserSummaryTable({
     r1_realizada: baseTotals.r1_realizada + (unassignedRow?.r1_realizada || 0),
     noshow: baseTotals.noshow + (unassignedRow?.noshow || 0),
     cotas: baseTotals.cotas + cotasSemCloser,
-    clientes: baseTotals.clientes + clientesSemCloser,
+    // Pessoas não somam: distinct global do conjunto filtrado, calculado uma
+    // única vez no hook — idêntico ao Total da aba SDRs e ao card do topo.
+    clientes: totalClientesDistintos,
     credito: baseTotals.credito + creditoSemCloser,
   };
 
@@ -142,7 +147,7 @@ export function ConsorcioCloserSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali."
+                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. ATENÇÃO: as linhas NÃO somam o Total — cliente que aparece em mais de uma linha é contado uma única vez no Total."
               >
                 Vendas Realizadas
               </TableHead>
@@ -326,6 +331,12 @@ export function ConsorcioCloserSummaryTable({
           </TableBody>
         </Table>
       </div>
+
+      <p className="px-4 py-2 text-xs text-muted-foreground">
+        Vendas Realizadas conta pessoas, não cartas: as linhas não somam o Total. Cliente que
+        aparece em mais de uma linha é contado uma única vez no Total — por isso o Total (e o
+        Ticket Médio e a Conv. Vendas / R1 do Total) é o mesmo nas abas SDRs e Closers.
+      </p>
 
       <ResiduoDetalheModal
         open={detalheOpen}

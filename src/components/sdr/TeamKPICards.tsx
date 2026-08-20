@@ -200,13 +200,13 @@ export function TeamKPICards({
       customOnClick: onRefundClick,
     },
     {
-      title: isConsorcio ? "Conversão Cota / R1" : "Taxa Conversão",
+      title: isConsorcio ? "Conversão Vendas / R1" : "Taxa Conversão",
       value: `${kpis.taxaConversao.toFixed(1)}%`,
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
       tooltip: isConsorcio
-        ? "Σ Cotas Contratadas ÷ Σ R1 Realizada × 100 — mesma fonte da coluna Cotas / R1 Realiz."
+        ? "Vendas Realizadas (clientes distintos que contrataram no período, contados uma única vez em todo o conjunto) ÷ R1 Realizada × 100. É o mesmo número do Total das abas SDRs e Closers."
         : "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
     },
     {
