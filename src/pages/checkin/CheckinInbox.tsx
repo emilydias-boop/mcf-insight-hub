@@ -10,6 +10,7 @@ import { useNow } from '@/hooks/wa/useNow';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Megaphone } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function CheckinInbox() {
   const { hasAnyRole } = useAuth();
