@@ -141,15 +141,15 @@ export function ConsorcioCloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
-              >
-                Cotas Contratadas
-              </TableHead>
-              <TableHead
-                className="text-muted-foreground text-center font-medium whitespace-nowrap"
                 title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. Cada cliente aparece em uma única linha, então as linhas somam o Total."
               >
                 Vendas Realizadas
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
+              >
+                Cotas Contratadas
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
@@ -211,13 +211,13 @@ export function ConsorcioCloserSummaryTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                      {cotas}
+                    <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
+                      {clientes}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
-                      {clientes}
+                    <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                      {cotas}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center whitespace-nowrap">
@@ -256,8 +256,8 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{cotasSemCloser}</TableCell>
                 <TableCell className="text-center">{clientesSemCloser}</TableCell>
+                <TableCell className="text-center">{cotasSemCloser}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {creditoSemCloser > 0 ? brl(creditoSemCloser) : "—"}
                 </TableCell>
@@ -306,13 +306,13 @@ export function ConsorcioCloserSummaryTable({
                 </span>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
-                  {totals.cotas}
+                <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
+                  {totals.clientes}
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
-                  {totals.clientes}
+                <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                  {totals.cotas}
                 </Badge>
               </TableCell>
               <TableCell className="text-center whitespace-nowrap">

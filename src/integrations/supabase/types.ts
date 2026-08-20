@@ -13761,6 +13761,7 @@ export type Database = {
           iniciado_em: string | null
           motivo_cancelamento: string | null
           nome: string
+          sender_number: string | null
           status: string
           template_nome: string | null
           template_preview: string | null
@@ -13783,6 +13784,7 @@ export type Database = {
           iniciado_em?: string | null
           motivo_cancelamento?: string | null
           nome: string
+          sender_number?: string | null
           status?: string
           template_nome?: string | null
           template_preview?: string | null
@@ -13805,6 +13807,7 @@ export type Database = {
           iniciado_em?: string | null
           motivo_cancelamento?: string | null
           nome?: string
+          sender_number?: string | null
           status?: string
           template_nome?: string | null
           template_preview?: string | null
@@ -13815,7 +13818,15 @@ export type Database = {
           updated_at?: string
           variaveis_fixas?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "wa_broadcasts_sender_number_fkey"
+            columns: ["sender_number"]
+            isOneToOne: false
+            referencedRelation: "wa_senders"
+            referencedColumns: ["phone_e164"]
+          },
+        ]
       }
       wa_conversations: {
         Row: {
@@ -13833,6 +13844,7 @@ export type Database = {
           last_message_at: string | null
           last_message_preview: string | null
           phone_e164: string
+          sender_number: string | null
           status: string
           unread_count: number
           updated_at: string
@@ -13852,6 +13864,7 @@ export type Database = {
           last_message_at?: string | null
           last_message_preview?: string | null
           phone_e164: string
+          sender_number?: string | null
           status?: string
           unread_count?: number
           updated_at?: string
@@ -13871,6 +13884,7 @@ export type Database = {
           last_message_at?: string | null
           last_message_preview?: string | null
           phone_e164?: string
+          sender_number?: string | null
           status?: string
           unread_count?: number
           updated_at?: string
@@ -13882,6 +13896,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crm_deals"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_conversations_sender_number_fkey"
+            columns: ["sender_number"]
+            isOneToOne: false
+            referencedRelation: "wa_senders"
+            referencedColumns: ["phone_e164"]
           },
         ]
       }
@@ -13959,27 +13980,69 @@ export type Database = {
       wa_send_budget: {
         Row: {
           atualizado_em: string
+          cooldown_dias: number
           id: boolean
           pausar_se_falha_percentual: number
+          reserva_atendimento_diaria: number
           ritmo_por_minuto: number
           teto_diario: number
+          teto_observado: number | null
+          teto_observado_codigo: string | null
+          teto_observado_em: string | null
           teto_por_usuario_diario: number
         }
         Insert: {
           atualizado_em?: string
+          cooldown_dias?: number
           id?: boolean
           pausar_se_falha_percentual?: number
+          reserva_atendimento_diaria?: number
           ritmo_por_minuto?: number
           teto_diario?: number
+          teto_observado?: number | null
+          teto_observado_codigo?: string | null
+          teto_observado_em?: string | null
           teto_por_usuario_diario?: number
         }
         Update: {
           atualizado_em?: string
+          cooldown_dias?: number
           id?: boolean
           pausar_se_falha_percentual?: number
+          reserva_atendimento_diaria?: number
           ritmo_por_minuto?: number
           teto_diario?: number
+          teto_observado?: number | null
+          teto_observado_codigo?: string | null
+          teto_observado_em?: string | null
           teto_por_usuario_diario?: number
+        }
+        Relationships: []
+      }
+      wa_senders: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          display_name: string | null
+          observacao: string | null
+          papel: string
+          phone_e164: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          display_name?: string | null
+          observacao?: string | null
+          papel: string
+          phone_e164: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          display_name?: string | null
+          observacao?: string | null
+          papel?: string
+          phone_e164?: string
         }
         Relationships: []
       }
@@ -15939,6 +16002,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_broadcast_montar_publico: {
+        Args: { _broadcast_id: string }
+        Returns: {
+          elegiveis: number
+          ignorados: number
+          total: number
+        }[]
+      }
+      wa_broadcast_reservar_lote: {
+        Args: { _broadcast_id: string; _quantidade: number }
+        Returns: {
+          contact_name: string
+          deal_id: string
+          phone_e164: string
+          target_id: string
+          variaveis: Json
+        }[]
+      }
       wa_can_access_conversation: {
         Args: { _conversation_id: string }
         Returns: boolean
@@ -15969,6 +16050,11 @@ export type Database = {
         Args: { _motivo?: string; _phone: string }
         Returns: undefined
       }
+      wa_registrar_teto_observado: {
+        Args: { _codigo: string }
+        Returns: undefined
+      }
+      wa_saldo_disparo_hoje: { Args: never; Returns: number }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }
     Enums: {
