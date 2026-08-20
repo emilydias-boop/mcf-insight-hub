@@ -164,13 +164,14 @@ export default function MinhasReunioes() {
       return;
     }
 
-    const headers = ['Data', 'Tipo', 'Lead', 'Email', 'Telefone', 'Origem', 'Status', 'Closer', 'Probabilidade'];
+    const headers = ['Data', 'Tipo', 'Lead', 'Email', 'Telefone', 'Segmento', 'Origem', 'Status', 'Closer', 'Probabilidade'];
     const rows = filteredMeetings.map(m => [
       m.data_agendamento ? format(new Date(m.data_agendamento), 'dd/MM/yyyy HH:mm') : '',
       m.tipo,
       m.contact_name,
       m.contact_email || '',
       m.contact_phone || '',
+      (m as any).icp_segment || 'Sem ICP',
       m.origin_name || '',
       m.status_atual,
       m.closer || '',
