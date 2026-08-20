@@ -161,7 +161,33 @@ function CriarDisparoDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
-  const { data: pendentes = 0 } = useWaTargetsCount(broadcast?.id, 'pendente');
+  const {
+    data: pendentesData,
+    isLoading: carregandoPendentes,
+    isError: erroPendentes,
+  } = useWaTargetsCount(broadcast?.id, 'pendente');
+  /** null = contagem indisponível. Nunca cai para 0, que liberaria o envio. */
+  const pendentes = typeof pendentesData === 'number' ? pendentesData : null;
+  const contagemIndisponivel = pendentes === null || carregandoPendentes || erroPendentes;
+
+  /**
+   * Qualquer mudança de filtro ou limite invalida o público já montado: o
+   * limite só é persistido dentro do handleMontar, então seguir sem remontar
+   * dispararia para a base inteira depois de um "Testar com 10".
+   */
+  const invalidarPublico = () => setJaMontou(false);
+  const handleStageChange = (v: string) => {
+    setStageId(v);
+    invalidarPublico();
+  };
+  const handleOriginChange = (v: string) => {
+    setOriginId(v);
+    invalidarPublico();
+  };
+  const handleLimiteChange = (v: string) => {
+    setLimite(v);
+    invalidarPublico();
+  };
 
   const templateAtual = useMemo(
     () => template ?? templates.find((t) => t.content_sid === broadcast?.content_sid) ?? null,
@@ -259,12 +285,12 @@ function CriarDisparoDialog({
             stageId={stageId}
             originId={originId}
             limite={limite}
-            pendentes={pendentes}
+            pendentes={pendentes ?? 0}
             montando={montar.isPending || atualizar.isPending}
             jaMontou={jaMontou}
-            onStageChange={setStageId}
-            onOriginChange={setOriginId}
-            onLimiteChange={setLimite}
+            onStageChange={handleStageChange}
+            onOriginChange={handleOriginChange}
+            onLimiteChange={handleLimiteChange}
             onMontar={handleMontar}
           />
         )}
@@ -273,7 +299,7 @@ function CriarDisparoDialog({
           <RevisaoStep
             broadcast={broadcast}
             template={templateAtual}
-            pendentes={pendentes}
+            pendentes={pendentes ?? 0}
             sampleName={sampleName}
             onBloqueioChange={setBloqueado}
           />
@@ -294,12 +320,18 @@ function CriarDisparoDialog({
             </Button>
           )}
           {step === 2 && (
-            <Button onClick={() => setStep(3)} disabled={!jaMontou || pendentes === 0}>
+            <Button
+              onClick={() => setStep(3)}
+              disabled={!jaMontou || contagemIndisponivel || pendentes === 0}
+            >
               Continuar
             </Button>
           )}
           {step === 3 && (
-            <Button onClick={() => setConfirmOpen(true)} disabled={bloqueado}>
+            <Button
+              onClick={() => setConfirmOpen(true)}
+              disabled={bloqueado || contagemIndisponivel}
+            >
               <Send className="mr-2 h-4 w-4" /> Revisar e disparar
             </Button>
           )}
