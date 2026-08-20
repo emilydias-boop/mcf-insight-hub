@@ -95,6 +95,7 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
               {isV2 && <TableHead className="text-muted-foreground">Tipo</TableHead>}
               {isV2 && <TableHead className="text-muted-foreground text-center">Conta?</TableHead>}
               <TableHead className="text-muted-foreground">Lead</TableHead>
+              {isV2 && <TableHead className="text-muted-foreground text-center">Seg.</TableHead>}
               <TableHead className="text-muted-foreground">Origem</TableHead>
               <TableHead className="text-muted-foreground">Status</TableHead>
               {isV2 && <TableHead className="text-muted-foreground">Closer</TableHead>}
@@ -195,6 +196,16 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                       </div>
                     </TableCell>
                     
+                    {isV2Meeting && (
+                      <TableCell className="text-center">
+                        {meeting.icp_segment === 'A' ? (
+                          <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">A</Badge>
+                        ) : meeting.icp_segment === 'B' ? (
+                          <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">B</Badge>
+                        ) : null}
+                      </TableCell>
+                    )}
+
                     <TableCell>
                       <span className="text-muted-foreground">{originName || 'N/A'}</span>
                     </TableCell>
