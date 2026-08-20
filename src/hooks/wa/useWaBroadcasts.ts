@@ -17,6 +17,15 @@ export type WaBroadcastStatus =
 
 export type WaTargetStatus = 'pendente' | 'enviando' | 'enviado' | 'falha' | 'ignorado';
 
+/** De onde vem o público: a carteira de quem dispara ou a de todos os SDRs da BU. */
+export type WaBroadcastEscopo = 'minha_carteira' | 'bu';
+
+export interface WaBroadcastBuDisponivel {
+  bu: string;
+  sdrs: number;
+  leads: number;
+}
+
 export interface WaBroadcast {
   id: string;
   criado_por: string;
@@ -26,6 +35,9 @@ export interface WaBroadcast {
   template_preview: string | null;
   variaveis_fixas: Record<string, string>;
   filtro: Record<string, string>;
+  escopo: WaBroadcastEscopo;
+  bu: string | null;
+  updated_at: string | null;
   status: WaBroadcastStatus;
   total_alvos: number;
   total_enviados: number;
@@ -405,6 +417,8 @@ export function useUpdateWaBroadcast() {
           | 'status'
           | 'motivo_cancelamento'
           | 'iniciado_em'
+          | 'escopo'
+          | 'bu'
         >
       >;
     }) => {
@@ -700,5 +714,45 @@ export function useWaEstagiosDisponiveis(originId: string | null) {
       if (error) throw error;
       return (data ?? []) as WaBroadcastEstagioDisponivel[];
     },
+  });
+}
+
+/**
+ * BUs com leads alcançáveis, com quantos SDRs cada uma tem. A função devolve
+ * vazio para quem não é admin/manager — o próprio resultado serve de gate.
+ */
+export function useWaBusDisponiveis() {
+  return useQuery({
+    queryKey: ['wa-broadcast-bus-disponiveis'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaBroadcastBuDisponivel[]> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_bus_disponiveis');
+      if (error) throw error;
+      return (data ?? []) as WaBroadcastBuDisponivel[];
+    },
+  });
+}
+
+/** Exclui rascunho — a RLS só permite rascunho próprio. */
+export function useExcluirRascunho() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (broadcastId: string) => {
+      const { data, error } = await supabase
+        .from('wa_broadcasts')
+        .delete()
+        .eq('id', broadcastId)
+        .eq('status', 'rascunho')
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Só é possível excluir um rascunho seu — recarregue a tela.');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Rascunho excluído');
+      qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao excluir rascunho')),
   });
 }

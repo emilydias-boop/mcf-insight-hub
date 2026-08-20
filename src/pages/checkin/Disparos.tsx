@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -18,19 +28,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Loader2, Plus, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   useCreateWaBroadcast,
+  useExcluirRascunho,
   useIniciarBroadcast,
   useMontarPublico,
   useUpdateWaBroadcast,
   useWaBroadcasts,
+  useWaBusDisponiveis,
   useWaSaldoHoje,
   useWaSampleName,
   useWaTargetsCount,
   useWaTemplates,
   WaBroadcast,
+  WaBroadcastEscopo,
   WaTemplateOption,
 } from '@/hooks/wa/useWaBroadcasts';
 import { TemplateStep } from '@/components/checkin/broadcast/TemplateStep';
@@ -41,9 +55,24 @@ import { BROADCAST_STATUS_LABEL } from '@/components/checkin/broadcast/waBroadca
 import { formatDateTime } from '@/lib/formatters';
 
 export default function Disparos() {
+  const { user } = useAuth();
   const { data: broadcasts = [], isLoading } = useWaBroadcasts();
   const { data: saldoInfo } = useWaSaldoHoje();
   const [wizardOpen, setWizardOpen] = useState(false);
+  /** rascunho reaberto para continuar de onde parou */
+  const [rascunho, setRascunho] = useState<WaBroadcast | null>(null);
+  const [excluindo, setExcluindo] = useState<WaBroadcast | null>(null);
+  const excluir = useExcluirRascunho();
+
+  const abrirNovo = () => {
+    setRascunho(null);
+    setWizardOpen(true);
+  };
+  const abrirRascunho = (b: WaBroadcast) => {
+    setRascunho(b);
+    setWizardOpen(true);
+  };
+
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -60,7 +89,7 @@ export default function Disparos() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Voltar ao inbox
             </Link>
           </Button>
-          <Button onClick={() => setWizardOpen(true)}>
+          <Button onClick={abrirNovo}>
             <Plus className="mr-2 h-4 w-4" /> Novo disparo
           </Button>
         </div>
@@ -86,51 +115,119 @@ export default function Disparos() {
               <TableHead className="text-right">Enviados</TableHead>
               <TableHead className="text-right">Falhas</TableHead>
               <TableHead>Criado</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Carregando…
                 </TableCell>
               </TableRow>
             ) : broadcasts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nenhum disparo criado ainda
                 </TableCell>
               </TableRow>
             ) : (
-              broadcasts.map((b) => (
-                <TableRow key={b.id} className="cursor-pointer">
-                  <TableCell className="font-medium">
-                    <Link to={`/checkin/disparos/${b.id}`} className="hover:underline">
-                      {b.nome}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {b.template_nome ?? b.content_sid}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={b.status === 'cancelado' ? 'destructive' : 'secondary'}>
-                      {BROADCAST_STATUS_LABEL[b.status] ?? b.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{b.total_alvos}</TableCell>
-                  <TableCell className="text-right">{b.total_enviados}</TableCell>
-                  <TableCell className="text-right">{b.total_falhas}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {formatDateTime(b.created_at)}
-                  </TableCell>
-                </TableRow>
-              ))
+              broadcasts.map((b) => {
+                const ehRascunho = b.status === 'rascunho';
+                const podeExcluir = ehRascunho && b.criado_por === user?.id;
+                return (
+                  <TableRow key={b.id}>
+                    <TableCell className="font-medium">
+                      {ehRascunho ? (
+                        // rascunho reabre o assistente; o resto vai para o acompanhamento
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => abrirRascunho(b)}
+                        >
+                          {b.nome}
+                        </button>
+                      ) : (
+                        <Link to={`/checkin/disparos/${b.id}`} className="hover:underline">
+                          {b.nome}
+                        </Link>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {b.template_nome ?? b.content_sid ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={b.status === 'cancelado' ? 'destructive' : 'secondary'}>
+                        {BROADCAST_STATUS_LABEL[b.status] ?? b.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{b.total_alvos}</TableCell>
+                    <TableCell className="text-right">{b.total_enviados}</TableCell>
+                    <TableCell className="text-right">{b.total_falhas}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {formatDateTime(b.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {ehRascunho && (
+                          <Button variant="ghost" size="sm" onClick={() => abrirRascunho(b)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Continuar
+                          </Button>
+                        )}
+                        {podeExcluir && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Excluir rascunho"
+                            onClick={() => setExcluindo(b)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </div>
 
-      <CriarDisparoDialog open={wizardOpen} onOpenChange={setWizardOpen} />
+      <CriarDisparoDialog
+        key={rascunho?.id ?? 'novo'}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        rascunho={rascunho}
+      />
+
+      <AlertDialog open={!!excluindo} onOpenChange={(v) => !v && setExcluindo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir rascunho</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{excluindo?.nome}” será removido junto com o público montado. Nada foi enviado
+              ainda, então nenhum lead é afetado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!excluindo) return;
+                try {
+                  await excluir.mutateAsync(excluindo.id);
+                } finally {
+                  setExcluindo(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
@@ -138,16 +235,24 @@ export default function Disparos() {
 function CriarDisparoDialog({
   open,
   onOpenChange,
+  rascunho,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  rascunho?: WaBroadcast | null;
 }) {
   const navigate = useNavigate();
+  const { hasAnyRole } = useAuth();
   const { data: templates = [] } = useWaTemplates();
+  const { data: busDisponiveis = [] } = useWaBusDisponiveis();
   const criar = useCreateWaBroadcast();
   const atualizar = useUpdateWaBroadcast();
   const montar = useMontarPublico();
   const iniciar = useIniciarBroadcast();
+
+  // a função devolve vazio para quem não é admin/manager, mas o gate da UI não
+  // depende só disso
+  const podeUsarBu = (hasAnyRole('admin', 'manager') && busDisponiveis.length > 0) || false;
 
   const [step, setStep] = useState(1);
   const [nome, setNome] = useState('');
@@ -156,9 +261,34 @@ function CriarDisparoDialog({
   const [stageId, setStageId] = useState('');
   const [originId, setOriginId] = useState('');
   const [limite, setLimite] = useState('');
+  const [escopo, setEscopo] = useState<WaBroadcastEscopo>('minha_carteira');
+  const [bu, setBu] = useState('');
   const [jaMontou, setJaMontou] = useState(false);
   const [bloqueado, setBloqueado] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  /** quando o público em banco foi montado — só quando um rascunho é reaberto */
+  const [publicoMontadoEm, setPublicoMontadoEm] = useState<string | null>(null);
+
+  /** Reabrir rascunho: recarrega template, escopo, BU, filtros e limite. */
+  useEffect(() => {
+    if (!open || !rascunho) return;
+    setBroadcast(rascunho);
+    setNome(rascunho.nome ?? '');
+    setTemplate(
+      rascunho.content_sid
+        ? (templates.find((t) => t.content_sid === rascunho.content_sid) ?? null)
+        : null,
+    );
+    setEscopo((rascunho.escopo as WaBroadcastEscopo) ?? 'minha_carteira');
+    setBu(rascunho.bu ?? '');
+    setStageId(rascunho.filtro?.stage_id ?? '');
+    setOriginId(rascunho.filtro?.origin_id ?? '');
+    setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
+    const temAlvos = (rascunho.total_alvos ?? 0) > 0;
+    setJaMontou(temAlvos);
+    setPublicoMontadoEm(temAlvos ? rascunho.updated_at : null);
+    setStep(rascunho.content_sid ? 2 : 1);
+  }, [open, rascunho, templates]);
 
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
   const {
@@ -177,11 +307,14 @@ function CriarDisparoDialog({
 
 
   /**
-   * Qualquer mudança de filtro ou limite invalida o público já montado: o
-   * limite só é persistido dentro do handleMontar, então seguir sem remontar
+   * Qualquer mudança de filtro, escopo ou limite invalida o público já montado:
+   * o limite só é persistido dentro do handleMontar, então seguir sem remontar
    * dispararia para a base inteira depois de um "Testar com 10".
    */
-  const invalidarPublico = () => setJaMontou(false);
+  const invalidarPublico = () => {
+    setJaMontou(false);
+    setPublicoMontadoEm(null);
+  };
   const handleStageChange = (v: string) => {
     setStageId(v);
     invalidarPublico();
@@ -192,10 +325,26 @@ function CriarDisparoDialog({
     invalidarPublico();
   };
 
+  const handleEscopoChange = (v: WaBroadcastEscopo) => {
+    setEscopo(v);
+    if (v === 'minha_carteira') setBu('');
+    // filtros de origem/estágio são da carteira de quem dispara: não valem na BU
+    if (v === 'bu') {
+      setOriginId('');
+      setStageId('');
+    }
+    invalidarPublico();
+  };
+  const handleBuChange = (v: string) => {
+    setBu(v);
+    invalidarPublico();
+  };
+
   const handleLimiteChange = (v: string) => {
     setLimite(v);
     invalidarPublico();
   };
+
 
   const templateAtual = useMemo(
     () => template ?? templates.find((t) => t.content_sid === broadcast?.content_sid) ?? null,
@@ -210,7 +359,10 @@ function CriarDisparoDialog({
     setStageId('');
     setOriginId('');
     setLimite('');
+    setEscopo('minha_carteira');
+    setBu('');
     setJaMontou(false);
+    setPublicoMontadoEm(null);
     setBloqueado(true);
   };
 
@@ -247,25 +399,36 @@ function CriarDisparoDialog({
 
   const handleMontar = async () => {
     if (!broadcast) return;
+    if (escopo === 'bu' && !bu) return toast.error('Escolha a BU');
     const filtro: Record<string, string> = {};
-    if (stageId) filtro.stage_id = stageId;
-    if (originId) filtro.origin_id = originId;
+    if (escopo !== 'bu') {
+      if (stageId) filtro.stage_id = stageId;
+      if (originId) filtro.origin_id = originId;
+    }
     try {
       await atualizar.mutateAsync({
         id: broadcast.id,
-        patch: { filtro, limite_alvos: limite ? Number(limite) : null },
+        patch: {
+          filtro,
+          limite_alvos: limite ? Number(limite) : null,
+          escopo,
+          bu: escopo === 'bu' ? bu : null,
+        },
       });
       const res = await montar.mutateAsync(broadcast.id);
       setJaMontou(true);
+      setPublicoMontadoEm(null);
       toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
     } catch (err) {
-      // o RPC levanta exceção quando o disparo não está mais em rascunho
+      // o RPC levanta exceção quando o disparo não está mais em rascunho, ou
+      // quando um SDR tenta usar o escopo de BU
       setJaMontou(false);
       toast.error(
         err instanceof Error && err.message ? err.message : 'Não foi possível montar o público',
       );
     }
   };
+
 
 
   const handleDisparar = async () => {
@@ -281,7 +444,7 @@ function CriarDisparoDialog({
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Novo disparo · passo {step} de 3 ·{' '}
+            {rascunho ? 'Continuar rascunho' : 'Novo disparo'} · passo {step} de 3 ·{' '}
             {step === 1 ? 'Template' : step === 2 ? 'Público' : 'Revisão'}
           </DialogTitle>
         </DialogHeader>
@@ -305,12 +468,20 @@ function CriarDisparoDialog({
             pendentes={pendentes ?? 0}
             montando={montar.isPending || atualizar.isPending}
             jaMontou={jaMontou}
+            escopo={escopo}
+            bu={bu}
+            busDisponiveis={busDisponiveis}
+            podeUsarBu={podeUsarBu}
+            publicoMontadoEm={publicoMontadoEm}
+            onEscopoChange={handleEscopoChange}
+            onBuChange={handleBuChange}
             onStageChange={handleStageChange}
             onOriginChange={handleOriginChange}
             onLimiteChange={handleLimiteChange}
             onMontar={handleMontar}
           />
         )}
+
 
         {step === 3 && broadcast && (
           <RevisaoStep

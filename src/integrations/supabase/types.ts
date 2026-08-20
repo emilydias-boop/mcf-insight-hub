@@ -13750,12 +13750,14 @@ export type Database = {
       }
       wa_broadcasts: {
         Row: {
+          bu: string | null
           cancelado_em: string | null
           cancelado_por: string | null
           concluido_em: string | null
           content_sid: string
           created_at: string
           criado_por: string
+          escopo: string
           filtro: Json
           id: string
           iniciado_em: string | null
@@ -13774,12 +13776,14 @@ export type Database = {
           variaveis_fixas: Json
         }
         Insert: {
+          bu?: string | null
           cancelado_em?: string | null
           cancelado_por?: string | null
           concluido_em?: string | null
           content_sid: string
           created_at?: string
           criado_por: string
+          escopo?: string
           filtro?: Json
           id?: string
           iniciado_em?: string | null
@@ -13798,12 +13802,14 @@ export type Database = {
           variaveis_fixas?: Json
         }
         Update: {
+          bu?: string | null
           cancelado_em?: string | null
           cancelado_por?: string | null
           concluido_em?: string | null
           content_sid?: string
           created_at?: string
           criado_por?: string
+          escopo?: string
           filtro?: Json
           id?: string
           iniciado_em?: string | null
@@ -16004,6 +16010,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      wa_broadcast_bus_disponiveis: {
+        Args: never
+        Returns: {
+          bu: string
+          leads: number
+          sdrs: number
+        }[]
       }
       wa_broadcast_estagios_disponiveis: {
         Args: { _origin_id?: string }
