@@ -11,13 +11,14 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Users } from 'lucide-react';
 import {
-  useCrmOriginOptions,
-  useCrmStageOptions,
+  useWaEstagiosDisponiveis,
   useWaIgnoradosPorMotivo,
+  useWaOrigensDisponiveis,
   useWaSendBudget,
   WaBroadcast,
 } from '@/hooks/wa/useWaBroadcasts';
 import { formatMinutos, motivoLabel } from './waBroadcastLabels';
+
 
 interface Props {
   broadcast: WaBroadcast;
