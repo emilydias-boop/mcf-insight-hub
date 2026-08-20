@@ -21,6 +21,7 @@ import {
   useCotaTitular,
   useCotasArrastadas,
   useLeadsParaVinculo,
+  useR1ConsorcioPorDeal,
   type LeadVinculoMatch,
 } from "@/hooks/useCorrigirVinculoCota";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
@@ -49,7 +50,18 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   const { data: titular, isLoading: loadingTitular } = useCotaTitular(open ? item?.cardId ?? null : null);
   const { data: arrastadas } = useCotasArrastadas(open ? item?.cardId ?? null : null);
   const { data: leads = [], isFetching } = useLeadsParaVinculo(titular, termo, buscaAmpla, open);
+  const { data: r1PorDeal } = useR1ConsorcioPorDeal(leads.map((l) => l.dealId), open);
   const corrigir = useCorrigirVinculoCota();
+
+  const fmtDia = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+      return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    } catch {
+      return null;
+    }
+  };
+  const r1Selecionado = selected ? r1PorDeal?.get(selected.dealId) : undefined;
 
   const anoMes = (item?.dataContratacao || "").slice(0, 7) || null;
   const { data: lock } = useMonthLock(anoMes);
@@ -208,6 +220,20 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
                       <span className="text-sm font-medium truncate">{l.contactName || "(sem nome)"}</span>
                       {l.casaTitular && (
                         <Badge variant="secondary" className="text-[10px]">bate com o titular</Badge>
+                      )}
+                      {r1PorDeal?.get(l.dealId) ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                        >
+                          tem R1 de consórcio
+                          {fmtDia(r1PorDeal.get(l.dealId)!.dia) ? ` · ${fmtDia(r1PorDeal.get(l.dealId)!.dia)}` : ""}
+                          {r1PorDeal.get(l.dealId)!.closerName ? ` · ${r1PorDeal.get(l.dealId)!.closerName}` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          sem R1 de consórcio
+                        </Badge>
                       )}
                     </span>
                     <span className="block text-[11px] text-muted-foreground truncate">
