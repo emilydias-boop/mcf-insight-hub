@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SdrSummaryRow, SdrUnassignedBucket } from "@/hooks/useTeamMeetingsData";
-import { ChevronRight, FileText, Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { ResiduoDetalheModal, type AgendaResiduoItem } from "./ResiduoDetalheModal";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 
