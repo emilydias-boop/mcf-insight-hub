@@ -85,8 +85,8 @@ export function ResiduoDetalheModal(props: Props) {
     queryFn: async () => {
       const map = new Map<string, string>();
       if (dealIds.length === 0) return map;
-      const { data } = await supabase.from("crm_deals").select("id, title").in("id", dealIds);
-      (data || []).forEach((d: any) => map.set(String(d.id), d.title || "—"));
+      const { data } = await supabase.from("crm_deals").select("id, name").in("id", dealIds);
+      (data || []).forEach((d: any) => map.set(String(d.id), d.name || "—"));
       return map;
     },
     enabled: open && kind === "agenda" && dealIds.length > 0,
