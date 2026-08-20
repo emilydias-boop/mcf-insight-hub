@@ -336,6 +336,25 @@ export function AcceptProposalModal({
 
         <ScrollArea className="max-h-[70vh] pr-4">
           <div className="space-y-4">
+            {/* Aviso de unidade: 1 carta = 1 cadastro pendente. */}
+            {((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id).length > 1 && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                <p className="font-medium">
+                  Esta proposta tem {((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id).length} cartas
+                </p>
+                <p className="text-muted-foreground">
+                  Serão criados os cadastros pendentes correspondentes, um por carta, com estes dados do cliente:
+                </p>
+                <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                  {((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id).map((c: any) => (
+                    <li key={c.id}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(c.valor_credito) || 0)}
+                      {' · '}{c.prazo_meses}x{' · '}{c.tipo_produto}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {/* ===== Dados do plano (bloco compartilhado com OpenCotaModal) ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
