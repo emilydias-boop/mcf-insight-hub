@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+// definição única de "bloqueante" — o wizard e o retomar precisam concordar
+import { PROBLEMAS_BLOQUEANTES } from '@/components/checkin/broadcast/waBroadcastLabels';
+
 
 export type WaBroadcastStatus =
   | 'rascunho'
