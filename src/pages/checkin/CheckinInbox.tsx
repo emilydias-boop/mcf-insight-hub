@@ -6,10 +6,11 @@ import { ConversationList } from '@/components/checkin/ConversationList';
 import { ConversationThread } from '@/components/checkin/ConversationThread';
 import { MessageComposer } from '@/components/checkin/MessageComposer';
 import { ContactPanel } from '@/components/checkin/ContactPanel';
+import { NovaConversaDialog } from '@/components/checkin/NovaConversaDialog';
 import { useNow } from '@/hooks/wa/useNow';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Megaphone } from 'lucide-react';
+import { Megaphone, MessageSquarePlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CheckinInbox() {
@@ -17,6 +18,7 @@ export default function CheckinInbox() {
   const canSeeAll = hasAnyRole('admin', 'manager');
 
   const [scope, setScope] = useState<WaScope>('mine');
+  const [novaConversaAberto, setNovaConversaAberto] = useState(false);
   const { data: conversations = [], isLoading } = useWaConversations(scope);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -96,12 +98,23 @@ export default function CheckinInbox() {
     <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">MCF - Atendimento</h1>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/checkin/disparos">
-            <Megaphone className="mr-2 h-4 w-4" /> Disparos por template
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setNovaConversaAberto(true)}>
+            <MessageSquarePlus className="mr-2 h-4 w-4" /> Nova conversa
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/checkin/disparos">
+              <Megaphone className="mr-2 h-4 w-4" /> Disparos por template
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      <NovaConversaDialog
+        open={novaConversaAberto}
+        onOpenChange={setNovaConversaAberto}
+        onCreated={(id) => setAlvoDeepLink(id)}
+      />
 
       <div className="flex min-h-0 flex-1 gap-3">
       <ConversationList
