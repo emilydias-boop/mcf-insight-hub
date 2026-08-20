@@ -12,6 +12,14 @@ export interface CotaResiduoItem {
   vendedorName: string | null;
   dealId: string | null;
   motivo: string;
+  /** Cadastro pendente já ligado à cota (quando existe) — define o caminho de correção. */
+  pendingRegId: string | null;
+  /** Autoria de correção manual do vínculo, quando houve. */
+  ajuste?: {
+    porId: string | null;
+    em: string | null;
+    dealAnterior: string | null;
+  } | null;
 }
 
 export interface ConsorcioCotasContratadas {
@@ -108,16 +116,23 @@ export function useConsorcioCotasContratadas(
       // Vínculo cota → cadastro pendente → deal
       const { data: regs, error: regsError } = await supabase
         .from("consorcio_pending_registrations")
-        .select("consortium_card_id, deal_id")
+        .select(
+          "id, consortium_card_id, deal_id, created_at, deal_vinculo_ajustado_por, deal_vinculo_ajustado_em, deal_vinculo_anterior",
+        )
         .in("consortium_card_id", cardIds);
       if (regsError) throw regsError;
 
       const cardToDeal = new Map<string, string>();
       const cardsComCadastro = new Set<string>();
+      const cardToReg = new Map<string, any>();
       (regs || []).forEach((r: any) => {
         if (r.consortium_card_id) cardsComCadastro.add(r.consortium_card_id);
+        if (r.consortium_card_id && !cardToReg.has(r.consortium_card_id)) {
+          cardToReg.set(r.consortium_card_id, r);
+        }
         if (r.consortium_card_id && r.deal_id && !cardToDeal.has(r.consortium_card_id)) {
           cardToDeal.set(r.consortium_card_id, r.deal_id);
+          cardToReg.set(r.consortium_card_id, r);
         }
       });
 
