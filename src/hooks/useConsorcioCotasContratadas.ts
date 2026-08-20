@@ -51,8 +51,9 @@ function nameKey(name?: string | null): string | null {
  *  - SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a
  *    PRIMEIRA reunião conduzida por closer DESTA BU (`meeting_slots.closer_id`).
  *    Reunião conduzida por closer de outra BU nunca define o SDR da cota, por
- *    mais antiga que seja. Attendees `invited`, `no_show` e `cancelled` são
- *    ignorados. Não há fallback no dono do negócio: sem agendador identificado
+ *    mais antiga que seja. Attendees `invited` e `cancelled` são
+ *    ignorados; `no_show` vale (prospecção existe mesmo sem comparecimento).
+ *    Não há fallback no dono do negócio: sem agendador identificado
  *    a cota vai para a linha "Não atribuído".
  *
  * Filtro de funil: aplicado pela origem do deal vinculado. Cota sem vínculo com
@@ -139,7 +140,7 @@ export function useConsorcioCotasContratadas(
           .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
           .in("deal_id", dealIds)
           .not("booked_by", "is", null)
-          .not("status", "in", "(cancelled,invited,no_show)");
+          .not("status", "in", "(cancelled,invited)");
         if (attError) throw attError;
 
         // Só reuniões conduzidas por closer desta BU definem o SDR.
