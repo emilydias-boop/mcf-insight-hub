@@ -286,10 +286,29 @@ export function ResiduoDetalheModal(props: Props) {
                         {temAcaoCota && (
                           <TableCell className="text-right">
                             {permitirCorrigirVinculo ? (
-                              <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
-                                <Link2 className="h-3.5 w-3.5 mr-1" />
-                                Corrigir
-                              </Button>
+                              // Regra: botão que não resolve o caso não aparece.
+                              i.problema === "sem_agendador" ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setInformandoAgendador(i)}
+                                >
+                                  <UserCog className="h-3.5 w-3.5 mr-1" />
+                                  Informar agendador
+                                </Button>
+                              ) : i.problema === undefined ||
+                                i.problema === "sem_cadastro" ||
+                                i.problema === "sem_lead" ||
+                                i.problema === "deal_inexistente" ? (
+                                <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Vincular lead
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground italic">
+                                  sem correção por vínculo
+                                </span>
+                              )
                             ) : (
                               <Button size="sm" variant="outline" asChild>
                                 <a
