@@ -31,6 +31,12 @@ interface MeetingSummaryCardsProps {
   summary: MeetingSummaryV2 | MeetingSummary;
   isLoading?: boolean;
   bu?: string;
+  /** Totais por segmento ICP (Lead A / Lead B). Quando ausente, os cards
+   *  ficam sem a linha de quebra. */
+  segmentTotals?: {
+    a: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
+    b: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
+  } | null;
 }
 
 // Type guard para verificar se é a nova interface
@@ -38,7 +44,7 @@ function isSummaryV2(summary: MeetingSummaryV2 | MeetingSummary): summary is Mee
   return 'primeiroAgendamento' in summary;
 }
 
-export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCardsProps) {
+export function MeetingSummaryCards({ summary, isLoading, bu, segmentTotals = null }: MeetingSummaryCardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   // Normalizar para nova interface
   const normalizedSummary: MeetingSummaryV2 = isSummaryV2(summary) 
@@ -57,6 +63,19 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
           : 0
       };
 
+  // icp_segment é conceito do Incorporador — no Consórcio não mostramos quebra.
+  const showSeg = !isConsorcio && !!segmentTotals;
+  const segLineFor = (
+    key: 'agendamentos' | 'r1Agendada' | 'realizadas' | 'noShows' | 'contratos',
+    total: number,
+  ): string | undefined => {
+    if (!showSeg || !segmentTotals) return undefined;
+    const a = segmentTotals.a[key] ?? 0;
+    const b = segmentTotals.b[key] ?? 0;
+    const semIcp = Math.max(0, total - a - b);
+    return `A: ${a} · B: ${b} · Sem ICP: ${semIcp}`;
+  };
+
   const cards = [
     {
       title: "Agendamentos",
@@ -64,7 +83,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      tooltip: "Reuniões CRIADAS no período (data do agendamento feito pelo SDR)"
+      tooltip: "Reuniões CRIADAS no período (data do agendamento feito pelo SDR)",
+      segLine: segLineFor('agendamentos', normalizedSummary.totalAgendamentos),
     },
     {
       title: "R1 Agendada",
@@ -72,7 +92,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       icon: CalendarCheck,
       color: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
-      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)"
+      tooltip: "Reuniões marcadas PARA o período (independente de quando foram criadas)",
+      segLine: segLineFor('r1Agendada', normalizedSummary.r1Agendada),
     },
     {
       title: "Realizadas",
@@ -80,7 +101,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
-      tooltip: "Reuniões realizadas (por intermediação)"
+      tooltip: "Reuniões realizadas (por intermediação)",
+      segLine: segLineFor('realizadas', normalizedSummary.realizadas),
     },
     {
       title: "No-Shows",
@@ -88,7 +110,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
-      tooltip: "No-shows (creditado ao owner no momento)"
+      tooltip: "No-shows (creditado ao owner no momento)",
+      segLine: segLineFor('noShows', normalizedSummary.noShows),
     },
     {
       title: "Taxa Conversão",
@@ -96,7 +119,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Realizadas / R1 Agendada × 100"
+      tooltip: "Realizadas / R1 Agendada × 100",
+      segLine: undefined,
     },
     {
       title: isConsorcio ? "Propostas Fechadas" : "Contratos",
@@ -106,7 +130,8 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Propostas fechadas atribuídas via R1"
-        : "Contratos fechados (por intermediação)"
+        : "Contratos fechados (por intermediação)",
+      segLine: segLineFor('contratos', normalizedSummary.contratos),
     }
   ];
 
@@ -132,6 +157,11 @@ export function MeetingSummaryCards({ summary, isLoading, bu }: MeetingSummaryCa
                       <p className="text-lg sm:text-2xl font-bold text-foreground">
                         {isLoading ? "..." : card.value}
                       </p>
+                      {card.segLine && !isLoading && (
+                        <p className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
+                          {card.segLine}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
