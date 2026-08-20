@@ -16017,6 +16017,10 @@ export type Database = {
           total: number
         }[]
       }
+      wa_broadcast_preencher_variaveis: {
+        Args: { _broadcast_id: string }
+        Returns: number
+      }
       wa_broadcast_reservar_lote: {
         Args: { _broadcast_id: string; _quantidade: number }
         Returns: {
@@ -16062,6 +16066,11 @@ export type Database = {
         }[]
       }
       wa_nome_utilizavel: { Args: { _nome: string }; Returns: boolean }
+      wa_posicao_variavel: {
+        Args: { _content_sid: string; _variavel: string }
+        Returns: number
+      }
+      wa_primeiro_nome: { Args: { _nome: string }; Returns: string }
       wa_register_opt_out: {
         Args: { _motivo?: string; _phone: string }
         Returns: undefined

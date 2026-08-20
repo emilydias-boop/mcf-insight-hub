@@ -163,12 +163,18 @@ function CriarDisparoDialog({
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
   const {
     data: pendentesData,
-    isLoading: carregandoPendentes,
+    isFetching: buscandoPendentes,
     isError: erroPendentes,
   } = useWaTargetsCount(broadcast?.id, 'pendente');
   /** null = contagem indisponível. Nunca cai para 0, que liberaria o envio. */
   const pendentes = typeof pendentesData === 'number' ? pendentesData : null;
-  const contagemIndisponivel = pendentes === null || carregandoPendentes || erroPendentes;
+  /**
+   * `isFetching` (e não `isLoading`): num refetch com dado em cache o React
+   * Query mantém isLoading falso e devolveria a contagem do público ANTERIOR —
+   * era assim que a confirmação por digitação se desarmava.
+   */
+  const contagemIndisponivel = pendentes === null || buscandoPendentes || erroPendentes;
+
 
   /**
    * Qualquer mudança de filtro ou limite invalida o público já montado: o
@@ -242,14 +248,23 @@ function CriarDisparoDialog({
     const filtro: Record<string, string> = {};
     if (stageId) filtro.stage_id = stageId;
     if (originId) filtro.origin_id = originId;
-    await atualizar.mutateAsync({
-      id: broadcast.id,
-      patch: { filtro, limite_alvos: limite ? Number(limite) : null },
-    });
-    const res = await montar.mutateAsync(broadcast.id);
-    setJaMontou(true);
-    toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
+    try {
+      await atualizar.mutateAsync({
+        id: broadcast.id,
+        patch: { filtro, limite_alvos: limite ? Number(limite) : null },
+      });
+      const res = await montar.mutateAsync(broadcast.id);
+      setJaMontou(true);
+      toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
+    } catch (err) {
+      // o RPC levanta exceção quando o disparo não está mais em rascunho
+      setJaMontou(false);
+      toast.error(
+        err instanceof Error && err.message ? err.message : 'Não foi possível montar o público',
+      );
+    }
   };
+
 
   const handleDisparar = async () => {
     if (!broadcast) return;
