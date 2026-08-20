@@ -23,8 +23,15 @@ export type WaBroadcastEscopo = 'minha_carteira' | 'bu';
 export interface WaBroadcastBuDisponivel {
   bu: string;
   sdrs: number;
+  /** leads disparáveis: só quem tem dono ativo */
   leads: number;
+  /** leads cujo dono está bloqueado — ninguém para ler a resposta */
+  leads_sem_dono_ativo: number;
 }
+
+/** Abaixo disso a BU não é carteira comercial — é área da empresa no campo squad. */
+export const BU_VOLUME_MINIMO = 50;
+
 
 export interface WaBroadcast {
   id: string;
@@ -296,6 +303,7 @@ export const MOTIVOS_IGNORADO = [
   'cooldown',
   'nome_invalido',
   'limite_marketing_do_destinatario',
+  'dono_inativo',
 ] as const;
 
 /**
@@ -738,7 +746,10 @@ export function useWaBusDisponiveis() {
       const { data, error } = await supabase.rpc('wa_broadcast_bus_disponiveis');
       if (error) throw error;
       // Guarda: BU vazia derruba o <SelectItem value=""> do Radix e a tela inteira.
-      return ((data ?? []) as WaBroadcastBuDisponivel[]).filter((b) => !!b.bu?.trim());
+      return ((data ?? []) as WaBroadcastBuDisponivel[])
+        .filter((b) => !!b.bu?.trim())
+        .map((b) => ({ ...b, leads_sem_dono_ativo: b.leads_sem_dono_ativo ?? 0 }))
+        .sort((a, b) => b.leads - a.leads);
     },
   });
 }
