@@ -203,14 +203,32 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Method not allowed' }, 405);
     }
 
-    // ===== Autenticação (FASE 1: permissiva — identifica, não bloqueia) =====
+    // ===== Autenticação (FASE 2: ESTRITA — 401 sem escrever nada de negócio) =====
     const authOutcome = checkWebhookSecret(req);
     const caller = describeCaller(req);
     if (authOutcome !== 'ok') {
-      console.warn(
-        `[webhook-consorcio][AUTH ${authOutcome}] requisição aceita em modo permissivo (FASE 1). Emissor: ${JSON.stringify(caller)}`,
+      console.error(
+        `[webhook-consorcio][AUTH ${authOutcome}] requisição REJEITADA (401). Emissor: ${JSON.stringify(caller)}`,
       );
+      // Auditoria da tentativa rejeitada — para saber quem tentou, quando e sem qual segredo.
+      try {
+        const auditClient = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        await auditClient.from('bu_webhook_logs').insert({
+          bu_type: 'consorcio',
+          event_type: `new_card.auth_${authOutcome}`,
+          payload: { fase: 2, modo: 'estrito', auth: authOutcome, caller, rejected: true },
+          status: 'error',
+          error_message: `401 unauthorized: ${authOutcome}`,
+        });
+      } catch (auditErr) {
+        console.error('[webhook-consorcio] falha ao auditar tentativa rejeitada:', auditErr);
+      }
+      return json({ success: false, error: 'unauthorized' }, 401);
     }
+
 
     // ===== Payload: rejeita malformado ANTES de qualquer escrita =====
     let payload: ConsorcioPayload;
