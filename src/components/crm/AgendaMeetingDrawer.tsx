@@ -77,6 +77,7 @@ import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
 import { useAttendeeChannels, CHANNEL_EMOJI, CHANNEL_BADGE_CLASS } from '@/hooks/useAttendeeChannels';
 import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { AgendadorEditor } from '@/components/crm/AgendadorEditor';
 import { QualificationHistorySection } from './qualification/QualificationHistorySection';
 
 const FOLLOWUP_CLOSER_STAGE_ID = 'c2d1b8f3-ae5a-4b2d-9f4c-3a6e7b9d0e02';
