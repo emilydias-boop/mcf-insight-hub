@@ -26,6 +26,9 @@ export interface WaBroadcast {
   template_preview: string | null;
   variaveis_fixas: Record<string, string>;
   filtro: Record<string, string>;
+  escopo: WaBroadcastEscopo;
+  bu: string | null;
+  updated_at: string | null;
   status: WaBroadcastStatus;
   total_alvos: number;
   total_enviados: number;
