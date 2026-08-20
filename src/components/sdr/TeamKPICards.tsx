@@ -41,6 +41,9 @@ interface TeamKPICardsProps {
   orphanRefundsCount?: number;
   /** Esconde o card "Agendamentos" (ex.: aba Closers — closer não agenda). */
   hideAgendamentos?: boolean;
+  /** Consórcio: clientes distintos que contrataram no período (Vendas Realizadas).
+   *  Mesmo totalClientes global usado no Total das abas — sem query nova. */
+  totalVendasRealizadas?: number;
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
