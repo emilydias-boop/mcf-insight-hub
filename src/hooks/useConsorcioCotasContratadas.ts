@@ -314,6 +314,9 @@ export function useConsorcioCotasContratadas(
       let semVinculo = 0;
       let semCloser = 0;
       const semVinculoItems: CotaResiduoItem[] = [];
+      const cadastroSemLeadItems: CotaResiduoItem[] = [];
+      let cadastroSemLead = 0;
+      let creditoCadastroSemLead = 0;
       const semCloserItems: CotaResiduoItem[] = [];
 
       const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => {
