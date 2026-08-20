@@ -1,0 +1,243 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Download, ExternalLink } from "lucide-react";
+import { format } from "date-fns";
+import { formatCurrency } from "@/lib/formatters";
+import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
+import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
+
+export interface AgendaResiduoItem {
+  dealId: string | null;
+  meetingDay: string;
+  closerName: string | null;
+  attendeeStatus: string | null;
+  motivo: string;
+}
+
+type Props =
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      kind: "cota";
+      titulo: string;
+      descricao: string;
+      items: CotaResiduoItem[];
+      esperado: number;
+    }
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      kind: "agenda";
+      titulo: string;
+      descricao: string;
+      items: AgendaResiduoItem[];
+      esperado: number;
+    };
+
+function fmtDate(value?: string | null): string {
+  if (!value) return "—";
+  try {
+    const d = value.length <= 10 ? new Date(`${value}T12:00:00`) : new Date(value);
+    return format(d, "dd/MM/yyyy");
+  } catch {
+    return value;
+  }
+}
+
+function baixarCsv(header: string[], rows: (string | number)[][], filename: string) {
+  const escape = (c: string | number) => {
+    const s = String(c ?? "");
+    // Proteção contra injeção de fórmula em planilha.
+    const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+  const csv = [header, ...rows].map(r => r.map(escape).join(",")).join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function ResiduoDetalheModal(props: Props) {
+  const { open, onOpenChange, kind, titulo, descricao, items, esperado } = props;
+
+  // Só rótulo: o número já vem da mesma fonte que produziu a linha clicada.
+  const dealIds = useMemo(
+    () => kind === "agenda"
+      ? [...new Set((items as AgendaResiduoItem[]).map(i => i.dealId).filter(Boolean) as string[])]
+      : [],
+    [kind, items],
+  );
+  const { data: leadNames } = useQuery({
+    queryKey: ["residuo-lead-names", dealIds.sort().join("|")],
+    queryFn: async () => {
+      const map = new Map<string, string>();
+      if (dealIds.length === 0) return map;
+      const { data } = await supabase.from("crm_deals").select("id, title").in("id", dealIds);
+      (data || []).forEach((d: any) => map.set(String(d.id), d.title || "—"));
+      return map;
+    },
+    enabled: open && kind === "agenda" && dealIds.length > 0,
+    staleTime: 60000,
+  });
+
+  const divergente = items.length !== esperado;
+
+  const exportar = () => {
+    const stamp = format(new Date(), "yyyyMMdd-HHmm");
+    if (kind === "cota") {
+      baixarCsv(
+        ["Cliente", "Grupo/Cota", "Data de contratação", "Valor do crédito", "Vendedor", "Motivo"],
+        (items as CotaResiduoItem[]).map(i => [
+          i.cliente,
+          [i.grupo, i.cota].filter(Boolean).join("/") || "—",
+          fmtDate(i.dataContratacao),
+          i.valorCredito != null ? i.valorCredito : "",
+          i.vendedorName || "",
+          i.motivo,
+        ]),
+        `residuo-cotas-${stamp}.csv`,
+      );
+    } else {
+      baixarCsv(
+        ["Lead", "Data da reunião", "Closer", "Status do attendee", "Motivo"],
+        (items as AgendaResiduoItem[]).map(i => [
+          (i.dealId && leadNames?.get(i.dealId)) || "—",
+          fmtDate(i.meetingDay),
+          i.closerName || "—",
+          formatMeetingStatus(i.attendeeStatus),
+          i.motivo,
+        ]),
+        `residuo-agenda-${stamp}.csv`,
+      );
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            {titulo}
+            <Badge variant="outline">{items.length} registro{items.length === 1 ? "" : "s"}</Badge>
+          </DialogTitle>
+          <DialogDescription className="text-xs leading-relaxed">{descricao}</DialogDescription>
+        </DialogHeader>
+
+        {divergente && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-500">
+            Atenção: o detalhamento trouxe {items.length} registros e a linha mostra {esperado}. Reporte esta divergência.
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={exportar}>
+            <Download className="h-4 w-4 mr-1" />
+            Exportar CSV
+          </Button>
+        </div>
+
+        <div className="overflow-auto border rounded-md flex-1">
+          {items.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              Nenhum registro por trás deste número.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  {kind === "cota" ? (
+                    <>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Grupo/Cota</TableHead>
+                      <TableHead>Data de contratação</TableHead>
+                      <TableHead className="text-right">Valor do crédito</TableHead>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead>Motivo</TableHead>
+                    </>
+                  ) : (
+                    <>
+                      <TableHead>Lead</TableHead>
+                      <TableHead>Data da reunião</TableHead>
+                      <TableHead>Closer</TableHead>
+                      <TableHead>Status do attendee</TableHead>
+                      <TableHead>Motivo</TableHead>
+                    </>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {kind === "cota"
+                  ? (items as CotaResiduoItem[]).map((i, idx) => (
+                      <TableRow key={`${i.cardId}-${idx}`}>
+                        <TableCell className="text-sm">
+                          <a
+                            href={`/consorcio/crm/venda-consorcio?tab=cotas&qCo=${encodeURIComponent(i.cliente)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 hover:underline"
+                            title="Abrir a cota no Controle Consórcio"
+                          >
+                            {i.cliente}
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {[i.grupo, i.cota].filter(Boolean).join("/") || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{fmtDate(i.dataContratacao)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-xs">
+                          {i.valorCredito != null ? formatCurrency(i.valorCredito) : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">{i.vendedorName || <span className="italic text-muted-foreground">vazio</span>}</TableCell>
+                        <TableCell className="text-xs">{i.motivo}</TableCell>
+                      </TableRow>
+                    ))
+                  : (items as AgendaResiduoItem[]).map((i, idx) => (
+                      <TableRow key={`${i.dealId || "sem-deal"}-${i.meetingDay}-${idx}`}>
+                        <TableCell className="text-sm">
+                          {i.dealId ? (
+                            <a
+                              href={`/consorcio/crm/negocios?deal=${i.dealId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 hover:underline"
+                              title="Abrir o lead no CRM"
+                            >
+                              {leadNames?.get(i.dealId) || "Abrir lead"}
+                              <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                            </a>
+                          ) : (
+                            <span className="italic text-muted-foreground">sem negócio vinculado</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{fmtDate(i.meetingDay)}</TableCell>
+                        <TableCell className="text-xs">{i.closerName || "—"}</TableCell>
+                        <TableCell className="text-xs">{formatMeetingStatus(i.attendeeStatus)}</TableCell>
+                        <TableCell className="text-xs">{i.motivo}</TableCell>
+                      </TableRow>
+                    ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        <div className="text-xs text-muted-foreground border-t pt-2">
+          Total: <span className="font-semibold text-foreground">{items.length}</span> · deve bater com o número da linha ({esperado})
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
