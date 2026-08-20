@@ -89,7 +89,7 @@ export default function Disparos() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Voltar ao inbox
             </Link>
           </Button>
-          <Button onClick={() => setWizardOpen(true)}>
+          <Button onClick={abrirNovo}>
             <Plus className="mr-2 h-4 w-4" /> Novo disparo
           </Button>
         </div>
@@ -115,51 +115,119 @@ export default function Disparos() {
               <TableHead className="text-right">Enviados</TableHead>
               <TableHead className="text-right">Falhas</TableHead>
               <TableHead>Criado</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Carregando…
                 </TableCell>
               </TableRow>
             ) : broadcasts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nenhum disparo criado ainda
                 </TableCell>
               </TableRow>
             ) : (
-              broadcasts.map((b) => (
-                <TableRow key={b.id} className="cursor-pointer">
-                  <TableCell className="font-medium">
-                    <Link to={`/checkin/disparos/${b.id}`} className="hover:underline">
-                      {b.nome}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {b.template_nome ?? b.content_sid}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={b.status === 'cancelado' ? 'destructive' : 'secondary'}>
-                      {BROADCAST_STATUS_LABEL[b.status] ?? b.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{b.total_alvos}</TableCell>
-                  <TableCell className="text-right">{b.total_enviados}</TableCell>
-                  <TableCell className="text-right">{b.total_falhas}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {formatDateTime(b.created_at)}
-                  </TableCell>
-                </TableRow>
-              ))
+              broadcasts.map((b) => {
+                const ehRascunho = b.status === 'rascunho';
+                const podeExcluir = ehRascunho && b.criado_por === user?.id;
+                return (
+                  <TableRow key={b.id}>
+                    <TableCell className="font-medium">
+                      {ehRascunho ? (
+                        // rascunho reabre o assistente; o resto vai para o acompanhamento
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => abrirRascunho(b)}
+                        >
+                          {b.nome}
+                        </button>
+                      ) : (
+                        <Link to={`/checkin/disparos/${b.id}`} className="hover:underline">
+                          {b.nome}
+                        </Link>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {b.template_nome ?? b.content_sid ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={b.status === 'cancelado' ? 'destructive' : 'secondary'}>
+                        {BROADCAST_STATUS_LABEL[b.status] ?? b.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{b.total_alvos}</TableCell>
+                    <TableCell className="text-right">{b.total_enviados}</TableCell>
+                    <TableCell className="text-right">{b.total_falhas}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {formatDateTime(b.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {ehRascunho && (
+                          <Button variant="ghost" size="sm" onClick={() => abrirRascunho(b)}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Continuar
+                          </Button>
+                        )}
+                        {podeExcluir && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Excluir rascunho"
+                            onClick={() => setExcluindo(b)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </div>
 
-      <CriarDisparoDialog open={wizardOpen} onOpenChange={setWizardOpen} />
+      <CriarDisparoDialog
+        key={rascunho?.id ?? 'novo'}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        rascunho={rascunho}
+      />
+
+      <AlertDialog open={!!excluindo} onOpenChange={(v) => !v && setExcluindo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir rascunho</AlertDialogTitle>
+            <AlertDialogDescription>
+              “{excluindo?.nome}” será removido junto com o público montado. Nada foi enviado
+              ainda, então nenhum lead é afetado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!excluindo) return;
+                try {
+                  await excluir.mutateAsync(excluindo.id);
+                } finally {
+                  setExcluindo(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
