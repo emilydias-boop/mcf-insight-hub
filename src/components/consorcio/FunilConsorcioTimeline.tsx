@@ -242,18 +242,36 @@ export function FunilConsorcioTimeline({
     {
       key: 'propostas',
       label: 'Cartas Negociadas',
-      hint: 'criadas no período',
+      hint: `cartas em ${propostasCount} proposta${propostasCount === 1 ? '' : 's'} do período`,
       count: loadingProposals ? null : negociadas,
       badges:
         !loadingProposals && naoAceitas > 0
           ? [{
-              label: `${naoAceitas} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
+              label: `${naoAceitas} proposta${naoAceitas > 1 ? 's' : ''} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
               filter: 'nao-aceitas' as FunilQuickFilter,
               tooltip:
-                'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. Clique para filtrar a lista.',
+                'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. O número grande da etapa conta CARTAS (uma proposta pode negociar várias); este selo conta propostas. Clique para filtrar a lista.',
             }]
           : null,
+      breakdown:
+        !loadingProposals
+          ? [
+              {
+                label: 'Propostas',
+                value: propostasCount,
+                tooltip:
+                  'Propostas criadas no período (eixo data da proposta). É esta a base da meta de crédito no BI — que segue contando propostas, não cartas.',
+              },
+              {
+                label: 'Cartas',
+                value: negociadas,
+                tooltip:
+                  'Soma das cartas de crédito negociadas dentro dessas propostas. Uma carta gera um cadastro pendente, por isso é este o denominador da etapa seguinte.',
+              },
+            ]
+          : null,
     },
+
     {
       key: 'pendentes',
       label: 'Cadastros Pendentes',
