@@ -208,6 +208,7 @@ export function ResiduoDetalheModal(props: Props) {
                       <TableHead>Closer</TableHead>
                       <TableHead>Status do attendee</TableHead>
                       <TableHead>Motivo</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </>
                   )}
                 </TableRow>
