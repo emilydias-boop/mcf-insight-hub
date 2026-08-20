@@ -16016,6 +16016,7 @@ export type Database = {
         Returns: {
           bu: string
           leads: number
+          leads_sem_dono_ativo: number
           sdrs: number
         }[]
       }
@@ -16084,6 +16085,7 @@ export type Database = {
           phone: string
         }[]
       }
+      wa_dono_ativo: { Args: { _profile_id: string }; Returns: boolean }
       wa_enviados_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
