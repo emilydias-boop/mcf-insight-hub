@@ -355,7 +355,13 @@ export function useConsorcioCotasContratadas(
       let creditoCadastroSemLead = 0;
       const semCloserItems: CotaResiduoItem[] = [];
 
-      const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => {
+      const baseItem = (
+        card: any,
+        dealId: string | null,
+        motivo: string,
+        problema?: CotaProblema,
+        agendamento?: AgendamentoSemAgendador | null,
+      ): CotaResiduoItem => {
         const reg = cardToReg.get(card.id);
         return {
           cardId: card.id,
@@ -367,6 +373,8 @@ export function useConsorcioCotasContratadas(
           vendedorName: card.vendedor_name ?? null,
           dealId,
           motivo,
+          problema,
+          agendamento: agendamento ?? null,
           pendingRegId: reg?.id ?? null,
           ajuste: reg?.deal_vinculo_ajustado_em
             ? {
