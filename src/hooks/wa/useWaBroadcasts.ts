@@ -716,3 +716,43 @@ export function useWaEstagiosDisponiveis(originId: string | null) {
     },
   });
 }
+
+/**
+ * BUs com leads alcançáveis, com quantos SDRs cada uma tem. A função devolve
+ * vazio para quem não é admin/manager — o próprio resultado serve de gate.
+ */
+export function useWaBusDisponiveis() {
+  return useQuery({
+    queryKey: ['wa-broadcast-bus-disponiveis'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaBroadcastBuDisponivel[]> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_bus_disponiveis');
+      if (error) throw error;
+      return (data ?? []) as WaBroadcastBuDisponivel[];
+    },
+  });
+}
+
+/** Exclui rascunho — a RLS só permite rascunho próprio. */
+export function useExcluirRascunho() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (broadcastId: string) => {
+      const { data, error } = await supabase
+        .from('wa_broadcasts')
+        .delete()
+        .eq('id', broadcastId)
+        .eq('status', 'rascunho')
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('Só é possível excluir um rascunho seu — recarregue a tela.');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Rascunho excluído');
+      qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Erro ao excluir rascunho')),
+  });
+}
