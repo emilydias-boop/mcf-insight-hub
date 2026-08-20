@@ -179,32 +179,58 @@ function calcularComissao(valorCredito: number, tipoProduto: TipoProduto, numero
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   const startTime = Date.now();
 
   try {
     if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ success: false, error: 'Method not allowed' }),
-        { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return json({ success: false, error: 'Method not allowed' }, 405);
     }
 
-    const payload: ConsorcioPayload = await req.json();
+    // ===== Autenticação (FASE 1: permissiva — identifica, não bloqueia) =====
+    const authOutcome = checkWebhookSecret(req);
+    const caller = describeCaller(req);
+    if (authOutcome !== 'ok') {
+      console.warn(
+        `[webhook-consorcio][AUTH ${authOutcome}] requisição aceita em modo permissivo (FASE 1). Emissor: ${JSON.stringify(caller)}`,
+      );
+    }
+
+    // ===== Payload: rejeita malformado ANTES de qualquer escrita =====
+    let payload: ConsorcioPayload;
+    try {
+      payload = await req.json();
+    } catch {
+      console.warn('[webhook-consorcio] corpo não é JSON válido. Emissor:', JSON.stringify(caller));
+      return json({ success: false, error: 'Corpo da requisição não é um JSON válido' }, 400);
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return json({ success: false, error: 'Corpo da requisição deve ser um objeto JSON' }, 400);
+    }
     console.log('Webhook Consórcio - Payload recebido:', JSON.stringify(payload));
 
     // ===== Validação =====
     if (!payload.grupo || !payload.cota || !payload.valor_credito || !payload.tipo_pessoa) {
-      return new Response(JSON.stringify({
+      return json({
         success: false,
         error: 'Campos obrigatórios: grupo, cota, valor_credito, tipo_pessoa',
-      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }, 400);
+    }
+    if (payload.tipo_pessoa !== 'pf' && payload.tipo_pessoa !== 'pj') {
+      return json({ success: false, error: "tipo_pessoa deve ser 'pf' ou 'pj'" }, 400);
     }
     if (payload.tipo_pessoa === 'pf' && !payload.nome_completo) {
-      return new Response(JSON.stringify({ success: false, error: 'Campo nome_completo é obrigatório para PF' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return json({ success: false, error: 'Campo nome_completo é obrigatório para PF' }, 400);
     }
     if (payload.tipo_pessoa === 'pj' && !payload.razao_social) {
-      return new Response(JSON.stringify({ success: false, error: 'Campo razao_social é obrigatório para PJ' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return json({ success: false, error: 'Campo razao_social é obrigatório para PJ' }, 400);
     }
 
     const tipoRegistro: TipoRegistro = payload.tipo_registro === 'reserva' ? 'reserva' : 'contratacao';
@@ -213,21 +239,30 @@ Deno.serve(async (req) => {
 
     // Regra: reserva exige data_reserva; contratação exige data_contratacao
     if (tipoRegistro === 'reserva' && !dataReserva) {
-      return new Response(JSON.stringify({ success: false, error: 'tipo_registro=reserva exige data_reserva' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return json({ success: false, error: 'tipo_registro=reserva exige data_reserva' }, 400);
     }
     if (tipoRegistro === 'contratacao' && !dataContratacao) {
-      return new Response(JSON.stringify({ success: false, error: 'tipo_registro=contratacao exige data_contratacao' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return json({ success: false, error: 'tipo_registro=contratacao exige data_contratacao' }, 400);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Contador auditável de requisições sem o segredo (base da decisão da Fase 2).
+    if (authOutcome !== 'ok') {
+      await supabase.from('bu_webhook_logs').insert({
+        bu_type: 'consorcio',
+        event_type: `new_card.auth_${authOutcome}`,
+        payload: { fase: 1, modo: 'permissivo', auth: authOutcome, caller },
+        status: 'warning',
+      });
+    }
+
     const { data: logEntry } = await supabase
       .from('bu_webhook_logs')
       .insert({ bu_type: 'consorcio', event_type: 'new_card', payload, status: 'processing' })
+
       .select('id').single();
 
     const valorCredito = parseMonetaryValue(payload.valor_credito);
