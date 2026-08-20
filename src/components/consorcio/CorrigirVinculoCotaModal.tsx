@@ -256,6 +256,23 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
           )}
         </ScrollArea>
 
+        {selected && !r1Selecionado && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            O lead escolhido não tem reunião de consórcio elegível. Vincular a cota a ele não credita
+            a venda a nenhum SDR — e desfaz a atribuição atual, se houver. Escolha o lead com o selo
+            "tem R1 de consórcio" quando existir.
+          </div>
+        )}
+
+        {selected && r1Selecionado && !r1Selecionado.temAgendador && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            Este lead tem R1 de consórcio, mas a reunião está sem agendador registrado. Depois de
+            vincular, use "Informar agendador" para a venda ser creditada.
+          </div>
+        )}
+
         {outrasCotas != null && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs space-y-2">
             <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
