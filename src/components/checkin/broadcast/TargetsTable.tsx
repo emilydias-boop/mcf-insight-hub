@@ -46,8 +46,9 @@ export function TargetsTable({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {total != null ? `${total} alvo(s) no total` : `${targets.length} alvo(s) listado(s)`}
-          {truncado && ` · mostrando os ${targets.length} primeiros (lista paginada)`}
+          {truncado && ` · mostrando os ${targets.length} primeiros de ${total}`}
         </p>
+
         <Select value={status} onValueChange={onStatusChange}>
           <SelectTrigger className="w-48">
             <SelectValue />
