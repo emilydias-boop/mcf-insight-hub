@@ -188,6 +188,7 @@ const menuItems: MenuItem[] = [
       { title: "Fechamento", url: "/consorcio/fechamento", requiredRoles: ["admin", "manager", "coordenador"] },
       { title: "CRM", url: "/consorcio/crm" },
       { title: "Pagamentos", url: "/consorcio/pagamentos", requiredRoles: ["admin", "manager", "coordenador", "assistente_administrativo"] },
+      { title: "Correções de atribuição", url: "/consorcio/auditoria-vinculos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 

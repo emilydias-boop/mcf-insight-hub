@@ -384,6 +384,7 @@ export function ConsorcioSdrSummaryTable({
         descricao="Cotas contratadas no período (com o filtro de funil ativo) que esta tela não conseguiu atribuir a nenhum SDR. A coluna Motivo diz exatamente qual dado está faltando na cadeia cota → cadastro pendente → negócio → reunião de consórcio → agendador."
         items={cotasSemVinculoItems}
         esperado={cotasSemVinculo}
+        permitirCorrigirVinculo
       />
       <ResiduoDetalheModal
         open={detalhe === "naoAtribuido"}

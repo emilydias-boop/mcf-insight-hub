@@ -4338,6 +4338,9 @@ export type Database = {
           data_contratacao: string | null
           data_fundacao: string | null
           deal_id: string | null
+          deal_vinculo_ajustado_em: string | null
+          deal_vinculo_ajustado_por: string | null
+          deal_vinculo_anterior: string | null
           declinada_at: string | null
           declinada_by: string | null
           dia_vencimento: number | null
@@ -4415,6 +4418,9 @@ export type Database = {
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
+          deal_vinculo_ajustado_em?: string | null
+          deal_vinculo_ajustado_por?: string | null
+          deal_vinculo_anterior?: string | null
           declinada_at?: string | null
           declinada_by?: string | null
           dia_vencimento?: number | null
@@ -4492,6 +4498,9 @@ export type Database = {
           data_contratacao?: string | null
           data_fundacao?: string | null
           deal_id?: string | null
+          deal_vinculo_ajustado_em?: string | null
+          deal_vinculo_ajustado_por?: string | null
+          deal_vinculo_anterior?: string | null
           declinada_at?: string | null
           declinada_by?: string | null
           dia_vencimento?: number | null
@@ -9677,6 +9686,9 @@ export type Database = {
           boas_vindas_r2_whatsapp_enviado_em: string | null
           booked_at: string | null
           booked_by: string | null
+          booked_by_ajustado_em: string | null
+          booked_by_ajustado_por: string | null
+          booked_by_anterior: string | null
           calendly_invitee_uri: string | null
           carrinho_status: string | null
           carrinho_updated_at: string | null
@@ -9722,6 +9734,9 @@ export type Database = {
           boas_vindas_r2_whatsapp_enviado_em?: string | null
           booked_at?: string | null
           booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
           calendly_invitee_uri?: string | null
           carrinho_status?: string | null
           carrinho_updated_at?: string | null
@@ -9767,6 +9782,9 @@ export type Database = {
           boas_vindas_r2_whatsapp_enviado_em?: string | null
           booked_at?: string | null
           booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
           calendly_invitee_uri?: string | null
           carrinho_status?: string | null
           carrinho_updated_at?: string | null
@@ -14770,6 +14788,15 @@ export type Database = {
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
+      consorcio_corrigir_vinculo_cota: {
+        Args: {
+          p_card_id: string
+          p_confirmar_duplicado?: boolean
+          p_deal_id: string
+          p_registration_id?: string
+        }
+        Returns: Json
+      }
       crm_deal_merge_custom_fields: {
         Args: { _deal_id: string; _patch: Json }
         Returns: Json

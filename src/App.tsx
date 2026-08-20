@@ -129,6 +129,7 @@ const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento")
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
 const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEquipe"));
+const ConsorcioAuditoriaVinculos = lazy(() => import("./pages/bu-consorcio/AuditoriaVinculos"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
 // Visão Chairman - desativada (item de menu/rota comentados abaixo). Mantida para rollback.
 // const Chairman = lazy(() => import("./pages/Chairman"));
@@ -231,6 +232,7 @@ const App = () => (
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
               <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><CloserMeetingsDetailPage /></BUProvider></RoleGuard>} />
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
+              <Route path="consorcio/auditoria-vinculos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioAuditoriaVinculos /></RoleGuard>} />
               
               <Route path="consorcio/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
