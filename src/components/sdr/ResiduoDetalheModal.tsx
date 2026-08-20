@@ -9,11 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, Link2, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/formatters";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
+import { useState } from "react";
+import { CorrigirVinculoCotaModal } from "@/components/consorcio/CorrigirVinculoCotaModal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useProfileName } from "@/hooks/useCorrigirVinculoCota";
 
 export interface AgendaResiduoItem {
   dealId: string | null;
@@ -32,6 +36,8 @@ type Props =
       descricao: string;
       items: CotaResiduoItem[];
       esperado: number;
+      /** Habilita a coluna de correção do vínculo cota → lead. */
+      permitirCorrigirVinculo?: boolean;
     }
   | {
       open: boolean;
@@ -70,8 +76,30 @@ function baixarCsv(header: string[], rows: (string | number)[][], filename: stri
   URL.revokeObjectURL(url);
 }
 
+/** Selo de autoria da última correção manual do vínculo. */
+function SeloAutoria({ ajuste }: { ajuste: NonNullable<CotaResiduoItem["ajuste"]> }) {
+  const { data: nome } = useProfileName(ajuste.porId);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="secondary" className="text-[10px] gap-1">
+          <ShieldCheck className="h-3 w-3" />
+          ajustado
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="text-xs">
+        Vínculo ajustado por {nome || "usuário"}
+        {ajuste.em ? ` em ${fmtDate(ajuste.em)}` : ""}
+        {ajuste.dealAnterior ? " (havia outro lead antes)" : ""}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ResiduoDetalheModal(props: Props) {
   const { open, onOpenChange, kind, titulo, descricao, items, esperado } = props;
+  const permitirCorrigirVinculo = kind === "cota" && props.permitirCorrigirVinculo === true;
+  const [corrigindo, setCorrigindo] = useState<CotaResiduoItem | null>(null);
 
   // Só rótulo: o número já vem da mesma fonte que produziu a linha clicada.
   const dealIds = useMemo(
@@ -166,6 +194,7 @@ export function ResiduoDetalheModal(props: Props) {
                       <TableHead className="text-right">Valor do crédito</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Motivo</TableHead>
+                      {permitirCorrigirVinculo && <TableHead className="text-right">Ação</TableHead>}
                     </>
                   ) : (
                     <>
@@ -202,7 +231,20 @@ export function ResiduoDetalheModal(props: Props) {
                           {i.valorCredito != null ? formatCurrency(i.valorCredito) : "—"}
                         </TableCell>
                         <TableCell className="text-xs">{i.vendedorName || <span className="italic text-muted-foreground">vazio</span>}</TableCell>
-                        <TableCell className="text-xs">{i.motivo}</TableCell>
+                        <TableCell className="text-xs">
+                          <span className="inline-flex items-center gap-2">
+                            {i.motivo}
+                            {i.ajuste && <SeloAutoria ajuste={i.ajuste} />}
+                          </span>
+                        </TableCell>
+                        {permitirCorrigirVinculo && (
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                              <Link2 className="h-3.5 w-3.5 mr-1" />
+                              Corrigir
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   : (items as AgendaResiduoItem[]).map((i, idx) => (
@@ -237,6 +279,14 @@ export function ResiduoDetalheModal(props: Props) {
         <div className="text-xs text-muted-foreground border-t pt-2">
           Total: <span className="font-semibold text-foreground">{items.length}</span> · deve bater com o número da linha ({esperado})
         </div>
+
+        {permitirCorrigirVinculo && (
+          <CorrigirVinculoCotaModal
+            item={corrigindo}
+            open={!!corrigindo}
+            onOpenChange={(o) => !o && setCorrigindo(null)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
