@@ -241,8 +241,10 @@ export function useConsorcioCotasContratadas(
       if (closersError) throw closersError;
       const closerByName = new Map<string, string>();
       const buCloserIds = new Set<string>();
+      const closerNameById = new Map<string, string>();
       (closers || []).forEach((c: any) => {
         buCloserIds.add(String(c.id));
+        if (c.name) closerNameById.set(String(c.id), String(c.name));
         const key = nameKey(c.name);
         if (key && !closerByName.has(key)) closerByName.set(key, c.id);
       });
@@ -253,24 +255,28 @@ export function useConsorcioCotasContratadas(
       const dealTemReuniaoBU = new Set<string>();
       const dealTemReuniaoElegivel = new Set<string>();
       const dealTemBooker = new Set<string>();
+      /** Reunião elegível sem `booked_by` — caminho de correção "Informar agendador". */
+      const dealSemAgendador = new Map<string, AgendamentoSemAgendador>();
       if (dealIds.length > 0) {
         const { data: attendees, error: attError } = await supabase
           .from("meeting_slot_attendees")
-          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
+          .select("id, deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
           .in("deal_id", dealIds);
         if (attError) throw attError;
 
         // Só reuniões conduzidas por closer desta BU definem o SDR.
         const slotIds = [...new Set((attendees || []).map((a: any) => a.meeting_slot_id).filter(Boolean))];
         const slotCloser = new Map<string, string>();
+        const slotDate = new Map<string, string>();
         if (slotIds.length > 0) {
           const { data: slots, error: slotsError } = await supabase
             .from("meeting_slots")
-            .select("id, closer_id")
+            .select("id, closer_id, scheduled_at")
             .in("id", slotIds);
           if (slotsError) throw slotsError;
           (slots || []).forEach((s: any) => {
             if (s.closer_id) slotCloser.set(String(s.id), String(s.closer_id));
+            if (s.scheduled_at) slotDate.set(String(s.id), String(s.scheduled_at));
           });
         }
 
@@ -284,6 +290,14 @@ export function useConsorcioCotasContratadas(
           if (a.status !== "cancelled" && a.status !== "invited") {
             dealTemReuniaoElegivel.add(a.deal_id);
             if (a.booked_by) dealTemBooker.add(a.deal_id);
+            else if (!dealSemAgendador.has(a.deal_id)) {
+              const closerId = a.meeting_slot_id ? slotCloser.get(String(a.meeting_slot_id)) : undefined;
+              dealSemAgendador.set(a.deal_id, {
+                attendeeId: String(a.id),
+                dia: a.meeting_slot_id ? slotDate.get(String(a.meeting_slot_id)) ?? null : null,
+                closerName: closerId ? closerNameById.get(closerId) ?? null : null,
+              });
+            }
           }
         });
         const buAttendees = buAttendeesAll.filter(
