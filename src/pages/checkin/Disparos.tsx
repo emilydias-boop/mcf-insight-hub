@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -18,19 +28,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Loader2, Plus, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   useCreateWaBroadcast,
+  useExcluirRascunho,
   useIniciarBroadcast,
   useMontarPublico,
   useUpdateWaBroadcast,
   useWaBroadcasts,
+  useWaBusDisponiveis,
   useWaSaldoHoje,
   useWaSampleName,
   useWaTargetsCount,
   useWaTemplates,
   WaBroadcast,
+  WaBroadcastEscopo,
   WaTemplateOption,
 } from '@/hooks/wa/useWaBroadcasts';
 import { TemplateStep } from '@/components/checkin/broadcast/TemplateStep';
@@ -41,9 +55,24 @@ import { BROADCAST_STATUS_LABEL } from '@/components/checkin/broadcast/waBroadca
 import { formatDateTime } from '@/lib/formatters';
 
 export default function Disparos() {
+  const { user } = useAuth();
   const { data: broadcasts = [], isLoading } = useWaBroadcasts();
   const { data: saldoInfo } = useWaSaldoHoje();
   const [wizardOpen, setWizardOpen] = useState(false);
+  /** rascunho reaberto para continuar de onde parou */
+  const [rascunho, setRascunho] = useState<WaBroadcast | null>(null);
+  const [excluindo, setExcluindo] = useState<WaBroadcast | null>(null);
+  const excluir = useExcluirRascunho();
+
+  const abrirNovo = () => {
+    setRascunho(null);
+    setWizardOpen(true);
+  };
+  const abrirRascunho = (b: WaBroadcast) => {
+    setRascunho(b);
+    setWizardOpen(true);
+  };
+
 
   return (
     <div className="space-y-6 p-4 md:p-6">
