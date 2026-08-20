@@ -447,6 +447,12 @@ export function ConsorcioSdrSummaryTable({
         </Table>
       </div>
 
+      <p className="px-4 py-2 text-xs text-muted-foreground">
+        Vendas Realizadas conta pessoas, não cartas: as linhas não somam o Total. Cliente que
+        aparece em mais de uma linha é contado uma única vez no Total — por isso o Total (e o
+        Ticket Médio e a Conv. Vendas / R1 do Total) é o mesmo nas abas SDRs e Closers.
+      </p>
+
       <ResiduoDetalheModal
         open={detalhe === "semVinculo"}
         onOpenChange={(o) => setDetalhe(o ? "semVinculo" : null)}
