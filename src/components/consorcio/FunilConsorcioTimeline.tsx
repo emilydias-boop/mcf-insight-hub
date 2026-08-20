@@ -278,6 +278,9 @@ export function FunilConsorcioTimeline({
       hint: 'criados no período',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
+      rateTooltip:
+        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%.',
+
       badges:
         aguardandoAbertura > 0
           ? [{
