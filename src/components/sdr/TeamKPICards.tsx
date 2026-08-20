@@ -200,12 +200,14 @@ export function TeamKPICards({
       customOnClick: onRefundClick,
     },
     {
-      title: "Taxa Conversão",
+      title: isConsorcio ? "Conversão Cota / R1" : "Taxa Conversão",
       value: `${kpis.taxaConversao.toFixed(1)}%`,
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
+      tooltip: isConsorcio
+        ? "Σ Cotas Contratadas ÷ Σ R1 Realizada × 100 — mesma fonte da coluna Cotas / R1 Realiz."
+        : "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
     },
     {
       title: "Taxa No-Show",
