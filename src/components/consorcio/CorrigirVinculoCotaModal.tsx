@@ -21,6 +21,7 @@ import {
   useCotaTitular,
   useCotasArrastadas,
   useLeadsParaVinculo,
+  useR1ConsorcioPorDeal,
   type LeadVinculoMatch,
 } from "@/hooks/useCorrigirVinculoCota";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
@@ -49,7 +50,18 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   const { data: titular, isLoading: loadingTitular } = useCotaTitular(open ? item?.cardId ?? null : null);
   const { data: arrastadas } = useCotasArrastadas(open ? item?.cardId ?? null : null);
   const { data: leads = [], isFetching } = useLeadsParaVinculo(titular, termo, buscaAmpla, open);
+  const { data: r1PorDeal } = useR1ConsorcioPorDeal(leads.map((l) => l.dealId), open);
   const corrigir = useCorrigirVinculoCota();
+
+  const fmtDia = (iso?: string | null) => {
+    if (!iso) return null;
+    try {
+      return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    } catch {
+      return null;
+    }
+  };
+  const r1Selecionado = selected ? r1PorDeal?.get(selected.dealId) : undefined;
 
   const anoMes = (item?.dataContratacao || "").slice(0, 7) || null;
   const { data: lock } = useMonthLock(anoMes);
@@ -209,6 +221,20 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
                       {l.casaTitular && (
                         <Badge variant="secondary" className="text-[10px]">bate com o titular</Badge>
                       )}
+                      {r1PorDeal?.get(l.dealId) ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                        >
+                          tem R1 de consórcio
+                          {fmtDia(r1PorDeal.get(l.dealId)!.dia) ? ` · ${fmtDia(r1PorDeal.get(l.dealId)!.dia)}` : ""}
+                          {r1PorDeal.get(l.dealId)!.closerName ? ` · ${r1PorDeal.get(l.dealId)!.closerName}` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          sem R1 de consórcio
+                        </Badge>
+                      )}
                     </span>
                     <span className="block text-[11px] text-muted-foreground truncate">
                       {[l.telefone, l.email, l.originName, l.stageName].filter(Boolean).join(" · ")}
@@ -229,6 +255,23 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
             </div>
           )}
         </ScrollArea>
+
+        {selected && !r1Selecionado && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            O lead escolhido não tem reunião de consórcio elegível. Vincular a cota a ele não credita
+            a venda a nenhum SDR — e desfaz a atribuição atual, se houver. Escolha o lead com o selo
+            "tem R1 de consórcio" quando existir.
+          </div>
+        )}
+
+        {selected && r1Selecionado && !r1Selecionado.temAgendador && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            Este lead tem R1 de consórcio, mas a reunião está sem agendador registrado. Depois de
+            vincular, use "Informar agendador" para a venda ser creditada.
+          </div>
+        )}
 
         {outrasCotas != null && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs space-y-2">

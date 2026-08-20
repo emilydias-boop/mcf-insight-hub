@@ -16,8 +16,10 @@ import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { useState } from "react";
 import { CorrigirVinculoCotaModal } from "@/components/consorcio/CorrigirVinculoCotaModal";
+import { InformarAgendadorModal } from "@/components/consorcio/InformarAgendadorModal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useProfileName } from "@/hooks/useCorrigirVinculoCota";
+import { CheckCircle2, Info } from "lucide-react";
 
 export interface AgendaResiduoItem {
   dealId: string | null;
@@ -104,6 +106,17 @@ export function ResiduoDetalheModal(props: Props) {
   const permitirCorrigirVendedor = kind === "cota" && props.permitirCorrigirVendedor === true;
   const temAcaoCota = permitirCorrigirVinculo || permitirCorrigirVendedor;
   const [corrigindo, setCorrigindo] = useState<CotaResiduoItem | null>(null);
+  const [informandoAgendador, setInformandoAgendador] = useState<CotaResiduoItem | null>(null);
+  /** Cota corrigida nesta sessão do modal — base do feedback honesto pós-gravação. */
+  const [ultimaCorrecao, setUltimaCorrecao] = useState<
+    { cardId: string; acao: "vinculo" | "agendador" } | null
+  >(null);
+
+  const itemDaCorrecao =
+    ultimaCorrecao && kind === "cota"
+      ? (items as CotaResiduoItem[]).find((i) => i.cardId === ultimaCorrecao.cardId) || null
+      : null;
+  const resolvido = !!ultimaCorrecao && !itemDaCorrecao;
 
   // Só rótulo: o número já vem da mesma fonte que produziu a linha clicada.
   const dealIds = useMemo(
@@ -173,6 +186,27 @@ export function ResiduoDetalheModal(props: Props) {
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-500">
             Atenção: o detalhamento trouxe {items.length} registros e a linha mostra {esperado}. Reporte esta divergência.
           </div>
+        )}
+
+        {ultimaCorrecao && (
+          resolvido ? (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-start gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {ultimaCorrecao.acao === "agendador"
+                ? "Agendador informado. A venda passou a ser creditada e esta cota saiu da lista."
+                : "Vínculo salvo. Esta cota saiu da lista."}
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {ultimaCorrecao.acao === "agendador"
+                  ? "Agendador salvo, mas o caso continua na lista: "
+                  : "Vínculo salvo, mas o caso continua na lista: "}
+                {itemDaCorrecao?.motivo || "reavaliando o cliente."}
+              </span>
+            </div>
+          )
         )}
 
         <div className="flex justify-end">
@@ -252,10 +286,29 @@ export function ResiduoDetalheModal(props: Props) {
                         {temAcaoCota && (
                           <TableCell className="text-right">
                             {permitirCorrigirVinculo ? (
-                              <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
-                                <Link2 className="h-3.5 w-3.5 mr-1" />
-                                Corrigir
-                              </Button>
+                              // Regra: botão que não resolve o caso não aparece.
+                              i.problema === "sem_agendador" ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setInformandoAgendador(i)}
+                                >
+                                  <UserCog className="h-3.5 w-3.5 mr-1" />
+                                  Informar agendador
+                                </Button>
+                              ) : i.problema === undefined ||
+                                i.problema === "sem_cadastro" ||
+                                i.problema === "sem_lead" ||
+                                i.problema === "deal_inexistente" ? (
+                                <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Vincular lead
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground italic">
+                                  sem correção por vínculo
+                                </span>
+                              )
                             ) : (
                               <Button size="sm" variant="outline" asChild>
                                 <a
@@ -320,11 +373,25 @@ export function ResiduoDetalheModal(props: Props) {
         </div>
 
         {permitirCorrigirVinculo && (
-          <CorrigirVinculoCotaModal
-            item={corrigindo}
-            open={!!corrigindo}
-            onOpenChange={(o) => !o && setCorrigindo(null)}
-          />
+          <>
+            <CorrigirVinculoCotaModal
+              item={corrigindo}
+              open={!!corrigindo}
+              onOpenChange={(o) => !o && setCorrigindo(null)}
+              onCorrigido={() =>
+                corrigindo && setUltimaCorrecao({ cardId: corrigindo.cardId, acao: "vinculo" })
+              }
+            />
+            <InformarAgendadorModal
+              item={informandoAgendador}
+              open={!!informandoAgendador}
+              onOpenChange={(o) => !o && setInformandoAgendador(null)}
+              onCorrigido={() =>
+                informandoAgendador &&
+                setUltimaCorrecao({ cardId: informandoAgendador.cardId, acao: "agendador" })
+              }
+            />
+          </>
         )}
       </DialogContent>
     </Dialog>

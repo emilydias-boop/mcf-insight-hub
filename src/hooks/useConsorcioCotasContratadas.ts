@@ -2,6 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
+/** Código do problema — define qual ação a UI oferece (e quando não oferece nenhuma). */
+export type CotaProblema =
+  | "sem_cadastro"
+  | "sem_lead"
+  | "deal_inexistente"
+  | "sem_reuniao_bu"
+  | "reuniao_nao_elegivel"
+  | "sem_agendador"
+  | "perfil_sem_email"
+  | "sem_vendedor";
+
+/** Reunião de consórcio elegível encontrada sem agendador registrado. */
+export interface AgendamentoSemAgendador {
+  attendeeId: string;
+  dia: string | null;
+  closerName: string | null;
+}
+
 export interface CotaResiduoItem {
   cardId: string;
   cliente: string;
@@ -12,6 +30,10 @@ export interface CotaResiduoItem {
   vendedorName: string | null;
   dealId: string | null;
   motivo: string;
+  /** Diagnóstico em código: a UI só mostra o botão que resolve ESTE problema. */
+  problema?: CotaProblema;
+  /** Presente quando o problema é `sem_agendador` — alimenta o editor de agendador. */
+  agendamento?: AgendamentoSemAgendador | null;
   /** Cadastro pendente já ligado à cota (quando existe) — define o caminho de correção. */
   pendingRegId: string | null;
   /** Quando o cliente já teve o resultado atribuído por OUTRA cota, o nome do SDR. */
@@ -219,8 +241,10 @@ export function useConsorcioCotasContratadas(
       if (closersError) throw closersError;
       const closerByName = new Map<string, string>();
       const buCloserIds = new Set<string>();
+      const closerNameById = new Map<string, string>();
       (closers || []).forEach((c: any) => {
         buCloserIds.add(String(c.id));
+        if (c.name) closerNameById.set(String(c.id), String(c.name));
         const key = nameKey(c.name);
         if (key && !closerByName.has(key)) closerByName.set(key, c.id);
       });
@@ -231,24 +255,28 @@ export function useConsorcioCotasContratadas(
       const dealTemReuniaoBU = new Set<string>();
       const dealTemReuniaoElegivel = new Set<string>();
       const dealTemBooker = new Set<string>();
+      /** Reunião elegível sem `booked_by` — caminho de correção "Informar agendador". */
+      const dealSemAgendador = new Map<string, AgendamentoSemAgendador>();
       if (dealIds.length > 0) {
         const { data: attendees, error: attError } = await supabase
           .from("meeting_slot_attendees")
-          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
+          .select("id, deal_id, booked_by, booked_at, created_at, status, meeting_slot_id")
           .in("deal_id", dealIds);
         if (attError) throw attError;
 
         // Só reuniões conduzidas por closer desta BU definem o SDR.
         const slotIds = [...new Set((attendees || []).map((a: any) => a.meeting_slot_id).filter(Boolean))];
         const slotCloser = new Map<string, string>();
+        const slotDate = new Map<string, string>();
         if (slotIds.length > 0) {
           const { data: slots, error: slotsError } = await supabase
             .from("meeting_slots")
-            .select("id, closer_id")
+            .select("id, closer_id, scheduled_at")
             .in("id", slotIds);
           if (slotsError) throw slotsError;
           (slots || []).forEach((s: any) => {
             if (s.closer_id) slotCloser.set(String(s.id), String(s.closer_id));
+            if (s.scheduled_at) slotDate.set(String(s.id), String(s.scheduled_at));
           });
         }
 
@@ -262,6 +290,14 @@ export function useConsorcioCotasContratadas(
           if (a.status !== "cancelled" && a.status !== "invited") {
             dealTemReuniaoElegivel.add(a.deal_id);
             if (a.booked_by) dealTemBooker.add(a.deal_id);
+            else if (!dealSemAgendador.has(a.deal_id)) {
+              const closerId = a.meeting_slot_id ? slotCloser.get(String(a.meeting_slot_id)) : undefined;
+              dealSemAgendador.set(a.deal_id, {
+                attendeeId: String(a.id),
+                dia: a.meeting_slot_id ? slotDate.get(String(a.meeting_slot_id)) ?? null : null,
+                closerName: closerId ? closerNameById.get(closerId) ?? null : null,
+              });
+            }
           }
         });
         const buAttendees = buAttendeesAll.filter(
@@ -319,7 +355,13 @@ export function useConsorcioCotasContratadas(
       let creditoCadastroSemLead = 0;
       const semCloserItems: CotaResiduoItem[] = [];
 
-      const baseItem = (card: any, dealId: string | null, motivo: string): CotaResiduoItem => {
+      const baseItem = (
+        card: any,
+        dealId: string | null,
+        motivo: string,
+        problema?: CotaProblema,
+        agendamento?: AgendamentoSemAgendador | null,
+      ): CotaResiduoItem => {
         const reg = cardToReg.get(card.id);
         return {
           cardId: card.id,
@@ -331,6 +373,8 @@ export function useConsorcioCotasContratadas(
           vendedorName: card.vendedor_name ?? null,
           dealId,
           motivo,
+          problema,
+          agendamento: agendamento ?? null,
           pendingRegId: reg?.id ?? null,
           ajuste: reg?.deal_vinculo_ajustado_em
             ? {
@@ -341,6 +385,93 @@ export function useConsorcioCotasContratadas(
             : null,
         };
       };
+
+      const diaBr = (iso?: string | null) => {
+        if (!iso) return null;
+        try {
+          return format(iso.length <= 10 ? new Date(`${iso}T12:00:00`) : new Date(iso), "dd/MM");
+        } catch {
+          return null;
+        }
+      };
+
+      /**
+       * Diagnóstico em cascata de UMA cota: para em qual elo a cadeia
+       * cota → cadastro → lead → reunião de consórcio → agendador se rompe.
+       */
+      const diagnosticarCota = (
+        cardId: string,
+        dealId: string | null,
+      ): { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null } => {
+        if (!cardsComCadastro.has(cardId)) {
+          return {
+            problema: "sem_cadastro",
+            motivo:
+              "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.",
+            agendamento: null,
+          };
+        }
+        if (!dealId) {
+          return {
+            problema: "sem_lead",
+            motivo:
+              "Cadastro pendente existe, mas sem lead vinculado (deal_id nulo) — vincular a cota ao negócio no CRM.",
+            agendamento: null,
+          };
+        }
+        if (!dealsExistentes.has(dealId)) {
+          return {
+            problema: "deal_inexistente",
+            motivo:
+              "Cadastro aponta para um negócio que não existe mais no CRM — revincular a cota a um lead válido.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemReuniaoBU.has(dealId)) {
+          return {
+            problema: "sem_reuniao_bu",
+            motivo:
+              "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemReuniaoElegivel.has(dealId)) {
+          return {
+            problema: "reuniao_nao_elegivel",
+            motivo:
+              "As reuniões de consórcio do lead estão todas como convite/cancelada — atualizar o status do attendee.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemBooker.has(dealId)) {
+          const ag = dealSemAgendador.get(dealId) || null;
+          const quando = diaBr(ag?.dia);
+          return {
+            problema: "sem_agendador",
+            motivo: `Reunião de consórcio elegível${quando ? ` em ${quando}` : ""}${
+              ag?.closerName ? ` com ${ag.closerName}` : ""
+            }, mas sem agendador registrado — informar quem agendou.`,
+            agendamento: ag,
+          };
+        }
+        return {
+          problema: "perfil_sem_email",
+          motivo: "Agendador registrado, mas sem e-mail no perfil — completar o cadastro do usuário.",
+          agendamento: null,
+        };
+      };
+
+      /** Prioridade do diagnóstico do CLIENTE: mostra primeiro o elo que tem correção. */
+      const PRIORIDADE: CotaProblema[] = [
+        "sem_agendador",
+        "perfil_sem_email",
+        "sem_lead",
+        "sem_cadastro",
+        "deal_inexistente",
+        "reuniao_nao_elegivel",
+        "sem_reuniao_bu",
+        "sem_vendedor",
+      ];
 
       // Passo 1 — cotas dentro do filtro, agrupadas por CLIENTE.
       type Linha = { card: any; dealId: string | null; credito: number; pessoa: string };
@@ -376,6 +507,21 @@ export function useConsorcioCotasContratadas(
         if (melhor) clienteSdr.set(pessoa, melhor.email);
       });
 
+      // Diagnóstico do CLIENTE: entre as cotas dele, o elo rompido que tem a
+      // correção mais efetiva. Corrigir o agendador de uma cota resolve todas.
+      const clienteDiag = new Map<
+        string,
+        { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null }
+      >();
+      porCliente.forEach((rs, pessoa) => {
+        let melhor: { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null } | null = null;
+        rs.forEach((r) => {
+          const d = diagnosticarCota(r.card.id, r.dealId);
+          if (!melhor || PRIORIDADE.indexOf(d.problema) < PRIORIDADE.indexOf(melhor.problema)) melhor = d;
+        });
+        if (melhor) clienteDiag.set(pessoa, melhor);
+      });
+
       linhas.forEach(({ card, dealId, credito, pessoa }) => {
         total++;
         totalCredito += credito;
@@ -400,6 +546,7 @@ export function useConsorcioCotasContratadas(
               vendedor
                 ? `Vendedor gravado como "${vendedor}", que não corresponde a nenhum closer cadastrado na BU Consórcio — corrigir a grafia na cota ou o cadastro do closer.`
                 : "Campo Vendedor está vazio na cota — preencher o vendedor no Controle Consórcio.",
+              "sem_vendedor",
             ),
           );
         }
@@ -415,11 +562,15 @@ export function useConsorcioCotasContratadas(
           semVinculo++;
           creditoSemVinculo += credito;
           clientesSemVinculoSet.add(pessoa);
+          const diag = clienteDiag.get(pessoa);
           semVinculoItems.push(
             baseItem(
               card,
               dealId ?? null,
-              "Nenhuma cota deste cliente tem lead com reunião de consórcio elegível — não há agendador a quem creditar a venda.",
+              diag?.motivo ||
+                "Nenhuma cota deste cliente tem lead com reunião de consórcio elegível — não há agendador a quem creditar a venda.",
+              diag?.problema,
+              diag?.agendamento ?? null,
             ),
           );
         }
@@ -427,25 +578,10 @@ export function useConsorcioCotasContratadas(
         // Indicador separado: qualidade do cadastro DESTA cota.
         const temBookerProprio = !!(dealId && dealBooker.get(dealId));
         if (!temBookerProprio) {
-          let motivo: string;
-          if (!cardsComCadastro.has(card.id)) {
-            motivo = "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.";
-          } else if (!dealId) {
-            motivo = "Cadastro pendente existe, mas sem lead vinculado (deal_id nulo) — vincular a cota ao negócio no CRM.";
-          } else if (!dealsExistentes.has(dealId)) {
-            motivo = "Cadastro aponta para um negócio que não existe mais no CRM — revincular a cota a um lead válido.";
-          } else if (!dealTemReuniaoBU.has(dealId)) {
-            motivo = "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.";
-          } else if (!dealTemReuniaoElegivel.has(dealId)) {
-            motivo = "As reuniões de consórcio do lead estão todas como convite/cancelada — atualizar o status do attendee.";
-          } else if (!dealTemBooker.has(dealId)) {
-            motivo = "Reunião de consórcio elegível, mas sem agendador registrado (booked_by nulo) — informar quem agendou.";
-          } else {
-            motivo = "Agendador registrado, mas sem e-mail no perfil — completar o cadastro do usuário.";
-          }
+          const diag = diagnosticarCota(card.id, dealId ?? null);
           cadastroSemLead++;
           creditoCadastroSemLead += credito;
-          const item = baseItem(card, dealId ?? null, motivo);
+          const item = baseItem(card, dealId ?? null, diag.motivo, diag.problema, diag.agendamento);
           (item as any).__sdrEmail = sdrEmail || null;
           cadastroSemLeadItems.push(item);
         }
