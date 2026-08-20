@@ -215,10 +215,11 @@ export function useConsorcioCotasContratadas(
         const bookerIds = [...new Set(buAttendees.map((a: any) => a.booked_by).filter(Boolean))];
         const emailById = new Map<string, string>();
         if (bookerIds.length > 0) {
-          const { data: profs } = await supabase
+          const { data: profs, error: profsError } = await supabase
             .from("profiles")
             .select("id, email")
             .in("id", bookerIds);
+          if (profsError) throw profsError;
           (profs || []).forEach((p: any) => {
             if (p.email) emailById.set(p.id, String(p.email).toLowerCase());
           });
