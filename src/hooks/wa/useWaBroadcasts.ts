@@ -484,16 +484,37 @@ export function useIgnorarNomeInvalido() {
   });
 }
 
+/** Roda a validação server-side e devolve só os problemas bloqueantes. */
+const BLOQUEANTES = new Set(['variavel_sem_valor', 'template_nao_aprovado']);
+
+async function validarBloqueantes(broadcastId: string): Promise<WaValidacaoItem[]> {
+  const { data, error } = await supabase.rpc('wa_broadcast_validar', {
+    _broadcast_id: broadcastId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as WaValidacaoItem[]).filter((p) => BLOQUEANTES.has(p.problema));
+}
+
 /** Marca como enviando e dispara o primeiro lote. O cron segue sozinho depois. */
 export function useIniciarBroadcast() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (broadcastId: string) => {
-      const { error } = await supabase
+      // guarda de status: só um rascunho pode iniciar. Sem isso, um retry
+      // reescreve o iniciado_em de um disparo em andamento — ou ressuscita
+      // um cancelado.
+      const { data, error } = await supabase
         .from('wa_broadcasts')
         .update({ status: 'enviando', iniciado_em: new Date().toISOString() })
-        .eq('id', broadcastId);
+        .eq('id', broadcastId)
+        .eq('status', 'rascunho')
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          'Este disparo não está mais em rascunho — recarregue a tela para ver o status atual.',
+        );
+      }
       const { error: fnError } = await supabase.functions.invoke('wa-broadcast-dispatch', {
         body: { broadcast_id: broadcastId },
       });
