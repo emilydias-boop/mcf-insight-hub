@@ -188,6 +188,27 @@ export function ResiduoDetalheModal(props: Props) {
           </div>
         )}
 
+        {ultimaCorrecao && (
+          resolvido ? (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-start gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {ultimaCorrecao.acao === "agendador"
+                ? "Agendador informado. A venda passou a ser creditada e esta cota saiu da lista."
+                : "Vínculo salvo. Esta cota saiu da lista."}
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                {ultimaCorrecao.acao === "agendador"
+                  ? "Agendador salvo, mas o caso continua na lista: "
+                  : "Vínculo salvo, mas o caso continua na lista: "}
+                {itemDaCorrecao?.motivo || "reavaliando o cliente."}
+              </span>
+            </div>
+          )
+        )}
+
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={exportar}>
             <Download className="h-4 w-4 mr-1" />
