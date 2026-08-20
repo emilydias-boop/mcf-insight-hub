@@ -251,24 +251,47 @@ export function useWaTargetsCount(broadcastId: string | undefined, status: WaTar
   });
 }
 
-/** Contagem de ignorados por motivo — o número agregado esconde o problema. */
+/** Motivos conhecidos de ignorado — o resto cai em "outro". */
+export const MOTIVOS_IGNORADO = [
+  'optout',
+  'cooldown',
+  'nome_invalido',
+  'limite_marketing_do_destinatario',
+] as const;
+
+/**
+ * Contagem de ignorados por motivo — agregada NO SERVIDOR (`count: 'exact'`),
+ * uma chamada por motivo. Antes baixávamos 5.000 linhas e somávamos no
+ * cliente, o que dava número errado em disparo grande sem avisar ninguém.
+ */
 export function useWaIgnoradosPorMotivo(broadcastId: string | undefined) {
   return useQuery({
     queryKey: ['wa-broadcast-ignorados', broadcastId],
     enabled: !!broadcastId,
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase
-        .from('wa_broadcast_targets')
-        .select('motivo_ignorado')
-        .eq('broadcast_id', broadcastId!)
-        .eq('status', 'ignorado')
-        .limit(5000);
-      if (error) throw error;
+      const base = () =>
+        supabase
+          .from('wa_broadcast_targets')
+          .select('id', { count: 'exact', head: true })
+          .eq('broadcast_id', broadcastId!)
+          .eq('status', 'ignorado');
+
+      const [totalRes, ...porMotivo] = await Promise.all([
+        base(),
+        ...MOTIVOS_IGNORADO.map((m) => base().eq('motivo_ignorado', m)),
+      ]);
+      if (totalRes.error) throw totalRes.error;
+
       const acc: Record<string, number> = {};
-      for (const row of data ?? []) {
-        const key = row.motivo_ignorado ?? 'outro';
-        acc[key] = (acc[key] ?? 0) + 1;
-      }
+      let somaConhecidos = 0;
+      porMotivo.forEach((res, i) => {
+        if (res.error) throw res.error;
+        const n = res.count ?? 0;
+        somaConhecidos += n;
+        if (n > 0) acc[MOTIVOS_IGNORADO[i]] = n;
+      });
+      const outros = (totalRes.count ?? 0) - somaConhecidos;
+      if (outros > 0) acc.outro = outros;
       return acc;
     },
   });
