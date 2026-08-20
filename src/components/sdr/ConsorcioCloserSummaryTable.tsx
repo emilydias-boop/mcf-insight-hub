@@ -8,8 +8,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, Search } from "lucide-react";
 import { R1CloserMetric } from "@/hooks/useR1CloserMetrics";
+import { ResiduoDetalheModal } from "./ResiduoDetalheModal";
+import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
@@ -20,6 +23,8 @@ interface ConsorcioCloserSummaryTableProps {
   cotasByCloser?: Map<string, number>;
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
   cotasSemCloser?: number;
+  /** Detalhe dessas cotas (mesma fonte do número). */
+  cotasSemCloserItems?: CotaResiduoItem[];
   /** Fatos da agenda sem closer identificável. */
   agendaUnassigned?: {
     r1Agendada: number;
@@ -36,8 +41,11 @@ export function ConsorcioCloserSummaryTable({
   propostasEnviadasByCloser,
   cotasByCloser,
   cotasSemCloser = 0,
+  cotasSemCloserItems = [],
   agendaUnassigned,
 }: ConsorcioCloserSummaryTableProps) {
+  const [detalheOpen, setDetalheOpen] = useState(false);
+
   if (isLoading) {
     return (
       <div className="space-y-2 p-4">
@@ -190,10 +198,16 @@ export function ConsorcioCloserSummaryTable({
             {/* Não atribuído: reuniões sem closer identificável nesta BU */}
             {cotasSemCloser > 0 && (
               <TableRow
-                className="italic text-muted-foreground hover:bg-muted/20"
-                title="Cotas contratadas cujo vendedor não corresponde a nenhum closer cadastrado nesta BU."
+                className="italic text-muted-foreground cursor-pointer hover:bg-muted/30"
+                title="Clique para ver quais cotas estão aqui e o que falta corrigir em cada uma."
+                onClick={() => setDetalheOpen(true)}
               >
-                <TableCell className="font-normal underline decoration-dotted">Sem vendedor identificado</TableCell>
+                <TableCell className="font-normal underline decoration-dotted">
+                  <span className="inline-flex items-center gap-1">
+                    Sem vendedor identificado
+                    <Search className="h-3 w-3" />
+                  </span>
+                </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
@@ -258,6 +272,16 @@ export function ConsorcioCloserSummaryTable({
           </TableBody>
         </Table>
       </div>
+
+      <ResiduoDetalheModal
+        open={detalheOpen}
+        onOpenChange={setDetalheOpen}
+        kind="cota"
+        titulo="Sem vendedor identificado"
+        descricao="Cotas contratadas no período (com o filtro de funil ativo) cujo vendedor não casa com nenhum closer da BU Consórcio. A coluna Motivo separa campo vazio de grafia divergente."
+        items={cotasSemCloserItems}
+        esperado={cotasSemCloser}
+      />
     </div>
   );
 }

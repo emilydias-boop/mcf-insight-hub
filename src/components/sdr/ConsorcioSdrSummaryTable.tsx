@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -5,7 +6,9 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SdrSummaryRow, SdrUnassignedBucket } from "@/hooks/useTeamMeetingsData";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight, FileText, Search } from "lucide-react";
+import { ResiduoDetalheModal, type AgendaResiduoItem } from "./ResiduoDetalheModal";
+import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 
 interface ConsorcioSdrSummaryTableProps {
   data: SdrSummaryRow[];
@@ -25,6 +28,10 @@ interface ConsorcioSdrSummaryTableProps {
   sdrFilterEmail?: string | null;
   /** Métricas devolvidas pela RPC cujo agendador o front não reconhece. */
   unassigned?: SdrUnassignedBucket | null;
+  /** Detalhe das cotas sem vínculo (mesma fonte do número). */
+  cotasSemVinculoItems?: CotaResiduoItem[];
+  /** Detalhe dos fatos de agenda sem agendador (mesma fonte do número). */
+  unassignedItems?: AgendaResiduoItem[];
 }
 
 export function ConsorcioSdrSummaryTable({
@@ -40,9 +47,12 @@ export function ConsorcioSdrSummaryTable({
   sdrNames,
   sdrFilterEmail = null,
   unassigned = null,
+  cotasSemVinculoItems = [],
+  unassignedItems = [],
 }: ConsorcioSdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [detalhe, setDetalhe] = useState<null | "semVinculo" | "naoAtribuido">(null);
 
   // SDRs que têm cota contratada no período mas nenhuma atividade de agenda —
   // sem isto a linha some em silêncio e o Total não fecha com o card do topo.
@@ -276,10 +286,16 @@ export function ConsorcioSdrSummaryTable({
             {/* Não atribuído: só o que a fonte devolveu e esta tela não soube atribuir */}
             {cotasSemVinculo > 0 && (
               <TableRow
-                className="italic text-muted-foreground hover:bg-muted/20"
-                title="Cotas contratadas que não têm cadastro pendente com negócio vinculado — não há SDR a quem atribuir."
+                className="italic text-muted-foreground cursor-pointer hover:bg-muted/30"
+                title="Clique para ver quais cotas estão aqui e o que falta preencher em cada uma."
+                onClick={() => setDetalhe("semVinculo")}
               >
-                <TableCell className="font-normal underline decoration-dotted">Sem vínculo com lead</TableCell>
+                <TableCell className="font-normal underline decoration-dotted">
+                  <span className="inline-flex items-center gap-1">
+                    Sem vínculo com lead
+                    <Search className="h-3 w-3" />
+                  </span>
+                </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
@@ -293,8 +309,17 @@ export function ConsorcioSdrSummaryTable({
             )}
 
             {unassigned && (
-              <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
-                <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
+              <TableRow
+                className="italic text-muted-foreground cursor-pointer hover:bg-muted/30"
+                title={`${unassignedTooltip}\nClique para ver as reuniões que estão aqui.`}
+                onClick={() => setDetalhe("naoAtribuido")}
+              >
+                <TableCell className="font-normal underline decoration-dotted">
+                  <span className="inline-flex items-center gap-1">
+                    Não atribuído
+                    <Search className="h-3 w-3" />
+                  </span>
+                </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{unassigned.agendamentos}</TableCell>
                 <TableCell className="text-center">{unassigned.r1Agendada}</TableCell>
@@ -350,6 +375,28 @@ export function ConsorcioSdrSummaryTable({
           </TableBody>
         </Table>
       </div>
+
+      <ResiduoDetalheModal
+        open={detalhe === "semVinculo"}
+        onOpenChange={(o) => setDetalhe(o ? "semVinculo" : null)}
+        kind="cota"
+        titulo="Sem vínculo com lead"
+        descricao="Cotas contratadas no período (com o filtro de funil ativo) que esta tela não conseguiu atribuir a nenhum SDR. A coluna Motivo diz exatamente qual dado está faltando na cadeia cota → cadastro pendente → negócio → reunião de consórcio → agendador."
+        items={cotasSemVinculoItems}
+        esperado={cotasSemVinculo}
+      />
+      <ResiduoDetalheModal
+        open={detalhe === "naoAtribuido"}
+        onOpenChange={(o) => setDetalhe(o ? "naoAtribuido" : null)}
+        kind="agenda"
+        titulo="Não atribuído (agenda)"
+        descricao="Fatos de agenda do Consórcio no período que não têm agendador identificado, por isso não entram em nenhuma linha de SDR."
+        items={unassignedItems}
+        esperado={
+          (unassigned?.agendamentos || 0) + (unassigned?.r1Agendada || 0) +
+          (unassigned?.r1Realizada || 0) + (unassigned?.noShows || 0) + (unassigned?.contratos || 0)
+        }
+      />
     </div>
   );
 }
