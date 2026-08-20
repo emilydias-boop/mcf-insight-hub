@@ -127,9 +127,23 @@ export function FunilConsorcioTimeline({
       ),
     [proposals, period.startDate, period.endDate],
   );
-  const negociadas = propostasPeriodo.length;
-  /** Estoque atual: criadas no período e que HOJE seguem sem aceite. */
+  const propostasCount = propostasPeriodo.length;
+  /**
+   * Contagem de CARTAS do período — unidade real desta etapa e denominador
+   * correto da conversão para "Cadastros Pendentes" (1 carta → 1 cadastro).
+   * Fallback: `qtd_cartas` da proposta e, na falta dele, 1 (propostas legadas).
+   */
+  const negociadas = useMemo(
+    () =>
+      propostasPeriodo.reduce(
+        (acc: number, p: any) => acc + (p.cartas?.length || p.qtd_cartas || 1),
+        0,
+      ),
+    [propostasPeriodo],
+  );
+  /** Estoque atual: propostas criadas no período e que HOJE seguem sem aceite. */
   const naoAceitas = propostasPeriodo.filter((p: any) => p.status !== 'aceita').length;
+
 
   // Etapa 4 — TODOS os cadastros criados no período (evento, não status).
   // Eixo aceite_date ?? created_at.
@@ -228,24 +242,45 @@ export function FunilConsorcioTimeline({
     {
       key: 'propostas',
       label: 'Cartas Negociadas',
-      hint: 'criadas no período',
+      hint: `cartas em ${propostasCount} proposta${propostasCount === 1 ? '' : 's'} do período`,
       count: loadingProposals ? null : negociadas,
       badges:
         !loadingProposals && naoAceitas > 0
           ? [{
-              label: `${naoAceitas} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
+              label: `${naoAceitas} proposta${naoAceitas > 1 ? 's' : ''} ainda não aceita${naoAceitas > 1 ? 's' : ''}`,
               filter: 'nao-aceitas' as FunilQuickFilter,
               tooltip:
-                'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. Clique para filtrar a lista.',
+                'Estoque atual: propostas criadas no período que hoje seguem sem aceite do closer. O número grande da etapa conta CARTAS (uma proposta pode negociar várias); este selo conta propostas. Clique para filtrar a lista.',
             }]
           : null,
+      breakdown:
+        !loadingProposals
+          ? [
+              {
+                label: 'Propostas',
+                value: propostasCount,
+                tooltip:
+                  'Propostas criadas no período (eixo data da proposta). É esta a base da meta de crédito no BI — que segue contando propostas, não cartas.',
+              },
+              {
+                label: 'Cartas',
+                value: negociadas,
+                tooltip:
+                  'Soma das cartas de crédito negociadas dentro dessas propostas. Uma carta gera um cadastro pendente, por isso é este o denominador da etapa seguinte.',
+              },
+            ]
+          : null,
     },
+
     {
       key: 'pendentes',
       label: 'Cadastros Pendentes',
       hint: 'criados no período',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
+      rateTooltip:
+        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%.',
+
       badges:
         aguardandoAbertura > 0
           ? [{
