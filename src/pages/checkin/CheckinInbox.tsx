@@ -18,6 +18,7 @@ export default function CheckinInbox() {
   const canSeeAll = hasAnyRole('admin', 'manager');
 
   const [scope, setScope] = useState<WaScope>('mine');
+  const [novaConversaAberto, setNovaConversaAberto] = useState(false);
   const { data: conversations = [], isLoading } = useWaConversations(scope);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
