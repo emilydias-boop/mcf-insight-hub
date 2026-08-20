@@ -149,7 +149,9 @@ export function useConsorcioCotasContratadas(
 
       const { data: cards, error: cardsError } = await supabase
         .from("consortium_cards")
-        .select("id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito")
+        .select(
+          "id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito, cpf, cnpj",
+        )
         .eq("tipo_registro", "contratacao")
         .gte("data_contratacao", format(startDate, "yyyy-MM-dd"))
         .lte("data_contratacao", format(endDate, "yyyy-MM-dd"));
@@ -282,6 +284,16 @@ export function useConsorcioCotasContratadas(
 
       const byCloser = new Map<string, number>();
       const bySdr = new Map<string, number>();
+      const creditoByCloser = new Map<string, number>();
+      const creditoBySdr = new Map<string, number>();
+      const clientesCloserSets = new Map<string, Set<string>>();
+      const clientesSdrSets = new Map<string, Set<string>>();
+      const clientesTotal = new Set<string>();
+      const clientesSemVinculoSet = new Set<string>();
+      const clientesSemCloserSet = new Set<string>();
+      let totalCredito = 0;
+      let creditoSemVinculo = 0;
+      let creditoSemCloser = 0;
       let total = 0;
       let semVinculo = 0;
       let semCloser = 0;
@@ -319,11 +331,22 @@ export function useConsorcioCotasContratadas(
           if (!origin || !allowedOriginNames.has(origin)) return;
         }
         total++;
+        const credito = Number(card.valor_credito) || 0;
+        const pessoa = clienteKey(card);
+        totalCredito += credito;
+        clientesTotal.add(pessoa);
 
         const closerId = closerByName.get(nameKey(card.vendedor_name) || "");
-        if (closerId) byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
+        if (closerId) {
+          byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
+          creditoByCloser.set(closerId, (creditoByCloser.get(closerId) || 0) + credito);
+          if (!clientesCloserSets.has(closerId)) clientesCloserSets.set(closerId, new Set());
+          clientesCloserSets.get(closerId)!.add(pessoa);
+        }
         else {
           semCloser++;
+          creditoSemCloser += credito;
+          clientesSemCloserSet.add(pessoa);
           const vendedor = (card.vendedor_name || "").trim();
           semCloserItems.push(
             baseItem(
@@ -338,9 +361,16 @@ export function useConsorcioCotasContratadas(
 
         // Sem fallback em owner_id: sem agendador desta BU → "Não atribuído".
         const sdrEmail = dealId ? dealBooker.get(dealId) : undefined;
-        if (sdrEmail) bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
+        if (sdrEmail) {
+          bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
+          creditoBySdr.set(sdrEmail, (creditoBySdr.get(sdrEmail) || 0) + credito);
+          if (!clientesSdrSets.has(sdrEmail)) clientesSdrSets.set(sdrEmail, new Set());
+          clientesSdrSets.get(sdrEmail)!.add(pessoa);
+        }
         else {
           semVinculo++;
+          creditoSemVinculo += credito;
+          clientesSemVinculoSet.add(pessoa);
           let motivo: string;
           if (!cardsComCadastro.has(card.id)) {
             motivo = "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.";
@@ -383,6 +413,20 @@ export function useConsorcioCotasContratadas(
       return {
         total, byCloser, bySdr, sdrNames, semVinculo, semCloser,
         semVinculoItems, semCloserItems,
+        clientesByCloser: new Map(
+          Array.from(clientesCloserSets.entries()).map(([k, s]) => [k, s.size]),
+        ),
+        clientesBySdr: new Map(
+          Array.from(clientesSdrSets.entries()).map(([k, s]) => [k, s.size]),
+        ),
+        creditoByCloser,
+        creditoBySdr,
+        clientesSemVinculo: clientesSemVinculoSet.size,
+        creditoSemVinculo,
+        clientesSemCloser: clientesSemCloserSet.size,
+        creditoSemCloser,
+        totalClientes: clientesTotal.size,
+        totalCredito,
       };
     },
     enabled: !!startDate && !!endDate,
