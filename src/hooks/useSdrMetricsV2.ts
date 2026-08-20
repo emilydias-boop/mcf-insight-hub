@@ -48,6 +48,9 @@ export interface MeetingV2 {
    *  Usada pelo drilldown do card "Contratos" para alinhar a lista
    *  com o KPI (que conta por contract_paid_at no período). */
   contract_paid_at?: string | null;
+  /** Segmento ICP do negócio (crm_deals.icp_segment): 'A' | 'B' | null.
+   *  Preenchido no cliente por query complementar. */
+  icp_segment?: 'A' | 'B' | null;
 }
 
 export interface MetricsSummary {
