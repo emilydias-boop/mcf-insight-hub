@@ -17,6 +17,15 @@ export type WaBroadcastStatus =
 
 export type WaTargetStatus = 'pendente' | 'enviando' | 'enviado' | 'falha' | 'ignorado';
 
+/** De onde vem o público: a carteira de quem dispara ou a de todos os SDRs da BU. */
+export type WaBroadcastEscopo = 'minha_carteira' | 'bu';
+
+export interface WaBroadcastBuDisponivel {
+  bu: string;
+  sdrs: number;
+  leads: number;
+}
+
 export interface WaBroadcast {
   id: string;
   criado_por: string;
