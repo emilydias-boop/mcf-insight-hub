@@ -20,8 +20,15 @@ interface ConsorcioSdrSummaryTableProps {
   propostasEnviadasBySdr?: Map<string, number>;
   /** Cotas contratadas (consortium_cards, tipo_registro='contratacao') por SDR. */
   cotasBySdr?: Map<string, number>;
+  /** Clientes distintos que contrataram ao menos uma cota, por SDR. */
+  clientesBySdr?: Map<string, number>;
+  /** Soma de valor_credito das cotas contratadas, por SDR. */
+  creditoBySdr?: Map<string, number>;
   /** Cotas contratadas sem vínculo com lead — linha própria. */
   cotasSemVinculo?: number;
+  /** Clientes distintos e crédito da linha "Sem vínculo com lead". */
+  clientesSemVinculo?: number;
+  creditoSemVinculo?: number;
   /** Nome exibível por e-mail (para SDR com cota mas sem atividade na agenda). */
   sdrNames?: Map<string, string>;
   /** Quando um SDR está filtrado, restringe as linhas extras a esse e-mail. */
@@ -43,7 +50,11 @@ export function ConsorcioSdrSummaryTable({
   sdrDiasUteisMap,
   propostasEnviadasBySdr,
   cotasBySdr,
+  clientesBySdr,
+  creditoBySdr,
   cotasSemVinculo = 0,
+  clientesSemVinculo = 0,
+  creditoSemVinculo = 0,
   sdrNames,
   sdrFilterEmail = null,
   unassigned = null,
@@ -62,6 +73,11 @@ export function ConsorcioSdrSummaryTable({
     .filter(([email]) => !sdrFilterEmail || email.toLowerCase() === sdrFilterEmail.toLowerCase())
     .sort((a, b) => b[1] - a[1]);
   const extraCotas = extraSdrs.reduce((s, [, qtd]) => s + qtd, 0);
+  const extraClientes = extraSdrs.reduce((s, [email]) => s + (clientesBySdr?.get(email) || 0), 0);
+  const extraCredito = extraSdrs.reduce((s, [email]) => s + (creditoBySdr?.get(email) || 0), 0);
+
+  const brl = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
   // Total derivado do MESMO array renderizado (respeita filtro de SDR aplicado).
   const baseTotals = data.reduce(
@@ -74,9 +90,11 @@ export function ConsorcioSdrSummaryTable({
         noShows: acc.noShows + (row.noShows || 0),
         propostas: acc.propostas + (propostasEnviadasBySdr?.get(email) || 0),
         cotas: acc.cotas + (cotasBySdr?.get(email) || 0),
+        clientes: acc.clientes + (clientesBySdr?.get(email) || 0),
+        credito: acc.credito + (creditoBySdr?.get(email) || 0),
       };
     },
-    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, cotas: 0 }
+    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, cotas: 0, clientes: 0, credito: 0 }
   );
   // O Total inclui a linha "Não atribuído" para fechar com o card do topo.
   const totals = {
@@ -86,14 +104,17 @@ export function ConsorcioSdrSummaryTable({
     r1Realizada: baseTotals.r1Realizada + (unassigned?.r1Realizada || 0),
     noShows: baseTotals.noShows + (unassigned?.noShows || 0),
     cotas: baseTotals.cotas + cotasSemVinculo + extraCotas,
+    clientes: baseTotals.clientes + clientesSemVinculo + extraClientes,
+    credito: baseTotals.credito + creditoSemVinculo + extraCredito,
   };
   const unassignedTooltip = unassigned
     ? `Linhas devolvidas pelas métricas da agenda cujo agendador não está na lista de SDRs/Closers do Consórcio${unassigned.emails.length ? `: ${unassigned.emails.join(', ')}` : ''}.\nCobre apenas o que é visível nesta camada — reuniões que a consulta de origem nunca devolveu não aparecem aqui.`
     : '';
-  // Taxa agregada (Σ cotas contratadas ÷ Σ R1 realizadas), não média das taxas.
+  // Taxa agregada por PESSOA (Σ clientes distintos ÷ Σ R1 realizadas).
   const totalTaxaVenda = totals.r1Realizada > 0
-    ? (totals.cotas / totals.r1Realizada) * 100
+    ? (totals.clientes / totals.r1Realizada) * 100
     : 0;
+  const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
   const totalTaxaVendaColor = totalTaxaVenda >= 20
     ? 'text-green-400'
     : totalTaxaVenda >= 10
