@@ -359,7 +359,10 @@ function CriarDisparoDialog({
     setStageId('');
     setOriginId('');
     setLimite('');
+    setEscopo('minha_carteira');
+    setBu('');
     setJaMontou(false);
+    setPublicoMontadoEm(null);
     setBloqueado(true);
   };
 
@@ -396,25 +399,36 @@ function CriarDisparoDialog({
 
   const handleMontar = async () => {
     if (!broadcast) return;
+    if (escopo === 'bu' && !bu) return toast.error('Escolha a BU');
     const filtro: Record<string, string> = {};
-    if (stageId) filtro.stage_id = stageId;
-    if (originId) filtro.origin_id = originId;
+    if (escopo !== 'bu') {
+      if (stageId) filtro.stage_id = stageId;
+      if (originId) filtro.origin_id = originId;
+    }
     try {
       await atualizar.mutateAsync({
         id: broadcast.id,
-        patch: { filtro, limite_alvos: limite ? Number(limite) : null },
+        patch: {
+          filtro,
+          limite_alvos: limite ? Number(limite) : null,
+          escopo,
+          bu: escopo === 'bu' ? bu : null,
+        },
       });
       const res = await montar.mutateAsync(broadcast.id);
       setJaMontou(true);
+      setPublicoMontadoEm(null);
       toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
     } catch (err) {
-      // o RPC levanta exceção quando o disparo não está mais em rascunho
+      // o RPC levanta exceção quando o disparo não está mais em rascunho, ou
+      // quando um SDR tenta usar o escopo de BU
       setJaMontou(false);
       toast.error(
         err instanceof Error && err.message ? err.message : 'Não foi possível montar o público',
       );
     }
   };
+
 
 
   const handleDisparar = async () => {
