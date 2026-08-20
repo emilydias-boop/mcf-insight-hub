@@ -14788,6 +14788,15 @@ export type Database = {
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
+      consorcio_corrigir_vinculo_cota: {
+        Args: {
+          p_card_id: string
+          p_confirmar_duplicado?: boolean
+          p_deal_id: string
+          p_registration_id?: string
+        }
+        Returns: Json
+      }
       crm_deal_merge_custom_fields: {
         Args: { _deal_id: string; _patch: Json }
         Returns: Json
