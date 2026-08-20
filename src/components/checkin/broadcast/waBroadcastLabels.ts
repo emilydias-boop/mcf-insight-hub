@@ -1,4 +1,4 @@
-import { WaBroadcastStatus, WaTargetStatus } from '@/hooks/wa/useWaBroadcasts';
+import type { WaBroadcastStatus, WaTargetStatus } from '@/hooks/wa/useWaBroadcasts';
 
 export const BROADCAST_STATUS_LABEL: Record<WaBroadcastStatus, string> = {
   rascunho: 'Rascunho',
