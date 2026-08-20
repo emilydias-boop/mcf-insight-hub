@@ -417,6 +417,8 @@ export function useUpdateWaBroadcast() {
           | 'status'
           | 'motivo_cancelamento'
           | 'iniciado_em'
+          | 'escopo'
+          | 'bu'
         >
       >;
     }) => {
