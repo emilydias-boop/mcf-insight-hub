@@ -14,6 +14,8 @@ export interface CotaResiduoItem {
   motivo: string;
   /** Cadastro pendente já ligado à cota (quando existe) — define o caminho de correção. */
   pendingRegId: string | null;
+  /** Quando o cliente já teve o resultado atribuído por OUTRA cota, o nome do SDR. */
+  atribuidoA?: string | null;
   /** Autoria de correção manual do vínculo, quando houve. */
   ajuste?: {
     porId: string | null;
@@ -47,12 +49,16 @@ export interface ConsorcioCotasContratadas {
   totalCredito: number;
   /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
   sdrNames: Map<string, string>;
-  /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo ou sem agendador da BU). */
+  /** Cotas de clientes SEM nenhum agendamento de consórcio (linha da tabela). */
   semVinculo: number;
   /** Cotas cujo vendedor não casou com nenhum closer da BU. */
   semCloser: number;
-  /** Detalhe das cotas sem SDR atribuível, com o motivo exato do dado faltante. */
+  /** Detalhe das cotas de clientes sem agendamento de consórcio. */
   semVinculoItems: CotaResiduoItem[];
+  /** Qualidade de cadastro: cotas cuja própria linha não tem lead/agendador resolvível. */
+  cadastroSemLead: number;
+  creditoCadastroSemLead: number;
+  cadastroSemLeadItems: CotaResiduoItem[];
   /** Detalhe das cotas sem vendedor casado com closer da BU. */
   semCloserItems: CotaResiduoItem[];
 }
@@ -75,6 +81,9 @@ const EMPTY: ConsorcioCotasContratadas = {
   semVinculo: 0,
   semCloser: 0,
   semVinculoItems: [],
+  cadastroSemLead: 0,
+  creditoCadastroSemLead: 0,
+  cadastroSemLeadItems: [],
   semCloserItems: [],
 };
 
