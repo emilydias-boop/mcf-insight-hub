@@ -3,9 +3,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useWaTemplates, WaTemplateOption } from '@/hooks/wa/useWaBroadcasts';
-import { interpolarPreview } from './waBroadcastLabels';
+import { interpolarPreview, motivoTemplateIndisponivel } from './waBroadcastLabels';
+
 
 interface Props {
   nome: string;
@@ -43,28 +45,51 @@ export function TemplateStep({ nome, onNomeChange, selected, onSelect, sampleNam
           </p>
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
-            {templates.map((t) => (
-              <button
-                key={t.content_sid}
-                type="button"
-                onClick={() => onSelect(t)}
-                className={cn(
-                  'rounded-lg border p-3 text-left transition-colors hover:bg-accent',
-                  selected?.content_sid === t.content_sid && 'border-primary bg-accent',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{t.name}</span>
-                  {t.category && (
-                    <Badge variant={t.category === 'marketing' ? 'default' : 'secondary'}>
-                      {t.category}
-                    </Badge>
+            {templates.map((t) => {
+              const motivo = motivoTemplateIndisponivel(t.variables);
+              const botao = (
+                <button
+                  key={t.content_sid}
+                  type="button"
+                  disabled={!!motivo}
+                  onClick={() => !motivo && onSelect(t)}
+                  className={cn(
+                    'w-full rounded-lg border p-3 text-left transition-colors',
+                    motivo
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'hover:bg-accent',
+                    selected?.content_sid === t.content_sid && 'border-primary bg-accent',
                   )}
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{t.body_preview}</p>
-              </button>
-            ))}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{t.name}</span>
+                    {motivo ? (
+                      <Badge variant="outline">Indisponível em massa</Badge>
+                    ) : (
+                      t.category && (
+                        <Badge variant={t.category === 'marketing' ? 'default' : 'secondary'}>
+                          {t.category}
+                        </Badge>
+                      )
+                    )}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {motivo ?? t.body_preview}
+                  </p>
+                </button>
+              );
+              if (!motivo) return botao;
+              return (
+                <Tooltip key={t.content_sid}>
+                  <TooltipTrigger asChild>
+                    <span className="block cursor-not-allowed">{botao}</span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">{motivo}</TooltipContent>
+                </Tooltip>
+              );
+            })}
           </div>
+
         )}
       </div>
 
