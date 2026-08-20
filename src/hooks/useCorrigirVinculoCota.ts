@@ -211,6 +211,50 @@ export interface CorrigirVinculoResult {
   acao?: string;
   registration_id?: string;
   outras_cotas?: number;
+  cotas_arrastadas?: number;
+  credito_arrastado?: number;
+}
+
+/**
+ * Outras cotas contratadas do MESMO cliente que serão arrastadas pela correção:
+ * a atribuição de SDR é por cliente, então um único vínculo decide o destino de
+ * todas as cotas dele.
+ */
+export function useCotasArrastadas(cardId: string | null) {
+  return useQuery({
+    queryKey: ["cotas-arrastadas", cardId],
+    enabled: !!cardId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<{ cotas: number; credito: number }> => {
+      if (!cardId) return { cotas: 0, credito: 0 };
+      const { data: card, error } = await supabase
+        .from("consortium_cards")
+        .select("id, cpf, cnpj, nome_completo")
+        .eq("id", cardId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!card) return { cotas: 0, credito: 0 };
+      const c = card as any;
+      const doc = digits(c.cpf) || digits(c.cnpj);
+
+      const { data: irmas, error: irmasError } = await supabase
+        .from("consortium_cards")
+        .select("id, cpf, cnpj, nome_completo, valor_credito")
+        .eq("tipo_registro", "contratacao");
+      if (irmasError) throw irmasError;
+
+      const nome = String(c.nome_completo || "").trim().toUpperCase();
+      const mesmas = (irmas || []).filter((o: any) => {
+        if (String(o.id) === String(cardId)) return false;
+        if (doc) return (digits(o.cpf) || digits(o.cnpj)) === doc;
+        return !!nome && String(o.nome_completo || "").trim().toUpperCase() === nome;
+      });
+      return {
+        cotas: mesmas.length,
+        credito: mesmas.reduce((s: number, o: any) => s + (Number(o.valor_credito) || 0), 0),
+      };
+    },
+  });
 }
 
 /** Grava a correção do vínculo cota → lead (auditada no banco). */
