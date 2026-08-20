@@ -2178,6 +2178,39 @@ export type Database = {
         }
         Relationships: []
       }
+      bkp_redistribuicao_a010_20260820: {
+        Row: {
+          backup_em: string | null
+          clint_id: string | null
+          created_at: string | null
+          id: string | null
+          origin_id: string | null
+          owner_id: string | null
+          owner_profile_id: string | null
+          stage_id: string | null
+        }
+        Insert: {
+          backup_em?: string | null
+          clint_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          origin_id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+          stage_id?: string | null
+        }
+        Update: {
+          backup_em?: string | null
+          clint_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          origin_id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+          stage_id?: string | null
+        }
+        Relationships: []
+      }
       bkp_redistribuicao_consorcio_20260819: {
         Row: {
           backup_em: string | null
