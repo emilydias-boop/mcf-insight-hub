@@ -507,6 +507,21 @@ export function useConsorcioCotasContratadas(
         if (melhor) clienteSdr.set(pessoa, melhor.email);
       });
 
+      // Diagnóstico do CLIENTE: entre as cotas dele, o elo rompido que tem a
+      // correção mais efetiva. Corrigir o agendador de uma cota resolve todas.
+      const clienteDiag = new Map<
+        string,
+        { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null }
+      >();
+      porCliente.forEach((rs, pessoa) => {
+        let melhor: { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null } | null = null;
+        rs.forEach((r) => {
+          const d = diagnosticarCota(r.card.id, r.dealId);
+          if (!melhor || PRIORIDADE.indexOf(d.problema) < PRIORIDADE.indexOf(melhor.problema)) melhor = d;
+        });
+        if (melhor) clienteDiag.set(pessoa, melhor);
+      });
+
       linhas.forEach(({ card, dealId, credito, pessoa }) => {
         total++;
         totalCredito += credito;
@@ -531,6 +546,7 @@ export function useConsorcioCotasContratadas(
               vendedor
                 ? `Vendedor gravado como "${vendedor}", que não corresponde a nenhum closer cadastrado na BU Consórcio — corrigir a grafia na cota ou o cadastro do closer.`
                 : "Campo Vendedor está vazio na cota — preencher o vendedor no Controle Consórcio.",
+              "sem_vendedor",
             ),
           );
         }
@@ -546,11 +562,15 @@ export function useConsorcioCotasContratadas(
           semVinculo++;
           creditoSemVinculo += credito;
           clientesSemVinculoSet.add(pessoa);
+          const diag = clienteDiag.get(pessoa);
           semVinculoItems.push(
             baseItem(
               card,
               dealId ?? null,
-              "Nenhuma cota deste cliente tem lead com reunião de consórcio elegível — não há agendador a quem creditar a venda.",
+              diag?.motivo ||
+                "Nenhuma cota deste cliente tem lead com reunião de consórcio elegível — não há agendador a quem creditar a venda.",
+              diag?.problema,
+              diag?.agendamento ?? null,
             ),
           );
         }
@@ -558,25 +578,10 @@ export function useConsorcioCotasContratadas(
         // Indicador separado: qualidade do cadastro DESTA cota.
         const temBookerProprio = !!(dealId && dealBooker.get(dealId));
         if (!temBookerProprio) {
-          let motivo: string;
-          if (!cardsComCadastro.has(card.id)) {
-            motivo = "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.";
-          } else if (!dealId) {
-            motivo = "Cadastro pendente existe, mas sem lead vinculado (deal_id nulo) — vincular a cota ao negócio no CRM.";
-          } else if (!dealsExistentes.has(dealId)) {
-            motivo = "Cadastro aponta para um negócio que não existe mais no CRM — revincular a cota a um lead válido.";
-          } else if (!dealTemReuniaoBU.has(dealId)) {
-            motivo = "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.";
-          } else if (!dealTemReuniaoElegivel.has(dealId)) {
-            motivo = "As reuniões de consórcio do lead estão todas como convite/cancelada — atualizar o status do attendee.";
-          } else if (!dealTemBooker.has(dealId)) {
-            motivo = "Reunião de consórcio elegível, mas sem agendador registrado (booked_by nulo) — informar quem agendou.";
-          } else {
-            motivo = "Agendador registrado, mas sem e-mail no perfil — completar o cadastro do usuário.";
-          }
+          const diag = diagnosticarCota(card.id, dealId ?? null);
           cadastroSemLead++;
           creditoCadastroSemLead += credito;
-          const item = baseItem(card, dealId ?? null, motivo);
+          const item = baseItem(card, dealId ?? null, diag.motivo, diag.problema, diag.agendamento);
           (item as any).__sdrEmail = sdrEmail || null;
           cadastroSemLeadItems.push(item);
         }
