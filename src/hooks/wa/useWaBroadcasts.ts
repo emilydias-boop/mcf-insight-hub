@@ -737,7 +737,8 @@ export function useWaBusDisponiveis() {
     queryFn: async (): Promise<WaBroadcastBuDisponivel[]> => {
       const { data, error } = await supabase.rpc('wa_broadcast_bus_disponiveis');
       if (error) throw error;
-      return (data ?? []) as WaBroadcastBuDisponivel[];
+      // Guarda: BU vazia derruba o <SelectItem value=""> do Radix e a tela inteira.
+      return ((data ?? []) as WaBroadcastBuDisponivel[]).filter((b) => !!b.bu?.trim());
     },
   });
 }
