@@ -234,6 +234,23 @@ export function useWaBroadcastTargets(broadcastId: string | undefined, status: s
 }
 
 /** Contagem de ignorados por motivo — o número agregado esconde o problema. */
+export function useWaTargetsCount(broadcastId: string | undefined, status: WaTargetStatus) {
+  return useQuery({
+    queryKey: ['wa-broadcast-targets-count', broadcastId, status],
+    enabled: !!broadcastId,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('wa_broadcast_targets')
+        .select('id', { count: 'exact', head: true })
+        .eq('broadcast_id', broadcastId!)
+        .eq('status', status);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/** Contagem de ignorados por motivo — o número agregado esconde o problema. */
 export function useWaIgnoradosPorMotivo(broadcastId: string | undefined) {
   return useQuery({
     queryKey: ['wa-broadcast-ignorados', broadcastId],
