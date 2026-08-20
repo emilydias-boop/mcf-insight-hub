@@ -1,9 +1,72 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+/**
+ * Origens permitidas por CORS. Integração máquina-a-máquina NÃO usa CORS,
+ * então fechar aqui não afeta o emissor do webhook — só impede que um site
+ * de terceiros chame esta função pelo navegador de um usuário logado.
+ */
+const ALLOWED_ORIGINS = [
+  'https://mcfgestao.com',
+  'https://www.mcfgestao.com',
+  'https://mcf-insight-hub.lovable.app',
+  'https://id-preview--34c6432e-9b01-4946-b0e7-fde5393c994f.lovable.app',
+];
+
+function buildCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') || '';
+  const allowed = ALLOWED_ORIGINS.includes(origin);
+  return {
+    // Sem origem (server-to-server) ou origem não listada: não libera navegador.
+    'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
+
+/** Comparação de tempo constante — não vaza o segredo por timing. */
+function timingSafeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  // Compara sempre o mesmo número de bytes; diferença de tamanho entra no diff.
+  const len = Math.max(ea.length, eb.length);
+  let diff = ea.length ^ eb.length;
+  for (let i = 0; i < len; i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  return diff === 0;
+}
+
+type AuthOutcome = 'ok' | 'missing_header' | 'bad_secret' | 'secret_not_configured';
+
+/**
+ * FASE 1 — modo PERMISSIVO: nunca rejeita, só identifica e registra.
+ * A Fase 2 troca `permissive` por 401 quando o resultado não é 'ok'.
+ */
+function checkWebhookSecret(req: Request): AuthOutcome {
+  const expected = Deno.env.get('CONSORCIO_WEBHOOK_SECRET');
+  if (!expected) return 'secret_not_configured';
+  const received = req.headers.get('x-webhook-secret');
+  if (!received) return 'missing_header';
+  return timingSafeEqual(received, expected) ? 'ok' : 'bad_secret';
+}
+
+/** Tudo que dá para identificar do emissor, para o dono saber quem reconfigurar. */
+function describeCaller(req: Request) {
+  const h = req.headers;
+  return {
+    ip: h.get('x-forwarded-for') || h.get('x-real-ip') || null,
+    user_agent: h.get('user-agent') || null,
+    origin: h.get('origin') || null,
+    referer: h.get('referer') || null,
+    content_type: h.get('content-type') || null,
+    // Pistas de quem chamou, quando o emissor se identifica.
+    via: h.get('via') || null,
+    country: h.get('cf-ipcountry') || h.get('x-vercel-ip-country') || null,
+    apikey_present: !!h.get('apikey'),
+    authorization_present: !!h.get('authorization'),
+    header_names: [...h.keys()].sort(),
+  };
+}
+
 
 type TipoRegistro = 'reserva' | 'contratacao';
 type Categoria = 'inside' | 'life';
