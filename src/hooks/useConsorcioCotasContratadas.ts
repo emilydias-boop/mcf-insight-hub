@@ -7,11 +7,11 @@ export interface ConsorcioCotasContratadas {
   total: number;
   /** Cotas por closer_id (via vendedor da cota → closers da BU). */
   byCloser: Map<string, number>;
-  /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou). */
+  /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou a R1 da BU). */
   bySdr: Map<string, number>;
   /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
   sdrNames: Map<string, string>;
-  /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo com lead). */
+  /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo ou sem agendador da BU). */
   semVinculo: number;
   /** Cotas cujo vendedor não casou com nenhum closer da BU. */
   semCloser: number;
@@ -48,8 +48,12 @@ function nameKey(name?: string | null): string | null {
  * Fonte: `consortium_cards` com `tipo_registro = 'contratacao'`, eixo de data
  * `data_contratacao`. Atribuição:
  *  - Closer: vendedor da cota (`vendedor_name`) casado com `closers` da BU.
- *  - SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a R1
- *    (`meeting_slot_attendees.booked_by`), com fallback no dono do negócio.
+ *  - SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a
+ *    PRIMEIRA reunião conduzida por closer DESTA BU (`meeting_slots.closer_id`).
+ *    Reunião conduzida por closer de outra BU nunca define o SDR da cota, por
+ *    mais antiga que seja. Attendees `invited`, `no_show` e `cancelled` são
+ *    ignorados. Não há fallback no dono do negócio: sem agendador identificado
+ *    a cota vai para a linha "Não atribuído".
  *
  * Filtro de funil: aplicado pela origem do deal vinculado. Cota sem vínculo com
  * lead não tem origem — fica de fora quando há funil selecionado (conservador).
