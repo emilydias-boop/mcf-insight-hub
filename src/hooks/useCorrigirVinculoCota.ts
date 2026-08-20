@@ -118,11 +118,13 @@ export function useLeadsParaVinculo(
         .limit(60);
 
       const out: LeadVinculoMatch[] = [];
+      const vistos = new Set<string>();
       (deals || []).forEach((d: any) => {
         const c = contactById.get(d.contact_id) || {};
         const casa =
           (!!email && String(c.email || "").toLowerCase() === email) ||
           (telSuffix.length >= 8 && digits(c.phone).endsWith(telSuffix));
+        vistos.add(String(d.id));
         out.push({
           dealId: d.id,
           contactName: c.name || null,
@@ -133,6 +135,39 @@ export function useLeadsParaVinculo(
           casaTitular: casa,
         });
       });
+
+      // Reforço por CPF/CNPJ: leads já vinculados a outras cotas do MESMO documento.
+      const doc = digits(titular.cpf) || digits(titular.cnpj);
+      if (!buscaAmpla && doc.length >= 11) {
+        const col = digits(titular.cpf).length >= 11 ? "cpf" : "cnpj";
+        const { data: regsDoc } = await supabase
+          .from("consorcio_pending_registrations")
+          .select("deal_id")
+          .eq(col, col === "cpf" ? titular.cpf! : titular.cnpj!)
+          .not("deal_id", "is", null)
+          .limit(20);
+        const extraIds = [...new Set((regsDoc || []).map((r: any) => r.deal_id))].filter(
+          (id) => id && !vistos.has(String(id)),
+        ) as string[];
+        if (extraIds.length > 0) {
+          const { data: extraDeals } = await supabase
+            .from("crm_deals")
+            .select("id, name, crm_origins(name, display_name), crm_stages(name), crm_contacts(name, email, phone)")
+            .in("id", extraIds);
+          (extraDeals || []).forEach((d: any) => {
+            out.push({
+              dealId: d.id,
+              contactName: d.crm_contacts?.name || d.name || null,
+              email: d.crm_contacts?.email || null,
+              telefone: d.crm_contacts?.phone || null,
+              originName: d.crm_origins?.display_name || d.crm_origins?.name || null,
+              stageName: d.crm_stages?.name || null,
+              casaTitular: true,
+            });
+          });
+        }
+      }
+
       return out.sort((a, b) => Number(b.casaTitular) - Number(a.casaTitular));
     },
   });
