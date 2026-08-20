@@ -161,15 +161,15 @@ export function ConsorcioSdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Cotas efetivamente contratadas (Controle Consórcio, tipo de registro 'contratação'), pela data de contratação. Atribuídas ao SDR que agendou a R1 do lead."
+                title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
               >
                 Cotas Contratadas
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Clientes distintos que contrataram ao menos uma cota no período. Identidade pelo CPF/CNPJ do titular da cota, com fallback no nome."
+                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali."
               >
-                Clientes
+                Vendas Realizadas
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
@@ -179,15 +179,15 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Crédito Contratado ÷ clientes distintos que fecharam. É o crédito médio por CLIENTE, não por cota."
+                title="Crédito Contratado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
               >
                 Ticket Médio
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Clientes distintos que contrataram ao menos uma cota ÷ R1 realizadas. Um cliente que compra várias cotas conta uma vez."
+                title="Vendas Realizadas ÷ R1 Realizadas. Um cliente que contrata várias cotas conta uma vez."
               >
-                Conv. Clientes / R1
+                Conv. Vendas / R1
               </TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
