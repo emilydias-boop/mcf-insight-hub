@@ -13759,6 +13759,7 @@ export type Database = {
           filtro: Json
           id: string
           iniciado_em: string | null
+          limite_alvos: number | null
           motivo_cancelamento: string | null
           nome: string
           sender_number: string | null
@@ -13782,6 +13783,7 @@ export type Database = {
           filtro?: Json
           id?: string
           iniciado_em?: string | null
+          limite_alvos?: number | null
           motivo_cancelamento?: string | null
           nome: string
           sender_number?: string | null
@@ -13805,6 +13807,7 @@ export type Database = {
           filtro?: Json
           id?: string
           iniciado_em?: string | null
+          limite_alvos?: number | null
           motivo_cancelamento?: string | null
           nome?: string
           sender_number?: string | null
@@ -16002,6 +16005,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_broadcast_ignorar_nome_invalido: {
+        Args: { _broadcast_id: string }
+        Returns: number
+      }
       wa_broadcast_montar_publico: {
         Args: { _broadcast_id: string }
         Returns: {
@@ -16018,6 +16025,14 @@ export type Database = {
           phone_e164: string
           target_id: string
           variaveis: Json
+        }[]
+      }
+      wa_broadcast_validar: {
+        Args: { _broadcast_id: string }
+        Returns: {
+          detalhe: string
+          problema: string
+          quantidade: number
         }[]
       }
       wa_can_access_conversation: {
@@ -16046,6 +16061,7 @@ export type Database = {
           negocios_encontrados: number
         }[]
       }
+      wa_nome_utilizavel: { Args: { _nome: string }; Returns: boolean }
       wa_register_opt_out: {
         Args: { _motivo?: string; _phone: string }
         Returns: undefined
