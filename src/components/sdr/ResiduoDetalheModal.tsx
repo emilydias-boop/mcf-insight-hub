@@ -16,8 +16,10 @@ import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { useState } from "react";
 import { CorrigirVinculoCotaModal } from "@/components/consorcio/CorrigirVinculoCotaModal";
+import { InformarAgendadorModal } from "@/components/consorcio/InformarAgendadorModal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useProfileName } from "@/hooks/useCorrigirVinculoCota";
+import { CheckCircle2, Info } from "lucide-react";
 
 export interface AgendaResiduoItem {
   dealId: string | null;
@@ -104,6 +106,17 @@ export function ResiduoDetalheModal(props: Props) {
   const permitirCorrigirVendedor = kind === "cota" && props.permitirCorrigirVendedor === true;
   const temAcaoCota = permitirCorrigirVinculo || permitirCorrigirVendedor;
   const [corrigindo, setCorrigindo] = useState<CotaResiduoItem | null>(null);
+  const [informandoAgendador, setInformandoAgendador] = useState<CotaResiduoItem | null>(null);
+  /** Cota corrigida nesta sessão do modal — base do feedback honesto pós-gravação. */
+  const [ultimaCorrecao, setUltimaCorrecao] = useState<
+    { cardId: string; acao: "vinculo" | "agendador" } | null
+  >(null);
+
+  const itemDaCorrecao =
+    ultimaCorrecao && kind === "cota"
+      ? (items as CotaResiduoItem[]).find((i) => i.cardId === ultimaCorrecao.cardId) || null
+      : null;
+  const resolvido = !!ultimaCorrecao && !itemDaCorrecao;
 
   // Só rótulo: o número já vem da mesma fonte que produziu a linha clicada.
   const dealIds = useMemo(
