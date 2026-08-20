@@ -469,6 +469,10 @@ export default function ConsorcioPainelEquipe() {
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
   const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
+  // Metas da Equipe: MESMA fonte, só mudando a janela (Dia / Semana / Mês).
+  const { data: cotasDay } = useConsorcioCotasContratadas(dayStart, dayEnd, allowedOriginNames, BU_SQUAD);
+  const { data: cotasWeek } = useConsorcioCotasContratadas(weekStartDate, weekEndDate, allowedOriginNames, BU_SQUAD);
+  const { data: cotasMonth } = useConsorcioCotasContratadas(monthStartDate, monthEndDate, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
