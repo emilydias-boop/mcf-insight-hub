@@ -1,3 +1,12 @@
+/**
+ * webhook-consorcio — entrada de cotas de consórcio.
+ *
+ * AUTENTICAÇÃO (modo estrito): todo integrador DEVE enviar o header
+ * `x-webhook-secret` com o valor do segredo `CONSORCIO_WEBHOOK_SECRET`
+ * (Project Settings → Secrets). Sem header, header errado, ou segredo
+ * não configurado no ambiente → 401, sem nenhuma escrita de negócio.
+ * Toda tentativa rejeitada é auditada em `bu_webhook_logs`.
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
@@ -38,8 +47,8 @@ function timingSafeEqual(a: string, b: string): boolean {
 type AuthOutcome = 'ok' | 'missing_header' | 'bad_secret' | 'secret_not_configured';
 
 /**
- * FASE 1 — modo PERMISSIVO: nunca rejeita, só identifica e registra.
- * A Fase 2 troca `permissive` por 401 quando o resultado não é 'ok'.
+ * FASE 2 — modo ESTRITO: qualquer resultado diferente de 'ok' devolve 401.
+ * Porta fechada por padrão: segredo ausente no ambiente também bloqueia.
  */
 function checkWebhookSecret(req: Request): AuthOutcome {
   const expected = Deno.env.get('CONSORCIO_WEBHOOK_SECRET');
@@ -194,14 +203,32 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Method not allowed' }, 405);
     }
 
-    // ===== Autenticação (FASE 1: permissiva — identifica, não bloqueia) =====
+    // ===== Autenticação (FASE 2: ESTRITA — 401 sem escrever nada de negócio) =====
     const authOutcome = checkWebhookSecret(req);
     const caller = describeCaller(req);
     if (authOutcome !== 'ok') {
-      console.warn(
-        `[webhook-consorcio][AUTH ${authOutcome}] requisição aceita em modo permissivo (FASE 1). Emissor: ${JSON.stringify(caller)}`,
+      console.error(
+        `[webhook-consorcio][AUTH ${authOutcome}] requisição REJEITADA (401). Emissor: ${JSON.stringify(caller)}`,
       );
+      // Auditoria da tentativa rejeitada — para saber quem tentou, quando e sem qual segredo.
+      try {
+        const auditClient = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        await auditClient.from('bu_webhook_logs').insert({
+          bu_type: 'consorcio',
+          event_type: `new_card.auth_${authOutcome}`,
+          payload: { fase: 2, modo: 'estrito', auth: authOutcome, caller, rejected: true },
+          status: 'error',
+          error_message: `401 unauthorized: ${authOutcome}`,
+        });
+      } catch (auditErr) {
+        console.error('[webhook-consorcio] falha ao auditar tentativa rejeitada:', auditErr);
+      }
+      return json({ success: false, error: 'unauthorized' }, 401);
     }
+
 
     // ===== Payload: rejeita malformado ANTES de qualquer escrita =====
     let payload: ConsorcioPayload;
@@ -249,15 +276,6 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Contador auditável de requisições sem o segredo (base da decisão da Fase 2).
-    if (authOutcome !== 'ok') {
-      await supabase.from('bu_webhook_logs').insert({
-        bu_type: 'consorcio',
-        event_type: `new_card.auth_${authOutcome}`,
-        payload: { fase: 1, modo: 'permissivo', auth: authOutcome, caller },
-        status: 'warning',
-      });
-    }
 
     const { data: logEntry } = await supabase
       .from('bu_webhook_logs')
