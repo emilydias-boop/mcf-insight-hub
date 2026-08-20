@@ -2,6 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 
+/** Código do problema — define qual ação a UI oferece (e quando não oferece nenhuma). */
+export type CotaProblema =
+  | "sem_cadastro"
+  | "sem_lead"
+  | "deal_inexistente"
+  | "sem_reuniao_bu"
+  | "reuniao_nao_elegivel"
+  | "sem_agendador"
+  | "perfil_sem_email"
+  | "sem_vendedor";
+
+/** Reunião de consórcio elegível encontrada sem agendador registrado. */
+export interface AgendamentoSemAgendador {
+  attendeeId: string;
+  dia: string | null;
+  closerName: string | null;
+}
+
 export interface CotaResiduoItem {
   cardId: string;
   cliente: string;
@@ -12,6 +30,10 @@ export interface CotaResiduoItem {
   vendedorName: string | null;
   dealId: string | null;
   motivo: string;
+  /** Diagnóstico em código: a UI só mostra o botão que resolve ESTE problema. */
+  problema?: CotaProblema;
+  /** Presente quando o problema é `sem_agendador` — alimenta o editor de agendador. */
+  agendamento?: AgendamentoSemAgendador | null;
   /** Cadastro pendente já ligado à cota (quando existe) — define o caminho de correção. */
   pendingRegId: string | null;
   /** Quando o cliente já teve o resultado atribuído por OUTRA cota, o nome do SDR. */
