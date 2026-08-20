@@ -373,11 +373,25 @@ export function ResiduoDetalheModal(props: Props) {
         </div>
 
         {permitirCorrigirVinculo && (
-          <CorrigirVinculoCotaModal
-            item={corrigindo}
-            open={!!corrigindo}
-            onOpenChange={(o) => !o && setCorrigindo(null)}
-          />
+          <>
+            <CorrigirVinculoCotaModal
+              item={corrigindo}
+              open={!!corrigindo}
+              onOpenChange={(o) => !o && setCorrigindo(null)}
+              onCorrigido={() =>
+                corrigindo && setUltimaCorrecao({ cardId: corrigindo.cardId, acao: "vinculo" })
+              }
+            />
+            <InformarAgendadorModal
+              item={informandoAgendador}
+              open={!!informandoAgendador}
+              onOpenChange={(o) => !o && setInformandoAgendador(null)}
+              onCorrigido={() =>
+                informandoAgendador &&
+                setUltimaCorrecao({ cardId: informandoAgendador.cardId, acao: "agendador" })
+              }
+            />
+          </>
         )}
       </DialogContent>
     </Dialog>
