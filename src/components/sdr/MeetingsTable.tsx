@@ -199,9 +199,9 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                     {isV2Meeting && (
                       <TableCell className="text-center">
                         {meeting.icp_segment === 'A' ? (
-                          <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">A</Badge>
+                          <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30 text-xs font-semibold">A</Badge>
                         ) : meeting.icp_segment === 'B' ? (
-                          <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">B</Badge>
+                          <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">B</Badge>
                         ) : null}
                       </TableCell>
                     )}

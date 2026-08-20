@@ -67,10 +67,12 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   // Quebra por segmento ICP — só faz sentido (e só é suportada pela RPC) fora
   // do Consórcio, cuja RPC dedicada não tem `segment_filter`.
   const isConsorcio = (squad || '').toLowerCase() === 'consorcio';
-  const segStart = isConsorcio ? null : startDate;
-  const segEnd = isConsorcio ? null : endDate;
-  const metricsA = useSdrMetricsFromAgenda(segStart, segEnd, sdrEmail, squad, 'A');
-  const metricsB = useSdrMetricsFromAgenda(segStart, segEnd, sdrEmail, squad, 'B');
+  // Só habilita as segmentadas quando o squad já resolveu (evita disparar
+  // RPC com segment_filter para SDR de Consórcio no primeiro render).
+  const squadResolved = sdrRecord !== undefined;
+  const segEnabled = squadResolved && !isConsorcio;
+  const metricsA = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail, squad, 'A', segEnabled);
+  const metricsB = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail, squad, 'B', segEnabled);
 
   const meetingsQuery = useSdrMeetingsFromAgenda({ 
     startDate, 
@@ -116,7 +118,14 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
 
   const mA = metricsA.data?.metrics?.[0];
   const mB = metricsB.data?.metrics?.[0];
-  const segmentTotals: MinhasReunioesSegmentTotals | null = isConsorcio
+  const segmentsUnavailable =
+    !segEnabled ||
+    metricsA.isError ||
+    metricsB.isError ||
+    metricsA.isLoading ||
+    metricsB.isLoading;
+  // Melhor não mostrar nada do que mostrar zero inventado.
+  const segmentTotals: MinhasReunioesSegmentTotals | null = segmentsUnavailable
     ? null
     : {
         a: {
@@ -141,10 +150,14 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
     segmentTotals,
     squad,
     isLoading: metricsQuery.isLoading || meetingsQuery.isLoading,
-    error: metricsQuery.error || meetingsQuery.error,
+    segmentsLoading: segEnabled && (metricsA.isLoading || metricsB.isLoading),
+    segmentsError: metricsA.error || metricsB.error,
+    error: metricsQuery.error || meetingsQuery.error || metricsA.error || metricsB.error,
     refetch: () => {
       metricsQuery.refetch();
       meetingsQuery.refetch();
+      metricsA.refetch();
+      metricsB.refetch();
     }
   };
 };

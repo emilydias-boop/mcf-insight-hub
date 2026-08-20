@@ -25,6 +25,8 @@ export const useSdrMetricsFromAgenda = (
   buFilter?: string,
   /** Segmento ICP opcional ('A' | 'B'). Quando ausente, nada muda. */
   segment?: string,
+  /** Gate explícito. Quando false, a query não roda. Padrão: true. */
+  enabled: boolean = true,
 ) => {
   const seg = segment && segment !== 'all' ? segment.toUpperCase() : null;
   return useQuery({
@@ -73,7 +75,7 @@ export const useSdrMetricsFromAgenda = (
         metrics: response?.metrics || []
       };
     },
-    enabled: !!startDate && !!endDate,
+    enabled: enabled && !!startDate && !!endDate,
     staleTime: 30000,
   });
 };

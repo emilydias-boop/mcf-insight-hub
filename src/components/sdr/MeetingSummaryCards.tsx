@@ -68,12 +68,12 @@ export function MeetingSummaryCards({ summary, isLoading, bu, segmentTotals = nu
   const segLineFor = (
     key: 'agendamentos' | 'r1Agendada' | 'realizadas' | 'noShows' | 'contratos',
     total: number,
-  ): string | undefined => {
+  ): { ab: string; semIcp: string } | undefined => {
     if (!showSeg || !segmentTotals) return undefined;
     const a = segmentTotals.a[key] ?? 0;
     const b = segmentTotals.b[key] ?? 0;
     const semIcp = Math.max(0, total - a - b);
-    return `A: ${a} · B: ${b} · Sem ICP: ${semIcp}`;
+    return { ab: `A: ${a} · B: ${b}`, semIcp: `Sem ICP: ${semIcp}` };
   };
 
   const cards = [
@@ -158,9 +158,11 @@ export function MeetingSummaryCards({ summary, isLoading, bu, segmentTotals = nu
                         {isLoading ? "..." : card.value}
                       </p>
                       {card.segLine && !isLoading && (
-                        <p className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-                          {card.segLine}
-                        </p>
+                        <div className="text-[9px] text-muted-foreground/70 mt-0.5 flex flex-col sm:flex-row sm:gap-1 whitespace-normal break-words">
+                          <span>{card.segLine.ab}</span>
+                          <span className="hidden sm:inline">·</span>
+                          <span>{card.segLine.semIcp}</span>
+                        </div>
                       )}
                     </div>
                   </div>
