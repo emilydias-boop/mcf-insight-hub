@@ -911,7 +911,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             <Separator />
 
             {/* SDR Info Section - Based on Selected Participant */}
-            {selectedParticipant && selectedParticipant.bookedByProfile && (
+            {selectedParticipant && (
               <>
                 <div className="bg-blue-500/10 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -925,11 +925,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <Badge variant="outline" className="text-xs">Sócio</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedParticipant.bookedByProfile.full_name || 'Não informado'}</span>
+                  <div className="flex items-start gap-2 text-sm">
+                    <User className="h-4 w-4 text-muted-foreground mt-1" />
+                    <AgendadorEditor
+                      attendeeId={selectedParticipant.id}
+                      nomeAtual={selectedParticipant.bookedByProfile?.full_name || null}
+                      bookedById={selectedParticipant.bookedBy || null}
+                    />
                   </div>
-                  {selectedParticipant.bookedByProfile.email && (
+                  {selectedParticipant.bookedByProfile?.email && (
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">{selectedParticipant.bookedByProfile.email}</span>
