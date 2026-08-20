@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
+import type { PropostaCarta, PropostaCartaInput } from '@/types/consorcioCartas';
+
 import {
   PAGE_SIZE,
   CHUNK_SIZE,
@@ -197,6 +199,11 @@ export interface Proposal {
   aceite_date: string | null;
   motivo_recusa: string | null;
   consortium_card_id: string | null;
+  /** Cartas da proposta (verdade por carta). Vazio só em proposta sem valor. */
+  cartas?: PropostaCarta[];
+  /** Quantidade de cartas (1 para propostas legadas). */
+  qtd_cartas?: number;
+
   origin_id: string;
   carta_excluida?: boolean;
   carta_excluida_em?: string | null;
@@ -539,6 +546,35 @@ export function useProposals() {
         (data || []).map((p: any) => p.deal_id).filter(Boolean)
       );
 
+      // Cartas da proposta (1 proposta → N cartas). Propostas antigas têm a
+      // carta espelho criada no backfill; se faltar, o agregado é o fallback.
+      const proposalIds = (data || []).map((p: any) => p.id).filter(Boolean) as string[];
+      const cartasByProposal: Record<string, PropostaCarta[]> = {};
+      if (proposalIds.length > 0) {
+        const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
+          supabase
+            .from('consorcio_proposal_cartas')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, pending_registration_id, consortium_card_id')
+            .in('proposal_id', lote)
+            .order('id', { ascending: true })
+            .range(from, to)
+        );
+        (cartasRows || []).forEach((c: any) => {
+          (cartasByProposal[c.proposal_id] ||= []).push({
+            id: c.id,
+            proposal_id: c.proposal_id,
+            ordem: c.ordem,
+            valor_credito: Number(c.valor_credito) || 0,
+            prazo_meses: Number(c.prazo_meses) || 0,
+            tipo_produto: c.tipo_produto || '',
+            pending_registration_id: c.pending_registration_id,
+            consortium_card_id: c.consortium_card_id,
+          });
+        });
+        Object.values(cartasByProposal).forEach(list => list.sort((a, b) => a.ordem - b.ordem));
+      }
+
+
       return (data || []).map(p => ({
         id: p.id,
         deal_id: p.deal_id || '',
@@ -561,6 +597,9 @@ export function useProposals() {
         aceite_date: p.aceite_date,
         motivo_recusa: p.motivo_recusa,
         consortium_card_id: p.consortium_card_id,
+        cartas: cartasByProposal[p.id] || [],
+        qtd_cartas: (cartasByProposal[p.id] || []).length || 1,
+
         carta_excluida: (p as any).carta_excluida || false,
         carta_excluida_em: (p as any).carta_excluida_em || null,
         carta_excluida_por_nome: (p as any).carta_excluida_por_nome || null,
@@ -668,24 +707,49 @@ export function useEnviarProposta() {
       deal_id: string;
       origin_id: string;
       proposal_details: string;
-      valor_credito: number;
-      prazo_meses: number;
-      tipo_produto: string;
+      /** Cartas da proposta (1..N). O total é a soma delas. */
+      cartas: PropostaCartaInput[];
       origem_lead?: string;
     }) => {
+      const cartas = (params.cartas || []).filter(c => Number(c.valor_credito) > 0);
+      if (cartas.length === 0) throw new Error('Informe ao menos uma carta com crédito, prazo e produto.');
+      if (cartas.some(c => !(Number(c.prazo_meses) > 0) || !String(c.tipo_produto || '').trim())) {
+        throw new Error('Todas as cartas precisam de prazo e tipo de produto.');
+      }
+
+      const total = cartas.reduce((a, c) => a + Number(c.valor_credito), 0);
+      // Carta de maior crédito define os campos legados/agregados da proposta
+      // (a trigger no banco também os mantém sincronizados).
+      const principal = [...cartas].sort((a, b) => b.valor_credito - a.valor_credito)[0];
+
       // 1. Create proposal
-      const { error: propError } = await supabase
+      const { data: created, error: propError } = await supabase
         .from('consorcio_proposals')
         .insert({
           deal_id: params.deal_id,
           created_by: user?.id,
           proposal_details: params.proposal_details,
-          valor_credito: params.valor_credito,
-          prazo_meses: params.prazo_meses,
-          tipo_produto: params.tipo_produto,
+          valor_credito: total,
+          prazo_meses: principal.prazo_meses,
+          tipo_produto: principal.tipo_produto,
           origem_lead: params.origem_lead || null,
-        });
+        })
+        .select('id')
+        .single();
       if (propError) throw propError;
+
+      // 1b. Cartas da proposta (verdade por carta)
+      const { error: cartasError } = await supabase
+        .from('consorcio_proposal_cartas')
+        .insert(cartas.map((c, i) => ({
+          proposal_id: created.id,
+          ordem: i + 1,
+          valor_credito: c.valor_credito,
+          prazo_meses: c.prazo_meses,
+          tipo_produto: c.tipo_produto,
+          created_by: user?.id ?? null,
+        })) as any);
+      if (cartasError) throw cartasError;
 
       // 2. Move deal to PROPOSTA ENVIADA (only VdA has this stage)
       const isVdA = params.origin_id === '4e2b810a-6782-4ce9-9c0d-10d04c018636';
@@ -705,6 +769,7 @@ export function useEnviarProposta() {
     onError: (e: any) => toast.error('Erro ao registrar proposta: ' + e.message),
   });
 }
+
 
 // Mutation: Marcar sem sucesso
 export function useMarcarSemSucesso() {
@@ -1118,12 +1183,17 @@ export function useEditarProposta() {
   return useMutation({
     mutationFn: async (params: {
       proposal_id: string;
-      valor_credito: number;
-      prazo_meses: number;
-      tipo_produto: string;
+      /** Cartas da proposta. Cartas já vinculadas a cadastro/cota não são removidas. */
+      cartas: PropostaCartaInput[];
       proposal_details?: string;
       origem_lead?: string;
     }) => {
+      const cartas = (params.cartas || []).filter(c => Number(c.valor_credito) > 0);
+      if (cartas.length === 0) throw new Error('Informe ao menos uma carta com crédito, prazo e produto.');
+      if (cartas.some(c => !(Number(c.prazo_meses) > 0) || !String(c.tipo_produto || '').trim())) {
+        throw new Error('Todas as cartas precisam de prazo e tipo de produto.');
+      }
+
       // Detalhes anteriores: usados para saber se a observação do cadastro pendente
       // ainda é a cópia automática (e portanto pode ser ressincronizada).
       const { data: anterior } = await supabase
@@ -1134,17 +1204,73 @@ export function useEditarProposta() {
       const detalhesAnteriores = String((anterior as any)?.proposal_details || '').trim();
       const detalhesNovos = String(params.proposal_details ?? '').trim();
 
+      // --- Cartas: atualiza as existentes, insere as novas e remove as que
+      // saíram (só as que ainda não geraram cadastro/cota). Os agregados legados
+      // da proposta (valor_credito/prazo_meses/tipo_produto) são recalculados
+      // pela trigger do banco.
+      const { data: atuaisRaw, error: atuaisErr } = await supabase
+        .from('consorcio_proposal_cartas')
+        .select('id, pending_registration_id, consortium_card_id')
+        .eq('proposal_id', params.proposal_id);
+      if (atuaisErr) throw atuaisErr;
+      const atuais = (atuaisRaw || []) as any[];
+      const mantidos = new Set(cartas.map(c => c.id).filter(Boolean) as string[]);
+      const removiveis = atuais.filter(
+        a => !mantidos.has(a.id) && !a.pending_registration_id && !a.consortium_card_id,
+      );
+      const travadasRemovidas = atuais.filter(
+        a => !mantidos.has(a.id) && (a.pending_registration_id || a.consortium_card_id),
+      );
+      if (travadasRemovidas.length > 0) {
+        throw new Error(
+          'Uma das cartas já gerou cadastro/cota e não pode ser removida na edição. Exclua o cadastro pendente primeiro.',
+        );
+      }
+
+      let ordem = 0;
+      for (const c of cartas) {
+        ordem += 1;
+        if (c.id) {
+          const { error } = await supabase
+            .from('consorcio_proposal_cartas')
+            .update({
+              ordem,
+              valor_credito: c.valor_credito,
+              prazo_meses: c.prazo_meses,
+              tipo_produto: c.tipo_produto,
+            } as any)
+            .eq('id', c.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('consorcio_proposal_cartas')
+            .insert({
+              proposal_id: params.proposal_id,
+              ordem,
+              valor_credito: c.valor_credito,
+              prazo_meses: c.prazo_meses,
+              tipo_produto: c.tipo_produto,
+            } as any);
+          if (error) throw error;
+        }
+      }
+      if (removiveis.length > 0) {
+        const { error } = await supabase
+          .from('consorcio_proposal_cartas')
+          .delete()
+          .in('id', removiveis.map(r => r.id));
+        if (error) throw error;
+      }
+
       const { error } = await supabase
         .from('consorcio_proposals')
         .update({
-          valor_credito: params.valor_credito,
-          prazo_meses: params.prazo_meses,
-          tipo_produto: params.tipo_produto,
           proposal_details: params.proposal_details ?? '',
           origem_lead: params.origem_lead ?? null,
         })
         .eq('id', params.proposal_id);
       if (error) throw error;
+
 
       // Ressincroniza observacoes dos cadastros pendentes que ainda não abriram cota,
       // sem NUNCA sobrescrever observação escrita à mão pela operação.

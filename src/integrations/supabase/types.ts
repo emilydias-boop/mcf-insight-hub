@@ -4693,6 +4693,67 @@ export type Database = {
           },
         ]
       }
+      consorcio_proposal_cartas: {
+        Row: {
+          consortium_card_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          ordem: number
+          pending_registration_id: string | null
+          prazo_meses: number
+          proposal_id: string
+          tipo_produto: string
+          valor_credito: number
+        }
+        Insert: {
+          consortium_card_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem?: number
+          pending_registration_id?: string | null
+          prazo_meses: number
+          proposal_id: string
+          tipo_produto: string
+          valor_credito: number
+        }
+        Update: {
+          consortium_card_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem?: number
+          pending_registration_id?: string | null
+          prazo_meses?: number
+          proposal_id?: string
+          tipo_produto?: string
+          valor_credito?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_proposal_cartas_consortium_card_id_fkey"
+            columns: ["consortium_card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposal_cartas_pending_registration_id_fkey"
+            columns: ["pending_registration_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_pending_registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposal_cartas_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_proposals: {
         Row: {
           aceite_at: string | null
@@ -4719,6 +4780,7 @@ export type Database = {
           prazo_meses: number | null
           proposal_date: string | null
           proposal_details: string | null
+          qtd_cartas: number
           recusada_at: string | null
           recusada_by: string | null
           status: string | null
@@ -4751,6 +4813,7 @@ export type Database = {
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null
+          qtd_cartas?: number
           recusada_at?: string | null
           recusada_by?: string | null
           status?: string | null
@@ -4783,6 +4846,7 @@ export type Database = {
           prazo_meses?: number | null
           proposal_date?: string | null
           proposal_details?: string | null
+          qtd_cartas?: number
           recusada_at?: string | null
           recusada_by?: string | null
           status?: string | null

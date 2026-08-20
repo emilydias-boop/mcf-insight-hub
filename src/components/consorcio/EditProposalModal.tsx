@@ -6,9 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import { useEditarProposta } from '@/hooks/useConsorcioPostMeeting';
+import { useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
+import { numberToBRLInput } from '@/lib/brlMask';
+import { CartasProposalEditor } from './CartasProposalEditor';
+import {
+  PropostaCarta, PropostaCartaDraft, cartaDraftValida, draftsParaInput, novaCartaDraft,
+} from '@/types/consorcioCartas';
 
 interface EditProposalModalProps {
   open: boolean;
@@ -16,6 +21,9 @@ interface EditProposalModalProps {
   proposalId: string;
   contactName: string;
   dealName: string;
+  /** Cartas atuais da proposta. Propostas legadas têm a carta espelho do backfill. */
+  initialCartas?: PropostaCarta[];
+  /** Fallback quando a proposta ainda não tem cartas. */
   initialValorCredito: number;
   initialPrazoMeses: number;
   initialTipoProduto: string;
@@ -23,58 +31,59 @@ interface EditProposalModalProps {
   initialOrigemLead?: string;
 }
 
-const formatBRL = (raw: string) => {
-  const digits = raw.replace(/\D/g, '');
-  if (!digits) return '';
-  const cents = Number(digits) / 100;
-  return cents.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-};
+function cartasParaDrafts(
+  cartas: PropostaCarta[] | undefined,
+  fallback: { valor: number; prazo: number; tipo: string },
+): PropostaCartaDraft[] {
+  const base = (cartas && cartas.length > 0)
+    ? cartas
+    : [{
+        id: undefined as any, proposal_id: '', ordem: 1,
+        valor_credito: fallback.valor, prazo_meses: fallback.prazo, tipo_produto: fallback.tipo,
+        pending_registration_id: null, consortium_card_id: null,
+      } as PropostaCarta];
 
-const numberToBRL = (n: number) =>
-  n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const parseBRL = (formatted: string): number => {
-  const digits = formatted.replace(/\D/g, '');
-  if (!digits) return 0;
-  return Number(digits) / 100;
-};
+  return base.map((c, i) => ({
+    key: c.id || `fallback-${i}`,
+    id: c.id || undefined,
+    valorStr: c.valor_credito ? numberToBRLInput(c.valor_credito) : '',
+    prazoMeses: c.prazo_meses ? String(c.prazo_meses) : '',
+    prazoOutro: !!c.prazo_meses && !PRAZO_OPTIONS.some(o => o.value === Number(c.prazo_meses)),
+    tipoProduto: c.tipo_produto || '',
+    travada: !!(c.pending_registration_id || c.consortium_card_id),
+  }));
+}
 
 export function EditProposalModal({
   open, onOpenChange, proposalId, contactName, dealName,
-  initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead,
+  initialCartas, initialValorCredito, initialPrazoMeses, initialTipoProduto,
+  initialDetails, initialOrigemLead,
 }: EditProposalModalProps) {
-  const [valorCredito, setValorCredito] = useState('');
-  const [prazoMeses, setPrazoMeses] = useState('');
-  // "Outro" libera o campo numérico para prazo fora do catálogo (ex.: 210).
-  const [prazoOutro, setPrazoOutro] = useState(false);
-  const [tipoProduto, setTipoProduto] = useState('');
+  const [cartas, setCartas] = useState<PropostaCartaDraft[]>([novaCartaDraft()]);
   const [details, setDetails] = useState('');
   const [origemLead, setOrigemLead] = useState('');
+  const [mostrarErros, setMostrarErros] = useState(false);
   const editar = useEditarProposta();
+  const { data: tipoOptions = [] } = useConsorcioTipoOptions();
 
   useEffect(() => {
     if (open) {
-      setValorCredito(initialValorCredito ? numberToBRL(initialValorCredito) : '');
-      setPrazoMeses(initialPrazoMeses ? String(initialPrazoMeses) : '');
-      setPrazoOutro(!!initialPrazoMeses && !PRAZO_OPTIONS.some(o => o.value === Number(initialPrazoMeses)));
-      setTipoProduto(initialTipoProduto || '');
+      setCartas(cartasParaDrafts(initialCartas, {
+        valor: initialValorCredito, prazo: initialPrazoMeses, tipo: initialTipoProduto,
+      }));
       setDetails(initialDetails || '');
       setOrigemLead(initialOrigemLead || '');
+      setMostrarErros(false);
     }
-  }, [open, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead]);
+  }, [open, initialCartas, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead]);
 
-  const valorNumerico = parseBRL(valorCredito);
+  const tudoValido = cartas.length > 0 && cartas.every(cartaDraftValida);
 
   const handleSubmit = () => {
-    if (!valorNumerico || !prazoMeses || !tipoProduto) return;
+    if (!tudoValido) { setMostrarErros(true); return; }
     editar.mutate({
       proposal_id: proposalId,
-      valor_credito: valorNumerico,
-      prazo_meses: Number(prazoMeses),
-      tipo_produto: tipoProduto,
+      cartas: draftsParaInput(cartas),
       proposal_details: details,
       origem_lead: origemLead.trim() || undefined,
     }, {
@@ -84,7 +93,7 @@ export function EditProposalModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Proposta</DialogTitle>
           <DialogDescription>
@@ -92,53 +101,12 @@ export function EditProposalModal({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label>Valor do Crédito (R$)</Label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={valorCredito}
-              onChange={e => setValorCredito(formatBRL(e.target.value))}
-              placeholder="Ex: 150.000,00"
-            />
-          </div>
-          <div>
-            <Label>Prazo (meses)</Label>
-            <Select
-              value={prazoOutro ? 'outro' : (prazoMeses || '')}
-              onValueChange={v => {
-                if (v === 'outro') { setPrazoOutro(true); setPrazoMeses(''); }
-                else { setPrazoOutro(false); setPrazoMeses(v); }
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Selecione o prazo" /></SelectTrigger>
-              <SelectContent>
-                {PRAZO_OPTIONS.map(o => (
-                  <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-                ))}
-                <SelectItem value="outro">Outro (informar)</SelectItem>
-              </SelectContent>
-            </Select>
-            {prazoOutro && (
-              <Input
-                className="mt-2"
-                type="number"
-                value={prazoMeses}
-                onChange={e => setPrazoMeses(e.target.value)}
-                placeholder="Prazo em meses (fora do catálogo)"
-              />
-            )}
-          </div>
-          <div>
-            <Label>Tipo de Produto</Label>
-            <Select value={tipoProduto} onValueChange={setTipoProduto}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="select">Select</SelectItem>
-                <SelectItem value="parcelinha">Parcelinha</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <CartasProposalEditor
+            cartas={cartas}
+            onChange={setCartas}
+            tipoOptions={tipoOptions.map(o => ({ name: o.name, label: o.label }))}
+            mostrarErros={mostrarErros}
+          />
           <div>
             <Label>Detalhes da Proposta</Label>
             <Textarea value={details} onChange={e => setDetails(e.target.value)} rows={3} />
@@ -155,7 +123,7 @@ export function EditProposalModal({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={editar.isPending || !valorNumerico || !prazoMeses || !tipoProduto}>
+          <Button onClick={handleSubmit} disabled={editar.isPending}>
             {editar.isPending ? 'Salvando...' : 'Salvar alterações'}
           </Button>
         </DialogFooter>
