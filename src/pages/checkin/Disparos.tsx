@@ -444,7 +444,7 @@ function CriarDisparoDialog({
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Novo disparo · passo {step} de 3 ·{' '}
+            {rascunho ? 'Continuar rascunho' : 'Novo disparo'} · passo {step} de 3 ·{' '}
             {step === 1 ? 'Template' : step === 2 ? 'Público' : 'Revisão'}
           </DialogTitle>
         </DialogHeader>
@@ -468,12 +468,20 @@ function CriarDisparoDialog({
             pendentes={pendentes ?? 0}
             montando={montar.isPending || atualizar.isPending}
             jaMontou={jaMontou}
+            escopo={escopo}
+            bu={bu}
+            busDisponiveis={busDisponiveis}
+            podeUsarBu={podeUsarBu}
+            publicoMontadoEm={publicoMontadoEm}
+            onEscopoChange={handleEscopoChange}
+            onBuChange={handleBuChange}
             onStageChange={handleStageChange}
             onOriginChange={handleOriginChange}
             onLimiteChange={handleLimiteChange}
             onMontar={handleMontar}
           />
         )}
+
 
         {step === 3 && broadcast && (
           <RevisaoStep
