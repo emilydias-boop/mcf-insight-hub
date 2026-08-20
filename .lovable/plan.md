@@ -1,117 +1,86 @@
-# Migração total do discador para Sonax (fim do Twilio)
+# Reforma do "Enviar Proposta": 1 proposta → N cartas
 
-Decisão confirmada: toda discagem (avulsa e em sequência) passa a rodar em Sonax. O Twilio sai do
-caminho de discagem. Perda aceita: sem duração/atendida automática — a efetividade passa a vir de
-outcome manual do SDR.
+## (a) Modelo de dados recomendado
 
-## 1. Motor de discagem (Auto-Discador)
+Tabela filha, como você inclinou. É o único caminho que preserva os números já publicados.
 
-Hoje `AutoDialerContext.tsx` é dirigido pelo `callStatus` do Twilio WebRTC: `dialIndex` chama
-`useTwilio().makeCall`, e um `useEffect` reage a `ringing → in-progress → completed/failed` para
-decidir atender/retry/avançar. Com Sonax não existe nenhum desses eventos no navegador.
+`consorcio_proposal_cartas`
+- `id uuid pk`
+- `proposal_id uuid not null` → `consorcio_proposals(id) on delete cascade`
+- `ordem int not null` (1..N, define a exibição)
+- `valor_credito numeric not null` (> 0, validado por trigger)
+- `prazo_meses int not null`
+- `tipo_produto text not null`
+- `pending_registration_id uuid null` → cadastro pendente gerado por esta carta
+- `consortium_card_id uuid null` → cota, quando nascer
+- `created_at`, `created_by`
 
-Reescrita:
+Grants: `select/insert/update/delete` para `authenticated`, `all` para `service_role`. RLS espelhando as políticas de `consorcio_proposals` (mesma BU/consórcio).
 
-- `dialIndex(idx)` passa a chamar a edge function `sonax-click-to-call` com
-  `{ numero, deal_id }` (o mesmo caminho do botão "Ligar"), via um novo helper
-  `dialViaSonax()` (reuso da lógica de `useSonaxClickToCall`, mas sem toast por chamada).
-- Remover do contexto: `useTwilio()`, `callStatus`, `currentCallId`, `hangUp`, `deviceStatus`,
-  `initializeDevice`, o `useEffect` de transição de status, a checagem de voicemail em `calls`
-  e o `ringTimeoutMs` (não há ring detectável).
-- Novo ciclo de vida por lead, dirigido pelo SDR (não por evento):
-  1. Dispara Sonax → estado `awaiting-outcome`, lead marcado `in-progress`.
-  2. Se a Sonax retornar erro (`sonax_erro`, ramal não atendendo) → resultado `failed`
-     automático, respeitando `maxAttemptsPerLead`/`retryDelayMs` como hoje.
-  3. Se retornar sucesso → o app abre o card de outcome (item 2) e **espera** o SDR.
-     `betweenCallsMs` deixa de ser timer cego; ele só conta depois do outcome registrado
-     (modo "avançar automático" opcional, com botão "Próximo" sempre disponível).
-- `pause`/`stop`/`skipCurrent` deixam de chamar `hangUp` (o app não controla mais a chamada);
-  passam apenas a parar o loop. `skipCurrent` registra `skipped` sem outcome.
-- Manter o carimbo `crm_deals.last_auto_dialer_call_at` como está.
+**Por que não alternativas:**
+- *Guardar as cartas em JSON dentro da proposta*: não dá para ligar carta ↔ cadastro pendente ↔ cota, que é justamente o elo que falta hoje. Descartado.
+- *Criar N propostas (uma por carta)*: quebraria a etapa 3 do funil (29 cartas negociadas viraria 89) e mexeria em número publicado. Descartado.
+- *Usar `consorcio_pending_registrations` como lista de cartas*: é o que acontece hoje de fato e é a origem do problema — o cadastro nasce depois do aceite, sem `proposal_id`. Descartado.
 
-### Mudança de experiência (precisa aparecer na UI)
-A ligação agora toca no **ramal/softphone do SDR**, não no navegador. Ajustes:
+**Agregados sincronizados por trigger** em `consorcio_proposal_cartas` (insert/update/delete):
+- `consorcio_proposals.valor_credito` = soma dos `valor_credito` das cartas
+- `prazo_meses` e `tipo_produto` = os da carta de maior crédito (moda simples), só para não deixar telas antigas vazias
+- nova coluna `qtd_cartas int` na proposta (contagem), útil no grid
 
-- `AutoDialerPanel.tsx`: banner fixo no topo do painel — "A ligação toca no seu softphone/ramal
-  {ramal}. Mantenha o softphone aberto e atenda por lá." + badge com o ramal lido de
-  `sdr_ramal_mapping` (bloqueia o `start()` com mensagem clara se não houver ramal ativo).
-- `AutoDialerInCallBanner.tsx`: sai o bloco Twilio (mute/hangup/`callDuration`) e entra o card de
-  outcome (item 2) com nome/telefone do lead, botão "Ver dados" (drawer atual) e "Pular".
-- `TwilioSoftphone.tsx` / `InlineCallControls.tsx` / `QuickDialer*`: deixam de ser montados no
-  fluxo de discagem (ver Rollout).
+Assim toda tela que hoje lê `valor_credito` continua lendo o total correto, sem nenhuma alteração.
 
-## 2. Captura de outcome manual
+## (b) Migração das propostas existentes
 
-Já existe `src/components/crm/PostCallModal.tsx` com exatamente essa pergunta ("Como foi a
-ligação?") e 10 opções (`sem_contato`, `ocupado`, `caixa_postal`, `numero_errado`, `interessado`,
-`nao_interessado`, `agendou_r1`, `agendou_r2`, `follow_up`, `outro`). Reaproveitar, com dois ajustes:
+Backfill idempotente: para cada proposta com `valor_credito > 0` e sem cartas, cria **uma** carta espelho (`ordem = 1`) com os valores atuais e, quando houver, `consortium_card_id` da própria proposta. Nenhum total muda (soma de 1 carta = valor atual). Propostas `aguardando_retorno` sem valor não geram carta.
 
-- Generalizar: hoje ele grava por `callId` na tabela `calls`. Passa a receber
-  `{ dealId, activityId }` e a gravar em `deal_activities` (item 3). `callId` sai.
-- Adicionar a opção explícita **"Atendida / falei com o lead"** e marcar cada opção com um flag
-  derivado `answered: boolean` (`interessado`, `nao_interessado`, `agendou_r1`, `agendou_r2`,
-  `follow_up`, `atendida` = true; `sem_contato`, `ocupado`, `caixa_postal`, `numero_errado` = false).
-- No Auto-Discador, versão compacta inline (botões grandes no banner) em vez de modal, para não
-  travar a fila; o modal completo (com observações) fica no botão avulso "Ligar".
-- Sem outcome, a fila não avança sozinha: aviso "registre o resultado para continuar", com escape
-  "Não sei / pular registro" que grava `outcome='nao_registrado'` (conta como discagem, não como
-  atendida).
+Depois do backfill, todas as propostas têm ao menos 1 carta — o front pode ler só a tabela filha, com fallback ao campo agregado por segurança.
 
-## 3. Onde fica registrado
+`consortium_card_id` na proposta **fica** (compatibilidade); passa a significar "primeira cota vinculada".
 
-Fonte única: `deal_activities` com `activity_type='click_to_call'`.
+## (c) O que muda em "Cadastros Pendentes"
 
-- A edge function `sonax-click-to-call` já insere a linha no disparo. Adicionar no `metadata`:
-  `origin: 'auto_dialer' | 'manual'` (novo campo no body), `attempt`, e retornar o `id` da
-  atividade criada para o front poder atualizá-la.
-- O outcome é gravado por `UPDATE` nessa mesma linha (não cria linha nova):
-  `metadata.outcome`, `metadata.answered`, `metadata.notes`, `metadata.outcome_at`.
-  Precisa de policy de UPDATE em `deal_activities` restrita ao autor da atividade (checar RLS
-  atual; se não permitir, fazer o update por uma edge function `sonax-call-outcome`).
-- Aposentar o `activity_type='call_result'` que o auto-discador Twilio gravava.
-- Nada da tabela `calls` é apagado — histórico Twilio permanece consultável, só deixa de ser escrito.
+No aceite (`AcceptProposalModal`), em vez de 1 cadastro pendente, gera **um cadastro por carta**, todos com:
+- `proposal_id` preenchido (mata os 51 órfãos)
+- `valor_credito`, `prazo_meses`, `tipo_produto` da carta
+- os dados de cadastro (PF/PJ, documentos) preenchidos uma vez e replicados nas N linhas
+- `consorcio_proposal_cartas.pending_registration_id` gravado de volta
 
-## 4. Painel "Atividades por SDR"
+Efeitos:
+- a conversão etapa 3 → 4 deixa de dar 306%: passa a ser "cartas da proposta" vs "cadastros criados", relação 1:1
+- o caso Rodrigo (9× R$ 120.000) nasce completo da proposta, sem digitação manual repetida
+- o fatiamento vira indicador próprio: "cotas por carta"
+- o fluxo manual de criar cadastro solto continua existindo (não removo nada), mas deixa de ser o caminho normal
 
-`src/hooks/useSdrActivityMetrics.ts` passa a ler **só** `deal_activities`
-(`activity_type='click_to_call'`), somando auto-discador + avulso:
+Nesta entrega **não** mexo em nenhum número histórico: agosto continua com os cadastros que já tem; só os aceites novos passam pelo caminho novo.
 
-- `discagens` = total de linhas; `discagensErro` = `metadata.ok === false`; `taxaErro`.
-- `atendidas` = `metadata.answered === true`; `conexao%` = atendidas / discagens.
-- `qualificadas` = outcome em (`interessado`, `agendou_r1`, `agendou_r2`, `follow_up`);
-  `qualif%` = qualificadas / discagens.
-- `semRegistro` = discagens com sucesso e sem outcome — coluna própria, para cobrar disciplina.
-- `caixaPostal` / `numeroErrado` vindos do outcome (agora reais, não heurística de duração).
-- `leadsDiscados` (deal_id distintos), `ligPorLead`, `ramais` (de `metadata.ramal`).
-- Removidos: `classifyCall`, thresholds de duração (`useCallClassificationThresholds`,
-  página `admin/CallThresholdsConfig`), `ringDropCalls`, `duration_seconds`.
+## (d) Telas que leem `valor_credito` / `prazo_meses` / `tipo_produto` da proposta
 
-`SdrActivityMetricsTable.tsx` — colunas: SDR | Ramal | Discagens | Falhas | Taxa erro | Atendidas |
-Conexão % | Qualificadas | Qualif % | S/ registro | Lig/Lead | Leads | Notas | Movimentos |
-WhatsApp | Detalhes. Ordenação por discagens desc, linha de totais mantida.
-`SdrLeadCallsDialog` passa a listar as tentativas de `deal_activities` (hora, ramal, ok, outcome,
-`sonax_body` truncado) em vez de linhas de `calls`.
+Todas continuam funcionando via agregado sincronizado; nenhuma precisa de ajuste obrigatório:
+- `useProposals` (grid Cartas Negociadas) — passa a mostrar também "3 cartas · R$ 500.000"
+- `useConsorcioPipelineMetrics` / `...BySdr` / `...ByCloser`, `useConsorcioRealizadoByCloser`, `BIConsorcio` — somam `valor_credito`: total inalterado
+- `useLeadReport`, `WeekDetailDialog`, `useConsorcio`, `usePendingOutcomes` — leitura descritiva
+- `useExcluirProposta` — log de exclusão passa a guardar também o snapshot das cartas
+- Edge functions (`consorcio-carta-cadastrada-webhook`, `external-query`, `notify-pending-outcomes`) — leem o agregado, seguem iguais
 
-Aviso de histórico: `click_to_call` só existe a partir de 10/08 — períodos anteriores ficam vazios
-no painel de ligações. Sugestão: um seletor "Fonte: Sonax (atual) / Twilio (histórico)" só nessa
-tabela, para não perder a leitura do passado.
+Painel Comercial e regras de atribuição: **não são tocados**.
 
-## 5. Rollout — recomendação
+## Formulário (UI)
 
-Recomendo **não** trocar tudo de uma vez. O risco não é técnico, é operacional: o SDR deixa de
-ouvir a ligação no navegador e passa a depender do softphone registrado — e já vimos ramal
-"NAO ESTA ATENDENDO" na Sonax, exatamente o sintoma de softphone desregistrado.
+`ProposalModal` e `EditProposalModal`:
+- sai o campo único de crédito; entra lista de cartas com Valor / Prazo / Tipo por linha
+- "Adicionar carta", "Duplicar" por linha, remover (bloqueado na última)
+- atalho de repetição em massa: no botão duplicar, um campo "×N" ao lado — digita 9, clica, e nascem 9 cópias da linha (1 clique + 1 número)
+- rodapé fixo com total ao vivo: "3 cartas · R$ 500.000"
+- registrar bloqueado enquanto houver linha incompleta, com destaque na linha faltante
+- Detalhes da Proposta e Origem do Lead permanecem no topo, inalterados
+- edição de proposta antiga abre com a carta espelho já preenchida
 
-Plano em 3 fases:
+## Ordem de execução
 
-1. **Fase 1 (flag, ~1 dia):** flag por usuário — nova coluna `sdr_ramal_mapping.auto_dialer_engine`
-   (`'twilio' | 'sonax'`, default `twilio`), lida no `AutoDialerContext`. Motor Sonax só para
-   Mayara (ramal 107) + 1 SDR. O código Twilio fica intacto atrás da flag.
-2. **Fase 2 (validação, 2-3 dias):** conferir no painel que discagens/atendidas/outcome batem com
-   o que os 2 SDRs relatam, e que o softphone se mantém registrado o dia todo.
-3. **Fase 3 (corte):** default para `sonax`, e então remover `TwilioContext`, `TwilioSoftphone`,
-   `useCallQualificationTrigger` na parte de Twilio, secrets e edge functions Twilio de discagem.
-   A tabela `calls` fica só como histórico.
+1. Migração: tabela + grants + RLS + triggers de agregado + backfill
+2. Hooks: leitura/escrita das cartas em `useEnviarProposta`, `useEditarProposta`, `useProposals`
+3. UI dos dois modais
+4. Aceite gerando N cadastros pendentes com `proposal_id`
+5. Conferência: totais de agosto (55 cotas / 24 vendas / R$ 9,94 mi) e etapa 3 do funil inalterados
 
-Se o usuário preferir corte seco, é viável — mas então o combinado é fazer numa manhã, com os SDRs
-avisados de que precisam abrir o softphone antes de iniciar a fila.
+Sem publicar.
