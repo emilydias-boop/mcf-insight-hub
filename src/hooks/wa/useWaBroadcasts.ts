@@ -665,34 +665,40 @@ export function useControlarBroadcast() {
 
 
 /** Estágios e origens para os filtros opcionais do público. */
-export function useCrmStageOptions() {
+export interface WaBroadcastOrigemDisponivel {
+  origin_id: string;
+  nome: string;
+  leads: number;
+}
+
+export interface WaBroadcastEstagioDisponivel {
+  stage_id: string;
+  nome: string;
+  leads: number;
+}
+
+export function useWaOrigensDisponiveis() {
   return useQuery({
-    queryKey: ['wa-broadcast-stage-options'],
-    staleTime: 10 * 60_000,
+    queryKey: ['wa-broadcast-origens-disponiveis'],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_stages')
-        .select('id, stage_name, origin_id, stage_order')
-        .eq('is_active', true)
-        .order('stage_order');
+      const { data, error } = await supabase.rpc('wa_broadcast_origens_disponiveis');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as WaBroadcastOrigemDisponivel[];
     },
   });
 }
 
-export function useCrmOriginOptions() {
+export function useWaEstagiosDisponiveis(originId: string | null) {
   return useQuery({
-    queryKey: ['wa-broadcast-origin-options'],
-    staleTime: 10 * 60_000,
+    queryKey: ['wa-broadcast-estagios-disponiveis', originId || null],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_origins')
-        .select('id, name, display_name, is_archived')
-        .or('is_archived.is.null,is_archived.eq.false')
-        .order('name');
+      const { data, error } = await supabase.rpc('wa_broadcast_estagios_disponiveis', {
+        _origin_id: originId || null,
+      });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as WaBroadcastEstagioDisponivel[];
     },
   });
 }
