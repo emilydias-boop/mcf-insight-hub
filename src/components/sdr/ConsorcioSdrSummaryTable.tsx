@@ -173,7 +173,7 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. ATENÇÃO: as linhas NÃO somam o Total — cliente que aparece em mais de uma linha é contado uma única vez no Total."
+                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. A atribuição é por cliente — cada cliente aparece em uma única linha, então as linhas somam o Total."
               >
                 Vendas Realizadas
               </TableHead>
@@ -349,7 +349,7 @@ export function ConsorcioSdrSummaryTable({
               >
                 <TableCell className="font-normal underline decoration-dotted">
                   <span className="inline-flex items-center gap-1">
-                    Sem vínculo com lead
+                    Sem agendamento de consórcio
                     <Search className="h-3 w-3" />
                   </span>
                 </TableCell>
@@ -448,17 +448,17 @@ export function ConsorcioSdrSummaryTable({
       </div>
 
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        Vendas Realizadas conta pessoas, não cartas: as linhas não somam o Total. Cliente que
-        aparece em mais de uma linha é contado uma única vez no Total — por isso o Total (e o
-        Ticket Médio e a Conv. Vendas / R1 do Total) é o mesmo nas abas SDRs e Closers.
+        Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em
+        Cotas Contratadas. A atribuição é por cliente (todas as cotas dele vão para o SDR do
+        último agendamento de consórcio), então as linhas somam o Total nas três colunas.
       </p>
 
       <ResiduoDetalheModal
         open={detalhe === "semVinculo"}
         onOpenChange={(o) => setDetalhe(o ? "semVinculo" : null)}
         kind="cota"
-        titulo="Sem vínculo com lead"
-        descricao="Cotas contratadas no período (com o filtro de funil ativo) que esta tela não conseguiu atribuir a nenhum SDR. A coluna Motivo diz exatamente qual dado está faltando na cadeia cota → cadastro pendente → negócio → reunião de consórcio → agendador."
+        titulo="Sem agendamento de consórcio"
+        descricao="Cotas de clientes que não têm NENHUM agendamento de consórcio em nenhuma das suas cotas — por isso não há SDR a quem creditar a venda. Qualidade de cadastro (cota sem lead vinculado) é o alerta separado acima da tabela."
         items={cotasSemVinculoItems}
         esperado={cotasSemVinculo}
         permitirCorrigirVinculo
