@@ -15,10 +15,71 @@ import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
  *
  * "Realizadas" = SOMENTE status = 'completed'. contract_paid/refunded ficam de fora
  * (o vocabulário "contrato pago" não existe no Consórcio — decisão de negócio).
+ *
+ * DEDUP (obrigatório para bater com o Painel Comercial / `get_agenda_fatos_consorcio`):
+ *  - 1 ocorrência por (deal_id, dia da reunião), priorizando completed > no_show > resto
+ *  - cap de 2 ocorrências por deal dentro do período (as 2 primeiras por data)
+ * Sem isso a tela inflava com remarcações do mesmo lead.
  */
 
 const CANCELLED_SLOT_STATUS = new Set(['cancelled', 'canceled', 'cancelada']);
 const SEM_DESFECHO_STATUS = new Set(['invited', 'scheduled', 'rescheduled']);
+
+/** Dia da reunião em America/Sao_Paulo (YYYY-MM-DD) — mesmo eixo do RPC. */
+function spDay(iso: string): string {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function statusRank(status: string): number {
+  if (status === 'completed') return 0;
+  if (status === 'no_show') return 1;
+  return 2;
+}
+
+/**
+ * Aplica dedup 1 por (deal, dia) + cap 2 por deal — espelho exato do RPC
+ * `get_agenda_fatos_consorcio`. Participantes sem deal_id são a própria unidade
+ * (chave `msa:<id>`), como no RPC.
+ */
+function dedupComCap(participants: R1FunnelParticipant[]): R1FunnelParticipant[] {
+  const porUnidadeDia = new Map<string, R1FunnelParticipant>();
+  participants.forEach((p) => {
+    const unit = p.deal_id || `msa:${p.id}`;
+    const day = spDay(p.scheduled_at);
+    const key = `${unit}|${day}`;
+    const atual = porUnidadeDia.get(key);
+    if (!atual || statusRank(p.status) < statusRank(atual.status)) {
+      porUnidadeDia.set(key, p);
+    }
+  });
+
+  const porUnidade = new Map<string, R1FunnelParticipant[]>();
+  porUnidadeDia.forEach((p) => {
+    const unit = p.deal_id || `msa:${p.id}`;
+    const arr = porUnidade.get(unit);
+    if (arr) arr.push(p);
+    else porUnidade.set(unit, [p]);
+  });
+
+  const out: R1FunnelParticipant[] = [];
+  porUnidade.forEach((arr) => {
+    arr
+      .sort((a, b) => (a.scheduled_at || '').localeCompare(b.scheduled_at || ''))
+      .slice(0, 2)
+      .forEach((p) => out.push(p));
+  });
+  return out;
+}
 
 export interface R1FunnelParticipant {
   id: string;
@@ -161,14 +222,15 @@ export function useConsorcioR1Funnel(
         };
       });
 
-      participants.sort((a, b) => (b.scheduled_at || '').localeCompare(a.scheduled_at || ''));
+      const deduped = dedupComCap(participants);
+      deduped.sort((a, b) => (b.scheduled_at || '').localeCompare(a.scheduled_at || ''));
 
       return {
-        agendadas: participants.length,
-        realizadas: participants.filter((p) => p.status === 'completed').length,
-        noShow: participants.filter((p) => p.status === 'no_show').length,
-        semDesfecho: participants.filter((p) => p.sem_desfecho).length,
-        participants,
+        agendadas: deduped.length,
+        realizadas: deduped.filter((p) => p.status === 'completed').length,
+        noShow: deduped.filter((p) => p.status === 'no_show').length,
+        semDesfecho: deduped.filter((p) => p.sem_desfecho).length,
+        participants: deduped,
       };
     },
   });
