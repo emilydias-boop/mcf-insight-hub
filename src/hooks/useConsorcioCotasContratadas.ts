@@ -225,8 +225,8 @@ export function useConsorcioCotasContratadas(
         if (key && !closerByName.has(key)) closerByName.set(key, c.id);
       });
 
-      // Quem agendou a PRIMEIRA reunião desta BU para o deal.
-      const dealBooker = new Map<string, string>();
+      // Quem agendou a ÚLTIMA reunião desta BU para o deal.
+      const dealBooker = new Map<string, { email: string; at: string }>();
       // Diagnóstico por deal (alimenta a coluna "Motivo" do detalhamento).
       const dealTemReuniaoBU = new Set<string>();
       const dealTemReuniaoElegivel = new Set<string>();
@@ -280,14 +280,21 @@ export function useConsorcioCotasContratadas(
             if (p.email) emailById.set(p.id, String(p.email).toLowerCase());
           });
         }
-        // O primeiro agendamento da BU define o SDR da cota.
+        // O ÚLTIMO agendamento da BU define o SDR: o crédito vai para quem
+        // remarcou e levou o cliente até a reunião que converteu, não para
+        // quem tomou o no-show anterior.
         const sorted = [...buAttendees].sort((a: any, b: any) =>
           String(a.booked_at || a.created_at || "").localeCompare(String(b.booked_at || b.created_at || "")),
         );
         sorted.forEach((a: any) => {
-          if (!a.deal_id || dealBooker.has(a.deal_id)) return;
+          if (!a.deal_id) return;
           const email = emailById.get(a.booked_by);
-          if (email) dealBooker.set(a.deal_id, email);
+          if (email) {
+            dealBooker.set(a.deal_id, {
+              email,
+              at: String(a.booked_at || a.created_at || ""),
+            });
+          }
         });
       }
 
