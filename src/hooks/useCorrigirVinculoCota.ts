@@ -82,7 +82,6 @@ export function useLeadsParaVinculo(
     queryFn: async (): Promise<LeadVinculoMatch[]> => {
       if (!titular) return [];
 
-      const docDigits = digits(titular.cpf) || digits(titular.cnpj);
       const telSuffix = digits(titular.telefone).slice(-9);
       const email = (titular.email || "").trim().toLowerCase();
 
@@ -95,7 +94,6 @@ export function useLeadsParaVinculo(
       } else {
         if (email) ors.push(`email.ilike.${email}`);
         if (telSuffix.length >= 8) ors.push(`phone.ilike.%${telSuffix}%`);
-        if (docDigits.length >= 11) ors.push(`document.ilike.%${docDigits}%`);
         if (titular.nome) ors.push(`name.ilike.%${titular.nome.trim()}%`);
       }
       if (ors.length === 0) return [];
@@ -103,6 +101,7 @@ export function useLeadsParaVinculo(
       const { data: contacts, error } = await supabase
         .from("crm_contacts")
         .select("id, name, email, phone")
+        .eq("is_archived", false)
         .or(ors.join(","))
         .limit(40);
       if (error) throw error;
