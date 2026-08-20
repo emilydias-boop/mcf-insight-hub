@@ -358,8 +358,8 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{cotasSemVinculo}</TableCell>
                 <TableCell className="text-center">{clientesSemVinculo}</TableCell>
+                <TableCell className="text-center">{cotasSemVinculo}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {creditoSemVinculo > 0 ? brl(creditoSemVinculo) : "—"}
                 </TableCell>
