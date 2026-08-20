@@ -19,8 +19,9 @@ import {
   WaBroadcast,
   WaBroadcastBuDisponivel,
   WaBroadcastEscopo,
+  BU_VOLUME_MINIMO,
 } from '@/hooks/wa/useWaBroadcasts';
-import { formatMinutos, motivoLabel } from './waBroadcastLabels';
+import { DONO_INATIVO_ALERTA_PCT, formatMinutos, motivoLabel } from './waBroadcastLabels';
 import { formatDateTime } from '@/lib/formatters';
 
 
@@ -82,6 +83,17 @@ export function PublicoStep({
   const fmt = (n: number) => new Intl.NumberFormat('pt-BR').format(n ?? 0);
   const semCarteira = !escopoBu && !origensLoading && origens.length === 0;
 
+  const totalAlvos = pendentes + totalIgnorados;
+  const donoInativo = ignorados.dono_inativo ?? 0;
+  const pctDonoInativo = totalAlvos > 0 ? (donoInativo / totalAlvos) * 100 : 0;
+  const alertaDonoInativo = donoInativo > 0 && pctDonoInativo >= DONO_INATIVO_ALERTA_PCT;
+
+  const busGrandes = busDisponiveis.filter((b) => b.leads >= BU_VOLUME_MINIMO);
+  const busPequenas = busDisponiveis.filter((b) => b.leads < BU_VOLUME_MINIMO);
+  const buLabel = (b: WaBroadcastBuDisponivel) =>
+    `${b.bu} — ${fmt(b.sdrs)} SDRs, ${fmt(b.leads)} leads` +
+    (b.leads_sem_dono_ativo > 0 ? ` (${fmt(b.leads_sem_dono_ativo)} sem dono ativo)` : '');
+
   const idadeHoras = publicoMontadoEm
     ? (Date.now() - new Date(publicoMontadoEm).getTime()) / 3_600_000
     : null;
@@ -137,11 +149,23 @@ export function PublicoStep({
                 <SelectValue placeholder="Escolha a BU" />
               </SelectTrigger>
               <SelectContent>
-                {busDisponiveis.map((b) => (
+                {busGrandes.map((b) => (
                   <SelectItem key={b.bu} value={b.bu}>
-                    {b.bu} — {fmt(b.sdrs)} SDRs, {fmt(b.leads)} leads
+                    {buLabel(b)}
                   </SelectItem>
                 ))}
+                {busPequenas.length > 0 && (
+                  <>
+                    <div className="mt-1 border-t px-2 pb-1 pt-2 text-xs text-muted-foreground">
+                      Sem carteira relevante (menos de {BU_VOLUME_MINIMO} leads)
+                    </div>
+                    {busPequenas.map((b) => (
+                      <SelectItem key={b.bu} value={b.bu} className="text-muted-foreground">
+                        {buLabel(b)}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -261,6 +285,17 @@ export function PublicoStep({
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {jaMontou && alertaDonoInativo && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {fmt(donoInativo)} leads ({pctDonoInativo.toFixed(0)}% do público) estão com o dono
+            bloqueado no sistema. Eles ficam de fora porque a resposta cairia numa conversa que
+            ninguém lê — precisam de novo responsável antes de fazerem sentido num disparo.
+          </AlertDescription>
+        </Alert>
       )}
 
       {jaMontou && totalIgnorados > 0 && (
