@@ -386,6 +386,93 @@ export function useConsorcioCotasContratadas(
         };
       };
 
+      const diaBr = (iso?: string | null) => {
+        if (!iso) return null;
+        try {
+          return format(iso.length <= 10 ? new Date(`${iso}T12:00:00`) : new Date(iso), "dd/MM");
+        } catch {
+          return null;
+        }
+      };
+
+      /**
+       * Diagnóstico em cascata de UMA cota: para em qual elo a cadeia
+       * cota → cadastro → lead → reunião de consórcio → agendador se rompe.
+       */
+      const diagnosticarCota = (
+        cardId: string,
+        dealId: string | null,
+      ): { problema: CotaProblema; motivo: string; agendamento: AgendamentoSemAgendador | null } => {
+        if (!cardsComCadastro.has(cardId)) {
+          return {
+            problema: "sem_cadastro",
+            motivo:
+              "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.",
+            agendamento: null,
+          };
+        }
+        if (!dealId) {
+          return {
+            problema: "sem_lead",
+            motivo:
+              "Cadastro pendente existe, mas sem lead vinculado (deal_id nulo) — vincular a cota ao negócio no CRM.",
+            agendamento: null,
+          };
+        }
+        if (!dealsExistentes.has(dealId)) {
+          return {
+            problema: "deal_inexistente",
+            motivo:
+              "Cadastro aponta para um negócio que não existe mais no CRM — revincular a cota a um lead válido.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemReuniaoBU.has(dealId)) {
+          return {
+            problema: "sem_reuniao_bu",
+            motivo:
+              "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemReuniaoElegivel.has(dealId)) {
+          return {
+            problema: "reuniao_nao_elegivel",
+            motivo:
+              "As reuniões de consórcio do lead estão todas como convite/cancelada — atualizar o status do attendee.",
+            agendamento: null,
+          };
+        }
+        if (!dealTemBooker.has(dealId)) {
+          const ag = dealSemAgendador.get(dealId) || null;
+          const quando = diaBr(ag?.dia);
+          return {
+            problema: "sem_agendador",
+            motivo: `Reunião de consórcio elegível${quando ? ` em ${quando}` : ""}${
+              ag?.closerName ? ` com ${ag.closerName}` : ""
+            }, mas sem agendador registrado — informar quem agendou.`,
+            agendamento: ag,
+          };
+        }
+        return {
+          problema: "perfil_sem_email",
+          motivo: "Agendador registrado, mas sem e-mail no perfil — completar o cadastro do usuário.",
+          agendamento: null,
+        };
+      };
+
+      /** Prioridade do diagnóstico do CLIENTE: mostra primeiro o elo que tem correção. */
+      const PRIORIDADE: CotaProblema[] = [
+        "sem_agendador",
+        "perfil_sem_email",
+        "sem_lead",
+        "sem_cadastro",
+        "deal_inexistente",
+        "reuniao_nao_elegivel",
+        "sem_reuniao_bu",
+        "sem_vendedor",
+      ];
+
       // Passo 1 — cotas dentro do filtro, agrupadas por CLIENTE.
       type Linha = { card: any; dealId: string | null; credito: number; pessoa: string };
       const linhas: Linha[] = [];
