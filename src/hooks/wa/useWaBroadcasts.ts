@@ -84,6 +84,7 @@ export function useWaTemplates() {
       const { data, error } = await supabase
         .from('wa_templates')
         .select('content_sid, name, body_preview, variables, category')
+        .eq('is_active', true)
         .order('name');
       if (error) throw error;
       return (data ?? [])
