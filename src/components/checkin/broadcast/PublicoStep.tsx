@@ -47,54 +47,73 @@ export function PublicoStep({
   onLimiteChange,
   onMontar,
 }: Props) {
-  const { data: stages = [] } = useCrmStageOptions();
-  const { data: origins = [] } = useCrmOriginOptions();
+  const { data: origens = [], isLoading: origensLoading } = useWaOrigensDisponiveis();
+  const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosDisponiveis(
+    originId || null,
+  );
   const { data: budget } = useWaSendBudget();
   const { data: ignorados = {} } = useWaIgnoradosPorMotivo(broadcast.id);
 
   const ritmo = budget?.ritmo_por_minuto ?? 0;
   const tempo = ritmo > 0 ? pendentes / ritmo : 0;
   const totalIgnorados = Object.values(ignorados).reduce((a, b) => a + b, 0);
-  const stagesFiltrados = originId
-    ? stages.filter((s) => !s.origin_id || s.origin_id === originId)
-    : stages;
+  const fmt = (n: number) => new Intl.NumberFormat('pt-BR').format(n ?? 0);
+  const semCarteira = !origensLoading && origens.length === 0;
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Origem (opcional)</Label>
-          <Select value={originId || 'all'} onValueChange={(v) => onOriginChange(v === 'all' ? '' : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Todas as origens" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as origens</SelectItem>
-              {origins.map((o) => (
-                <SelectItem key={o.id} value={o.id}>
-                  {o.display_name || o.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {semCarteira ? (
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm font-medium">Você não tem leads com telefone válido</p>
+            <p className="text-xs text-muted-foreground">
+              Não há origens com leads alcançáveis na sua carteira para filtrar.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Origem (opcional)</Label>
+            <Select value={originId || 'all'} onValueChange={(v) => onOriginChange(v === 'all' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas as origens" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as origens</SelectItem>
+                {origens.map((o) => (
+                  <SelectItem key={o.origin_id} value={o.origin_id}>
+                    {o.nome} ({fmt(o.leads)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Estágio (opcional)</Label>
+            {!estagiosLoading && estagios.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Você não tem leads com telefone válido
+              </p>
+            ) : (
+              <Select value={stageId || 'all'} onValueChange={(v) => onStageChange(v === 'all' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os estágios" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os estágios</SelectItem>
+                  {estagios.map((s) => (
+                    <SelectItem key={s.stage_id} value={s.stage_id}>
+                      {s.nome} ({fmt(s.leads)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label>Estágio (opcional)</Label>
-          <Select value={stageId || 'all'} onValueChange={(v) => onStageChange(v === 'all' ? '' : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Todos os estágios" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os estágios</SelectItem>
-              {stagesFiltrados.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.stage_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      )}
+
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-2">
