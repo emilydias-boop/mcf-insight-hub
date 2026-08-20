@@ -159,12 +159,6 @@ export function ConsorcioSdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">
-                <span className="inline-flex items-center gap-1">
-                  <FileText className="h-3.5 w-3.5" />
-                  Prop. Env.
-                </span>
-              </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
                 title="Cotas efetivamente contratadas (Controle Consórcio, tipo de registro 'contratação'), pela data de contratação. Atribuídas ao SDR que agendou a R1 do lead."
@@ -173,9 +167,27 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Cotas Contratadas ÷ R1 Realizada, no período."
+                title="Clientes distintos que contrataram ao menos uma cota no período. Identidade pelo CPF/CNPJ do titular da cota, com fallback no nome."
               >
-                Cotas / R1 Realiz.
+                Clientes
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Soma do valor de crédito das cotas contratadas no período."
+              >
+                Crédito Contratado
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Crédito Contratado ÷ clientes distintos que fecharam. É o crédito médio por CLIENTE, não por cota."
+              >
+                Ticket Médio
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title="Clientes distintos que contrataram ao menos uma cota ÷ R1 realizadas. Um cliente que compra várias cotas conta uma vez."
+              >
+                Conv. Clientes / R1
               </TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
@@ -188,12 +200,14 @@ export function ConsorcioSdrSummaryTable({
               const bateuMeta = row.agendamentos >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
-              const propostas = propostasEnviadasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
               const cotas = cotasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const clientes = clientesBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const credito = creditoBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const ticket = clientes > 0 ? credito / clientes : null;
 
-              // Cotas / R1 Realizada
+              // Clientes distintos / R1 Realizada
               const taxaVenda = row.r1Realizada > 0
-                ? (cotas / row.r1Realizada) * 100
+                ? (clientes / row.r1Realizada) * 100
                 : 0;
               const taxaVendaColor = taxaVenda >= 20
                 ? 'text-green-400'
@@ -260,14 +274,20 @@ export function ConsorcioSdrSummaryTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                      {propostas}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                       {cotas}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
+                      {clientes}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center whitespace-nowrap">
+                    {credito > 0 ? brl(credito) : "—"}
+                  </TableCell>
+                  <TableCell className="text-center whitespace-nowrap">
+                    {ticket !== null ? brl(ticket) : "—"}
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaVendaColor}`}>{taxaVenda.toFixed(1)}%</span>
@@ -297,8 +317,18 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
-                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{qtd}</TableCell>
+                <TableCell className="text-center">{clientesBySdr?.get(email.toLowerCase()) || 0}</TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {(creditoBySdr?.get(email.toLowerCase()) || 0) > 0
+                    ? brl(creditoBySdr!.get(email.toLowerCase())!)
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {(clientesBySdr?.get(email.toLowerCase()) || 0) > 0
+                    ? brl((creditoBySdr?.get(email.toLowerCase()) || 0) / (clientesBySdr!.get(email.toLowerCase())!))
+                    : "—"}
+                </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {!disableNavigation && <TableCell />}
               </TableRow>
@@ -322,8 +352,14 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{cotasSemVinculo}</TableCell>
+                <TableCell className="text-center">{clientesSemVinculo}</TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {creditoSemVinculo > 0 ? brl(creditoSemVinculo) : "—"}
+                </TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {clientesSemVinculo > 0 ? brl(creditoSemVinculo / clientesSemVinculo) : "—"}
+                </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {!disableNavigation && <TableCell />}
               </TableRow>
@@ -346,6 +382,8 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">{unassigned.r1Agendada}</TableCell>
                 <TableCell className="text-center">{unassigned.r1Realizada}</TableCell>
                 <TableCell className="text-center">{unassigned.noShows}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
@@ -379,14 +417,20 @@ export function ConsorcioSdrSummaryTable({
                 </div>
               </TableCell>
               <TableCell className="text-center">
-                <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
-                  {totals.propostas}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                   {totals.cotas}
                 </Badge>
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
+                  {totals.clientes}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center whitespace-nowrap">
+                {totals.credito > 0 ? brl(totals.credito) : "—"}
+              </TableCell>
+              <TableCell className="text-center whitespace-nowrap">
+                {totalTicket !== null ? brl(totalTicket) : "—"}
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${totalTaxaVendaColor}`}>{totalTaxaVenda.toFixed(1)}%</span>
