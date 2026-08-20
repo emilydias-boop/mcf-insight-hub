@@ -968,7 +968,11 @@ export default function ConsorcioPainelEquipe() {
                 sdrDiasUteisMap={sdrDiasUteisMap}
                 propostasEnviadasBySdr={propostasData}
                 cotasBySdr={cotasContratadas?.bySdr}
+                clientesBySdr={cotasContratadas?.clientesBySdr}
+                creditoBySdr={cotasContratadas?.creditoBySdr}
                 cotasSemVinculo={cotasContratadas?.semVinculo || 0}
+                clientesSemVinculo={cotasContratadas?.clientesSemVinculo || 0}
+                creditoSemVinculo={cotasContratadas?.creditoSemVinculo || 0}
                 sdrNames={cotasContratadas?.sdrNames}
                 sdrFilterEmail={sdrFilter === "all" ? null : sdrFilter}
                 unassigned={sdrUnassignedRow}
@@ -985,7 +989,11 @@ export default function ConsorcioPainelEquipe() {
               isLoading={closerLoading || fatosLoading}
               propostasEnviadasByCloser={propostasByCloser}
               cotasByCloser={cotasContratadas?.byCloser}
+              clientesByCloser={cotasContratadas?.clientesByCloser}
+              creditoByCloser={cotasContratadas?.creditoByCloser}
               cotasSemCloser={cotasContratadas?.semCloser || 0}
+              clientesSemCloser={cotasContratadas?.clientesSemCloser || 0}
+              creditoSemCloser={cotasContratadas?.creditoSemCloser || 0}
               cotasSemCloserItems={cotasContratadas?.semCloserItems}
               agendaUnassigned={fatos.closerUnassigned}
               onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {

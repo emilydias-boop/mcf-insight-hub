@@ -29,6 +29,22 @@ export interface ConsorcioCotasContratadas {
   byCloser: Map<string, number>;
   /** Cotas por e-mail do SDR (via cota → cadastro pendente → deal → quem agendou a R1 da BU). */
   bySdr: Map<string, number>;
+  /** Clientes distintos (identidade do titular da cota) por closer_id. */
+  clientesByCloser: Map<string, number>;
+  /** Clientes distintos por e-mail de SDR. */
+  clientesBySdr: Map<string, number>;
+  /** Soma de valor_credito por closer_id. */
+  creditoByCloser: Map<string, number>;
+  /** Soma de valor_credito por e-mail de SDR. */
+  creditoBySdr: Map<string, number>;
+  /** Clientes distintos / crédito das linhas residuais. */
+  clientesSemVinculo: number;
+  creditoSemVinculo: number;
+  clientesSemCloser: number;
+  creditoSemCloser: number;
+  /** Clientes distintos e crédito do período inteiro (base do card). */
+  totalClientes: number;
+  totalCredito: number;
   /** Nome exibível por e-mail de SDR (para linhas de SDR sem atividade na agenda). */
   sdrNames: Map<string, string>;
   /** Cotas que não puderam ser atribuídas a um SDR (sem vínculo ou sem agendador da BU). */
@@ -45,6 +61,16 @@ const EMPTY: ConsorcioCotasContratadas = {
   total: 0,
   byCloser: new Map(),
   bySdr: new Map(),
+  clientesByCloser: new Map(),
+  clientesBySdr: new Map(),
+  creditoByCloser: new Map(),
+  creditoBySdr: new Map(),
+  clientesSemVinculo: 0,
+  creditoSemVinculo: 0,
+  clientesSemCloser: 0,
+  creditoSemCloser: 0,
+  totalClientes: 0,
+  totalCredito: 0,
   sdrNames: new Map(),
   semVinculo: 0,
   semCloser: 0,
@@ -66,6 +92,25 @@ function nameKey(name?: string | null): string | null {
   const first = clean[0];
   const last = clean[clean.length - 1];
   return `${first}|${last}`;
+}
+
+/**
+ * Identidade da PESSOA titular da cota — base da contagem de clientes.
+ * Uma pessoa pode contratar várias cotas; a conversão do comercial é por
+ * pessoa atendida, não por cota. Documento (CPF/CNPJ) tem prioridade; sem
+ * documento, cai no nome normalizado (sem acento, caixa alta, espaços
+ * colapsados) para que a cota órfã não deixe de contar.
+ */
+function clienteKey(card: any): string {
+  const doc = String(card.cpf || "").replace(/\D/g, "") || String(card.cnpj || "").replace(/\D/g, "");
+  if (doc) return `doc:${doc}`;
+  const nome = String(card.nome_completo || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return nome ? `nome:${nome}` : `card:${card.id}`;
 }
 
 /**
@@ -104,7 +149,9 @@ export function useConsorcioCotasContratadas(
 
       const { data: cards, error: cardsError } = await supabase
         .from("consortium_cards")
-        .select("id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito")
+        .select(
+          "id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito, cpf, cnpj",
+        )
         .eq("tipo_registro", "contratacao")
         .gte("data_contratacao", format(startDate, "yyyy-MM-dd"))
         .lte("data_contratacao", format(endDate, "yyyy-MM-dd"));
@@ -237,6 +284,16 @@ export function useConsorcioCotasContratadas(
 
       const byCloser = new Map<string, number>();
       const bySdr = new Map<string, number>();
+      const creditoByCloser = new Map<string, number>();
+      const creditoBySdr = new Map<string, number>();
+      const clientesCloserSets = new Map<string, Set<string>>();
+      const clientesSdrSets = new Map<string, Set<string>>();
+      const clientesTotal = new Set<string>();
+      const clientesSemVinculoSet = new Set<string>();
+      const clientesSemCloserSet = new Set<string>();
+      let totalCredito = 0;
+      let creditoSemVinculo = 0;
+      let creditoSemCloser = 0;
       let total = 0;
       let semVinculo = 0;
       let semCloser = 0;
@@ -274,11 +331,22 @@ export function useConsorcioCotasContratadas(
           if (!origin || !allowedOriginNames.has(origin)) return;
         }
         total++;
+        const credito = Number(card.valor_credito) || 0;
+        const pessoa = clienteKey(card);
+        totalCredito += credito;
+        clientesTotal.add(pessoa);
 
         const closerId = closerByName.get(nameKey(card.vendedor_name) || "");
-        if (closerId) byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
+        if (closerId) {
+          byCloser.set(closerId, (byCloser.get(closerId) || 0) + 1);
+          creditoByCloser.set(closerId, (creditoByCloser.get(closerId) || 0) + credito);
+          if (!clientesCloserSets.has(closerId)) clientesCloserSets.set(closerId, new Set());
+          clientesCloserSets.get(closerId)!.add(pessoa);
+        }
         else {
           semCloser++;
+          creditoSemCloser += credito;
+          clientesSemCloserSet.add(pessoa);
           const vendedor = (card.vendedor_name || "").trim();
           semCloserItems.push(
             baseItem(
@@ -293,9 +361,16 @@ export function useConsorcioCotasContratadas(
 
         // Sem fallback em owner_id: sem agendador desta BU → "Não atribuído".
         const sdrEmail = dealId ? dealBooker.get(dealId) : undefined;
-        if (sdrEmail) bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
+        if (sdrEmail) {
+          bySdr.set(sdrEmail, (bySdr.get(sdrEmail) || 0) + 1);
+          creditoBySdr.set(sdrEmail, (creditoBySdr.get(sdrEmail) || 0) + credito);
+          if (!clientesSdrSets.has(sdrEmail)) clientesSdrSets.set(sdrEmail, new Set());
+          clientesSdrSets.get(sdrEmail)!.add(pessoa);
+        }
         else {
           semVinculo++;
+          creditoSemVinculo += credito;
+          clientesSemVinculoSet.add(pessoa);
           let motivo: string;
           if (!cardsComCadastro.has(card.id)) {
             motivo = "Cota sem nenhum cadastro pendente — foi criada direto no Controle Consórcio, sem passar pelo fluxo de venda.";
@@ -338,6 +413,20 @@ export function useConsorcioCotasContratadas(
       return {
         total, byCloser, bySdr, sdrNames, semVinculo, semCloser,
         semVinculoItems, semCloserItems,
+        clientesByCloser: new Map(
+          Array.from(clientesCloserSets.entries()).map(([k, s]) => [k, s.size]),
+        ),
+        clientesBySdr: new Map(
+          Array.from(clientesSdrSets.entries()).map(([k, s]) => [k, s.size]),
+        ),
+        creditoByCloser,
+        creditoBySdr,
+        clientesSemVinculo: clientesSemVinculoSet.size,
+        creditoSemVinculo,
+        clientesSemCloser: clientesSemCloserSet.size,
+        creditoSemCloser,
+        totalClientes: clientesTotal.size,
+        totalCredito,
       };
     },
     enabled: !!startDate && !!endDate,
