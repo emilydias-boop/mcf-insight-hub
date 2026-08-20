@@ -22,7 +22,12 @@ export const MOTIVO_IGNORADO_LABEL: Record<string, string> = {
   cooldown: 'Receberam disparo nos últimos 7 dias',
   nome_invalido: 'Nome cadastrado é o telefone',
   limite_marketing_do_destinatario: 'Limite de marketing do WhatsApp',
+  dono_inativo: 'Dono do lead está inativo no sistema',
 };
+
+/** Acima disso, dono inativo deixa de ser detalhe e vira pauta de gestão. */
+export const DONO_INATIVO_ALERTA_PCT = 10;
+
 
 export function motivoLabel(motivo: string): string {
   return MOTIVO_IGNORADO_LABEL[motivo] ?? motivo.replace(/_/g, ' ');
