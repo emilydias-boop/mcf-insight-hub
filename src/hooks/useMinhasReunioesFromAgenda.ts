@@ -16,6 +16,11 @@ export interface MinhasReunioesSummary {
   taxaNoShow: number;
 }
 
+export interface MinhasReunioesSegmentTotals {
+  a: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
+  b: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
+}
+
 /**
  * Hook combinado para página "Minhas Reuniões" usando dados da AGENDA
  * (fonte de verdade) ao invés do Clint.
@@ -58,6 +63,15 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   // comportamento anterior para usuários sem squad cadastrado.
   const squad = sdrRecord?.squad || 'incorporador';
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmail, squad);
+
+  // Quebra por segmento ICP — só faz sentido (e só é suportada pela RPC) fora
+  // do Consórcio, cuja RPC dedicada não tem `segment_filter`.
+  const isConsorcio = (squad || '').toLowerCase() === 'consorcio';
+  const segStart = isConsorcio ? null : startDate;
+  const segEnd = isConsorcio ? null : endDate;
+  const metricsA = useSdrMetricsFromAgenda(segStart, segEnd, sdrEmail, squad, 'A');
+  const metricsB = useSdrMetricsFromAgenda(segStart, segEnd, sdrEmail, squad, 'B');
+
   const meetingsQuery = useSdrMeetingsFromAgenda({ 
     startDate, 
     endDate, 
@@ -100,9 +114,31 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
     taxaNoShow
   };
 
+  const mA = metricsA.data?.metrics?.[0];
+  const mB = metricsB.data?.metrics?.[0];
+  const segmentTotals: MinhasReunioesSegmentTotals | null = isConsorcio
+    ? null
+    : {
+        a: {
+          agendamentos: mA?.agendamentos || 0,
+          r1Agendada: mA?.r1_agendada || 0,
+          realizadas: mA?.r1_realizada || 0,
+          noShows: mA?.no_shows || 0,
+          contratos: mA?.contratos || 0,
+        },
+        b: {
+          agendamentos: mB?.agendamentos || 0,
+          r1Agendada: mB?.r1_agendada || 0,
+          realizadas: mB?.r1_realizada || 0,
+          noShows: mB?.no_shows || 0,
+          contratos: mB?.contratos || 0,
+        },
+      };
+
   return {
     meetings: meetingsQuery.data || [],
     summary,
+    segmentTotals,
     squad,
     isLoading: metricsQuery.isLoading || meetingsQuery.isLoading,
     error: metricsQuery.error || meetingsQuery.error,
