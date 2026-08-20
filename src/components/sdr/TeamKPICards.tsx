@@ -183,6 +183,17 @@ export function TeamKPICards({
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
     },
+    // Consórcio: Vendas Realizadas (pessoas) imediatamente após Cotas Contratadas
+    // para o contraste cartas × pessoas ficar óbvio na leitura. Mesmo totalClientes
+    // global — sem query nova, mesma fonte do Total das abas.
+    ...(isConsorcio ? [{
+      title: "Vendas Realizadas",
+      value: totalVendasRealizadas ?? 0,
+      icon: Users,
+      color: "text-lime-500",
+      bgColor: "bg-lime-500/10",
+      tooltip: "Clientes distintos que contrataram ao menos uma cota no período. Um cliente que contrata várias cotas conta uma vez. É o numerador da Conversão Vendas / R1.",
+    }] : []),
     ...(isConsorcio ? [] : [{
       title: "Outside",
       value: kpis.totalOutside || 0,
