@@ -66,6 +66,7 @@ export function TeamKPICards({
   onRefundClick,
   orphanRefundsCount = 0,
   hideAgendamentos = false,
+  totalVendasRealizadas,
   segmentTotals = null,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
