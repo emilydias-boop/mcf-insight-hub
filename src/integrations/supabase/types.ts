@@ -2154,6 +2154,27 @@ export type Database = {
           },
         ]
       }
+      bkp_cotas_fatiadas_20260820: {
+        Row: {
+          bkp_at: string
+          bkp_id: string
+          bkp_motivo: string
+          registro: Json
+        }
+        Insert: {
+          bkp_at?: string
+          bkp_id?: string
+          bkp_motivo: string
+          registro: Json
+        }
+        Update: {
+          bkp_at?: string
+          bkp_id?: string
+          bkp_motivo?: string
+          registro?: Json
+        }
+        Relationships: []
+      }
       bkp_profiles_squad_20260819: {
         Row: {
           backup_em: string | null
