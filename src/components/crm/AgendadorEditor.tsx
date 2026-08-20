@@ -16,14 +16,18 @@ interface Props {
   /** Nome atual do agendador, quando existe. */
   nomeAtual?: string | null;
   bookedById?: string | null;
+  /** Abre já em modo de edição (usado no fluxo "Informar agendador"). */
+  autoEditar?: boolean;
+  /** Chamado depois de gravar com sucesso. */
+  onSalvo?: () => void;
 }
 
 /**
  * Corrige o agendador (`booked_by`) de um participante da reunião.
  * Toda gravação passa por RPC auditada — quem corrigiu fica visível aqui mesmo.
  */
-export function AgendadorEditor({ attendeeId, nomeAtual, bookedById }: Props) {
-  const [editando, setEditando] = useState(false);
+export function AgendadorEditor({ attendeeId, nomeAtual, bookedById, autoEditar, onSalvo }: Props) {
+  const [editando, setEditando] = useState(!!autoEditar);
   const [escolhido, setEscolhido] = useState<string>(bookedById || "");
   const { data: opcoes = [], isLoading } = useAgendadoresDisponiveis(editando);
   const { data: ajuste } = useAjusteAgendador(attendeeId);
@@ -33,6 +37,7 @@ export function AgendadorEditor({ attendeeId, nomeAtual, bookedById }: Props) {
     if (!escolhido) return;
     await corrigir.mutateAsync({ attendeeId, bookedBy: escolhido });
     setEditando(false);
+    onSalvo?.();
   };
 
   if (editando) {
