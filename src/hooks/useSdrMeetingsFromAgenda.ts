@@ -84,7 +84,26 @@ export function useSdrMeetingsFromAgenda({
       }
 
       // Map to MeetingV2 format
-      return (data as AgendaMeetingRow[] || []).map((row): MeetingV2 => {
+      const rows = (data as AgendaMeetingRow[]) || [];
+
+      // Query complementar (barata, sem mexer na RPC) para trazer o segmento
+      // ICP de cada negócio e permitir conferência linha por linha.
+      const segmentMap = new Map<string, 'A' | 'B' | null>();
+      const dealIds = Array.from(new Set(rows.map((r) => r.deal_id).filter(Boolean)));
+      const CHUNK = 200;
+      for (let i = 0; i < dealIds.length; i += CHUNK) {
+        const chunk = dealIds.slice(i, i + CHUNK);
+        const { data: segRows, error: segError } = await (supabase.from('crm_deals') as any)
+          .select('id, icp_segment')
+          .in('id', chunk);
+        if (segError) throw segError;
+        (segRows || []).forEach((row: any) => {
+          const v = (row.icp_segment ?? '').toString().trim().toUpperCase();
+          segmentMap.set(row.id, v === 'A' || v === 'B' ? (v as 'A' | 'B') : null);
+        });
+      }
+
+      return rows.map((row): MeetingV2 => {
         // Map tipo to valid union type
         let tipoValue: "1º Agendamento" | "Reagendamento Válido" | "Reagendamento Inválido" = "1º Agendamento";
         if (row.tipo === "Reagendamento") {
@@ -118,6 +137,7 @@ export function useSdrMeetingsFromAgenda({
           total_no_shows_deal: row.total_no_shows_deal ?? null,
           conta_no_show: row.conta_no_show ?? null,
           contract_paid_at: row.contract_paid_at ?? null,
+          icp_segment: segmentMap.get(row.deal_id) ?? null,
         };
       });
     },
