@@ -163,12 +163,18 @@ function CriarDisparoDialog({
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
   const {
     data: pendentesData,
-    isLoading: carregandoPendentes,
+    isFetching: buscandoPendentes,
     isError: erroPendentes,
   } = useWaTargetsCount(broadcast?.id, 'pendente');
   /** null = contagem indisponível. Nunca cai para 0, que liberaria o envio. */
   const pendentes = typeof pendentesData === 'number' ? pendentesData : null;
-  const contagemIndisponivel = pendentes === null || carregandoPendentes || erroPendentes;
+  /**
+   * `isFetching` (e não `isLoading`): num refetch com dado em cache o React
+   * Query mantém isLoading falso e devolveria a contagem do público ANTERIOR —
+   * era assim que a confirmação por digitação se desarmava.
+   */
+  const contagemIndisponivel = pendentes === null || buscandoPendentes || erroPendentes;
+
 
   /**
    * Qualquer mudança de filtro ou limite invalida o público já montado: o
