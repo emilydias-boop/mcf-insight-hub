@@ -667,7 +667,9 @@ function PropostasTab({
             proposalId={editTarget.id}
             contactName={editTarget.contact_name || ''}
             dealName={editTarget.deal_name || ''}
+            initialCartas={(editTarget as any).cartas || []}
             initialValorCredito={Number(editTarget.valor_credito) || 0}
+
             initialPrazoMeses={Number(editTarget.prazo_meses) || 0}
             initialTipoProduto={editTarget.tipo_produto || ''}
             initialDetails={editTarget.proposal_details || ''}

@@ -435,6 +435,8 @@ export interface CreatePendingRegistrationInput {
   socios?: Array<{ nome?: string; cpf: string; renda: number }>;
   // Documents
   documents?: Array<{ file: File; tipo: TipoDocumento }>;
+  /** Carta da proposta que originou este cadastro (1 carta -> 1 cadastro). */
+  carta_id?: string;
 }
 
 export function useCreatePendingRegistration() {
@@ -448,24 +450,42 @@ export function useCreatePendingRegistration() {
         throw new Error('Usuário não autenticado. Faça login novamente.');
       }
 
-      const { documents, ...registrationData } = input;
+      const { documents, carta_id, ...registrationData } = input;
 
-      // 0. Rede de segurança: nunca criar um SEGUNDO cadastro para a mesma proposta.
-      //    Duplicidade infla a etapa 4, quebra o "Destinada 1/N" e re-dispara
-      //    e-mail/WhatsApp + webhook do Make para o cliente.
-      const { data: existentes, error: existErr } = await supabase
-        .from('consorcio_pending_registrations')
-        .select('id, status')
-        .eq('proposal_id', input.proposal_id);
+      // 0. Rede de segurança: uma proposta pode gerar N cadastros — um por carta.
+      //    O que nunca pode acontecer é DOIS cadastros para a MESMA carta, nem mais
+      //    cadastros do que cartas: duplicidade infla a etapa 4, quebra o
+      //    "Destinada 1/N" e re-dispara e-mail/WhatsApp + webhook do Make.
+      const [{ data: existentes, error: existErr }, { data: cartasProposta, error: cartasErr }] = await Promise.all([
+        supabase
+          .from('consorcio_pending_registrations')
+          .select('id, status')
+          .eq('proposal_id', input.proposal_id),
+        supabase
+          .from('consorcio_proposal_cartas')
+          .select('id, pending_registration_id')
+          .eq('proposal_id', input.proposal_id),
+      ]);
       if (existErr) throw existErr;
+      if (cartasErr) throw cartasErr;
       // 'excluida' é status legado e hoje inalcançável (o CHECK da coluna não o
       // aceita mais); a leitura fica só para linhas históricas.
-      const jaExiste = (existentes || []).some((r: any) => r.status !== 'excluida');
-      if (jaExiste) {
+      const ativos = (existentes || []).filter((r: any) => r.status !== 'excluida');
+      const limiteCadastros = Math.max(1, (cartasProposta || []).length);
+      if (ativos.length >= limiteCadastros) {
         throw new Error(
-          'Esta carta já possui cadastro em Cadastros Pendentes. Abra o cadastro existente em vez de criar outro.',
+          limiteCadastros > 1
+            ? `Esta proposta já possui ${ativos.length} de ${limiteCadastros} cadastros (um por carta). Abra o cadastro existente em vez de criar outro.`
+            : 'Esta carta já possui cadastro em Cadastros Pendentes. Abra o cadastro existente em vez de criar outro.',
         );
       }
+      if (input.carta_id) {
+        const carta = (cartasProposta || []).find((c: any) => c.id === input.carta_id);
+        if (carta?.pending_registration_id) {
+          throw new Error('Esta carta já possui cadastro em Cadastros Pendentes.');
+        }
+      }
+
 
       // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
       const { error: proposalError } = await supabase
@@ -507,6 +527,15 @@ export function useCreatePendingRegistration() {
       if (regError) {
         console.error('Erro ao criar registro pendente:', regError);
         throw new Error('Proposta aceita, mas erro ao criar cadastro pendente: ' + regError.message);
+      }
+
+      // 3a. Vincula a carta da proposta ao cadastro criado (rastreio 1:1).
+      if (carta_id) {
+        const { error: linkErr } = await supabase
+          .from('consorcio_proposal_cartas')
+          .update({ pending_registration_id: registration.id } as any)
+          .eq('id', carta_id);
+        if (linkErr) console.error('[cartas] Falha ao vincular carta ao cadastro:', linkErr);
       }
 
       // 3. Upload documents linked to pending_registration_id

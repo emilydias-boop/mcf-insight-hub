@@ -126,7 +126,13 @@ export function AcceptProposalModal({
         .select('valor_credito, prazo_meses, proposal_details, tipo_produto, origem_lead, crm_deals (crm_contacts (phone, email))')
         .eq('id', proposalId)
         .maybeSingle();
-      return data;
+      // Cartas da proposta: cada carta ainda sem cadastro gera 1 cadastro pendente.
+      const { data: cartas } = await supabase
+        .from('consorcio_proposal_cartas')
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, pending_registration_id')
+        .eq('proposal_id', proposalId)
+        .order('ordem', { ascending: true });
+      return { ...(data as any), cartas: cartas || [] };
     },
   });
 
@@ -273,33 +279,47 @@ export function AcceptProposalModal({
       Object.entries(data).filter(([k]) => !fieldsToExclude.includes(k))
     );
 
-    await createRegistration.mutateAsync({
-      proposal_id: proposalId,
-      deal_id: dealId,
-      tipo_pessoa: tipoPessoa,
-      vendedor_name: vendedorName,
-      documents,
-      empresa_paga_parcelas: empresaPaga,
-      tipo_contrato: tipoContrato,
-      parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
-      valor_credito: parseBRLInput(valorCreditoStr) || (proposal?.valor_credito ? Number(proposal.valor_credito) : undefined),
-      prazo_meses: prazo ? Number(prazo) : (proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined),
-      credito_id: plano.valores.credito_id,
-      produto_codigo: produtoDoPlano?.codigo || undefined,
-      condicao_pagamento: plano.valores.condicao_pagamento,
-      parcela_1a_12a: plano.valores.parcela_1a_12a,
-      parcela_demais: plano.valores.parcela_demais,
-      dia_vencimento: plano.valores.dia_vencimento,
-      inicio_segunda_parcela: plano.valores.inicio_segunda_parcela,
-      objetivo: plano.valores.objetivo,
-      inclui_seguro: incluiSeguro,
-      // Vêm da proposta: `tipo_produto` decide o produto e a comissão de TODAS as
-      // parcelas no "Abrir cota"; `origem` é o crédito da origem do lead.
-      tipo_produto: (proposal as any)?.tipo_produto || undefined,
-      origem: (proposal as any)?.origem_lead || undefined,
-      observacoes: proposal?.proposal_details?.trim() || undefined,
-      ...cleanData,
-    });
+    // Uma carta -> um cadastro pendente. Sem cartas (proposta legada), 1 cadastro.
+    const cartasPendentes = ((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id);
+    const alvos: Array<any> = cartasPendentes.length > 0 ? cartasPendentes : [null];
+
+    for (let i = 0; i < alvos.length; i++) {
+      const carta = alvos[i];
+      await createRegistration.mutateAsync({
+        carta_id: carta?.id,
+        proposal_id: proposalId,
+        deal_id: dealId,
+        tipo_pessoa: tipoPessoa,
+        vendedor_name: vendedorName,
+        // Documentos são do cliente: sobem uma única vez, no primeiro cadastro.
+        documents: i === 0 ? documents : [],
+        empresa_paga_parcelas: empresaPaga,
+        tipo_contrato: tipoContrato,
+        parcelas_pagas_empresa: empresaPaga === 'sim' ? Number(qtdParcelasEmpresa || 0) : 0,
+        // Valor/prazo/produto vêm da CARTA quando existe; senão do bloco do plano.
+        valor_credito: carta
+          ? Number(carta.valor_credito)
+          : (parseBRLInput(valorCreditoStr) || (proposal?.valor_credito ? Number(proposal.valor_credito) : undefined)),
+        prazo_meses: carta
+          ? Number(carta.prazo_meses)
+          : (prazo ? Number(prazo) : (proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined)),
+        credito_id: plano.valores.credito_id,
+        produto_codigo: produtoDoPlano?.codigo || undefined,
+        condicao_pagamento: plano.valores.condicao_pagamento,
+        parcela_1a_12a: plano.valores.parcela_1a_12a,
+        parcela_demais: plano.valores.parcela_demais,
+        dia_vencimento: plano.valores.dia_vencimento,
+        inicio_segunda_parcela: plano.valores.inicio_segunda_parcela,
+        objetivo: plano.valores.objetivo,
+        inclui_seguro: incluiSeguro,
+        // `tipo_produto` decide o produto e a comissão de TODAS as parcelas no
+        // "Abrir cota"; `origem` é o crédito da origem do lead.
+        tipo_produto: carta?.tipo_produto || (proposal as any)?.tipo_produto || undefined,
+        origem: (proposal as any)?.origem_lead || undefined,
+        observacoes: proposal?.proposal_details?.trim() || undefined,
+        ...cleanData,
+      });
+    }
 
     onOpenChange(false);
   };
