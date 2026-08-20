@@ -15622,6 +15622,7 @@ export type Database = {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
       }
+      nome_usuario: { Args: { p_id: string }; Returns: string }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
       oi_classify_origem: {
