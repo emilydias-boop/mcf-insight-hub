@@ -534,12 +534,45 @@ export function useIniciarBroadcast() {
 
 export function useControlarBroadcast() {
   const update = useUpdateWaBroadcast();
+  const [retomando, setRetomando] = useState(false);
+
+  /**
+   * Retomar revalida antes: se o sistema pausou por taxa de falha ou por
+   * limite da conta, voltar para `enviando` sem checar nada é reabrir o
+   * problema. Também chama o dispatch uma vez, para não esperar o cron.
+   */
+  const retomar = async (id: string) => {
+    setRetomando(true);
+    try {
+      const bloqueantes = await validarBloqueantes(id);
+      if (bloqueantes.length > 0) {
+        toast.error(
+          `Não é possível retomar: ${bloqueantes.map((p) => p.detalhe).join(' · ')}`,
+        );
+        return;
+      }
+      await update.mutateAsync({ id, patch: { status: 'enviando' } });
+      const { error } = await supabase.functions.invoke('wa-broadcast-dispatch', {
+        body: { broadcast_id: id },
+      });
+      if (error) {
+        toast.warning('Disparo retomado. O próximo lote sai no próximo ciclo automático.');
+      } else {
+        toast.success('Disparo retomado');
+      }
+    } catch (err) {
+      toast.error(errMsg(err, 'Erro ao retomar disparo'));
+    } finally {
+      setRetomando(false);
+    }
+  };
+
   return {
     pausar: (id: string) => update.mutateAsync({ id, patch: { status: 'pausado' } }),
-    retomar: (id: string) => update.mutateAsync({ id, patch: { status: 'enviando' } }),
+    retomar,
     cancelar: (id: string, motivo: string) =>
       update.mutateAsync({ id, patch: { status: 'cancelado', motivo_cancelamento: motivo } }),
-    isPending: update.isPending,
+    isPending: update.isPending || retomando,
   };
 }
 
