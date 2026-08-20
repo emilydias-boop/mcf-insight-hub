@@ -16109,6 +16109,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      wa_abrir_conversa: { Args: { _deal_id: string }; Returns: string }
       wa_broadcast_bus_disponiveis: {
         Args: never
         Returns: {
@@ -16184,12 +16185,26 @@ export type Database = {
         }[]
       }
       wa_dono_ativo: { Args: { _profile_id: string }; Returns: boolean }
+      wa_e164_br: { Args: { _raw: string }; Returns: string }
       wa_enviados_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
         Returns: string
       }
       wa_is_opted_out: { Args: { _phone: string }; Returns: boolean }
+      wa_leads_sem_conversa: {
+        Args: { _busca?: string; _limite?: number }
+        Returns: {
+          atividades: number
+          contato: string
+          criado_em: string
+          deal_id: string
+          estagio: string
+          phone_e164: string
+          produto: string
+          telefone: string
+        }[]
+      }
       wa_match_lead_by_phone: {
         Args: { p_phone: string }
         Returns: {
