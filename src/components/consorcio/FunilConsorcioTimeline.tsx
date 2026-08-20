@@ -127,9 +127,23 @@ export function FunilConsorcioTimeline({
       ),
     [proposals, period.startDate, period.endDate],
   );
-  const negociadas = propostasPeriodo.length;
-  /** Estoque atual: criadas no período e que HOJE seguem sem aceite. */
+  const propostasCount = propostasPeriodo.length;
+  /**
+   * Contagem de CARTAS do período — unidade real desta etapa e denominador
+   * correto da conversão para "Cadastros Pendentes" (1 carta → 1 cadastro).
+   * Fallback: `qtd_cartas` da proposta e, na falta dele, 1 (propostas legadas).
+   */
+  const negociadas = useMemo(
+    () =>
+      propostasPeriodo.reduce(
+        (acc: number, p: any) => acc + (p.cartas?.length || p.qtd_cartas || 1),
+        0,
+      ),
+    [propostasPeriodo],
+  );
+  /** Estoque atual: propostas criadas no período e que HOJE seguem sem aceite. */
   const naoAceitas = propostasPeriodo.filter((p: any) => p.status !== 'aceita').length;
+
 
   // Etapa 4 — TODOS os cadastros criados no período (evento, não status).
   // Eixo aceite_date ?? created_at.
