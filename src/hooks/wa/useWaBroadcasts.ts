@@ -495,15 +495,14 @@ export function useIgnorarNomeInvalido() {
 }
 
 /** Roda a validação server-side e devolve só os problemas bloqueantes. */
-const BLOQUEANTES = new Set(['variavel_sem_valor', 'template_nao_aprovado']);
-
 async function validarBloqueantes(broadcastId: string): Promise<WaValidacaoItem[]> {
   const { data, error } = await supabase.rpc('wa_broadcast_validar', {
     _broadcast_id: broadcastId,
   });
   if (error) throw error;
-  return ((data ?? []) as WaValidacaoItem[]).filter((p) => BLOQUEANTES.has(p.problema));
+  return ((data ?? []) as WaValidacaoItem[]).filter((p) => PROBLEMAS_BLOQUEANTES.has(p.problema));
 }
+
 
 /** Marca como enviando e dispara o primeiro lote. O cron segue sozinho depois. */
 export function useIniciarBroadcast() {
