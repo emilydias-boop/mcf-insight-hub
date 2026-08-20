@@ -81,11 +81,13 @@ export function useWaTemplates() {
     queryKey: ['wa-templates', 'broadcast'],
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<WaTemplateOption[]> => {
+      // a view wa_templates já filtra com COALESCE(is_active, true) — um .eq()
+      // aqui excluiria template aprovado com is_active nulo
       const { data, error } = await supabase
         .from('wa_templates')
         .select('content_sid, name, body_preview, variables, category')
-        .eq('is_active', true)
         .order('name');
+
       if (error) throw error;
       return (data ?? [])
         .filter((t) => !!t.content_sid && !!t.name)
@@ -429,6 +431,13 @@ export function useMontarPublico() {
         ignorados: number;
       };
     },
+    onMutate: (broadcastId: string) => {
+      // a contagem em cache é do público ANTERIOR. Enquanto a nova não chega,
+      // ela tem que ficar indisponível — não obsoleta — ou a confirmação por
+      // digitação é calculada sobre o número errado.
+      qc.removeQueries({ queryKey: ['wa-broadcast-targets-count', broadcastId] });
+      qc.removeQueries({ queryKey: ['wa-broadcast-targets-total', broadcastId] });
+    },
     onSuccess: (_d, broadcastId) => {
       qc.invalidateQueries({ queryKey: ['wa-broadcast', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-broadcast-targets', broadcastId] });
@@ -440,6 +449,7 @@ export function useMontarPublico() {
       qc.invalidateQueries({ queryKey: ['wa-broadcast-validacao', broadcastId] });
       qc.invalidateQueries({ queryKey: ['wa-sample-name', broadcastId] });
     },
+
     onError: (err) => toast.error(errMsg(err, 'Erro ao montar público')),
   });
 }
