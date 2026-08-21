@@ -363,6 +363,16 @@ export function CartasProposalEditor({
             informe crédito, prazo e produto em cada linha.
           </p>
         )}
+
+        {semParcela > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {semParcela === 1
+              ? '1 carta sem valor de parcela'
+              : `${semParcela} cartas sem valor de parcela`} — a venda pode ser lançada, mas o
+            cadastro fica marcado como cadastro incompleto e o Termo de Adesão só sai depois de preencher.
+          </p>
+        )}
+
       </div>
     </TooltipProvider>
   );
