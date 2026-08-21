@@ -102,6 +102,8 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   parcelas_pagas_empresa,
   tipo_produto,
   parcela_1a_12a,
+  categoria,
+  origem,
 
   vendedor_name_cota,
   vendedor_id,
