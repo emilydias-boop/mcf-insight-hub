@@ -16333,6 +16333,7 @@ export type Database = {
       }
       wa_dono_ativo: { Args: { _profile_id: string }; Returns: boolean }
       wa_e164_br: { Args: { _raw: string }; Returns: string }
+      wa_enviados_1a1_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_enviados_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
