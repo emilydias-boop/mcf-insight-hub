@@ -224,14 +224,18 @@ export function ConversationThread({
   return (
     <Card className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <div className="p-3 border-b flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-semibold truncate">
-            {conversation.contact_name?.trim() || formatPhone(conversation.phone_e164)}
-          </div>
-          <div className="text-xs text-muted-foreground truncate">
-            {formatPhone(conversation.phone_e164)}
+        <div className="flex min-w-0 items-center gap-2">
+          {acaoVoltar}
+          <div className="min-w-0">
+            <div className="font-semibold truncate">
+              {conversation.contact_name?.trim() || formatPhone(conversation.phone_e164)}
+            </div>
+            <div className="text-xs text-muted-foreground truncate">
+              {formatPhone(conversation.phone_e164)}
+            </div>
           </div>
         </div>
+
         <div className="flex items-center gap-2 shrink-0">
           <Badge
             variant="outline"
