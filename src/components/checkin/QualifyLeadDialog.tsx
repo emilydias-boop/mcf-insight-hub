@@ -72,14 +72,14 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* layout em três faixas: cabeçalho fixo, corpo rolável, rodapé fixo */}
-      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col overflow-hidden gap-0 p-0">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] grid grid-rows-[auto_minmax(0,1fr)_auto] gap-0 p-0 overflow-hidden">
         {/* cabeçalho fixo — sempre visível */}
         <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
           <DialogTitle>Qualificar lead</DialogTitle>
         </DialogHeader>
 
         {/* corpo rolável — só o meio rola; encolhe em telas baixas */}
-        <ScrollArea className="flex-1 min-h-0 px-6">
+        <ScrollArea className="h-full min-h-0 px-6">
           <div className="space-y-4 pb-4">
             <QualificationQuestionnaire
               answers={answers}
