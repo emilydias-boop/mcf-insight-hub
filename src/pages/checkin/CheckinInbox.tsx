@@ -200,7 +200,15 @@ export default function CheckinInbox() {
 }
 
 
-function ConversationPane({ conversation }: { conversation: WaConversation }) {
+function ConversationPane({
+  conversation,
+  onVoltar,
+}: {
+  conversation: WaConversation;
+  onVoltar: () => void;
+}) {
+  const [painelContatoAberto, setPainelContatoAberto] = useState(false);
+
   const { data: messages = [], sendMessage, sendMedia, markRead } = useWaMessages(conversation.id);
   const updateConversation = useUpdateWaConversation();
   const [forceTemplateMode, setForceTemplateMode] = useState(false);
