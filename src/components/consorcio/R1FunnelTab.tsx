@@ -80,6 +80,8 @@ const R1_EXTRATORES: Record<R1SortField, (p: R1FunnelParticipant) => unknown> = 
 export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilter }: R1FunnelTabProps) {
   const { data, isLoading } = useConsorcioR1Funnel(range);
   const { data: proposals = [] } = useProposals();
+  const { data: semSucesso = [] } = useSemSucesso();
+
   const { role } = useAuth();
   const updateStatus = useUpdateAttendeeAndSlotStatus();
   const [closerFilter, setCloserFilter] = useState('all');
