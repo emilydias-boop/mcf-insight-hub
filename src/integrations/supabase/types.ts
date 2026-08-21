@@ -2154,6 +2154,30 @@ export type Database = {
           },
         ]
       }
+      bkp_cotas_duplicadas_20260821: {
+        Row: {
+          created_at: string
+          dados: Json
+          id: string
+          registro_id: string | null
+          tabela: string
+        }
+        Insert: {
+          created_at?: string
+          dados: Json
+          id?: string
+          registro_id?: string | null
+          tabela: string
+        }
+        Update: {
+          created_at?: string
+          dados?: Json
+          id?: string
+          registro_id?: string | null
+          tabela?: string
+        }
+        Relationships: []
+      }
       bkp_cotas_fatiadas_20260820: {
         Row: {
           bkp_at: string

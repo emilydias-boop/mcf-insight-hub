@@ -4,7 +4,7 @@ import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FileText, ExternalLink, Trash2, Upload } from 'lucide-react';
+import { Loader2, FileText, ExternalLink, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { formatarCep } from '@/lib/cepUtils';
 
 function formatCep(value: string): string {
@@ -124,6 +124,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    */
   const [modo, setModo] = useState<'reserva' | 'contratacao'>('reserva');
 
+
+
   // Documents attached to the pending registration
   const { data: documents = [] } = usePendingRegistrationDocuments(registrationId);
   const uploadPendingDocs = useBatchUploadPendingDocuments();
@@ -192,6 +194,30 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       e_transferencia: false,
       transferido_de: '',
       observacoes: '',
+    },
+  });
+
+  /**
+   * Aviso (nunca bloqueio): outra cota ativa já usa o mesmo par grupo/cota.
+   * Mesmo padrão do modal "Cota Cadastrada" — foi a ausência desta checagem que
+   * permitiu as duplicatas do grupo 7274.
+   */
+  const grupoDigitado = String(form.watch('grupo') || '').trim();
+  const cotaDigitada = String(form.watch('cota') || '').trim();
+  const { data: cotasDuplicadas = [] } = useQuery({
+    queryKey: ['open-cota-duplicada', grupoDigitado, cotaDigitada, registration?.consortium_card_id],
+    enabled: !!grupoDigitado && !!cotaDigitada,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select('id, nome_completo, razao_social, tipo_registro, data_contratacao')
+        .eq('grupo', grupoDigitado)
+        .eq('cota', cotaDigitada)
+        .eq('status', 'ativo')
+        .limit(5);
+      if (error) throw error;
+      const atual = (registration as any)?.consortium_card_id;
+      return (data || []).filter((c) => c.id !== atual);
     },
   });
 
@@ -857,6 +883,30 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         </FormItem>
                       )} />
                     </div>
+
+                    {/* Aviso de grupo+cota já usado: informa, nunca bloqueia. */}
+                    {cotasDuplicadas.length > 0 && (
+                      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+                        <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+                          <AlertCircle className="h-3.5 w-3.5" /> Já existe cota ativa com grupo {grupoDigitado} / cota {cotaDigitada}
+                        </div>
+                        <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                          {cotasDuplicadas.map((d: any) => (
+                            <li key={d.id}>
+                              {d.nome_completo || d.razao_social || 'sem nome'}
+                              {' — '}
+                              {d.tipo_registro === 'contratacao' ? 'contratada' : 'reserva'}
+                              {d.data_contratacao ? ` (contratação ${d.data_contratacao})` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-1 text-muted-foreground">
+                          Pode ser erro de digitação ou cota duplicada — confira antes de salvar. Não bloqueia.
+                        </p>
+                      </div>
+                    )}
+
+
 
                     {/* Valor + Prazo + Tipo */}
                     <div className="grid grid-cols-3 gap-3">
