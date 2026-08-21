@@ -58,6 +58,8 @@ import { BulkMovePipelineDialog } from '@/components/crm/BulkMovePipelineDialog'
 import { BulkAddTagDialog } from '@/components/crm/BulkAddTagDialog';
 import { BulkDistributeSdrsDialog } from '@/components/crm/BulkDistributeSdrsDialog';
 import { BulkSetTemperatureDialog } from '@/components/crm/BulkSetTemperatureDialog';
+import { BulkBroadcastDialog } from '@/components/crm/BulkBroadcastDialog';
+import { useMcfAtendimentoAccess } from '@/hooks/useMcfAtendimentoAccess';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
 import { Download } from 'lucide-react';
 
@@ -92,6 +94,9 @@ const Negocios = () => {
   
   // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false);
+  // o botão de disparo só aparece para quem tem acesso ao MCF - Atendimento
+  const { hasAccess: temAcessoAtendimento } = useMcfAtendimentoAccess();
   const sendToDialer = useSendDealsToDialer();
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false);
@@ -1184,6 +1189,9 @@ const Negocios = () => {
           })
         }
         isSendingToDialer={sendToDialer.isPending}
+        onSendToBroadcast={
+          temAcessoAtendimento ? () => setBroadcastDialogOpen(true) : undefined
+        }
         onExportSelected={() => {
           setExportSelectedOnly(true);
           setExportDialogOpen(true);
@@ -1265,6 +1273,15 @@ const Negocios = () => {
       <BulkDistributeSdrsDialog
         open={distributeSdrsDialogOpen}
         onOpenChange={setDistributeSdrsDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        originId={effectiveOriginId}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Dialog de criar disparo por template a partir da seleção */}
+      <BulkBroadcastDialog
+        open={broadcastDialogOpen}
+        onOpenChange={setBroadcastDialogOpen}
         selectedDealIds={Array.from(selectedDealIds)}
         originId={effectiveOriginId}
         onSuccess={handleClearSelection}

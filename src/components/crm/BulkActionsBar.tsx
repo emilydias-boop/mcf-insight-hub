@@ -15,6 +15,7 @@ import {
   Thermometer,
   Building2,
   PhoneCall,
+  Megaphone,
 } from 'lucide-react';
 
 interface BulkActionsBarProps {
@@ -40,6 +41,8 @@ interface BulkActionsBarProps {
   onTransferToBU?: () => void;
   onSendToDialer?: () => void;
   isSendingToDialer?: boolean;
+  onSendToBroadcast?: () => void;
+  isSendingToBroadcast?: boolean;
 }
 
 export const BulkActionsBar = ({
@@ -65,6 +68,8 @@ export const BulkActionsBar = ({
   onTransferToBU,
   onSendToDialer,
   isSendingToDialer = false,
+  onSendToBroadcast,
+  isSendingToBroadcast = false,
 }: BulkActionsBarProps) => {
   if (selectedCount === 0) return null;
 
@@ -175,6 +180,23 @@ export const BulkActionsBar = ({
               <PhoneCall className="h-4 w-4" />
             )}
             Enviar para discador ({selectedCount})
+          </Button>
+        )}
+
+        {onSendToBroadcast && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSendToBroadcast}
+            disabled={isSendingToBroadcast || isTransferring || isDuplicating || isMovingStage}
+            className="gap-2"
+          >
+            {isSendingToBroadcast ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Megaphone className="h-4 w-4" />
+            )}
+            Disparar por template
           </Button>
         )}
 

@@ -837,3 +837,26 @@ export function useExcluirRascunho() {
     onError: (err) => toast.error(errMsg(err, 'Erro ao excluir rascunho')),
   });
 }
+
+/**
+ * Cria um disparo em rascunho a partir de uma seleção de negócios do CRM.
+ * Toda a validação de permissão (carteira do SDR, BU única para admin) é do
+ * banco — a mensagem de erro é exibida exatamente como vem.
+ */
+export function useCriarDisparoDeSelecao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nome, dealIds }: { nome: string; dealIds: string[] }): Promise<string> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_criar_de_selecao', {
+        _nome: nome,
+        _deal_ids: dealIds,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wa-broadcasts'] });
+    },
+    onError: (err) => toast.error(errMsg(err, 'Não foi possível criar o disparo')),
+  });
+}
