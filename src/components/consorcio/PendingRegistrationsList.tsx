@@ -792,15 +792,23 @@ function RegistrationRow({
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
           {variant === 'pendentes' && semCota && (
-            <Button size="sm" onClick={onCotaCadastrada}>
-              <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
-            </Button>
+            <>
+              <Button size="sm" onClick={onCotaCadastrada}>
+                <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
+              </Button>
+              {/* A outra ação que define a etapa 4 também fica na linha, em estilo
+                  discreto de ação destrutiva (o motivo continua obrigatório). */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDecline}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Ban className="h-3 w-3 mr-1" /> Declinada
+              </Button>
+            </>
           )}
-          {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
-            <Button size="sm" variant="outline" onClick={onOpen}>
-              <FileEdit className="h-3 w-3 mr-1" /> Abrir
-            </Button>
-          )}
+
           {variant === 'declinadas' && (
             <Button
               size="sm"
