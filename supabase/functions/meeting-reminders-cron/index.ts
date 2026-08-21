@@ -417,6 +417,16 @@ serve(async (req) => {
               });
               summary.skipped++;
             } else {
+              // Texto equivalente ao template enviado, com as variáveis já substituídas —
+              // é isso que o SDR precisa ver na thread para entender o que a lead recebeu.
+              const nomeLead = attendee.attendee_name || contact.name || deal.name || 'Lead';
+              const corpoEspelho =
+                `Olá, ${nomeLead}! Lembrete da sua reunião ${meetingType} em ${meetingDate} às ${meetingTime}` +
+                `${closerName ? ` com ${closerName}` : ''}.` +
+                `${meetingLink ? `\nLink: ${meetingLink}` : ''}`;
+              const remetenteEspelho = `Lembrete ${meetingType} · ${offsetKey}`;
+              const telefoneEspelho = attendee.attendee_phone || contact.phone;
+
               try {
                 const waRes = await supabase.functions.invoke('twilio-whatsapp-send', {
                   body: {
@@ -447,12 +457,31 @@ serve(async (req) => {
                     error_message: detailed,
                   });
                   summary.failed++;
+                  // Falha também é espelhada: hoje o SDR não vê lembrete que não saiu.
+                  await espelharNaThreadWa(supabase, {
+                    telefoneBruto: telefoneEspelho,
+                    dealId: attendee.deal_id || deal.id,
+                    nomeContato: nomeLead,
+                    corpo: corpoEspelho,
+                    remetenteNome: remetenteEspelho,
+                    sucesso: false,
+                    erro: detailed,
+                  });
                 } else {
                   await supabase.from('meeting_reminders_log').insert({
                     ...waBase,
                     status: 'sent',
                   });
                   summary.sent++;
+                  await espelharNaThreadWa(supabase, {
+                    telefoneBruto: telefoneEspelho,
+                    dealId: attendee.deal_id || deal.id,
+                    nomeContato: nomeLead,
+                    corpo: corpoEspelho,
+                    remetenteNome: remetenteEspelho,
+                    sucesso: true,
+                    sid: waRes.data?.messageSid || null,
+                  });
                 }
               } catch (e: any) {
                 await supabase.from('meeting_reminders_log').insert({
@@ -461,8 +490,18 @@ serve(async (req) => {
                   error_message: e.message,
                 });
                 summary.failed++;
+                await espelharNaThreadWa(supabase, {
+                  telefoneBruto: telefoneEspelho,
+                  dealId: attendee.deal_id || deal.id,
+                  nomeContato: nomeLead,
+                  corpo: corpoEspelho,
+                  remetenteNome: remetenteEspelho,
+                  sucesso: false,
+                  erro: e.message,
+                });
               }
             }
+
           }
         }
       }
