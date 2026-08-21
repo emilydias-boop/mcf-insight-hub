@@ -75,7 +75,7 @@ serve(async (req) => {
       .select(`
         id, scheduled_at, status, closer_id, meeting_type, updated_at,
         meeting_slot_attendees!inner(
-          id, status, deal_id,
+          id, status, deal_id, attendee_name, attendee_phone,
           crm_deals!inner(
             id, name, owner_id, contact_id, origin_id,
             crm_contacts(id, name, email, phone)
