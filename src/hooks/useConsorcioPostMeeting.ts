@@ -1298,11 +1298,8 @@ export function useEditarProposta() {
             .eq('id', (r as any).id);
         }
       }
-    },
-    onSuccess: () => {
-      toast.success('Proposta atualizada com sucesso');
-      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
-      }
+
+
 
       // --- Log da edição da venda (etapa 3). Antes desta tabela só havia log de
       // exclusão, então uma alteração de valor/prazo/produto era invisível.
