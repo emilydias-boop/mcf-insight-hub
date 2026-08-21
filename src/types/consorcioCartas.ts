@@ -37,6 +37,7 @@ export interface PropostaCartaInput {
   parcela_demais?: number | null;
   condicao_pagamento?: string | null;
   objetivo?: string | null;
+  categoria?: string | null;
 }
 
 /** Linha em edição no formulário (valor em string por causa da máscara BRL). */
@@ -54,6 +55,8 @@ export interface PropostaCartaDraft {
   parcelaDemaisStr: string;
   condicaoPagamento: string;
   objetivo: string;
+  /** Categoria da cota (opcional no lançamento; sem ela o cadastro fica incompleto). */
+  categoria: string;
   /** Carta já vinculada a cadastro/cota: não pode ser removida. */
   travada?: boolean;
 }
