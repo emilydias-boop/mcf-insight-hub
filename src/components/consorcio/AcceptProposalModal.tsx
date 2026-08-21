@@ -271,9 +271,12 @@ export function AcceptProposalModal({
         ...cleanData,
       } as any);
     }
+    // Replica a linha do documento para todos os cadastros da venda.
+    await replicarDocumentosDaVenda(proposalId);
 
     onOpenChange(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
