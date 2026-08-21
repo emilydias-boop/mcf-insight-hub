@@ -350,6 +350,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           tipo_contrato: r.tipo_contrato,
           parcelas_pagas_empresa: r.parcelas_pagas_empresa,
           tipo_produto: r.tipo_produto || null,
+          categoria: r.categoria ?? null,
+          origem: r.origem ?? null,
           origem_label: formatOrigemLabel(
             originName,
             r.aceite_date || r.created_at?.slice(0, 10),
