@@ -751,10 +751,16 @@ export function useEnviarProposta() {
           tipo_produto: c.tipo_produto,
           // Intenção de parcelas MCF: só registro, não vira cronograma nem comissão.
           parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
+          // Dados do plano são propriedade da CARTA (opcionais no lançamento).
+          parcela_1a_12a: c.parcela_1a_12a ?? null,
+          parcela_demais: c.parcela_demais ?? null,
+          condicao_pagamento: c.condicao_pagamento ?? null,
+          objetivo: c.objetivo ?? null,
           created_by: user?.id ?? null,
         })) as any)
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf');
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo');
       if (cartasError) throw cartasError;
+
 
       // 2. Move deal to PROPOSTA ENVIADA (only VdA has this stage)
       const isVdA = params.origin_id === '4e2b810a-6782-4ce9-9c0d-10d04c018636';
