@@ -49,6 +49,15 @@ import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistra
 import { CotasTab } from '@/components/consorcio/CotasTab';
 import { CotasReservadasTab } from '@/components/consorcio/CotasReservadasTab';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados, diasDesde } from '@/components/consorcio/SeloDiasParados';
+import { TaxaAssinaturaHeader } from '@/components/consorcio/TaxaAssinaturaHeader';
+import { GerarTermoModal } from '@/components/consorcio/GerarTermoModal';
+import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
+import { FileSignature } from 'lucide-react';
+import {
+  useTermosByProposal, useRegistrationIdsByProposal, type ConsorcioTermo,
+} from '@/hooks/useConsorcioTermos';
 
 const POS_TABS = [
   'r1-agendadas', 'r1-realizadas', 'propostas', 'pendentes', 'cadastradas', 'cotas',
@@ -305,7 +314,7 @@ function PropostasTab({
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-        const renderTabela = (rows: Proposal[]) => (
+  const renderTabela = (rows: Proposal[]) => (
           <Table>
             <TableHeader>
               <TableRow>
