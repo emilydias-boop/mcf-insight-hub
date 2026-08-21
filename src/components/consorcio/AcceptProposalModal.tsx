@@ -185,6 +185,18 @@ export function AcceptProposalModal({
       plano.setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
     }
     if (!prazo && proposal.prazo_meses) plano.setPrazo(String(proposal.prazo_meses));
+    // Carta única: o plano digitado no lançamento já vem preenchido aqui.
+    const cartasProp = ((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id);
+    if (cartasProp.length === 1) {
+      const c0 = cartasProp[0];
+      plano.hidratar({
+        condicao: c0.condicao_pagamento ?? null,
+        parcela1a12: c0.parcela_1a_12a != null ? Number(c0.parcela_1a_12a) : null,
+        parcelaDemais: c0.parcela_demais != null ? Number(c0.parcela_demais) : null,
+        objetivo: c0.objetivo ?? null,
+      });
+    }
+
     // Aproveita telefone/e-mail do contato do negócio, sem sobrescrever o que o operador já digitou
     const contato = (proposal as any)?.crm_deals?.crm_contacts;
     const phone = contato?.phone || '';
