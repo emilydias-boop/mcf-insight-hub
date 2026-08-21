@@ -297,6 +297,8 @@ function CriarDisparoDialog({
     setStageIds(stagesSalvos.length > 0 ? stagesSalvos : stageAntigo);
     setTags(comoArray(filtro.tags));
     setOriginId(typeof filtro.origin_id === 'string' ? filtro.origin_id : '');
+    // seleção do CRM: preservada como recorte, fora dos seletores do wizard
+    setDealIds(comoArray(filtro.deal_ids));
     setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
     const temAlvos = (rascunho.total_alvos ?? 0) > 0;
     setJaMontou(temAlvos);
