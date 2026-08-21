@@ -495,12 +495,19 @@ export function PendingRegistrationsList({
           <FilaDuasListas
             pendentes={pendentes}
             tratadas={tratadas}
-            tituloPendentes={`Pendentes — aguardando abertura (${pendentes.length})`}
+            tituloPendentes={`Liberadas para cadastro — termo assinado (${pendentes.length})`}
             tituloTratadas={`Tratadas — cota aberta ou declinada (${tratadas.length})`}
             descricaoPendentes="do mais parado para o mais recente"
-            vazioPendentes="Nenhum cadastro aguardando abertura de cota."
+            vazioPendentes="Nenhum cadastro liberado para abertura de cota."
             renderTabela={renderTabela}
+            secaoIntermediaria={{
+              titulo: `Aguardando assinatura do termo (${travadas.length})`,
+              descricao: 'a cota só é cadastrada na Embracon depois da assinatura',
+              linhas: travadas,
+              renderTabela: (linhas) => renderTabela(linhas, { travadaAssinatura: true }),
+            }}
           />
+
         ) : (
           <>
             <div className="overflow-x-auto">{renderTabela(pageRows)}</div>
