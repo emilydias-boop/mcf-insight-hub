@@ -47,7 +47,7 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { CotasTab } from '@/components/consorcio/CotasTab';
-import { CotasReservadasTab } from '@/components/consorcio/CotasReservadasTab';
+import { CotasCadastradasTab } from '@/components/consorcio/CotasCadastradasTab';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
 import { SeloDiasParados, diasDesde } from '@/components/consorcio/SeloDiasParados';
@@ -172,7 +172,9 @@ export default function PosReuniao() {
             onClearQuickFilter={() => setQuickFilter(null)}
           />
         </TabsContent>
-        <TabsContent value="cadastradas"><CotasReservadasTab range={range} /></TabsContent>
+        <TabsContent value="cadastradas">
+          {activeTab === 'cadastradas' && <CotasCadastradasTab range={range} />}
+        </TabsContent>
         <TabsContent value="cotas">
           <CotasTab
             range={range}
