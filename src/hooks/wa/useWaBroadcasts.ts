@@ -95,8 +95,20 @@ export interface WaSendBudget {
   ritmo_por_minuto: number;
 }
 
-const errMsg = (err: unknown, fallback: string) =>
-  err instanceof Error && err.message ? err.message : fallback;
+// PostgREST errors are plain objects with { message, details, hint, code },
+// not instances of Error — `instanceof Error` discards the real DB message.
+const errMsg = (err: unknown, fallback: string): string => {
+  if (err instanceof Error && err.message) return err.message;
+  if (
+    err &&
+    typeof err === 'object' &&
+    typeof (err as { message?: unknown }).message === 'string' &&
+    ((err as { message: string }).message).length > 0
+  ) {
+    return (err as { message: string }).message;
+  }
+  return fallback;
+};
 
 /** Templates aprovados disponíveis para disparo. */
 export function useWaTemplates() {
