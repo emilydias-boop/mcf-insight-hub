@@ -79,12 +79,14 @@ export interface CotaReservada {
   vendedor_name: string | null;
   tipo_registro: 'reserva' | 'contratacao' | null;
   contrato_embracon: string | null;
+  /** Nulo = "A definir" (a Embracon informa na confirmação). */
+  dia_vencimento: number | null;
   /** A cota nasceu dentro do funil (cadastro pendente vinculado)? */
   origemFunil: boolean;
 }
 
 const CARD_RESERVA_SELECT =
-  'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, data_reserva, data_contratacao, vendedor_name, tipo_registro, contrato_embracon';
+  'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, data_reserva, data_contratacao, vendedor_name, tipo_registro, contrato_embracon, dia_vencimento';
 
 /** Dias corridos entre duas datas YYYY-MM-DD (null quando falta alguma). */
 function diasEntre(de?: string | null, ate?: string | null): number | null {

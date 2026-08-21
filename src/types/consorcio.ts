@@ -33,7 +33,8 @@ export interface ConsorcioCard {
   data_contratacao: string | null;
   data_reserva?: string | null;
   tipo_registro?: 'reserva' | 'contratacao';
-  dia_vencimento: number;
+  /** Nulo = "A definir" (a Embracon define depois da abertura da cota). */
+  dia_vencimento: number | null;
   
   // Origem
   origem: OrigemConsorcio;
@@ -177,7 +178,8 @@ export interface CreateConsorcioCardInput {
   data_contratacao?: string | null;
   data_reserva?: string | null;
   tipo_registro?: 'reserva' | 'contratacao';
-  dia_vencimento: number;
+  /** Nulo = "A definir" (a Embracon define depois da abertura da cota). */
+  dia_vencimento: number | null;
   inicio_segunda_parcela?: InicioSegundaParcela;
   origem: OrigemConsorcio;
   origem_detalhe?: string;
