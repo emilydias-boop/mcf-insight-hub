@@ -16072,8 +16072,10 @@ export type Database = {
         Returns: boolean
       }
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
+      is_fechamento_leader: { Args: never; Returns: boolean }
       is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
       is_my_employee_folder: { Args: { _folder: string }; Returns: boolean }
+      is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
