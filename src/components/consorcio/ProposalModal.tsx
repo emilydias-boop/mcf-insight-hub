@@ -11,6 +11,8 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEnviarProposta } from '@/hooks/useConsorcioPostMeeting';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { useConsorcioTipoOptions, useConsorcioOrigemOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CartasProposalEditor } from './CartasProposalEditor';
 import { DadosClienteFields, TipoPessoaSelect, useDadosCliente } from './DadosClienteBloco';
