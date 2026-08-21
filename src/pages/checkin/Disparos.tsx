@@ -557,6 +557,7 @@ function CriarDisparoDialog({
             pendentes={pendentes ?? 0}
             montando={montar.isPending || atualizar.isPending}
             jaMontou={jaMontou}
+            publicoPronto={publicoPronto}
             escopo={escopo}
             bu={bu}
             busDisponiveis={busDisponiveis}
@@ -603,7 +604,9 @@ function CriarDisparoDialog({
           {step === 2 && (
             <Button
               onClick={() => setStep(3)}
-              disabled={!jaMontou || contagemIndisponivel || pendentes === 0}
+              // o público pode ter nascido montado (seleção do CRM): o critério é
+              // o número real de alvos, não só o clique manual em "Montar público"
+              disabled={!publicoPronto || contagemIndisponivel || pendentes === 0}
             >
               Continuar
             </Button>
