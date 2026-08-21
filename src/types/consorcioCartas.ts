@@ -79,6 +79,7 @@ export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCart
     parcelaDemaisStr: '',
     condicaoPagamento: '',
     objetivo: '',
+    categoria: '',
     ...base,
     id: undefined,
     travada: false,
@@ -121,6 +122,7 @@ export function draftsParaInput(cartas: PropostaCartaDraft[]): PropostaCartaInpu
       parcela_demais: brlParaNumero(c.parcelaDemaisStr) || null,
       condicao_pagamento: c.condicaoPagamento || null,
       objetivo: c.objetivo || null,
+      categoria: c.categoria || null,
     };
   });
 }
