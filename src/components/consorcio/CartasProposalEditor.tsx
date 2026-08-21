@@ -10,11 +10,13 @@ import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput } from '@/lib/brlMask';
 import {
   MAX_CARTAS_POR_PROPOSTA,
+  PARCELAS_MARCAVEIS,
   PropostaCartaDraft,
   cartaDraftValida,
   novaCartaDraft,
   totalCartas,
 } from '@/types/consorcioCartas';
+
 
 interface CartasProposalEditorProps {
   cartas: PropostaCartaDraft[];
@@ -56,8 +58,10 @@ export function CartasProposalEditor({
         prazoMeses: base.prazoMeses,
         prazoOutro: base.prazoOutro,
         tipoProduto: base.tipoProduto,
+        parcelasMcf: [...base.parcelasMcf],
       }),
     );
+
     const idx = cartas.findIndex(c => c.key === key);
     onChange([...cartas.slice(0, idx + 1), ...copias, ...cartas.slice(idx + 1)]);
     setRepetir(r => ({ ...r, [key]: '' }));
@@ -198,7 +202,48 @@ export function CartasProposalEditor({
                     </Select>
                   </div>
                 </div>
+
+                {/* Intenção do closer: quais das 12 primeiras parcelas a MCF paga.
+                    Não é verdade oficial — a confirmação acontece na etapa 5. */}
+                <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label className="text-xs">Parcelas que a MCF paga (intenção)</Label>
+                    <span className="text-xs font-medium">
+                      MCF paga {c.parcelasMcf.length} de {PARCELAS_MARCAVEIS}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from({ length: PARCELAS_MARCAVEIS }, (_, k) => k + 1).map(n => {
+                      const mcf = c.parcelasMcf.includes(n);
+                      return (
+                        <Button
+                          key={n}
+                          type="button"
+                          size="sm"
+                          variant={mcf ? 'default' : 'outline'}
+                          className="h-7 w-9 p-0 text-xs tabular-nums"
+                          aria-pressed={mcf}
+                          aria-label={`Parcela ${n} — ${mcf ? 'MCF paga' : 'cliente paga'}`}
+                          onClick={() =>
+                            patch(c.key, {
+                              parcelasMcf: mcf
+                                ? c.parcelasMcf.filter(p => p !== n)
+                                : [...c.parcelasMcf, n].sort((a, b) => a - b),
+                            })
+                          }
+                        >
+                          {n}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Clique para alternar entre MCF e cliente. Confirmação oficial na etapa Cotas Cadastradas.
+                  </p>
+                </div>
               </div>
+
             );
           })}
         </div>

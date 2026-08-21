@@ -4811,6 +4811,7 @@ export type Database = {
           created_by: string | null
           id: string
           ordem: number
+          parcelas_mcf: number[] | null
           pending_registration_id: string | null
           prazo_meses: number
           proposal_id: string
@@ -4823,6 +4824,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           ordem?: number
+          parcelas_mcf?: number[] | null
           pending_registration_id?: string | null
           prazo_meses: number
           proposal_id: string
@@ -4835,6 +4837,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           ordem?: number
+          parcelas_mcf?: number[] | null
           pending_registration_id?: string | null
           prazo_meses?: number
           proposal_id?: string

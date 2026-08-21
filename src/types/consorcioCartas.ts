@@ -12,6 +12,8 @@ export interface PropostaCarta {
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: string;
+  /** Intenção: quais das 12 primeiras parcelas a MCF pretende pagar. */
+  parcelas_mcf?: number[] | null;
   pending_registration_id: string | null;
   consortium_card_id: string | null;
 }
@@ -22,6 +24,7 @@ export interface PropostaCartaInput {
   valor_credito: number;
   prazo_meses: number;
   tipo_produto: string;
+  parcelas_mcf?: number[];
 }
 
 /** Linha em edição no formulário (valor em string por causa da máscara BRL). */
@@ -32,11 +35,16 @@ export interface PropostaCartaDraft {
   prazoMeses: string;
   prazoOutro: boolean;
   tipoProduto: string;
+  /** Marcação das 12 primeiras parcelas que a MCF paga (intenção do closer). */
+  parcelasMcf: number[];
   /** Carta já vinculada a cadastro/cota: não pode ser removida. */
   travada?: boolean;
 }
 
 export const MAX_CARTAS_POR_PROPOSTA = 50;
+
+/** Quantidade de parcelas marcáveis no lançamento da venda (as 12 primeiras). */
+export const PARCELAS_MARCAVEIS = 12;
 
 export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCartaDraft {
   return {
@@ -45,6 +53,7 @@ export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCart
     prazoMeses: '',
     prazoOutro: false,
     tipoProduto: '',
+    parcelasMcf: [],
     ...base,
     id: undefined,
     travada: false,
@@ -72,6 +81,43 @@ export function draftsParaInput(cartas: PropostaCartaDraft[]): PropostaCartaInpu
       valor_credito: digits ? Number(digits) / 100 : 0,
       prazo_meses: Number(c.prazoMeses),
       tipo_produto: c.tipoProduto,
+      parcelas_mcf: normalizarParcelasMcf(c.parcelasMcf),
     };
   });
+}
+
+/** Ordena, tira repetidos e mantém só números dentro das 12 primeiras parcelas. */
+export function normalizarParcelasMcf(parcelas: number[] | null | undefined): number[] {
+  return Array.from(new Set((parcelas || []).map(Number)))
+    .filter(n => Number.isInteger(n) && n >= 1 && n <= PARCELAS_MARCAVEIS)
+    .sort((a, b) => a - b);
+}
+
+export interface ParcelasEmpresaDerivadas {
+  empresa_paga_parcelas: 'sim' | 'nao';
+  tipo_contrato: 'normal' | 'intercalado' | 'intercalado_impar';
+  parcelas_pagas_empresa: number;
+}
+
+/**
+ * Traduz a marcação nova (array de parcelas) para os campos antigos que o resto
+ * do sistema já lê (`empresa_paga_parcelas`, `tipo_contrato`,
+ * `parcelas_pagas_empresa`), para nada que dependa deles quebrar.
+ */
+export function derivarParcelasEmpresa(parcelas: number[] | null | undefined): ParcelasEmpresaDerivadas {
+  const uniq = normalizarParcelasMcf(parcelas);
+  if (uniq.length === 0) {
+    return { empresa_paga_parcelas: 'nao', tipo_contrato: 'normal', parcelas_pagas_empresa: 0 };
+  }
+  const contiguo = uniq.every((n, i) => n === i + 1);
+  const soPares = uniq.every(n => n % 2 === 0);
+  const soImpares = uniq.every(n => n % 2 === 1);
+  const tipo_contrato = contiguo
+    ? 'normal'
+    : soPares
+      ? 'intercalado'
+      : soImpares
+        ? 'intercalado_impar'
+        : 'normal';
+  return { empresa_paga_parcelas: 'sim', tipo_contrato, parcelas_pagas_empresa: uniq.length };
 }

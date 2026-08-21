@@ -554,7 +554,7 @@ export function useProposals() {
         const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
           supabase
             .from('consorcio_proposal_cartas')
-            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, pending_registration_id, consortium_card_id')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, pending_registration_id, consortium_card_id')
             .in('proposal_id', lote)
             .order('id', { ascending: true })
             .range(from, to)
@@ -567,6 +567,8 @@ export function useProposals() {
             valor_credito: Number(c.valor_credito) || 0,
             prazo_meses: Number(c.prazo_meses) || 0,
             tipo_produto: c.tipo_produto || '',
+            parcelas_mcf: Array.isArray(c.parcelas_mcf) ? c.parcelas_mcf.map(Number) : null,
+
             pending_registration_id: c.pending_registration_id,
             consortium_card_id: c.consortium_card_id,
           });
@@ -739,7 +741,7 @@ export function useEnviarProposta() {
       if (propError) throw propError;
 
       // 1b. Cartas da proposta (verdade por carta)
-      const { error: cartasError } = await supabase
+      const { data: cartasCriadas, error: cartasError } = await supabase
         .from('consorcio_proposal_cartas')
         .insert(cartas.map((c, i) => ({
           proposal_id: created.id,
@@ -747,8 +749,11 @@ export function useEnviarProposta() {
           valor_credito: c.valor_credito,
           prazo_meses: c.prazo_meses,
           tipo_produto: c.tipo_produto,
+          // Intenção de parcelas MCF: só registro, não vira cronograma nem comissão.
+          parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
           created_by: user?.id ?? null,
-        })) as any);
+        })) as any)
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf');
       if (cartasError) throw cartasError;
 
       // 2. Move deal to PROPOSTA ENVIADA (only VdA has this stage)
@@ -760,7 +765,18 @@ export function useEnviarProposta() {
           .eq('id', params.deal_id);
         if (dealError) throw dealError;
       }
+
+      // Devolve os ids para o formulário fundido poder criar os cadastros
+      // pendentes (bloco 2) já vinculados a cada carta.
+      return {
+        proposal_id: created.id as string,
+        cartas: (cartasCriadas || []) as Array<{
+          id: string; ordem: number; valor_credito: number;
+          prazo_meses: number; tipo_produto: string; parcelas_mcf: number[] | null;
+        }>,
+      };
     },
+
     onSuccess: () => {
       toast.success('Proposta registrada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['consorcio-realizadas'] });
@@ -1245,6 +1261,7 @@ export function useEditarProposta() {
               valor_credito: c.valor_credito,
               prazo_meses: c.prazo_meses,
               tipo_produto: c.tipo_produto,
+              parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
             } as any)
             .eq('id', c.id);
           if (error) throw error;
@@ -1257,9 +1274,11 @@ export function useEditarProposta() {
               valor_credito: c.valor_credito,
               prazo_meses: c.prazo_meses,
               tipo_produto: c.tipo_produto,
+              parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
             } as any);
           if (error) throw error;
         }
+
       }
       if (removiveis.length > 0) {
         const { error } = await supabase
