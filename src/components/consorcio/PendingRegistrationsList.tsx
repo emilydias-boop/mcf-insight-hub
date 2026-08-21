@@ -234,6 +234,15 @@ export function PendingRegistrationsList({
     setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
+  const { data: termosByProposal = {} } = useTermosByProposal();
+  /**
+   * O termo é um por venda e grava só o `pending_registration_id` da 1ª carta.
+   * Lemos pela proposta para as cartas irmãs mostrarem o mesmo selo; o vínculo
+   * antigo por cadastro fica como fallback para termos sem `proposal_id`.
+   */
+  const termosDoCadastro = (reg: { id: string; proposal_id?: string | null }): ConsorcioTermo[] =>
+    (reg.proposal_id ? termosByProposal[reg.proposal_id] : undefined) || termosByPending[reg.id] || [];
+
 
   /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
   const maisAntigoFila = useMemo(() => {
