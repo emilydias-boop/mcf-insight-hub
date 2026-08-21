@@ -241,8 +241,10 @@ export function AcceptProposalModal({
         deal_id: dealId,
         tipo_pessoa: tipoPessoa,
         vendedor_name: vendedorName,
-        // Documentos são do cliente: sobem uma única vez, no primeiro cadastro.
+        // Documento é do cliente e vale para a venda inteira: sobe uma única vez
+        // e a linha é replicada para as cartas irmãs logo abaixo.
         documents: i === 0 ? documents : [],
+
         empresa_paga_parcelas: parcelas.empresa_paga_parcelas,
         tipo_contrato: parcelas.tipo_contrato,
         parcelas_pagas_empresa: parcelas.parcelas_pagas_empresa,
