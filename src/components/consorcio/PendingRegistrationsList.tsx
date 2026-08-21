@@ -855,9 +855,19 @@ function RegistrationRow({
         <div className="flex items-center gap-1 justify-end">
           {variant === 'pendentes' && semCota && (
             <>
-              <Button size="sm" onClick={onCotaCadastrada}>
+              <Button
+                size="sm"
+                onClick={onCotaCadastrada}
+                disabled={travadaAssinatura}
+                title={
+                  travadaAssinatura
+                    ? 'O cliente ainda não assinou o Termo de Adesão. Cadastre a cota na Embracon só depois da assinatura.'
+                    : undefined
+                }
+              >
                 <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
               </Button>
+
               {/* A outra ação que define a etapa 4 também fica na linha, em estilo
                   discreto de ação destrutiva (o motivo continua obrigatório). */}
               <Button
