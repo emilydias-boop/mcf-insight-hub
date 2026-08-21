@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWaConversations, useUpdateWaConversation, WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
 import { useWaMessages, WaSendError } from '@/hooks/wa/useWaMessages';
+import { useWaNotificacoes } from '@/hooks/wa/useWaNotificacoes';
 import { ConversationList } from '@/components/checkin/ConversationList';
 import { ConversationThread } from '@/components/checkin/ConversationThread';
 import { MessageComposer } from '@/components/checkin/MessageComposer';
