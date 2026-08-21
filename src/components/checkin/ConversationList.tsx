@@ -7,6 +7,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
 import { WA_STATUS_COLOR, WA_STATUS_OPTIONS, formatPhone } from './waLabels';
+import { cn } from '@/lib/utils';
+
 
 interface Props {
   conversations: WaConversation[];
