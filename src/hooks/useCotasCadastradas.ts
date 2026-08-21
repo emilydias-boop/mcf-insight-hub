@@ -87,27 +87,80 @@ export function useCotasCadastradas(range: { startDate?: Date; endDate?: Date })
 }
 
 /**
- * Marca (ou desmarca) o pagamento da parcela inicial. Grava só nas duas colunas
- * de controle interno — nada mais é tocado.
+ * Marca (ou desmarca) o pagamento da parcela inicial.
+ *
+ * REGRA DE NEGÓCIO (21/08/2026): pagou a parcela inicial ⇒ a cota está
+ * CONTRATADA. Além do marcador interno, a reserva é convertida em contratação no
+ * `consortium_cards` (`tipo_registro` = 'contratacao' e `data_contratacao` = a
+ * DATA DO PAGAMENTO informada no formulário), o que faz a cota aparecer na etapa
+ * 6 "Cotas" — que filtra justamente por `data_contratacao`.
+ *
+ * Seguro por verificação: o trigger `trg_enqueue_outbound_consorcio_webhook`
+ * observa status, valor_credito, valor_comissao, parcelas_pagas_empresa, grupo,
+ * cota, tipo_produto e contemplação. `tipo_registro` e `data_contratacao` NÃO
+ * estão na lista — a conversão não dispara evento externo.
+ *
+ * "Desfazer" só devolve o card para reserva quando existe `data_reserva` para
+ * voltar; sem ela, o marcador é limpo e o card é deixado intacto (não inventamos
+ * um estado de reserva que nunca existiu).
  */
 export function useMarcarParcelaInicial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: string | null }) => {
       const { data: sessao } = await supabase.auth.getUser();
-      const { error } = await supabase
+      const { data: reg, error: erroReg } = await supabase
         .from('consorcio_pending_registrations')
         .update({
           parcela_inicial_paga_em: data,
           parcela_inicial_paga_por: data ? (sessao?.user?.id ?? null) : null,
         })
-        .eq('id', id);
-      if (error) throw error;
+        .eq('id', id)
+        .select('consortium_card_id')
+        .maybeSingle();
+      if (erroReg) throw erroReg;
+
+      const cardId = reg?.consortium_card_id;
+      if (!cardId) return;
+
+      const { data: card, error: erroCard } = await supabase
+        .from('consortium_cards')
+        .select('id, tipo_registro, data_reserva, data_contratacao')
+        .eq('id', cardId)
+        .maybeSingle();
+      if (erroCard) throw erroCard;
+      if (!card) return;
+
+      if (data) {
+        // Converte reserva → contratação usando a data do pagamento.
+        if (card.tipo_registro === 'contratacao' && card.data_contratacao === data) return;
+        const { error } = await supabase
+          .from('consortium_cards')
+          .update({ tipo_registro: 'contratacao', data_contratacao: data })
+          .eq('id', cardId);
+        if (error) throw error;
+      } else {
+        // Desfazer: devolve para reserva sem deixar meio-caminho.
+        if (!card.data_reserva) return;
+        const { error } = await supabase
+          .from('consortium_cards')
+          .update({ tipo_registro: 'reserva', data_contratacao: null })
+          .eq('id', cardId);
+        if (error) throw error;
+      }
     },
     onSuccess: (_r, vars) => {
       qc.invalidateQueries({ queryKey: ['consorcio-cotas-cadastradas'] });
-      toast.success(vars.data ? 'Parcela inicial marcada como paga' : 'Marcação de pagamento desfeita');
+      qc.invalidateQueries({ queryKey: ['consortium-cards'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-cotas-reservadas'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-reservas-aguardando'] });
+      toast.success(
+        vars.data
+          ? 'Parcela inicial paga — cota contratada e movida para Cotas'
+          : 'Marcação desfeita — cota devolvida para reserva',
+      );
     },
     onError: (e: any) => toast.error('Não foi possível registrar: ' + (e?.message || 'erro desconhecido')),
   });
 }
+
