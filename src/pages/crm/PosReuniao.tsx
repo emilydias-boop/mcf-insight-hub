@@ -236,8 +236,6 @@ function PropostasTab({
   const [searchTerm, setSearchTerm] = useState(q);
   const termo = useDebounce(searchTerm, 300);
   useEffect(() => { setQ(termo); /* eslint-disable-next-line */ }, [termo]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
 
   const closerOptions = useMemo(() => {
     const names = [...new Set(allPropostas.map(p => p.closer_name).filter(Boolean))];
@@ -420,6 +418,12 @@ function PropostasTab({
                         <span className="text-sm text-muted-foreground">
                           {format(proposalDate, "dd/MM/yyyy", { locale: ptBR })}
                         </span>
+                        {!p.carta_excluida && !termoAssinadoDe(p) && (
+                          <SeloDiasParados
+                            desde={ancoraDe(p).desde}
+                            motivo={ancoraDe(p).motivo}
+                          />
+                        )}
                         {p.documentos_pendentes && daysOverdue > 0 && (
                           <span
                             className="animate-frantic-blink font-extrabold text-2xl leading-none text-destructive drop-shadow-sm"
@@ -479,7 +483,7 @@ function PropostasTab({
                           className="text-xs cursor-help"
                           title={`Carta excluída${(p as any).carta_excluida_em ? ' em ' + new Date((p as any).carta_excluida_em).toLocaleString('pt-BR') : ''}${(p as any).carta_excluida_por_nome ? ' por ' + (p as any).carta_excluida_por_nome : ''}\nJustificativa: ${(p as any).carta_excluida_motivo || '—'}`}
                         >
-                          Carta excluída
+                          Desistência da Carta
                         </Badge>
                       )}
                       {(p as any).carta_excluida && (p as any).carta_excluida_motivo && (
@@ -557,23 +561,55 @@ function PropostasTab({
                         )}
                       </>
                     )}
+                    {!p.carta_excluida && (
+                      termosDe(p).length > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTermoPanelTarget(p)}
+                          title="Ver, copiar o link ou reenviar o termo de adesão"
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Ver / reenviar termo
+                        </Button>
+                      ) : registrationByProposal[p.id] ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTermoTarget(p)}
+                          title="Gerar o termo de adesão para o cliente assinar"
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Gerar Termo de Adesão
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="O termo é montado a partir do cadastro da cota. Lance a venda (Inserir Dados) antes de gerar o termo."
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Gerar Termo de Adesão
+                        </Button>
+                      )
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => setEditTarget(p)}
-                      title="Editar valores da proposta"
+                      title="Editar a venda (as alterações ficam registradas)"
                     >
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteTarget(p)}
-                      title="Excluir proposta (abate do realizado)"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    {!p.carta_excluida && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteTarget(p)}
+                        title="Desistência da Carta (abate do realizado)"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
                 );
@@ -724,6 +760,28 @@ function PropostasTab({
           onClose={() => setDeleteTarget(null)}
         />
 
+        {termoTarget && registrationByProposal[termoTarget.id] && (
+          <GerarTermoModal
+            open={!!termoTarget}
+            onOpenChange={o => !o && setTermoTarget(null)}
+            registrationId={registrationByProposal[termoTarget.id]}
+          />
+        )}
+
+        {termoPanelTarget && (
+          <TermoPanelDialog
+            open={!!termoPanelTarget}
+            onOpenChange={o => !o && setTermoPanelTarget(null)}
+            termos={termosDe(termoPanelTarget)}
+            clienteNome={termoPanelTarget.contact_name || termoPanelTarget.deal_name || 'cliente'}
+            onGerarNovo={() => {
+              const alvo = termoPanelTarget;
+              setTermoPanelTarget(null);
+              if (alvo && registrationByProposal[alvo.id]) setTermoTarget(alvo);
+            }}
+          />
+        )}
+
         {editTarget && (
           <EditProposalModal
             open={!!editTarget}
@@ -782,12 +840,12 @@ function DeletePropostaDialog({
     <AlertDialog open={!!proposal} onOpenChange={o => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir Carta Negociada?</AlertDialogTitle>
+          <AlertDialogTitle>Registrar Desistência da Carta?</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
               {proposal && (
                 <p>
-                  Você está excluindo a carta de{' '}
+                  Você está registrando a desistência da carta de{' '}
                   <strong>{proposal.contact_name || proposal.deal_name}</strong> no valor de{' '}
                   <strong>{formatCurrency(proposal.valor_credito || 0)}</strong>.
                 </p>
@@ -812,12 +870,12 @@ function DeletePropostaDialog({
               </p>
               <div>
                 <label className="text-sm font-medium">
-                  Motivo da exclusão <span className="text-destructive">*</span>
+                  Motivo da desistência <span className="text-destructive">*</span>
                 </label>
                 <Textarea
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  placeholder="Descreva o motivo da exclusão/cancelamento…"
+                  placeholder="Descreva o motivo da desistência…"
                   rows={3}
                   className="mt-1"
                 />
@@ -841,7 +899,7 @@ function DeletePropostaDialog({
               }
             }}
           >
-            {excluir.isPending ? 'Excluindo…' : 'Excluir'}
+            {excluir.isPending ? 'Registrando…' : 'Registrar desistência'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
