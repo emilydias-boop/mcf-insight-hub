@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -265,6 +265,17 @@ function CriarDisparoDialog({
   const [escopo, setEscopo] = useState<WaBroadcastEscopo>('minha_carteira');
   const [bu, setBu] = useState('');
   const [jaMontou, setJaMontou] = useState(false);
+  /**
+   * Filtro/escopo/limite mudou depois da última montagem: o público em banco
+   * deixou de valer, mesmo que a contagem de alvos ainda venha positiva.
+   */
+  const [publicoInvalidado, setPublicoInvalidado] = useState(false);
+  /**
+   * Template já refletido no público montado. Serve para remontar uma única vez
+   * quando o template muda (é aí que as variáveis são preenchidas), sem laço.
+   */
+  const ultimoSidMontado = useRef<string | null>(null);
+
   const [bloqueado, setBloqueado] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** quando o público em banco foi montado — só quando um rascunho é reaberto */
@@ -302,8 +313,12 @@ function CriarDisparoDialog({
     setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
     const temAlvos = (rascunho.total_alvos ?? 0) > 0;
     setJaMontou(temAlvos);
+    setPublicoInvalidado(false);
     setPublicoMontadoEm(temAlvos ? rascunho.updated_at : null);
+    // público em banco já reflete o template salvo — não remontar por nada
+    ultimoSidMontado.current = temAlvos ? (rascunho.content_sid ?? null) : null;
     setStep(rascunho.content_sid ? 2 : 1);
+
   }, [open, rascunho, templates]);
 
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
@@ -321,6 +336,12 @@ function CriarDisparoDialog({
    */
   const contagemIndisponivel = pendentes === null || buscandoPendentes || erroPendentes;
 
+  /**
+   * Público existe de fato: montado agora no wizard ou já vindo do banco (é o
+   * caso do disparo criado a partir de uma seleção do CRM, que nasce montado).
+   * Uma mudança de filtro invalida o que veio do banco até remontar.
+   */
+  const publicoPronto = jaMontou || (!publicoInvalidado && (pendentes ?? 0) > 0);
 
   /**
    * Qualquer mudança de filtro, escopo ou limite invalida o público já montado:
@@ -329,8 +350,10 @@ function CriarDisparoDialog({
    */
   const invalidarPublico = () => {
     setJaMontou(false);
+    setPublicoInvalidado(true);
     setPublicoMontadoEm(null);
   };
+
   const handleStageIdsChange = (v: string[]) => {
     setStageIds(v);
     invalidarPublico();
@@ -386,7 +409,10 @@ function CriarDisparoDialog({
     setEscopo('minha_carteira');
     setBu('');
     setJaMontou(false);
+    setPublicoInvalidado(false);
+    ultimoSidMontado.current = null;
     setPublicoMontadoEm(null);
+
     setBloqueado(true);
   };
 
@@ -446,6 +472,8 @@ function CriarDisparoDialog({
       });
       const res = await montar.mutateAsync(broadcast.id);
       setJaMontou(true);
+      setPublicoInvalidado(false);
+      ultimoSidMontado.current = templateAtual?.content_sid ?? null;
       setPublicoMontadoEm(null);
       toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
     } catch (err) {
@@ -467,6 +495,25 @@ function CriarDisparoDialog({
     setPublicoMontadoEm(null);
     await montarPublico([]);
   };
+
+  /**
+   * Disparo vindo de uma seleção do CRM nasce com o público montado, mas sem
+   * template — as variáveis do template (nome) só podem ser preenchidas depois
+   * que ele é escolhido. Como essa pessoa vai do template direto para a revisão,
+   * sem passar pelo botão de montar, remontamos aqui. Só quando o template
+   * realmente muda, nunca a cada render.
+   */
+  useEffect(() => {
+    if (step !== 2 || !broadcast || dealIds.length === 0) return;
+    const sid = templateAtual?.content_sid ?? null;
+    if (!sid || sid === ultimoSidMontado.current) return;
+    if (montar.isPending || atualizar.isPending) return;
+    ultimoSidMontado.current = sid;
+    void montarPublico(dealIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, broadcast?.id, templateAtual?.content_sid, dealIds.length]);
+
+
 
 
 
@@ -510,6 +557,7 @@ function CriarDisparoDialog({
             pendentes={pendentes ?? 0}
             montando={montar.isPending || atualizar.isPending}
             jaMontou={jaMontou}
+            publicoPronto={publicoPronto}
             escopo={escopo}
             bu={bu}
             busDisponiveis={busDisponiveis}
@@ -554,10 +602,13 @@ function CriarDisparoDialog({
             </Button>
           )}
           {step === 2 && (
+            // o público pode ter nascido montado (seleção do CRM): o critério é o
+            // número real de alvos, não só o clique manual em "Montar público"
             <Button
               onClick={() => setStep(3)}
-              disabled={!jaMontou || contagemIndisponivel || pendentes === 0}
+              disabled={!publicoPronto || contagemIndisponivel || pendentes === 0}
             >
+
               Continuar
             </Button>
           )}

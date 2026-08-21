@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -6,13 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertTriangle, Info, Loader2, Users, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Info, Loader2, SlidersHorizontal, Users, X } from 'lucide-react';
+
 import {
   useWaEstagiosNoEscopo,
   useWaTagsNoEscopo,
@@ -39,6 +45,12 @@ interface Props {
   pendentes: number;
   montando: boolean;
   jaMontou: boolean;
+  /**
+   * Público existe de fato (montado agora ou já vindo do banco). É o que decide
+   * se este passo mostra os números ou pede configuração.
+   */
+  publicoPronto?: boolean;
+
   escopo: WaBroadcastEscopo;
   bu: string;
   busDisponiveis: WaBroadcastBuDisponivel[];
@@ -69,6 +81,8 @@ export function PublicoStep({
   pendentes,
   montando,
   jaMontou,
+  publicoPronto,
+
   escopo,
   bu,
   busDisponiveis,
@@ -86,8 +100,16 @@ export function PublicoStep({
   onMontar,
 }: Props) {
   const escopoBu = escopo === 'bu';
+  /**
+   * Disparo criado a partir de uma seleção de negócios no CRM: o recorte de quem
+   * recebe já foi feito lá, então este passo é revisão, não configuração.
+   */
+  const emRevisao = dealIdsSelecionados.length > 0;
+  const mostrarNumeros = (publicoPronto ?? jaMontou) === true;
+  const [refinarAberto, setRefinarAberto] = useState(false);
   /** No escopo da BU as listas só existem depois de escolher a BU. */
   const filtrosBloqueados = escopoBu && !bu;
+
   const { data: origens = [], isLoading: origensLoading } = useWaOrigensDisponiveis();
   const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosNoEscopo(
     escopo,
@@ -151,9 +173,11 @@ export function PublicoStep({
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>
               Este disparo foi criado a partir de uma seleção de{' '}
-              <strong>{fmt(dealIdsSelecionados.length)}</strong> negócio(s) no CRM. Os filtros
-              abaixo refinam essa seleção — não a substituem.
+              <strong>{fmt(dealIdsSelecionados.length)}</strong> negócio(s) no CRM. O público já
+              está montado — os filtros em “Refinar seleção” só reduzem essa seleção, nunca a
+              substituem.
             </span>
+
             {onDescartarSelecao && (
               <Button
                 type="button"
@@ -185,8 +209,26 @@ export function PublicoStep({
         </Alert>
       )}
 
+      <Collapsible
+        open={emRevisao ? refinarAberto : true}
+        onOpenChange={setRefinarAberto}
+        className="space-y-4"
+      >
+        {emRevisao && (
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
+              Refinar seleção
+              <ChevronDown
+                className={`ml-2 h-3.5 w-3.5 transition-transform ${refinarAberto ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+        )}
+        <CollapsibleContent className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2">
+
           <Label>De onde vem o público</Label>
           <Select
             value={escopo}
@@ -375,11 +417,14 @@ export function PublicoStep({
         </Button>
         <Button type="button" onClick={onMontar} disabled={montando || (escopoBu && !bu)}>
           {montando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
-          {jaMontou || publicoMontadoEm ? 'Remontar público' : 'Montar público'}
+          {mostrarNumeros || publicoMontadoEm ? 'Remontar público' : 'Montar público'}
         </Button>
       </div>
+        </CollapsibleContent>
+      </Collapsible>
 
-      {jaMontou && (
+      {mostrarNumeros && (
+
         <div className="grid gap-3 md:grid-cols-3">
           <Card>
             <CardContent className="pt-4">
@@ -405,7 +450,7 @@ export function PublicoStep({
         </div>
       )}
 
-      {jaMontou && alertaDonoInativo && (
+      {mostrarNumeros && alertaDonoInativo && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
@@ -416,7 +461,7 @@ export function PublicoStep({
         </Alert>
       )}
 
-      {jaMontou && totalIgnorados > 0 && (
+      {mostrarNumeros && totalIgnorados > 0 && (
         <Card>
           <CardContent className="pt-4">
             <p className="mb-2 text-sm font-medium">Por que ficam de fora</p>
