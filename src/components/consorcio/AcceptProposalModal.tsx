@@ -191,6 +191,14 @@ export function AcceptProposalModal({
   }, [proposal]);
 
   const cartasPendentes = ((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id);
+  const multiCartas = cartasPendentes.length > 1;
+
+  // Plano por carta: cada carta tem parcela própria.
+  const [planosPorCarta, setPlanosPorCarta] = useState<Record<string, PlanoPorCarta>>({});
+  const [copia, setCopia] = useState<{ seq: number; condicao?: string; objetivo?: string } | null>(null);
+  const handlePlanoCarta = useCallback((cartaId: string, valores: PlanoPorCarta) => {
+    setPlanosPorCarta(prev => ({ ...prev, [cartaId]: valores }));
+  }, []);
 
   const onSubmit = async () => {
     const data = form.getValues();
