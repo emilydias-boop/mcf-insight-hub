@@ -284,11 +284,30 @@ export function AcceptProposalModal({
               </div>
             )}
 
-            {/* ===== Dados do plano (bloco compartilhado com OpenCotaModal) ===== */}
-            <div className="space-y-3 rounded-lg border p-3">
-              <h3 className="font-semibold text-sm">Dados do plano</h3>
-              <DadosPlanoFields plano={plano} hide={['diaVencimento', 'inicioSegundaParcela']} />
-            </div>
+            {/* ===== Dados do plano — um bloco POR CARTA quando há mais de uma ===== */}
+            {multiCartas ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Cada carta tem plano e parcela próprios. Preencha os {cartasPendentes.length} blocos abaixo.
+                </p>
+                {cartasPendentes.map((c: any, i: number) => (
+                  <CartaPlanoBloco
+                    key={c.id}
+                    carta={c}
+                    index={i}
+                    total={cartasPendentes.length}
+                    onChange={handlePlanoCarta}
+                    copia={i > 0 ? copia : null}
+                    onRepetir={i === 0 ? d => setCopia({ seq: Date.now(), ...d }) : undefined}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-lg border p-3">
+                <h3 className="font-semibold text-sm">Dados do plano</h3>
+                <DadosPlanoFields plano={plano} hide={['diaVencimento', 'inicioSegundaParcela']} />
+              </div>
+            )}
 
             <TipoPessoaSelect bloco={cliente} />
 
