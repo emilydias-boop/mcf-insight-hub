@@ -6,6 +6,7 @@ import { CreateConsorcioCardInput, TipoDocumento } from '@/types/consorcio';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { montarParcelasCota, inserirParcelas } from '@/lib/consorcioCronograma';
 import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
@@ -948,7 +949,8 @@ export function useOpenCota() {
         empresa_paga_parcelas: string;
         tipo_contrato?: string;
         parcelas_pagas_empresa?: number;
-        dia_vencimento: number;
+        /** Nulo = "A definir" (a Embracon informa depois da abertura). */
+        dia_vencimento: number | null;
         inicio_segunda_parcela?: string;
         data_contratacao: string;
         /** 'reserva' = enviada à Embracon, aguardando confirmação. */
