@@ -199,6 +199,8 @@ export function useCreateTermo() {
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['consorcio-termos-by-pending'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-termos-by-proposal'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-termo-assinatura-metrics'] });
       qc.invalidateQueries({ queryKey: ['consorcio-comprovantes-by-card'] });
       toast.success(
         vars.tipo === 'comprovante_cadastro' ? 'Comprovante de cadastro gerado' : 'Termo de adesão gerado',
@@ -227,6 +229,8 @@ export function useCancelTermo() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['consorcio-termos-by-pending'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-termos-by-proposal'] });
+      qc.invalidateQueries({ queryKey: ['consorcio-termo-assinatura-metrics'] });
       qc.invalidateQueries({ queryKey: ['consorcio-comprovantes-by-card'] });
       toast.success('Documento cancelado');
     },
