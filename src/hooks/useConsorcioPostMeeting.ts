@@ -1233,7 +1233,7 @@ export function useEditarProposta() {
       // pela trigger do banco.
       const { data: atuaisRaw, error: atuaisErr } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, pending_registration_id, consortium_card_id')
+        .select('id, pending_registration_id, consortium_card_id, valor_credito, prazo_meses, tipo_produto')
         .eq('proposal_id', params.proposal_id);
       if (atuaisErr) throw atuaisErr;
       const atuais = (atuaisRaw || []) as any[];
@@ -1250,6 +1250,30 @@ export function useEditarProposta() {
         );
       }
 
+      // Cartas que já viraram cota na Embracon não podem ter valor/prazo/produto
+      // alterados por aqui: a cota real é a fonte da verdade.
+      for (const c of cartas) {
+        if (!c.id) continue;
+        const a = atuais.find(x => x.id === c.id);
+        if (!a || !a.consortium_card_id) continue;
+        const mudou =
+          Number(a.valor_credito) !== Number(c.valor_credito) ||
+          Number(a.prazo_meses) !== Number(c.prazo_meses) ||
+          String(a.tipo_produto || '') !== String(c.tipo_produto || '');
+        if (!mudou) continue;
+        const { data: card } = await supabase
+          .from('consortium_cards')
+          .select('grupo, cota')
+          .eq('id', a.consortium_card_id)
+          .maybeSingle();
+        throw new Error(
+          `Esta carta já virou cota na Embracon (grupo ${(card as any)?.grupo ?? '—'} / cota ${(card as any)?.cota ?? '—'}). O valor não pode ser alterado por aqui — corrija pela própria cota.`,
+        );
+      }
+
+      // Propagação carta -> cadastro pendente (quando a carta ainda não virou cota).
+      const propagacoes: Array<{ campo: string; de: unknown; para: unknown }> = [];
+
       let ordem = 0;
       for (const c of cartas) {
         ordem += 1;
@@ -1265,6 +1289,46 @@ export function useEditarProposta() {
             } as any)
             .eq('id', c.id);
           if (error) throw error;
+
+          const a = atuais.find(x => x.id === c.id);
+          if (a?.pending_registration_id) {
+            const { data: reg, error: regErr } = await supabase
+              .from('consorcio_pending_registrations')
+              .select('id, valor_credito, prazo_meses, tipo_produto, consortium_card_id')
+              .eq('id', a.pending_registration_id)
+              .maybeSingle();
+            if (regErr) throw regErr;
+            if (reg && !(reg as any).consortium_card_id) {
+              const r = reg as any;
+              const difs: Array<{ campo: string; de: unknown; para: unknown }> = [];
+              if (Number(r.valor_credito) !== Number(c.valor_credito)) {
+                difs.push({ campo: `cadastro[${ordem}].valor_credito`, de: Number(r.valor_credito) || 0, para: Number(c.valor_credito) });
+              }
+              if (Number(r.prazo_meses) !== Number(c.prazo_meses)) {
+                difs.push({ campo: `cadastro[${ordem}].prazo_meses`, de: Number(r.prazo_meses) || 0, para: Number(c.prazo_meses) });
+              }
+              if (String(r.tipo_produto || '') !== String(c.tipo_produto || '')) {
+                difs.push({ campo: `cadastro[${ordem}].tipo_produto`, de: r.tipo_produto || '', para: c.tipo_produto || '' });
+              }
+              if (difs.length > 0) {
+                const { error: propErr } = await supabase
+                  .from('consorcio_pending_registrations')
+                  .update({
+                    valor_credito: c.valor_credito,
+                    prazo_meses: c.prazo_meses,
+                    tipo_produto: c.tipo_produto,
+                  } as any)
+                  .eq('id', r.id);
+                // Propagação é obrigatória: se falhar, a edição inteira falha.
+                if (propErr) {
+                  throw new Error(
+                    'Não foi possível atualizar o cadastro pendente desta carta. A edição foi interrompida: ' + propErr.message,
+                  );
+                }
+                propagacoes.push(...difs);
+              }
+            }
+          }
         } else {
           const { error } = await supabase
             .from('consorcio_proposal_cartas')
@@ -1287,6 +1351,7 @@ export function useEditarProposta() {
           .in('id', removiveis.map(r => r.id));
         if (error) throw error;
       }
+
 
       const { error } = await supabase
         .from('consorcio_proposals')
@@ -1342,7 +1407,7 @@ export function useEditarProposta() {
           { campo: 'proposal_details', de: detalhesAnteriores, para: detalhesNovos },
           { campo: 'origem_lead', de: antes.origem_lead || '', para: depois.origem_lead || '' },
         ];
-        const alteracoes = cmp.filter(c => String(c.de) !== String(c.para));
+        const alteracoes = [...cmp.filter(c => String(c.de) !== String(c.para)), ...propagacoes];
 
         if (alteracoes.length > 0) {
           const { data: userData } = await supabase.auth.getUser();
