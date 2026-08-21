@@ -409,7 +409,10 @@ function CriarDisparoDialog({
     setEscopo('minha_carteira');
     setBu('');
     setJaMontou(false);
+    setPublicoInvalidado(false);
+    ultimoSidMontado.current = null;
     setPublicoMontadoEm(null);
+
     setBloqueado(true);
   };
 
