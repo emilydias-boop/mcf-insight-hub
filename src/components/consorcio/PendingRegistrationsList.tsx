@@ -292,6 +292,68 @@ export function PendingRegistrationsList({
     XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
   };
 
+  /**
+   * Duas listas da etapa 4: pendente = aguardando abertura de cota.
+   * Pendentes do mais parado para o mais recente (created_at, não updated_at).
+   */
+  const pendentes = useMemo(
+    () =>
+      filtered
+        .filter((r) => r.status === 'aguardando_abertura')
+        .slice()
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))),
+    [filtered],
+  );
+  const tratadas = useMemo(
+    () => filtered.filter((r) => r.status !== 'aguardando_abertura'),
+    [filtered],
+  );
+
+  /** Uma tabela, reaproveitada nas duas seções da fila (e na aba declinadas). */
+  const renderTabela = (linhas: EnrichedPendingRegistration[]) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
+          <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome / Razão Social</SortableTableHead>
+          <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor da Cota</SortableTableHead>
+          <SortableTableHead field="parcelas_empresa" active={field} dir={dir} onSort={toggle}>Parcelas (empresa)</SortableTableHead>
+          <SortableTableHead field="valor_total_empresa" active={field} dir={dir} onSort={toggle}>Total a pagar</SortableTableHead>
+          <SortableTableHead field="closer" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+          <SortableTableHead field="sdr" active={field} dir={dir} onSort={toggle}>SDR</SortableTableHead>
+          <SortableTableHead field="cotas_existentes" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cotas existentes</SortableTableHead>
+          <SortableTableHead field="destinada" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Destinada</SortableTableHead>
+          <SortableTableHead field="solicitado_em" active={field} dir={dir} onSort={toggle}>Solicitado em</SortableTableHead>
+          {variant === 'pendentes' && (
+            <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+          )}
+          {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
+          <TableHead className="text-right">Ações</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {linhas.map((reg) => (
+          <RegistrationRow
+            key={reg.id}
+            reg={reg}
+            variant={variant}
+            onOpen={() => setOpenId(reg.id)}
+            onView={() => setViewId(reg.id)}
+            onLink={() => setLinkTarget(reg)}
+            onDelete={() => setDeleteTarget(reg)}
+            onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
+            onUndecline={() => undeclineMut.mutate(reg.id)}
+            termos={termosByPending[reg.id] || []}
+            onGerarTermo={() => setTermoTarget(reg)}
+            onVerTermos={() => setTermoPanelTarget(reg)}
+            isMarking={undeclineMut.isPending}
+          />
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
