@@ -1407,7 +1407,7 @@ export function useEditarProposta() {
           { campo: 'proposal_details', de: detalhesAnteriores, para: detalhesNovos },
           { campo: 'origem_lead', de: antes.origem_lead || '', para: depois.origem_lead || '' },
         ];
-        const alteracoes = cmp.filter(c => String(c.de) !== String(c.para));
+        const alteracoes = [...cmp.filter(c => String(c.de) !== String(c.para)), ...propagacoes];
 
         if (alteracoes.length > 0) {
           const { data: userData } = await supabase.auth.getUser();
