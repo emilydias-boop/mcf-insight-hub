@@ -17,6 +17,8 @@ import { usePendingRegistration, type PendingRegistration } from '@/hooks/useCon
 import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
 
 import { useBatchUploadPendingDocuments } from '@/hooks/useConsorcioDocuments';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { TIPO_DOCUMENTO_OPTIONS, type TipoDocumento } from '@/types/consorcio';
 import { documentosFaltantes, tipoDocumentoLabel } from '@/lib/consorcioDocumentosEsperados';
 import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
@@ -286,8 +288,14 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
                         pendingRegistrationId: reg.id,
                         documents: [{ file, tipo: tipoUpload }],
                       });
+                      // Documento do cliente vale para a venda inteira: a linha
+                      // é replicada para as cartas irmãs (sem reupload).
+                      if ((reg as any).proposal_id) {
+                        await replicarDocumentosDaVenda((reg as any).proposal_id);
+                      }
                       e.target.value = '';
                       void refetchDocs();
+
                     }}
                   />
                   <Button

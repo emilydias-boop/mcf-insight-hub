@@ -11,6 +11,8 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEnviarProposta } from '@/hooks/useConsorcioPostMeeting';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { useConsorcioTipoOptions, useConsorcioOrigemOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CartasProposalEditor } from './CartasProposalEditor';
 import { DadosClienteFields, TipoPessoaSelect, useDadosCliente } from './DadosClienteBloco';
@@ -91,7 +93,9 @@ export function ProposalModal({
             deal_id: dealId,
             tipo_pessoa: cliente.tipoPessoa,
             vendedor_name: vendedorName || '',
-            // Documentos são do cliente: sobem uma vez, no primeiro cadastro.
+            // Documento é do cliente e vale para a venda inteira: sobe uma vez
+            // (no primeiro cadastro) e depois é replicado para as cartas irmãs
+            // sem reupload do binário.
             documents: idx === 0 ? docs : [],
             empresa_paga_parcelas: parcelas.empresa_paga_parcelas,
             tipo_contrato: parcelas.tipo_contrato,
@@ -99,11 +103,19 @@ export function ProposalModal({
             valor_credito: carta ? Number(carta.valor_credito) : undefined,
             prazo_meses: carta ? Number(carta.prazo_meses) : undefined,
             tipo_produto: carta?.tipo_produto || undefined,
+            // Dados do plano nascem na carta e descem para o cadastro.
+            parcela_1a_12a: carta?.parcela_1a_12a ?? undefined,
+            parcela_demais: carta?.parcela_demais ?? undefined,
+            condicao_pagamento: carta?.condicao_pagamento || undefined,
+            objetivo: carta?.objetivo || undefined,
             origem: origemLead || undefined,
             observacoes: details.trim() || undefined,
             ...dados,
           } as any);
         }
+        // Replica a linha do documento para todos os cadastros da venda.
+        await replicarDocumentosDaVenda(resultado.proposal_id);
+
         if (!cliente.checklistOk || !cliente.docsOk) {
           toast.warning(
             `Venda lançada com cadastro incompleto — vai aparecer em ${CONSORCIO_LABELS.cotasAFazer} como pendência.`,

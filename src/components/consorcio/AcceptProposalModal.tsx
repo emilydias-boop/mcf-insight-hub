@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
@@ -55,9 +57,18 @@ function CartaPlanoBloco({ carta, index, total, onChange, copia, onRepetir }: Ca
   useEffect(() => {
     if (hidratado.current) return;
     hidratado.current = true;
-    plano.hidratar({ valorCredito: Number(carta.valor_credito) || null, prazo: Number(carta.prazo_meses) || null });
+    // O bloco já vem preenchido com o plano digitado no lançamento da venda.
+    plano.hidratar({
+      valorCredito: Number(carta.valor_credito) || null,
+      prazo: Number(carta.prazo_meses) || null,
+      condicao: carta.condicao_pagamento ?? null,
+      parcela1a12: carta.parcela_1a_12a != null ? Number(carta.parcela_1a_12a) : null,
+      parcelaDemais: carta.parcela_demais != null ? Number(carta.parcela_demais) : null,
+      objetivo: carta.objetivo ?? null,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carta.id]);
+
 
   // Conveniência do 1º bloco: replica condição e objetivo nas demais cartas.
   const ultimaCopia = useRef(0);
@@ -158,9 +169,10 @@ export function AcceptProposalModal({
       // Cartas da proposta: cada carta ainda sem cadastro gera 1 cadastro pendente.
       const { data: cartas } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, pending_registration_id')
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id')
         .eq('proposal_id', proposalId)
         .order('ordem', { ascending: true });
+
       return { ...(data as any), cartas: cartas || [] };
     },
   });
@@ -175,6 +187,18 @@ export function AcceptProposalModal({
       plano.setValorCreditoStr(numberToBRLInput(Number(proposal.valor_credito)));
     }
     if (!prazo && proposal.prazo_meses) plano.setPrazo(String(proposal.prazo_meses));
+    // Carta única: o plano digitado no lançamento já vem preenchido aqui.
+    const cartasProp = ((proposal as any)?.cartas || []).filter((c: any) => !c.pending_registration_id);
+    if (cartasProp.length === 1) {
+      const c0 = cartasProp[0];
+      plano.hidratar({
+        condicao: c0.condicao_pagamento ?? null,
+        parcela1a12: c0.parcela_1a_12a != null ? Number(c0.parcela_1a_12a) : null,
+        parcelaDemais: c0.parcela_demais != null ? Number(c0.parcela_demais) : null,
+        objetivo: c0.objetivo ?? null,
+      });
+    }
+
     // Aproveita telefone/e-mail do contato do negócio, sem sobrescrever o que o operador já digitou
     const contato = (proposal as any)?.crm_deals?.crm_contacts;
     const phone = contato?.phone || '';
@@ -219,8 +243,10 @@ export function AcceptProposalModal({
         deal_id: dealId,
         tipo_pessoa: tipoPessoa,
         vendedor_name: vendedorName,
-        // Documentos são do cliente: sobem uma única vez, no primeiro cadastro.
+        // Documento é do cliente e vale para a venda inteira: sobe uma única vez
+        // e a linha é replicada para as cartas irmãs logo abaixo.
         documents: i === 0 ? documents : [],
+
         empresa_paga_parcelas: parcelas.empresa_paga_parcelas,
         tipo_contrato: parcelas.tipo_contrato,
         parcelas_pagas_empresa: parcelas.parcelas_pagas_empresa,
@@ -247,9 +273,12 @@ export function AcceptProposalModal({
         ...cleanData,
       } as any);
     }
+    // Replica a linha do documento para todos os cadastros da venda.
+    await replicarDocumentosDaVenda(proposalId);
 
     onOpenChange(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

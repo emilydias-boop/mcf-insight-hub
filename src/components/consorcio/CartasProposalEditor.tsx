@@ -6,13 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, Plus, Trash2 } from 'lucide-react';
-import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
+import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput } from '@/lib/brlMask';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import {
   MAX_CARTAS_POR_PROPOSTA,
   PARCELAS_MARCAVEIS,
   PropostaCartaDraft,
   cartaDraftValida,
+  cartaSemParcela,
   novaCartaDraft,
   totalCartas,
 } from '@/types/consorcioCartas';
@@ -30,11 +32,13 @@ interface CartasProposalEditorProps {
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
+
 export function CartasProposalEditor({
   cartas, onChange, tipoOptions, mostrarErros,
 }: CartasProposalEditorProps) {
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
+  const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
@@ -59,6 +63,10 @@ export function CartasProposalEditor({
         prazoOutro: base.prazoOutro,
         tipoProduto: base.tipoProduto,
         parcelasMcf: [...base.parcelasMcf],
+        parcela1a12Str: base.parcela1a12Str,
+        parcelaDemaisStr: base.parcelaDemaisStr,
+        condicaoPagamento: base.condicaoPagamento,
+        objetivo: base.objetivo,
       }),
     );
 
@@ -74,6 +82,8 @@ export function CartasProposalEditor({
 
   const total = totalCartas(cartas);
   const incompletas = cartas.filter(c => !cartaDraftValida(c)).length;
+  const semParcela = cartas.filter(cartaSemParcela).length;
+
 
   return (
     <TooltipProvider>
@@ -94,7 +104,15 @@ export function CartasProposalEditor({
                 className={`rounded-md border p-2.5 space-y-2 ${invalida ? 'border-destructive bg-destructive/5' : 'border-border'}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Carta {i + 1}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Carta {i + 1}
+                    {(() => {
+                      const digits = c.valorStr.replace(/\D/g, '');
+                      const v = digits ? Number(digits) / 100 : 0;
+                      return v > 0 ? ` · ${fmtBRL(v)}` : '';
+                    })()}
+                  </span>
+
                   <div className="flex items-center gap-1">
                     <Input
                       className="h-7 w-14 text-xs"
@@ -203,6 +221,82 @@ export function CartasProposalEditor({
                   </div>
                 </div>
 
+                {/* Dados do plano da carta. Opcionais no lançamento — mas sem o
+                    valor da parcela o cadastro nasce como cadastro incompleto e
+                    o Termo de Adesão não sai. Nada é calculado aqui: o valor é o
+                    da tabela da Embracon, digitado pela pessoa. */}
+                <div className="space-y-2 rounded-md border border-dashed p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label className="text-xs">
+                      Plano da carta {i + 1}
+                      {(() => {
+                        const digits = c.valorStr.replace(/\D/g, '');
+                        const v = digits ? Number(digits) / 100 : 0;
+                        return v > 0 ? ` · ${fmtBRL(v)}` : '';
+                      })()}
+                      <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
+                    </Label>
+                    {cartaSemParcela(c) && (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                        sem parcela → cadastro incompleto
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="h-9"
+                        value={c.parcela1a12Str}
+                        onChange={e => patch(c.key, { parcela1a12Str: formatBRLInput(e.target.value) })}
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Demais parcelas (R$)</Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="h-9"
+                        value={c.parcelaDemaisStr}
+                        onChange={e => patch(c.key, { parcelaDemaisStr: formatBRLInput(e.target.value) })}
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Condição de pagamento</Label>
+                      <Select
+                        value={c.condicaoPagamento}
+                        onValueChange={v => patch(c.key, { condicaoPagamento: v })}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
+                        <SelectContent>
+                          {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Objetivo</Label>
+                      <Select value={c.objetivo} onValueChange={v => patch(c.key, { objetivo: v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Objetivo" /></SelectTrigger>
+                        <SelectContent>
+                          {objetivoOptions.map(o => (
+                            <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                          ))}
+                          {c.objetivo && !objetivoOptions.some(o => o.name === c.objetivo) && (
+                            <SelectItem value={c.objetivo}>{c.objetivo} (legado)</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+
                 {/* Intenção do closer: quais das 12 primeiras parcelas a MCF paga.
                     Não é verdade oficial — a confirmação acontece na etapa 5. */}
                 <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
@@ -269,6 +363,16 @@ export function CartasProposalEditor({
             informe crédito, prazo e produto em cada linha.
           </p>
         )}
+
+        {semParcela > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {semParcela === 1
+              ? '1 carta sem valor de parcela'
+              : `${semParcela} cartas sem valor de parcela`} — a venda pode ser lançada, mas o
+            cadastro fica marcado como cadastro incompleto e o Termo de Adesão só sai depois de preencher.
+          </p>
+        )}
+
       </div>
     </TooltipProvider>
   );

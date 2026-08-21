@@ -554,7 +554,7 @@ export function useProposals() {
         const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
           supabase
             .from('consorcio_proposal_cartas')
-            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, pending_registration_id, consortium_card_id')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id, consortium_card_id')
             .in('proposal_id', lote)
             .order('id', { ascending: true })
             .range(from, to)
@@ -568,11 +568,15 @@ export function useProposals() {
             prazo_meses: Number(c.prazo_meses) || 0,
             tipo_produto: c.tipo_produto || '',
             parcelas_mcf: Array.isArray(c.parcelas_mcf) ? c.parcelas_mcf.map(Number) : null,
-
+            parcela_1a_12a: c.parcela_1a_12a != null ? Number(c.parcela_1a_12a) : null,
+            parcela_demais: c.parcela_demais != null ? Number(c.parcela_demais) : null,
+            condicao_pagamento: c.condicao_pagamento || null,
+            objetivo: c.objetivo || null,
             pending_registration_id: c.pending_registration_id,
             consortium_card_id: c.consortium_card_id,
           });
         });
+
         Object.values(cartasByProposal).forEach(list => list.sort((a, b) => a.ordem - b.ordem));
       }
 
@@ -751,10 +755,16 @@ export function useEnviarProposta() {
           tipo_produto: c.tipo_produto,
           // Intenção de parcelas MCF: só registro, não vira cronograma nem comissão.
           parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
+          // Dados do plano são propriedade da CARTA (opcionais no lançamento).
+          parcela_1a_12a: c.parcela_1a_12a ?? null,
+          parcela_demais: c.parcela_demais ?? null,
+          condicao_pagamento: c.condicao_pagamento ?? null,
+          objetivo: c.objetivo ?? null,
           created_by: user?.id ?? null,
         })) as any)
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf');
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo');
       if (cartasError) throw cartasError;
+
 
       // 2. Move deal to PROPOSTA ENVIADA (only VdA has this stage)
       const isVdA = params.origin_id === '4e2b810a-6782-4ce9-9c0d-10d04c018636';
@@ -773,7 +783,10 @@ export function useEnviarProposta() {
         cartas: (cartasCriadas || []) as Array<{
           id: string; ordem: number; valor_credito: number;
           prazo_meses: number; tipo_produto: string; parcelas_mcf: number[] | null;
+          parcela_1a_12a: number | null; parcela_demais: number | null;
+          condicao_pagamento: string | null; objetivo: string | null;
         }>,
+
       };
     },
 
@@ -1233,7 +1246,7 @@ export function useEditarProposta() {
       // pela trigger do banco.
       const { data: atuaisRaw, error: atuaisErr } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, pending_registration_id, consortium_card_id, valor_credito, prazo_meses, tipo_produto')
+        .select('id, pending_registration_id, consortium_card_id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo')
         .eq('proposal_id', params.proposal_id);
       if (atuaisErr) throw atuaisErr;
       const atuais = (atuaisRaw || []) as any[];
@@ -1250,8 +1263,10 @@ export function useEditarProposta() {
         );
       }
 
+      const num = (v: unknown) => (v == null || v === '' ? null : Number(v));
+
       // Cartas que já viraram cota na Embracon não podem ter valor/prazo/produto
-      // alterados por aqui: a cota real é a fonte da verdade.
+      // nem dados do plano alterados por aqui: a cota real é a fonte da verdade.
       for (const c of cartas) {
         if (!c.id) continue;
         const a = atuais.find(x => x.id === c.id);
@@ -1259,7 +1274,11 @@ export function useEditarProposta() {
         const mudou =
           Number(a.valor_credito) !== Number(c.valor_credito) ||
           Number(a.prazo_meses) !== Number(c.prazo_meses) ||
-          String(a.tipo_produto || '') !== String(c.tipo_produto || '');
+          String(a.tipo_produto || '') !== String(c.tipo_produto || '') ||
+          num(a.parcela_1a_12a) !== num(c.parcela_1a_12a) ||
+          num(a.parcela_demais) !== num(c.parcela_demais) ||
+          String(a.condicao_pagamento || '') !== String(c.condicao_pagamento || '') ||
+          String(a.objetivo || '') !== String(c.objetivo || '');
         if (!mudou) continue;
         const { data: card } = await supabase
           .from('consortium_cards')
@@ -1286,6 +1305,10 @@ export function useEditarProposta() {
               prazo_meses: c.prazo_meses,
               tipo_produto: c.tipo_produto,
               parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
+              parcela_1a_12a: c.parcela_1a_12a ?? null,
+              parcela_demais: c.parcela_demais ?? null,
+              condicao_pagamento: c.condicao_pagamento ?? null,
+              objetivo: c.objetivo ?? null,
             } as any)
             .eq('id', c.id);
           if (error) throw error;
@@ -1294,7 +1317,7 @@ export function useEditarProposta() {
           if (a?.pending_registration_id) {
             const { data: reg, error: regErr } = await supabase
               .from('consorcio_pending_registrations')
-              .select('id, valor_credito, prazo_meses, tipo_produto, consortium_card_id')
+              .select('id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, consortium_card_id')
               .eq('id', a.pending_registration_id)
               .maybeSingle();
             if (regErr) throw regErr;
@@ -1310,6 +1333,18 @@ export function useEditarProposta() {
               if (String(r.tipo_produto || '') !== String(c.tipo_produto || '')) {
                 difs.push({ campo: `cadastro[${ordem}].tipo_produto`, de: r.tipo_produto || '', para: c.tipo_produto || '' });
               }
+              if (num(r.parcela_1a_12a) !== num(c.parcela_1a_12a)) {
+                difs.push({ campo: `cadastro[${ordem}].parcela_1a_12a`, de: num(r.parcela_1a_12a), para: num(c.parcela_1a_12a) });
+              }
+              if (num(r.parcela_demais) !== num(c.parcela_demais)) {
+                difs.push({ campo: `cadastro[${ordem}].parcela_demais`, de: num(r.parcela_demais), para: num(c.parcela_demais) });
+              }
+              if (String(r.condicao_pagamento || '') !== String(c.condicao_pagamento || '')) {
+                difs.push({ campo: `cadastro[${ordem}].condicao_pagamento`, de: r.condicao_pagamento || '', para: c.condicao_pagamento || '' });
+              }
+              if (String(r.objetivo || '') !== String(c.objetivo || '')) {
+                difs.push({ campo: `cadastro[${ordem}].objetivo`, de: r.objetivo || '', para: c.objetivo || '' });
+              }
               if (difs.length > 0) {
                 const { error: propErr } = await supabase
                   .from('consorcio_pending_registrations')
@@ -1317,6 +1352,10 @@ export function useEditarProposta() {
                     valor_credito: c.valor_credito,
                     prazo_meses: c.prazo_meses,
                     tipo_produto: c.tipo_produto,
+                    parcela_1a_12a: c.parcela_1a_12a ?? null,
+                    parcela_demais: c.parcela_demais ?? null,
+                    condicao_pagamento: c.condicao_pagamento ?? null,
+                    objetivo: c.objetivo ?? null,
                   } as any)
                   .eq('id', r.id);
                 // Propagação é obrigatória: se falhar, a edição inteira falha.
@@ -1339,11 +1378,16 @@ export function useEditarProposta() {
               prazo_meses: c.prazo_meses,
               tipo_produto: c.tipo_produto,
               parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
+              parcela_1a_12a: c.parcela_1a_12a ?? null,
+              parcela_demais: c.parcela_demais ?? null,
+              condicao_pagamento: c.condicao_pagamento ?? null,
+              objetivo: c.objetivo ?? null,
             } as any);
           if (error) throw error;
         }
 
       }
+
       if (removiveis.length > 0) {
         const { error } = await supabase
           .from('consorcio_proposal_cartas')

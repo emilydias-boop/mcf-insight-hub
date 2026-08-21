@@ -54,7 +54,12 @@ function cartasParaDrafts(
     prazoOutro: !!c.prazo_meses && !PRAZO_OPTIONS.some(o => o.value === Number(c.prazo_meses)),
     tipoProduto: c.tipo_produto || '',
     parcelasMcf: normalizarParcelasMcf(c.parcelas_mcf),
+    parcela1a12Str: c.parcela_1a_12a ? numberToBRLInput(Number(c.parcela_1a_12a)) : '',
+    parcelaDemaisStr: c.parcela_demais ? numberToBRLInput(Number(c.parcela_demais)) : '',
+    condicaoPagamento: c.condicao_pagamento || '',
+    objetivo: c.objetivo || '',
     travada: !!(c.pending_registration_id || c.consortium_card_id),
+
   }));
 
 }

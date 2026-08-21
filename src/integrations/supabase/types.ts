@@ -4836,11 +4836,15 @@ export type Database = {
       }
       consorcio_proposal_cartas: {
         Row: {
+          condicao_pagamento: string | null
           consortium_card_id: string | null
           created_at: string
           created_by: string | null
           id: string
+          objetivo: string | null
           ordem: number
+          parcela_1a_12a: number | null
+          parcela_demais: number | null
           parcelas_mcf: number[] | null
           pending_registration_id: string | null
           prazo_meses: number
@@ -4849,11 +4853,15 @@ export type Database = {
           valor_credito: number
         }
         Insert: {
+          condicao_pagamento?: string | null
           consortium_card_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          objetivo?: string | null
           ordem?: number
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_mcf?: number[] | null
           pending_registration_id?: string | null
           prazo_meses: number
@@ -4862,11 +4870,15 @@ export type Database = {
           valor_credito: number
         }
         Update: {
+          condicao_pagamento?: string | null
           consortium_card_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
+          objetivo?: string | null
           ordem?: number
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_mcf?: number[] | null
           pending_registration_id?: string | null
           prazo_meses?: number

@@ -14,6 +14,11 @@ export interface PropostaCarta {
   tipo_produto: string;
   /** Intenção: quais das 12 primeiras parcelas a MCF pretende pagar. */
   parcelas_mcf?: number[] | null;
+  /** Dados do plano — propriedade da CARTA (uma de 150k ≠ uma de 200k). */
+  parcela_1a_12a?: number | null;
+  parcela_demais?: number | null;
+  condicao_pagamento?: string | null;
+  objetivo?: string | null;
   pending_registration_id: string | null;
   consortium_card_id: string | null;
 }
@@ -25,6 +30,11 @@ export interface PropostaCartaInput {
   prazo_meses: number;
   tipo_produto: string;
   parcelas_mcf?: number[];
+  /** Dados do plano por carta — opcionais (podem ser completados depois). */
+  parcela_1a_12a?: number | null;
+  parcela_demais?: number | null;
+  condicao_pagamento?: string | null;
+  objetivo?: string | null;
 }
 
 /** Linha em edição no formulário (valor em string por causa da máscara BRL). */
@@ -37,9 +47,15 @@ export interface PropostaCartaDraft {
   tipoProduto: string;
   /** Marcação das 12 primeiras parcelas que a MCF paga (intenção do closer). */
   parcelasMcf: number[];
+  /** Dados do plano da carta (opcionais). */
+  parcela1a12Str: string;
+  parcelaDemaisStr: string;
+  condicaoPagamento: string;
+  objetivo: string;
   /** Carta já vinculada a cadastro/cota: não pode ser removida. */
   travada?: boolean;
 }
+
 
 export const MAX_CARTAS_POR_PROPOSTA = 50;
 
@@ -54,6 +70,10 @@ export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCart
     prazoOutro: false,
     tipoProduto: '',
     parcelasMcf: [],
+    parcela1a12Str: '',
+    parcelaDemaisStr: '',
+    condicaoPagamento: '',
+    objetivo: '',
     ...base,
     id: undefined,
     travada: false,
@@ -64,6 +84,16 @@ export function cartaDraftValida(c: PropostaCartaDraft): boolean {
   const digits = c.valorStr.replace(/\D/g, '');
   const valor = digits ? Number(digits) / 100 : 0;
   return valor > 0 && Number(c.prazoMeses) > 0 && !!c.tipoProduto.trim();
+}
+
+/** Parcela é opcional no lançamento — sem ela o cadastro nasce incompleto. */
+export function cartaSemParcela(c: PropostaCartaDraft): boolean {
+  return !(brlParaNumero(c.parcela1a12Str) > 0);
+}
+
+function brlParaNumero(s: string): number {
+  const digits = String(s || '').replace(/\D/g, '');
+  return digits ? Number(digits) / 100 : 0;
 }
 
 export function totalCartas(cartas: PropostaCartaDraft[]): number {
@@ -82,9 +112,14 @@ export function draftsParaInput(cartas: PropostaCartaDraft[]): PropostaCartaInpu
       prazo_meses: Number(c.prazoMeses),
       tipo_produto: c.tipoProduto,
       parcelas_mcf: normalizarParcelasMcf(c.parcelasMcf),
+      parcela_1a_12a: brlParaNumero(c.parcela1a12Str) || null,
+      parcela_demais: brlParaNumero(c.parcelaDemaisStr) || null,
+      condicao_pagamento: c.condicaoPagamento || null,
+      objetivo: c.objetivo || null,
     };
   });
 }
+
 
 /** Ordena, tira repetidos e mantém só números dentro das 12 primeiras parcelas. */
 export function normalizarParcelasMcf(parcelas: number[] | null | undefined): number[] {

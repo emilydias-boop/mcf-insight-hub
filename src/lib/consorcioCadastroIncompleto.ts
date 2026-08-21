@@ -33,8 +33,12 @@ export function camposCadastroFaltantes(
   reg: Record<string, unknown> & { tipo_pessoa?: string | null },
 ): string[] {
   const campos = reg?.tipo_pessoa === 'pj' ? CAMPOS_PJ : CAMPOS_PF;
-  return campos.filter(c => !preenchido(reg?.[c.key])).map(c => c.label);
+  const faltantes = campos.filter(c => !preenchido(reg?.[c.key])).map(c => c.label);
+  // Sem valor de parcela o Termo de Adesão não pode ser gerado.
+  if (!preenchido(reg?.parcela_1a_12a)) faltantes.push('Valor da parcela (1ª à 12ª)');
+  return faltantes;
 }
+
 
 /** Texto curto para selo/tooltip: "faltam 3: CPF, E-mail, Renda". */
 export function resumoCamposFaltantes(faltantes: string[]): string {
