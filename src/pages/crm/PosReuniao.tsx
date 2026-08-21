@@ -349,15 +349,51 @@ function PropostasTab({
   );
 
   const { data: comCadastro } = useProposalIdsWithPendingRegistration(idsAceitasSemCota);
-  const [, setSearchParamsProp] = useSearchParams();
-  const irParaCadastro = (p: Proposal) => {
-    setSearchParamsProp(prev => {
-      const next = new URLSearchParams(prev);
-      next.set('tab', 'pendentes');
-      next.set('qPe', p.contact_name || p.deal_name || '');
-      return next;
-    });
+
+  /**
+   * Selo do termo de adesão na coluna Status. Só visibilidade — não muda etapa
+   * nem cálculo: a etapa 3 continua governada pela assinatura.
+   */
+  const seloTermo = (p: Proposal) => {
+    const t = termosDe(p)[0];
+    if (!t) return null;
+    if (t.status === 'pendente') {
+      const dias = diasDesde(t.created_at);
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs border-amber-500 text-amber-600"
+          title={`Termo gerado em ${new Date(t.created_at).toLocaleString('pt-BR')}${
+            dias != null ? ` — aguardando assinatura há ${dias} dia(s)` : ''
+          }`}
+        >
+          Termo aguardando assinatura
+        </Badge>
+      );
+    }
+    if (t.status === 'assinado') {
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs border-emerald-500 text-emerald-600"
+          title={t.assinado_em ? `Assinado em ${new Date(t.assinado_em).toLocaleString('pt-BR')}` : undefined}
+        >
+          Termo assinado
+          {t.assinado_em ? ` · ${format(new Date(t.assinado_em), 'dd/MM/yyyy', { locale: ptBR })}` : ''}
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs text-muted-foreground font-normal"
+        title={t.cancelado_motivo || undefined}
+      >
+        {t.status === 'cancelado' ? 'Termo cancelado' : 'Termo expirado'}
+      </Badge>
+    );
   };
+
 
   if (isLoading) return <LoadingState />;
 
