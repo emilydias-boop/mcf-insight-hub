@@ -690,6 +690,11 @@ function RegistrationRow({
   onGerarTermo: () => void;
   onVerTermos: () => void;
   isMarking: boolean;
+  /** Linha da lista "Aguardando assinatura do termo": bloqueia só "Cota Cadastrada". */
+  travadaAssinatura?: boolean;
+  /** Âncora do selo de dias parados nas linhas travadas (geração do termo). */
+  esperandoDesde?: string | null;
+
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
   const doc = reg.tipo_pessoa === 'pf' ? reg.cpf : reg.cnpj;
