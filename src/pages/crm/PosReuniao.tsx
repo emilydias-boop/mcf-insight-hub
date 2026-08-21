@@ -232,6 +232,8 @@ function PropostasTab({
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente' | 'recusada'>('all');
   const [closerFilter, setCloserFilter] = useState('all');
+  const [addCartaOpen, setAddCartaOpen] = useState(false);
+
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PropostaSortField>({
     campos: PROPOSTA_SORT_FIELDS,
     inicial: { field: 'meeting_date', dir: 'desc' },
@@ -731,7 +733,11 @@ function PropostasTab({
           <Download className="h-4 w-4 mr-1" />
           Exportar Excel
         </Button>
+        <Button size="sm" onClick={() => setAddCartaOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar Carta
+        </Button>
       </CardHeader>
+
       <CardContent>
         {onlyNaoAceitas && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
