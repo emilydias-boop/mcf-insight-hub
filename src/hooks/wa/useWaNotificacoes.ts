@@ -159,12 +159,17 @@ export function useWaNotificacoes({
     0,
   );
 
+  /** Título de antes de montar: restaurado no desmonte, sem vazar o contador. */
+  const tituloOriginalRef = useRef<string | null>(null);
   useEffect(() => {
-    const original = document.title;
-    document.title = totalNaoLidas > 0 ? `(${totalNaoLidas}) ${tituloBase}` : tituloBase;
+    if (tituloOriginalRef.current === null) tituloOriginalRef.current = document.title;
     return () => {
-      document.title = original;
+      if (tituloOriginalRef.current !== null) document.title = tituloOriginalRef.current;
     };
+  }, []);
+
+  useEffect(() => {
+    document.title = totalNaoLidas > 0 ? `(${totalNaoLidas}) ${tituloBase}` : tituloBase;
   }, [totalNaoLidas, tituloBase]);
 
   return { totalNaoLidas };
