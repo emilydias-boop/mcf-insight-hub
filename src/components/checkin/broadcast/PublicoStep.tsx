@@ -209,8 +209,26 @@ export function PublicoStep({
         </Alert>
       )}
 
+      <Collapsible
+        open={emRevisao ? refinarAberto : true}
+        onOpenChange={setRefinarAberto}
+        className="space-y-4"
+      >
+        {emRevisao && (
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
+              Refinar seleção
+              <ChevronDown
+                className={`ml-2 h-3.5 w-3.5 transition-transform ${refinarAberto ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+        )}
+        <CollapsibleContent className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2">
+
           <Label>De onde vem o público</Label>
           <Select
             value={escopo}
