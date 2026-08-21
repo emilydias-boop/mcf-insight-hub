@@ -4479,6 +4479,8 @@ export type Database = {
           origem_detalhe: string | null
           parcela_1a_12a: number | null
           parcela_demais: number | null
+          parcela_inicial_paga_em: string | null
+          parcela_inicial_paga_por: string | null
           parcelas_pagas_empresa: number | null
           patrimonio: number | null
           pix: string | null
@@ -4559,6 +4561,8 @@ export type Database = {
           origem_detalhe?: string | null
           parcela_1a_12a?: number | null
           parcela_demais?: number | null
+          parcela_inicial_paga_em?: string | null
+          parcela_inicial_paga_por?: string | null
           parcelas_pagas_empresa?: number | null
           patrimonio?: number | null
           pix?: string | null
@@ -4639,6 +4643,8 @@ export type Database = {
           origem_detalhe?: string | null
           parcela_1a_12a?: number | null
           parcela_demais?: number | null
+          parcela_inicial_paga_em?: string | null
+          parcela_inicial_paga_por?: string | null
           parcelas_pagas_empresa?: number | null
           patrimonio?: number | null
           pix?: string | null
