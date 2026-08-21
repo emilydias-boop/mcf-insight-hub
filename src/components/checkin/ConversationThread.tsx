@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, Check, CheckCheck, Clock } from 'lucide-react';
 import { Download, FileText, Loader2 } from 'lucide-react';
@@ -137,6 +137,43 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
   const wasNearBottomRef = useRef(true);
   const windowInfo = get24hWindow(conversation.last_inbound_at, now);
 
+  // Rótulo de separador de data em português (padrão WhatsApp).
+  // "Hoje"/"Ontem" usam date-fns (dia civil, não diferença de 24h);
+  // demais usam o dia civil do ano corrente ou completo.
+  const rotuloData = (d: Date): string => {
+    if (isToday(d)) return 'Hoje';
+    if (isYesterday(d)) return 'Ontem';
+    if (isSameYear(d, new Date(now))) {
+      return format(d, "d 'de' MMMM", { locale: ptBR });
+    }
+    return format(d, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+  };
+
+  // Lista unificada de itens: separador antes de cada novo dia civil + a mensagem.
+  // Derivada em useMemo para não recalcular a cada render.
+  const itens = useMemo(() => {
+    let diaAnterior: string | null = null;
+    const resultado: Array<
+      | { tipo: 'separador'; id: string; rotulo: string }
+      | { tipo: 'mensagem'; id: string; mensagem: WaMessage }
+    > = [];
+    for (const m of messages) {
+      const data = new Date(m.created_at);
+      const chaveDia = format(data, 'yyyy-MM-dd');
+      if (chaveDia !== diaAnterior) {
+        resultado.push({
+          tipo: 'separador',
+          id: `sep-${m.id}`,
+          rotulo: rotuloData(data),
+        });
+        diaAnterior = chaveDia;
+      }
+      resultado.push({ tipo: 'mensagem', id: m.id, mensagem: m });
+    }
+    return resultado;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
   // primeiro render / troca de conversa: sempre ao fim
   useEffect(() => {
     const el = scrollRef.current;
@@ -219,7 +256,17 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
             Nenhuma mensagem ainda. Envie a primeira!
           </div>
         )}
-        {messages.map((m) => {
+        {itens.map((item) => {
+          if (item.tipo === 'separador') {
+            return (
+              <div key={item.id} className="flex justify-center my-1">
+                <span className="text-xs text-muted-foreground bg-muted rounded-full px-3 py-1 select-none">
+                  {item.rotulo}
+                </span>
+              </div>
+            );
+          }
+          const m = item.mensagem;
           const outbound = m.direction === 'outbound';
           const failed = outbound && m.status === 'failed';
           const hasMedia = !!m.media_path;
