@@ -350,8 +350,16 @@ export function PendingRegistrationsList({
   );
 
 
-  /** Uma tabela, reaproveitada nas duas seções da fila (e na aba declinadas). */
-  const renderTabela = (linhas: EnrichedPendingRegistration[]) => (
+  /**
+   * Uma tabela, reaproveitada nas seções da fila (e na aba declinadas).
+   * `travadaAssinatura` desabilita apenas "Cota Cadastrada" — "Declinada" segue
+   * ativa, porque uma venda pode morrer enquanto espera assinatura.
+   */
+  const renderTabela = (
+    linhas: EnrichedPendingRegistration[],
+    opcoes?: { travadaAssinatura?: boolean },
+  ) => (
+
     <Table>
       <TableHeader>
         <TableRow>
