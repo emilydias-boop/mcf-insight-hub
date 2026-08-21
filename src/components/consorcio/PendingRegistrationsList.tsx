@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -173,7 +173,6 @@ export function PendingRegistrationsList({
     [allRegistrations, onlyAguardandoAbertura, range?.startDate, range?.endDate],
   );
   const [openId, setOpenId] = useState<string | null>(null);
-  const [viewId, setViewId] = useState<string | null>(null);
   /** Formulário curto "Cota Cadastrada" (grupo, cota, contrato Embracon). */
   const [cadastradaId, setCadastradaId] = useState<string | null>(null);
   /** Dossiê do cadastro: tudo para efetivar a cota, em um clique. */
@@ -348,7 +347,6 @@ export function PendingRegistrationsList({
             reg={reg}
             variant={variant}
             onOpen={() => setOpenId(reg.id)}
-            onView={() => setViewId(reg.id)}
             onDossie={() => setDossieId(reg.id)}
             onCotaCadastrada={() => setCadastradaId(reg.id)}
             onLink={() => setLinkTarget(reg)}
@@ -475,14 +473,6 @@ export function PendingRegistrationsList({
             open={!!openId}
             onOpenChange={(o) => !o && setOpenId(null)}
             registrationId={openId}
-          />
-        )}
-        {viewId && (
-          <OpenCotaModal
-            open={!!viewId}
-            onOpenChange={(o) => !o && setViewId(null)}
-            registrationId={viewId}
-            mode="view"
           />
         )}
         {completarId && (
@@ -613,7 +603,6 @@ function RegistrationRow({
   reg,
   variant,
   onOpen,
-  onView,
   onDossie,
   onCotaCadastrada,
   onLink,
@@ -628,7 +617,6 @@ function RegistrationRow({
   reg: EnrichedPendingRegistration;
   variant: 'pendentes' | 'declinadas';
   onOpen: () => void;
-  onView: () => void;
   onDossie: () => void;
   onCotaCadastrada: () => void;
   onLink: () => void;
@@ -792,15 +780,23 @@ function RegistrationRow({
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
           {variant === 'pendentes' && semCota && (
-            <Button size="sm" onClick={onCotaCadastrada}>
-              <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
-            </Button>
+            <>
+              <Button size="sm" onClick={onCotaCadastrada}>
+                <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
+              </Button>
+              {/* A outra ação que define a etapa 4 também fica na linha, em estilo
+                  discreto de ação destrutiva (o motivo continua obrigatório). */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDecline}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Ban className="h-3 w-3 mr-1" /> Declinada
+              </Button>
+            </>
           )}
-          {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
-            <Button size="sm" variant="outline" onClick={onOpen}>
-              <FileEdit className="h-3 w-3 mr-1" /> Abrir
-            </Button>
-          )}
+
           {variant === 'declinadas' && (
             <Button
               size="sm"
@@ -821,9 +817,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onDossie}>
                 <FileSearch className="h-4 w-4 mr-2" /> Dossiê do cadastro
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onView}>
-                <Eye className="h-4 w-4 mr-2" /> Ver / editar formulário
+              {/* "Abrir" e "Ver / editar formulário" eram o MESMO formulário
+                  (OpenCotaModal). Ficou um só item, editável. */}
+              <DropdownMenuItem onClick={onOpen}>
+                <FileEdit className="h-4 w-4 mr-2" /> Ver / editar formulário completo
               </DropdownMenuItem>
+
               {/* A GERAÇÃO do termo mudou para a etapa 3 (Termos de Adesão Pendentes),
                   onde o trabalho de fazer o cliente assinar acontece. Aqui só se
                   consulta o termo já emitido — informação útil para o cadastro. */}
@@ -837,17 +836,6 @@ function RegistrationRow({
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
-              )}
-              {variant === 'pendentes' && semCota && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={onDecline}
-                    className="text-amber-600 focus:text-amber-700"
-                  >
-                    <Ban className="h-4 w-4 mr-2" /> Declinada — parceiro desistiu
-                  </DropdownMenuItem>
-                </>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
