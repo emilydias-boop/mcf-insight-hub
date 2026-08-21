@@ -81,6 +81,8 @@ export function PublicoStep({
   pendentes,
   montando,
   jaMontou,
+  publicoPronto,
+
   escopo,
   bu,
   busDisponiveis,
