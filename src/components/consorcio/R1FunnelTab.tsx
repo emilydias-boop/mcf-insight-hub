@@ -20,16 +20,19 @@ import {
   r1StatusShortLabel,
   type R1FunnelParticipant,
 } from '@/hooks/useConsorcioR1Funnel';
-import { useProposals } from '@/hooks/useConsorcioPostMeeting';
+import { useProposals, useSemSucesso } from '@/hooks/useConsorcioPostMeeting';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReasonLabel, NO_REASON_LABEL } from '@/lib/meetingOutcomeReasons';
 import { cn } from '@/lib/utils';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
-import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { useDebounce } from '@/hooks/useDebounce';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
+
 
 interface R1FunnelTabProps {
   mode: 'agendadas' | 'realizadas';
