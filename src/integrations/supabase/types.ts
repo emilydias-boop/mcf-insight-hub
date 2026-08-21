@@ -2175,6 +2175,30 @@ export type Database = {
         }
         Relationships: []
       }
+      bkp_dia_vencimento_20260821: {
+        Row: {
+          backup_em: string
+          dia_vencimento_antigo: number | null
+          id: string
+          nome_completo: string | null
+          tabela: string
+        }
+        Insert: {
+          backup_em?: string
+          dia_vencimento_antigo?: number | null
+          id: string
+          nome_completo?: string | null
+          tabela: string
+        }
+        Update: {
+          backup_em?: string
+          dia_vencimento_antigo?: number | null
+          id?: string
+          nome_completo?: string | null
+          tabela?: string
+        }
+        Relationships: []
+      }
       bkp_profiles_squad_20260819: {
         Row: {
           backup_em: string | null
@@ -5379,7 +5403,7 @@ export type Database = {
           data_fundacao: string | null
           data_nascimento: string | null
           data_reserva: string | null
-          dia_vencimento: number
+          dia_vencimento: number | null
           e_transferencia: boolean | null
           email: string | null
           email_comercial: string | null
@@ -5458,7 +5482,7 @@ export type Database = {
           data_fundacao?: string | null
           data_nascimento?: string | null
           data_reserva?: string | null
-          dia_vencimento: number
+          dia_vencimento?: number | null
           e_transferencia?: boolean | null
           email?: string | null
           email_comercial?: string | null
@@ -5537,7 +5561,7 @@ export type Database = {
           data_fundacao?: string | null
           data_nascimento?: string | null
           data_reserva?: string | null
-          dia_vencimento?: number
+          dia_vencimento?: number | null
           e_transferencia?: boolean | null
           email?: string | null
           email_comercial?: string | null
