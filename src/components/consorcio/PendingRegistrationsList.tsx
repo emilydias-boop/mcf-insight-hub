@@ -60,6 +60,9 @@ import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
@@ -284,10 +287,10 @@ export function PendingRegistrationsList({
     const wb = XLSX.utils.book_new();
     const sheetName =
       variant === 'declinadas' ? 'Cartas Declinadas'
-      : 'Cadastros Pendentes';
+      : CONSORCIO_LABELS.cotasAFazer;
     const fileSlug =
       variant === 'declinadas' ? 'cartas-declinadas'
-      : 'cadastros-pendentes';
+      : 'cotas-a-fazer';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
   };
@@ -376,7 +379,7 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
           {variant === 'pendentes' && maisAntigoFila != null && (
             <Tooltip>
