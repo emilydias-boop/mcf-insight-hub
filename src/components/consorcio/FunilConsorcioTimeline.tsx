@@ -147,20 +147,28 @@ export function FunilConsorcioTimeline({
   const naoAceitas = propostasPeriodo.filter((p: any) => p.status !== 'aceita').length;
 
 
-  // Etapa 4 — TODOS os cadastros criados no período (evento, não status).
+  // Etapa 4 — cadastros criados no período (evento, não status), MENOS as vendas
+  // travadas esperando assinatura do termo: decisão do dono, a bolinha conta só
+  // as liberadas para cadastro. Filtramos na ORIGEM para o funil não descolar da
+  // lista da etapa 4, que aplica exatamente a mesma regra.
   // Eixo aceite_date ?? created_at.
   const cadastrosPeriodo = useMemo(
     () =>
       pendentes
-        ? pendentes.filter((r: any) => isInPeriod(r.aceite_date || r.created_at, range))
+        ? pendentes.filter(
+            (r: any) =>
+              isInPeriod(r.aceite_date || r.created_at, range) &&
+              !cadastroTravadoSemAssinatura(r, termosByProposal, termosByPending),
+          )
         : null,
-    [pendentes, period.startDate, period.endDate],
+    [pendentes, period.startDate, period.endDate, termosByProposal, termosByPending],
   );
   const pendentesCount = cadastrosPeriodo ? cadastrosPeriodo.length : null;
-  /** Estoque atual da fila da equipe de acompanhamento. */
+  /** Estoque atual da fila da equipe de acompanhamento (só liberadas). */
   const aguardandoAbertura = cadastrosPeriodo
     ? cadastrosPeriodo.filter((r: any) => r.status === 'aguardando_abertura').length
     : 0;
+
 
   // Etapa 5 — "Cotas Cadastradas" = cotas RESERVADAS na Embracon no período, restritas
   // às que têm origem no funil (cadastro pendente vinculado).
