@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
@@ -10,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertTriangle, Info, Loader2, Users } from 'lucide-react';
+import { AlertTriangle, Info, Loader2, Users, X } from 'lucide-react';
 import {
-  useWaEstagiosDisponiveis,
+  useWaEstagiosNoEscopo,
+  useWaTagsNoEscopo,
   useWaIgnoradosPorMotivo,
   useWaOrigensDisponiveis,
   useWaSendBudget,
@@ -21,8 +24,10 @@ import {
   WaBroadcastEscopo,
   BU_VOLUME_MINIMO,
 } from '@/hooks/wa/useWaBroadcasts';
+import { MultiSelecaoPopover } from './MultiSelecaoPopover';
 import { DONO_INATIVO_ALERTA_PCT, formatMinutos, motivoLabel } from './waBroadcastLabels';
 import { formatDateTime } from '@/lib/formatters';
+
 
 
 interface Props {
