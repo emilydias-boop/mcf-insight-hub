@@ -554,7 +554,7 @@ export function useProposals() {
         const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
           supabase
             .from('consorcio_proposal_cartas')
-            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id, consortium_card_id')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, pending_registration_id, consortium_card_id')
             .in('proposal_id', lote)
             .order('id', { ascending: true })
             .range(from, to)
@@ -572,6 +572,7 @@ export function useProposals() {
             parcela_demais: c.parcela_demais != null ? Number(c.parcela_demais) : null,
             condicao_pagamento: c.condicao_pagamento || null,
             objetivo: c.objetivo || null,
+            categoria: c.categoria || null,
             pending_registration_id: c.pending_registration_id,
             consortium_card_id: c.consortium_card_id,
           });
@@ -760,9 +761,10 @@ export function useEnviarProposta() {
           parcela_demais: c.parcela_demais ?? null,
           condicao_pagamento: c.condicao_pagamento ?? null,
           objetivo: c.objetivo ?? null,
+          categoria: c.categoria ?? null,
           created_by: user?.id ?? null,
         })) as any)
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo');
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria');
       if (cartasError) throw cartasError;
 
 
@@ -785,6 +787,7 @@ export function useEnviarProposta() {
           prazo_meses: number; tipo_produto: string; parcelas_mcf: number[] | null;
           parcela_1a_12a: number | null; parcela_demais: number | null;
           condicao_pagamento: string | null; objetivo: string | null;
+          categoria: string | null;
         }>,
 
       };

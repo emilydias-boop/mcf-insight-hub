@@ -42,7 +42,7 @@ function cartasParaDrafts(
     : [{
         id: undefined as any, proposal_id: '', ordem: 1,
         valor_credito: fallback.valor, prazo_meses: fallback.prazo, tipo_produto: fallback.tipo,
-        parcelas_mcf: null,
+        parcelas_mcf: null, categoria: null,
         pending_registration_id: null, consortium_card_id: null,
       } as PropostaCarta];
 
@@ -58,6 +58,7 @@ function cartasParaDrafts(
     parcelaDemaisStr: c.parcela_demais ? numberToBRLInput(Number(c.parcela_demais)) : '',
     condicaoPagamento: c.condicao_pagamento || '',
     objetivo: c.objetivo || '',
+    categoria: c.categoria || '',
     travada: !!(c.pending_registration_id || c.consortium_card_id),
 
   }));
