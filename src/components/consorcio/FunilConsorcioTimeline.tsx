@@ -112,6 +112,9 @@ export function FunilConsorcioTimeline({
   const { data: r1, isLoading: loadingR1 } = useConsorcioR1Funnel(range);
   const { data: proposals, isLoading: loadingProposals } = useProposals();
   const { data: pendentes } = usePendingRegistrations([...PENDING_REGISTRATION_ALL_STATUSES]);
+  const { data: termosByPending = {} } = useTermosByPending();
+  const { data: termosByProposal = {} } = useTermosByProposal();
+
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: reservadas, isLoading: loadingReservadas } = useConsorcioCotasReservadas(range);
