@@ -253,14 +253,16 @@ export function ConversationThread({
             value={conversation.status}
             onValueChange={(v) => onStatusChange(v as WaConversationStatus)}
           >
-            <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-32 sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WA_STATUS_OPTIONS.map((s) => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {acoesCabecalho}
         </div>
+
       </div>
 
       <div
