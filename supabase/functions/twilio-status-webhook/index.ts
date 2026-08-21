@@ -116,6 +116,51 @@ Deno.serve(async (req) => {
       console.error('[twilio-status-webhook] update wa_messages falhou', e);
     }
 
+    // O SID tambem pode ser de um alvo de disparo (wa_broadcast_targets). Sem isso,
+    // uma falha de entrega posterior ao "aceito" pela Twilio deixava o alvo como
+    // 'enviado' e o total_falhas do disparo mentia. 'delivered'/'read' nao mexem no
+    // alvo: 'enviado' ja e o estado correto.
+    if (['failed', 'undelivered'].includes(status)) {
+      try {
+        const { data: alvos, error } = await admin
+          .from('wa_broadcast_targets')
+          .update({
+            status: 'falha',
+            erro: `[${errorCode ?? status}] ${errorMessage ?? 'entrega falhou'}`,
+          })
+          .eq('twilio_message_sid', sid)
+          .select('broadcast_id');
+        if (error) throw error;
+
+        // Recalculamos os contadores a partir da tabela (em vez de incrementar) para
+        // o callback ser idempotente se a Twilio reentregar o mesmo status.
+        const broadcastIds = Array.from(
+          new Set((alvos ?? []).map((a: { broadcast_id: string | null }) => a.broadcast_id).filter(
+            (id): id is string => !!id,
+          )),
+        );
+        for (const broadcastId of broadcastIds) {
+          const { count: enviados } = await admin
+            .from('wa_broadcast_targets')
+            .select('id', { count: 'exact', head: true })
+            .eq('broadcast_id', broadcastId)
+            .eq('status', 'enviado');
+          const { count: falhas } = await admin
+            .from('wa_broadcast_targets')
+            .select('id', { count: 'exact', head: true })
+            .eq('broadcast_id', broadcastId)
+            .eq('status', 'falha');
+          await admin
+            .from('wa_broadcasts')
+            .update({ total_enviados: enviados ?? 0, total_falhas: falhas ?? 0 })
+            .eq('id', broadcastId);
+        }
+      } catch (e) {
+        console.error('[twilio-status-webhook] update wa_broadcast_targets falhou', e);
+      }
+    }
+
+
     return new Response('ok', { status: 200, headers: corsHeaders });
   } catch (e: any) {
     console.error('[twilio-status-webhook] error', e);
