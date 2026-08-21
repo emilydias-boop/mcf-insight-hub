@@ -283,7 +283,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
                       const file = e.target.files?.[0];
                       if (!file) return;
                       await upload.mutateAsync({
-                        pendingRegistrationId: registrationId,
+                        pendingRegistrationId: reg.id,
                         documents: [{ file, tipo: tipoUpload }],
                       });
                       e.target.value = '';
