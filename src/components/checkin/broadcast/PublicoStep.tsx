@@ -450,7 +450,7 @@ export function PublicoStep({
         </div>
       )}
 
-      {jaMontou && alertaDonoInativo && (
+      {mostrarNumeros && alertaDonoInativo && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
@@ -461,7 +461,7 @@ export function PublicoStep({
         </Alert>
       )}
 
-      {jaMontou && totalIgnorados > 0 && (
+      {mostrarNumeros && totalIgnorados > 0 && (
         <Card>
           <CardContent className="pt-4">
             <p className="mb-2 text-sm font-medium">Por que ficam de fora</p>
