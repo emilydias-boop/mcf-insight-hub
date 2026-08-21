@@ -318,21 +318,37 @@ export function PendingRegistrationsList({
   };
 
   /**
-   * Duas listas da etapa 4: pendente = aguardando abertura de cota.
+   * Etapa 4 divide "Pendentes" em duas: LIBERADAS (termo assinado — é o que a
+   * equipe de cadastro trabalha) e TRAVADAS (venda esperando assinatura).
    * Pendentes do mais parado para o mais recente (created_at, não updated_at).
    */
-  const pendentes = useMemo(
-    () =>
-      filtered
-        .filter((r) => r.status === 'aguardando_abertura')
-        .slice()
-        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))),
+  const maisAntigoPrimeiro = (a: EnrichedPendingRegistration, b: EnrichedPendingRegistration) =>
+    String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  const aguardando = useMemo(
+    () => filtered.filter((r) => r.status === 'aguardando_abertura'),
     [filtered],
+  );
+  const pendentes = useMemo(
+    () => aguardando.filter((r) => !estaTravado(r)).slice().sort(maisAntigoPrimeiro),
+    [aguardando, estaTravado],
+  );
+  const travadas = useMemo(
+    () => aguardando.filter((r) => estaTravado(r)).slice().sort(maisAntigoPrimeiro),
+    [aguardando, estaTravado],
   );
   const tratadas = useMemo(
     () => filtered.filter((r) => r.status !== 'aguardando_abertura'),
     [filtered],
   );
+  /**
+   * Conjunto que alimenta os KPIs e a contagem do funil: fora as vendas travadas
+   * esperando assinatura, para o número de cima não contradizer a lista de baixo.
+   */
+  const registrationsLiberados = useMemo(
+    () => (variant === 'pendentes' ? registrations.filter((r) => !estaTravado(r)) : registrations),
+    [registrations, estaTravado, variant],
+  );
+
 
   /** Uma tabela, reaproveitada nas duas seções da fila (e na aba declinadas). */
   const renderTabela = (linhas: EnrichedPendingRegistration[]) => (
