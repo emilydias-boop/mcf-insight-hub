@@ -469,6 +469,21 @@ serve(async (req) => {
           sent_at: sendResult.success ? new Date().toISOString() : null
         });
 
+        // Espelha na thread do MCF - Atendimento: só canal WhatsApp, sucesso e falha.
+        // Nunca interfere no envio nem no automation_logs (bloco protegido dentro do helper).
+        if (step.channel === 'whatsapp') {
+          await espelharNaThreadWa(supabase, {
+            telefoneBruto: contact.phone,
+            dealId: item.deal_id,
+            nomeContato: contact.name,
+            corpo: content,
+            remetenteNome: `Automação: ${flow?.name || 'sem nome'}`,
+            sucesso: Boolean(sendResult.success),
+            sid: sendResult.externalId || null,
+            erro: sendResult.error || null,
+          });
+        }
+
         // 10. Update queue item status
         if (sendResult.success) {
           await supabase
