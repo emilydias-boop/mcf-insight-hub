@@ -49,6 +49,8 @@ export function useWaNotificacoes({
   const abrirRef = useRef<Opcoes['onAbrirConversa']>(onAbrirConversa);
   abrirRef.current = onAbrirConversa;
 
+  /** Sufixo por instância, para não colidir com outra montagem do canal. */
+  const sufixoCanal = useRef(Math.random().toString(36).slice(2, 8));
   const audioCtxRef = useRef<AudioContext | null>(null);
   const ultimoSomRef = useRef(0);
   /** Já houve interação do usuário nesta aba? Gate da política de autoplay. */
@@ -122,8 +124,9 @@ export function useWaNotificacoes({
   // ── Realtime de mensagens recebidas (canal próprio) ─────────────────────────
   useEffect(() => {
     if (!uid) return;
+    const nomeCanal = `wa-notificacoes-inbound-${sufixoCanal.current}`;
     const channel = supabase
-      .channel('wa-notificacoes-inbound')
+      .channel(nomeCanal)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'wa_messages' },
@@ -147,7 +150,11 @@ export function useWaNotificacoes({
           notificarNavegador(titulo, corpo, data.id);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn(`[wa-realtime] canal ${nomeCanal}: ${status}`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };

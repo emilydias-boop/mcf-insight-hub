@@ -117,10 +117,14 @@ export function useWaMessages(conversationId: string | null) {
 
   const markReadRef = useRef<() => void>(() => {});
 
+  /** Sufixo por instância: dois montes não podem disputar o mesmo canal. */
+  const sufixoCanal = useRef(Math.random().toString(36).slice(2, 8));
+
   useEffect(() => {
     if (!conversationId) return;
+    const nomeCanal = `wa-conversation-${conversationId}-${sufixoCanal.current}`;
     const channel = supabase
-      .channel(`wa-conversation-${conversationId}`)
+      .channel(nomeCanal)
       .on(
         'postgres_changes',
         {
@@ -139,7 +143,13 @@ export function useWaMessages(conversationId: string | null) {
           }
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn(`[wa-realtime] canal ${nomeCanal}: ${status}`);
+        } else {
+          console.info(`[wa-realtime] canal ${nomeCanal}: SUBSCRIBED`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };

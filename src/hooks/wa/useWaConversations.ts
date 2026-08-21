@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -40,10 +40,15 @@ export function useWaConversations(scope: WaScope = 'mine') {
   const qc = useQueryClient();
   const { user } = useAuth();
   const uid = user?.id ?? null;
+  /** Sufixo por instância: evita duas assinaturas disputando o mesmo canal. */
+  const sufixoCanal = useRef(Math.random().toString(36).slice(2, 8));
 
   const query = useQuery({
     queryKey: ['wa-conversations', scope, uid],
     staleTime: 15_000,
+    // Rede de segurança: se o realtime cair, badge e ordenação ainda aparecem.
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       let q = supabase
         .from('wa_conversations')
@@ -64,12 +69,19 @@ export function useWaConversations(scope: WaScope = 'mine') {
   });
 
   useEffect(() => {
+    const nomeCanal = `wa-conversations-${scope}-${sufixoCanal.current}`;
     const channel = supabase
-      .channel(`wa-conversations-${scope}`)
+      .channel(nomeCanal)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_conversations' }, () => {
         qc.invalidateQueries({ queryKey: ['wa-conversations'] });
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn(`[wa-realtime] canal ${nomeCanal}: ${status}`);
+        } else {
+          console.info(`[wa-realtime] canal ${nomeCanal}: SUBSCRIBED`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
