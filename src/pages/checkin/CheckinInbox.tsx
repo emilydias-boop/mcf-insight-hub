@@ -273,7 +273,44 @@ function ConversationPane({
       onStatusChange={(status) =>
         updateConversation.mutate({ id: conversation.id, patch: { status } })
       }
+      acaoVoltar={
+        // Só em tela pequena, onde a lista dá lugar à conversa.
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 md:hidden"
+          onClick={onVoltar}
+          aria-label="Voltar para a lista de conversas"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+      }
+      acoesCabecalho={
+        // Abaixo de xl o painel do contato sai do fluxo; aqui está o acesso a ele.
+        <Sheet open={painelContatoAberto} onOpenChange={setPainelContatoAberto}>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0 xl:hidden"
+              aria-label="Abrir painel do contato"
+            >
+              <User className="h-4 w-4" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent
+            side="right"
+            className="flex w-full flex-col gap-3 sm:max-w-md"
+          >
+            <SheetHeader>
+              <SheetTitle>Dados do contato</SheetTitle>
+            </SheetHeader>
+            <ContactPanel conversation={conversation} variante="painel" />
+          </SheetContent>
+        </Sheet>
+      }
     >
+
       <MessageComposer
         conversation={conversation}
         now={now}
