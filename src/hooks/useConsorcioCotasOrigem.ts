@@ -109,6 +109,8 @@ function mapCard(c: any, origemFunil = true): CotaReservada {
     vendedor_name: c.vendedor_name || null,
     tipo_registro: c.tipo_registro ?? null,
     contrato_embracon: c.contrato_embracon ?? null,
+    dia_vencimento: c.dia_vencimento ?? null,
+
     origemFunil,
   };
 }
