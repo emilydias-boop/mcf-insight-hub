@@ -35,6 +35,7 @@ export function ConfirmarContratacaoModal({
   const [contrato, setContrato] = useState('');
   const [grupo, setGrupo] = useState('');
   const [cotaNum, setCotaNum] = useState('');
+  const [diaVenc, setDiaVenc] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [semComprovante, setSemComprovante] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -45,10 +46,11 @@ export function ConfirmarContratacaoModal({
     setContrato(cota?.contrato_embracon || '');
     setGrupo(cota?.grupo || '');
     setCotaNum(cota?.cota || '');
+    setDiaVenc(cota?.dia_vencimento ? String(cota.dia_vencimento) : '');
     setFile(null);
     setSemComprovante(false);
     setMotivo('');
-  }, [open, cota?.id, cota?.contrato_embracon, cota?.grupo, cota?.cota]);
+  }, [open, cota?.id, cota?.contrato_embracon, cota?.grupo, cota?.cota, cota?.dia_vencimento]);
 
   const handleConfirm = async () => {
     if (!cota) return;
@@ -64,6 +66,11 @@ export function ConfirmarContratacaoModal({
       toast.error('Descreva o motivo da confirmação sem comprovante (mínimo 10 caracteres)');
       return;
     }
+    const dia = Number(diaVenc);
+    if (!dia || dia < 1 || dia > 31) {
+      toast.error('Informe o dia de vencimento devolvido pela Embracon (1 a 31)');
+      return;
+    }
     if (!grupo.trim() || !cotaNum.trim()) {
       toast.error('Informe o grupo e a cota devolvidos pela Embracon');
       return;
@@ -75,6 +82,7 @@ export function ConfirmarContratacaoModal({
         contratoEmbracon: contrato,
         grupo,
         cota: cotaNum,
+        diaVencimento: dia,
         file: semComprovante ? null : file,
         motivoSemComprovante: semComprovante ? motivo : null,
       });
@@ -136,6 +144,23 @@ export function ConfirmarContratacaoModal({
                 placeholder="Cota informada pela Embracon"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="dia-vencimento-embracon">Dia de vencimento</Label>
+            <Input
+              id="dia-vencimento-embracon"
+              type="number"
+              min={1}
+              max={31}
+              value={diaVenc}
+              onChange={(e) => setDiaVenc(e.target.value)}
+              placeholder="Dia informado pela Embracon"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Na abertura o dia fica "A definir". É aqui, com o retorno da Embracon, que ele passa a valer — o
+              cronograma de parcelas é gerado/recalculado com esse dia.
+            </p>
           </div>
 
           {!semComprovante ? (
