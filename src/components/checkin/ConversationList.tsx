@@ -80,7 +80,13 @@ export function ConversationList({
         </Select>
       </div>
 
-      <ScrollArea className="flex-1">
+      {/* O Viewport do Radix ScrollArea renderiza um div interno com
+          display: table, que faz o conteúdo dimensionar pela largura
+          natural do texto em vez de respeitar o contêiner. Com isso o
+          truncate nunca é acionado e a linha cresce além do Card,
+          cortando o bloco do horário e do badge. Forçamos display:block
+          e largura total para o truncate funcionar corretamente. */}
+      <ScrollArea className="flex-1 [&>div>div]:!block [&>div>div]:!w-full">
         {isLoading && <div className="p-4 text-sm text-muted-foreground">Carregando…</div>}
         {!isLoading && conversations.length === 0 && (
           <div className="p-4 text-sm text-muted-foreground">Nenhuma conversa.</div>
