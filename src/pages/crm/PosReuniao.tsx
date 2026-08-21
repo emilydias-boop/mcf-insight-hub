@@ -49,6 +49,15 @@ import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistra
 import { CotasTab } from '@/components/consorcio/CotasTab';
 import { CotasReservadasTab } from '@/components/consorcio/CotasReservadasTab';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados, diasDesde } from '@/components/consorcio/SeloDiasParados';
+import { TaxaAssinaturaHeader } from '@/components/consorcio/TaxaAssinaturaHeader';
+import { GerarTermoModal } from '@/components/consorcio/GerarTermoModal';
+import { TermoPanelDialog } from '@/components/consorcio/TermoPanelDialog';
+import { FileSignature } from 'lucide-react';
+import {
+  useTermosByProposal, useRegistrationIdsByProposal, type ConsorcioTermo,
+} from '@/hooks/useConsorcioTermos';
 
 const POS_TABS = [
   'r1-agendadas', 'r1-realizadas', 'propostas', 'pendentes', 'cadastradas', 'cotas',
@@ -227,8 +236,6 @@ function PropostasTab({
   const [searchTerm, setSearchTerm] = useState(q);
   const termo = useDebounce(searchTerm, 300);
   useEffect(() => { setQ(termo); /* eslint-disable-next-line */ }, [termo]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
 
   const closerOptions = useMemo(() => {
     const names = [...new Set(allPropostas.map(p => p.closer_name).filter(Boolean))];
@@ -268,13 +275,22 @@ function PropostasTab({
     return ordenarPor(list, PROPOSTA_EXTRATORES[field], dir);
   }, [allPropostas, statusFilter, closerFilter, termo, onlyNaoAceitas, range.startDate, range.endDate, field, dir]);
 
-  const totalPages = Math.max(1, Math.ceil(propostas.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageRows = useMemo(
-    () => propostas.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [propostas, safePage, pageSize],
-  );
-  useEffect(() => { setPage(0); }, [termo, field, dir, pageSize, statusFilter, closerFilter, onlyNaoAceitas]);
+  // Desistências da carta no período (o que o sistema grava como "carta excluída").
+  // Elas ficam fora da métrica da etapa, mas aparecem na lista de tratados.
+  const desistidas = useMemo(() => {
+    let list = allPropostas.filter(
+      p => p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
+    );
+    if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
+    if (termo.trim()) {
+      const t = termo.toLowerCase();
+      list = list.filter(p =>
+        `${p.contact_name || p.deal_name || ''} ${p.closer_name || ''}`.toLowerCase().includes(t),
+      );
+    }
+    return list;
+  }, [allPropostas, closerFilter, termo, range.startDate, range.endDate]);
+
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -282,13 +298,54 @@ function PropostasTab({
   const [viewTarget, setViewTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
+  const [termoTarget, setTermoTarget] = useState<Proposal | null>(null);
+  const [termoPanelTarget, setTermoPanelTarget] = useState<Proposal | null>(null);
+
+  const linhasVisiveis = useMemo(() => [...propostas, ...desistidas], [propostas, desistidas]);
+  const { data: termosByProposal = {} } = useTermosByProposal();
+  const { data: registrationByProposal = {} } = useRegistrationIdsByProposal(
+    useMemo(() => linhasVisiveis.map(p => p.id), [linhasVisiveis]),
+  );
+
+  const termosDe = (p: Proposal): ConsorcioTermo[] => termosByProposal[p.id] || [];
+  const termoAssinadoDe = (p: Proposal) => termosDe(p).find(t => t.status === 'assinado');
+
+  /**
+   * Âncora do selo de dias parados na etapa 3: a geração do termo. Quando a
+   * venda foi lançada e o termo ainda não existe, contamos da data da venda —
+   * são âncoras diferentes e o tooltip diz qual está valendo.
+   */
+  const ancoraDe = (p: Proposal) => {
+    const t = termosDe(p)[0];
+    return t
+      ? { desde: t.created_at, motivo: 'Contando desde a geração do termo de adesão.' }
+      : {
+          desde: p.proposal_date || p.created_at,
+          motivo: 'Termo ainda não gerado — contando desde a data da venda.',
+        };
+  };
+
+  // Pendentes: venda viva, termo ainda não assinado. Tratados: termo assinado
+  // ou desistência da carta.
+  const propostasPendentes = useMemo(
+    () =>
+      propostas
+        .filter(p => !termoAssinadoDe(p))
+        .sort((a, b) => (diasDesde(ancoraDe(b).desde) ?? 0) - (diasDesde(ancoraDe(a).desde) ?? 0)),
+    [propostas, termosByProposal],
+  );
+  const propostasTratadas = useMemo(
+    () => [...propostas.filter(p => !!termoAssinadoDe(p)), ...desistidas],
+    [propostas, desistidas, termosByProposal],
+  );
 
   // Quais cartas já têm cadastro em Cotas a Fazer. Sem isso, "Inserir Dados"
   // cria um SEGUNDO cadastro e re-dispara e-mail/WhatsApp + webhook para o cliente.
   const idsAceitasSemCota = useMemo(
-    () => pageRows.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
-    [pageRows],
+    () => linhasVisiveis.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
+    [linhasVisiveis],
   );
+
   const { data: comCadastro } = useProposalIdsWithPendingRegistration(idsAceitasSemCota);
   const [, setSearchParamsProp] = useSearchParams();
   const irParaCadastro = (p: Proposal) => {
@@ -304,6 +361,263 @@ function PropostasTab({
 
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  const renderTabela = (rows: Proposal[]) => (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortableTableHead field="contato" active={field} dir={dir} onSort={toggle}>Contato</SortableTableHead>
+                <SortableTableHead field="created_at" active={field} dir={dir} onSort={toggle}>Data Proposta</SortableTableHead>
+                <SortableTableHead field="meeting_date" active={field} dir={dir} onSort={toggle}>Data Reunião</SortableTableHead>
+                <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor Crédito</SortableTableHead>
+                <SortableTableHead field="prazo_meses" active={field} dir={dir} onSort={toggle}>Prazo</SortableTableHead>
+                <SortableTableHead field="tipo_produto" active={field} dir={dir} onSort={toggle}>Produto</SortableTableHead>
+                <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+                <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(p => {
+                const proposalDate = p.created_at ? new Date(p.created_at) : null;
+                const daysOverdue = proposalDate && p.documentos_pendentes
+                  ? Math.max(0, Math.floor((Date.now() - proposalDate.getTime()) / (1000 * 60 * 60 * 24)))
+                  : 0;
+                return (
+                <TableRow
+                  key={p.id}
+                  className={`cursor-pointer ${p.documentos_pendentes ? 'bg-destructive/10 hover:bg-destructive/20 border-l-4 border-l-destructive' : ''}`}
+                  onClick={() => setSelectedDealId(p.deal_id)}
+                >
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>{p.contact_name || p.deal_name}</span>
+                      {p.closer_notes && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={e => e.stopPropagation()}
+                              className="text-amber-600"
+                              aria-label="Nota do closer na R1"
+                            >
+                              <StickyNote className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm whitespace-pre-wrap text-xs">
+                            <p className="font-semibold mb-1">Nota do closer na R1</p>
+                            {p.closer_notes}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {proposalDate ? (
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          {format(proposalDate, "dd/MM/yyyy", { locale: ptBR })}
+                        </span>
+                        {!p.carta_excluida && !termoAssinadoDe(p) && (
+                          <SeloDiasParados
+                            desde={ancoraDe(p).desde}
+                            motivo={ancoraDe(p).motivo}
+                          />
+                        )}
+                        {p.documentos_pendentes && daysOverdue > 0 && (
+                          <span
+                            className="animate-frantic-blink font-extrabold text-2xl leading-none text-destructive drop-shadow-sm"
+                            title={`Documentação pendente há ${daysOverdue} dia(s)`}
+                          >
+                            {daysOverdue}d
+                          </span>
+                        )}
+                      </div>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {(p as any).meeting_date
+                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                      : '—'}
+                  </TableCell>
+                  <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
+                  <TableCell>{p.prazo_meses} meses</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 items-start">
+                      {isPropostaSemValor(p) ? (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-amber-500 text-amber-600"
+                          title="Proposta registrada sem valor de crédito — não conta como carta negociada"
+                        >
+                          {labelPropostaSemValor(p)}
+                        </Badge>
+                      ) : (
+                        <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
+                          {p.status === 'aceita' ? 'Cadastrada' : p.status}
+                        </Badge>
+                      )}
+                      {p.documentos_pendentes && (
+                        <Badge
+                          variant="destructive"
+                          className="text-xs cursor-pointer hover:opacity-80"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (p.consortium_card_id) {
+                              setUploadTarget(p);
+                            } else {
+                              setAcceptTarget(p);
+                            }
+                          }}
+                          title={p.consortium_card_id ? 'Anexar documentos faltantes' : 'Cadastrar cota para anexar documentos'}
+                        >
+                          Documento pendente
+                        </Badge>
+                      )}
+                      {(p as any).carta_excluida && (
+                        <Badge
+                          variant="destructive"
+                          className="text-xs cursor-help"
+                          title={`Carta excluída${(p as any).carta_excluida_em ? ' em ' + new Date((p as any).carta_excluida_em).toLocaleString('pt-BR') : ''}${(p as any).carta_excluida_por_nome ? ' por ' + (p as any).carta_excluida_por_nome : ''}\nJustificativa: ${(p as any).carta_excluida_motivo || '—'}`}
+                        >
+                          Desistência da Carta
+                        </Badge>
+                      )}
+                      {(p as any).carta_excluida && (p as any).carta_excluida_motivo && (
+                        <span className="text-[11px] text-muted-foreground italic max-w-[220px] block">
+                          "{(p as any).carta_excluida_motivo}"
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">{p.closer_name || '—'}</TableCell>
+                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
+                    {p.status === 'pendente' && (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={isPropostaSemValor(p)}
+                          title={isPropostaSemValor(p) ? 'Registre valor e prazo antes de cadastrar' : undefined}
+                          onClick={() => setAcceptTarget(p)}
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(p)}>
+                          <XCircle className="h-3 w-3 mr-1" /> Recusar
+                        </Button>
+                      </>
+                    )}
+                    {p.status === 'aceita' && !p.consortium_card_id && (
+                      <>
+                        {comCadastro?.has(p.id) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            title="Esta carta já possui cadastro em Cotas a Fazer — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
+                            onClick={() => irParaCadastro(p)}
+                          >
+                            <FileText className="h-3 w-3 mr-1" /> Abrir cadastro
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={p.cadastro_completo}
+                            title={p.cadastro_completo ? 'Cadastro já preenchido e documento anexado' : undefined}
+                            onClick={() => setAcceptTarget(p)}
+                          >
+                            <FileText className="h-3 w-3 mr-1" /> Inserir Dados
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
+                        </Button>
+                      </>
+                    )}
+                    {p.consortium_card_id && (
+                      <>
+                        <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="Cota já cadastrada"
+                        >
+                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                          <FileText className="h-3 w-3 mr-1" /> Documentos
+                        </Button>
+                        {p.documentos_pendentes && (
+                          <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
+                            <FileText className="h-3 w-3 mr-1" /> Anexar Documentos
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {!p.carta_excluida && (
+                      termosDe(p).length > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTermoPanelTarget(p)}
+                          title="Ver, copiar o link ou reenviar o termo de adesão"
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Ver / reenviar termo
+                        </Button>
+                      ) : registrationByProposal[p.id] ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTermoTarget(p)}
+                          title="Gerar o termo de adesão para o cliente assinar"
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Gerar Termo de Adesão
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="O termo é montado a partir do cadastro da cota. Lance a venda (Inserir Dados) antes de gerar o termo."
+                        >
+                          <FileSignature className="h-3 w-3 mr-1" /> Gerar Termo de Adesão
+                        </Button>
+                      )
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditTarget(p)}
+                      title="Editar a venda (as alterações ficam registradas)"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    {!p.carta_excluida && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteTarget(p)}
+                        title="Desistência da Carta (abate do realizado)"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        );
+
 
   return (
     <Card>
@@ -384,233 +698,18 @@ function PropostasTab({
           title="Crédito Contratado — Termos de Adesão Pendentes"
           className="mb-4"
         />
-        {propostas.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead field="contato" active={field} dir={dir} onSort={toggle}>Contato</SortableTableHead>
-                <SortableTableHead field="created_at" active={field} dir={dir} onSort={toggle}>Data Proposta</SortableTableHead>
-                <SortableTableHead field="meeting_date" active={field} dir={dir} onSort={toggle}>Data Reunião</SortableTableHead>
-                <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor Crédito</SortableTableHead>
-                <SortableTableHead field="prazo_meses" active={field} dir={dir} onSort={toggle}>Prazo</SortableTableHead>
-                <SortableTableHead field="tipo_produto" active={field} dir={dir} onSort={toggle}>Produto</SortableTableHead>
-                <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
-                <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageRows.map(p => {
-                const proposalDate = p.created_at ? new Date(p.created_at) : null;
-                const daysOverdue = proposalDate && p.documentos_pendentes
-                  ? Math.max(0, Math.floor((Date.now() - proposalDate.getTime()) / (1000 * 60 * 60 * 24)))
-                  : 0;
-                return (
-                <TableRow
-                  key={p.id}
-                  className={`cursor-pointer ${p.documentos_pendentes ? 'bg-destructive/10 hover:bg-destructive/20 border-l-4 border-l-destructive' : ''}`}
-                  onClick={() => setSelectedDealId(p.deal_id)}
-                >
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>{p.contact_name || p.deal_name}</span>
-                      {p.closer_notes && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={e => e.stopPropagation()}
-                              className="text-amber-600"
-                              aria-label="Nota do closer na R1"
-                            >
-                              <StickyNote className="h-4 w-4" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-sm whitespace-pre-wrap text-xs">
-                            <p className="font-semibold mb-1">Nota do closer na R1</p>
-                            {p.closer_notes}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {proposalDate ? (
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground">
-                          {format(proposalDate, "dd/MM/yyyy", { locale: ptBR })}
-                        </span>
-                        {p.documentos_pendentes && daysOverdue > 0 && (
-                          <span
-                            className="animate-frantic-blink font-extrabold text-2xl leading-none text-destructive drop-shadow-sm"
-                            title={`Documentação pendente há ${daysOverdue} dia(s)`}
-                          >
-                            {daysOverdue}d
-                          </span>
-                        )}
-                      </div>
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {(p as any).meeting_date
-                      ? format(new Date((p as any).meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                      : '—'}
-                  </TableCell>
-                  <TableCell>{formatCurrency(p.valor_credito)}</TableCell>
-                  <TableCell>{p.prazo_meses} meses</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs capitalize">{p.tipo_produto}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 items-start">
-                      {isPropostaSemValor(p) ? (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-amber-500 text-amber-600"
-                          title="Proposta registrada sem valor de crédito — não conta como carta negociada"
-                        >
-                          {labelPropostaSemValor(p)}
-                        </Badge>
-                      ) : (
-                        <Badge variant={p.status === 'aceita' ? 'default' : 'outline'} className="text-xs capitalize">
-                          {p.status === 'aceita' ? 'Cadastrada' : p.status}
-                        </Badge>
-                      )}
-                      {p.documentos_pendentes && (
-                        <Badge
-                          variant="destructive"
-                          className="text-xs cursor-pointer hover:opacity-80"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (p.consortium_card_id) {
-                              setUploadTarget(p);
-                            } else {
-                              setAcceptTarget(p);
-                            }
-                          }}
-                          title={p.consortium_card_id ? 'Anexar documentos faltantes' : 'Cadastrar cota para anexar documentos'}
-                        >
-                          Documento pendente
-                        </Badge>
-                      )}
-                      {(p as any).carta_excluida && (
-                        <Badge
-                          variant="destructive"
-                          className="text-xs cursor-help"
-                          title={`Carta excluída${(p as any).carta_excluida_em ? ' em ' + new Date((p as any).carta_excluida_em).toLocaleString('pt-BR') : ''}${(p as any).carta_excluida_por_nome ? ' por ' + (p as any).carta_excluida_por_nome : ''}\nJustificativa: ${(p as any).carta_excluida_motivo || '—'}`}
-                        >
-                          Carta excluída
-                        </Badge>
-                      )}
-                      {(p as any).carta_excluida && (p as any).carta_excluida_motivo && (
-                        <span className="text-[11px] text-muted-foreground italic max-w-[220px] block">
-                          "{(p as any).carta_excluida_motivo}"
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">{p.closer_name || '—'}</TableCell>
-                  <TableCell className="text-right space-x-2" onClick={e => e.stopPropagation()}>
-                    {p.status === 'pendente' && (
-                      <>
-                        <Button
-                          size="sm"
-                          disabled={isPropostaSemValor(p)}
-                          title={isPropostaSemValor(p) ? 'Registre valor e prazo antes de cadastrar' : undefined}
-                          onClick={() => setAcceptTarget(p)}
-                        >
-                          <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(p)}>
-                          <XCircle className="h-3 w-3 mr-1" /> Recusar
-                        </Button>
-                      </>
-                    )}
-                    {p.status === 'aceita' && !p.consortium_card_id && (
-                      <>
-                        {comCadastro?.has(p.id) ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            title="Esta carta já possui cadastro em Cotas a Fazer — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
-                            onClick={() => irParaCadastro(p)}
-                          >
-                            <FileText className="h-3 w-3 mr-1" /> Abrir cadastro
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={p.cadastro_completo}
-                            title={p.cadastro_completo ? 'Cadastro já preenchido e documento anexado' : undefined}
-                            onClick={() => setAcceptTarget(p)}
-                          >
-                            <FileText className="h-3 w-3 mr-1" /> Inserir Dados
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
-                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
-                        </Button>
-                      </>
-                    )}
-                    {p.consortium_card_id && (
-                      <>
-                        <Badge className="bg-primary/10 text-primary text-xs">Cota Cadastrada</Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled
-                          title="Cota já cadastrada"
-                        >
-                          <FileText className="h-3 w-3 mr-1" /> Inserir Dados
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setViewTarget(p)}>
-                          <FileText className="h-3 w-3 mr-1" /> Ver Dados
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
-                          <FileText className="h-3 w-3 mr-1" /> Documentos
-                        </Button>
-                        {p.documentos_pendentes && (
-                          <Button size="sm" variant="outline" onClick={() => setUploadTarget(p)}>
-                            <FileText className="h-3 w-3 mr-1" /> Anexar Documentos
-                          </Button>
-                        )}
-                      </>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditTarget(p)}
-                      title="Editar valores da proposta"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteTarget(p)}
-                      title="Excluir proposta (abate do realizado)"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-
-        <TablePagination
-          page={safePage}
-          pageSize={pageSize}
-          total={propostas.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+        <TaxaAssinaturaHeader range={range} className="mb-4" />
+        <FilaDuasListas
+          pendentes={propostasPendentes}
+          tratadas={propostasTratadas}
+          renderTabela={renderTabela}
+          tituloPendentes="Pendentes — termo de adesão não assinado"
+          tituloTratadas="Tratados — termo assinado ou desistência da carta"
+          descricaoPendentes="ordenado do mais parado para o mais recente"
+          vazioPendentes="Nenhum termo de adesão pendente no período."
+          vazioTratadas="Nenhum termo assinado nem desistência no período."
         />
+
 
         {semSucessoTarget && (
           <SemSucessoModal
@@ -660,6 +759,28 @@ function PropostasTab({
           proposal={deleteTarget}
           onClose={() => setDeleteTarget(null)}
         />
+
+        {termoTarget && registrationByProposal[termoTarget.id] && (
+          <GerarTermoModal
+            open={!!termoTarget}
+            onOpenChange={o => !o && setTermoTarget(null)}
+            registrationId={registrationByProposal[termoTarget.id]}
+          />
+        )}
+
+        {termoPanelTarget && (
+          <TermoPanelDialog
+            open={!!termoPanelTarget}
+            onOpenChange={o => !o && setTermoPanelTarget(null)}
+            termos={termosDe(termoPanelTarget)}
+            clienteNome={termoPanelTarget.contact_name || termoPanelTarget.deal_name || 'cliente'}
+            onGerarNovo={() => {
+              const alvo = termoPanelTarget;
+              setTermoPanelTarget(null);
+              if (alvo && registrationByProposal[alvo.id]) setTermoTarget(alvo);
+            }}
+          />
+        )}
 
         {editTarget && (
           <EditProposalModal
@@ -719,12 +840,12 @@ function DeletePropostaDialog({
     <AlertDialog open={!!proposal} onOpenChange={o => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir Carta Negociada?</AlertDialogTitle>
+          <AlertDialogTitle>Registrar Desistência da Carta?</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
               {proposal && (
                 <p>
-                  Você está excluindo a carta de{' '}
+                  Você está registrando a desistência da carta de{' '}
                   <strong>{proposal.contact_name || proposal.deal_name}</strong> no valor de{' '}
                   <strong>{formatCurrency(proposal.valor_credito || 0)}</strong>.
                 </p>
@@ -749,12 +870,12 @@ function DeletePropostaDialog({
               </p>
               <div>
                 <label className="text-sm font-medium">
-                  Motivo da exclusão <span className="text-destructive">*</span>
+                  Motivo da desistência <span className="text-destructive">*</span>
                 </label>
                 <Textarea
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  placeholder="Descreva o motivo da exclusão/cancelamento…"
+                  placeholder="Descreva o motivo da desistência…"
                   rows={3}
                   className="mt-1"
                 />
@@ -778,7 +899,7 @@ function DeletePropostaDialog({
               }
             }}
           >
-            {excluir.isPending ? 'Excluindo…' : 'Excluir'}
+            {excluir.isPending ? 'Registrando…' : 'Registrar desistência'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

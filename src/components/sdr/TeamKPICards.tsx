@@ -1,5 +1,7 @@
-import { 
+import { CONSORCIO_LABELS } from "@/lib/consorcioLabels";
+import {
   Calendar, 
+
   CalendarCheck,
   CheckCircle, 
   XCircle, 
@@ -85,7 +87,7 @@ export function TeamKPICards({
   const pendentesTotal = pendentesBreakdown ? pendentesBreakdown.total : pendentesArit;
   const pendentesTooltip = pendentesBreakdown
     ? `Reuniões marcadas para o período que não viraram Realizada nem No-Show:\n• Futuras (ainda vão acontecer): ${pendentesBreakdown.futuras}\n• Vencidas s/ desfecho (já passaram e ninguém atualizou): ${pendentesBreakdown.vencidas}\n• Remanejados/Restituídos: ${pendentesBreakdown.canceladas}\nClique para destrinchar.`
-    : "R1 Agendada − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.";
+    : `${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.`;
   const segLineFor = (
     key: 'agendamentos' | 'r1Agendada' | 'r1Realizada' | 'noShows' | 'contratos',
   ): string | undefined =>
@@ -124,13 +126,13 @@ export function TeamKPICards({
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
       tooltip: isConsorcio
-        ? "Agendamentos feitos no período (data do agendamento), enquanto R1 Agendada conta reuniões marcadas para o período (data da reunião). Por serem eixos diferentes, os dois números não precisam ser iguais."
+        ? "Agendamentos feitos no período (data do agendamento), enquanto Reuniões Agendadas conta reuniões marcadas para o período (data da reunião). Por serem eixos diferentes, os dois números não precisam ser iguais."
         : "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
       segLine: segLineFor('agendamentos'),
     }]),
     {
-      title: "R1 Agendada",
+      title: isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada",
       value: kpis.totalR1Agendada,
       icon: CalendarCheck,
       color: "text-cyan-500",
@@ -140,7 +142,7 @@ export function TeamKPICards({
       segLine: segLineFor('r1Agendada'),
     },
     {
-      title: "R1 Realizada",
+      title: isConsorcio ? CONSORCIO_LABELS.reunioesRealizadas : "R1 Realizada",
       value: kpis.totalRealizadas,
       icon: CheckCircle,
       color: "text-green-500",
@@ -181,7 +183,7 @@ export function TeamKPICards({
       icon: Users,
       color: "text-lime-500",
       bgColor: "bg-lime-500/10",
-      tooltip: "Clientes distintos que contrataram ao menos uma cota no período. Um cliente que contrata várias cotas conta uma vez. É o numerador da Conversão Vendas / R1.",
+      tooltip: "Clientes distintos que contrataram ao menos uma cota no período. Um cliente que contrata várias cotas conta uma vez. É o numerador da Conversão Vendas / Reunião.",
     }] : []),
     {
       title: isConsorcio ? "Cotas Contratadas" : "Contratos",
@@ -216,13 +218,13 @@ export function TeamKPICards({
       customOnClick: onRefundClick,
     },
     {
-      title: isConsorcio ? "Conversão Vendas / R1" : "Taxa Conversão",
+      title: isConsorcio ? CONSORCIO_LABELS.conversaoVendasReuniao : "Taxa Conversão",
       value: `${kpis.taxaConversao.toFixed(1)}%`,
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
       tooltip: isConsorcio
-        ? "Vendas Realizadas (clientes distintos que contrataram no período, contados uma única vez em todo o conjunto) ÷ R1 Realizada × 100. É o mesmo número do Total das abas SDRs e Closers."
+        ? "Vendas Realizadas (clientes distintos que contrataram no período, contados uma única vez em todo o conjunto) ÷ Reuniões Realizadas × 100. É o mesmo número do Total das abas SDRs e Closers."
         : "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
     },
     {
@@ -231,7 +233,7 @@ export function TeamKPICards({
       icon: AlertTriangle,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
-      tooltip: "Global agregada: Σ No-Shows / Σ R1 Agendada × 100.",
+      tooltip: `Global agregada: Σ No-Shows / Σ ${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} × 100.`,
     },
   ];
 

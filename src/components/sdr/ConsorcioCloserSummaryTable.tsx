@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { CONSORCIO_LABELS } from "@/lib/consorcioLabels";
 import {
   Table,
   TableBody,
@@ -136,8 +137,8 @@ export function ConsorcioCloserSummaryTable({
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{CONSORCIO_LABELS.reunioesAgendadas}</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{CONSORCIO_LABELS.reunioesRealizadas}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
@@ -165,9 +166,9 @@ export function ConsorcioCloserSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Vendas Realizadas ÷ R1 Realizadas. Um cliente que contrata várias cotas conta uma vez."
+                title="Vendas Realizadas ÷ Reuniões Realizadas. Um cliente que contrata várias cotas conta uma vez."
               >
-                Conv. Vendas / R1
+                {CONSORCIO_LABELS.convVendasReuniao}
               </TableHead>
               {onCloserClick && <TableHead className="w-8" />}
             </TableRow>

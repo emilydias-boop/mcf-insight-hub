@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CONSORCIO_LABELS } from "@/lib/consorcioLabels";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -162,8 +163,8 @@ export function ConsorcioSdrSummaryTable({
               <TableHead className="text-muted-foreground font-medium">SDR</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Meta</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Agendamento</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{CONSORCIO_LABELS.reunioesAgendadas}</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">{CONSORCIO_LABELS.reunioesRealizadas}</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
@@ -191,9 +192,9 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Vendas Realizadas ÷ R1 Realizadas. Um cliente que contrata várias cotas conta uma vez."
+                title="Vendas Realizadas ÷ Reuniões Realizadas. Um cliente que contrata várias cotas conta uma vez."
               >
-                Conv. Vendas / R1
+                {CONSORCIO_LABELS.convVendasReuniao}
               </TableHead>
               {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
@@ -450,7 +451,7 @@ export function ConsorcioSdrSummaryTable({
       <p className="px-4 py-2 text-xs text-muted-foreground">
         Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em
         Cotas Contratadas. A atribuição é por cliente (todas as cotas dele vão para o SDR do
-        último agendamento de consórcio), então as linhas somam o Total nas três colunas.
+        última reunião de consórcio agendada), então as linhas somam o Total nas três colunas.
       </p>
 
       <ResiduoDetalheModal

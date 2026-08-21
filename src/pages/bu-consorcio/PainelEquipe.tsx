@@ -768,8 +768,8 @@ export default function ConsorcioPainelEquipe() {
     const resumoData = filteredBySDR.map(sdr => ({
       "SDR": sdr.sdrName,
       "Agendamento": sdr.agendamentos,
-      "R1 Agendada": sdr.r1Agendada,
-      "R1 Realizada": sdr.r1Realizada,
+      [CONSORCIO_LABELS.reunioesAgendadas]: sdr.r1Agendada,
+      [CONSORCIO_LABELS.reunioesRealizadas]: sdr.r1Realizada,
       "No-Show": sdr.noShows,
       "Contrato PAGO": sdr.contratos,
     }));
