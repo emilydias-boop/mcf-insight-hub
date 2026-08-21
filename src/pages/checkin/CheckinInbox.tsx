@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWaConversations, useUpdateWaConversation, WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
 import { useWaMessages, WaSendError } from '@/hooks/wa/useWaMessages';
@@ -19,7 +19,7 @@ export default function CheckinInbox() {
 
   const [scope, setScope] = useState<WaScope>('mine');
   const [novaConversaAberto, setNovaConversaAberto] = useState(false);
-  const { data: conversations = [], isLoading } = useWaConversations(scope);
+  const { data: conversations = [], isLoading, isFetching, refetch } = useWaConversations(scope);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
