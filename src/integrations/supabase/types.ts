@@ -4865,6 +4865,44 @@ export type Database = {
           },
         ]
       }
+      consorcio_proposal_edit_log: {
+        Row: {
+          alteracoes: Json
+          created_at: string
+          deal_id: string | null
+          edited_by: string | null
+          edited_by_nome: string | null
+          id: string
+          proposal_id: string
+        }
+        Insert: {
+          alteracoes?: Json
+          created_at?: string
+          deal_id?: string | null
+          edited_by?: string | null
+          edited_by_nome?: string | null
+          id?: string
+          proposal_id: string
+        }
+        Update: {
+          alteracoes?: Json
+          created_at?: string
+          deal_id?: string | null
+          edited_by?: string | null
+          edited_by_nome?: string | null
+          id?: string
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_proposal_edit_log_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_proposals: {
         Row: {
           aceite_at: string | null
