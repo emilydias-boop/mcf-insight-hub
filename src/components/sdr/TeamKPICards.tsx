@@ -86,7 +86,7 @@ export function TeamKPICards({
   const pendentesTotal = pendentesBreakdown ? pendentesBreakdown.total : pendentesArit;
   const pendentesTooltip = pendentesBreakdown
     ? `Reuniões marcadas para o período que não viraram Realizada nem No-Show:\n• Futuras (ainda vão acontecer): ${pendentesBreakdown.futuras}\n• Vencidas s/ desfecho (já passaram e ninguém atualizou): ${pendentesBreakdown.vencidas}\n• Remanejados/Restituídos: ${pendentesBreakdown.canceladas}\nClique para destrinchar.`
-    : `${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.";
+    : `${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.`;
   const segLineFor = (
     key: 'agendamentos' | 'r1Agendada' | 'r1Realizada' | 'noShows' | 'contratos',
   ): string | undefined =>
