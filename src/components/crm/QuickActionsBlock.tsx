@@ -139,7 +139,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     await makeCall(normalizedPhone, deal?.id, contact?.id, deal?.origin_id);
   };
   
-  const handleWhatsApp = () => {
+  // Fallback: abre o wa.me numa aba externa (comportamento original).
+  // Preservado para usuários sem acesso ao MCF - Atendimento.
+  const abrirWaMe = () => {
     let phone = extractPhoneFromDeal(deal, contact);
     
     if (!phone) {
@@ -178,6 +180,23 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     });
     
     window.open(`https://wa.me/${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // Abre a conversa dentro do MCF - Atendimento quando o usuário tem acesso.
+  // Em caso de erro (telefone inválido, opt-out, conversa atribuída a outra
+  // pessoa) o toast já é emitido pelo hook — não cair no wa.me, pois isso
+  // furaria justamente as proteções da RPC.
+  const handleWhatsApp = async () => {
+    if (!hasAccess || !deal?.id) {
+      abrirWaMe();
+      return;
+    }
+    try {
+      const conversationId = await abrirConversa.mutateAsync(deal.id);
+      navigate(`/checkin?conversa=${conversationId}`);
+    } catch {
+      // Erro intencional e acionável — o toast já foi emitido pelo hook.
+    }
   };
   
   const handleMoveStage = async () => {
