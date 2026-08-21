@@ -336,6 +336,12 @@ function CriarDisparoDialog({
    */
   const contagemIndisponivel = pendentes === null || buscandoPendentes || erroPendentes;
 
+  /**
+   * Público existe de fato: montado agora no wizard ou já vindo do banco (é o
+   * caso do disparo criado a partir de uma seleção do CRM, que nasce montado).
+   * Uma mudança de filtro invalida o que veio do banco até remontar.
+   */
+  const publicoPronto = jaMontou || (!publicoInvalidado && (pendentes ?? 0) > 0);
 
   /**
    * Qualquer mudança de filtro, escopo ou limite invalida o público já montado:
@@ -344,8 +350,10 @@ function CriarDisparoDialog({
    */
   const invalidarPublico = () => {
     setJaMontou(false);
+    setPublicoInvalidado(true);
     setPublicoMontadoEm(null);
   };
+
   const handleStageIdsChange = (v: string[]) => {
     setStageIds(v);
     invalidarPublico();
