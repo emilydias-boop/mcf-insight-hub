@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
 import { AlertTriangle, Check, ExternalLink, Link2, Loader2, Lock, Search } from "lucide-react";
 import {
   Dialog,
@@ -53,6 +56,25 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   const { data: r1PorDeal } = useR1ConsorcioPorDeal(leads.map((l) => l.dealId), open);
   const corrigir = useCorrigirVinculoCota();
 
+  // Nome do lead vinculado hoje: a pessoa precisa ver o que está trocando.
+  const dealAtualId = item?.dealId ?? null;
+  const { data: leadAtual } = useQuery({
+    queryKey: ["lead-vinculado-atual", dealAtualId],
+    enabled: open && !!dealAtualId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<{ nome: string } | null> => {
+      const { data, error } = await supabase
+        .from("crm_deals")
+        .select("name, crm_contacts(name)")
+        .eq("id", dealAtualId!)
+        .maybeSingle();
+      if (error) throw error;
+      const d = data as any;
+      return d ? { nome: d?.crm_contacts?.name || d?.name || "lead sem nome" } : null;
+    },
+  });
+
+
   const fmtDia = (iso?: string | null) => {
     if (!iso) return null;
     try {
@@ -97,6 +119,8 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   };
 
   const criaCadastro = !item?.pendingRegId;
+  /** O vínculo já existe e aponta para o lead errado: é troca, não criação. */
+  const trocandoLead = !!item?.dealId;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -104,12 +128,14 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-4 w-4" />
-            Corrigir vínculo da cota com o lead
+            {trocandoLead ? "Trocar o lead desta cota" : "Corrigir vínculo da cota com o lead"}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            {criaCadastro
-              ? "Esta cota não tem cadastro no fluxo de venda. Ao escolher o lead, o cadastro é criado já vinculado à cota, copiando os dados do titular."
-              : "O cadastro desta cota existe, mas está sem lead. Escolha o lead do CRM a que a cota pertence."}
+            {trocandoLead
+              ? "Esta cota já aponta para um lead, mas não é o lead que passou pela reunião. Escolha abaixo o lead com o selo \"tem R1 de consórcio\" — é ele que credita a venda."
+              : criaCadastro
+                ? "Esta cota não tem cadastro no fluxo de venda. Ao escolher o lead, o cadastro é criado já vinculado à cota, copiando os dados do titular."
+                : "O cadastro desta cota existe, mas está sem lead. Escolha o lead do CRM a que a cota pertence."}
           </DialogDescription>
         </DialogHeader>
 
@@ -122,8 +148,24 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
               {titular?.telefone ? ` · ${titular.telefone}` : ""}
               {titular?.email ? ` · ${titular.email}` : ""}
             </div>
+            {trocandoLead && (
+              <div className="pt-1 border-t mt-1 flex items-center gap-1 flex-wrap">
+                <span className="text-muted-foreground">Lead vinculado hoje:</span>
+                <span className="font-medium">{leadAtual?.nome || "carregando..."}</span>
+                <a
+                  href={`/consorcio/crm/negocios?deal=${item.dealId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Abrir o lead vinculado hoje"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
           </div>
         )}
+
 
         {!!arrastadas?.cotas && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
@@ -303,7 +345,12 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
             }
           >
             {corrigir.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {criaCadastro ? "Criar cadastro e vincular" : "Vincular ao lead"}
+            {trocandoLead
+              ? "Trocar para este lead"
+              : criaCadastro
+                ? "Criar cadastro e vincular"
+                : "Vincular ao lead"}
+
           </Button>
         </DialogFooter>
       </DialogContent>

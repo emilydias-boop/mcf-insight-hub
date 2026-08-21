@@ -276,10 +276,12 @@ export function ResiduoDetalheModal(props: Props) {
                             {i.motivo}
                             {i.atribuidoA && (
                               <Badge variant="outline" className="text-[10px]">
-                                Resultado já atribuído a {i.atribuidoA} por outra cota do mesmo
-                                cliente — falta o vínculo desta cota.
+                                {i.problema === "sem_reuniao_bu"
+                                  ? `Crédito já está com ${i.atribuidoA} — falta esta cota apontar para o lead que teve a R1.`
+                                  : `Crédito já está com ${i.atribuidoA} por outra cota deste cliente — falta o vínculo desta cota.`}
                               </Badge>
                             )}
+
                             {i.ajuste && <SeloAutoria ajuste={i.ajuste} />}
                           </span>
                         </TableCell>
@@ -296,6 +298,13 @@ export function ResiduoDetalheModal(props: Props) {
                                   <UserCog className="h-3.5 w-3.5 mr-1" />
                                   Informar agendador
                                 </Button>
+                              ) : i.problema === "sem_reuniao_bu" ? (
+                                // O lead existe, só não é o que teve a reunião:
+                                // a correção é trocar de lead, não criar vínculo.
+                                <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Trocar lead
+                                </Button>
                               ) : i.problema === undefined ||
                                 i.problema === "sem_cadastro" ||
                                 i.problema === "sem_lead" ||
@@ -309,6 +318,7 @@ export function ResiduoDetalheModal(props: Props) {
                                   sem correção por vínculo
                                 </span>
                               )
+
                             ) : (
                               <Button size="sm" variant="outline" asChild>
                                 <a

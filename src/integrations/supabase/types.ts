@@ -2283,6 +2283,39 @@ export type Database = {
         }
         Relationships: []
       }
+      bkp_vinculo_deal_20260821: {
+        Row: {
+          consortium_card_id: string | null
+          created_at: string
+          deal_id_antes: string | null
+          deal_id_depois: string | null
+          id: string
+          motivo: string | null
+          nome_completo: string | null
+          registration_id: string
+        }
+        Insert: {
+          consortium_card_id?: string | null
+          created_at?: string
+          deal_id_antes?: string | null
+          deal_id_depois?: string | null
+          id?: string
+          motivo?: string | null
+          nome_completo?: string | null
+          registration_id: string
+        }
+        Update: {
+          consortium_card_id?: string | null
+          created_at?: string
+          deal_id_antes?: string | null
+          deal_id_depois?: string | null
+          id?: string
+          motivo?: string | null
+          nome_completo?: string | null
+          registration_id?: string
+        }
+        Relationships: []
+      }
       bu_catalog: {
         Row: {
           code: string
