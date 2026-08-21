@@ -417,27 +417,37 @@ serve(async (req) => {
               });
               summary.skipped++;
             } else {
-              // Texto equivalente ao template enviado, com as variáveis já substituídas —
-              // é isso que o SDR precisa ver na thread para entender o que a lead recebeu.
-              const nomeLead = attendee.attendee_name || contact.name || deal.name || 'Lead';
+              // Variáveis do template Twilio — ÚNICA fonte de verdade usada tanto no
+              // envio quanto no espelho, para que o corpo da thread nunca diverja do
+              // que a lead realmente recebeu.
+              const varsTemplate: Record<string, string> = {
+                '1': contact.name || deal.name || 'Lead',
+                '2': `${meetingDate} às ${meetingTime}`,
+                '3': closerName,
+                '4': meetingLink,
+              };
+              const nomeLead = varsTemplate['1'];
+              // ATENÇÃO: o corpo espelhado abaixo é uma RECONSTRUÇÃO APROXIMADA do
+              // template aprovado na Meta (WHATSAPP_REMINDER_TEMPLATE_SID). O texto
+              // exato que a lead recebe é o template aprovado; se ele mudar na Meta,
+              // esta string precisa ser atualizada junto. Sem buscar o texto na Twilio,
+              // esta aproximação é o melhor possível.
               const corpoEspelho =
                 `Olá, ${nomeLead}! Lembrete da sua reunião ${meetingType} em ${meetingDate} às ${meetingTime}` +
                 `${closerName ? ` com ${closerName}` : ''}.` +
                 `${meetingLink ? `\nLink: ${meetingLink}` : ''}`;
               const remetenteEspelho = `Lembrete ${meetingType} · ${offsetKey}`;
-              const telefoneEspelho = attendee.attendee_phone || contact.phone;
+              // O espelho usa EXATAMENTE o mesmo telefone passado ao envio (contact.phone).
+              // Não calcular por conta própria nada que o envio já resolveu — senão a
+              // mensagem pode cair numa thread/conversa diferente da que recebeu.
+              const telefoneEspelho = contact.phone;
 
               try {
                 const waRes = await supabase.functions.invoke('twilio-whatsapp-send', {
                   body: {
                     to: contact.phone,
                     templateSid: WHATSAPP_REMINDER_TEMPLATE_SID,
-                    contentVariables: {
-                      '1': contact.name || deal.name || 'Lead',
-                      '2': `${meetingDate} às ${meetingTime}`,
-                      '3': closerName,
-                      '4': meetingLink,
-                    },
+                    contentVariables: varsTemplate,
                     dealId: deal.id,
                   },
                 });
