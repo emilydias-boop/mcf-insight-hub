@@ -36,6 +36,9 @@ export function camposCadastroFaltantes(
   const faltantes = campos.filter(c => !preenchido(reg?.[c.key])).map(c => c.label);
   // Sem valor de parcela o Termo de Adesão não pode ser gerado.
   if (!preenchido(reg?.parcela_1a_12a)) faltantes.push('Valor da parcela (1ª à 12ª)');
+  // Sem categoria e origem a cota não abre na Embracon nem entra certa no canal.
+  if (!preenchido(reg?.categoria)) faltantes.push('Categoria');
+  if (!preenchido(reg?.origem)) faltantes.push('Origem');
   return faltantes;
 }
 

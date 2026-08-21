@@ -188,8 +188,11 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
       // Sem valor de parcela o Termo de Adesão não sai: conta como incompleto.
+      // Categoria e Origem também são cobradas: sem elas a cota não abre na
+      // Embracon nem entra certa no relatório de canal.
       const isChecklistIncompleto = (r: any) =>
         !(Number(r.parcela_1a_12a) > 0) ||
+        !r.categoria || !r.origem ||
         (r.tipo_pessoa === 'pj'
           ? !(r.razao_social && r.cnpj && r.telefone_comercial && r.email_comercial && r.endereco_comercial && r.faturamento_mensal)
           : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda));
@@ -403,6 +406,8 @@ export interface CreatePendingRegistrationInput {
   tipo_produto?: string;
   /** Origem do lead declarada na proposta (grava `name` do catálogo). */
   origem?: string;
+  /** Categoria da cota declarada na carta (grava `name` do catálogo). */
+  categoria?: string;
   // Dados do plano (Termo de Adesão)
   credito_id?: string;
   produto_codigo?: string;
@@ -900,6 +905,16 @@ export type UpdatePendingRegistrationPatch = Partial<{
   valor_comissao: number | null;
   e_transferencia: boolean | null;
   transferido_de: string | null;
+  // PJ (a edição do cadastro pendente também precisa corrigir dado de empresa)
+  natureza_juridica: string | null;
+  inscricao_estadual: string | null;
+  data_fundacao: string | null;
+  telefone_comercial: string | null;
+  email_comercial: string | null;
+  endereco_comercial: string | null;
+  endereco_comercial_cep: string | null;
+  num_funcionarios: number | null;
+  faturamento_mensal: number | null;
   // plano / Termo de Adesão
   credito_id: string | null;
   condicao_pagamento: string | null;
