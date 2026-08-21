@@ -64,7 +64,9 @@ export function NovaConversaDialog({ open, onOpenChange, onCreated }: Props) {
           />
         </div>
 
-        <ScrollArea className="h-[min(60vh,24rem)]">
+        {/* Mesma correção do ConversationList: o Viewport do Radix
+            usa display: table, impedindo o truncate do nome/telefone. */}
+        <ScrollArea className="h-[min(60vh,24rem)] [&>div>div]:!block [&>div>div]:!w-full">
           <ul className="divide-y">
             {isLoading && Array.from({ length: 5 }).map((_, i) => (
               <li key={i} className="px-4 py-3">
