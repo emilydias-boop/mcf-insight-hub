@@ -829,9 +829,12 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onDossie}>
                 <FileSearch className="h-4 w-4 mr-2" /> Dossiê do cadastro
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onView}>
-                <Eye className="h-4 w-4 mr-2" /> Ver / editar formulário
+              {/* "Abrir" e "Ver / editar formulário" eram o MESMO formulário
+                  (OpenCotaModal). Ficou um só item, editável. */}
+              <DropdownMenuItem onClick={onOpen}>
+                <FileEdit className="h-4 w-4 mr-2" /> Ver / editar formulário completo
               </DropdownMenuItem>
+
               {/* A GERAÇÃO do termo mudou para a etapa 3 (Termos de Adesão Pendentes),
                   onde o trabalho de fazer o cliente assinar acontece. Aqui só se
                   consulta o termo já emitido — informação útil para o cadastro. */}
