@@ -277,13 +277,22 @@ function PropostasTab({
     return ordenarPor(list, PROPOSTA_EXTRATORES[field], dir);
   }, [allPropostas, statusFilter, closerFilter, termo, onlyNaoAceitas, range.startDate, range.endDate, field, dir]);
 
-  const totalPages = Math.max(1, Math.ceil(propostas.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageRows = useMemo(
-    () => propostas.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [propostas, safePage, pageSize],
-  );
-  useEffect(() => { setPage(0); }, [termo, field, dir, pageSize, statusFilter, closerFilter, onlyNaoAceitas]);
+  // Desistências da carta no período (o que o sistema grava como "carta excluída").
+  // Elas ficam fora da métrica da etapa, mas aparecem na lista de tratados.
+  const desistidas = useMemo(() => {
+    let list = allPropostas.filter(
+      p => p.carta_excluida && isInPeriod(p.proposal_date || p.created_at, range),
+    );
+    if (closerFilter !== 'all') list = list.filter(p => p.closer_name === closerFilter);
+    if (termo.trim()) {
+      const t = termo.toLowerCase();
+      list = list.filter(p =>
+        `${p.contact_name || p.deal_name || ''} ${p.closer_name || ''}`.toLowerCase().includes(t),
+      );
+    }
+    return list;
+  }, [allPropostas, closerFilter, termo, range.startDate, range.endDate]);
+
   const [semSucessoTarget, setSemSucessoTarget] = useState<Proposal | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [acceptTarget, setAcceptTarget] = useState<Proposal | null>(null);
@@ -291,13 +300,54 @@ function PropostasTab({
   const [viewTarget, setViewTarget] = useState<Proposal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
+  const [termoTarget, setTermoTarget] = useState<Proposal | null>(null);
+  const [termoPanelTarget, setTermoPanelTarget] = useState<Proposal | null>(null);
+
+  const linhasVisiveis = useMemo(() => [...propostas, ...desistidas], [propostas, desistidas]);
+  const { data: termosByProposal = {} } = useTermosByProposal();
+  const { data: registrationByProposal = {} } = useRegistrationIdsByProposal(
+    useMemo(() => linhasVisiveis.map(p => p.id), [linhasVisiveis]),
+  );
+
+  const termosDe = (p: Proposal): ConsorcioTermo[] => termosByProposal[p.id] || [];
+  const termoAssinadoDe = (p: Proposal) => termosDe(p).find(t => t.status === 'assinado');
+
+  /**
+   * Âncora do selo de dias parados na etapa 3: a geração do termo. Quando a
+   * venda foi lançada e o termo ainda não existe, contamos da data da venda —
+   * são âncoras diferentes e o tooltip diz qual está valendo.
+   */
+  const ancoraDe = (p: Proposal) => {
+    const t = termosDe(p)[0];
+    return t
+      ? { desde: t.created_at, motivo: 'Contando desde a geração do termo de adesão.' }
+      : {
+          desde: p.proposal_date || p.created_at,
+          motivo: 'Termo ainda não gerado — contando desde a data da venda.',
+        };
+  };
+
+  // Pendentes: venda viva, termo ainda não assinado. Tratados: termo assinado
+  // ou desistência da carta.
+  const propostasPendentes = useMemo(
+    () =>
+      propostas
+        .filter(p => !termoAssinadoDe(p))
+        .sort((a, b) => (diasDesde(ancoraDe(b).desde) ?? 0) - (diasDesde(ancoraDe(a).desde) ?? 0)),
+    [propostas, termosByProposal],
+  );
+  const propostasTratadas = useMemo(
+    () => [...propostas.filter(p => !!termoAssinadoDe(p)), ...desistidas],
+    [propostas, desistidas, termosByProposal],
+  );
 
   // Quais cartas já têm cadastro em Cotas a Fazer. Sem isso, "Inserir Dados"
   // cria um SEGUNDO cadastro e re-dispara e-mail/WhatsApp + webhook para o cliente.
   const idsAceitasSemCota = useMemo(
-    () => pageRows.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
-    [pageRows],
+    () => linhasVisiveis.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
+    [linhasVisiveis],
   );
+
   const { data: comCadastro } = useProposalIdsWithPendingRegistration(idsAceitasSemCota);
   const [, setSearchParamsProp] = useSearchParams();
   const irParaCadastro = (p: Proposal) => {
