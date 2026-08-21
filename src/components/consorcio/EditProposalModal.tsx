@@ -13,7 +13,9 @@ import { numberToBRLInput } from '@/lib/brlMask';
 import { CartasProposalEditor } from './CartasProposalEditor';
 import {
   PropostaCarta, PropostaCartaDraft, cartaDraftValida, draftsParaInput, novaCartaDraft,
+  normalizarParcelasMcf,
 } from '@/types/consorcioCartas';
+
 
 interface EditProposalModalProps {
   open: boolean;
@@ -40,6 +42,7 @@ function cartasParaDrafts(
     : [{
         id: undefined as any, proposal_id: '', ordem: 1,
         valor_credito: fallback.valor, prazo_meses: fallback.prazo, tipo_produto: fallback.tipo,
+        parcelas_mcf: null,
         pending_registration_id: null, consortium_card_id: null,
       } as PropostaCarta];
 
@@ -50,8 +53,10 @@ function cartasParaDrafts(
     prazoMeses: c.prazo_meses ? String(c.prazo_meses) : '',
     prazoOutro: !!c.prazo_meses && !PRAZO_OPTIONS.some(o => o.value === Number(c.prazo_meses)),
     tipoProduto: c.tipo_produto || '',
+    parcelasMcf: normalizarParcelasMcf(c.parcelas_mcf),
     travada: !!(c.pending_registration_id || c.consortium_card_id),
   }));
+
 }
 
 export function EditProposalModal({
