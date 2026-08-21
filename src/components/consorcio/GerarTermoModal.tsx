@@ -35,7 +35,6 @@ interface RegRow {
   id: string;
   proposal_id: string | null;
   deal_id: string | null;
-  carta_id: string | null;
   status: string | null;
   created_at: string;
   [k: string]: unknown;
@@ -87,17 +86,9 @@ export function GerarTermoModal({
       for (const c of (cartas || []) as Array<{ id: string; ordem: number | null; pending_registration_id: string | null }>) {
         if (c.pending_registration_id) ordemPorReg.set(c.pending_registration_id, Number(c.ordem ?? 0));
       }
-      // Fallback: vínculo pela própria carta_id do cadastro.
-      const ordemPorCarta = new Map<string, number>();
-      for (const c of (cartas || []) as Array<{ id: string; ordem: number | null }>) {
-        ordemPorCarta.set(c.id, Number(c.ordem ?? 0));
-      }
-
       const chave = (r: RegRow, i: number) => {
         const porReg = ordemPorReg.get(r.id);
         if (porReg != null) return porReg;
-        const porCarta = r.carta_id ? ordemPorCarta.get(r.carta_id) : undefined;
-        if (porCarta != null) return porCarta;
         return 1000 + i; // sem vínculo: mantém a ordem de criação, sempre depois
       };
       return vivos
