@@ -254,14 +254,21 @@ export function montarTabelaCartas(regs: TermoSourceRegistration[]): string {
 export function montarTabelaParcelasMcfConsolidada(
   regs: TermoSourceRegistration[],
 ): { tabela: string; qtd: number; total: number } {
+  // Só o número da carta não diz nada ao leitor: a coluna mostra também o
+  // crédito daquela carta ("Carta 1 · R$ 150.000,00").
+  const rotulo = (reg: TermoSourceRegistration, i: number) =>
+    regs.length > 1
+      ? `Carta ${i + 1} · ${formatCurrency(Number(reg.valor_credito || 0))}`
+      : String(i + 1);
   const itens = regs.flatMap((reg, i) =>
     parcelasMcfComValoresDigitados(reg).map(p => ({
-      carta: i + 1,
+      carta: rotulo(reg, i),
       numero: p.numero,
       valor: p.valor,
       venc: Number(reg.dia_vencimento) ? `dia ${Number(reg.dia_vencimento)}` : 'A definir',
     })),
   );
+
   const total = itens.reduce((s, p) => s + p.valor, 0);
   if (!itens.length) {
     return { tabela: 'Nenhuma parcela sob responsabilidade da MCF Capital.', qtd: 0, total: 0 };
