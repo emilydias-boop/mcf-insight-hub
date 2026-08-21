@@ -41,7 +41,8 @@ export interface WaBroadcast {
   template_nome: string | null;
   template_preview: string | null;
   variaveis_fixas: Record<string, string>;
-  filtro: Record<string, string>;
+  /** Chaves: origin_id (string), stage_ids/tags/deal_ids (arrays). */
+  filtro: Record<string, string | string[]>;
   escopo: WaBroadcastEscopo;
   bu: string | null;
   updated_at: string | null;
@@ -733,6 +734,65 @@ export function useWaEstagiosDisponiveis(originId: string | null) {
     },
   });
 }
+
+/** Tag da carteira, com quantos leads alcançáveis a possuem. */
+export interface WaBroadcastTagDisponivel {
+  tag: string;
+  leads: number;
+}
+
+/**
+ * Escopo `bu` exige BU escolhida: a RPC levanta exceção sem ela, então a query
+ * só é habilitada quando o recorte está coerente.
+ */
+const escopoCoerente = (escopo: WaBroadcastEscopo, bu: string | null) =>
+  escopo !== 'bu' || !!bu;
+
+/** Estágios visíveis dentro do escopo atual (carteira própria ou BU inteira). */
+export function useWaEstagiosNoEscopo(
+  escopo: WaBroadcastEscopo,
+  bu: string | null,
+  originId: string | null,
+) {
+  return useQuery({
+    queryKey: ['wa-broadcast-estagios-no-escopo', escopo, bu || null, originId || null],
+    enabled: escopoCoerente(escopo, bu),
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaBroadcastEstagioDisponivel[]> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_estagios_no_escopo', {
+        _escopo: escopo,
+        _bu: bu || null,
+        _origin_id: originId || null,
+      });
+      if (error) throw error;
+      return (data ?? []) as WaBroadcastEstagioDisponivel[];
+    },
+  });
+}
+
+/** Tags visíveis dentro do escopo atual. */
+export function useWaTagsNoEscopo(
+  escopo: WaBroadcastEscopo,
+  bu: string | null,
+  originId: string | null,
+) {
+  return useQuery({
+    queryKey: ['wa-broadcast-tags-no-escopo', escopo, bu || null, originId || null],
+    enabled: escopoCoerente(escopo, bu),
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WaBroadcastTagDisponivel[]> => {
+      const { data, error } = await supabase.rpc('wa_broadcast_tags_no_escopo', {
+        _escopo: escopo,
+        _bu: bu || null,
+        _origin_id: originId || null,
+      });
+      if (error) throw error;
+      return (data ?? []) as WaBroadcastTagDisponivel[];
+    },
+  });
+}
+
+
 
 /**
  * BUs com leads alcançáveis, com quantos SDRs cada uma tem. A função devolve

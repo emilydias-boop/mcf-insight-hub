@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
@@ -10,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertTriangle, Info, Loader2, Users } from 'lucide-react';
+import { AlertTriangle, Info, Loader2, Users, X } from 'lucide-react';
 import {
-  useWaEstagiosDisponiveis,
+  useWaEstagiosNoEscopo,
+  useWaTagsNoEscopo,
   useWaIgnoradosPorMotivo,
   useWaOrigensDisponiveis,
   useWaSendBudget,
@@ -21,13 +24,16 @@ import {
   WaBroadcastEscopo,
   BU_VOLUME_MINIMO,
 } from '@/hooks/wa/useWaBroadcasts';
+import { MultiSelecaoPopover } from './MultiSelecaoPopover';
 import { DONO_INATIVO_ALERTA_PCT, formatMinutos, motivoLabel } from './waBroadcastLabels';
 import { formatDateTime } from '@/lib/formatters';
 
 
+
 interface Props {
   broadcast: WaBroadcast;
-  stageId: string;
+  stageIds: string[];
+  tags: string[];
   originId: string;
   limite: string;
   pendentes: number;
@@ -41,7 +47,8 @@ interface Props {
   publicoMontadoEm?: string | null;
   onEscopoChange: (v: WaBroadcastEscopo) => void;
   onBuChange: (v: string) => void;
-  onStageChange: (v: string) => void;
+  onStageIdsChange: (v: string[]) => void;
+  onTagsChange: (v: string[]) => void;
   onOriginChange: (v: string) => void;
   onLimiteChange: (v: string) => void;
   onMontar: () => void;
@@ -51,7 +58,8 @@ const HORAS_ALERTA = 6;
 
 export function PublicoStep({
   broadcast,
-  stageId,
+  stageIds,
+  tags,
   originId,
   limite,
   pendentes,
@@ -64,14 +72,24 @@ export function PublicoStep({
   publicoMontadoEm,
   onEscopoChange,
   onBuChange,
-  onStageChange,
+  onStageIdsChange,
+  onTagsChange,
   onOriginChange,
   onLimiteChange,
   onMontar,
 }: Props) {
   const escopoBu = escopo === 'bu';
+  /** No escopo da BU as listas só existem depois de escolher a BU. */
+  const filtrosBloqueados = escopoBu && !bu;
   const { data: origens = [], isLoading: origensLoading } = useWaOrigensDisponiveis();
-  const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosDisponiveis(
+  const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosNoEscopo(
+    escopo,
+    bu || null,
+    originId || null,
+  );
+  const { data: tagsDisponiveis = [], isLoading: tagsLoading } = useWaTagsNoEscopo(
+    escopo,
+    bu || null,
     originId || null,
   );
   const { data: budget } = useWaSendBudget();
@@ -82,6 +100,17 @@ export function PublicoStep({
   const totalIgnorados = Object.values(ignorados).reduce((a, b) => a + b, 0);
   const fmt = (n: number) => new Intl.NumberFormat('pt-BR').format(n ?? 0);
   const semCarteira = !escopoBu && !origensLoading && origens.length === 0;
+
+  const opcoesEstagios = useMemo(
+    () => estagios.map((s) => ({ valor: s.stage_id, rotulo: s.nome, leads: s.leads })),
+    [estagios],
+  );
+  const opcoesTags = useMemo(
+    () => tagsDisponiveis.map((t) => ({ valor: t.tag, rotulo: t.tag, leads: t.leads })),
+    [tagsDisponiveis],
+  );
+
+
 
   const totalAlvos = pendentes + totalIgnorados;
   const donoInativo = ignorados.dono_inativo ?? 0;
@@ -182,12 +211,7 @@ export function PublicoStep({
         </Alert>
       )}
 
-      {escopoBu ? (
-        <p className="text-sm text-muted-foreground">
-          Os filtros de origem e estágio listam apenas a sua carteira, por isso ficam
-          indisponíveis no escopo da BU. O público é a carteira inteira dos SDRs da BU.
-        </p>
-      ) : semCarteira ? (
+      {semCarteira ? (
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm font-medium">Você não tem leads com telefone válido</p>
@@ -197,47 +221,110 @@ export function PublicoStep({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Origem (opcional)</Label>
-            <Select value={originId || 'all'} onValueChange={(v) => onOriginChange(v === 'all' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas as origens" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as origens</SelectItem>
-                {origens.map((o) => (
-                  <SelectItem key={o.origin_id} value={o.origin_id}>
-                    {o.nome} ({fmt(o.leads)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Estágio (opcional)</Label>
-            {!estagiosLoading && estagios.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Você não tem leads com telefone válido
-              </p>
-            ) : (
-              <Select value={stageId || 'all'} onValueChange={(v) => onStageChange(v === 'all' ? '' : v)}>
+        <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Origem (opcional)</Label>
+              <Select
+                value={originId || 'all'}
+                onValueChange={(v) => onOriginChange(v === 'all' ? '' : v)}
+                disabled={filtrosBloqueados}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todos os estágios" />
+                  <SelectValue placeholder="Todas as origens" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os estágios</SelectItem>
-                  {estagios.map((s) => (
-                    <SelectItem key={s.stage_id} value={s.stage_id}>
-                      {s.nome} ({fmt(s.leads)})
+                  <SelectItem value="all">Todas as origens</SelectItem>
+                  {origens.map((o) => (
+                    <SelectItem key={o.origin_id} value={o.origin_id}>
+                      {o.nome} ({fmt(o.leads)})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
+            </div>
+            <div className="space-y-2">
+              <Label>Estágios (opcional)</Label>
+              <MultiSelecaoPopover
+                rotuloBotao="Estágios"
+                placeholderBusca="Buscar estágio..."
+                opcoes={opcoesEstagios}
+                selecionados={stageIds}
+                onChange={onStageIdsChange}
+                disabled={filtrosBloqueados}
+                isLoading={estagiosLoading}
+                vazioTexto="Nenhum estágio com leads alcançáveis"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tags (opcional)</Label>
+              <MultiSelecaoPopover
+                rotuloBotao="Tags"
+                placeholderBusca="Buscar tag..."
+                opcoes={opcoesTags}
+                selecionados={tags}
+                onChange={onTagsChange}
+                disabled={filtrosBloqueados}
+                isLoading={tagsLoading}
+                vazioTexto="Nenhuma tag com leads alcançáveis"
+              />
+            </div>
           </div>
+
+          {filtrosBloqueados && (
+            <p className="text-sm text-muted-foreground">
+              Escolha a BU primeiro para liberar os filtros de origem, estágio e tag.
+            </p>
+          )}
+
+          {(stageIds.length > 0 || tags.length > 0) && (
+            <div className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                {stageIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-1 text-xs uppercase text-muted-foreground">Estágios</span>
+                    {stageIds.map((id) => (
+                      <Badge key={id} variant="secondary" className="gap-1">
+                        {estagios.find((s) => s.stage_id === id)?.nome ?? id}
+                        <button
+                          type="button"
+                          onClick={() => onStageIdsChange(stageIds.filter((s) => s !== id))}
+                          aria-label="Remover estágio"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-1 text-xs uppercase text-muted-foreground">Tags</span>
+                    {tags.map((t) => (
+                      <Badge key={t} variant="secondary" className="gap-1">
+                        {t}
+                        <button
+                          type="button"
+                          onClick={() => onTagsChange(tags.filter((x) => x !== t))}
+                          aria-label="Remover tag"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="max-w-xs text-xs text-muted-foreground">
+                Entre estágios e entre tags a regra é <strong>OU</strong>; entre estágio e tag é{' '}
+                <strong>E</strong>. O lead precisa estar em um dos estágios marcados{' '}
+                <strong>e</strong> ter ao menos uma das tags marcadas.
+              </p>
+            </div>
+          )}
         </div>
       )}
+
 
 
       <div className="flex flex-wrap items-end gap-3">
