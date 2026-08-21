@@ -421,13 +421,19 @@ function CriarDisparoDialog({
     setStep(2);
   };
 
-  const handleMontar = async () => {
+  /**
+   * Monta o público. `dealIdsAtuais` permite remontar já sem a seleção do CRM
+   * (botão "usar toda a carteira") sem depender do estado ainda não aplicado.
+   */
+  const montarPublico = async (dealIdsAtuais: string[]) => {
     if (!broadcast) return;
     if (escopo === 'bu' && !bu) return toast.error('Escolha a BU');
     const filtro: Record<string, string | string[]> = {};
     if (stageIds.length > 0) filtro.stage_ids = stageIds;
     if (tags.length > 0) filtro.tags = tags;
     if (originId) filtro.origin_id = originId;
+    // seleção do CRM sobrevive à remontagem: sem isso o público viraria o do filtro
+    if (dealIdsAtuais.length > 0) filtro.deal_ids = dealIdsAtuais;
     try {
       await atualizar.mutateAsync({
         id: broadcast.id,
@@ -451,6 +457,18 @@ function CriarDisparoDialog({
       );
     }
   };
+
+  const handleMontar = () => montarPublico(dealIds);
+
+  /** Descarta a seleção do CRM e remonta o público sem esse recorte. */
+  const handleDescartarSelecao = async () => {
+    setDealIds([]);
+    setJaMontou(false);
+    setPublicoMontadoEm(null);
+    await montarPublico([]);
+  };
+
+
 
 
 
