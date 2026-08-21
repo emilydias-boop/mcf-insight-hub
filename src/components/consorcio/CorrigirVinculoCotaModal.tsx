@@ -345,7 +345,12 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
             }
           >
             {corrigir.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-            {criaCadastro ? "Criar cadastro e vincular" : "Vincular ao lead"}
+            {trocandoLead
+              ? "Trocar para este lead"
+              : criaCadastro
+                ? "Criar cadastro e vincular"
+                : "Vincular ao lead"}
+
           </Button>
         </DialogFooter>
       </DialogContent>
