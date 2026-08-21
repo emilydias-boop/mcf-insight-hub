@@ -9,32 +9,101 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { TermoMarkdown } from './TermoMarkdown';
 import { useTermoModelos, useCreateTermo, termoPublicUrl, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
-import { montarDadosTermo, renderTermo, validarDadosTermo } from '@/lib/consorcioTermo';
+import {
+  montarDadosTermoMulti,
+  renderTermo,
+  validarDadosTermoMulti,
+  divergenciasIdentidade,
+  rotuloFaltando,
+} from '@/lib/consorcioTermo';
 
 interface GerarTermoModalProps {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  registrationId: string;
+  /**
+   * Termo da VENDA: cobre TODAS as cartas da proposta (um termo por venda).
+   * É o caminho da etapa 3 do funil.
+   */
+  proposalId?: string;
+  /** Termo de um cadastro específico (etapa 4, linha por carta). */
+  registrationId?: string;
   /** Fecha este modal e abre o cadastro pendente em modo edição, no bloco "Dados da Cota". */
   onCompletarCadastro?: () => void;
 }
 
-export function GerarTermoModal({ open, onOpenChange, registrationId, onCompletarCadastro }: GerarTermoModalProps) {
+interface RegRow {
+  id: string;
+  proposal_id: string | null;
+  deal_id: string | null;
+  carta_id: string | null;
+  status: string | null;
+  created_at: string;
+  [k: string]: unknown;
+}
+
+export function GerarTermoModal({
+  open,
+  onOpenChange,
+  proposalId,
+  registrationId,
+  onCompletarCadastro,
+}: GerarTermoModalProps) {
   const { data: modelos = [], isLoading: loadingModelos } = useTermoModelos(true);
   const createTermo = useCreateTermo();
   const [gerado, setGerado] = useState<ConsorcioTermo | null>(null);
 
-  const { data: reg, isLoading } = useQuery({
-    queryKey: ['consorcio-pending-registration-termo', registrationId],
-    enabled: open && !!registrationId,
-    queryFn: async () => {
+  const { data: regs = [], isLoading } = useQuery({
+    queryKey: ['consorcio-termo-fonte', proposalId ?? null, registrationId ?? null],
+    enabled: open && (!!proposalId || !!registrationId),
+    queryFn: async (): Promise<RegRow[]> => {
+      // Caminho por cadastro (etapa 4): o termo cobre só aquela carta.
+      if (!proposalId && registrationId) {
+        const { data, error } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('*')
+          .eq('id', registrationId)
+          .single();
+        if (error) throw error;
+        return [data as unknown as RegRow];
+      }
+
+      // Caminho por proposta (etapa 3): TODOS os cadastros vivos da venda,
+      // na ordem das cartas; sem vínculo de carta, cai na ordem de criação.
       const { data, error } = await supabase
         .from('consorcio_pending_registrations')
         .select('*')
-        .eq('id', registrationId)
-        .single();
+        .eq('proposal_id', proposalId!)
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return data as any;
+      const vivos = ((data || []) as unknown as RegRow[]).filter(r => r.status !== 'excluida');
+
+      const { data: cartas } = await supabase
+        .from('consorcio_proposal_cartas')
+        .select('id, ordem, pending_registration_id')
+        .eq('proposal_id', proposalId!)
+        .order('ordem', { ascending: true });
+
+      const ordemPorReg = new Map<string, number>();
+      for (const c of (cartas || []) as Array<{ id: string; ordem: number | null; pending_registration_id: string | null }>) {
+        if (c.pending_registration_id) ordemPorReg.set(c.pending_registration_id, Number(c.ordem ?? 0));
+      }
+      // Fallback: vínculo pela própria carta_id do cadastro.
+      const ordemPorCarta = new Map<string, number>();
+      for (const c of (cartas || []) as Array<{ id: string; ordem: number | null }>) {
+        ordemPorCarta.set(c.id, Number(c.ordem ?? 0));
+      }
+
+      const chave = (r: RegRow, i: number) => {
+        const porReg = ordemPorReg.get(r.id);
+        if (porReg != null) return porReg;
+        const porCarta = r.carta_id ? ordemPorCarta.get(r.carta_id) : undefined;
+        if (porCarta != null) return porCarta;
+        return 1000 + i; // sem vínculo: mantém a ordem de criação, sempre depois
+      };
+      return vivos
+        .map((r, i) => ({ r, k: chave(r, i) }))
+        .sort((a, b) => a.k - b.k)
+        .map(x => x.r);
     },
   });
 
@@ -43,12 +112,15 @@ export function GerarTermoModal({ open, onOpenChange, registrationId, onCompleta
   }, [open]);
 
   const modelo = modelos[0];
-  const faltando = useMemo(() => (reg ? validarDadosTermo(reg) : []), [reg]);
-  const dados = useMemo(() => (reg ? montarDadosTermo(reg) : null), [reg]);
+  const divergencias = useMemo(() => divergenciasIdentidade(regs as any[]), [regs]);
+  const faltando = useMemo(() => (regs.length ? validarDadosTermoMulti(regs as any[]) : []), [regs]);
+  const dados = useMemo(() => (regs.length ? montarDadosTermoMulti(regs as any[]) : null), [regs]);
   const preview = useMemo(
     () => (modelo && dados ? renderTermo(modelo.conteudo, dados) : ''),
     [modelo, dados],
   );
+
+  const bloqueado = faltando.length > 0 || divergencias.length > 0 || regs.length === 0;
 
   const copyLink = async (token: string) => {
     await navigator.clipboard.writeText(termoPublicUrl(token));
@@ -56,11 +128,14 @@ export function GerarTermoModal({ open, onOpenChange, registrationId, onCompleta
   };
 
   const handleGerar = async () => {
-    if (!reg || !modelo || !dados) return;
+    if (!modelo || !dados || !regs.length) return;
+    const primeiro = regs[0];
     const termo = await createTermo.mutateAsync({
-      pendingRegistrationId: reg.id,
-      proposalId: reg.proposal_id,
-      dealId: reg.deal_id,
+      // `proposal_id` é o vínculo autoritativo do termo da venda; o
+      // `pending_registration_id` da 1ª carta fica só por compatibilidade.
+      pendingRegistrationId: primeiro.id,
+      proposalId: proposalId ?? primeiro.proposal_id,
+      dealId: primeiro.deal_id,
       modeloId: modelo.id,
       modeloVersao: modelo.versao,
       dados,
@@ -112,14 +187,37 @@ export function GerarTermoModal({ open, onOpenChange, registrationId, onCompleta
           </div>
         ) : (
           <div className="space-y-4">
+            {regs.length > 1 && (
+              <p className="text-xs text-muted-foreground">
+                Esta venda tem {regs.length} cartas — o termo cobre todas, com o crédito total somado.
+              </p>
+            )}
+
+            {divergencias.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Cadastros da venda não são da mesma pessoa</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                    {divergencias.map(d => (
+                      <li key={d}>{d}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">
+                    Corrija os cadastros antes de emitir o termo — um único documento não pode cobrir pessoas diferentes.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {faltando.length > 0 && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Dados obrigatórios faltando</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                    {faltando.map((f) => (
-                      <li key={f.campo}>{f.label}</li>
+                    {faltando.map(f => (
+                      <li key={f.campo}>{rotuloFaltando(f)}</li>
                     ))}
                   </ul>
                   <p className="mt-2">
@@ -147,7 +245,7 @@ export function GerarTermoModal({ open, onOpenChange, registrationId, onCompleta
             </Button>
           )}
           {!gerado && modelo && (
-            <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
+            <Button onClick={handleGerar} disabled={bloqueado || createTermo.isPending}>
               {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               Gerar termo e link
             </Button>
