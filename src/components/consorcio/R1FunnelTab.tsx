@@ -20,16 +20,19 @@ import {
   r1StatusShortLabel,
   type R1FunnelParticipant,
 } from '@/hooks/useConsorcioR1Funnel';
-import { useProposals } from '@/hooks/useConsorcioPostMeeting';
+import { useProposals, useSemSucesso } from '@/hooks/useConsorcioPostMeeting';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReasonLabel, NO_REASON_LABEL } from '@/lib/meetingOutcomeReasons';
 import { cn } from '@/lib/utils';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
-import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { useDebounce } from '@/hooks/useDebounce';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
+
 
 interface R1FunnelTabProps {
   mode: 'agendadas' | 'realizadas';
@@ -77,6 +80,8 @@ const R1_EXTRATORES: Record<R1SortField, (p: R1FunnelParticipant) => unknown> = 
 export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilter }: R1FunnelTabProps) {
   const { data, isLoading } = useConsorcioR1Funnel(range);
   const { data: proposals = [] } = useProposals();
+  const { data: semSucesso = [] } = useSemSucesso();
+
   const { role } = useAuth();
   const updateStatus = useUpdateAttendeeAndSlotStatus();
   const [closerFilter, setCloserFilter] = useState('all');
@@ -89,8 +94,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
   const [search, setSearch] = useState(q);
   const buscaAplicada = useDebounce(search, 300);
   useEffect(() => { setQ(buscaAplicada); /* eslint-disable-next-line */ }, [buscaAplicada]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  // Paginação agora é por seção (pendentes / tratadas), dentro de FilaDuasListas.
+
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [proposalTarget, setProposalTarget] = useState<R1FunnelParticipant | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<R1FunnelParticipant | null>(null);
@@ -105,6 +110,13 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     () => new Set((proposals || []).map((p: any) => p.deal_id).filter(Boolean)),
     [proposals],
   );
+
+  /** Negócios já marcados como "sem sucesso" — desfecho comercial da etapa 2. */
+  const dealsSemSucesso = useMemo(
+    () => new Set((semSucesso || []).map((d) => d.deal_id).filter(Boolean)),
+    [semSucesso],
+  );
+
 
   const base = useMemo(() => {
     const all = data?.participants || [];
@@ -137,13 +149,34 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     [filtradas, field, dir],
   );
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageRows = useMemo(
-    () => rows.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [rows, safePage, pageSize],
+  /**
+   * Duas listas: pendentes (o trabalho) antes de tratadas.
+   *  - Etapa 1: pendente = reunião passou e continua sem desfecho.
+   *  - Etapa 2: pendente = realizada e sem desfecho comercial (nem venda
+   *    lançada, nem "sem sucesso").
+   * Pendentes sempre do mais parado para o mais recente, ignorando a ordenação
+   * de coluna — a fila tem que se auto-priorizar.
+   */
+  const ehPendente = (p: R1FunnelParticipant) =>
+    mode === 'realizadas'
+      ? !(p.deal_id && (dealsWithProposal.has(p.deal_id) || dealsSemSucesso.has(p.deal_id)))
+      : p.sem_desfecho;
+
+  const pendentes = useMemo(
+    () =>
+      rows
+        .filter(ehPendente)
+        .slice()
+        .sort((a, b) => (a.scheduled_at || '').localeCompare(b.scheduled_at || '')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, mode, dealsWithProposal, dealsSemSucesso],
   );
-  useEffect(() => { setPage(0); }, [field, dir, buscaAplicada, closerFilter, pageSize, mode, quickFilter]);
+  const tratadas = useMemo(
+    () => rows.filter((p) => !ehPendente(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, mode, dealsWithProposal, dealsSemSucesso],
+  );
+
 
   // Quebra por motivo dos no-shows do período (só quando o filtro está ativo)
   const reasonBreakdown = useMemo(() => {
@@ -189,6 +222,192 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     applyStatus(p, 'no_show', payload);
   };
 
+  const showActions = mode === 'agendadas';
+
+  /** Uma única tabela, reaproveitada nas duas seções da fila. */
+  const renderTabela = (linhas: R1FunnelParticipant[]) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <SortableTableHead field="lead_name" active={field} dir={dir} onSort={toggle}>Lead</SortableTableHead>
+          <SortableTableHead field="lead_phone" active={field} dir={dir} onSort={toggle}>Telefone</SortableTableHead>
+          <SortableTableHead field="scheduled_at" active={field} dir={dir} onSort={toggle}>Data / Hora</SortableTableHead>
+          <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+          <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+          <SortableTableHead field="outcome_reason" active={field} dir={dir} onSort={toggle}>Motivo</SortableTableHead>
+          <SortableTableHead field="closer_notes" active={field} dir={dir} onSort={toggle}>Nota do Closer</SortableTableHead>
+          {(mode === 'realizadas' || showActions) && (
+            <TableHead className="text-right">Ações</TableHead>
+          )}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {linhas.map(p => {
+          const short = r1StatusShortLabel(p.status);
+          const jaTemCarta = p.deal_id ? dealsWithProposal.has(p.deal_id) : false;
+          const reasonLabel = getReasonLabel(p.outcome_reason);
+          return (
+            <TableRow
+              key={p.id}
+              className={cn(p.deal_id && 'cursor-pointer', p.sem_desfecho && 'bg-amber-500/5')}
+              onClick={() => p.deal_id && setSelectedDealId(p.deal_id)}
+            >
+              <TableCell className="font-medium">
+                <div className="flex flex-col items-start gap-1">
+                  <span>{p.lead_name}</span>
+                  {ehPendente(p) && (
+                    <SeloDiasParados
+                      desde={p.scheduled_at}
+                      motivo={
+                        mode === 'realizadas'
+                          ? 'Dias desde a reunião realizada sem desfecho comercial (nem venda lançada, nem "sem sucesso"). Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                          : 'Dias desde o horário da reunião sem nenhum desfecho registrado. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                      }
+                    />
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-1">
+                  <span>{p.lead_phone || '—'}</span>
+                  <LeadCallButton phone={p.lead_phone} dealId={p.deal_id || undefined} />
+                </div>
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                {p.scheduled_at
+                  ? format(new Date(p.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                  : '—'}
+              </TableCell>
+              <TableCell className="text-sm">{p.closer_name}</TableCell>
+              <TableCell>
+                <div className="flex flex-col items-start gap-1">
+                  <Badge variant="outline" className={cn('text-xs', STATUS_STYLE[short])}>
+                    {short}
+                  </Badge>
+                  {p.sem_desfecho && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className="cursor-help border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400"
+                        >
+                          sem desfecho
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[240px]">
+                        <p className="text-xs">
+                          Reunião já passou e continua sem status — não entra em realizadas
+                          nem em no-show.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-xs">
+                {reasonLabel ? (
+                  p.outcome_reason_note ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help underline decoration-dotted">
+                          {reasonLabel}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[260px]">
+                        <p className="text-xs">{p.outcome_reason_note}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span>{reasonLabel}</span>
+                  )
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="max-w-[280px] text-xs text-muted-foreground">
+                {p.closer_notes || p.notes || '—'}
+              </TableCell>
+              {mode === 'realizadas' && (
+                <TableCell className="space-x-2 text-right" onClick={e => e.stopPropagation()}>
+                  {p.deal_id ? (
+                    <>
+                      <Button size="sm" disabled={jaTemCarta} onClick={() => setProposalTarget(p)}>
+                        <Send className="mr-1 h-3 w-3" /> {CONSORCIO_LABELS.lancarVenda}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={jaTemCarta}
+                        onClick={() => setSemSucessoTarget(p)}
+                      >
+                        <XCircle className="mr-1 h-3 w-3" /> Sem Sucesso
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">sem negócio vinculado</span>
+                  )}
+                </TableCell>
+              )}
+              {showActions && (
+                <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-primary/40 text-primary hover:bg-primary/10"
+                          disabled={updateStatus.isPending || p.status === 'completed'}
+                          onClick={() => applyStatus(p, 'completed')}
+                        >
+                          <CheckCircle className="mr-1 h-3 w-3" /> Realizada
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[280px]">
+                        <p className="text-xs">
+                          Marcar como Realizada muda o estágio do negócio no CRM
+                          <strong> e transfere a titularidade do negócio para o closer</strong>.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    <NoShowReasonPicker
+                      loading={updateStatus.isPending}
+                      onConfirm={payload => handleNoShow(p, payload)}
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 border-amber-500/40 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                        disabled={updateStatus.isPending || p.status === 'no_show'}
+                      >
+                        <AlertTriangle className="mr-1 h-3 w-3" />
+                        {p.status === 'no_show' ? 'No-Show ✓' : 'No-Show'}
+                      </Button>
+                    </NoShowReasonPicker>
+
+                    {p.status !== 'scheduled' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-muted-foreground"
+                        disabled={updateStatus.isPending}
+                        onClick={() => applyStatus(p, 'scheduled')}
+                      >
+                        <CalendarCheck className="mr-1 h-3 w-3" /> Voltar p/ Agendada
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              )}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -197,14 +416,14 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     );
   }
 
-  const showActions = mode === 'agendadas';
+
 
   return (
     <TooltipProvider delayDuration={150}>
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">
-            {mode === 'realizadas' ? 'R1 Realizadas' : 'R1 Agendadas'} ({rows.length})
+            {mode === 'realizadas' ? CONSORCIO_LABELS.reunioesRealizadas : CONSORCIO_LABELS.reunioesAgendadas} ({rows.length})
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-60">
@@ -270,182 +489,29 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
               Nenhuma reunião no período selecionado.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableTableHead field="lead_name" active={field} dir={dir} onSort={toggle}>Lead</SortableTableHead>
-                    <SortableTableHead field="lead_phone" active={field} dir={dir} onSort={toggle}>Telefone</SortableTableHead>
-                    <SortableTableHead field="scheduled_at" active={field} dir={dir} onSort={toggle}>Data / Hora</SortableTableHead>
-                    <SortableTableHead field="closer_name" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
-                    <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
-                    <SortableTableHead field="outcome_reason" active={field} dir={dir} onSort={toggle}>Motivo</SortableTableHead>
-                    <SortableTableHead field="closer_notes" active={field} dir={dir} onSort={toggle}>Nota do Closer</SortableTableHead>
-                    {(mode === 'realizadas' || showActions) && (
-                      <TableHead className="text-right">Ações</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageRows.map(p => {
-                    const short = r1StatusShortLabel(p.status);
-                    const jaTemCarta = p.deal_id ? dealsWithProposal.has(p.deal_id) : false;
-                    const reasonLabel = getReasonLabel(p.outcome_reason);
-                    return (
-                      <TableRow
-                        key={p.id}
-                        className={cn(p.deal_id && 'cursor-pointer', p.sem_desfecho && 'bg-amber-500/5')}
-                        onClick={() => p.deal_id && setSelectedDealId(p.deal_id)}
-                      >
-                        <TableCell className="font-medium">{p.lead_name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <span>{p.lead_phone || '—'}</span>
-                            <LeadCallButton phone={p.lead_phone} dealId={p.deal_id || undefined} />
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {p.scheduled_at
-                            ? format(new Date(p.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="text-sm">{p.closer_name}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col items-start gap-1">
-                            <Badge variant="outline" className={cn('text-xs', STATUS_STYLE[short])}>
-                              {short}
-                            </Badge>
-                            {p.sem_desfecho && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge
-                                    variant="outline"
-                                    className="cursor-help border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400"
-                                  >
-                                    sem desfecho
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-[240px]">
-                                  <p className="text-xs">
-                                    Reunião já passou e continua sem status — não entra em realizadas
-                                    nem em no-show.
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {reasonLabel ? (
-                            p.outcome_reason_note ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="cursor-help underline decoration-dotted">
-                                    {reasonLabel}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-[260px]">
-                                  <p className="text-xs">{p.outcome_reason_note}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span>{reasonLabel}</span>
-                            )
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-[280px] text-xs text-muted-foreground">
-                          {p.closer_notes || p.notes || '—'}
-                        </TableCell>
-                        {mode === 'realizadas' && (
-                          <TableCell className="space-x-2 text-right" onClick={e => e.stopPropagation()}>
-                            {p.deal_id ? (
-                              <>
-                                <Button size="sm" disabled={jaTemCarta} onClick={() => setProposalTarget(p)}>
-                                  <Send className="mr-1 h-3 w-3" /> Lançar Carta
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  disabled={jaTemCarta}
-                                  onClick={() => setSemSucessoTarget(p)}
-                                >
-                                  <XCircle className="mr-1 h-3 w-3" /> Sem Sucesso
-                                </Button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">sem negócio vinculado</span>
-                            )}
-                          </TableCell>
-                        )}
-                        {showActions && (
-                          <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                            <div className="flex flex-wrap items-center justify-end gap-1.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 border-primary/40 text-primary hover:bg-primary/10"
-                                    disabled={updateStatus.isPending || p.status === 'completed'}
-                                    onClick={() => applyStatus(p, 'completed')}
-                                  >
-                                    <CheckCircle className="mr-1 h-3 w-3" /> Realizada
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-[280px]">
-                                  <p className="text-xs">
-                                    Marcar como Realizada muda o estágio do negócio no CRM
-                                    <strong> e transfere a titularidade do negócio para o closer</strong>.
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-
-                              <NoShowReasonPicker
-                                loading={updateStatus.isPending}
-                                onConfirm={payload => handleNoShow(p, payload)}
-                              >
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 border-amber-500/40 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
-                                  disabled={updateStatus.isPending || p.status === 'no_show'}
-                                >
-                                  <AlertTriangle className="mr-1 h-3 w-3" />
-                                  {p.status === 'no_show' ? 'No-Show ✓' : 'No-Show'}
-                                </Button>
-                              </NoShowReasonPicker>
-
-                              {p.status !== 'scheduled' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 text-muted-foreground"
-                                  disabled={updateStatus.isPending}
-                                  onClick={() => applyStatus(p, 'scheduled')}
-                                >
-                                  <CalendarCheck className="mr-1 h-3 w-3" /> Voltar p/ Agendada
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <FilaDuasListas
+              pendentes={pendentes}
+              tratadas={tratadas}
+              tituloPendentes={
+                mode === 'realizadas'
+                  ? `Pendentes — sem desfecho comercial (${pendentes.length})`
+                  : `Pendentes — reunião passou sem desfecho (${pendentes.length})`
+              }
+              tituloTratadas={
+                mode === 'realizadas'
+                  ? `Tratadas — venda lançada ou sem sucesso (${tratadas.length})`
+                  : `Tratadas — realizada, no-show ou remarcada (${tratadas.length})`
+              }
+              descricaoPendentes="do mais parado para o mais recente"
+              vazioPendentes={
+                mode === 'realizadas'
+                  ? 'Toda reunião realizada do período já teve desfecho comercial.'
+                  : 'Nenhuma reunião do período ficou sem desfecho.'
+              }
+              renderTabela={renderTabela}
+            />
           )}
 
-          <TablePagination
-            page={safePage}
-            pageSize={pageSize}
-            total={rows.length}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
 
           {proposalTarget?.deal_id && (
             <ProposalModal

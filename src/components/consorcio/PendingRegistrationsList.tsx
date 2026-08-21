@@ -60,6 +60,9 @@ import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
+import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
@@ -284,13 +287,75 @@ export function PendingRegistrationsList({
     const wb = XLSX.utils.book_new();
     const sheetName =
       variant === 'declinadas' ? 'Cartas Declinadas'
-      : 'Cadastros Pendentes';
+      : CONSORCIO_LABELS.cotasAFazer;
     const fileSlug =
       variant === 'declinadas' ? 'cartas-declinadas'
-      : 'cadastros-pendentes';
+      : 'cotas-a-fazer';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     XLSX.writeFile(wb, `${fileSlug}-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
   };
+
+  /**
+   * Duas listas da etapa 4: pendente = aguardando abertura de cota.
+   * Pendentes do mais parado para o mais recente (created_at, não updated_at).
+   */
+  const pendentes = useMemo(
+    () =>
+      filtered
+        .filter((r) => r.status === 'aguardando_abertura')
+        .slice()
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))),
+    [filtered],
+  );
+  const tratadas = useMemo(
+    () => filtered.filter((r) => r.status !== 'aguardando_abertura'),
+    [filtered],
+  );
+
+  /** Uma tabela, reaproveitada nas duas seções da fila (e na aba declinadas). */
+  const renderTabela = (linhas: EnrichedPendingRegistration[]) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
+          <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome / Razão Social</SortableTableHead>
+          <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor da Cota</SortableTableHead>
+          <SortableTableHead field="parcelas_empresa" active={field} dir={dir} onSort={toggle}>Parcelas (empresa)</SortableTableHead>
+          <SortableTableHead field="valor_total_empresa" active={field} dir={dir} onSort={toggle}>Total a pagar</SortableTableHead>
+          <SortableTableHead field="closer" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
+          <SortableTableHead field="sdr" active={field} dir={dir} onSort={toggle}>SDR</SortableTableHead>
+          <SortableTableHead field="cotas_existentes" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cotas existentes</SortableTableHead>
+          <SortableTableHead field="destinada" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Destinada</SortableTableHead>
+          <SortableTableHead field="solicitado_em" active={field} dir={dir} onSort={toggle}>Solicitado em</SortableTableHead>
+          {variant === 'pendentes' && (
+            <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
+          )}
+          {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
+          <TableHead className="text-right">Ações</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {linhas.map((reg) => (
+          <RegistrationRow
+            key={reg.id}
+            reg={reg}
+            variant={variant}
+            onOpen={() => setOpenId(reg.id)}
+            onView={() => setViewId(reg.id)}
+            onLink={() => setLinkTarget(reg)}
+            onDelete={() => setDeleteTarget(reg)}
+            onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
+            onUndecline={() => undeclineMut.mutate(reg.id)}
+            termos={termosByPending[reg.id] || []}
+            onGerarTermo={() => setTermoTarget(reg)}
+            onVerTermos={() => setTermoPanelTarget(reg)}
+            isMarking={undeclineMut.isPending}
+          />
+        ))}
+      </TableBody>
+    </Table>
+  );
+
 
   if (isLoading) {
     return (
@@ -314,7 +379,7 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'declinadas' ? 'Cartas Declinadas' : 'Cadastros Pendentes'} ({filtered.length}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} ({filtered.length}
           {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
           {variant === 'pendentes' && maisAntigoFila != null && (
             <Tooltip>
@@ -369,61 +434,32 @@ export function PendingRegistrationsList({
             {registrations.length === 0
               ? variant === 'declinadas'
                 ? 'Nenhuma carta declinada.'
-                : 'Nenhum cadastro pendente de abertura.'
+                : 'Nenhuma cota a fazer.'
               : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
+        ) : variant === 'pendentes' ? (
+          <FilaDuasListas
+            pendentes={pendentes}
+            tratadas={tratadas}
+            tituloPendentes={`Pendentes — aguardando abertura (${pendentes.length})`}
+            tituloTratadas={`Tratadas — cota aberta ou declinada (${tratadas.length})`}
+            descricaoPendentes="do mais parado para o mais recente"
+            vazioPendentes="Nenhum cadastro aguardando abertura de cota."
+            renderTabela={renderTabela}
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
-                  <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome / Razão Social</SortableTableHead>
-                  <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor da Cota</SortableTableHead>
-                  <SortableTableHead field="parcelas_empresa" active={field} dir={dir} onSort={toggle}>Parcelas (empresa)</SortableTableHead>
-                  <SortableTableHead field="valor_total_empresa" active={field} dir={dir} onSort={toggle}>Total a pagar</SortableTableHead>
-                  <SortableTableHead field="closer" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
-                  <SortableTableHead field="sdr" active={field} dir={dir} onSort={toggle}>SDR</SortableTableHead>
-                  <SortableTableHead field="cotas_existentes" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cotas existentes</SortableTableHead>
-                  <SortableTableHead field="destinada" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Destinada</SortableTableHead>
-                  <SortableTableHead field="solicitado_em" active={field} dir={dir} onSort={toggle}>Solicitado em</SortableTableHead>
-                  {variant === 'pendentes' && (
-                    <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
-                  )}
-                  {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageRows.map((reg) => (
-                  <RegistrationRow
-                    key={reg.id}
-                    reg={reg}
-                    variant={variant}
-                    onOpen={() => setOpenId(reg.id)}
-                    onView={() => setViewId(reg.id)}
-                    onLink={() => setLinkTarget(reg)}
-                    onDelete={() => setDeleteTarget(reg)}
-                    onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
-                    onUndecline={() => undeclineMut.mutate(reg.id)}
-                    termos={termosByPending[reg.id] || []}
-                    onGerarTermo={() => setTermoTarget(reg)}
-                    onVerTermos={() => setTermoPanelTarget(reg)}
-                    isMarking={undeclineMut.isPending}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <>
+            <div className="overflow-x-auto">{renderTabela(pageRows)}</div>
+            <TablePagination
+              page={safePage}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
 
-        <TablePagination
-          page={safePage}
-          pageSize={pageSize}
-          total={filtered.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
 
         {openId && (
           <OpenCotaModal
@@ -603,6 +639,16 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
+          <div className="mt-1">
+            {/* Etapa 4 conta desde a criação do cadastro, nunca desde updated_at. */}
+            <SeloDiasParados
+              desde={reg.created_at}
+              motivo='Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+            />
+          </div>
+        )}
+
         {termoBadge && (
           <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
             <Badge variant="outline" className={`text-[10px] cursor-pointer ${termoBadge.className}`}>

@@ -15,6 +15,8 @@ import {
   medianDias,
 } from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+
 
 const STEP_ICONS: LucideIcon[] = [CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet];
 
@@ -130,7 +132,7 @@ export function FunilConsorcioTimeline({
   const propostasCount = propostasPeriodo.length;
   /**
    * Contagem de CARTAS do período — unidade real desta etapa e denominador
-   * correto da conversão para "Cadastros Pendentes" (1 carta → 1 cadastro).
+   * correto da conversão para "Cotas a Fazer" (1 carta → 1 cadastro).
    * Fallback: `qtd_cartas` da proposta e, na falta dele, 1 (propostas legadas).
    */
   const negociadas = useMemo(
@@ -160,7 +162,7 @@ export function FunilConsorcioTimeline({
     ? cadastrosPeriodo.filter((r: any) => r.status === 'aguardando_abertura').length
     : 0;
 
-  // Etapa 5 — "Cadastradas" = cotas RESERVADAS na Embracon no período, restritas
+  // Etapa 5 — "Cotas Cadastradas" = cotas RESERVADAS na Embracon no período, restritas
   // às que têm origem no funil (cadastro pendente vinculado).
   //
   // ATENÇÃO (processo, não código): esta etapa só descreve o cadastramento/pagamento
@@ -207,7 +209,7 @@ export function FunilConsorcioTimeline({
   const steps: Step[] = [
     {
       key: 'r1-agendadas',
-      label: 'R1 Agendadas',
+      label: CONSORCIO_LABELS.reunioesAgendadas,
       hint: 'agendadas para o período',
       count: loadingR1 ? null : (r1?.agendadas ?? 0),
       badges: r1
@@ -235,13 +237,13 @@ export function FunilConsorcioTimeline({
     },
     {
       key: 'r1-realizadas',
-      label: 'R1 Realizadas',
+      label: CONSORCIO_LABELS.reunioesRealizadas,
       hint: 'marcadas pelo closer',
       count: loadingR1 ? null : (r1?.realizadas ?? 0),
     },
     {
       key: 'propostas',
-      label: 'Cartas Negociadas',
+      label: CONSORCIO_LABELS.termosPendentes,
       hint: `cartas em ${propostasCount} proposta${propostasCount === 1 ? '' : 's'} do período`,
       count: loadingProposals ? null : negociadas,
       badges:
@@ -266,7 +268,7 @@ export function FunilConsorcioTimeline({
                 label: 'Cartas',
                 value: negociadas,
                 tooltip:
-                  'Soma das cartas de crédito negociadas dentro dessas propostas. Uma carta gera um cadastro pendente, por isso é este o denominador da etapa seguinte.',
+                  'Soma das cartas de crédito negociadas dentro dessas propostas. Uma carta gera uma cota a fazer, por isso é este o denominador da etapa seguinte.',
               },
             ]
           : null,
@@ -274,7 +276,7 @@ export function FunilConsorcioTimeline({
 
     {
       key: 'pendentes',
-      label: 'Cadastros Pendentes',
+      label: CONSORCIO_LABELS.cotasAFazer,
       hint: 'criados no período',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
@@ -293,12 +295,12 @@ export function FunilConsorcioTimeline({
     },
     {
       key: 'cadastradas',
-      label: 'Cadastradas',
+      label: CONSORCIO_LABELS.cotasCadastradas,
       hint: 'reservadas na Embracon',
       count: cadastradasCount,
       rateBaseIndex: 3,
       rateTooltip:
-        'Calculada sobre os cadastros do período. A etapa Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
+        'Calculada sobre os cadastros do período. A etapa Cotas Cadastradas usa a data de reserva, um eixo de data diferente, e por isso não serve de base para a etapa seguinte.',
       badges:
         cadastradasCount != null
           ? [
@@ -334,7 +336,7 @@ export function FunilConsorcioTimeline({
       rateCount: cotasFunil,
       rateBaseIndex: 3,
       rateTooltip:
-        'Calculada sobre os cadastros do período: cotas originadas no funil ÷ cadastros criados. A etapa Cadastradas usa a data de reserva, um eixo diferente, e por isso não entra nesta conta. As cotas externas não vieram de reunião e ficam fora do numerador.',
+        'Calculada sobre os cadastros do período: cotas originadas no funil ÷ cadastros criados. A etapa Cotas Cadastradas usa a data de reserva, um eixo diferente, e por isso não entra nesta conta. As cotas externas não vieram de reunião e ficam fora do numerador.',
       badges:
         cotasFunil && cotasFunil > 0
           ? [{
@@ -409,7 +411,7 @@ export function FunilConsorcioTimeline({
               Funil Consórcio
             </p>
             <p className="text-[11px] text-muted-foreground/80">
-              6 etapas — da R1 agendada até a cota contratada · período: {period.label}
+              6 etapas — da reunião agendada até a cota contratada · período: {period.label}
             </p>
           </div>
           <ConsorcioPeriodFilter value={period} onChange={onPeriodChange} />

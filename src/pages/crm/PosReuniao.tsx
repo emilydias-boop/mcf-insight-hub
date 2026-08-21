@@ -48,6 +48,7 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 import { PendingRegistrationsList } from '@/components/consorcio/PendingRegistrationsList';
 import { CotasTab } from '@/components/consorcio/CotasTab';
 import { CotasReservadasTab } from '@/components/consorcio/CotasReservadasTab';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 
 const POS_TABS = [
   'r1-agendadas', 'r1-realizadas', 'propostas', 'pendentes', 'cadastradas', 'cotas',
@@ -282,7 +283,7 @@ function PropostasTab({
   const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
   const [editTarget, setEditTarget] = useState<Proposal | null>(null);
 
-  // Quais cartas já têm cadastro em Cadastros Pendentes. Sem isso, "Inserir Dados"
+  // Quais cartas já têm cadastro em Cotas a Fazer. Sem isso, "Inserir Dados"
   // cria um SEGUNDO cadastro e re-dispara e-mail/WhatsApp + webhook para o cliente.
   const idsAceitasSemCota = useMemo(
     () => pageRows.filter(p => p.status === 'aceita' && !p.consortium_card_id).map(p => p.id),
@@ -308,7 +309,7 @@ function PropostasTab({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
-          <CardTitle className="text-base">Cartas Negociadas ({propostas.length})</CardTitle>
+          <CardTitle className="text-base">{CONSORCIO_LABELS.termosPendentes} ({propostas.length})</CardTitle>
           <div className="relative w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -380,7 +381,7 @@ function PropostasTab({
         )}
         <TotalCreditoSummary
           propostas={propostas.filter(p => !isPropostaSemValor(p))}
-          title="Crédito Contratado — Cartas Negociadas"
+          title="Crédito Contratado — Termos de Adesão Pendentes"
           className="mb-4"
         />
         {propostas.length === 0 ? (
@@ -533,7 +534,7 @@ function PropostasTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            title="Esta carta já possui cadastro em Cadastros Pendentes — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
+                            title="Esta carta já possui cadastro em Cotas a Fazer — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
                             onClick={() => irParaCadastro(p)}
                           >
                             <FileText className="h-3 w-3 mr-1" /> Abrir cadastro

@@ -330,7 +330,7 @@ export function AcceptProposalModal({
         <DialogHeader>
           <DialogTitle>Cadastrar Dados da Cota</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Preencha os dados completos do cliente para enviar aos Cadastros Pendentes.
+            Preencha os dados completos do cliente para enviar às Cotas a Fazer.
           </p>
         </DialogHeader>
 
@@ -742,7 +742,7 @@ export function AcceptProposalModal({
                     }
                   >
                     {createRegistration.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Confirmar e Enviar para Cadastros Pendentes
+                    Confirmar e Enviar para Cotas a Fazer
                   </Button>
                 </div>
                 {!canSubmit && (

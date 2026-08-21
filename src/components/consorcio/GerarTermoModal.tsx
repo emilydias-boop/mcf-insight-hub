@@ -123,7 +123,7 @@ export function GerarTermoModal({ open, onOpenChange, registrationId, onCompleta
                     ))}
                   </ul>
                   <p className="mt-2">
-                    Abra o cadastro em Cadastros Pendentes → ⋮ → Ver detalhes → Editar, ou use o botão abaixo.
+                    Abra o cadastro em Cotas a Fazer → ⋮ → Ver detalhes → Editar, ou use o botão abaixo.
                   </p>
                 </AlertDescription>
               </Alert>

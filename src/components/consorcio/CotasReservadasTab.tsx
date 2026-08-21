@@ -86,7 +86,7 @@ function DiasParados({ dias }: { dias: number | null }) {
 }
 
 /**
- * Etapa 5 do Funil Consórcio — "Cadastradas".
+ * Etapa 5 do Funil Consórcio — "Cotas Cadastradas".
  *
  * Duas seções:
  *  - Fila "Aguardando confirmação da Embracon": cotas abertas como RESERVA e sem
@@ -271,7 +271,7 @@ export function CotasReservadasTab({ range }: { range: { startDate?: Date; endDa
               Reservas do período que a Embracon já confirmou. Respeita o filtro de período (data de reserva).
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Etapa 5 (Cadastradas) no período = {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} com
+              Etapa 5 (Cotas Cadastradas) no período = {doPeriodo.length} cota{doPeriodo.length === 1 ? '' : 's'} com
               origem no funil reservadas no período: {confirmadas.length} confirmada
               {confirmadas.length === 1 ? '' : 's'} + {doPeriodo.length - confirmadas.length} em aberto. É este
               total que a bolinha da etapa 5 exibe. Já a <strong>fila acima</strong> é outro conjunto: todas as
