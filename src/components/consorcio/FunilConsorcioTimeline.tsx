@@ -5,6 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProposals, isPropostaSemValor } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
+import { useTermosByPending, useTermosByProposal } from '@/hooks/useConsorcioTermos';
+import { cadastroTravadoSemAssinatura } from '@/lib/consorcioLiberacaoCadastro';
+
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
 import {
@@ -109,6 +112,9 @@ export function FunilConsorcioTimeline({
   const { data: r1, isLoading: loadingR1 } = useConsorcioR1Funnel(range);
   const { data: proposals, isLoading: loadingProposals } = useProposals();
   const { data: pendentes } = usePendingRegistrations([...PENDING_REGISTRATION_ALL_STATUSES]);
+  const { data: termosByPending = {} } = useTermosByPending();
+  const { data: termosByProposal = {} } = useTermosByProposal();
+
   const ownCards = useConsorcioCards({ startDate: range.startDate, endDate: range.endDate });
   const { data: funnelCardIds } = useConsorcioCotasOrigem();
   const { data: reservadas, isLoading: loadingReservadas } = useConsorcioCotasReservadas(range);
@@ -147,20 +153,28 @@ export function FunilConsorcioTimeline({
   const naoAceitas = propostasPeriodo.filter((p: any) => p.status !== 'aceita').length;
 
 
-  // Etapa 4 — TODOS os cadastros criados no período (evento, não status).
+  // Etapa 4 — cadastros criados no período (evento, não status), MENOS as vendas
+  // travadas esperando assinatura do termo: decisão do dono, a bolinha conta só
+  // as liberadas para cadastro. Filtramos na ORIGEM para o funil não descolar da
+  // lista da etapa 4, que aplica exatamente a mesma regra.
   // Eixo aceite_date ?? created_at.
   const cadastrosPeriodo = useMemo(
     () =>
       pendentes
-        ? pendentes.filter((r: any) => isInPeriod(r.aceite_date || r.created_at, range))
+        ? pendentes.filter(
+            (r: any) =>
+              isInPeriod(r.aceite_date || r.created_at, range) &&
+              !cadastroTravadoSemAssinatura(r, termosByProposal, termosByPending),
+          )
         : null,
-    [pendentes, period.startDate, period.endDate],
+    [pendentes, period.startDate, period.endDate, termosByProposal, termosByPending],
   );
   const pendentesCount = cadastrosPeriodo ? cadastrosPeriodo.length : null;
-  /** Estoque atual da fila da equipe de acompanhamento. */
+  /** Estoque atual da fila da equipe de acompanhamento (só liberadas). */
   const aguardandoAbertura = cadastrosPeriodo
     ? cadastrosPeriodo.filter((r: any) => r.status === 'aguardando_abertura').length
     : 0;
+
 
   // Etapa 5 — "Cotas Cadastradas" = cotas RESERVADAS na Embracon no período, restritas
   // às que têm origem no funil (cadastro pendente vinculado).
@@ -277,21 +291,22 @@ export function FunilConsorcioTimeline({
     {
       key: 'pendentes',
       label: CONSORCIO_LABELS.cotasAFazer,
-      hint: 'criados no período',
+      hint: 'liberadas para cadastro — termo assinado',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
       rateTooltip:
-        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%. Atenção: propostas anteriores a setembro/2026 não registravam cartas individualmente — nesses períodos a contagem de cartas é uma estimativa de backfill (1 por proposta ou qtd_cartas), então a taxa pode ficar distorcida.',
+        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). A partir do fluxo de termo, a etapa conta só os cadastros LIBERADOS (venda com Termo de Adesão assinado, cadastro avulso sem proposta, ou cadastro anterior a 19/08/2026 — data do primeiro termo da base); as vendas esperando assinatura ficam na lista recolhida "Aguardando assinatura do termo". Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%. Atenção: propostas anteriores a setembro/2026 não registravam cartas individualmente — nesses períodos a contagem de cartas é uma estimativa de backfill (1 por proposta ou qtd_cartas), então a taxa pode ficar distorcida.',
 
       badges:
         aguardandoAbertura > 0
           ? [{
-              label: `${aguardandoAbertura} aguardando abertura`,
+              label: `${aguardandoAbertura} liberadas aguardando abertura`,
               filter: 'aguardando-abertura' as FunilQuickFilter,
               tooltip:
-                'Estoque atual: cadastros criados no período que hoje continuam aguardando abertura de cota. Clique para filtrar a lista.',
+                'Estoque atual: cadastros LIBERADOS (termo assinado, avulsos ou anteriores a 19/08/2026) criados no período e que hoje continuam aguardando abertura de cota. Vendas esperando assinatura do termo não entram aqui. Clique para filtrar a lista.',
             }]
           : null,
+
     },
     {
       key: 'cadastradas',

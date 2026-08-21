@@ -25,6 +25,7 @@ export function FilaDuasListas<T>({
   descricaoPendentes,
   vazioPendentes = 'Nada pendente por aqui.',
   vazioTratadas = 'Nenhum item tratado no período.',
+  secaoIntermediaria,
 }: {
   pendentes: T[];
   tratadas: T[];
@@ -34,6 +35,19 @@ export function FilaDuasListas<T>({
   descricaoPendentes?: string;
   vazioPendentes?: string;
   vazioTratadas?: string;
+  /**
+   * Seção OPCIONAL entre pendentes e tratadas, recolhida por padrão: itens que
+   * ainda não são demanda da equipe (ex.: etapa 4 — venda esperando assinatura
+   * do termo). Fica visível na tela para nada "desaparecer", mas fora do bloco
+   * de trabalho e fora da contagem do funil.
+   */
+  secaoIntermediaria?: {
+    titulo: string;
+    descricao?: string;
+    linhas: T[];
+    vazio?: string;
+    renderTabela?: (linhas: T[]) => ReactNode;
+  };
 }) {
   return (
     <div className="space-y-4">
@@ -46,6 +60,16 @@ export function FilaDuasListas<T>({
         abertaInicialmente
         destaque
       />
+      {secaoIntermediaria && secaoIntermediaria.linhas.length > 0 && (
+        <Secao
+          titulo={secaoIntermediaria.titulo}
+          descricao={secaoIntermediaria.descricao}
+          linhas={secaoIntermediaria.linhas}
+          renderTabela={secaoIntermediaria.renderTabela || renderTabela}
+          vazio={secaoIntermediaria.vazio || 'Nada aqui.'}
+          abertaInicialmente={false}
+        />
+      )}
       <Secao
         titulo={tituloTratadas}
         linhas={tratadas}
@@ -56,6 +80,7 @@ export function FilaDuasListas<T>({
     </div>
   );
 }
+
 
 function Secao<T>({
   titulo,

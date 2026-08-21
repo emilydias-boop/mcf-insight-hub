@@ -66,6 +66,12 @@ import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
 import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 import { CotaCadastradaModal } from '@/components/consorcio/CotaCadastradaModal';
 import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
+import {
+  ancoraEsperaAssinatura,
+  cadastroTravadoSemAssinatura,
+  termosDoCadastro as termosDoCadastroLib,
+} from '@/lib/consorcioLiberacaoCadastro';
+
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
@@ -241,7 +247,14 @@ export function PendingRegistrationsList({
    * antigo por cadastro fica como fallback para termos sem `proposal_id`.
    */
   const termosDoCadastro = (reg: { id: string; proposal_id?: string | null }): ConsorcioTermo[] =>
-    (reg.proposal_id ? termosByProposal[reg.proposal_id] : undefined) || termosByPending[reg.id] || [];
+    termosDoCadastroLib(reg as any, termosByProposal, termosByPending);
+  /** Venda esperando assinatura: sai da fila de trabalho e da contagem do funil. */
+  const estaTravado = useCallback(
+    (reg: EnrichedPendingRegistration) =>
+      cadastroTravadoSemAssinatura(reg as any, termosByProposal, termosByPending),
+    [termosByProposal, termosByPending],
+  );
+
 
 
   /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
@@ -311,24 +324,48 @@ export function PendingRegistrationsList({
   };
 
   /**
-   * Duas listas da etapa 4: pendente = aguardando abertura de cota.
+   * Etapa 4 divide "Pendentes" em duas: LIBERADAS (termo assinado — é o que a
+   * equipe de cadastro trabalha) e TRAVADAS (venda esperando assinatura).
    * Pendentes do mais parado para o mais recente (created_at, não updated_at).
    */
-  const pendentes = useMemo(
-    () =>
-      filtered
-        .filter((r) => r.status === 'aguardando_abertura')
-        .slice()
-        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || ''))),
+  const maisAntigoPrimeiro = (a: EnrichedPendingRegistration, b: EnrichedPendingRegistration) =>
+    String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  const aguardando = useMemo(
+    () => filtered.filter((r) => r.status === 'aguardando_abertura'),
     [filtered],
+  );
+  const pendentes = useMemo(
+    () => aguardando.filter((r) => !estaTravado(r)).slice().sort(maisAntigoPrimeiro),
+    [aguardando, estaTravado],
+  );
+  const travadas = useMemo(
+    () => aguardando.filter((r) => estaTravado(r)).slice().sort(maisAntigoPrimeiro),
+    [aguardando, estaTravado],
   );
   const tratadas = useMemo(
     () => filtered.filter((r) => r.status !== 'aguardando_abertura'),
     [filtered],
   );
+  /**
+   * Conjunto que alimenta os KPIs e a contagem do funil: fora as vendas travadas
+   * esperando assinatura, para o número de cima não contradizer a lista de baixo.
+   */
+  const registrationsLiberados = useMemo(
+    () => (variant === 'pendentes' ? registrations.filter((r) => !estaTravado(r)) : registrations),
+    [registrations, estaTravado, variant],
+  );
 
-  /** Uma tabela, reaproveitada nas duas seções da fila (e na aba declinadas). */
-  const renderTabela = (linhas: EnrichedPendingRegistration[]) => (
+
+  /**
+   * Uma tabela, reaproveitada nas seções da fila (e na aba declinadas).
+   * `travadaAssinatura` desabilita apenas "Cota Cadastrada" — "Declinada" segue
+   * ativa, porque uma venda pode morrer enquanto espera assinatura.
+   */
+  const renderTabela = (
+    linhas: EnrichedPendingRegistration[],
+    opcoes?: { travadaAssinatura?: boolean },
+  ) => (
+
     <Table>
       <TableHeader>
         <TableRow>
@@ -366,8 +403,15 @@ export function PendingRegistrationsList({
             onGerarTermo={() => setTermoTarget(reg)}
             onVerTermos={() => setTermoPanelTarget(reg)}
             isMarking={undeclineMut.isPending}
+            travadaAssinatura={!!opcoes?.travadaAssinatura}
+            esperandoDesde={
+              opcoes?.travadaAssinatura
+                ? ancoraEsperaAssinatura(reg as any, termosByProposal, termosByPending)
+                : undefined
+            }
           />
         ))}
+
       </TableBody>
     </Table>
   );
@@ -390,7 +434,7 @@ export function PendingRegistrationsList({
       registrations={registrations}
       showStatus={variant === 'pendentes'}
     />
-    <PendingRegistrationsKPIs registrations={registrations} variant={variant} />
+    <PendingRegistrationsKPIs registrations={registrationsLiberados} variant={variant} />
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
@@ -457,12 +501,19 @@ export function PendingRegistrationsList({
           <FilaDuasListas
             pendentes={pendentes}
             tratadas={tratadas}
-            tituloPendentes={`Pendentes — aguardando abertura (${pendentes.length})`}
+            tituloPendentes={`Liberadas para cadastro — termo assinado (${pendentes.length})`}
             tituloTratadas={`Tratadas — cota aberta ou declinada (${tratadas.length})`}
             descricaoPendentes="do mais parado para o mais recente"
-            vazioPendentes="Nenhum cadastro aguardando abertura de cota."
+            vazioPendentes="Nenhum cadastro liberado para abertura de cota."
             renderTabela={renderTabela}
+            secaoIntermediaria={{
+              titulo: `Aguardando assinatura do termo (${travadas.length})`,
+              descricao: 'a cota só é cadastrada na Embracon depois da assinatura',
+              linhas: travadas,
+              renderTabela: (linhas) => renderTabela(linhas, { travadaAssinatura: true }),
+            }}
           />
+
         ) : (
           <>
             <div className="overflow-x-auto">{renderTabela(pageRows)}</div>
@@ -622,6 +673,9 @@ function RegistrationRow({
   onGerarTermo,
   onVerTermos,
   isMarking,
+  travadaAssinatura = false,
+  esperandoDesde,
+
 }: {
   reg: EnrichedPendingRegistration;
   variant: 'pendentes' | 'declinadas';
@@ -636,6 +690,11 @@ function RegistrationRow({
   onGerarTermo: () => void;
   onVerTermos: () => void;
   isMarking: boolean;
+  /** Linha da lista "Aguardando assinatura do termo": bloqueia só "Cota Cadastrada". */
+  travadaAssinatura?: boolean;
+  /** Âncora do selo de dias parados nas linhas travadas (geração do termo). */
+  esperandoDesde?: string | null;
+
 }) {
   const nome = reg.tipo_pessoa === 'pf' ? reg.nome_completo : reg.razao_social;
   const doc = reg.tipo_pessoa === 'pf' ? reg.cpf : reg.cnpj;
@@ -669,13 +728,19 @@ function RegistrationRow({
         </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
           <div className="mt-1">
-            {/* Etapa 4 conta desde a criação do cadastro, nunca desde updated_at. */}
+            {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
+                termo (ou da criação, quando o termo ainda não existe). */}
             <SeloDiasParados
-              desde={reg.created_at}
-              motivo='Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+              desde={travadaAssinatura ? (esperandoDesde ?? reg.created_at) : reg.created_at}
+              motivo={
+                travadaAssinatura
+                  ? 'Dias desde a geração do Termo de Adesão (ou da criação do cadastro, quando ainda não há termo), esperando a assinatura do cliente. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                  : 'Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+              }
             />
           </div>
         )}
+
 
         {termoBadge && (
           <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
@@ -790,9 +855,22 @@ function RegistrationRow({
         <div className="flex items-center gap-1 justify-end">
           {variant === 'pendentes' && semCota && (
             <>
-              <Button size="sm" onClick={onCotaCadastrada}>
-                <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
-              </Button>
+              {/* O `title` fica no wrapper: navegadores não mostram tooltip de
+                  elemento desabilitado. */}
+              <span
+                title={
+                  travadaAssinatura
+                    ? 'O cliente ainda não assinou o Termo de Adesão. Cadastre a cota na Embracon só depois da assinatura.'
+                    : undefined
+                }
+                className="inline-flex"
+              >
+                <Button size="sm" onClick={onCotaCadastrada} disabled={travadaAssinatura}>
+                  <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
+                </Button>
+              </span>
+
+
               {/* A outra ação que define a etapa 4 também fica na linha, em estilo
                   discreto de ação destrutiva (o motivo continua obrigatório). */}
               <Button
