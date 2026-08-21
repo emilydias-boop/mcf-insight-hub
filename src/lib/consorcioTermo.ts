@@ -113,7 +113,7 @@ export function montarTabelaParcelasMcf(
   diaVencimento?: number | null,
 ): string {
   if (!parcelas.length) return 'Nenhuma parcela sob responsabilidade da MCF Capital.';
-  const venc = Number(diaVencimento) ? `dia ${Number(diaVencimento)}` : '—';
+  const venc = Number(diaVencimento) ? `dia ${Number(diaVencimento)}` : 'A definir';
   const linhas = [
     '| Parcela | Vencimento | Valor | Responsável |',
     '| --- | --- | --- | --- |',
@@ -131,7 +131,6 @@ export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[]
   if (!Number(reg.prazo_meses)) faltando.push({ campo: 'prazo_meses', label: 'Prazo (meses)' });
   if (!Number(reg.parcela_1a_12a)) faltando.push({ campo: 'parcela_1a_12a', label: 'Valor da parcela (1ª à 12ª)' });
   if (!Number(reg.parcela_demais)) faltando.push({ campo: 'parcela_demais', label: 'Valor das demais parcelas' });
-  if (!Number(reg.dia_vencimento)) faltando.push({ campo: 'dia_vencimento', label: 'Dia de vencimento' });
   return faltando;
 }
 
@@ -155,7 +154,8 @@ export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Dat
     condicao_pagamento: CONDICAO_LABELS[String(reg.condicao_pagamento)] || reg.condicao_pagamento || '—',
     parcela_1a_12a: formatCurrency(Number(reg.parcela_1a_12a || 0)),
     parcela_demais: formatCurrency(Number(reg.parcela_demais || 0)),
-    dia_vencimento: String(reg.dia_vencimento || '—'),
+    // O dia é definido pela Embracon depois da abertura da cota.
+    dia_vencimento: Number(reg.dia_vencimento) ? String(reg.dia_vencimento) : 'A definir',
     parcelas_mcf_qtd: String(parcelas.length),
     parcelas_mcf_lista: lista,
     parcelas_mcf_total: formatCurrency(total),

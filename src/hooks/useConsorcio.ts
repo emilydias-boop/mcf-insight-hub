@@ -13,6 +13,7 @@ import {
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
+import { gerarCronogramaSeFaltando } from '@/lib/consorcioCronograma';
 import { toast } from 'sonner';
 import { fetchAllPages } from '@/lib/supabasePaginacao';
 
@@ -400,7 +401,9 @@ export function useCreateConsorcioCard() {
       // Lookup produto cadastrado para usar cronograma de comissão customizado
       const ctxComissao = await getProdutoComissaoContext(input.valor_credito, input.tipo_produto);
 
-      for (let i = 1; i <= input.prazo_meses; i++) {
+      // Sem dia de vencimento ("A definir" até a Embracon responder) não há data
+      // confiável: o cronograma é gerado depois, por gerarCronogramaSeFaltando().
+      for (let i = 1; input.dia_vencimento && i <= input.prazo_meses; i++) {
         let dataVencimento: Date;
         if (i === 1) {
           // Parcela 1 = data de contratação (já paga no ato)
@@ -412,7 +415,7 @@ export function useCreateConsorcioCard() {
           const anoAlvo = dataContratacao.getFullYear() + Math.floor(mesAlvo / 12);
           const mesNormalizado = ((mesAlvo % 12) + 12) % 12;
           const ultimoDia = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
-          const diaAjustado = Math.min(input.dia_vencimento, ultimoDia);
+          const diaAjustado = Math.min(Number(input.dia_vencimento), ultimoDia);
           dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
         }
         const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i, ctxComissao);
@@ -562,6 +565,12 @@ export function useUpdateConsorcioCard() {
 
           if (insertError) throw insertError;
         }
+      }
+
+      // 2.1 Dia de vencimento acabou de ser informado ("A definir" → dia real):
+      // gera o cronograma que não pôde ser criado na abertura da cota.
+      if (cardData.dia_vencimento) {
+        await gerarCronogramaSeFaltando(id);
       }
 
       // 3. Recalculate commissions if tipo_produto or valor_credito changed
@@ -853,10 +862,13 @@ export function useConvertReservaToContratacao() {
       cardId,
       dataContratacao,
       inicioSegundaParcela,
+      diaVencimento,
     }: {
       cardId: string;
       dataContratacao: string; // YYYY-MM-DD
       inicioSegundaParcela?: 'proximo_mes' | 'pular_mes' | 'automatico';
+      /** Dia de vencimento devolvido pela Embracon (a reserva pode ter nascido "A definir"). */
+      diaVencimento?: number | null;
     }) => {
       // 1. Buscar cota
       const { data: card, error: cardErr } = await supabase
@@ -867,6 +879,20 @@ export function useConvertReservaToContratacao() {
       if (cardErr) throw cardErr;
       if (card.tipo_registro !== 'reserva') {
         throw new Error('Esta cota já está contratada.');
+      }
+
+      // Dia de vencimento: a reserva pode ter sido aberta como "A definir" e é
+      // agora, na volta da Embracon, que o dia passa a existir.
+      const diaEfetivo = Number(diaVencimento) || Number(card.dia_vencimento) || null;
+      if (diaVencimento && Number(diaVencimento) !== Number(card.dia_vencimento)) {
+        const { error: diaErr } = await supabase
+          .from('consortium_cards')
+          .update({ dia_vencimento: Number(diaVencimento) } as any)
+          .eq('id', cardId);
+        if (diaErr) throw diaErr;
+      }
+      if (!diaEfetivo) {
+        throw new Error('Informe o dia de vencimento devolvido pela Embracon antes de confirmar a contratação.');
       }
 
       // 2. Buscar parcelas
@@ -897,7 +923,7 @@ export function useConvertReservaToContratacao() {
           const anoAlvo = baseDate.getFullYear() + Math.floor(mesAlvo / 12);
           const mesNorm = ((mesAlvo % 12) + 12) % 12;
           const ultimoDia = new Date(anoAlvo, mesNorm + 1, 0).getDate();
-          const diaAj = Math.min(card.dia_vencimento, ultimoDia);
+          const diaAj = Math.min(diaEfetivo, ultimoDia);
           dataVenc = calcularProximoDiaUtil(new Date(anoAlvo, mesNorm, diaAj));
         }
         const update: Record<string, unknown> = {
@@ -920,6 +946,12 @@ export function useConvertReservaToContratacao() {
         })
         .eq('id', cardId);
       if (updateErr) throw updateErr;
+
+      // 6. Cota aberta com vencimento "A definir" não teve cronograma gerado.
+      // Agora que o dia existe, o cronograma nasce.
+      if (!installments || installments.length === 0) {
+        await gerarCronogramaSeFaltando(cardId);
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });

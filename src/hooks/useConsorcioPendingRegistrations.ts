@@ -6,6 +6,7 @@ import { CreateConsorcioCardInput, TipoDocumento } from '@/types/consorcio';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { montarParcelasCota, inserirParcelas } from '@/lib/consorcioCronograma';
 import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
@@ -948,7 +949,8 @@ export function useOpenCota() {
         empresa_paga_parcelas: string;
         tipo_contrato?: string;
         parcelas_pagas_empresa?: number;
-        dia_vencimento: number;
+        /** Nulo = "A definir" (a Embracon informa depois da abertura). */
+        dia_vencimento: number | null;
         inicio_segunda_parcela?: string;
         data_contratacao: string;
         /** 'reserva' = enviada à Embracon, aguardando confirmação. */
@@ -1101,69 +1103,27 @@ export function useOpenCota() {
         await supabase.from('consortium_pj_partners').insert(partnersData);
       }
 
-      // 4. Generate installments
-      const [year, month, day] = String(baseDateStr).split('-').map(Number);
-      const dataContratacao = new Date(year, month - 1, day);
-      const inicioSegunda = cotaData.inicio_segunda_parcela || 'automatico';
-      let offsetSegundaParcela: number;
-      if (inicioSegunda === 'proximo_mes') {
-        offsetSegundaParcela = 1;
-      } else if (inicioSegunda === 'pular_mes') {
-        offsetSegundaParcela = 2;
-      } else {
-        offsetSegundaParcela = dataContratacao.getDate() > 16 ? 2 : 1;
-      }
-
-      const installments: any[] = [];
-      const tipoContrato = cotaData.tipo_contrato || 'normal';
-      const parcelasEmpresa = cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0;
-
-      const ctxComissao = await getProdutoComissaoContext(cotaData.valor_credito, cotaData.tipo_produto as any);
-      for (let i = 1; i <= cotaData.prazo_meses; i++) {
-        let dataVencimento: Date;
-        if (i === 1) {
-          dataVencimento = dataContratacao;
-        } else {
-          const monthOffset = offsetSegundaParcela + (i - 2);
-          const mesAlvo = dataContratacao.getMonth() + monthOffset;
-          const anoAlvo = dataContratacao.getFullYear() + Math.floor(mesAlvo / 12);
-          const mesNormalizado = ((mesAlvo % 12) + 12) % 12;
-          const ultimoDia = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
-          const diaAjustado = Math.min(cotaData.dia_vencimento, ultimoDia);
-          dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
-        }
-        const valorComissao = calcularComissao(cotaData.valor_credito, cotaData.tipo_produto as any, i, ctxComissao);
-
-        let tipo: 'cliente' | 'empresa';
-        if (tipoContrato === 'intercalado') {
-          const ehPar = i % 2 === 0;
-          tipo = (ehPar && (i / 2) <= parcelasEmpresa) ? 'empresa' : 'cliente';
-        } else if (tipoContrato === 'intercalado_impar') {
-          const ehImpar = i % 2 === 1;
-          tipo = (ehImpar && Math.ceil(i / 2) <= parcelasEmpresa) ? 'empresa' : 'cliente';
-        } else {
-          tipo = i <= parcelasEmpresa ? 'empresa' : 'cliente';
-        }
-
-        installments.push({
-          card_id: card.id,
-          numero_parcela: i,
-          tipo,
-          valor_parcela: cotaData.valor_credito / cotaData.prazo_meses,
-          valor_comissao: valorComissao,
-          data_vencimento: dataVencimento.toISOString().split('T')[0],
-          status: isReserva ? 'previsto' : 'pendente',
+      // 4. Cronograma de parcelas.
+      // O dia de vencimento é definido pela Embracon DEPOIS da abertura. Quando
+      // ele ainda é "A definir" (nulo), não há data confiável: o cronograma não é
+      // gerado agora e nasce quando o dia for informado (confirmação da Embracon
+      // ou edição da cota) — ver gerarCronogramaSeFaltando().
+      if (cotaData.dia_vencimento) {
+        const parcelas = await montarParcelasCota({
+          cardId: card.id,
+          baseDate: String(baseDateStr),
+          diaVencimento: Number(cotaData.dia_vencimento),
+          prazoMeses: cotaData.prazo_meses,
+          valorCredito: cotaData.valor_credito,
+          tipoProduto: cotaData.tipo_produto,
+          tipoContrato: cotaData.tipo_contrato || 'normal',
+          parcelasEmpresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+          inicioSegundaParcela: cotaData.inicio_segunda_parcela || 'automatico',
+          isReserva,
         });
+        await inserirParcelas(parcelas);
       }
 
-      const CHUNK_SIZE = 8;
-      for (let i = 0; i < installments.length; i += CHUNK_SIZE) {
-        const { error: installmentsError } = await supabase
-          .from('consortium_installments')
-          .insert(installments.slice(i, i + CHUNK_SIZE));
-
-        if (installmentsError) throw installmentsError;
-      }
 
       // 5. Migrate documents from pending_registration_id to card_id
       const { error: documentsUpdateError } = await supabase
