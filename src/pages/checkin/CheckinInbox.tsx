@@ -135,10 +135,12 @@ export default function CheckinInbox() {
   });
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
+    // overflow-x-hidden é rede de segurança: nada aqui dentro empurra a página
+    // para fora da viewport, mesmo com zoom do navegador acima de 100%.
+    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3 overflow-x-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">MCF - Atendimento</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => setNovaConversaAberto(true)}>
             <MessageSquarePlus className="mr-2 h-4 w-4" /> Nova conversa
           </Button>
@@ -157,39 +159,46 @@ export default function CheckinInbox() {
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 gap-3">
-      <ConversationList
-        conversations={filtered}
-        isLoading={isLoading}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        search={search}
-        onSearchChange={setSearch}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        scope={scope}
-        onScopeChange={setScope}
-        canSeeAll={canSeeAll}
-      />
+        {/* Abaixo de md alternamos lista x conversa: só cabe uma coluna. */}
+        <ConversationList
+          className={selected ? 'hidden md:flex' : 'flex'}
+          conversations={filtered}
+          isLoading={isLoading}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          scope={scope}
+          onScopeChange={setScope}
+          canSeeAll={canSeeAll}
+        />
 
-      {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
-          do painel lateral e a rolagem interna do ContactPanel nunca ativa. */}
-      <div className="flex min-h-0 flex-1 gap-3 min-w-0">
-
-        {selected ? (
-          <>
-            <ConversationPane conversation={selected} />
-            <ContactPanel conversation={selected} />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Selecione uma conversa para começar
-          </div>
-        )}
-      </div>
+        {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
+            do painel lateral e a rolagem interna do ContactPanel nunca ativa. */}
+        <div
+          className={`min-h-0 min-w-0 flex-1 gap-3 ${selected ? 'flex' : 'hidden md:flex'}`}
+        >
+          {selected ? (
+            <>
+              <ConversationPane
+                conversation={selected}
+                onVoltar={() => setSelectedId(null)}
+              />
+              <ContactPanel conversation={selected} />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              Selecione uma conversa para começar
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
 
 function ConversationPane({ conversation }: { conversation: WaConversation }) {
   const { data: messages = [], sendMessage, sendMedia, markRead } = useWaMessages(conversation.id);
