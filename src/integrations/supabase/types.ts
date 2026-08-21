@@ -14074,6 +14074,7 @@ export type Database = {
           last_inbound_at: string | null
           last_message_at: string | null
           last_message_preview: string | null
+          pedido_saida_em: string | null
           phone_e164: string
           sender_number: string | null
           status: string
@@ -14094,6 +14095,7 @@ export type Database = {
           last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          pedido_saida_em?: string | null
           phone_e164: string
           sender_number?: string | null
           status?: string
@@ -14114,6 +14116,7 @@ export type Database = {
           last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          pedido_saida_em?: string | null
           phone_e164?: string
           sender_number?: string | null
           status?: string
