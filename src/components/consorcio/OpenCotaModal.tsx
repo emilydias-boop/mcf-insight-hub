@@ -884,6 +884,30 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       )} />
                     </div>
 
+                    {/* Aviso de grupo+cota já usado: informa, nunca bloqueia. */}
+                    {cotasDuplicadas.length > 0 && (
+                      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+                        <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+                          <AlertCircle className="h-3.5 w-3.5" /> Já existe cota ativa com grupo {grupoDigitado} / cota {cotaDigitada}
+                        </div>
+                        <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                          {cotasDuplicadas.map((d: any) => (
+                            <li key={d.id}>
+                              {d.nome_completo || d.razao_social || 'sem nome'}
+                              {' — '}
+                              {d.tipo_registro === 'contratacao' ? 'contratada' : 'reserva'}
+                              {d.data_contratacao ? ` (contratação ${d.data_contratacao})` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-1 text-muted-foreground">
+                          Pode ser erro de digitação ou cota duplicada — confira antes de salvar. Não bloqueia.
+                        </p>
+                      </div>
+                    )}
+
+
+
                     {/* Valor + Prazo + Tipo */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="valor_credito" rules={{ required: 'Obrigatório', validate: (v: any) => Number(v) > 0 || 'Informe um valor maior que zero' }} render={({ field }) => (
