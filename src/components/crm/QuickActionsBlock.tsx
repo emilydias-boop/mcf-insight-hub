@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
@@ -8,6 +9,8 @@ import { toast } from 'sonner';
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
 import { buildWhatsAppMessage } from '@/lib/whatsappTemplates';
 import { format, parseISO } from 'date-fns';
+import { useMcfAtendimentoAccess } from '@/hooks/useMcfAtendimentoAccess';
+import { useAbrirConversa } from '@/hooks/wa/useWaLeadsSemConversa';
 import {
   Select,
   SelectContent,
