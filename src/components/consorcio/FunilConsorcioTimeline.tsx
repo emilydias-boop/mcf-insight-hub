@@ -15,6 +15,8 @@ import {
   medianDias,
 } from '@/hooks/useConsorcioCotasOrigem';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+
 
 const STEP_ICONS: LucideIcon[] = [CalendarClock, CheckCheck, Mail, Inbox, BadgeCheck, Wallet];
 
