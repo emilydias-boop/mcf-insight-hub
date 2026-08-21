@@ -403,8 +403,9 @@ export function PendingRegistrationsList({
                 ? ancoraEsperaAssinatura(reg as any, termosByProposal, termosByPending)
                 : undefined
             }
-
+          />
         ))}
+
       </TableBody>
     </Table>
   );
