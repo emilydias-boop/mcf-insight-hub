@@ -65,7 +65,9 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
   };
 
   return (
-    <Card className="w-80 xl:w-96 p-4 shrink-0 flex flex-col gap-4 overflow-y-auto">
+    // h-full + min-h-0 limitam a altura ao contêiner do inbox; a rolagem fica
+    // dentro do painel, sem fazer a página inteira rolar.
+    <Card className="w-80 xl:w-96 h-full min-h-0 shrink-0 flex flex-col gap-4 overflow-y-auto overscroll-contain p-4">
       <div className="flex items-center gap-2">
         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
           <User className="h-5 w-5 text-primary" />

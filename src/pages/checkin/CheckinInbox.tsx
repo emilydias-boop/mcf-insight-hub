@@ -159,7 +159,10 @@ export default function CheckinInbox() {
         canSeeAll={canSeeAll}
       />
 
-      <div className="flex-1 flex gap-3 min-w-0">
+      {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
+          do painel lateral e a rolagem interna do ContactPanel nunca ativa. */}
+      <div className="flex min-h-0 flex-1 gap-3 min-w-0">
+
         {selected ? (
           <>
             <ConversationPane conversation={selected} />
