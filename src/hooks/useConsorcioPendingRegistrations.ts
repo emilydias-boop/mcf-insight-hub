@@ -1026,6 +1026,11 @@ export function useOpenCota() {
         categoria: cotaData.categoria as any,
         grupo: cotaData.grupo,
         cota: cotaData.cota,
+        // Contrato Embracon mora só no card (ver comentário no tipo de cotaData).
+        ...(cotaData.contrato_embracon?.trim()
+          ? { contrato_embracon: cotaData.contrato_embracon.trim() }
+          : {}),
+
         valor_credito: cotaData.valor_credito,
         prazo_meses: cotaData.prazo_meses,
         tipo_produto: cotaData.tipo_produto as any,
