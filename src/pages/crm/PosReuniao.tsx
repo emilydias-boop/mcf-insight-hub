@@ -18,7 +18,7 @@ import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal'
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
 import { UploadPendingDocumentsDialog } from '@/components/consorcio/UploadPendingDocumentsDialog';
 import { LeadCallButton } from '@/components/crm/LeadCallButton';
-import { ViewRegistrationDialog } from '@/components/consorcio/ViewRegistrationDialog';
+import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
 import { FunilConsorcioTimeline, isInPeriod, type FunilQuickFilter } from '@/components/consorcio/FunilConsorcioTimeline';
 import { R1FunnelTab } from '@/components/consorcio/R1FunnelTab';
 import { ConsorcioPeriodFilter, type DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
@@ -792,14 +792,13 @@ function PropostasTab({
         )}
 
         {viewTarget && (
-          <ViewRegistrationDialog
+          <DossieCadastroDialog
             open={!!viewTarget}
             onOpenChange={o => !o && setViewTarget(null)}
             proposalId={viewTarget.id}
-            consortiumCardId={viewTarget.consortium_card_id}
-            contactName={viewTarget.contact_name || viewTarget.deal_name}
           />
         )}
+
 
         <DealDetailsDrawer dealId={selectedDealId} open={!!selectedDealId} onOpenChange={o => !o && setSelectedDealId(null)} />
 
