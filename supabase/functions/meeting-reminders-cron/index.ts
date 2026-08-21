@@ -430,12 +430,40 @@ serve(async (req) => {
                 '3': closerName,
                 '4': meetingLink,
               };
+              // Guarda explícito: nenhuma variável pode ir vazia para a Twilio.
+              // Variável vazia é rejeitada com erro 21656 e o lembrete não sai.
+              // O `|| ''` silencioso do lookup de closer escondeu esse defeito
+              // por semanas até a Meta/Twilio endurecer a validação.
+              const VAR_LABELS: Record<string, string> = {
+                '1': 'nome_lead',
+                '2': 'data_hora',
+                '3': 'closer',
+                '4': 'link',
+              };
+              for (const [k, v] of Object.entries(varsTemplate)) {
+                if (!v || !v.trim()) {
+                  console.warn(
+                    `[MEETING-REMINDERS-CRON] variável do template vazia: {{${k}}} (${VAR_LABELS[k]}) ` +
+                    `slot=${slot.id} attendee=${attendee.id} offset=${offsetKey} closer_id=${slot.closer_id || '(none)'}`
+                  );
+                }
+              }
+              // Fallback neutro e correto para o closer ausente — a frase do
+              // template continua fazendo sentido e é infinitamente melhor
+              // que a mensagem não sair. As outras três variáveis (nome, data,
+              // link) já vêm com fallback próprio acima, mas garantimos aqui.
+              if (!varsTemplate['3'] || !varsTemplate['3'].trim()) {
+                varsTemplate['3'] = 'MCF Capital';
+                closerName = 'MCF Capital';
+              }
               const nomeLead = varsTemplate['1'];
               // ATENÇÃO: o corpo espelhado abaixo é uma RECONSTRUÇÃO APROXIMADA do
               // template aprovado na Meta (WHATSAPP_REMINDER_TEMPLATE_SID). O texto
               // exato que a lead recebe é o template aprovado; se ele mudar na Meta,
               // esta string precisa ser atualizada junto. Sem buscar o texto na Twilio,
               // esta aproximação é o melhor possível.
+              // corpoEspelho deriva das MESMAS constantes (varsTemplate/closerName)
+              // usadas no envio, para que a thread nunca diverja do que a lead recebeu.
               const corpoEspelho =
                 `Olá, ${nomeLead}! Lembrete da sua reunião ${meetingType} em ${meetingDate} às ${meetingTime}` +
                 `${closerName ? ` com ${closerName}` : ''}.` +
