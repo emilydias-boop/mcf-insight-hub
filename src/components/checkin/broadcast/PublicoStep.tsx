@@ -45,6 +45,12 @@ interface Props {
   pendentes: number;
   montando: boolean;
   jaMontou: boolean;
+  /**
+   * Público existe de fato (montado agora ou já vindo do banco). É o que decide
+   * se este passo mostra os números ou pede configuração.
+   */
+  publicoPronto?: boolean;
+
   escopo: WaBroadcastEscopo;
   bu: string;
   busDisponiveis: WaBroadcastBuDisponivel[];
