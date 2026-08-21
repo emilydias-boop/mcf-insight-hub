@@ -225,7 +225,7 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-base">
-            {mode === 'realizadas' ? 'R1 Realizadas' : 'R1 Agendadas'} ({rows.length})
+            {mode === 'realizadas' ? CONSORCIO_LABELS.reunioesRealizadas : CONSORCIO_LABELS.reunioesAgendadas} ({rows.length})
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-60">
