@@ -50,7 +50,16 @@ function useAssignedName(assignedTo: string | null) {
   });
 }
 
-export function ContactPanel({ conversation }: { conversation: WaConversation }) {
+interface ContactPanelProps {
+  conversation: WaConversation;
+  /**
+   * 'coluna' = terceira coluna do inbox, visível só a partir de xl (padrão).
+   * 'painel' = mesmo conteúdo dentro de um Sheet, ocupando a largura toda.
+   */
+  variante?: 'coluna' | 'painel';
+}
+
+export function ContactPanel({ conversation, variante = 'coluna' }: ContactPanelProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: assignedName } = useAssignedName(conversation.assigned_to);
@@ -66,10 +75,18 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
     queryClient.invalidateQueries({ queryKey: ['crm-deal', dealId] });
   };
 
+  // Como coluna, o painel só entra no fluxo em xl+ — abaixo disso o espaço não
+  // cabe e ele é acessado pelo botão do cabeçalho do thread (Sheet).
+  const classesRaiz =
+    variante === 'coluna'
+      ? 'hidden xl:flex w-80 2xl:w-96 shrink-0 h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain p-4'
+      : 'flex w-full min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain border-0 p-0 shadow-none';
+
   return (
     // h-full + min-h-0 limitam a altura ao contêiner do inbox; a rolagem fica
     // dentro do painel, sem fazer a página inteira rolar.
-    <Card className="w-80 xl:w-96 h-full min-h-0 shrink-0 flex flex-col gap-4 overflow-y-auto overscroll-contain p-4">
+    <Card className={classesRaiz}>
+
       <div className="flex items-center gap-2">
         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
           <User className="h-5 w-5 text-primary" />
