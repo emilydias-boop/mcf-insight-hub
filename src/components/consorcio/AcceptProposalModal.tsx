@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useCreatePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
