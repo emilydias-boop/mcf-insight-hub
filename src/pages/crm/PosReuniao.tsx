@@ -305,88 +305,7 @@ function PropostasTab({
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CardTitle className="text-base">{CONSORCIO_LABELS.termosPendentes} ({propostas.length})</CardTitle>
-          <div className="relative w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar contato, closer, produto, valor..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-9 h-8"
-            />
-          </div>
-          <Select value={closerFilter} onValueChange={setCloserFilter}>
-            <SelectTrigger className="w-[180px] h-8">
-              <SelectValue placeholder="Closer" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Closers</SelectItem>
-              {closerOptions.map(c => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
-            <SelectTrigger className="w-[180px] h-8">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Status</SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="documento-pendente">Documento pendente</SelectItem>
-              <SelectItem value="recusada">Recusada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={propostas.length === 0}
-          onClick={async () => {
-            const XLSX = await loadXLSX();
-            const data = propostas.map(p => ({
-              "Contato": p.contact_name || p.deal_name || '',
-              "Telefone": p.contact_phone || '',
-              "Email": p.contact_email || '',
-              "Valor Crédito": p.valor_credito,
-              "Prazo (meses)": p.prazo_meses,
-              "Produto": p.tipo_produto || '',
-              "Status": p.status || '',
-              "Closer": p.closer_name || '',
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Propostas");
-            XLSX.writeFile(wb, `propostas-consorcio-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-          }}
-        >
-          <Download className="h-4 w-4 mr-1" />
-          Exportar Excel
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {onlyNaoAceitas && (
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-primary/50 text-primary">
-              Filtrado: ainda não aceitas
-            </Badge>
-            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
-              Limpar filtro
-            </Button>
-          </div>
-        )}
-        <TotalCreditoSummary
-          propostas={propostas.filter(p => !isPropostaSemValor(p))}
-          title="Crédito Contratado — Termos de Adesão Pendentes"
-          className="mb-4"
-        />
-        {propostas.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma proposta pendente.</p>
-        ) : (
+        const renderTabela = (rows: Proposal[]) => (
           <Table>
             <TableHeader>
               <TableRow>
@@ -402,7 +321,7 @@ function PropostasTab({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageRows.map(p => {
+              {rows.map(p => {
                 const proposalDate = p.created_at ? new Date(p.created_at) : null;
                 const daysOverdue = proposalDate && p.documentos_pendentes
                   ? Math.max(0, Math.floor((Date.now() - proposalDate.getTime()) / (1000 * 60 * 60 * 24)))
@@ -602,15 +521,100 @@ function PropostasTab({
               })}
             </TableBody>
           </Table>
-        )}
+        );
 
-        <TablePagination
-          page={safePage}
-          pageSize={pageSize}
-          total={propostas.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-base">{CONSORCIO_LABELS.termosPendentes} ({propostas.length})</CardTitle>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contato, closer, produto, valor..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 h-8"
+            />
+          </div>
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Closer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Closers</SelectItem>
+              {closerOptions.map(c => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Status</SelectItem>
+              <SelectItem value="pendente">Pendente</SelectItem>
+              <SelectItem value="documento-pendente">Documento pendente</SelectItem>
+              <SelectItem value="recusada">Recusada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={propostas.length === 0}
+          onClick={async () => {
+            const XLSX = await loadXLSX();
+            const data = propostas.map(p => ({
+              "Contato": p.contact_name || p.deal_name || '',
+              "Telefone": p.contact_phone || '',
+              "Email": p.contact_email || '',
+              "Valor Crédito": p.valor_credito,
+              "Prazo (meses)": p.prazo_meses,
+              "Produto": p.tipo_produto || '',
+              "Status": p.status || '',
+              "Closer": p.closer_name || '',
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Propostas");
+            XLSX.writeFile(wb, `propostas-consorcio-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+          }}
+        >
+          <Download className="h-4 w-4 mr-1" />
+          Exportar Excel
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {onlyNaoAceitas && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/50 text-primary">
+              Filtrado: ainda não aceitas
+            </Badge>
+            <Button size="sm" variant="ghost" onClick={onClearQuickFilter}>
+              Limpar filtro
+            </Button>
+          </div>
+        )}
+        <TotalCreditoSummary
+          propostas={propostas.filter(p => !isPropostaSemValor(p))}
+          title="Crédito Contratado — Termos de Adesão Pendentes"
+          className="mb-4"
         />
+        <TaxaAssinaturaHeader range={range} className="mb-4" />
+        <FilaDuasListas
+          pendentes={propostasPendentes}
+          tratadas={propostasTratadas}
+          renderTabela={renderTabela}
+          tituloPendentes="Pendentes — termo de adesão não assinado"
+          tituloTratadas="Tratados — termo assinado ou desistência da carta"
+          descricaoPendentes="ordenado do mais parado para o mais recente"
+          vazioPendentes="Nenhum termo de adesão pendente no período."
+          vazioTratadas="Nenhum termo assinado nem desistência no período."
+        />
+
 
         {semSucessoTarget && (
           <SemSucessoModal
