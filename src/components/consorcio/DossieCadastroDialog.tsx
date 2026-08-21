@@ -17,6 +17,8 @@ import { usePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations
 import { useBatchUploadPendingDocuments } from '@/hooks/useConsorcioDocuments';
 import { TIPO_DOCUMENTO_OPTIONS, type TipoDocumento } from '@/types/consorcio';
 import { documentosFaltantes, tipoDocumentoLabel } from '@/lib/consorcioDocumentosEsperados';
+import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
+
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { tipoContratoLabel, getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 
