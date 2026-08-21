@@ -230,13 +230,14 @@ export function AcceptProposalModal({
         prazo_meses: carta
           ? Number(carta.prazo_meses)
           : (prazo ? Number(prazo) : (proposal?.prazo_meses ? Number(proposal.prazo_meses) : undefined)),
-        credito_id: plano.valores.credito_id,
-        produto_codigo: produtoDoPlano?.codigo || undefined,
-        condicao_pagamento: plano.valores.condicao_pagamento,
-        parcela_1a_12a: plano.valores.parcela_1a_12a,
-        parcela_demais: plano.valores.parcela_demais,
-        objetivo: plano.valores.objetivo,
-        inclui_seguro: incluiSeguro,
+        // Com várias cartas, o plano é POR CARTA (parcela de 150k ≠ de 200k).
+        credito_id: pc?.credito_id ?? plano.valores.credito_id,
+        produto_codigo: pc?.produto_codigo ?? produtoDoPlano?.codigo ?? undefined,
+        condicao_pagamento: pc?.condicao_pagamento ?? plano.valores.condicao_pagamento,
+        parcela_1a_12a: pc?.parcela_1a_12a ?? plano.valores.parcela_1a_12a,
+        parcela_demais: pc?.parcela_demais ?? plano.valores.parcela_demais,
+        objetivo: pc?.objetivo ?? plano.valores.objetivo,
+        inclui_seguro: pc ? pc.inclui_seguro : incluiSeguro,
         // `tipo_produto` decide o produto e a comissão de TODAS as parcelas no
         // "Abrir cota"; `origem` é o crédito da origem do lead.
         tipo_produto: carta?.tipo_produto || (proposal as any)?.tipo_produto || undefined,
