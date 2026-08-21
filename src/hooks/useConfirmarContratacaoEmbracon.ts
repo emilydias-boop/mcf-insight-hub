@@ -34,6 +34,7 @@ export function useConfirmarContratacaoEmbracon() {
       contratoEmbracon,
       grupo,
       cota,
+      diaVencimento,
       file,
       motivoSemComprovante,
     }: {
@@ -43,6 +44,8 @@ export function useConfirmarContratacaoEmbracon() {
       /** Grupo/cota devolvidos pela Embracon (reserva pode ter nascido sem eles). */
       grupo?: string | null;
       cota?: string | null;
+      /** Dia de vencimento devolvido pela Embracon (obrigatório se a cota está "A definir"). */
+      diaVencimento?: number | null;
       file?: File | null;
       /** Obrigatório quando a confirmação é feita sem comprovante. */
       motivoSemComprovante?: string | null;
@@ -125,7 +128,7 @@ export function useConfirmarContratacaoEmbracon() {
 
       // 4. Reserva -> contratação (datas das parcelas e status 'previsto' -> 'pendente')
       try {
-        await convert.mutateAsync({ cardId, dataContratacao });
+        await convert.mutateAsync({ cardId, dataContratacao, diaVencimento });
       } catch (e: any) {
         // A própria mutation de conversão já mostrou o toast — não avisar de novo.
         throw Object.assign(e instanceof Error ? e : new Error(String(e)), { silent: true });
