@@ -56,27 +56,59 @@ function dataBR(v?: string | null) {
  * na Embracon em um clique: dados pessoais, dados do plano e os documentos com
  * link para abrir. Somente leitura, exceto o anexo de documento que falta.
  */
-export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Props) {
-  const { data: reg, isLoading } = usePendingRegistration(open ? registrationId : null);
-  const cardId = reg?.consortium_card_id || null;
+export function DossieCadastroDialog({ open, onOpenChange, registrationId, proposalId }: Props) {
+  const modoVenda = !registrationId && !!proposalId;
+
+  // Etapa 4 (uma carta) — caminho original, intocado.
+  const { data: regUnico, isLoading: loadingUnico } = usePendingRegistration(
+    open && !modoVenda ? registrationId ?? null : null,
+  );
+  // Etapa 3 (venda) — todas as cartas vivas da proposta, na ordem das cartas.
+  const { data: regsVenda = [], isLoading: loadingVenda } = useCadastrosDaVenda(
+    open && modoVenda ? proposalId! : null,
+  );
+
+  const regs = useMemo<PendingRegistration[]>(
+    () => (modoVenda ? regsVenda : regUnico ? [regUnico] : []),
+    [modoVenda, regsVenda, regUnico],
+  );
+  const isLoading = modoVenda ? loadingVenda : loadingUnico;
+
+  const [cartaIdx, setCartaIdx] = useState(0);
+  useEffect(() => {
+    setCartaIdx(0);
+  }, [open, proposalId, registrationId]);
+  const idx = Math.min(cartaIdx, Math.max(0, regs.length - 1));
+  const reg = regs[idx] || null;
+
+  const regIds = useMemo(() => regs.map((r) => r.id), [regs]);
+  const cardIds = useMemo(
+    () => regs.map((r) => r.consortium_card_id).filter((v): v is string => !!v),
+    [regs],
+  );
 
   const { data: documentos = [], refetch: refetchDocs } = useQuery({
-    queryKey: ['dossie-cadastro-documentos', registrationId, cardId],
-    enabled: open,
+    queryKey: ['dossie-cadastro-documentos', regIds, cardIds],
+    enabled: open && regIds.length > 0,
     queryFn: async () => {
       // Os anexos migram de `pending_registration_id` para `card_id` quando a cota
       // é aberta — buscamos os dois lados para o dossiê nunca aparecer vazio.
-      let query = supabase.from('consortium_documents').select('*');
-      query = cardId
-        ? query.or(`card_id.eq.${cardId},pending_registration_id.eq.${registrationId}`)
-        : query.eq('pending_registration_id', registrationId);
-      const { data, error } = await query.order('uploaded_at', { ascending: false });
+      // No modo venda, os documentos são do cliente (iguais em todas as cartas):
+      // juntamos os de todos os cadastros e mostramos uma vez só.
+      const filtros = [`pending_registration_id.in.(${regIds.join(',')})`];
+      if (cardIds.length) filtros.push(`card_id.in.(${cardIds.join(',')})`);
+      const { data, error } = await supabase
+        .from('consortium_documents')
+        .select('*')
+        .or(filtros.join(','))
+        .order('uploaded_at', { ascending: false });
       if (error) throw error;
       return (data || []) as Array<{
         id: string; tipo: string; nome_arquivo: string; storage_url?: string | null; uploaded_at: string;
       }>;
     },
   });
+
 
   const tipoPessoa = (reg?.tipo_pessoa || 'pf') as 'pf' | 'pj';
   const faltantes = useMemo(
