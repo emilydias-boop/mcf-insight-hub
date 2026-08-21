@@ -38,7 +38,7 @@ import {
 import { OpenCotaModal } from './OpenCotaModal';
 import { GerarTermoModal } from './GerarTermoModal';
 import { TermoPanelDialog } from './TermoPanelDialog';
-import { useTermosByPending, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
+import { useTermosByPending, useTermosByProposal, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
 import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
@@ -234,6 +234,15 @@ export function PendingRegistrationsList({
     setFiltersState({ ...next, search: '', status: DEFAULT_PENDING_STATUS_FILTER });
   };
   const { data: termosByPending = {} } = useTermosByPending();
+  const { data: termosByProposal = {} } = useTermosByProposal();
+  /**
+   * O termo é um por venda e grava só o `pending_registration_id` da 1ª carta.
+   * Lemos pela proposta para as cartas irmãs mostrarem o mesmo selo; o vínculo
+   * antigo por cadastro fica como fallback para termos sem `proposal_id`.
+   */
+  const termosDoCadastro = (reg: { id: string; proposal_id?: string | null }): ConsorcioTermo[] =>
+    (reg.proposal_id ? termosByProposal[reg.proposal_id] : undefined) || termosByPending[reg.id] || [];
+
 
   /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
   const maisAntigoFila = useMemo(() => {
@@ -353,7 +362,7 @@ export function PendingRegistrationsList({
             onDelete={() => setDeleteTarget(reg)}
             onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
             onUndecline={() => undeclineMut.mutate(reg.id)}
-            termos={termosByPending[reg.id] || []}
+            termos={termosDoCadastro(reg)}
             onGerarTermo={() => setTermoTarget(reg)}
             onVerTermos={() => setTermoPanelTarget(reg)}
             isMarking={undeclineMut.isPending}
@@ -551,7 +560,7 @@ export function PendingRegistrationsList({
       <TermoPanelDialog
         open={!!termoPanelTarget}
         onOpenChange={(o) => !o && setTermoPanelTarget(null)}
-        termos={termosByPending[termoPanelTarget.id] || []}
+        termos={termosDoCadastro(termoPanelTarget)}
         clienteNome={termoPanelTarget.nome_completo || termoPanelTarget.razao_social || 'cliente'}
         onGerarNovo={() => setTermoTarget(termoPanelTarget)}
       />

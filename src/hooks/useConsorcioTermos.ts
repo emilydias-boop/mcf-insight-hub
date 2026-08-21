@@ -137,6 +137,11 @@ export function useTermosByPending() {
   });
 }
 
+
+
+
+
+
 /** Comprovantes de cadastro emitidos, indexados por card_id (o mais recente primeiro). */
 export function useComprovantesByCard() {
   return useQuery({

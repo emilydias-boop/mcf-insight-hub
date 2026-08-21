@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2, Upload } from 'lucide-react';
-import { usePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { usePendingRegistration, type PendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
+
 import { useBatchUploadPendingDocuments } from '@/hooks/useConsorcioDocuments';
 import { TIPO_DOCUMENTO_OPTIONS, type TipoDocumento } from '@/types/consorcio';
 import { documentosFaltantes, tipoDocumentoLabel } from '@/lib/consorcioDocumentosEsperados';
@@ -25,8 +27,12 @@ import { tipoContratoLabel, getParcelasEmpresa } from '@/lib/consorcioParcelasEm
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  registrationId: string;
+  /** Etapa 4: dossiê de UMA carta. Comportamento original, sem seletor. */
+  registrationId?: string;
+  /** Etapa 3: dossiê da VENDA — todas as cartas vivas da proposta, com seletor. */
+  proposalId?: string;
 }
+
 
 function Campo({ label, value }: { label: string; value: React.ReactNode }) {
   const vazio = value === null || value === undefined || value === '';
@@ -52,27 +58,59 @@ function dataBR(v?: string | null) {
  * na Embracon em um clique: dados pessoais, dados do plano e os documentos com
  * link para abrir. Somente leitura, exceto o anexo de documento que falta.
  */
-export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Props) {
-  const { data: reg, isLoading } = usePendingRegistration(open ? registrationId : null);
-  const cardId = reg?.consortium_card_id || null;
+export function DossieCadastroDialog({ open, onOpenChange, registrationId, proposalId }: Props) {
+  const modoVenda = !registrationId && !!proposalId;
+
+  // Etapa 4 (uma carta) — caminho original, intocado.
+  const { data: regUnico, isLoading: loadingUnico } = usePendingRegistration(
+    open && !modoVenda ? registrationId ?? null : null,
+  );
+  // Etapa 3 (venda) — todas as cartas vivas da proposta, na ordem das cartas.
+  const { data: regsVenda = [], isLoading: loadingVenda } = useCadastrosDaVenda(
+    open && modoVenda ? proposalId! : null,
+  );
+
+  const regs = useMemo<PendingRegistration[]>(
+    () => (modoVenda ? regsVenda : regUnico ? [regUnico] : []),
+    [modoVenda, regsVenda, regUnico],
+  );
+  const isLoading = modoVenda ? loadingVenda : loadingUnico;
+
+  const [cartaIdx, setCartaIdx] = useState(0);
+  useEffect(() => {
+    setCartaIdx(0);
+  }, [open, proposalId, registrationId]);
+  const idx = Math.min(cartaIdx, Math.max(0, regs.length - 1));
+  const reg = regs[idx] || null;
+
+  const regIds = useMemo(() => regs.map((r) => r.id), [regs]);
+  const cardIds = useMemo(
+    () => regs.map((r) => r.consortium_card_id).filter((v): v is string => !!v),
+    [regs],
+  );
 
   const { data: documentos = [], refetch: refetchDocs } = useQuery({
-    queryKey: ['dossie-cadastro-documentos', registrationId, cardId],
-    enabled: open,
+    queryKey: ['dossie-cadastro-documentos', regIds, cardIds],
+    enabled: open && regIds.length > 0,
     queryFn: async () => {
       // Os anexos migram de `pending_registration_id` para `card_id` quando a cota
       // é aberta — buscamos os dois lados para o dossiê nunca aparecer vazio.
-      let query = supabase.from('consortium_documents').select('*');
-      query = cardId
-        ? query.or(`card_id.eq.${cardId},pending_registration_id.eq.${registrationId}`)
-        : query.eq('pending_registration_id', registrationId);
-      const { data, error } = await query.order('uploaded_at', { ascending: false });
+      // No modo venda, os documentos são do cliente (iguais em todas as cartas):
+      // juntamos os de todos os cadastros e mostramos uma vez só.
+      const filtros = [`pending_registration_id.in.(${regIds.join(',')})`];
+      if (cardIds.length) filtros.push(`card_id.in.(${cardIds.join(',')})`);
+      const { data, error } = await supabase
+        .from('consortium_documents')
+        .select('*')
+        .or(filtros.join(','))
+        .order('uploaded_at', { ascending: false });
       if (error) throw error;
       return (data || []) as Array<{
         id: string; tipo: string; nome_arquivo: string; storage_url?: string | null; uploaded_at: string;
       }>;
     },
   });
+
 
   const tipoPessoa = (reg?.tipo_pessoa || 'pf') as 'pf' | 'pj';
   const faltantes = useMemo(
@@ -124,6 +162,31 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Pro
         ) : (
           <ScrollArea className="max-h-[70vh] flex-1 pr-4">
             <div className="space-y-6">
+              {/* Seletor de cartas: só aparece quando a venda tem mais de uma. */}
+              {regs.length > 1 && (
+                <div className="space-y-2 rounded border bg-muted/30 p-2">
+                  <p className="text-xs text-muted-foreground">
+                    Esta venda tem {regs.length} cartas — dados do cliente e documentos são os mesmos;
+                    o plano e o estado do cadastro mudam por carta.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {regs.map((r, i) => (
+                      <Button
+                        key={r.id}
+                        size="sm"
+                        variant={i === idx ? 'default' : 'outline'}
+                        className="h-auto py-1 text-xs"
+                        onClick={() => setCartaIdx(i)}
+                      >
+                        Carta {i + 1} de {regs.length}
+                        {r.valor_credito != null ? ` · ${formatCurrency(Number(r.valor_credito))}` : ''}
+                        {r.prazo_meses ? ` · ${r.prazo_meses}x` : ''}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="uppercase">
                   {tipoPessoa === 'pj' ? 'Pessoa Jurídica' : 'Pessoa Física'}
@@ -135,6 +198,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Pro
                   </Badge>
                 ) : null}
               </div>
+
 
               {/* Campos cadastrais faltando: mesma regra do selo "cadastro incompleto". */}
               {camposFaltantes.length > 0 && (
@@ -219,7 +283,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Pro
                       const file = e.target.files?.[0];
                       if (!file) return;
                       await upload.mutateAsync({
-                        pendingRegistrationId: registrationId,
+                        pendingRegistrationId: reg.id,
                         documents: [{ file, tipo: tipoUpload }],
                       });
                       e.target.value = '';
