@@ -691,6 +691,56 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       <FormItem><FormLabel>PIX</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
                     )} />
                   </div>
+                ) : editOnly || isEditing ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    <FormField control={form.control} name="pj_razao_social" render={({ field }) => (
+                      <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_cnpj" render={({ field }) => (
+                      <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_natureza_juridica" render={({ field }) => (
+                      <FormItem><FormLabel>Natureza Jurídica</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_inscricao_estadual" render={({ field }) => (
+                      <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_data_fundacao" render={({ field }) => (
+                      <FormItem><FormLabel>Data de Fundação</FormLabel><FormControl><Input type="date" {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_telefone" render={({ field }) => (
+                      <FormItem><FormLabel>Telefone Comercial</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatPhone(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_email" render={({ field }) => (
+                      <FormItem><FormLabel>Email Comercial</FormLabel><FormControl><Input type="email" {...field} /></FormControl></FormItem>
+                    )} />
+                    <div className="col-span-2">
+                      <FormField control={form.control} name="pj_endereco" render={({ field }) => (
+                        <FormItem><FormLabel>Endereço Comercial</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                      )} />
+                    </div>
+                    <FormField control={form.control} name="pj_cep" render={({ field }) => (
+                      <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatarCep(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_num_funcionarios" render={({ field }) => (
+                      <FormItem><FormLabel>Nº Funcionários</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_faturamento" render={({ field }) => (
+                      <FormItem><FormLabel>Faturamento Mensal</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    {registration.socios && registration.socios.length > 0 && (
+                      <div className="col-span-3 text-sm">
+                        <span className="text-muted-foreground">Sócios:</span>
+                        <div className="mt-1 space-y-1">
+                          {registration.socios.map((s: any, i: number) => (
+                            <Badge key={i} variant="outline" className="mr-2">
+                              CPF: {s.cpf} — Renda: {formatCurrency(s.renda || 0)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <div className="grid grid-cols-3 gap-3 text-sm">
@@ -899,7 +949,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         </div>
                       </div>
                     )}
-                    {/* Categoria + Grupo + Cota */}
+                    {/* Categoria + Grupo + Cota. No modo "editar cadastro" grupo/cota
+                        não aparecem: eles só existem quando a Embracon abre a cota. */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="categoria" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
@@ -917,6 +968,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       )} />
                       {/* Reserva: grupo/cota só chegam quando a Embracon responde,
                           então são opcionais nesse modo. Contratação exige os dois. */}
+                      {!editOnly && (<>
                       <FormField control={form.control} name="grupo" rules={{ required: modo === 'reserva' ? false : 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>{modo === 'reserva' ? 'Grupo' : 'Grupo *'}</FormLabel>
@@ -931,6 +983,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <FormMessage />
                         </FormItem>
                       )} />
+                      </>)}
                     </div>
 
                     {/* Aviso de grupo+cota já usado: informa, nunca bloqueia. */}
@@ -1122,6 +1175,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           </Select>
                         </FormItem>
                       )} />
+                      {!editOnly && (
                       <FormField control={form.control} name="data_contratacao" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>
@@ -1136,6 +1190,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <FormMessage />
                         </FormItem>
                       )} />
+                      )}
                     </div>
 
                     {/* Origem + Vendedor */}

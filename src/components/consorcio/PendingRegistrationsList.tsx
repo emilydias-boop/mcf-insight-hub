@@ -540,8 +540,7 @@ export function PendingRegistrationsList({
             open={!!completarId}
             onOpenChange={(o) => !o && setCompletarId(null)}
             registrationId={completarId}
-            mode="view"
-            startEditing
+            mode="edit"
             focusPlano
           />
         )}
