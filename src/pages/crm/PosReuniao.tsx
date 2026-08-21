@@ -522,14 +522,16 @@ function PropostasTab({
                     {p.status === 'aceita' && !p.consortium_card_id && (
                       <>
                         {comCadastro?.has(p.id) ? (
-                          <Button
-                            size="sm"
+                          /* Selo, não botão: o cadastro é tratado na etapa 4. Continua
+                             bloqueando "Inserir Dados" para não criar um segundo
+                             cadastro (que redispara e-mail/WhatsApp + webhook). */
+                          <Badge
                             variant="outline"
-                            title="Esta carta já possui cadastro em Cotas a Fazer — abra o cadastro existente. Criar outro duplicaria a mensagem ao cliente."
-                            onClick={() => irParaCadastro(p)}
+                            className="text-xs text-muted-foreground font-normal"
+                            title="Esta carta já tem cadastro em Cotas a Fazer. Trate por lá."
                           >
-                            <FileText className="h-3 w-3 mr-1" /> Abrir cadastro
-                          </Button>
+                            Cadastro já criado
+                          </Badge>
                         ) : (
                           <Button
                             size="sm"
