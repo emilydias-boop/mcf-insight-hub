@@ -41,7 +41,8 @@ export interface WaBroadcast {
   template_nome: string | null;
   template_preview: string | null;
   variaveis_fixas: Record<string, string>;
-  filtro: Record<string, string>;
+  /** Chaves: origin_id (string), stage_ids/tags/deal_ids (arrays). */
+  filtro: Record<string, string | string[]>;
   escopo: WaBroadcastEscopo;
   bu: string | null;
   updated_at: string | null;
