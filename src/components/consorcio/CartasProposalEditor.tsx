@@ -6,13 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, Plus, Trash2 } from 'lucide-react';
-import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
+import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput } from '@/lib/brlMask';
+import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import {
   MAX_CARTAS_POR_PROPOSTA,
   PARCELAS_MARCAVEIS,
   PropostaCartaDraft,
   cartaDraftValida,
+  cartaSemParcela,
   novaCartaDraft,
   totalCartas,
 } from '@/types/consorcioCartas';
@@ -29,6 +31,7 @@ interface CartasProposalEditorProps {
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
 
 export function CartasProposalEditor({
   cartas, onChange, tipoOptions, mostrarErros,
