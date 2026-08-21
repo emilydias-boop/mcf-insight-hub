@@ -673,6 +673,9 @@ function RegistrationRow({
   onGerarTermo,
   onVerTermos,
   isMarking,
+  travadaAssinatura = false,
+  esperandoDesde,
+
 }: {
   reg: EnrichedPendingRegistration;
   variant: 'pendentes' | 'declinadas';
