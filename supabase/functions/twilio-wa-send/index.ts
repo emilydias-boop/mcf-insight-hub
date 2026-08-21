@@ -75,6 +75,32 @@ Deno.serve(async (req) => {
     const { data: hasAccess } = await admin.rpc('has_mcf_atendimento_access', { _user_id: userId });
     if (!hasAccess) return json({ error: 'Sem acesso ao MCF - Atendimento' }, 403);
 
+    // ---- teto diario por usuario ----
+    // Usamos a RPC wa_enviados_hoje: a definicao dela conta TODA linha outbound de
+    // wa_messages do usuario no dia (fuso America/Sao_Paulo), ou seja 1:1 e disparo
+    // espelhado, template e texto livre igualmente. E exatamente a regra pedida.
+    const { data: budget } = await admin
+      .from('wa_send_budget')
+      .select('teto_por_usuario_diario')
+      .maybeSingle();
+    const tetoUsuario = Number(budget?.teto_por_usuario_diario ?? 0);
+    if (tetoUsuario > 0) {
+      const { data: enviadosHoje, error: tetoErr } = await admin.rpc('wa_enviados_hoje', {
+        _user_id: userId,
+      });
+      if (tetoErr) {
+        // Falha na contagem nao pode bloquear o atendimento; seguimos e registramos.
+        console.error('twilio-wa-send: wa_enviados_hoje falhou', tetoErr);
+      } else if (Number(enviadosHoje ?? 0) >= tetoUsuario) {
+        const enviados = Number(enviadosHoje ?? 0);
+        return json({
+          error: 'teto_diario_atingido',
+          message: `Você já enviou ${enviados} mensagens hoje e o limite diário por usuário é de ${tetoUsuario}. Fale com a liderança para liberar mais envios.`,
+        }, 429);
+      }
+    }
+
+
     const {
       conversation_id, deal_id, phone, room_id,
       body, template_sid, template_variables,

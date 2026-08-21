@@ -54,6 +54,9 @@ const PRE_SEND_ERROR_CODES = new Set([
   'template_nao_aprovado',
   'parametros_invalidos',
   'midia_nao_encontrada',
+  // teto diario: o backend bloqueia antes de chamar a Twilio, entao a midia ja
+  // enviada ao bucket pode ser limpa.
+  'teto_diario_atingido',
 ]);
 
 /**
