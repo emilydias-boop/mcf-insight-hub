@@ -25,8 +25,12 @@ import { tipoContratoLabel, getParcelasEmpresa } from '@/lib/consorcioParcelasEm
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  registrationId: string;
+  /** Etapa 4: dossiê de UMA carta. Comportamento original, sem seletor. */
+  registrationId?: string;
+  /** Etapa 3: dossiê da VENDA — todas as cartas vivas da proposta, com seletor. */
+  proposalId?: string;
 }
+
 
 function Campo({ label, value }: { label: string; value: React.ReactNode }) {
   const vazio = value === null || value === undefined || value === '';
