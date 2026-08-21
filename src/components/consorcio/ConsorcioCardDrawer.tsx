@@ -784,7 +784,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Dia Vencimento</p>
-                          <p className="font-medium">Dia {card.dia_vencimento}</p>
+                          <p className="font-medium">{card.dia_vencimento ? `Dia ${card.dia_vencimento}` : "A definir"}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-4 gap-4 mt-4">

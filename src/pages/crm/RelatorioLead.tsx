@@ -523,7 +523,7 @@ export default function RelatorioLead() {
                     <Field label="Parcela 1ª–12ª" value={fmtMoney(r.parcela_1a_12a)} />
                     <Field label="Parcela demais" value={fmtMoney(r.parcela_demais)} />
                     <Field label="Parcelas pagas pela MCF" value={fmtInt(r.parcelas_pagas_empresa)} />
-                    <Field label="Vencimento" value={r.dia_vencimento ? `dia ${r.dia_vencimento}` : NOT_RECORDED} />
+                    <Field label="Vencimento" value={r.dia_vencimento ? `dia ${r.dia_vencimento}` : 'A definir'} />
                     <Field label="Grupo / Cota" value={`${r.grupo || NOT_RECORDED} / ${r.cota || NOT_RECORDED}`} />
                     <Field label="Criado em" value={fmtDateTime(r.created_at)} />
                     <Field label="Cadastrada na Embracon" value={fmtDateTime(r.cadastrada_at)} />

@@ -114,6 +114,9 @@ function getFirstTwoNames(fullName?: string): string {
   return `${parts[0]} ${parts[1]}`;
 }
 
+/** Rótulo do vencimento: nulo = definido pela Embracon depois da abertura. */
+const VENCIMENTO_A_DEFINIR = 'A definir';
+
 // Calculate next due date based on dia_vencimento
 function calcularProximoVencimento(diaVencimento: number): Date {
   const now = new Date();
@@ -486,7 +489,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
 
     const rows = displayCards.map((card: any, index) => {
       const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
-      const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
+      const proximoVencimento = card.dia_vencimento ? calcularProximoVencimento(card.dia_vencimento) : null;
 
       return [
         index + 1,
@@ -500,8 +503,8 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
         card.grupo,
         card.cota,
         card.valor_credito,
-        card.dia_vencimento,
-        format(proximoVencimento, 'dd/MM/yyyy'),
+        card.dia_vencimento ?? VENCIMENTO_A_DEFINIR,
+        proximoVencimento ? format(proximoVencimento, 'dd/MM/yyyy') : VENCIMENTO_A_DEFINIR,
         fmtDate(card.data_reserva),
         fmtDate(card.data_contratacao),
         card.valor_parcela ?? '',
@@ -877,7 +880,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                 paginatedCards.map((card, index) => {
                   const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
-                  const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
+                  const proximoVencimento = card.dia_vencimento ? calcularProximoVencimento(card.dia_vencimento) : null;
                   // Descending number: total - (page offset + index)
                   const orderNumber = displayCards.length - ((currentPage - 1) * itemsPerPage + index);
 
@@ -907,7 +910,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                           : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
-                        {format(proximoVencimento, 'dd/MM/yyyy')}
+                        {proximoVencimento ? format(proximoVencimento, 'dd/MM/yyyy') : VENCIMENTO_A_DEFINIR}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">

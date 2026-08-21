@@ -987,8 +987,28 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
-                      <FormField control={form.control} name="dia_vencimento" rules={{ required: 'Obrigatório' }} render={({ field }) => (
-                        <FormItem><FormLabel>Dia de Vencimento *</FormLabel><FormControl><Input type="number" min={1} max={31} {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                      <FormField control={form.control} name="dia_vencimento" rules={{
+                        validate: (v) => v == null || v === '' || (Number(v) >= 1 && Number(v) <= 31) || 'Informe um dia entre 1 e 31',
+                      }} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dia de Vencimento</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={31}
+                              placeholder="A definir"
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <p className="text-[11px] leading-snug text-muted-foreground">
+                            Definido pela Embracon após a abertura da cota. Costuma cair no dia 10, 15 ou 20 — se for
+                            fim de semana ou feriado, no próximo dia útil.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
                       )} />
                       <FormField control={form.control} name="inicio_segunda_parcela" render={({ field }) => (
                         <FormItem>
