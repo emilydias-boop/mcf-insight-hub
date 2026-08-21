@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -173,7 +173,6 @@ export function PendingRegistrationsList({
     [allRegistrations, onlyAguardandoAbertura, range?.startDate, range?.endDate],
   );
   const [openId, setOpenId] = useState<string | null>(null);
-  const [viewId, setViewId] = useState<string | null>(null);
   /** Formulário curto "Cota Cadastrada" (grupo, cota, contrato Embracon). */
   const [cadastradaId, setCadastradaId] = useState<string | null>(null);
   /** Dossiê do cadastro: tudo para efetivar a cota, em um clique. */
@@ -348,7 +347,6 @@ export function PendingRegistrationsList({
             reg={reg}
             variant={variant}
             onOpen={() => setOpenId(reg.id)}
-            onView={() => setViewId(reg.id)}
             onDossie={() => setDossieId(reg.id)}
             onCotaCadastrada={() => setCadastradaId(reg.id)}
             onLink={() => setLinkTarget(reg)}
@@ -475,14 +473,6 @@ export function PendingRegistrationsList({
             open={!!openId}
             onOpenChange={(o) => !o && setOpenId(null)}
             registrationId={openId}
-          />
-        )}
-        {viewId && (
-          <OpenCotaModal
-            open={!!viewId}
-            onOpenChange={(o) => !o && setViewId(null)}
-            registrationId={viewId}
-            mode="view"
           />
         )}
         {completarId && (
@@ -613,7 +603,6 @@ function RegistrationRow({
   reg,
   variant,
   onOpen,
-  onView,
   onDossie,
   onCotaCadastrada,
   onLink,
@@ -628,7 +617,6 @@ function RegistrationRow({
   reg: EnrichedPendingRegistration;
   variant: 'pendentes' | 'declinadas';
   onOpen: () => void;
-  onView: () => void;
   onDossie: () => void;
   onCotaCadastrada: () => void;
   onLink: () => void;
