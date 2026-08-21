@@ -14,6 +14,11 @@ export interface PropostaCarta {
   tipo_produto: string;
   /** Intenção: quais das 12 primeiras parcelas a MCF pretende pagar. */
   parcelas_mcf?: number[] | null;
+  /** Dados do plano — propriedade da CARTA (uma de 150k ≠ uma de 200k). */
+  parcela_1a_12a?: number | null;
+  parcela_demais?: number | null;
+  condicao_pagamento?: string | null;
+  objetivo?: string | null;
   pending_registration_id: string | null;
   consortium_card_id: string | null;
 }
@@ -25,6 +30,11 @@ export interface PropostaCartaInput {
   prazo_meses: number;
   tipo_produto: string;
   parcelas_mcf?: number[];
+  /** Dados do plano por carta — opcionais (podem ser completados depois). */
+  parcela_1a_12a?: number | null;
+  parcela_demais?: number | null;
+  condicao_pagamento?: string | null;
+  objetivo?: string | null;
 }
 
 /** Linha em edição no formulário (valor em string por causa da máscara BRL). */
@@ -37,9 +47,15 @@ export interface PropostaCartaDraft {
   tipoProduto: string;
   /** Marcação das 12 primeiras parcelas que a MCF paga (intenção do closer). */
   parcelasMcf: number[];
+  /** Dados do plano da carta (opcionais). */
+  parcela1a12Str: string;
+  parcelaDemaisStr: string;
+  condicaoPagamento: string;
+  objetivo: string;
   /** Carta já vinculada a cadastro/cota: não pode ser removida. */
   travada?: boolean;
 }
+
 
 export const MAX_CARTAS_POR_PROPOSTA = 50;
 
