@@ -32,4 +32,4 @@
 - [Atribuição Cotas por Cliente](mem://business-logic/consorcio-atribuicao-por-cliente) — SDR = último agendamento, atribuição por cliente, alerta de cadastro sem lead.
 - [Venda Consórcio Redesenho](mem://business-logic/venda-consorcio-redesenho-decisoes) — Decisões do dono: fusão em 2 blocos, etapa 5 manual e oficial, rótulos novos (Reuniões/Cotas a Fazer), selo 2-5 âmbar e 6+ vermelho.
 - [Venda Consórcio Formulário Fundido](mem://business-logic/venda-consorcio-formulario-fundido) — Bloco cadastral compartilhado e opcional, parcelas_mcf por carta (intenção), cadastro incompleto na etapa 4.
-
+- [Etapa 5 Parcela Inicial](mem://business-logic/etapa5-parcela-inicial-marcador-interno) — Marcador interno da parcela inicial em consorcio_pending_registrations, isolado de finanças.
