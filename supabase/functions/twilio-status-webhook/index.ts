@@ -99,7 +99,22 @@ Deno.serve(async (req) => {
     if (status === 'delivered') update.delivered_at = new Date().toISOString();
     if (status === 'read') update.read_at = new Date().toISOString();
 
-    await admin.from('automation_logs').update(update).eq('external_id', sid);
+    // O SID pode ser de uma automação (automation_logs.external_id) ou do inbox
+    // (wa_messages.twilio_message_sid). Tentamos os dois; "0 linhas" é normal na
+    // tabela que não é dona daquele SID, então não é erro.
+    try {
+      const { error } = await admin.from('automation_logs').update(update).eq('external_id', sid);
+      if (error) throw error;
+    } catch (e) {
+      console.error('[twilio-status-webhook] update automation_logs falhou', e);
+    }
+
+    try {
+      const { error } = await admin.from('wa_messages').update(update).eq('twilio_message_sid', sid);
+      if (error) throw error;
+    } catch (e) {
+      console.error('[twilio-status-webhook] update wa_messages falhou', e);
+    }
 
     return new Response('ok', { status: 200, headers: corsHeaders });
   } catch (e: any) {
