@@ -779,7 +779,10 @@ export function useEnviarProposta() {
         cartas: (cartasCriadas || []) as Array<{
           id: string; ordem: number; valor_credito: number;
           prazo_meses: number; tipo_produto: string; parcelas_mcf: number[] | null;
+          parcela_1a_12a: number | null; parcela_demais: number | null;
+          condicao_pagamento: string | null; objetivo: string | null;
         }>,
+
       };
     },
 
