@@ -244,7 +244,6 @@ export function CartasProposalEditor({
                 </div>
               </div>
 
-              </div>
             );
           })}
         </div>
