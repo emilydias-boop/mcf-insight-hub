@@ -1196,13 +1196,20 @@ export function useEditarProposta() {
 
       // Detalhes anteriores: usados para saber se a observação do cadastro pendente
       // ainda é a cópia automática (e portanto pode ser ressincronizada).
+      // O snapshot também alimenta o log de edição da venda (etapa 3).
       const { data: anterior } = await supabase
         .from('consorcio_proposals')
-        .select('proposal_details')
+        .select('proposal_details, valor_credito, prazo_meses, tipo_produto, origem_lead, deal_id')
         .eq('id', params.proposal_id)
         .maybeSingle();
+      const antes = (anterior || {}) as any;
+      const { count: cartasAntes } = await supabase
+        .from('consorcio_proposal_cartas')
+        .select('id', { count: 'exact', head: true })
+        .eq('proposal_id', params.proposal_id);
       const detalhesAnteriores = String((anterior as any)?.proposal_details || '').trim();
       const detalhesNovos = String(params.proposal_details ?? '').trim();
+
 
       // --- Cartas: atualiza as existentes, insere as novas e remove as que
       // saíram (só as que ainda não geraram cadastro/cota). Os agregados legados
