@@ -45,6 +45,10 @@ interface Props {
   podeUsarBu: boolean;
   /** quando o público em banco foi montado — só no rascunho reaberto */
   publicoMontadoEm?: string | null;
+  /** negócios que vieram de uma seleção do CRM — recorte de origem, não filtro editável */
+  dealIdsSelecionados?: string[];
+  onDescartarSelecao?: () => void;
+  descartandoSelecao?: boolean;
   onEscopoChange: (v: WaBroadcastEscopo) => void;
   onBuChange: (v: string) => void;
   onStageIdsChange: (v: string[]) => void;
