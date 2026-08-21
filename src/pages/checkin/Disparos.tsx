@@ -313,8 +313,12 @@ function CriarDisparoDialog({
     setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
     const temAlvos = (rascunho.total_alvos ?? 0) > 0;
     setJaMontou(temAlvos);
+    setPublicoInvalidado(false);
     setPublicoMontadoEm(temAlvos ? rascunho.updated_at : null);
+    // público em banco já reflete o template salvo — não remontar por nada
+    ultimoSidMontado.current = temAlvos ? (rascunho.content_sid ?? null) : null;
     setStep(rascunho.content_sid ? 2 : 1);
+
   }, [open, rascunho, templates]);
 
   const { data: sampleName = null } = useWaSampleName(broadcast?.id);
