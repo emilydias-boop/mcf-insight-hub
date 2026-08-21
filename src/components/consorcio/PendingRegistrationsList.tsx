@@ -369,61 +369,32 @@ export function PendingRegistrationsList({
             {registrations.length === 0
               ? variant === 'declinadas'
                 ? 'Nenhuma carta declinada.'
-                : 'Nenhum cadastro pendente de abertura.'
+                : 'Nenhuma cota a fazer.'
               : 'Nenhum cadastro corresponde aos filtros aplicados.'}
           </p>
+        ) : variant === 'pendentes' ? (
+          <FilaDuasListas
+            pendentes={pendentes}
+            tratadas={tratadas}
+            tituloPendentes={`Pendentes — aguardando abertura (${pendentes.length})`}
+            tituloTratadas={`Tratadas — cota aberta ou declinada (${tratadas.length})`}
+            descricaoPendentes="do mais parado para o mais recente"
+            vazioPendentes="Nenhum cadastro aguardando abertura de cota."
+            renderTabela={renderTabela}
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortableTableHead field="origem" active={field} dir={dir} onSort={toggle}>Origem</SortableTableHead>
-                  <SortableTableHead field="nome" active={field} dir={dir} onSort={toggle}>Nome / Razão Social</SortableTableHead>
-                  <SortableTableHead field="valor_credito" active={field} dir={dir} onSort={toggle}>Valor da Cota</SortableTableHead>
-                  <SortableTableHead field="parcelas_empresa" active={field} dir={dir} onSort={toggle}>Parcelas (empresa)</SortableTableHead>
-                  <SortableTableHead field="valor_total_empresa" active={field} dir={dir} onSort={toggle}>Total a pagar</SortableTableHead>
-                  <SortableTableHead field="closer" active={field} dir={dir} onSort={toggle}>Closer</SortableTableHead>
-                  <SortableTableHead field="sdr" active={field} dir={dir} onSort={toggle}>SDR</SortableTableHead>
-                  <SortableTableHead field="cotas_existentes" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Cotas existentes</SortableTableHead>
-                  <SortableTableHead field="destinada" active={field} dir={dir} onSort={toggle} className="text-center" align="center">Destinada</SortableTableHead>
-                  <SortableTableHead field="solicitado_em" active={field} dir={dir} onSort={toggle}>Solicitado em</SortableTableHead>
-                  {variant === 'pendentes' && (
-                    <SortableTableHead field="status" active={field} dir={dir} onSort={toggle}>Status</SortableTableHead>
-                  )}
-                  {variant === 'declinadas' && <TableHead>Motivo do declínio</TableHead>}
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageRows.map((reg) => (
-                  <RegistrationRow
-                    key={reg.id}
-                    reg={reg}
-                    variant={variant}
-                    onOpen={() => setOpenId(reg.id)}
-                    onView={() => setViewId(reg.id)}
-                    onLink={() => setLinkTarget(reg)}
-                    onDelete={() => setDeleteTarget(reg)}
-                    onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
-                    onUndecline={() => undeclineMut.mutate(reg.id)}
-                    termos={termosByPending[reg.id] || []}
-                    onGerarTermo={() => setTermoTarget(reg)}
-                    onVerTermos={() => setTermoPanelTarget(reg)}
-                    isMarking={undeclineMut.isPending}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <>
+            <div className="overflow-x-auto">{renderTabela(pageRows)}</div>
+            <TablePagination
+              page={safePage}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
 
-        <TablePagination
-          page={safePage}
-          pageSize={pageSize}
-          total={filtered.length}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
 
         {openId && (
           <OpenCotaModal
