@@ -105,7 +105,7 @@ export async function inserirParcelas(parcelas: any[]): Promise<void> {
 export async function gerarCronogramaSeFaltando(cardId: string): Promise<number> {
   const { data: card, error } = await supabase
     .from('consortium_cards')
-    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, inicio_segunda_parcela, tipo_registro, data_contratacao, data_reserva')
+    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, tipo_registro, data_contratacao, data_reserva')
     .eq('id', cardId)
     .single();
   if (error) throw error;
@@ -132,7 +132,6 @@ export async function gerarCronogramaSeFaltando(cardId: string): Promise<number>
     tipoProduto: String(card.tipo_produto),
     tipoContrato: (card as any).tipo_contrato,
     parcelasEmpresa: Number((card as any).parcelas_pagas_empresa || 0),
-    inicioSegundaParcela: (card as any).inicio_segunda_parcela,
     isReserva,
   });
   await inserirParcelas(parcelas);
