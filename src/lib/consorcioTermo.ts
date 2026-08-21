@@ -340,7 +340,7 @@ export async function sha256Hex(text: string): Promise<string> {
     .join('');
 }
 
-export const DADOS_EXEMPLO_TERMO: TermoDados = montarDadosTermo({
+export const DADOS_EXEMPLO_TERMO: TermoDados = montarDadosTermoMulti([{
   tipo_pessoa: 'pf',
   nome_completo: 'Maria Aparecida de Souza',
   cpf: '123.456.789-00',
