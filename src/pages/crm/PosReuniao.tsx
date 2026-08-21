@@ -6,13 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { XCircle, CheckCircle, FileText, Loader2, Search, Download, Trash2, Pencil } from 'lucide-react';
+import { XCircle, CheckCircle, FileText, Loader2, Search, Download, Trash2, Pencil, Plus } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
+import { AddCartaModal } from '@/components/consorcio/AddCartaModal';
+
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
@@ -230,6 +232,8 @@ function PropostasTab({
   const { data: allPropostas = [], isLoading } = useProposals();
   const [statusFilter, setStatusFilter] = useState<'all' | 'pendente' | 'documento-pendente' | 'recusada'>('all');
   const [closerFilter, setCloserFilter] = useState('all');
+  const [addCartaOpen, setAddCartaOpen] = useState(false);
+
   const { field, dir, toggle, q, setQ } = useTableSortUrl<PropostaSortField>({
     campos: PROPOSTA_SORT_FIELDS,
     inicial: { field: 'meeting_date', dir: 'desc' },
@@ -729,7 +733,11 @@ function PropostasTab({
           <Download className="h-4 w-4 mr-1" />
           Exportar Excel
         </Button>
+        <Button size="sm" onClick={() => setAddCartaOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Adicionar Carta
+        </Button>
       </CardHeader>
+
       <CardContent>
         {onlyNaoAceitas && (
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -757,6 +765,10 @@ function PropostasTab({
           vazioPendentes="Nenhum termo de adesão pendente no período."
           vazioTratadas="Nenhum termo assinado nem desistência no período."
         />
+
+        <AddCartaModal open={addCartaOpen} onOpenChange={setAddCartaOpen} />
+
+
 
 
         {semSucessoTarget && (

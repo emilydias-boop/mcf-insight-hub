@@ -33,3 +33,4 @@
 - [Venda Consórcio Redesenho](mem://business-logic/venda-consorcio-redesenho-decisoes) — Decisões do dono: fusão em 2 blocos, etapa 5 manual e oficial, rótulos novos (Reuniões/Cotas a Fazer), selo 2-5 âmbar e 6+ vermelho.
 - [Venda Consórcio Formulário Fundido](mem://business-logic/venda-consorcio-formulario-fundido) — Bloco cadastral compartilhado e opcional, parcelas_mcf por carta (intenção), cadastro incompleto na etapa 4.
 - [Etapa 5 Parcela Inicial](mem://business-logic/etapa5-parcela-inicial-marcador-interno) — Marcador interno da parcela inicial em consorcio_pending_registrations, isolado de finanças.
+- [Adicionar Carta etapa 3](mem://features/adicionar-carta-etapa3) — Venda manual cria proposta+cartas+cadastros, lead obrigatório, entra na trava de termo assinado.

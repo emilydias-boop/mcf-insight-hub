@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Link2, Trash2, FileEdit, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +40,6 @@ import { GerarTermoModal } from './GerarTermoModal';
 import { TermoPanelDialog } from './TermoPanelDialog';
 import { useTermosByPending, useTermosByProposal, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
-import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
 import {
   PendingRegistrationsFilters,
@@ -188,7 +187,6 @@ export function PendingRegistrationsList({
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineReason, setDeclineReason] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
   const [termoTarget, setTermoTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [termoPanelTarget, setTermoPanelTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [filtersState, setFiltersState] = useState<PendingFiltersState>(defaultPendingFilters);
@@ -471,11 +469,6 @@ export function PendingRegistrationsList({
           <Button size="sm" variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
             <Download className="h-4 w-4 mr-1" /> Exportar
           </Button>
-          {variant === 'pendentes' && (
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar Pendente
-            </Button>
-          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -593,7 +586,6 @@ export function PendingRegistrationsList({
         </AlertDialog>
       </CardContent>
     </Card>
-    <AddPendingRegistrationModal open={addOpen} onOpenChange={setAddOpen} />
     {termoTarget && (
       <GerarTermoModal
         open={!!termoTarget}
