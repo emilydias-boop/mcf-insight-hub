@@ -417,11 +417,14 @@ export function PublicoStep({
         </Button>
         <Button type="button" onClick={onMontar} disabled={montando || (escopoBu && !bu)}>
           {montando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
-          {jaMontou || publicoMontadoEm ? 'Remontar público' : 'Montar público'}
+          {mostrarNumeros || publicoMontadoEm ? 'Remontar público' : 'Montar público'}
         </Button>
       </div>
+        </CollapsibleContent>
+      </Collapsible>
 
-      {jaMontou && (
+      {mostrarNumeros && (
+
         <div className="grid gap-3 md:grid-cols-3">
           <Card>
             <CardContent className="pt-4">
