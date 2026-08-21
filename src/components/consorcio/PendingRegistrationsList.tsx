@@ -362,7 +362,7 @@ export function PendingRegistrationsList({
             onDelete={() => setDeleteTarget(reg)}
             onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
             onUndecline={() => undeclineMut.mutate(reg.id)}
-            termos={termosByPending[reg.id] || []}
+            termos={termosDoCadastro(reg)}
             onGerarTermo={() => setTermoTarget(reg)}
             onVerTermos={() => setTermoPanelTarget(reg)}
             isMarking={undeclineMut.isPending}
@@ -560,7 +560,7 @@ export function PendingRegistrationsList({
       <TermoPanelDialog
         open={!!termoPanelTarget}
         onOpenChange={(o) => !o && setTermoPanelTarget(null)}
-        termos={termosByPending[termoPanelTarget.id] || []}
+        termos={termosDoCadastro(termoPanelTarget)}
         clienteNome={termoPanelTarget.nome_completo || termoPanelTarget.razao_social || 'cliente'}
         onGerarNovo={() => setTermoTarget(termoPanelTarget)}
       />
