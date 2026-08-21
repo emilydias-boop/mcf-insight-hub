@@ -404,7 +404,7 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     );
   }
 
-  const showActions = mode === 'agendadas';
+
 
   return (
     <TooltipProvider delayDuration={150}>
