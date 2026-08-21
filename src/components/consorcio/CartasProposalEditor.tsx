@@ -10,11 +10,13 @@ import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput } from '@/lib/brlMask';
 import {
   MAX_CARTAS_POR_PROPOSTA,
+  PARCELAS_MARCAVEIS,
   PropostaCartaDraft,
   cartaDraftValida,
   novaCartaDraft,
   totalCartas,
 } from '@/types/consorcioCartas';
+
 
 interface CartasProposalEditorProps {
   cartas: PropostaCartaDraft[];
