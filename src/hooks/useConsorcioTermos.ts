@@ -137,6 +137,34 @@ export function useTermosByPending() {
   });
 }
 
+/**
+ * Termos de adesão emitidos, indexados por proposal_id (o mais recente primeiro).
+ * O termo é UM POR VENDA e grava `pending_registration_id` apenas do cadastro da
+ * primeira carta — logo, o estado do termo tem que ser lido pela proposta para que
+ * as cartas irmãs mostrem o mesmo selo.
+ */
+export function useTermosByProposal() {
+  return useQuery({
+    queryKey: ['consorcio-termos-by-proposal'],
+    queryFn: async (): Promise<Record<string, ConsorcioTermo[]>> => {
+      const { data, error } = await supabase
+        .from('consorcio_termos')
+        .select(TERMO_SELECT)
+        .eq('tipo', 'adesao')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map: Record<string, ConsorcioTermo[]> = {};
+      for (const t of (data || []) as any[]) {
+        if (!t.proposal_id) continue;
+        (map[t.proposal_id] ||= []).push(t as ConsorcioTermo);
+      }
+      return map;
+    },
+  });
+}
+
+
+
 /** Comprovantes de cadastro emitidos, indexados por card_id (o mais recente primeiro). */
 export function useComprovantesByCard() {
   return useQuery({
