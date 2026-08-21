@@ -515,6 +515,7 @@ function PropostasTab({
                           Documento pendente
                         </Badge>
                       )}
+                      {seloTermo(p)}
                       {(p as any).carta_excluida && (
                         <Badge
                           variant="destructive"
