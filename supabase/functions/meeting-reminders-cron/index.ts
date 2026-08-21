@@ -330,13 +330,17 @@ serve(async (req) => {
           let sdrName = '';
           let whatsappOwner = '';
 
+          // meeting_slots.closer_id é FK para closers.id (NÃO para profiles.id).
+          // Buscar em profiles devolvia null em silêncio (|| '') e mandava a
+          // variável {{3}} do template vazia para a Twilio, que rejeita com
+          // erro 21656 "The Content Variables parameter is invalid".
           if (slot.closer_id) {
-            const { data: closerProfile } = await supabase
-              .from('profiles')
-              .select('full_name')
+            const { data: closer } = await supabase
+              .from('closers')
+              .select('name')
               .eq('id', slot.closer_id)
               .maybeSingle();
-            closerName = closerProfile?.full_name || '';
+            closerName = closer?.name?.trim() || '';
           }
 
           if (deal.owner_id) {
