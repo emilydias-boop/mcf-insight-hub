@@ -89,8 +89,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
   const [search, setSearch] = useState(q);
   const buscaAplicada = useDebounce(search, 300);
   useEffect(() => { setQ(buscaAplicada); /* eslint-disable-next-line */ }, [buscaAplicada]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  // Paginação agora é por seção (pendentes / tratadas), dentro de FilaDuasListas.
+
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [proposalTarget, setProposalTarget] = useState<R1FunnelParticipant | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<R1FunnelParticipant | null>(null);
