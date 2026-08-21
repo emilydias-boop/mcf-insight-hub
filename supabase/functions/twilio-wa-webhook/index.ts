@@ -49,6 +49,38 @@ function placeholderFromType(type: string): string {
   return '[arquivo]';
 }
 
+/** Expressões que, sozinhas, são pedido inequívoco de descadastro. */
+const EXPRESSOES_SAIDA = new Set([
+  'sair',
+  'parar',
+  'pare',
+  'stop',
+  'descadastrar',
+  'remover',
+  'nao quero mais receber',
+  'nao quero receber',
+  'me tira da lista',
+  'cancelar inscricao',
+]);
+
+/**
+ * Detecção conservadora de pedido de saída: a mensagem tem de ser essencialmente
+ * uma das expressões acima (sem acento, sem pontuação, sem caixa alta). Uma frase
+ * longa com "parar" no meio — "não vou parar de tentar" — NÃO conta.
+ */
+function ehPedidoDeSaida(texto: string): boolean {
+  const normalizado = texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalizado || normalizado.length > 30) return false;
+  return EXPRESSOES_SAIDA.has(normalizado);
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
