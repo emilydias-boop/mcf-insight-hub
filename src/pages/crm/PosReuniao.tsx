@@ -766,6 +766,10 @@ function PropostasTab({
           vazioTratadas="Nenhum termo assinado nem desistência no período."
         />
 
+        <AddCartaModal open={addCartaOpen} onOpenChange={setAddCartaOpen} />
+
+
+
 
         {semSucessoTarget && (
           <SemSucessoModal
