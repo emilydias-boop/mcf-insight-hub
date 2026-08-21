@@ -602,12 +602,13 @@ function CriarDisparoDialog({
             </Button>
           )}
           {step === 2 && (
+            // o público pode ter nascido montado (seleção do CRM): o critério é o
+            // número real de alvos, não só o clique manual em "Montar público"
             <Button
               onClick={() => setStep(3)}
-              // o público pode ter nascido montado (seleção do CRM): o critério é
-              // o número real de alvos, não só o clique manual em "Montar público"
               disabled={!publicoPronto || contagemIndisponivel || pendentes === 0}
             >
+
               Continuar
             </Button>
           )}
