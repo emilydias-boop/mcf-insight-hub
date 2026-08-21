@@ -180,7 +180,7 @@ export function AcceptProposalModal({
             {/* ===== Dados do plano (bloco compartilhado com OpenCotaModal) ===== */}
             <div className="space-y-3 rounded-lg border p-3">
               <h3 className="font-semibold text-sm">Dados do plano</h3>
-              <DadosPlanoFields plano={plano} esconder={['diaVencimento', 'inicioSegundaParcela']} />
+              <DadosPlanoFields plano={plano} hide={['diaVencimento', 'inicioSegundaParcela']} />
             </div>
 
             <TipoPessoaSelect bloco={cliente} />
