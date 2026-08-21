@@ -774,12 +774,15 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onView}>
                 <Eye className="h-4 w-4 mr-2" /> Ver detalhes
               </DropdownMenuItem>
-              {variant === 'pendentes' && (
-                <DropdownMenuItem onClick={termos.length ? onVerTermos : onGerarTermo}>
-                  <FileSignature className="h-4 w-4 mr-2" />
-                  {termos.length ? 'Termo de Adesão' : 'Gerar Termo de Adesão'}
+              {/* A GERAÇÃO do termo mudou para a etapa 3 (Termos de Adesão Pendentes),
+                  onde o trabalho de fazer o cliente assinar acontece. Aqui só se
+                  consulta o termo já emitido — informação útil para o cadastro. */}
+              {variant === 'pendentes' && termos.length > 0 && (
+                <DropdownMenuItem onClick={onVerTermos}>
+                  <FileSignature className="h-4 w-4 mr-2" /> Termo de Adesão
                 </DropdownMenuItem>
               )}
+
               {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
                 <DropdownMenuItem onClick={onLink}>
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
