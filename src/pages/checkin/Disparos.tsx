@@ -269,6 +269,12 @@ function CriarDisparoDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** quando o público em banco foi montado — só quando um rascunho é reaberto */
   const [publicoMontadoEm, setPublicoMontadoEm] = useState<string | null>(null);
+  /**
+   * Recorte de origem quando o disparo nasceu de uma seleção de negócios no CRM.
+   * Não é filtro editável nos seletores: precisa sobreviver a cada remontagem,
+   * senão o público deixa de ser o que a pessoa marcou.
+   */
+  const [dealIds, setDealIds] = useState<string[]>([]);
 
   /** Reabrir rascunho: recarrega template, escopo, BU, filtros e limite. */
   useEffect(() => {
