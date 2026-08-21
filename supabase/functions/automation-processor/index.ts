@@ -643,6 +643,57 @@ function pickBestSlot(slots: any[]) {
   return activeSlot || cleanSlots[0] || null;
 }
 
+// Espelha um envio de WhatsApp na thread do MCF - Atendimento (wa_messages).
+// Só WhatsApp: e-mail nunca vira mensagem na conversa.
+// Nunca lança — o espelho é secundário; a fonte de verdade do envio é automation_logs.
+async function espelharNaThreadWa(
+  supabase: any,
+  params: {
+    telefoneBruto: string | null | undefined;
+    dealId: string | null | undefined;
+    nomeContato: string | null | undefined;
+    corpo: string;
+    remetenteNome: string;
+    sucesso: boolean;
+    sid?: string | null;
+    erro?: string | null;
+  },
+): Promise<void> {
+  try {
+    if (!params.telefoneBruto) return;
+
+    const { data: e164, error: e164Err } = await supabase.rpc('wa_e164_br', { _raw: params.telefoneBruto });
+    if (e164Err || !e164) {
+      console.warn('[WA-MIRROR] telefone não normalizável, espelho ignorado:', e164Err?.message || params.telefoneBruto);
+      return;
+    }
+
+    const { data: conversationId, error: convErr } = await supabase.rpc('wa_get_or_create_conversation', {
+      _phone_e164: e164,
+      _deal_id: params.dealId ?? null,
+      _contact_name: params.nomeContato ?? null,
+    });
+    if (convErr || !conversationId) {
+      console.warn('[WA-MIRROR] falha ao obter conversa:', convErr?.message);
+      return;
+    }
+
+    const { error: insErr } = await supabase.from('wa_messages').insert({
+      conversation_id: conversationId,
+      direction: 'outbound',
+      body: params.corpo,
+      twilio_message_sid: params.sid || null,
+      sent_by_user_id: null, // envio automático, sem humano
+      sent_by_name: params.remetenteNome,
+      status: params.sucesso ? 'sent' : 'failed',
+      error_message: params.sucesso ? null : (params.erro || null),
+    });
+    if (insErr) console.warn('[WA-MIRROR] falha ao inserir wa_messages:', insErr.message);
+  } catch (e: any) {
+    console.warn('[WA-MIRROR] erro inesperado no espelhamento:', e?.message);
+  }
+}
+
 async function markAsSkipped(supabase: any, itemId: string, reason: string) {
   await supabase
     .from('automation_queue')
