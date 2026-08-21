@@ -20,6 +20,8 @@ import { useQualificationNote } from '@/hooks/useQualificationNote';
 import { AddNoteDialog } from './AddNoteDialog';
 import { QualifyLeadDialog } from './QualifyLeadDialog';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
+import { PedidoSaidaAviso } from './PedidoSaidaAviso';
+
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -80,7 +82,10 @@ export function ContactPanel({ conversation }: { conversation: WaConversation })
         </div>
       </div>
 
+      <PedidoSaidaAviso conversation={conversation} />
+
       <div className="space-y-2 text-sm">
+
         <InfoRow label="Telefone" value={formatPhone(conversation.phone_e164)} />
         <InfoRow label="Responsável" value={assignedName ?? (conversation.assigned_to ? '—' : 'Não atribuído')} />
         <InfoRow label="Motivo da atribuição" value={conversation.assigned_reason} />

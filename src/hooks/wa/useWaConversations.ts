@@ -21,6 +21,8 @@ export interface WaConversation {
   assigned_reason: string | null;
   last_inbound_at: string | null;
   first_contact_at: string | null;
+  /** Quando o webhook detectou pedido de descadastro. Só sinalização — o opt-out é manual. */
+  pedido_saida_em: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +33,7 @@ export type WaScope = 'mine' | 'all';
 export interface WaConversationPatch {
   status?: WaConversationStatus;
   assigned_to?: string | null;
+  pedido_saida_em?: string | null;
 }
 
 export function useWaConversations(scope: WaScope = 'mine') {
