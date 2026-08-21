@@ -37,6 +37,59 @@ function formatPtBR(date: Date): { date: string; time: string } {
   };
 }
 
+// Espelha um envio de WhatsApp na thread do MCF - Atendimento (wa_messages).
+// Só WhatsApp entra aqui: lembrete de e-mail nunca deve virar mensagem na conversa.
+// Nunca lança: se o espelho falhar, o lembrete já foi enviado e permanece registrado
+// em meeting_reminders_log (fonte de verdade do envio não muda).
+async function espelharNaThreadWa(
+  supabase: any,
+  params: {
+    telefoneBruto: string | null | undefined;
+    dealId: string | null | undefined;
+    nomeContato: string | null | undefined;
+    corpo: string;
+    remetenteNome: string;
+    sucesso: boolean;
+    sid?: string | null;
+    erro?: string | null;
+  },
+): Promise<void> {
+  try {
+    if (!params.telefoneBruto) return;
+
+    // Normaliza pela mesma RPC usada pelo resto do módulo WhatsApp.
+    const { data: e164, error: e164Err } = await supabase.rpc('wa_e164_br', { _raw: params.telefoneBruto });
+    if (e164Err || !e164) {
+      console.warn('[WA-MIRROR] telefone não normalizável, espelho ignorado:', e164Err?.message || params.telefoneBruto);
+      return;
+    }
+
+    const { data: conversationId, error: convErr } = await supabase.rpc('wa_get_or_create_conversation', {
+      _phone_e164: e164,
+      _deal_id: params.dealId ?? null,
+      _contact_name: params.nomeContato ?? null,
+    });
+    if (convErr || !conversationId) {
+      console.warn('[WA-MIRROR] falha ao obter conversa:', convErr?.message);
+      return;
+    }
+
+    const { error: insErr } = await supabase.from('wa_messages').insert({
+      conversation_id: conversationId,
+      direction: 'outbound',
+      body: params.corpo,
+      twilio_message_sid: params.sid || null,
+      sent_by_user_id: null, // envio automático, sem humano
+      sent_by_name: params.remetenteNome,
+      status: params.sucesso ? 'sent' : 'failed',
+      error_message: params.sucesso ? null : (params.erro || null),
+    });
+    if (insErr) console.warn('[WA-MIRROR] falha ao inserir wa_messages:', insErr.message);
+  } catch (e: any) {
+    console.warn('[WA-MIRROR] erro inesperado no espelhamento:', e?.message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -75,7 +128,7 @@ serve(async (req) => {
       .select(`
         id, scheduled_at, status, closer_id, meeting_type, updated_at,
         meeting_slot_attendees!inner(
-          id, status, deal_id,
+          id, status, deal_id, attendee_name, attendee_phone,
           crm_deals!inner(
             id, name, owner_id, contact_id, origin_id,
             crm_contacts(id, name, email, phone)
@@ -364,6 +417,16 @@ serve(async (req) => {
               });
               summary.skipped++;
             } else {
+              // Texto equivalente ao template enviado, com as variáveis já substituídas —
+              // é isso que o SDR precisa ver na thread para entender o que a lead recebeu.
+              const nomeLead = attendee.attendee_name || contact.name || deal.name || 'Lead';
+              const corpoEspelho =
+                `Olá, ${nomeLead}! Lembrete da sua reunião ${meetingType} em ${meetingDate} às ${meetingTime}` +
+                `${closerName ? ` com ${closerName}` : ''}.` +
+                `${meetingLink ? `\nLink: ${meetingLink}` : ''}`;
+              const remetenteEspelho = `Lembrete ${meetingType} · ${offsetKey}`;
+              const telefoneEspelho = attendee.attendee_phone || contact.phone;
+
               try {
                 const waRes = await supabase.functions.invoke('twilio-whatsapp-send', {
                   body: {
@@ -394,12 +457,31 @@ serve(async (req) => {
                     error_message: detailed,
                   });
                   summary.failed++;
+                  // Falha também é espelhada: hoje o SDR não vê lembrete que não saiu.
+                  await espelharNaThreadWa(supabase, {
+                    telefoneBruto: telefoneEspelho,
+                    dealId: attendee.deal_id || deal.id,
+                    nomeContato: nomeLead,
+                    corpo: corpoEspelho,
+                    remetenteNome: remetenteEspelho,
+                    sucesso: false,
+                    erro: detailed,
+                  });
                 } else {
                   await supabase.from('meeting_reminders_log').insert({
                     ...waBase,
                     status: 'sent',
                   });
                   summary.sent++;
+                  await espelharNaThreadWa(supabase, {
+                    telefoneBruto: telefoneEspelho,
+                    dealId: attendee.deal_id || deal.id,
+                    nomeContato: nomeLead,
+                    corpo: corpoEspelho,
+                    remetenteNome: remetenteEspelho,
+                    sucesso: true,
+                    sid: waRes.data?.messageSid || null,
+                  });
                 }
               } catch (e: any) {
                 await supabase.from('meeting_reminders_log').insert({
@@ -408,8 +490,18 @@ serve(async (req) => {
                   error_message: e.message,
                 });
                 summary.failed++;
+                await espelharNaThreadWa(supabase, {
+                  telefoneBruto: telefoneEspelho,
+                  dealId: attendee.deal_id || deal.id,
+                  nomeContato: nomeLead,
+                  corpo: corpoEspelho,
+                  remetenteNome: remetenteEspelho,
+                  sucesso: false,
+                  erro: e.message,
+                });
               }
             }
+
           }
         }
       }
