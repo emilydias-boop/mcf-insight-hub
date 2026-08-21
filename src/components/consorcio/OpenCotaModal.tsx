@@ -4,7 +4,7 @@ import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FileText, ExternalLink, Trash2, Upload } from 'lucide-react';
+import { Loader2, FileText, ExternalLink, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { formatarCep } from '@/lib/cepUtils';
 
 function formatCep(value: string): string {
