@@ -122,6 +122,13 @@ export default function CheckinInbox() {
 
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
 
+  // Avisos de mensagem recebida: bipe, notificação do navegador e contador na aba.
+  useWaNotificacoes({
+    conversas: conversations,
+    conversaSelecionadaId: selectedId,
+    onAbrirConversa: (id) => setAlvoDeepLink(id),
+  });
+
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
