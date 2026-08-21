@@ -269,6 +269,12 @@ function CriarDisparoDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** quando o público em banco foi montado — só quando um rascunho é reaberto */
   const [publicoMontadoEm, setPublicoMontadoEm] = useState<string | null>(null);
+  /**
+   * Recorte de origem quando o disparo nasceu de uma seleção de negócios no CRM.
+   * Não é filtro editável nos seletores: precisa sobreviver a cada remontagem,
+   * senão o público deixa de ser o que a pessoa marcou.
+   */
+  const [dealIds, setDealIds] = useState<string[]>([]);
 
   /** Reabrir rascunho: recarrega template, escopo, BU, filtros e limite. */
   useEffect(() => {
@@ -291,6 +297,8 @@ function CriarDisparoDialog({
     setStageIds(stagesSalvos.length > 0 ? stagesSalvos : stageAntigo);
     setTags(comoArray(filtro.tags));
     setOriginId(typeof filtro.origin_id === 'string' ? filtro.origin_id : '');
+    // seleção do CRM: preservada como recorte, fora dos seletores do wizard
+    setDealIds(comoArray(filtro.deal_ids));
     setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
     const temAlvos = (rascunho.total_alvos ?? 0) > 0;
     setJaMontou(temAlvos);
@@ -373,6 +381,7 @@ function CriarDisparoDialog({
     setStageIds([]);
     setTags([]);
     setOriginId('');
+    setDealIds([]);
     setLimite('');
     setEscopo('minha_carteira');
     setBu('');
@@ -412,13 +421,19 @@ function CriarDisparoDialog({
     setStep(2);
   };
 
-  const handleMontar = async () => {
+  /**
+   * Monta o público. `dealIdsAtuais` permite remontar já sem a seleção do CRM
+   * (botão "usar toda a carteira") sem depender do estado ainda não aplicado.
+   */
+  const montarPublico = async (dealIdsAtuais: string[]) => {
     if (!broadcast) return;
     if (escopo === 'bu' && !bu) return toast.error('Escolha a BU');
     const filtro: Record<string, string | string[]> = {};
     if (stageIds.length > 0) filtro.stage_ids = stageIds;
     if (tags.length > 0) filtro.tags = tags;
     if (originId) filtro.origin_id = originId;
+    // seleção do CRM sobrevive à remontagem: sem isso o público viraria o do filtro
+    if (dealIdsAtuais.length > 0) filtro.deal_ids = dealIdsAtuais;
     try {
       await atualizar.mutateAsync({
         id: broadcast.id,
@@ -442,6 +457,18 @@ function CriarDisparoDialog({
       );
     }
   };
+
+  const handleMontar = () => montarPublico(dealIds);
+
+  /** Descarta a seleção do CRM e remonta o público sem esse recorte. */
+  const handleDescartarSelecao = async () => {
+    setDealIds([]);
+    setJaMontou(false);
+    setPublicoMontadoEm(null);
+    await montarPublico([]);
+  };
+
+
 
 
 
@@ -488,6 +515,9 @@ function CriarDisparoDialog({
             busDisponiveis={busDisponiveis}
             podeUsarBu={podeUsarBu}
             publicoMontadoEm={publicoMontadoEm}
+            dealIdsSelecionados={dealIds}
+            onDescartarSelecao={handleDescartarSelecao}
+            descartandoSelecao={montar.isPending || atualizar.isPending}
             onEscopoChange={handleEscopoChange}
             onBuChange={handleBuChange}
             onStageIdsChange={handleStageIdsChange}
