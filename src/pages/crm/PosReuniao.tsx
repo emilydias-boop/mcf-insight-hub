@@ -507,9 +507,16 @@ function PropostasTab({
                         >
                           <CheckCircle className="h-3 w-3 mr-1" /> Cadastrar
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => setSemSucessoTarget(p)}>
+                        {/* Mesmo padrão da etapa 4: ação destrutiva discreta, não gritante. */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setSemSucessoTarget(p)}
+                        >
                           <XCircle className="h-3 w-3 mr-1" /> Recusar
                         </Button>
+
                       </>
                     )}
                     {p.status === 'aceita' && !p.consortium_card_id && (
