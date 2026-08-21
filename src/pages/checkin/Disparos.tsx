@@ -258,7 +258,8 @@ function CriarDisparoDialog({
   const [nome, setNome] = useState('');
   const [template, setTemplate] = useState<WaTemplateOption | null>(null);
   const [broadcast, setBroadcast] = useState<WaBroadcast | null>(null);
-  const [stageId, setStageId] = useState('');
+  const [stageIds, setStageIds] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [originId, setOriginId] = useState('');
   const [limite, setLimite] = useState('');
   const [escopo, setEscopo] = useState<WaBroadcastEscopo>('minha_carteira');
@@ -281,8 +282,15 @@ function CriarDisparoDialog({
     );
     setEscopo((rascunho.escopo as WaBroadcastEscopo) ?? 'minha_carteira');
     setBu(rascunho.bu ?? '');
-    setStageId(rascunho.filtro?.stage_id ?? '');
-    setOriginId(rascunho.filtro?.origin_id ?? '');
+    // rascunho antigo salvava stage_id (string única) — converte para array
+    const filtro = rascunho.filtro ?? {};
+    const comoArray = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const stagesSalvos = comoArray(filtro.stage_ids);
+    const stageAntigo = typeof filtro.stage_id === 'string' && filtro.stage_id ? [filtro.stage_id] : [];
+    setStageIds(stagesSalvos.length > 0 ? stagesSalvos : stageAntigo);
+    setTags(comoArray(filtro.tags));
+    setOriginId(typeof filtro.origin_id === 'string' ? filtro.origin_id : '');
     setLimite(rascunho.limite_alvos ? String(rascunho.limite_alvos) : '');
     const temAlvos = (rascunho.total_alvos ?? 0) > 0;
     setJaMontou(temAlvos);
@@ -315,23 +323,29 @@ function CriarDisparoDialog({
     setJaMontou(false);
     setPublicoMontadoEm(null);
   };
-  const handleStageChange = (v: string) => {
-    setStageId(v);
+  const handleStageIdsChange = (v: string[]) => {
+    setStageIds(v);
+    invalidarPublico();
+  };
+  const handleTagsChange = (v: string[]) => {
+    setTags(v);
     invalidarPublico();
   };
   const handleOriginChange = (v: string) => {
     setOriginId(v);
-    setStageId('');
+    // as opções de estágio mudam com a origem; as tags são independentes
+    setStageIds([]);
     invalidarPublico();
   };
 
   const handleEscopoChange = (v: WaBroadcastEscopo) => {
     setEscopo(v);
     if (v === 'minha_carteira') setBu('');
-    // filtros de origem/estágio são da carteira de quem dispara: não valem na BU
+    // as listas de origem/estágio/tag mudam de recorte junto com o escopo
     if (v === 'bu') {
       setOriginId('');
-      setStageId('');
+      setStageIds([]);
+      setTags([]);
     }
     invalidarPublico();
   };
@@ -356,7 +370,8 @@ function CriarDisparoDialog({
     setNome('');
     setTemplate(null);
     setBroadcast(null);
-    setStageId('');
+    setStageIds([]);
+    setTags([]);
     setOriginId('');
     setLimite('');
     setEscopo('minha_carteira');
@@ -400,11 +415,10 @@ function CriarDisparoDialog({
   const handleMontar = async () => {
     if (!broadcast) return;
     if (escopo === 'bu' && !bu) return toast.error('Escolha a BU');
-    const filtro: Record<string, string> = {};
-    if (escopo !== 'bu') {
-      if (stageId) filtro.stage_id = stageId;
-      if (originId) filtro.origin_id = originId;
-    }
+    const filtro: Record<string, string | string[]> = {};
+    if (stageIds.length > 0) filtro.stage_ids = stageIds;
+    if (tags.length > 0) filtro.tags = tags;
+    if (originId) filtro.origin_id = originId;
     try {
       await atualizar.mutateAsync({
         id: broadcast.id,
@@ -462,7 +476,8 @@ function CriarDisparoDialog({
         {step === 2 && broadcast && (
           <PublicoStep
             broadcast={broadcast}
-            stageId={stageId}
+            stageIds={stageIds}
+            tags={tags}
             originId={originId}
             limite={limite}
             pendentes={pendentes ?? 0}
@@ -475,7 +490,8 @@ function CriarDisparoDialog({
             publicoMontadoEm={publicoMontadoEm}
             onEscopoChange={handleEscopoChange}
             onBuChange={handleBuChange}
-            onStageChange={handleStageChange}
+            onStageIdsChange={handleStageIdsChange}
+            onTagsChange={handleTagsChange}
             onOriginChange={handleOriginChange}
             onLimiteChange={handleLimiteChange}
             onMontar={handleMontar}
