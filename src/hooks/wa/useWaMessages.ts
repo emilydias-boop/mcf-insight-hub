@@ -232,6 +232,17 @@ export function useWaMessages(conversationId: string | null) {
     markReadRef.current = markReadNow;
   }, [markReadNow]);
 
+  // Quando a aba volta ao foco com a conversa aberta, marca as mensagens
+  // recebidas enquanto estava em background como lidas.
+  useEffect(() => {
+    if (!conversationId) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') markReadRef.current();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [conversationId]);
+
   const sendMedia = useMutation({
     mutationFn: async (input: {
       file: File | Blob;
