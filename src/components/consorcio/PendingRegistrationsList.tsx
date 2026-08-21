@@ -241,7 +241,14 @@ export function PendingRegistrationsList({
    * antigo por cadastro fica como fallback para termos sem `proposal_id`.
    */
   const termosDoCadastro = (reg: { id: string; proposal_id?: string | null }): ConsorcioTermo[] =>
-    (reg.proposal_id ? termosByProposal[reg.proposal_id] : undefined) || termosByPending[reg.id] || [];
+    termosDoCadastroLib(reg as any, termosByProposal, termosByPending);
+  /** Venda esperando assinatura: sai da fila de trabalho e da contagem do funil. */
+  const estaTravado = useCallback(
+    (reg: EnrichedPendingRegistration) =>
+      cadastroTravadoSemAssinatura(reg as any, termosByProposal, termosByPending),
+    [termosByProposal, termosByPending],
+  );
+
 
 
   /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
