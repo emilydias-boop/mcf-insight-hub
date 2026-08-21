@@ -17,6 +17,8 @@ import { usePendingRegistration, type PendingRegistration } from '@/hooks/useCon
 import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
 
 import { useBatchUploadPendingDocuments } from '@/hooks/useConsorcioDocuments';
+import { replicarDocumentosDaVenda } from '@/lib/consorcioDocumentReplication';
+
 import { TIPO_DOCUMENTO_OPTIONS, type TipoDocumento } from '@/types/consorcio';
 import { documentosFaltantes, tipoDocumentoLabel } from '@/lib/consorcioDocumentosEsperados';
 import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
