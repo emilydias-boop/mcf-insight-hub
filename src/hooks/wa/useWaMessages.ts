@@ -136,9 +136,15 @@ export function useWaMessages(conversationId: string | null) {
         (payload) => {
           qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
           qc.invalidateQueries({ queryKey: ['wa-conversations'] });
-          // conversa aberta: mensagem nova do cliente já entra como lida
+          // conversa aberta: mensagem nova do cliente só vira lida se a aba estiver
+          // visível — caso contrário o badge precisa sobreviver até o SDR voltar.
           const row = payload.new as { direction?: string; read_at?: string | null } | null;
-          if (payload.eventType !== 'DELETE' && row?.direction === 'inbound' && !row.read_at) {
+          if (
+            payload.eventType !== 'DELETE' &&
+            row?.direction === 'inbound' &&
+            !row.read_at &&
+            document.visibilityState === 'visible'
+          ) {
             markReadRef.current();
           }
         },
