@@ -185,10 +185,13 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       // docs do próprio pending_registration_id OU do card vinculado a ele.
       const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
+      // Sem valor de parcela o Termo de Adesão não sai: conta como incompleto.
       const isChecklistIncompleto = (r: any) =>
-        r.tipo_pessoa === 'pj'
+        !(Number(r.parcela_1a_12a) > 0) ||
+        (r.tipo_pessoa === 'pj'
           ? !(r.razao_social && r.cnpj && r.telefone_comercial && r.email_comercial && r.endereco_comercial && r.faturamento_mensal)
-          : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda);
+          : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda));
+
 
       // Resolver nomes de closer (owner_id → profiles/employees) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
       // owner_id em crm_deals é TEXT: pode conter UUID OU e-mail do owner. Tratamos os dois casos.
