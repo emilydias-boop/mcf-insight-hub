@@ -554,7 +554,7 @@ export function useProposals() {
         const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
           supabase
             .from('consorcio_proposal_cartas')
-            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id, consortium_card_id')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, pending_registration_id, consortium_card_id')
             .in('proposal_id', lote)
             .order('id', { ascending: true })
             .range(from, to)
@@ -572,6 +572,7 @@ export function useProposals() {
             parcela_demais: c.parcela_demais != null ? Number(c.parcela_demais) : null,
             condicao_pagamento: c.condicao_pagamento || null,
             objetivo: c.objetivo || null,
+            categoria: c.categoria || null,
             pending_registration_id: c.pending_registration_id,
             consortium_card_id: c.consortium_card_id,
           });
@@ -760,9 +761,10 @@ export function useEnviarProposta() {
           parcela_demais: c.parcela_demais ?? null,
           condicao_pagamento: c.condicao_pagamento ?? null,
           objetivo: c.objetivo ?? null,
+          categoria: c.categoria ?? null,
           created_by: user?.id ?? null,
         })) as any)
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo');
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria');
       if (cartasError) throw cartasError;
 
 
@@ -785,6 +787,7 @@ export function useEnviarProposta() {
           prazo_meses: number; tipo_produto: string; parcelas_mcf: number[] | null;
           parcela_1a_12a: number | null; parcela_demais: number | null;
           condicao_pagamento: string | null; objetivo: string | null;
+          categoria: string | null;
         }>,
 
       };
@@ -1246,7 +1249,7 @@ export function useEditarProposta() {
       // pela trigger do banco.
       const { data: atuaisRaw, error: atuaisErr } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, pending_registration_id, consortium_card_id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo')
+        .select('id, pending_registration_id, consortium_card_id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria')
         .eq('proposal_id', params.proposal_id);
       if (atuaisErr) throw atuaisErr;
       const atuais = (atuaisRaw || []) as any[];
@@ -1309,6 +1312,7 @@ export function useEditarProposta() {
               parcela_demais: c.parcela_demais ?? null,
               condicao_pagamento: c.condicao_pagamento ?? null,
               objetivo: c.objetivo ?? null,
+              categoria: c.categoria ?? null,
             } as any)
             .eq('id', c.id);
           if (error) throw error;
@@ -1317,7 +1321,7 @@ export function useEditarProposta() {
           if (a?.pending_registration_id) {
             const { data: reg, error: regErr } = await supabase
               .from('consorcio_pending_registrations')
-              .select('id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, consortium_card_id')
+              .select('id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, consortium_card_id')
               .eq('id', a.pending_registration_id)
               .maybeSingle();
             if (regErr) throw regErr;
@@ -1345,6 +1349,9 @@ export function useEditarProposta() {
               if (String(r.objetivo || '') !== String(c.objetivo || '')) {
                 difs.push({ campo: `cadastro[${ordem}].objetivo`, de: r.objetivo || '', para: c.objetivo || '' });
               }
+              if (String(r.categoria || '') !== String(c.categoria || '')) {
+                difs.push({ campo: `cadastro[${ordem}].categoria`, de: r.categoria || '', para: c.categoria || '' });
+              }
               if (difs.length > 0) {
                 const { error: propErr } = await supabase
                   .from('consorcio_pending_registrations')
@@ -1356,6 +1363,7 @@ export function useEditarProposta() {
                     parcela_demais: c.parcela_demais ?? null,
                     condicao_pagamento: c.condicao_pagamento ?? null,
                     objetivo: c.objetivo ?? null,
+                    categoria: c.categoria ?? null,
                   } as any)
                   .eq('id', r.id);
                 // Propagação é obrigatória: se falhar, a edição inteira falha.
@@ -1382,6 +1390,7 @@ export function useEditarProposta() {
               parcela_demais: c.parcela_demais ?? null,
               condicao_pagamento: c.condicao_pagamento ?? null,
               objetivo: c.objetivo ?? null,
+              categoria: c.categoria ?? null,
             } as any);
           if (error) throw error;
         }

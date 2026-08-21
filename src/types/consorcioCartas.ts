@@ -19,6 +19,8 @@ export interface PropostaCarta {
   parcela_demais?: number | null;
   condicao_pagamento?: string | null;
   objetivo?: string | null;
+  /** Categoria da cota (imóvel/auto/...): nasce na carta e desce para o cadastro. */
+  categoria?: string | null;
   pending_registration_id: string | null;
   consortium_card_id: string | null;
 }
@@ -35,6 +37,7 @@ export interface PropostaCartaInput {
   parcela_demais?: number | null;
   condicao_pagamento?: string | null;
   objetivo?: string | null;
+  categoria?: string | null;
 }
 
 /** Linha em edição no formulário (valor em string por causa da máscara BRL). */
@@ -52,6 +55,8 @@ export interface PropostaCartaDraft {
   parcelaDemaisStr: string;
   condicaoPagamento: string;
   objetivo: string;
+  /** Categoria da cota (opcional no lançamento; sem ela o cadastro fica incompleto). */
+  categoria: string;
   /** Carta já vinculada a cadastro/cota: não pode ser removida. */
   travada?: boolean;
 }
@@ -74,6 +79,7 @@ export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCart
     parcelaDemaisStr: '',
     condicaoPagamento: '',
     objetivo: '',
+    categoria: '',
     ...base,
     id: undefined,
     travada: false,
@@ -116,6 +122,7 @@ export function draftsParaInput(cartas: PropostaCartaDraft[]): PropostaCartaInpu
       parcela_demais: brlParaNumero(c.parcelaDemaisStr) || null,
       condicao_pagamento: c.condicaoPagamento || null,
       objetivo: c.objetivo || null,
+      categoria: c.categoria || null,
     };
   });
 }

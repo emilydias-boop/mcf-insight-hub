@@ -392,7 +392,7 @@ export function PendingRegistrationsList({
             key={reg.id}
             reg={reg}
             variant={variant}
-            onOpen={() => setOpenId(reg.id)}
+            onOpen={() => setCompletarId(reg.id)}
             onDossie={() => setDossieId(reg.id)}
             onCotaCadastrada={() => setCadastradaId(reg.id)}
             onLink={() => setLinkTarget(reg)}
@@ -540,8 +540,7 @@ export function PendingRegistrationsList({
             open={!!completarId}
             onOpenChange={(o) => !o && setCompletarId(null)}
             registrationId={completarId}
-            mode="view"
-            startEditing
+            mode="edit"
             focusPlano
           />
         )}
@@ -904,10 +903,10 @@ function RegistrationRow({
               <DropdownMenuItem onClick={onDossie}>
                 <FileSearch className="h-4 w-4 mr-2" /> Dossiê do cadastro
               </DropdownMenuItem>
-              {/* "Abrir" e "Ver / editar formulário" eram o MESMO formulário
-                  (OpenCotaModal). Ficou um só item, editável. */}
+              {/* Este item é SÓ edição do cadastro pendente: não abre cota.
+                  A abertura acontece pelo botão "Cota Cadastrada" da linha. */}
               <DropdownMenuItem onClick={onOpen}>
-                <FileEdit className="h-4 w-4 mr-2" /> Ver / editar formulário completo
+                <FileEdit className="h-4 w-4 mr-2" /> Editar cadastro
               </DropdownMenuItem>
 
               {/* A GERAÇÃO do termo mudou para a etapa 3 (Termos de Adesão Pendentes),

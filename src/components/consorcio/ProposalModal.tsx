@@ -108,6 +108,7 @@ export function ProposalModal({
             parcela_demais: carta?.parcela_demais ?? undefined,
             condicao_pagamento: carta?.condicao_pagamento || undefined,
             objetivo: carta?.objetivo || undefined,
+            categoria: carta?.categoria || undefined,
             origem: origemLead || undefined,
             observacoes: details.trim() || undefined,
             ...dados,

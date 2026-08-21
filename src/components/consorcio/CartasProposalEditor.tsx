@@ -9,6 +9,7 @@ import { Copy, Plus, Trash2 } from 'lucide-react';
 import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput } from '@/lib/brlMask';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
+import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import {
   MAX_CARTAS_POR_PROPOSTA,
   PARCELAS_MARCAVEIS,
@@ -39,6 +40,7 @@ export function CartasProposalEditor({
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
   const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
+  const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
@@ -67,6 +69,7 @@ export function CartasProposalEditor({
         parcelaDemaisStr: base.parcelaDemaisStr,
         condicaoPagamento: base.condicaoPagamento,
         objetivo: base.objetivo,
+        categoria: base.categoria,
       }),
     );
 
@@ -276,6 +279,20 @@ export function CartasProposalEditor({
                           {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
                             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Categoria</Label>
+                      <Select value={c.categoria} onValueChange={v => patch(c.key, { categoria: v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                        <SelectContent>
+                          {(categoriaOptions as any[]).map((o: any) => (
+                            <SelectItem key={o.id || o.name} value={o.name}>{o.label || o.name}</SelectItem>
+                          ))}
+                          {c.categoria && !(categoriaOptions as any[]).some((o: any) => o.name === c.categoria) && (
+                            <SelectItem value={c.categoria}>{c.categoria} (legado)</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>

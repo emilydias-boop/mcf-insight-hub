@@ -89,7 +89,12 @@ interface OpenCotaModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   registrationId: string;
-  mode?: 'open' | 'view';
+  /**
+   * `open` = abre a cota. `view` = detalhe com botão Editar.
+   * `edit` = SÓ edição do cadastro pendente (etapa 4): nunca abre cota, então
+   * grupo/cota/contrato Embracon e data de contratação não aparecem.
+   */
+  mode?: 'open' | 'view' | 'edit';
   /** Abre já em modo edição (usado pelo atalho "Completar cadastro" do Termo de Adesão). */
   startEditing?: boolean;
   /** Rola até o bloco "Dados da Cota" ao abrir. */
@@ -97,8 +102,9 @@ interface OpenCotaModalProps {
 }
 
 export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false }: OpenCotaModalProps) {
-  const isViewMode = mode === 'view';
-  const [isEditing, setIsEditing] = useState(startEditing);
+  const editOnly = mode === 'edit';
+  const isViewMode = mode === 'view' || editOnly;
+  const [isEditing, setIsEditing] = useState(startEditing || editOnly);
   const readOnly = isViewMode && !isEditing;
   const { data: registration, isLoading: regLoading } = usePendingRegistration(registrationId);
   const { data: produtos = [] } = useConsorcioProdutos();
@@ -167,6 +173,18 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       cliente_renda: 0,
       cliente_patrimonio: 0,
       cliente_pix: '',
+      // Cliente PJ (editável — antes só aparecia como texto)
+      pj_razao_social: '',
+      pj_cnpj: '',
+      pj_natureza_juridica: '',
+      pj_inscricao_estadual: '',
+      pj_data_fundacao: '',
+      pj_telefone: '',
+      pj_email: '',
+      pj_endereco: '',
+      pj_cep: '',
+      pj_num_funcionarios: 0,
+      pj_faturamento: 0,
       // Cota data
       // Estes 6 campos NÃO têm default: sem valor no cadastro pendente o operador
       // precisa escolher explicitamente (antes o formulário carimbava em silêncio
@@ -236,6 +254,17 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       form.setValue('cliente_renda', registration.renda || 0);
       form.setValue('cliente_patrimonio', registration.patrimonio || 0);
       form.setValue('cliente_pix', registration.pix || '');
+      form.setValue('pj_razao_social', registration.razao_social || '');
+      form.setValue('pj_cnpj', registration.cnpj || '');
+      form.setValue('pj_natureza_juridica', (registration as any).natureza_juridica || '');
+      form.setValue('pj_inscricao_estadual', (registration as any).inscricao_estadual || '');
+      form.setValue('pj_data_fundacao', (registration as any).data_fundacao || '');
+      form.setValue('pj_telefone', registration.telefone_comercial ? formatPhone(registration.telefone_comercial) : '');
+      form.setValue('pj_email', registration.email_comercial || '');
+      form.setValue('pj_endereco', (registration as any).endereco_comercial || '');
+      form.setValue('pj_cep', (registration as any).endereco_comercial_cep || '');
+      form.setValue('pj_num_funcionarios', (registration as any).num_funcionarios || 0);
+      form.setValue('pj_faturamento', (registration as any).faturamento_mensal || 0);
       // Populate cota fields if already saved (so view/edit shows real values).
       // No modo de edição do cadastro pendente, campo sem valor no registro fica VAZIO —
       // nunca com o default do formulário, para o "Salvar" não carimbar dados inventados.
@@ -537,9 +566,24 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         parcela_1a_12a: plano.valores.parcela_1a_12a ?? null,
         parcela_demais: plano.valores.parcela_demais ?? null,
         objetivo: plano.valores.objetivo ?? null,
+        // PJ
+        ...(registration.tipo_pessoa === 'pj' ? {
+          razao_social: data.pj_razao_social || null,
+          cnpj: data.pj_cnpj ? String(data.pj_cnpj).replace(/\D/g, '') : null,
+          natureza_juridica: data.pj_natureza_juridica || null,
+          inscricao_estadual: data.pj_inscricao_estadual || null,
+          data_fundacao: data.pj_data_fundacao || null,
+          telefone_comercial: data.pj_telefone || null,
+          email_comercial: data.pj_email || null,
+          endereco_comercial: data.pj_endereco || null,
+          endereco_comercial_cep: data.pj_cep || null,
+          num_funcionarios: numOuNull(data.pj_num_funcionarios),
+          faturamento_mensal: numOuNull(data.pj_faturamento),
+        } : {}),
       },
     });
-    setIsEditing(false);
+    if (editOnly) onOpenChange(false);
+    else setIsEditing(false);
   };
 
   return (
@@ -548,11 +592,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-6">
             <DialogTitle>
-              {isViewMode ? 'Detalhes do Cadastro' : 'Abertura de Cota'} — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}
+              {editOnly ? 'Editar Cadastro Pendente' : isViewMode ? 'Detalhes do Cadastro' : 'Abertura de Cota'} — {registration.tipo_pessoa === 'pf' ? registration.nome_completo : registration.razao_social}
             </DialogTitle>
             {isViewMode && (
               <div className="flex items-center gap-2">
-                {!isEditing ? (
+                {editOnly ? (
+                  <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                    {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+                    Salvar alterações
+                  </Button>
+                ) : !isEditing ? (
                   <Button type="button" size="sm" variant="outline" onClick={() => setIsEditing(true)}>
                     Editar
                   </Button>
@@ -641,6 +690,56 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     <FormField control={form.control} name="cliente_pix" render={({ field }) => (
                       <FormItem><FormLabel>PIX</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
                     )} />
+                  </div>
+                ) : editOnly || isEditing ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    <FormField control={form.control} name="pj_razao_social" render={({ field }) => (
+                      <FormItem><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_cnpj" render={({ field }) => (
+                      <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_natureza_juridica" render={({ field }) => (
+                      <FormItem><FormLabel>Natureza Jurídica</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_inscricao_estadual" render={({ field }) => (
+                      <FormItem><FormLabel>Inscrição Estadual</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_data_fundacao" render={({ field }) => (
+                      <FormItem><FormLabel>Data de Fundação</FormLabel><FormControl><Input type="date" {...field} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_telefone" render={({ field }) => (
+                      <FormItem><FormLabel>Telefone Comercial</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatPhone(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_email" render={({ field }) => (
+                      <FormItem><FormLabel>Email Comercial</FormLabel><FormControl><Input type="email" {...field} /></FormControl></FormItem>
+                    )} />
+                    <div className="col-span-2">
+                      <FormField control={form.control} name="pj_endereco" render={({ field }) => (
+                        <FormItem><FormLabel>Endereço Comercial</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                      )} />
+                    </div>
+                    <FormField control={form.control} name="pj_cep" render={({ field }) => (
+                      <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatarCep(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_num_funcionarios" render={({ field }) => (
+                      <FormItem><FormLabel>Nº Funcionários</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    <FormField control={form.control} name="pj_faturamento" render={({ field }) => (
+                      <FormItem><FormLabel>Faturamento Mensal</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
+                    )} />
+                    {registration.socios && registration.socios.length > 0 && (
+                      <div className="col-span-3 text-sm">
+                        <span className="text-muted-foreground">Sócios:</span>
+                        <div className="mt-1 space-y-1">
+                          {registration.socios.map((s: any, i: number) => (
+                            <Badge key={i} variant="outline" className="mr-2">
+                              CPF: {s.cpf} — Renda: {formatCurrency(s.renda || 0)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -817,13 +916,13 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             {/* Cota form */}
             <Card ref={cotaBlockRef}>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Dados da Cota (preencher)</CardTitle>
+                <CardTitle className="text-sm">{editOnly ? 'Dados da Cota' : 'Dados da Cota (preencher)'}</CardTitle>
               </CardHeader>
               <CardContent>
                   <div className="space-y-4">
                     {/* Modo de abertura no TOPO: Reserva (default) x Já contratada.
                         Define se grupo/cota são obrigatórios e o rótulo da data. */}
-                    {!readOnly && (
+                    {!readOnly && !editOnly && (
                       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
                         <Label className="text-sm font-semibold">Modo de abertura</Label>
                         <div className="grid grid-cols-2 gap-3">
@@ -850,7 +949,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         </div>
                       </div>
                     )}
-                    {/* Categoria + Grupo + Cota */}
+                    {/* Categoria + Grupo + Cota. No modo "editar cadastro" grupo/cota
+                        não aparecem: eles só existem quando a Embracon abre a cota. */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="categoria" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
@@ -868,6 +968,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                       )} />
                       {/* Reserva: grupo/cota só chegam quando a Embracon responde,
                           então são opcionais nesse modo. Contratação exige os dois. */}
+                      {!editOnly && (<>
                       <FormField control={form.control} name="grupo" rules={{ required: modo === 'reserva' ? false : 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>{modo === 'reserva' ? 'Grupo' : 'Grupo *'}</FormLabel>
@@ -882,6 +983,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <FormMessage />
                         </FormItem>
                       )} />
+                      </>)}
                     </div>
 
                     {/* Aviso de grupo+cota já usado: informa, nunca bloqueia. */}
@@ -1073,6 +1175,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           </Select>
                         </FormItem>
                       )} />
+                      {!editOnly && (
                       <FormField control={form.control} name="data_contratacao" rules={{ required: 'Obrigatório' }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>
@@ -1087,6 +1190,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           <FormMessage />
                         </FormItem>
                       )} />
+                      )}
                     </div>
 
                     {/* Origem + Vendedor */}
@@ -1174,7 +1278,13 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                           {readOnly ? 'Fechar' : 'Cancelar'}
                         </Button>
-                        {!readOnly && (
+                        {editOnly && (
+                          <Button type="button" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                            {updatePending.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Salvar alterações
+                          </Button>
+                        )}
+                        {!readOnly && !editOnly && (
                           <>
                             {/* type="button": com submit, o Enter em qualquer campo
                                 dispararia o primeiro botão do DOM. O modo já foi
@@ -1191,7 +1301,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           </>
                         )}
                       </div>
-                      {!readOnly && (
+                      {!readOnly && !editOnly && (
                         <div className="space-y-1 text-right text-xs text-muted-foreground">
                           <p>
                             Reserva = enviado à Embracon, aguardando confirmação. Já contratada = a Embracon
