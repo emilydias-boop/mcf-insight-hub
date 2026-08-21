@@ -193,9 +193,11 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
           <DialogHeader>
             <DialogTitle>Parcela inicial paga</DialogTitle>
             <DialogDescription>
-              {alvo?.nome} — grupo {alvo?.grupo} / cota {alvo?.cota}. Registro interno de acompanhamento; nada é
+              {alvo?.nome} — grupo {alvo?.grupo} / cota {alvo?.cota}. Ao confirmar, a cota é convertida em{' '}
+              <strong>contratação</strong> com esta data e passa a aparecer na etapa <strong>Cotas</strong>. Nada é
               cobrado nem lançado no financeiro.
             </DialogDescription>
+
           </DialogHeader>
           <div className="space-y-1 py-2">
             <Label htmlFor="pi-data">Data do pagamento</Label>
