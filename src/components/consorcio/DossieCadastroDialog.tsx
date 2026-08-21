@@ -13,7 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, CheckCircle2, ExternalLink, FileText, Loader2, Upload } from 'lucide-react';
-import { usePendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { usePendingRegistration, type PendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
+import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
+
 import { useBatchUploadPendingDocuments } from '@/hooks/useConsorcioDocuments';
 import { TIPO_DOCUMENTO_OPTIONS, type TipoDocumento } from '@/types/consorcio';
 import { documentosFaltantes, tipoDocumentoLabel } from '@/lib/consorcioDocumentosEsperados';
