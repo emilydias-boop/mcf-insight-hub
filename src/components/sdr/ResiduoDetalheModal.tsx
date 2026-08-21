@@ -296,6 +296,13 @@ export function ResiduoDetalheModal(props: Props) {
                                   <UserCog className="h-3.5 w-3.5 mr-1" />
                                   Informar agendador
                                 </Button>
+                              ) : i.problema === "sem_reuniao_bu" ? (
+                                // O lead existe, só não é o que teve a reunião:
+                                // a correção é trocar de lead, não criar vínculo.
+                                <Button size="sm" variant="outline" onClick={() => setCorrigindo(i)}>
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Trocar lead
+                                </Button>
                               ) : i.problema === undefined ||
                                 i.problema === "sem_cadastro" ||
                                 i.problema === "sem_lead" ||
@@ -309,6 +316,7 @@ export function ResiduoDetalheModal(props: Props) {
                                   sem correção por vínculo
                                 </span>
                               )
+
                             ) : (
                               <Button size="sm" variant="outline" asChild>
                                 <a
