@@ -162,6 +162,31 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
         ) : (
           <ScrollArea className="max-h-[70vh] flex-1 pr-4">
             <div className="space-y-6">
+              {/* Seletor de cartas: só aparece quando a venda tem mais de uma. */}
+              {regs.length > 1 && (
+                <div className="space-y-2 rounded border bg-muted/30 p-2">
+                  <p className="text-xs text-muted-foreground">
+                    Esta venda tem {regs.length} cartas — dados do cliente e documentos são os mesmos;
+                    o plano e o estado do cadastro mudam por carta.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {regs.map((r, i) => (
+                      <Button
+                        key={r.id}
+                        size="sm"
+                        variant={i === idx ? 'default' : 'outline'}
+                        className="h-auto py-1 text-xs"
+                        onClick={() => setCartaIdx(i)}
+                      >
+                        Carta {i + 1} de {regs.length}
+                        {r.valor_credito != null ? ` · ${formatCurrency(Number(r.valor_credito))}` : ''}
+                        {r.prazo_meses ? ` · ${r.prazo_meses}x` : ''}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="uppercase">
                   {tipoPessoa === 'pj' ? 'Pessoa Jurídica' : 'Pessoa Física'}
@@ -173,6 +198,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
                   </Badge>
                 ) : null}
               </div>
+
 
               {/* Campos cadastrais faltando: mesma regra do selo "cadastro incompleto". */}
               {camposFaltantes.length > 0 && (
