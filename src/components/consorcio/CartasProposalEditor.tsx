@@ -104,7 +104,15 @@ export function CartasProposalEditor({
                 className={`rounded-md border p-2.5 space-y-2 ${invalida ? 'border-destructive bg-destructive/5' : 'border-border'}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Carta {i + 1}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Carta {i + 1}
+                    {(() => {
+                      const digits = c.valorStr.replace(/\D/g, '');
+                      const v = digits ? Number(digits) / 100 : 0;
+                      return v > 0 ? ` · ${fmtBRL(v)}` : '';
+                    })()}
+                  </span>
+
                   <div className="flex items-center gap-1">
                     <Input
                       className="h-7 w-14 text-xs"
