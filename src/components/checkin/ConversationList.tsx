@@ -36,7 +36,7 @@ export function ConversationList({
   canSeeAll,
 }: Props) {
   return (
-    <Card className="w-80 flex flex-col overflow-hidden">
+    <Card className="w-80 shrink-0 flex flex-col overflow-hidden">
       <div className="p-3 border-b space-y-2">
         <h2 className="font-semibold text-sm">MCF - Atendimento</h2>
 
