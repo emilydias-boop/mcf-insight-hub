@@ -129,6 +129,18 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Pro
                 ) : null}
               </div>
 
+              {/* Campos cadastrais faltando: mesma regra do selo "cadastro incompleto". */}
+              {camposFaltantes.length > 0 && (
+                <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-sm">
+                  <p className="font-medium text-amber-700 dark:text-amber-400">
+                    Cadastro incompleto — {camposFaltantes.length} campo(s)
+                  </p>
+                  <p className="text-muted-foreground">{camposFaltantes.join(' · ')}</p>
+                </div>
+              )}
+
+
+
               {/* Documentos primeiro: é o que trava o cadastro na Embracon. */}
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Documentos ({documentos.length})</h3>
