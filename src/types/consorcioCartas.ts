@@ -70,6 +70,10 @@ export function novaCartaDraft(base?: Partial<PropostaCartaDraft>): PropostaCart
     prazoOutro: false,
     tipoProduto: '',
     parcelasMcf: [],
+    parcela1a12Str: '',
+    parcelaDemaisStr: '',
+    condicaoPagamento: '',
+    objetivo: '',
     ...base,
     id: undefined,
     travada: false,
@@ -80,6 +84,16 @@ export function cartaDraftValida(c: PropostaCartaDraft): boolean {
   const digits = c.valorStr.replace(/\D/g, '');
   const valor = digits ? Number(digits) / 100 : 0;
   return valor > 0 && Number(c.prazoMeses) > 0 && !!c.tipoProduto.trim();
+}
+
+/** Parcela é opcional no lançamento — sem ela o cadastro nasce incompleto. */
+export function cartaSemParcela(c: PropostaCartaDraft): boolean {
+  return !(brlParaNumero(c.parcela1a12Str) > 0);
+}
+
+function brlParaNumero(s: string): number {
+  const digits = String(s || '').replace(/\D/g, '');
+  return digits ? Number(digits) / 100 : 0;
 }
 
 export function totalCartas(cartas: PropostaCartaDraft[]): number {
@@ -98,9 +112,14 @@ export function draftsParaInput(cartas: PropostaCartaDraft[]): PropostaCartaInpu
       prazo_meses: Number(c.prazoMeses),
       tipo_produto: c.tipoProduto,
       parcelas_mcf: normalizarParcelasMcf(c.parcelasMcf),
+      parcela_1a_12a: brlParaNumero(c.parcela1a12Str) || null,
+      parcela_demais: brlParaNumero(c.parcelaDemaisStr) || null,
+      condicao_pagamento: c.condicaoPagamento || null,
+      objetivo: c.objetivo || null,
     };
   });
 }
+
 
 /** Ordena, tira repetidos e mantém só números dentro das 12 primeiras parcelas. */
 export function normalizarParcelasMcf(parcelas: number[] | null | undefined): number[] {
