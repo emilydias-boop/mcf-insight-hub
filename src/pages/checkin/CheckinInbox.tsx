@@ -29,6 +29,17 @@ export default function CheckinInbox() {
     () => searchParams.get('conversa'),
   );
 
+  /**
+   * Conta quantas vezes o efeito do deep link já avaliou o alvo atual sem
+   * encontrar a conversa. A invalidação do react-query é assíncrona, então
+   * pode haver uma janela em que o refetch ainda nem começou e o efeito roda
+   * com dados velhos. Zera sempre que o alvo muda.
+   */
+  const tentativasDeepLink = useRef(0);
+  useEffect(() => {
+    tentativasDeepLink.current = 0;
+  }, [alvoDeepLink]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return conversations.filter((c) => {
@@ -51,14 +62,28 @@ export default function CheckinInbox() {
    * Resolve o ?conversa=: se a conversa não aparece na lista atual, ajusta o
    * escopo e limpa filtros até conseguir mostrá-la. Cair na conversa errada é
    * pior que não navegar.
+   *
+   * Enquanto há busca em andamento (isLoading ou isFetching) não concluímos que
+   * a conversa não existe — o cache pode estar velho e o refetch pode trazer
+   * a conversa recém-criada. Só declaramos "não disponível" após a segunda
+   * avaliação com dados em paz, para cobrir a janela em que a invalidação
+   * assíncrona ainda não disparou o refetch.
    */
   useEffect(() => {
-    if (!alvoDeepLink || isLoading) return;
+    if (!alvoDeepLink || isLoading || isFetching) return;
 
     const naLista = conversations.some((c) => c.id === alvoDeepLink);
     if (!naLista) {
+      // A troca automática para escopo "all" tem prioridade sobre o retry.
       if (scope !== 'all' && canSeeAll) {
         setScope('all');
+        return;
+      }
+      // Sem permissão de ver tudo: dá uma segunda chance (refetch) antes de
+      // desistir — cobre a janela entre a invalidação assíncrona e o refetch.
+      if (tentativasDeepLink.current === 0) {
+        tentativasDeepLink.current += 1;
+        refetch();
         return;
       }
       toast.error('Não foi possível abrir essa conversa — ela não está disponível para você.');
@@ -75,6 +100,7 @@ export default function CheckinInbox() {
       return;
     }
 
+    tentativasDeepLink.current = 0;
     setSelectedId(alvoDeepLink);
     setAlvoDeepLink(null);
     searchParams.delete('conversa');
@@ -82,6 +108,7 @@ export default function CheckinInbox() {
   }, [
     alvoDeepLink,
     isLoading,
+    isFetching,
     conversations,
     filtered,
     scope,
@@ -90,6 +117,7 @@ export default function CheckinInbox() {
     search,
     searchParams,
     setSearchParams,
+    refetch,
   ]);
 
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
