@@ -603,6 +603,16 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="font-medium">
         <div>{nome || '—'}</div>
+        {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
+          <div className="mt-1">
+            {/* Etapa 4 conta desde a criação do cadastro, nunca desde updated_at. */}
+            <SeloDiasParados
+              desde={reg.created_at}
+              motivo='Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+            />
+          </div>
+        )}
+
         {termoBadge && (
           <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
             <Badge variant="outline" className={`text-[10px] cursor-pointer ${termoBadge.className}`}>
