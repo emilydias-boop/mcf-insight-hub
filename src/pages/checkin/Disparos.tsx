@@ -381,6 +381,7 @@ function CriarDisparoDialog({
     setStageIds([]);
     setTags([]);
     setOriginId('');
+    setDealIds([]);
     setLimite('');
     setEscopo('minha_carteira');
     setBu('');
