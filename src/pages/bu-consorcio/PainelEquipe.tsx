@@ -65,6 +65,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
 import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
 import { useConsorcioSummary } from "@/hooks/useConsorcio";
+import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 
 const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
@@ -146,7 +147,7 @@ function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => vo
                     </p>
                     <p className="mt-1">
                       Cotas novas entram via <b>Adicionar Cota</b> ou aprovando em
-                      <b> Cadastros Pendentes</b> (rota <code>/consorcio</code>).
+                      <b> Cotas a Fazer</b> (rota <code>/consorcio</code>).
                     </p>
                     <p className="mt-1">
                       + Comissão do setor <b>Crédito Imobiliário</b> registrada em
@@ -698,13 +699,13 @@ export default function ConsorcioPainelEquipe() {
         month: { value: monthValues.agendamento, target: getTargetValue('agendamento_mes') },
       },
       {
-        label: 'R1 Agendada',
+        label: CONSORCIO_LABELS.reunioesAgendadas,
         day: { value: dayValues.r1Agendada, target: getDayTargetValue('r1_agendada_dia') },
         week: { value: weekValues.r1Agendada, target: getTargetValue('r1_agendada_semana') },
         month: { value: monthValues.r1Agendada, target: getTargetValue('r1_agendada_mes') },
       },
       {
-        label: 'R1 Realizada',
+        label: CONSORCIO_LABELS.reunioesRealizadas,
         day: { value: dayValues.r1Realizada, target: getDayTargetValue('r1_realizada_dia') },
         week: { value: weekValues.r1Realizada, target: getTargetValue('r1_realizada_semana') },
         month: { value: monthValues.r1Realizada, target: getTargetValue('r1_realizada_mes') },
