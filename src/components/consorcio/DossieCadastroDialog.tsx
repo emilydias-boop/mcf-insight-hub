@@ -79,6 +79,11 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId }: Pro
     () => (reg ? documentosFaltantes(tipoPessoa, documentos) : []),
     [reg, tipoPessoa, documentos],
   );
+  const camposFaltantes = useMemo(
+    () => (reg ? camposCadastroFaltantes(reg as any) : []),
+    [reg],
+  );
+
 
   const parcelasEmpresa = useMemo(
     () =>
