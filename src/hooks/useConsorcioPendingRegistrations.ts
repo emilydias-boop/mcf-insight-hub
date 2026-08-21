@@ -940,6 +940,13 @@ export function useOpenCota() {
         /** Reserva pode nascer sem grupo/cota (a Embracon devolve depois). */
         grupo: string | null;
         cota: string | null;
+        /**
+         * Número do contrato na Embracon. A verdade vive em
+         * `consortium_cards.contrato_embracon` (coluna que já existia): o cadastro
+         * pendente não guarda esse dado para não existirem duas versões dele.
+         */
+        contrato_embracon?: string | null;
+
         valor_credito: number;
         prazo_meses: number;
         tipo_produto: string;
@@ -1019,6 +1026,11 @@ export function useOpenCota() {
         categoria: cotaData.categoria as any,
         grupo: cotaData.grupo,
         cota: cotaData.cota,
+        // Contrato Embracon mora só no card (ver comentário no tipo de cotaData).
+        ...(cotaData.contrato_embracon?.trim()
+          ? { contrato_embracon: cotaData.contrato_embracon.trim() }
+          : {}),
+
         valor_credito: cotaData.valor_credito,
         prazo_meses: cotaData.prazo_meses,
         tipo_produto: cotaData.tipo_produto as any,

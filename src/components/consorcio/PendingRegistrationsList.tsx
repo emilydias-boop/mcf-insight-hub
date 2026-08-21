@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature } from 'lucide-react';
+import { Loader2, FolderOpen, MoreVertical, Eye, Link2, Trash2, FileEdit, Plus, Download, Ban, RotateCcw, FileSignature, BadgeCheck, FileSearch } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +63,8 @@ import { ordenarPor } from '@/lib/ordenacaoTabela';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
 import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
+import { CotaCadastradaModal } from '@/components/consorcio/CotaCadastradaModal';
+import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
@@ -171,6 +173,10 @@ export function PendingRegistrationsList({
   );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewId, setViewId] = useState<string | null>(null);
+  /** Formulário curto "Cota Cadastrada" (grupo, cota, contrato Embracon). */
+  const [cadastradaId, setCadastradaId] = useState<string | null>(null);
+  /** Dossiê do cadastro: tudo para efetivar a cota, em um clique. */
+  const [dossieId, setDossieId] = useState<string | null>(null);
   const [completarId, setCompletarId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
@@ -342,6 +348,8 @@ export function PendingRegistrationsList({
             variant={variant}
             onOpen={() => setOpenId(reg.id)}
             onView={() => setViewId(reg.id)}
+            onDossie={() => setDossieId(reg.id)}
+            onCotaCadastrada={() => setCadastradaId(reg.id)}
             onLink={() => setLinkTarget(reg)}
             onDelete={() => setDeleteTarget(reg)}
             onDecline={() => { setDeclineReason(''); setDeclineTarget(reg); }}
@@ -486,6 +494,21 @@ export function PendingRegistrationsList({
             focusPlano
           />
         )}
+        {cadastradaId && (
+          <CotaCadastradaModal
+            open={!!cadastradaId}
+            onOpenChange={(o) => !o && setCadastradaId(null)}
+            registrationId={cadastradaId}
+            onAbrirFormularioCompleto={() => setOpenId(cadastradaId)}
+          />
+        )}
+        {dossieId && (
+          <DossieCadastroDialog
+            open={!!dossieId}
+            onOpenChange={(o) => !o && setDossieId(null)}
+            registrationId={dossieId}
+          />
+        )}
         {linkTarget && (
           <LinkExistingCotaModal
             open={!!linkTarget}
@@ -590,6 +613,8 @@ function RegistrationRow({
   variant,
   onOpen,
   onView,
+  onDossie,
+  onCotaCadastrada,
   onLink,
   onDelete,
   onDecline,
@@ -603,6 +628,8 @@ function RegistrationRow({
   variant: 'pendentes' | 'declinadas';
   onOpen: () => void;
   onView: () => void;
+  onDossie: () => void;
+  onCotaCadastrada: () => void;
   onLink: () => void;
   onDelete: () => void;
   onDecline: () => void;
@@ -638,7 +665,10 @@ function RegistrationRow({
         <Badge variant="outline" className="text-xs">{reg.origem_label}</Badge>
       </TableCell>
       <TableCell className="font-medium">
-        <div>{nome || '—'}</div>
+        {/* Um clique no nome abre o dossiê: dados, plano e documentos numa só tela. */}
+        <button type="button" onClick={onDossie} className="text-left hover:underline">
+          {nome || '—'}
+        </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
           <div className="mt-1">
             {/* Etapa 4 conta desde a criação do cadastro, nunca desde updated_at. */}
@@ -749,8 +779,13 @@ function RegistrationRow({
       )}
       <TableCell className="text-right">
         <div className="flex items-center gap-1 justify-end">
+          {variant === 'pendentes' && semCota && (
+            <Button size="sm" onClick={onCotaCadastrada}>
+              <BadgeCheck className="h-3 w-3 mr-1" /> Cota Cadastrada
+            </Button>
+          )}
           {variant !== 'declinadas' && (variant !== 'pendentes' || semCota) && (
-            <Button size="sm" onClick={onOpen}>
+            <Button size="sm" variant="outline" onClick={onOpen}>
               <FileEdit className="h-3 w-3 mr-1" /> Abrir
             </Button>
           )}
@@ -771,8 +806,11 @@ function RegistrationRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onDossie}>
+                <FileSearch className="h-4 w-4 mr-2" /> Dossiê do cadastro
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={onView}>
-                <Eye className="h-4 w-4 mr-2" /> Ver detalhes
+                <Eye className="h-4 w-4 mr-2" /> Ver / editar formulário
               </DropdownMenuItem>
               {/* A GERAÇÃO do termo mudou para a etapa 3 (Termos de Adesão Pendentes),
                   onde o trabalho de fazer o cliente assinar acontece. Aqui só se
@@ -795,7 +833,7 @@ function RegistrationRow({
                     onClick={onDecline}
                     className="text-amber-600 focus:text-amber-700"
                   >
-                    <Ban className="h-4 w-4 mr-2" /> Declinar carta
+                    <Ban className="h-4 w-4 mr-2" /> Declinada — parceiro desistiu
                   </DropdownMenuItem>
                 </>
               )}
