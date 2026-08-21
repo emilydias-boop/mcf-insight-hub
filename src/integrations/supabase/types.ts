@@ -4836,6 +4836,7 @@ export type Database = {
       }
       consorcio_proposal_cartas: {
         Row: {
+          categoria: string | null
           condicao_pagamento: string | null
           consortium_card_id: string | null
           created_at: string
@@ -4853,6 +4854,7 @@ export type Database = {
           valor_credito: number
         }
         Insert: {
+          categoria?: string | null
           condicao_pagamento?: string | null
           consortium_card_id?: string | null
           created_at?: string
@@ -4870,6 +4872,7 @@ export type Database = {
           valor_credito: number
         }
         Update: {
+          categoria?: string | null
           condicao_pagamento?: string | null
           consortium_card_id?: string | null
           created_at?: string

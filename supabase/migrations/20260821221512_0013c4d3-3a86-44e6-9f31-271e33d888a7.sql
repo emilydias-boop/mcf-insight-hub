@@ -1,0 +1,1 @@
+ALTER TABLE public.consorcio_proposal_cartas ADD COLUMN IF NOT EXISTS categoria text;
