@@ -265,6 +265,17 @@ function CriarDisparoDialog({
   const [escopo, setEscopo] = useState<WaBroadcastEscopo>('minha_carteira');
   const [bu, setBu] = useState('');
   const [jaMontou, setJaMontou] = useState(false);
+  /**
+   * Filtro/escopo/limite mudou depois da última montagem: o público em banco
+   * deixou de valer, mesmo que a contagem de alvos ainda venha positiva.
+   */
+  const [publicoInvalidado, setPublicoInvalidado] = useState(false);
+  /**
+   * Template já refletido no público montado. Serve para remontar uma única vez
+   * quando o template muda (é aí que as variáveis são preenchidas), sem laço.
+   */
+  const ultimoSidMontado = useRef<string | null>(null);
+
   const [bloqueado, setBloqueado] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   /** quando o público em banco foi montado — só quando um rascunho é reaberto */
