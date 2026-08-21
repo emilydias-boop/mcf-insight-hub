@@ -472,6 +472,8 @@ function CriarDisparoDialog({
       });
       const res = await montar.mutateAsync(broadcast.id);
       setJaMontou(true);
+      setPublicoInvalidado(false);
+      ultimoSidMontado.current = templateAtual?.content_sid ?? null;
       setPublicoMontadoEm(null);
       toast.success(`${res.elegiveis} vão receber · ${res.ignorados} ficam de fora`);
     } catch (err) {
@@ -493,6 +495,25 @@ function CriarDisparoDialog({
     setPublicoMontadoEm(null);
     await montarPublico([]);
   };
+
+  /**
+   * Disparo vindo de uma seleção do CRM nasce com o público montado, mas sem
+   * template — as variáveis do template (nome) só podem ser preenchidas depois
+   * que ele é escolhido. Como essa pessoa vai do template direto para a revisão,
+   * sem passar pelo botão de montar, remontamos aqui. Só quando o template
+   * realmente muda, nunca a cada render.
+   */
+  useEffect(() => {
+    if (step !== 2 || !broadcast || dealIds.length === 0) return;
+    const sid = templateAtual?.content_sid ?? null;
+    if (!sid || sid === ultimoSidMontado.current) return;
+    if (montar.isPending || atualizar.isPending) return;
+    ultimoSidMontado.current = sid;
+    void montarPublico(dealIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, broadcast?.id, templateAtual?.content_sid, dealIds.length]);
+
+
 
 
 
