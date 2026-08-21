@@ -6,13 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { XCircle, CheckCircle, FileText, Loader2, Search, Download, Trash2, Pencil } from 'lucide-react';
+import { XCircle, CheckCircle, FileText, Loader2, Search, Download, Trash2, Pencil, Plus } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { loadXLSX } from '@/lib/lazyExport';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
+import { AddCartaModal } from '@/components/consorcio/AddCartaModal';
+
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import { AcceptProposalModal } from '@/components/consorcio/AcceptProposalModal';
 import { EditProposalModal } from '@/components/consorcio/EditProposalModal';
