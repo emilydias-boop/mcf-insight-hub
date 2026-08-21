@@ -1302,9 +1302,63 @@ export function useEditarProposta() {
     onSuccess: () => {
       toast.success('Proposta atualizada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      }
+
+      // --- Log da edição da venda (etapa 3). Antes desta tabela só havia log de
+      // exclusão, então uma alteração de valor/prazo/produto era invisível.
+      try {
+        const { data: depoisRaw } = await supabase
+          .from('consorcio_proposals')
+          .select('valor_credito, prazo_meses, tipo_produto, origem_lead')
+          .eq('id', params.proposal_id)
+          .maybeSingle();
+        const depois = (depoisRaw || {}) as any;
+        const { count: cartasDepois } = await supabase
+          .from('consorcio_proposal_cartas')
+          .select('id', { count: 'exact', head: true })
+          .eq('proposal_id', params.proposal_id);
+
+        const cmp: Array<{ campo: string; de: unknown; para: unknown }> = [
+          { campo: 'valor_credito', de: Number(antes.valor_credito) || 0, para: Number(depois.valor_credito) || 0 },
+          { campo: 'prazo_meses', de: Number(antes.prazo_meses) || 0, para: Number(depois.prazo_meses) || 0 },
+          { campo: 'tipo_produto', de: antes.tipo_produto || '', para: depois.tipo_produto || '' },
+          { campo: 'quantidade_cartas', de: cartasAntes ?? 0, para: cartasDepois ?? 0 },
+          { campo: 'proposal_details', de: detalhesAnteriores, para: detalhesNovos },
+          { campo: 'origem_lead', de: antes.origem_lead || '', para: depois.origem_lead || '' },
+        ];
+        const alteracoes = cmp.filter(c => String(c.de) !== String(c.para));
+
+        if (alteracoes.length > 0) {
+          const { data: userData } = await supabase.auth.getUser();
+          let nome: string | null = userData?.user?.email ?? null;
+          if (userData?.user?.id) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', userData.user.id)
+              .maybeSingle();
+            nome = (prof as any)?.full_name || nome;
+          }
+          await supabase.from('consorcio_proposal_edit_log').insert({
+            proposal_id: params.proposal_id,
+            deal_id: antes.deal_id ?? null,
+            edited_by: userData?.user?.id ?? null,
+            edited_by_nome: nome,
+            alteracoes: alteracoes as any,
+          } as any);
+        }
+      } catch {
+        /* log é auxiliar: nunca derruba a edição */
+      }
+    },
+    onSuccess: () => {
+      toast.success('Proposta atualizada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-bi-propostas'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-realizado-by-closer'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-proposal-edit-log'] });
+
     },
     onError: (e: any) => toast.error('Erro ao atualizar: ' + e.message),
   });
