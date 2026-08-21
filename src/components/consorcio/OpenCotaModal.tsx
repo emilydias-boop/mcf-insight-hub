@@ -197,6 +197,30 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     },
   });
 
+  /**
+   * Aviso (nunca bloqueio): outra cota ativa já usa o mesmo par grupo/cota.
+   * Mesmo padrão do modal "Cota Cadastrada" — foi a ausência desta checagem que
+   * permitiu as duplicatas do grupo 7274.
+   */
+  const grupoDigitado = String(form.watch('grupo') || '').trim();
+  const cotaDigitada = String(form.watch('cota') || '').trim();
+  const { data: cotasDuplicadas = [] } = useQuery({
+    queryKey: ['open-cota-duplicada', grupoDigitado, cotaDigitada, registration?.consortium_card_id],
+    enabled: !!grupoDigitado && !!cotaDigitada,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consortium_cards')
+        .select('id, nome_completo, razao_social, tipo_registro, data_contratacao')
+        .eq('grupo', grupoDigitado)
+        .eq('cota', cotaDigitada)
+        .eq('status', 'ativo')
+        .limit(5);
+      if (error) throw error;
+      const atual = (registration as any)?.consortium_card_id;
+      return (data || []).filter((c) => c.id !== atual);
+    },
+  });
+
   // Populate client fields when registration loads
   useEffect(() => {
     if (registration) {
