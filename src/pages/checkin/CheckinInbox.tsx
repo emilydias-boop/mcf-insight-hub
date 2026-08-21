@@ -11,7 +11,15 @@ import { NovaConversaDialog } from '@/components/checkin/NovaConversaDialog';
 import { useNow } from '@/hooks/wa/useNow';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Megaphone, MessageSquarePlus } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { ArrowLeft, Megaphone, MessageSquarePlus, User } from 'lucide-react';
+
 import { toast } from 'sonner';
 
 export default function CheckinInbox() {
