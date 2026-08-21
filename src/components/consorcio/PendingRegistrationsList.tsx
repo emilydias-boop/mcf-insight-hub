@@ -397,7 +397,13 @@ export function PendingRegistrationsList({
             onGerarTermo={() => setTermoTarget(reg)}
             onVerTermos={() => setTermoPanelTarget(reg)}
             isMarking={undeclineMut.isPending}
-          />
+            travadaAssinatura={!!opcoes?.travadaAssinatura}
+            esperandoDesde={
+              opcoes?.travadaAssinatura
+                ? ancoraEsperaAssinatura(reg as any, termosByProposal, termosByPending)
+                : undefined
+            }
+
         ))}
       </TableBody>
     </Table>
