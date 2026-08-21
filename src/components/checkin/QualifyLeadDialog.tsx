@@ -71,28 +71,37 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      {/* layout em três faixas: cabeçalho fixo, corpo rolável, rodapé fixo */}
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col overflow-hidden gap-0 p-0">
+        {/* cabeçalho fixo — sempre visível */}
+        <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
           <DialogTitle>Qualificar lead</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1 -mx-2 px-2">
-          <QualificationQuestionnaire
-            answers={answers}
-            onChange={setAnswers}
-            disabled={save.isPending}
-          />
+
+        {/* corpo rolável — só o meio rola; encolhe em telas baixas */}
+        <ScrollArea className="flex-1 min-h-0 px-6">
+          <div className="space-y-4 pb-4">
+            <QualificationQuestionnaire
+              answers={answers}
+              onChange={setAnswers}
+              disabled={save.isPending}
+            />
+            {/* checkbox fica no corpo rolável para não roubar espaço do rodapé */}
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="para-r1"
+                checked={paraR1}
+                onCheckedChange={(v) => setParaR1(!!v)}
+              />
+              <Label htmlFor="para-r1" className="text-sm font-normal">
+                Qualificação para R1
+              </Label>
+            </div>
+          </div>
         </ScrollArea>
-        <div className="flex items-center gap-2 pt-2">
-          <Checkbox
-            id="para-r1"
-            checked={paraR1}
-            onCheckedChange={(v) => setParaR1(!!v)}
-          />
-          <Label htmlFor="para-r1" className="text-sm font-normal">
-            Qualificação para R1
-          </Label>
-        </div>
-        <DialogFooter>
+
+        {/* rodapé fixo — botões sempre alcançáveis */}
+        <DialogFooter className="px-6 py-4 border-t shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
