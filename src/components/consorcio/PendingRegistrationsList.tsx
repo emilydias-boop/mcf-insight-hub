@@ -38,7 +38,7 @@ import {
 import { OpenCotaModal } from './OpenCotaModal';
 import { GerarTermoModal } from './GerarTermoModal';
 import { TermoPanelDialog } from './TermoPanelDialog';
-import { useTermosByPending, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
+import { useTermosByPending, useTermosByProposal, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import { LinkExistingCotaModal } from './LinkExistingCotaModal';
 import { AddPendingRegistrationModal } from './AddPendingRegistrationModal';
 import { PendingRegistrationsKPIs } from './PendingRegistrationsKPIs';
