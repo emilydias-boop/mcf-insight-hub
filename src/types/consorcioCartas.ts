@@ -19,6 +19,8 @@ export interface PropostaCarta {
   parcela_demais?: number | null;
   condicao_pagamento?: string | null;
   objetivo?: string | null;
+  /** Categoria da cota (imóvel/auto/...): nasce na carta e desce para o cadastro. */
+  categoria?: string | null;
   pending_registration_id: string | null;
   consortium_card_id: string | null;
 }
