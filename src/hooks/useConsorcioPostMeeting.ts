@@ -554,7 +554,7 @@ export function useProposals() {
         const cartasRows = await fetchAllByIds<any>(proposalIds, (lote, from, to) =>
           supabase
             .from('consorcio_proposal_cartas')
-            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, pending_registration_id, consortium_card_id')
+            .select('id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id, consortium_card_id')
             .in('proposal_id', lote)
             .order('id', { ascending: true })
             .range(from, to)
@@ -568,11 +568,15 @@ export function useProposals() {
             prazo_meses: Number(c.prazo_meses) || 0,
             tipo_produto: c.tipo_produto || '',
             parcelas_mcf: Array.isArray(c.parcelas_mcf) ? c.parcelas_mcf.map(Number) : null,
-
+            parcela_1a_12a: c.parcela_1a_12a != null ? Number(c.parcela_1a_12a) : null,
+            parcela_demais: c.parcela_demais != null ? Number(c.parcela_demais) : null,
+            condicao_pagamento: c.condicao_pagamento || null,
+            objetivo: c.objetivo || null,
             pending_registration_id: c.pending_registration_id,
             consortium_card_id: c.consortium_card_id,
           });
         });
+
         Object.values(cartasByProposal).forEach(list => list.sort((a, b) => a.ordem - b.ordem));
       }
 
