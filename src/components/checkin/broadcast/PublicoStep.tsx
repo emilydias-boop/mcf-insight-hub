@@ -32,7 +32,8 @@ import { formatDateTime } from '@/lib/formatters';
 
 interface Props {
   broadcast: WaBroadcast;
-  stageId: string;
+  stageIds: string[];
+  tags: string[];
   originId: string;
   limite: string;
   pendentes: number;
@@ -46,7 +47,8 @@ interface Props {
   publicoMontadoEm?: string | null;
   onEscopoChange: (v: WaBroadcastEscopo) => void;
   onBuChange: (v: string) => void;
-  onStageChange: (v: string) => void;
+  onStageIdsChange: (v: string[]) => void;
+  onTagsChange: (v: string[]) => void;
   onOriginChange: (v: string) => void;
   onLimiteChange: (v: string) => void;
   onMontar: () => void;
@@ -56,7 +58,8 @@ const HORAS_ALERTA = 6;
 
 export function PublicoStep({
   broadcast,
-  stageId,
+  stageIds,
+  tags,
   originId,
   limite,
   pendentes,
@@ -69,14 +72,24 @@ export function PublicoStep({
   publicoMontadoEm,
   onEscopoChange,
   onBuChange,
-  onStageChange,
+  onStageIdsChange,
+  onTagsChange,
   onOriginChange,
   onLimiteChange,
   onMontar,
 }: Props) {
   const escopoBu = escopo === 'bu';
+  /** No escopo da BU as listas só existem depois de escolher a BU. */
+  const filtrosBloqueados = escopoBu && !bu;
   const { data: origens = [], isLoading: origensLoading } = useWaOrigensDisponiveis();
-  const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosDisponiveis(
+  const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosNoEscopo(
+    escopo,
+    bu || null,
+    originId || null,
+  );
+  const { data: tagsDisponiveis = [], isLoading: tagsLoading } = useWaTagsNoEscopo(
+    escopo,
+    bu || null,
     originId || null,
   );
   const { data: budget } = useWaSendBudget();
@@ -87,6 +100,17 @@ export function PublicoStep({
   const totalIgnorados = Object.values(ignorados).reduce((a, b) => a + b, 0);
   const fmt = (n: number) => new Intl.NumberFormat('pt-BR').format(n ?? 0);
   const semCarteira = !escopoBu && !origensLoading && origens.length === 0;
+
+  const opcoesEstagios = useMemo(
+    () => estagios.map((s) => ({ valor: s.stage_id, rotulo: s.nome, leads: s.leads })),
+    [estagios],
+  );
+  const opcoesTags = useMemo(
+    () => tagsDisponiveis.map((t) => ({ valor: t.tag, rotulo: t.tag, leads: t.leads })),
+    [tagsDisponiveis],
+  );
+
+
 
   const totalAlvos = pendentes + totalIgnorados;
   const donoInativo = ignorados.dono_inativo ?? 0;
