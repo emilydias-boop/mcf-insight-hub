@@ -237,3 +237,105 @@ export function useCancelTermo() {
 export function termoPublicUrl(token: string): string {
   return `${window.location.origin}/termo/${token}`;
 }
+
+// ── Etapa 3 do funil Consórcio (Termos de Adesão Pendentes) ──────────────
+
+/** Termos de adesão indexados por `proposal_id` (mais recente primeiro). */
+export function useTermosByProposal() {
+  return useQuery({
+    queryKey: ['consorcio-termos-by-proposal'],
+    queryFn: async (): Promise<Record<string, ConsorcioTermo[]>> => {
+      const { data, error } = await supabase
+        .from('consorcio_termos')
+        .select(TERMO_SELECT)
+        .eq('tipo', 'adesao')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map: Record<string, ConsorcioTermo[]> = {};
+      for (const t of (data || []) as any[]) {
+        if (!t.proposal_id) continue;
+        (map[t.proposal_id] ||= []).push(t as ConsorcioTermo);
+      }
+      return map;
+    },
+  });
+}
+
+/**
+ * Cadastro pendente (não excluído) de cada proposta. O termo é montado a partir
+ * do cadastro pendente — sem ele não há dado suficiente para gerar o documento.
+ */
+export function useRegistrationIdsByProposal(proposalIds: string[]) {
+  const key = [...proposalIds].sort().join(',');
+  return useQuery({
+    queryKey: ['consorcio-registration-by-proposal', key],
+    enabled: proposalIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const map: Record<string, string> = {};
+      const chunk = 200;
+      for (let i = 0; i < proposalIds.length; i += chunk) {
+        const { data, error } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('id, proposal_id, status, created_at')
+          .in('proposal_id', proposalIds.slice(i, i + chunk))
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        for (const r of (data || []) as any[]) {
+          if (r.status === 'excluida' || !r.proposal_id) continue;
+          if (!map[r.proposal_id]) map[r.proposal_id] = r.id as string;
+        }
+      }
+      return map;
+    },
+  });
+}
+
+export interface TermoAssinaturaMetrics {
+  gerados: number;
+  assinados: number;
+  taxa: number | null;
+  medianaHoras: number | null;
+}
+
+/**
+ * Taxa de assinatura do período: assinados ÷ gerados, com o tempo mediano entre
+ * gerar e assinar. É o único número que diz algo sobre a etapa 3 — a conversão
+ * 2→3 é 100% por construção, já que toda venda lançada gera termo pendente.
+ */
+export function useTermoAssinaturaMetrics(range: { startDate?: Date; endDate?: Date }) {
+  const de = range.startDate ? range.startDate.toISOString().slice(0, 10) : null;
+  const ate = range.endDate ? range.endDate.toISOString().slice(0, 10) : null;
+  return useQuery({
+    queryKey: ['consorcio-termo-assinatura-metrics', de, ate],
+    staleTime: 60_000,
+    queryFn: async (): Promise<TermoAssinaturaMetrics> => {
+      let q = supabase
+        .from('consorcio_termos')
+        .select('created_at, assinado_em, status')
+        .eq('tipo', 'adesao')
+        .neq('status', 'cancelado');
+      if (de) q = q.gte('created_at', `${de}T00:00:00`);
+      if (ate) q = q.lte('created_at', `${ate}T23:59:59`);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data || []) as any[];
+      const assinadosRows = rows.filter(r => r.assinado_em);
+      const horas = assinadosRows
+        .map(r => (new Date(r.assinado_em).getTime() - new Date(r.created_at).getTime()) / 3_600_000)
+        .filter(h => Number.isFinite(h) && h >= 0)
+        .sort((a, b) => a - b);
+      const mediana = horas.length
+        ? horas.length % 2
+          ? horas[(horas.length - 1) / 2]
+          : (horas[horas.length / 2 - 1] + horas[horas.length / 2]) / 2
+        : null;
+      return {
+        gerados: rows.length,
+        assinados: assinadosRows.length,
+        taxa: rows.length ? (assinadosRows.length / rows.length) * 100 : null,
+        medianaHoras: mediana,
+      };
+    },
+  });
+}
