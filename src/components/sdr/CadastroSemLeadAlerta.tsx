@@ -70,8 +70,8 @@ export function CadastroSemLeadAlerta({ items }: Props) {
       {semVinculo.length > 0 && (
         <Caixa
           icone={<AlertTriangle className="h-4 w-4" />}
-          titulo={`${semVinculo.length} cota${semVinculo.length === 1 ? "" : "s"} com cadastro sem lead vinculado — vincular lead`}
-          subtitulo={`${brl(soma(semVinculo))} em crédito. Qualidade de cadastro, não atribuição: parte dessas cotas já está creditada porque outra cota do mesmo cliente tem o vínculo.`}
+          titulo={`${semVinculo.length} cota${semVinculo.length === 1 ? "" : "s"} sem lead vinculado — alerta de cadastro`}
+          subtitulo={`${brl(soma(semVinculo))} em crédito. É qualidade de cadastro, não atribuição: quando outra cota do mesmo cliente tem o vínculo, o crédito da venda já está com o SDR e não se perde.`}
           onOpen={() => setAberta("vinculo")}
         />
       )}
@@ -79,8 +79,8 @@ export function CadastroSemLeadAlerta({ items }: Props) {
       {semAgendador.length > 0 && (
         <Caixa
           icone={<UserCog className="h-4 w-4" />}
-          titulo={`${semAgendador.length} cota${semAgendador.length === 1 ? "" : "s"} sem agendador a creditar`}
-          subtitulo={`${brl(soma(semAgendador))} em crédito. O vínculo existe, mas a reunião de consórcio está sem agendador registrado — ou o lead não passou por R1 desta BU, caso em que não há correção por vínculo.`}
+          titulo={`${semAgendador.length} cota${semAgendador.length === 1 ? "" : "s"} apontando para o lead sem reunião — alerta de cadastro`}
+          subtitulo={`${brl(soma(semAgendador))} em crédito. Não é venda sem crédito: quando o cliente já tem outra cota atribuída, o crédito continua com o SDR dele. Falta esta cota apontar para o lead que teve a R1 — ou informar quem agendou a reunião.`}
           onOpen={() => setAberta("agendador")}
         />
       )}
@@ -89,8 +89,8 @@ export function CadastroSemLeadAlerta({ items }: Props) {
         open={aberta === "vinculo"}
         onOpenChange={(o) => setAberta(o ? "vinculo" : null)}
         kind="cota"
-        titulo="Cotas com cadastro sem lead vinculado"
-        descricao="Cotas contratadas no período cujo cadastro não aponta para nenhum negócio válido do CRM. A ação é vincular o lead; a coluna Motivo diz exatamente qual dado falta e o selo mostra quando o cliente já foi creditado por outra cota."
+        titulo="Cotas sem lead vinculado"
+        descricao="Cotas contratadas no período cujo cadastro não aponta para nenhum negócio do CRM. A ação é vincular o lead. O crédito da venda não se perde quando o cliente já foi creditado por outra cota — o selo da linha mostra com quem está."
         items={semVinculo}
         esperado={semVinculo.length}
         permitirCorrigirVinculo
@@ -99,8 +99,8 @@ export function CadastroSemLeadAlerta({ items }: Props) {
         open={aberta === "agendador"}
         onOpenChange={(o) => setAberta(o ? "agendador" : null)}
         kind="cota"
-        titulo="Cotas sem agendador a creditar"
-        descricao="O vínculo cota → lead existe. Falta o agendador: quando há reunião de consórcio elegível sem booked_by, informe quem agendou. Quando o lead não tem reunião desta BU, não há correção por vínculo — a venda segue sem SDR a creditar."
+        titulo="Cotas com cadastro a ajustar"
+        descricao="Alerta de qualidade de cadastro. O crédito da venda não está perdido: quando o cliente já tem atribuição por outra cota, o SDR aparece no selo da linha. Quando a reunião existe sem agendador, informe quem agendou; quando a cota aponta para um lead sem reunião, troque para o lead que teve a R1."
         items={semAgendador}
         esperado={semAgendador.length}
         permitirCorrigirVinculo
