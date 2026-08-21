@@ -728,13 +728,19 @@ function RegistrationRow({
         </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
           <div className="mt-1">
-            {/* Etapa 4 conta desde a criação do cadastro, nunca desde updated_at. */}
+            {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
+                termo (ou da criação, quando o termo ainda não existe). */}
             <SeloDiasParados
-              desde={reg.created_at}
-              motivo='Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+              desde={travadaAssinatura ? (esperandoDesde ?? reg.created_at) : reg.created_at}
+              motivo={
+                travadaAssinatura
+                  ? 'Dias desde a geração do Termo de Adesão (ou da criação do cadastro, quando ainda não há termo), esperando a assinatura do cliente. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                  : 'Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+              }
             />
           </div>
         )}
+
 
         {termoBadge && (
           <button type="button" onClick={onVerTermos} className="mt-1 inline-flex">
