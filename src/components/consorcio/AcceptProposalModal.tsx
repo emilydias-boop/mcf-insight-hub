@@ -55,9 +55,18 @@ function CartaPlanoBloco({ carta, index, total, onChange, copia, onRepetir }: Ca
   useEffect(() => {
     if (hidratado.current) return;
     hidratado.current = true;
-    plano.hidratar({ valorCredito: Number(carta.valor_credito) || null, prazo: Number(carta.prazo_meses) || null });
+    // O bloco já vem preenchido com o plano digitado no lançamento da venda.
+    plano.hidratar({
+      valorCredito: Number(carta.valor_credito) || null,
+      prazo: Number(carta.prazo_meses) || null,
+      condicao: carta.condicao_pagamento ?? null,
+      parcela1a12: carta.parcela_1a_12a != null ? Number(carta.parcela_1a_12a) : null,
+      parcelaDemais: carta.parcela_demais != null ? Number(carta.parcela_demais) : null,
+      objetivo: carta.objetivo ?? null,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carta.id]);
+
 
   // Conveniência do 1º bloco: replica condição e objetivo nas demais cartas.
   const ultimaCopia = useRef(0);
