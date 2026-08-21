@@ -291,21 +291,22 @@ export function FunilConsorcioTimeline({
     {
       key: 'pendentes',
       label: CONSORCIO_LABELS.cotasAFazer,
-      hint: 'criados no período',
+      hint: 'liberadas para cadastro — termo assinado',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
       rateTooltip:
-        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%. Atenção: propostas anteriores a setembro/2026 não registravam cartas individualmente — nesses períodos a contagem de cartas é uma estimativa de backfill (1 por proposta ou qtd_cartas), então a taxa pode ficar distorcida.',
+        'Conversão calculada sobre CARTAS negociadas, não sobre propostas: cada carta deveria gerar um cadastro pendente (relação 1:1). A partir do fluxo de termo, a etapa conta só os cadastros LIBERADOS (venda com Termo de Adesão assinado, cadastro avulso sem proposta, ou cadastro anterior a 19/08/2026 — data do primeiro termo da base); as vendas esperando assinatura ficam na lista recolhida "Aguardando assinatura do termo". Cadastros antigos criados fora da proposta, ou aceites de cartas de meses anteriores, ainda podem levar a taxa acima de 100%. Atenção: propostas anteriores a setembro/2026 não registravam cartas individualmente — nesses períodos a contagem de cartas é uma estimativa de backfill (1 por proposta ou qtd_cartas), então a taxa pode ficar distorcida.',
 
       badges:
         aguardandoAbertura > 0
           ? [{
-              label: `${aguardandoAbertura} aguardando abertura`,
+              label: `${aguardandoAbertura} liberadas aguardando abertura`,
               filter: 'aguardando-abertura' as FunilQuickFilter,
               tooltip:
-                'Estoque atual: cadastros criados no período que hoje continuam aguardando abertura de cota. Clique para filtrar a lista.',
+                'Estoque atual: cadastros LIBERADOS (termo assinado, avulsos ou anteriores a 19/08/2026) criados no período e que hoje continuam aguardando abertura de cota. Vendas esperando assinatura do termo não entram aqui. Clique para filtrar a lista.',
             }]
           : null,
+
     },
     {
       key: 'cadastradas',
