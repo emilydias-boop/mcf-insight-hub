@@ -200,11 +200,13 @@ export function CartasProposalEditor({
                         )}
                       </SelectContent>
                     </Select>
+                  </div>
                 </div>
 
                 {/* Intenção do closer: quais das 12 primeiras parcelas a MCF paga.
                     Não é verdade oficial — a confirmação acontece na etapa 5. */}
                 <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
+
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-xs">Parcelas que a MCF paga (intenção)</Label>
                     <span className="text-xs font-medium">
