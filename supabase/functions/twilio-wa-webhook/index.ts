@@ -215,6 +215,20 @@ Deno.serve(async (req) => {
     });
     if (msgErr) console.error('twilio-wa-webhook: insert wa_messages falhou', msgErr);
 
+    // 5.1) Pedido de saída: apenas SINALIZA para o SDR decidir. Nunca chamamos
+    //      wa_register_opt_out aqui — o risco de falso positivo é maior que o ganho.
+    if (body && ehPedidoDeSaida(body)) {
+      try {
+        await admin
+          .from('wa_conversations')
+          .update({ pedido_saida_em: new Date().toISOString() })
+          .eq('id', convId)
+          .is('pedido_saida_em', null);
+      } catch (e) {
+        console.error('twilio-wa-webhook: marcar pedido_saida_em falhou', e);
+      }
+    }
+
     // 6) Escrita legada (tela antiga) — isolada para não derrubar o fluxo novo.
     try {
       const suffix = digitsOnly(phone).slice(-10);
