@@ -252,14 +252,19 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
               className="h-8 bg-primary text-primary-foreground border-transparent hover:bg-primary/90 hover:text-primary-foreground"
             />
             
-            {/* Botão WhatsApp */}
+            {/* Botão WhatsApp — abre no MCF - Atendimento quando há acesso; senão wa.me */}
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
               onClick={handleWhatsApp}
-              disabled={!hasPhone}
+              disabled={!hasPhone || abrirConversa.isPending}
+              title={hasAccess ? 'Abrir conversa no MCF - Atendimento' : undefined}
             >
-              <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+              {abrirConversa.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+              )}
               WhatsApp
             </Button>
             
