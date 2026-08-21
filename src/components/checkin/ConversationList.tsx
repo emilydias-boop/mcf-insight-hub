@@ -72,7 +72,10 @@ export function ConversationList({
         {!isLoading && conversations.length === 0 && (
           <div className="p-4 text-sm text-muted-foreground">Nenhuma conversa.</div>
         )}
-        {conversations.map((c) => (
+        {conversations.map((c) => {
+          // Linha com não lidas fica em destaque: só o badge não chama atenção.
+          const naoLida = (c.unread_count ?? 0) > 0;
+          return (
           <button
             key={c.id}
             onClick={() => onSelect(c.id)}
@@ -82,10 +85,10 @@ export function ConversationList({
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-sm truncate">
+                <div className={`text-sm truncate ${naoLida ? 'font-semibold text-foreground' : 'font-medium'}`}>
                   {c.contact_name?.trim() || formatPhone(c.phone_e164)}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">
+                <div className={`text-xs truncate ${naoLida ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
                   {c.last_message_preview ?? 'Sem mensagens ainda'}
                 </div>
               </div>
@@ -111,7 +114,8 @@ export function ConversationList({
               )}
             </div>
           </button>
-        ))}
+          );
+        })}
       </ScrollArea>
     </Card>
   );
