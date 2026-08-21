@@ -75,30 +75,42 @@ Deno.serve(async (req) => {
     const { data: hasAccess } = await admin.rpc('has_mcf_atendimento_access', { _user_id: userId });
     if (!hasAccess) return json({ error: 'Sem acesso ao MCF - Atendimento' }, 403);
 
-    // ---- teto diario por usuario ----
-    // Usamos a RPC wa_enviados_hoje: a definicao dela conta TODA linha outbound de
-    // wa_messages do usuario no dia (fuso America/Sao_Paulo), ou seja 1:1 e disparo
-    // espelhado, template e texto livre igualmente. E exatamente a regra pedida.
-    const { data: budget } = await admin
+    // ---- teto diario de ATENDIMENTO (1:1) por usuario ----
+    // wa_enviados_1a1_hoje conta apenas as mensagens outbound do usuario no dia
+    // (fuso America/Sao_Paulo) que NAO pertencem a um disparo em massa. Assim um
+    // disparo grande nao consome a cota de atendimento do SDR no inbox.
+    const { data: budget, error: budgetErr } = await admin
       .from('wa_send_budget')
       .select('teto_por_usuario_diario')
       .maybeSingle();
-    const tetoUsuario = Number(budget?.teto_por_usuario_diario ?? 0);
-    if (tetoUsuario > 0) {
-      const { data: enviadosHoje, error: tetoErr } = await admin.rpc('wa_enviados_hoje', {
+    const tetoBruto = budget?.teto_por_usuario_diario;
+    const tetoUsuario = Number(tetoBruto ?? 0);
+    if (budgetErr || tetoBruto === null || tetoBruto === undefined) {
+      // Fail-open deliberado: travar atendimento por falha de leitura de config
+      // seria pior. Mas fica rastreavel.
+      console.error(
+        'twilio-wa-send: nao foi possivel determinar teto_por_usuario_diario; envio seguiu SEM limite diario',
+        budgetErr ?? '(wa_send_budget sem linha ou valor nulo)',
+      );
+    } else if (tetoUsuario > 0) {
+      const { data: enviadosHoje, error: tetoErr } = await admin.rpc('wa_enviados_1a1_hoje', {
         _user_id: userId,
       });
       if (tetoErr) {
         // Falha na contagem nao pode bloquear o atendimento; seguimos e registramos.
-        console.error('twilio-wa-send: wa_enviados_hoje falhou', tetoErr);
+        console.error(
+          'twilio-wa-send: wa_enviados_1a1_hoje falhou; envio seguiu SEM limite diario',
+          tetoErr,
+        );
       } else if (Number(enviadosHoje ?? 0) >= tetoUsuario) {
         const enviados = Number(enviadosHoje ?? 0);
         return json({
           error: 'teto_diario_atingido',
-          message: `Você já enviou ${enviados} mensagens hoje e o limite diário por usuário é de ${tetoUsuario}. Fale com a liderança para liberar mais envios.`,
+          message: `Você já enviou ${enviados} mensagens de atendimento hoje e o limite diário de atendimento por usuário é de ${tetoUsuario} (mensagens de disparo em massa não entram nessa conta). Fale com a liderança para liberar mais envios.`,
         }, 429);
       }
     }
+
 
 
     const {
