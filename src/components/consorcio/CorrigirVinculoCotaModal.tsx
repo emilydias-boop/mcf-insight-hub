@@ -53,6 +53,25 @@ export function CorrigirVinculoCotaModal({ item, open, onOpenChange, onCorrigido
   const { data: r1PorDeal } = useR1ConsorcioPorDeal(leads.map((l) => l.dealId), open);
   const corrigir = useCorrigirVinculoCota();
 
+  // Nome do lead vinculado hoje: a pessoa precisa ver o que está trocando.
+  const dealAtualId = item?.dealId ?? null;
+  const { data: leadAtual } = useQuery({
+    queryKey: ["lead-vinculado-atual", dealAtualId],
+    enabled: open && !!dealAtualId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<{ nome: string } | null> => {
+      const { data, error } = await supabase
+        .from("crm_deals")
+        .select("name, crm_contacts(name)")
+        .eq("id", dealAtualId!)
+        .maybeSingle();
+      if (error) throw error;
+      const d = data as any;
+      return d ? { nome: d?.crm_contacts?.name || d?.name || "lead sem nome" } : null;
+    },
+  });
+
+
   const fmtDia = (iso?: string | null) => {
     if (!iso) return null;
     try {
