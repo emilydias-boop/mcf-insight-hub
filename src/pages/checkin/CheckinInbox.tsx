@@ -53,10 +53,14 @@ export default function CheckinInbox() {
     });
   }, [conversations, search, statusFilter]);
 
+  // Sem seleção automática: ao abrir o inbox nenhuma conversa fica selecionada,
+  // como no WhatsApp Web. Assim o badge de não lidas sobrevive até alguém clicar.
+  // Quando a conversa selecionada sai da lista por filtro, apenas desselecionar.
   useEffect(() => {
     if (alvoDeepLink) return; // o deep link decide a seleção até ser resolvido
-    if (filtered.length === 0) return;
-    if (!filtered.some((c) => c.id === selectedId)) setSelectedId(filtered[0].id);
+    if (selectedId && !filtered.some((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
   }, [filtered, selectedId, alvoDeepLink]);
 
   /**
@@ -194,7 +198,9 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
   const now = useNow(60_000);
 
   useEffect(() => {
-    markRead.mutate();
+    // Só marca como lida se a aba estiver visível — se o SDR trocou de aba com a
+    // conversa aberta, a mensagem recebida precisa sobreviver até ele voltar.
+    if (document.visibilityState === 'visible') markRead.mutate();
     setForceTemplateMode(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation.id]);

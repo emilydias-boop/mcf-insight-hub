@@ -136,9 +136,15 @@ export function useWaMessages(conversationId: string | null) {
         (payload) => {
           qc.invalidateQueries({ queryKey: ['wa-messages', conversationId] });
           qc.invalidateQueries({ queryKey: ['wa-conversations'] });
-          // conversa aberta: mensagem nova do cliente já entra como lida
+          // conversa aberta: mensagem nova do cliente só vira lida se a aba estiver
+          // visível — caso contrário o badge precisa sobreviver até o SDR voltar.
           const row = payload.new as { direction?: string; read_at?: string | null } | null;
-          if (payload.eventType !== 'DELETE' && row?.direction === 'inbound' && !row.read_at) {
+          if (
+            payload.eventType !== 'DELETE' &&
+            row?.direction === 'inbound' &&
+            !row.read_at &&
+            document.visibilityState === 'visible'
+          ) {
             markReadRef.current();
           }
         },
@@ -225,6 +231,17 @@ export function useWaMessages(conversationId: string | null) {
   useEffect(() => {
     markReadRef.current = markReadNow;
   }, [markReadNow]);
+
+  // Quando a aba volta ao foco com a conversa aberta, marca as mensagens
+  // recebidas enquanto estava em background como lidas.
+  useEffect(() => {
+    if (!conversationId) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') markReadRef.current();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [conversationId]);
 
   const sendMedia = useMutation({
     mutationFn: async (input: {
