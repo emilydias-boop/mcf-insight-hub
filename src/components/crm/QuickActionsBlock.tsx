@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
@@ -8,6 +9,8 @@ import { toast } from 'sonner';
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
 import { buildWhatsAppMessage } from '@/lib/whatsappTemplates';
 import { format, parseISO } from 'date-fns';
+import { useMcfAtendimentoAccess } from '@/hooks/useMcfAtendimentoAccess';
+import { useAbrirConversa } from '@/hooks/wa/useWaLeadsSemConversa';
 import {
   Select,
   SelectContent,
@@ -50,6 +53,9 @@ interface QuickActionsBlockProps {
 export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onDeleted }: QuickActionsBlockProps) => {
   const { role } = useAuth();
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
+  const navigate = useNavigate();
+  const { hasAccess } = useMcfAtendimentoAccess();
+  const abrirConversa = useAbrirConversa();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
   
@@ -133,7 +139,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     await makeCall(normalizedPhone, deal?.id, contact?.id, deal?.origin_id);
   };
   
-  const handleWhatsApp = () => {
+  // Fallback: abre o wa.me numa aba externa (comportamento original).
+  // Preservado para usuários sem acesso ao MCF - Atendimento.
+  const abrirWaMe = () => {
     let phone = extractPhoneFromDeal(deal, contact);
     
     if (!phone) {
@@ -172,6 +180,23 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     });
     
     window.open(`https://wa.me/${whatsappNumber}?text=${message}`, '_blank');
+  };
+
+  // Abre a conversa dentro do MCF - Atendimento quando o usuário tem acesso.
+  // Em caso de erro (telefone inválido, opt-out, conversa atribuída a outra
+  // pessoa) o toast já é emitido pelo hook — não cair no wa.me, pois isso
+  // furaria justamente as proteções da RPC.
+  const handleWhatsApp = async () => {
+    if (!hasAccess || !deal?.id) {
+      abrirWaMe();
+      return;
+    }
+    try {
+      const conversationId = await abrirConversa.mutateAsync(deal.id);
+      navigate(`/checkin?conversa=${conversationId}`);
+    } catch {
+      // Erro intencional e acionável — o toast já foi emitido pelo hook.
+    }
   };
   
   const handleMoveStage = async () => {
@@ -227,14 +252,19 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
               className="h-8 bg-primary text-primary-foreground border-transparent hover:bg-primary/90 hover:text-primary-foreground"
             />
             
-            {/* Botão WhatsApp */}
+            {/* Botão WhatsApp — abre no MCF - Atendimento quando há acesso; senão wa.me */}
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
               onClick={handleWhatsApp}
-              disabled={!hasPhone}
+              disabled={!hasPhone || abrirConversa.isPending}
+              title={hasAccess ? 'Abrir conversa no MCF - Atendimento' : undefined}
             >
-              <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+              {abrirConversa.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+              )}
               WhatsApp
             </Button>
             
