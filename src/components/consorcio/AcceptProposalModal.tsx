@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -17,9 +17,105 @@ import { CloserR1NoteBlock } from './CloserR1NoteBlock';
 import { DadosClienteFields, TipoPessoaSelect, useDadosCliente } from './DadosClienteBloco';
 import { parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 import { derivarParcelasEmpresa } from '@/types/consorcioCartas';
+import { formatCurrency } from '@/lib/consorcioCalculos';
 
 // A validação desta tela é feita pelo `checklistOk`/`docsOk` do bloco cadastral
 // compartilhado (`DadosClienteBloco`) — aqui o bloco é obrigatório.
+
+/** Valores do plano de UMA carta, reportados pelo bloco ao formulário-pai. */
+interface PlanoPorCarta {
+  credito_id?: string;
+  condicao_pagamento?: string;
+  parcela_1a_12a?: number;
+  parcela_demais?: number;
+  objetivo?: string;
+  produto_codigo?: string;
+  inclui_seguro: boolean;
+}
+
+interface CartaPlanoBlocoProps {
+  carta: any;
+  index: number;
+  total: number;
+  onChange: (cartaId: string, valores: PlanoPorCarta) => void;
+  /** Sinal do 1º bloco: copie condição e objetivo (nunca valor de parcela). */
+  copia?: { seq: number; condicao?: string; objetivo?: string } | null;
+  onRepetir?: (dados: { condicao?: string; objetivo?: string }) => void;
+}
+
+/**
+ * Um bloco "Dados do plano" POR CARTA. Cada carta tem parcela própria — uma de
+ * 150k e uma de 200k não têm o mesmo valor. Crédito, prazo e produto vêm da
+ * carta e são somente leitura aqui (quem edita é o lançamento da venda).
+ */
+function CartaPlanoBloco({ carta, index, total, onChange, copia, onRepetir }: CartaPlanoBlocoProps) {
+  const plano = useDadosPlano();
+  const hidratado = useRef(false);
+
+  useEffect(() => {
+    if (hidratado.current) return;
+    hidratado.current = true;
+    plano.hidratar({ valorCredito: Number(carta.valor_credito) || null, prazo: Number(carta.prazo_meses) || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carta.id]);
+
+  // Conveniência do 1º bloco: replica condição e objetivo nas demais cartas.
+  const ultimaCopia = useRef(0);
+  useEffect(() => {
+    if (!copia || copia.seq === ultimaCopia.current) return;
+    ultimaCopia.current = copia.seq;
+    if (copia.condicao) plano.setCondicao(copia.condicao);
+    if (copia.objetivo) plano.setObjetivo(copia.objetivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copia?.seq]);
+
+  const v = plano.valores;
+  useEffect(() => {
+    onChange(carta.id, {
+      credito_id: v.credito_id,
+      condicao_pagamento: v.condicao_pagamento,
+      parcela_1a_12a: v.parcela_1a_12a,
+      parcela_demais: v.parcela_demais,
+      objetivo: v.objetivo,
+      produto_codigo: v.produto_codigo,
+      inclui_seguro: plano.incluiSeguro,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    v.credito_id, v.condicao_pagamento, v.parcela_1a_12a, v.parcela_demais,
+    v.objetivo, v.produto_codigo, plano.incluiSeguro,
+  ]);
+
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold text-sm">
+          Carta {index + 1} de {total}
+          <span className="text-muted-foreground font-normal">
+            {' · '}{formatCurrency(Number(carta.valor_credito) || 0)}
+            {' · '}{carta.prazo_meses}x
+            {carta.tipo_produto ? ` · ${carta.tipo_produto}` : ''}
+          </span>
+        </h3>
+        {index === 0 && total > 1 && onRepetir && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onRepetir({ condicao: plano.condicao, objetivo: plano.objetivo })}
+            title="Copia condição de pagamento e objetivo para as demais cartas (o valor da parcela continua individual)"
+          >
+            Repetir para as demais cartas
+          </Button>
+        )}
+      </div>
+      <DadosPlanoFields
+        plano={plano}
+        hide={['valorCredito', 'prazo', 'diaVencimento', 'inicioSegundaParcela']}
+      />
+    </div>
+  );
+}
 
 interface AcceptProposalModalProps {
   open: boolean;
@@ -29,6 +125,7 @@ interface AcceptProposalModalProps {
   contactName: string;
   vendedorName: string;
 }
+
 
 export function AcceptProposalModal({
   open,
