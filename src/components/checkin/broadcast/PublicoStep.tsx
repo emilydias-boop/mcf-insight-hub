@@ -173,9 +173,11 @@ export function PublicoStep({
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>
               Este disparo foi criado a partir de uma seleção de{' '}
-              <strong>{fmt(dealIdsSelecionados.length)}</strong> negócio(s) no CRM. Os filtros
-              abaixo refinam essa seleção — não a substituem.
+              <strong>{fmt(dealIdsSelecionados.length)}</strong> negócio(s) no CRM. O público já
+              está montado — os filtros em “Refinar seleção” só reduzem essa seleção, nunca a
+              substituem.
             </span>
+
             {onDescartarSelecao && (
               <Button
                 type="button"
