@@ -7,6 +7,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
 import { WA_STATUS_COLOR, WA_STATUS_OPTIONS, formatPhone } from './waLabels';
+import { cn } from '@/lib/utils';
+
 
 interface Props {
   conversations: WaConversation[];
@@ -20,6 +22,8 @@ interface Props {
   scope: WaScope;
   onScopeChange: (v: WaScope) => void;
   canSeeAll: boolean;
+  /** Classes de layout vindas do inbox (visibilidade em tela pequena). */
+  className?: string;
 }
 
 export function ConversationList({
@@ -34,9 +38,18 @@ export function ConversationList({
   scope,
   onScopeChange,
   canSeeAll,
+  className,
 }: Props) {
   return (
-    <Card className="w-80 shrink-0 flex flex-col overflow-hidden">
+    // Largura adaptativa: 288px na maioria das telas, 320px em monitor grande.
+    // shrink-0 evita que a coluna seja comprimida e corte horário/badge.
+    <Card
+      className={cn(
+        'w-full md:w-72 2xl:w-80 shrink-0 flex flex-col overflow-hidden',
+        className,
+      )}
+    >
+
       <div className="p-3 border-b space-y-2">
         <h2 className="font-semibold text-sm">MCF - Atendimento</h2>
 

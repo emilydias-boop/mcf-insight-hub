@@ -130,9 +130,22 @@ interface Props {
   now: number;
   onStatusChange: (status: WaConversationStatus) => void;
   children?: ReactNode; // composer
+  /** Ação à esquerda do cabeçalho (ex. voltar para a lista em tela pequena). */
+  acaoVoltar?: ReactNode;
+  /** Ações à direita do cabeçalho (ex. abrir painel do contato em tela menor). */
+  acoesCabecalho?: ReactNode;
 }
 
-export function ConversationThread({ conversation, messages, now, onStatusChange, children }: Props) {
+export function ConversationThread({
+  conversation,
+  messages,
+  now,
+  onStatusChange,
+  children,
+  acaoVoltar,
+  acoesCabecalho,
+}: Props) {
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasNearBottomRef = useRef(true);
   const windowInfo = get24hWindow(conversation.last_inbound_at, now);
@@ -211,14 +224,18 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
   return (
     <Card className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <div className="p-3 border-b flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-semibold truncate">
-            {conversation.contact_name?.trim() || formatPhone(conversation.phone_e164)}
-          </div>
-          <div className="text-xs text-muted-foreground truncate">
-            {formatPhone(conversation.phone_e164)}
+        <div className="flex min-w-0 items-center gap-2">
+          {acaoVoltar}
+          <div className="min-w-0">
+            <div className="font-semibold truncate">
+              {conversation.contact_name?.trim() || formatPhone(conversation.phone_e164)}
+            </div>
+            <div className="text-xs text-muted-foreground truncate">
+              {formatPhone(conversation.phone_e164)}
+            </div>
           </div>
         </div>
+
         <div className="flex items-center gap-2 shrink-0">
           <Badge
             variant="outline"
@@ -236,14 +253,16 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
             value={conversation.status}
             onValueChange={(v) => onStatusChange(v as WaConversationStatus)}
           >
-            <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-8 w-32 sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               {WA_STATUS_OPTIONS.map((s) => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {acoesCabecalho}
         </div>
+
       </div>
 
       <div

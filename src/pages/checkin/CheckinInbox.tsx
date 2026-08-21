@@ -11,7 +11,15 @@ import { NovaConversaDialog } from '@/components/checkin/NovaConversaDialog';
 import { useNow } from '@/hooks/wa/useNow';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Megaphone, MessageSquarePlus } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { ArrowLeft, Megaphone, MessageSquarePlus, User } from 'lucide-react';
+
 import { toast } from 'sonner';
 
 export default function CheckinInbox() {
@@ -135,10 +143,12 @@ export default function CheckinInbox() {
   });
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
+    // overflow-x-hidden é rede de segurança: nada aqui dentro empurra a página
+    // para fora da viewport, mesmo com zoom do navegador acima de 100%.
+    <div className="h-[calc(100vh-8rem)] flex flex-col gap-3 overflow-x-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">MCF - Atendimento</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => setNovaConversaAberto(true)}>
             <MessageSquarePlus className="mr-2 h-4 w-4" /> Nova conversa
           </Button>
@@ -157,41 +167,56 @@ export default function CheckinInbox() {
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 gap-3">
-      <ConversationList
-        conversations={filtered}
-        isLoading={isLoading}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        search={search}
-        onSearchChange={setSearch}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        scope={scope}
-        onScopeChange={setScope}
-        canSeeAll={canSeeAll}
-      />
+        {/* Abaixo de md alternamos lista x conversa: só cabe uma coluna. */}
+        <ConversationList
+          className={selected ? 'hidden md:flex' : 'flex'}
+          conversations={filtered}
+          isLoading={isLoading}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          scope={scope}
+          onScopeChange={setScope}
+          canSeeAll={canSeeAll}
+        />
 
-      {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
-          do painel lateral e a rolagem interna do ContactPanel nunca ativa. */}
-      <div className="flex min-h-0 flex-1 gap-3 min-w-0">
-
-        {selected ? (
-          <>
-            <ConversationPane conversation={selected} />
-            <ContactPanel conversation={selected} />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            Selecione uma conversa para começar
-          </div>
-        )}
-      </div>
+        {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
+            do painel lateral e a rolagem interna do ContactPanel nunca ativa. */}
+        <div
+          className={`min-h-0 min-w-0 flex-1 gap-3 ${selected ? 'flex' : 'hidden md:flex'}`}
+        >
+          {selected ? (
+            <>
+              <ConversationPane
+                conversation={selected}
+                onVoltar={() => setSelectedId(null)}
+              />
+              <ContactPanel conversation={selected} />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              Selecione uma conversa para começar
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function ConversationPane({ conversation }: { conversation: WaConversation }) {
+
+function ConversationPane({
+  conversation,
+  onVoltar,
+}: {
+  conversation: WaConversation;
+  onVoltar: () => void;
+}) {
+  const [painelContatoAberto, setPainelContatoAberto] = useState(false);
+
   const { data: messages = [], sendMessage, sendMedia, markRead } = useWaMessages(conversation.id);
   const updateConversation = useUpdateWaConversation();
   const [forceTemplateMode, setForceTemplateMode] = useState(false);
@@ -256,7 +281,44 @@ function ConversationPane({ conversation }: { conversation: WaConversation }) {
       onStatusChange={(status) =>
         updateConversation.mutate({ id: conversation.id, patch: { status } })
       }
+      acaoVoltar={
+        // Só em tela pequena, onde a lista dá lugar à conversa.
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 md:hidden"
+          onClick={onVoltar}
+          aria-label="Voltar para a lista de conversas"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+      }
+      acoesCabecalho={
+        // Abaixo de xl o painel do contato sai do fluxo; aqui está o acesso a ele.
+        <Sheet open={painelContatoAberto} onOpenChange={setPainelContatoAberto}>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0 xl:hidden"
+              aria-label="Abrir painel do contato"
+            >
+              <User className="h-4 w-4" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent
+            side="right"
+            className="flex w-full flex-col gap-3 sm:max-w-md"
+          >
+            <SheetHeader>
+              <SheetTitle>Dados do contato</SheetTitle>
+            </SheetHeader>
+            <ContactPanel conversation={conversation} variante="painel" />
+          </SheetContent>
+        </Sheet>
+      }
     >
+
       <MessageComposer
         conversation={conversation}
         now={now}
