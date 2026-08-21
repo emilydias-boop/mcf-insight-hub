@@ -16197,8 +16197,20 @@ export type Database = {
           sdrs: number
         }[]
       }
+      wa_broadcast_criar_de_selecao: {
+        Args: { _deal_ids: string[]; _nome: string }
+        Returns: string
+      }
       wa_broadcast_estagios_disponiveis: {
         Args: { _origin_id?: string }
+        Returns: {
+          leads: number
+          nome: string
+          stage_id: string
+        }[]
+      }
+      wa_broadcast_estagios_no_escopo: {
+        Args: { _bu?: string; _escopo: string; _origin_id?: string }
         Returns: {
           leads: number
           nome: string
@@ -16237,6 +16249,13 @@ export type Database = {
           phone_e164: string
           target_id: string
           variaveis: Json
+        }[]
+      }
+      wa_broadcast_tags_no_escopo: {
+        Args: { _bu?: string; _escopo: string; _origin_id?: string }
+        Returns: {
+          leads: number
+          tag: string
         }[]
       }
       wa_broadcast_validar: {
