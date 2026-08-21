@@ -52,6 +52,7 @@ import {
   type PendingStatusFilter,
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
+import { camposCadastroFaltantes, resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { diasParados } from '@/hooks/useConsorcioCotasOrigem';
 import { loadXLSX } from '@/lib/lazyExport';
