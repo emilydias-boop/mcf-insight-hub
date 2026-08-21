@@ -66,6 +66,12 @@ import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
 import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
 import { CotaCadastradaModal } from '@/components/consorcio/CotaCadastradaModal';
 import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
+import {
+  ancoraEsperaAssinatura,
+  cadastroTravadoSemAssinatura,
+  termosDoCadastro as termosDoCadastroLib,
+} from '@/lib/consorcioLiberacaoCadastro';
+
 
 const STATUS_LABELS: Record<string, string> = {
   aguardando_abertura: 'Aguardando abertura',
