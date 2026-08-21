@@ -38,6 +38,7 @@ export function CartasProposalEditor({
 }: CartasProposalEditorProps) {
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
+  const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
@@ -62,6 +63,10 @@ export function CartasProposalEditor({
         prazoOutro: base.prazoOutro,
         tipoProduto: base.tipoProduto,
         parcelasMcf: [...base.parcelasMcf],
+        parcela1a12Str: base.parcela1a12Str,
+        parcelaDemaisStr: base.parcelaDemaisStr,
+        condicaoPagamento: base.condicaoPagamento,
+        objetivo: base.objetivo,
       }),
     );
 
@@ -77,6 +82,8 @@ export function CartasProposalEditor({
 
   const total = totalCartas(cartas);
   const incompletas = cartas.filter(c => !cartaDraftValida(c)).length;
+  const semParcela = cartas.filter(cartaSemParcela).length;
+
 
   return (
     <TooltipProvider>
