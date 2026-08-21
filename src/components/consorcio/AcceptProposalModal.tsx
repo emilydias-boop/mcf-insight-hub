@@ -212,6 +212,7 @@ export function AcceptProposalModal({
       const carta = alvos[i];
       // Parcelas que a MCF paga vêm da marcação feita no lançamento da venda.
       const parcelas = derivarParcelasEmpresa(carta?.parcelas_mcf);
+      const pc = multiCartas && carta ? planosPorCarta[carta.id] : undefined;
       await createRegistration.mutateAsync({
         carta_id: carta?.id,
         proposal_id: proposalId,
