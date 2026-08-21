@@ -221,6 +221,82 @@ export function CartasProposalEditor({
                   </div>
                 </div>
 
+                {/* Dados do plano da carta. Opcionais no lançamento — mas sem o
+                    valor da parcela o cadastro nasce como cadastro incompleto e
+                    o Termo de Adesão não sai. Nada é calculado aqui: o valor é o
+                    da tabela da Embracon, digitado pela pessoa. */}
+                <div className="space-y-2 rounded-md border border-dashed p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label className="text-xs">
+                      Plano da carta {i + 1}
+                      {(() => {
+                        const digits = c.valorStr.replace(/\D/g, '');
+                        const v = digits ? Number(digits) / 100 : 0;
+                        return v > 0 ? ` · ${fmtBRL(v)}` : '';
+                      })()}
+                      <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
+                    </Label>
+                    {cartaSemParcela(c) && (
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                        sem parcela → cadastro incompleto
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="h-9"
+                        value={c.parcela1a12Str}
+                        onChange={e => patch(c.key, { parcela1a12Str: formatBRLInput(e.target.value) })}
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Demais parcelas (R$)</Label>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        className="h-9"
+                        value={c.parcelaDemaisStr}
+                        onChange={e => patch(c.key, { parcelaDemaisStr: formatBRLInput(e.target.value) })}
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Condição de pagamento</Label>
+                      <Select
+                        value={c.condicaoPagamento}
+                        onValueChange={v => patch(c.key, { condicaoPagamento: v })}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
+                        <SelectContent>
+                          {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Objetivo</Label>
+                      <Select value={c.objetivo} onValueChange={v => patch(c.key, { objetivo: v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Objetivo" /></SelectTrigger>
+                        <SelectContent>
+                          {objetivoOptions.map(o => (
+                            <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                          ))}
+                          {c.objetivo && !objetivoOptions.some(o => o.name === c.objetivo) && (
+                            <SelectItem value={c.objetivo}>{c.objetivo} (legado)</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+
                 {/* Intenção do closer: quais das 12 primeiras parcelas a MCF paga.
                     Não é verdade oficial — a confirmação acontece na etapa 5. */}
                 <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
