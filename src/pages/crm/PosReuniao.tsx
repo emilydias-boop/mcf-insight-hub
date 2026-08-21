@@ -812,7 +812,8 @@ function PropostasTab({
           <GerarTermoModal
             open={!!termoTarget}
             onOpenChange={o => !o && setTermoTarget(null)}
-            registrationId={registrationByProposal[termoTarget.id]}
+            // Termo da VENDA: cobre todas as cartas da proposta.
+            proposalId={termoTarget.id}
           />
         )}
 
