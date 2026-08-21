@@ -21,12 +21,15 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'parcela_1a_12a', label: 'Parcela 1ª à 12ª' },
   { key: 'parcela_demais', label: 'Demais parcelas' },
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
+  { key: 'qtd_cartas', label: 'Quantidade de cartas' },
+  { key: 'cartas_tabela', label: 'Tabela das cartas da venda' },
   { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas pagas pela MCF' },
   { key: 'parcelas_mcf_lista', label: 'Tabela das parcelas da MCF' },
   { key: 'parcelas_mcf_total', label: 'Total pago pela MCF' },
   { key: 'tipo_contrato', label: 'Tipo de contrato' },
   { key: 'data_emissao', label: 'Data de emissão' },
 ] as const;
+
 
 export type TermoPlaceholderKey = (typeof TERMO_PLACEHOLDERS)[number]['key'];
 export type TermoDados = Record<string, string>;
