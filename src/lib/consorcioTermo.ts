@@ -167,9 +167,170 @@ export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Dat
   };
 }
 
+// ── Termo por VENDA (1 termo cobrindo N cartas) ───────────────────────────
+// Regra do dono: o termo é da proposta, não do cadastro. Onde as cartas
+// divergem, o documento diz "ver tabela" — nunca escolhe um valor em silêncio.
+
+export interface TermoFaltandoCarta extends TermoFaltando {
+  /** 1-based. `0` = problema do cliente (comum a todas as cartas). */
+  carta: number;
+  totalCartas: number;
+}
+
+/** Divergência de identidade entre cadastros — bloqueia a geração. */
+export function divergenciasIdentidade(regs: TermoSourceRegistration[]): string[] {
+  if (regs.length < 2) return [];
+  const out: string[] = [];
+  const docs = new Set(regs.map(r => onlyDigits(termoDocumentoCliente(r))).filter(Boolean));
+  const nomes = new Set(regs.map(r => normalizeNome(termoNomeCliente(r))).filter(Boolean));
+  if (docs.size > 1) out.push(`CPF/CNPJ diferente entre os cadastros (${docs.size} documentos distintos)`);
+  if (nomes.size > 1) out.push(`Nome / razão social diferente entre os cadastros (${nomes.size} nomes distintos)`);
+  return out;
+}
+
+/** Valida TODAS as cartas, dizendo qual delas está incompleta. */
+export function validarDadosTermoMulti(regs: TermoSourceRegistration[]): TermoFaltandoCarta[] {
+  const total = regs.length;
+  if (!total) return [{ campo: 'cadastro', label: 'Nenhum cadastro da venda encontrado', carta: 0, totalCartas: 0 }];
+  const faltando: TermoFaltandoCarta[] = [];
+  const primeiro = regs[0];
+  if (!termoNomeCliente(primeiro)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente', carta: 0, totalCartas: total });
+  if (!termoDocumentoCliente(primeiro)) faltando.push({ campo: 'documento', label: 'CPF / CNPJ do cliente', carta: 0, totalCartas: total });
+  regs.forEach((reg, i) => {
+    const carta = i + 1;
+    const push = (campo: string, label: string) => faltando.push({ campo: `${campo}_${carta}`, label, carta, totalCartas: total });
+    if (!Number(reg.valor_credito)) push('valor_credito', 'Valor do crédito');
+    if (!Number(reg.prazo_meses)) push('prazo_meses', 'Prazo (meses)');
+    if (!Number(reg.parcela_1a_12a)) push('parcela_1a_12a', 'Valor da parcela (1ª à 12ª)');
+    if (!Number(reg.parcela_demais)) push('parcela_demais', 'Valor das demais parcelas');
+  });
+  return faltando;
+}
+
+/** Rótulo humano de um item faltante: "Carta 2 de 3 — valor da parcela". */
+export function rotuloFaltando(f: TermoFaltandoCarta): string {
+  return f.carta === 0 ? f.label : `Carta ${f.carta} de ${f.totalCartas} — ${f.label}`;
+}
+
+const VER_TABELA = 'ver tabela';
+
+/** Mantém o valor quando todas as cartas concordam; senão "ver tabela". */
+function unicoOuVerTabela(valores: string[]): string {
+  const set = new Set(valores.map(v => v || '—'));
+  if (set.size === 1) return [...set][0];
+  return VER_TABELA;
+}
+
+function condicaoLabel(reg: TermoSourceRegistration): string {
+  return CONDICAO_LABELS[String(reg.condicao_pagamento)] || reg.condicao_pagamento || '—';
+}
+
+function objetivoLabel(reg: TermoSourceRegistration): string {
+  return reg.objetivo === 'imovel' ? 'Imóvel' : reg.objetivo === 'auto' ? 'Automóvel' : '—';
+}
+
+function produtoLabel(reg: TermoSourceRegistration): string {
+  return reg.produto_codigo || reg.tipo_produto || '—';
+}
+
+/** Tabela markdown das cartas da venda, com linha de Total. */
+export function montarTabelaCartas(regs: TermoSourceRegistration[]): string {
+  const totalCredito = regs.reduce((s, r) => s + Number(r.valor_credito || 0), 0);
+  const linhas = [
+    '| Carta | Produto | Crédito | Prazo | Parcela 1ª–12ª | Demais |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...regs.map((r, i) => {
+      const p12 = Number(r.parcela_1a_12a) ? formatCurrency(Number(r.parcela_1a_12a)) : '—';
+      const pd = Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—';
+      const prz = Number(r.prazo_meses) ? `${Number(r.prazo_meses)} meses` : '—';
+      return `| ${i + 1} | ${produtoLabel(r)} | ${formatCurrency(Number(r.valor_credito || 0))} | ${prz} | ${p12} | ${pd} |`;
+    }),
+    `| **Total** | | **${formatCurrency(totalCredito)}** | | | |`,
+  ];
+  return linhas.join('\n');
+}
+
+/** Tabela consolidada das parcelas da MCF, com a coluna Carta. */
+export function montarTabelaParcelasMcfConsolidada(
+  regs: TermoSourceRegistration[],
+): { tabela: string; qtd: number; total: number } {
+  const itens = regs.flatMap((reg, i) =>
+    parcelasMcfComValoresDigitados(reg).map(p => ({
+      carta: i + 1,
+      numero: p.numero,
+      valor: p.valor,
+      venc: Number(reg.dia_vencimento) ? `dia ${Number(reg.dia_vencimento)}` : 'A definir',
+    })),
+  );
+  const total = itens.reduce((s, p) => s + p.valor, 0);
+  if (!itens.length) {
+    return { tabela: 'Nenhuma parcela sob responsabilidade da MCF Capital.', qtd: 0, total: 0 };
+  }
+  const linhas = [
+    '| Carta | Parcela | Vencimento | Valor | Responsável |',
+    '| --- | --- | --- | --- | --- |',
+    ...itens.map(p => `| ${p.carta} | ${p.numero}ª | ${p.venc} | ${formatCurrency(p.valor)} | MCF Capital |`),
+    `| **Total** | | | **${formatCurrency(total)}** | |`,
+  ];
+  return { tabela: linhas.join('\n'), qtd: itens.length, total };
+}
+
+/**
+ * Dados do termo de uma VENDA inteira. Cliente vem do primeiro cadastro
+ * (o aceite replica os dados em todos); crédito é a SOMA das cartas.
+ */
+export function montarDadosTermoMulti(
+  regs: TermoSourceRegistration[],
+  emissao = new Date(),
+): TermoDados {
+  if (regs.length === 0) return montarDadosTermo({}, emissao);
+  if (regs.length === 1) {
+    const base = montarDadosTermo(regs[0], emissao);
+    return { ...base, qtd_cartas: '1', cartas_tabela: montarTabelaCartas(regs) };
+  }
+
+  const primeiro = regs[0];
+  const isPj = primeiro.tipo_pessoa === 'pj';
+  const somaCredito = regs.reduce((s, r) => s + Number(r.valor_credito || 0), 0);
+  const mcf = montarTabelaParcelasMcfConsolidada(regs);
+
+  return {
+    cliente_nome: termoNomeCliente(primeiro) || '—',
+    cliente_documento: termoDocumentoCliente(primeiro) || '—',
+    cliente_telefone: (isPj ? primeiro.telefone_comercial : primeiro.telefone) || primeiro.telefone || '—',
+    cliente_email: (isPj ? primeiro.email_comercial : primeiro.email) || primeiro.email || '—',
+    cliente_endereco: (isPj ? primeiro.endereco_comercial : primeiro.endereco_completo) || primeiro.endereco_completo || '—',
+    administradora: ADMINISTRADORA_CONSORCIO,
+    produto: unicoOuVerTabela(regs.map(produtoLabel)),
+    objetivo: unicoOuVerTabela(regs.map(objetivoLabel)),
+    valor_credito: formatCurrency(somaCredito),
+    prazo: unicoOuVerTabela(regs.map(r => String(r.prazo_meses || '—'))),
+    condicao_pagamento: unicoOuVerTabela(regs.map(condicaoLabel)),
+    parcela_1a_12a: unicoOuVerTabela(
+      regs.map(r => (Number(r.parcela_1a_12a) ? formatCurrency(Number(r.parcela_1a_12a)) : '—')),
+    ),
+    parcela_demais: unicoOuVerTabela(
+      regs.map(r => (Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—')),
+    ),
+    dia_vencimento: unicoOuVerTabela(
+      regs.map(r => (Number(r.dia_vencimento) ? String(r.dia_vencimento) : 'A definir')),
+    ),
+    qtd_cartas: String(regs.length),
+    cartas_tabela: montarTabelaCartas(regs),
+    parcelas_mcf_qtd: String(mcf.qtd),
+    parcelas_mcf_lista: mcf.tabela,
+    parcelas_mcf_total: formatCurrency(mcf.total),
+    tipo_contrato: unicoOuVerTabela(
+      regs.map(r => TIPO_CONTRATO_LABELS[String(r.tipo_contrato)] || 'Normal'),
+    ),
+    data_emissao: emissao.toLocaleDateString('pt-BR'),
+  };
+}
+
 export function renderTermo(template: string, dados: TermoDados): string {
   return template.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_m, key: string) => dados[key] ?? `{{${key}}}`);
 }
+
 
 export async function sha256Hex(text: string): Promise<string> {
   const bytes = new TextEncoder().encode(text);
