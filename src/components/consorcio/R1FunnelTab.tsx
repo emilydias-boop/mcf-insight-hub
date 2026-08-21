@@ -137,13 +137,34 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     [filtradas, field, dir],
   );
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageRows = useMemo(
-    () => rows.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [rows, safePage, pageSize],
+  /**
+   * Duas listas: pendentes (o trabalho) antes de tratadas.
+   *  - Etapa 1: pendente = reunião passou e continua sem desfecho.
+   *  - Etapa 2: pendente = realizada e sem desfecho comercial (nem venda
+   *    lançada, nem "sem sucesso").
+   * Pendentes sempre do mais parado para o mais recente, ignorando a ordenação
+   * de coluna — a fila tem que se auto-priorizar.
+   */
+  const ehPendente = (p: R1FunnelParticipant) =>
+    mode === 'realizadas'
+      ? !(p.deal_id && (dealsWithProposal.has(p.deal_id) || dealsSemSucesso.has(p.deal_id)))
+      : p.sem_desfecho;
+
+  const pendentes = useMemo(
+    () =>
+      rows
+        .filter(ehPendente)
+        .slice()
+        .sort((a, b) => (a.scheduled_at || '').localeCompare(b.scheduled_at || '')),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, mode, dealsWithProposal, dealsSemSucesso],
   );
-  useEffect(() => { setPage(0); }, [field, dir, buscaAplicada, closerFilter, pageSize, mode, quickFilter]);
+  const tratadas = useMemo(
+    () => rows.filter((p) => !ehPendente(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, mode, dealsWithProposal, dealsSemSucesso],
+  );
+
 
   // Quebra por motivo dos no-shows do período (só quando o filtro está ativo)
   const reasonBreakdown = useMemo(() => {
