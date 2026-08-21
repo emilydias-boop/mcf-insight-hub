@@ -849,17 +849,6 @@ function RegistrationRow({
                   <Link2 className="h-4 w-4 mr-2" /> Vincular a cota existente
                 </DropdownMenuItem>
               )}
-              {variant === 'pendentes' && semCota && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={onDecline}
-                    className="text-amber-600 focus:text-amber-700"
-                  >
-                    <Ban className="h-4 w-4 mr-2" /> Declinada — parceiro desistiu
-                  </DropdownMenuItem>
-                </>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={onDelete}
