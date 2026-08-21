@@ -109,6 +109,13 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     [proposals],
   );
 
+  /** Negócios já marcados como "sem sucesso" — desfecho comercial da etapa 2. */
+  const dealsSemSucesso = useMemo(
+    () => new Set((semSucesso || []).map((d) => d.deal_id).filter(Boolean)),
+    [semSucesso],
+  );
+
+
   const base = useMemo(() => {
     const all = data?.participants || [];
     if (mode === 'realizadas') return all.filter(p => p.status === 'completed');
