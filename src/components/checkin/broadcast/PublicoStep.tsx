@@ -145,6 +145,30 @@ export function PublicoStep({
 
   return (
     <div className="space-y-4">
+      {dealIdsSelecionados.length > 0 && (
+        <Alert>
+          <Users className="h-4 w-4" />
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Este disparo foi criado a partir de uma seleção de{' '}
+              <strong>{fmt(dealIdsSelecionados.length)}</strong> negócio(s) no CRM. Os filtros
+              abaixo refinam essa seleção — não a substituem.
+            </span>
+            {onDescartarSelecao && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onDescartarSelecao}
+                disabled={descartandoSelecao}
+              >
+                {descartandoSelecao && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                Usar toda a carteira em vez da seleção
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       {publicoMontadoEm && (
         <Alert variant={publicoVelho ? 'destructive' : 'default'}>
           {publicoVelho ? (
