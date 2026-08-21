@@ -5,6 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProposals, isPropostaSemValor } from '@/hooks/useConsorcioPostMeeting';
 import { usePendingRegistrations } from '@/hooks/useConsorcioPendingRegistrations';
+import { useTermosByPending, useTermosByProposal } from '@/hooks/useConsorcioTermos';
+import { cadastroTravadoSemAssinatura } from '@/lib/consorcioLiberacaoCadastro';
+
 import { useConsorcioCards } from '@/hooks/useConsorcio';
 import { useConsorcioR1Funnel } from '@/hooks/useConsorcioR1Funnel';
 import {
