@@ -130,9 +130,22 @@ interface Props {
   now: number;
   onStatusChange: (status: WaConversationStatus) => void;
   children?: ReactNode; // composer
+  /** Ação à esquerda do cabeçalho (ex. voltar para a lista em tela pequena). */
+  acaoVoltar?: ReactNode;
+  /** Ações à direita do cabeçalho (ex. abrir painel do contato em tela menor). */
+  acoesCabecalho?: ReactNode;
 }
 
-export function ConversationThread({ conversation, messages, now, onStatusChange, children }: Props) {
+export function ConversationThread({
+  conversation,
+  messages,
+  now,
+  onStatusChange,
+  children,
+  acaoVoltar,
+  acoesCabecalho,
+}: Props) {
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasNearBottomRef = useRef(true);
   const windowInfo = get24hWindow(conversation.last_inbound_at, now);
