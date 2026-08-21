@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
 import { AlertTriangle, Check, ExternalLink, Link2, Loader2, Lock, Search } from "lucide-react";
 import {
   Dialog,
