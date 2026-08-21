@@ -13,6 +13,7 @@ import {
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
+import { gerarCronogramaSeFaltando } from '@/lib/consorcioCronograma';
 import { toast } from 'sonner';
 import { fetchAllPages } from '@/lib/supabasePaginacao';
 
@@ -400,7 +401,9 @@ export function useCreateConsorcioCard() {
       // Lookup produto cadastrado para usar cronograma de comissão customizado
       const ctxComissao = await getProdutoComissaoContext(input.valor_credito, input.tipo_produto);
 
-      for (let i = 1; i <= input.prazo_meses; i++) {
+      // Sem dia de vencimento ("A definir" até a Embracon responder) não há data
+      // confiável: o cronograma é gerado depois, por gerarCronogramaSeFaltando().
+      for (let i = 1; input.dia_vencimento && i <= input.prazo_meses; i++) {
         let dataVencimento: Date;
         if (i === 1) {
           // Parcela 1 = data de contratação (já paga no ato)
@@ -412,7 +415,7 @@ export function useCreateConsorcioCard() {
           const anoAlvo = dataContratacao.getFullYear() + Math.floor(mesAlvo / 12);
           const mesNormalizado = ((mesAlvo % 12) + 12) % 12;
           const ultimoDia = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
-          const diaAjustado = Math.min(input.dia_vencimento, ultimoDia);
+          const diaAjustado = Math.min(Number(input.dia_vencimento), ultimoDia);
           dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
         }
         const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i, ctxComissao);

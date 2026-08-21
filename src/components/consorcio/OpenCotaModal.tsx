@@ -988,7 +988,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
                       <FormField control={form.control} name="dia_vencimento" rules={{
-                        validate: (v) => v == null || v === '' || (Number(v) >= 1 && Number(v) <= 31) || 'Informe um dia entre 1 e 31',
+                        validate: (v) => v == null || (Number(v) >= 1 && Number(v) <= 31) || 'Informe um dia entre 1 e 31',
                       }} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Dia de Vencimento</FormLabel>
