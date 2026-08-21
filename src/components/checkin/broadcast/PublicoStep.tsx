@@ -100,8 +100,16 @@ export function PublicoStep({
   onMontar,
 }: Props) {
   const escopoBu = escopo === 'bu';
+  /**
+   * Disparo criado a partir de uma seleção de negócios no CRM: o recorte de quem
+   * recebe já foi feito lá, então este passo é revisão, não configuração.
+   */
+  const emRevisao = dealIdsSelecionados.length > 0;
+  const mostrarNumeros = (publicoPronto ?? jaMontou) === true;
+  const [refinarAberto, setRefinarAberto] = useState(false);
   /** No escopo da BU as listas só existem depois de escolher a BU. */
   const filtrosBloqueados = escopoBu && !bu;
+
   const { data: origens = [], isLoading: origensLoading } = useWaOrigensDisponiveis();
   const { data: estagios = [], isLoading: estagiosLoading } = useWaEstagiosNoEscopo(
     escopo,
