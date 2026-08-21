@@ -359,7 +359,7 @@ export const DADOS_EXEMPLO_TERMO: TermoDados = montarDadosTermoMulti([{
   tipo_contrato: 'normal',
   parcelas_pagas_empresa: 3,
   empresa_paga_parcelas: 'sim',
-});
+}]);
 
 /** Normaliza nome: sem acento, minúsculo, espaços colapsados. */
 export function normalizeNome(v: string): string {
