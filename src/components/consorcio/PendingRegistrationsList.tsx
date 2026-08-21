@@ -689,9 +689,19 @@ function RegistrationRow({
         {variant === 'pendentes' && (reg.checklist_incompleto || reg.documentos_faltando) && (
           <div className="mt-1 flex flex-wrap gap-1">
             {reg.checklist_incompleto && (
-              <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
-                checklist incompleto
-              </Badge>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
+                    cadastro incompleto
+                    {camposCadastroFaltantes(reg as any).length > 0
+                      ? ` (${camposCadastroFaltantes(reg as any).length})`
+                      : ''}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {resumoCamposFaltantes(camposCadastroFaltantes(reg as any))}
+                </TooltipContent>
+              </Tooltip>
             )}
             {reg.documentos_faltando && (
               <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
@@ -700,6 +710,7 @@ function RegistrationRow({
             )}
           </div>
         )}
+
         <div className="text-xs text-muted-foreground">
           {doc || '—'}
           {sociosLabel ? ` · ${sociosLabel}` : ''}
