@@ -19,6 +19,10 @@ export const CONSORCIO_LABELS = {
   cotasCadastradas: 'Cotas Cadastradas',
   cotas: 'Cotas',
   lancarVenda: 'Lançar Venda',
+  convVendasReuniao: 'Conv. Vendas / Reunião',
+  conversaoVendasReuniao: 'Conversão Vendas / Reunião',
+  /** Uso em textos corridos e tooltips ("÷ Reuniões Realizadas"). */
+  reuniao: 'Reunião',
 } as const;
 
 /** Rótulos antigos → novos. A chave é o texto legado que ainda aparece no código/banco. */
@@ -31,6 +35,8 @@ const MAPA_ROTULOS: Record<string, string> = {
   'Cadastros Pendentes': CONSORCIO_LABELS.cotasAFazer,
   'Cadastradas': CONSORCIO_LABELS.cotasCadastradas,
   'Cotas': CONSORCIO_LABELS.cotas,
+  'Conv. Vendas / R1': CONSORCIO_LABELS.convVendasReuniao,
+  'Conversão Vendas / R1': CONSORCIO_LABELS.conversaoVendasReuniao,
 };
 
 /**
