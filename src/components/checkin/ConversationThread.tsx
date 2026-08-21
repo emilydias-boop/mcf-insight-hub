@@ -256,7 +256,17 @@ export function ConversationThread({ conversation, messages, now, onStatusChange
             Nenhuma mensagem ainda. Envie a primeira!
           </div>
         )}
-        {messages.map((m) => {
+        {itens.map((item) => {
+          if (item.tipo === 'separador') {
+            return (
+              <div key={item.id} className="flex justify-center my-1">
+                <span className="text-xs text-muted-foreground bg-muted rounded-full px-3 py-1 select-none">
+                  {item.rotulo}
+                </span>
+              </div>
+            );
+          }
+          const m = item.mensagem;
           const outbound = m.direction === 'outbound';
           const failed = outbound && m.status === 'failed';
           const hasMedia = !!m.media_path;
