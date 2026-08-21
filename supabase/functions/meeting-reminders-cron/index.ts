@@ -37,6 +37,59 @@ function formatPtBR(date: Date): { date: string; time: string } {
   };
 }
 
+// Espelha um envio de WhatsApp na thread do MCF - Atendimento (wa_messages).
+// Só WhatsApp entra aqui: lembrete de e-mail nunca deve virar mensagem na conversa.
+// Nunca lança: se o espelho falhar, o lembrete já foi enviado e permanece registrado
+// em meeting_reminders_log (fonte de verdade do envio não muda).
+async function espelharNaThreadWa(
+  supabase: any,
+  params: {
+    telefoneBruto: string | null | undefined;
+    dealId: string | null | undefined;
+    nomeContato: string | null | undefined;
+    corpo: string;
+    remetenteNome: string;
+    sucesso: boolean;
+    sid?: string | null;
+    erro?: string | null;
+  },
+): Promise<void> {
+  try {
+    if (!params.telefoneBruto) return;
+
+    // Normaliza pela mesma RPC usada pelo resto do módulo WhatsApp.
+    const { data: e164, error: e164Err } = await supabase.rpc('wa_e164_br', { _raw: params.telefoneBruto });
+    if (e164Err || !e164) {
+      console.warn('[WA-MIRROR] telefone não normalizável, espelho ignorado:', e164Err?.message || params.telefoneBruto);
+      return;
+    }
+
+    const { data: conversationId, error: convErr } = await supabase.rpc('wa_get_or_create_conversation', {
+      _phone_e164: e164,
+      _deal_id: params.dealId ?? null,
+      _contact_name: params.nomeContato ?? null,
+    });
+    if (convErr || !conversationId) {
+      console.warn('[WA-MIRROR] falha ao obter conversa:', convErr?.message);
+      return;
+    }
+
+    const { error: insErr } = await supabase.from('wa_messages').insert({
+      conversation_id: conversationId,
+      direction: 'outbound',
+      body: params.corpo,
+      twilio_message_sid: params.sid || null,
+      sent_by_user_id: null, // envio automático, sem humano
+      sent_by_name: params.remetenteNome,
+      status: params.sucesso ? 'sent' : 'failed',
+      error_message: params.sucesso ? null : (params.erro || null),
+    });
+    if (insErr) console.warn('[WA-MIRROR] falha ao inserir wa_messages:', insErr.message);
+  } catch (e: any) {
+    console.warn('[WA-MIRROR] erro inesperado no espelhamento:', e?.message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
