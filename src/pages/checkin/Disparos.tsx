@@ -515,6 +515,9 @@ function CriarDisparoDialog({
             busDisponiveis={busDisponiveis}
             podeUsarBu={podeUsarBu}
             publicoMontadoEm={publicoMontadoEm}
+            dealIdsSelecionados={dealIds}
+            onDescartarSelecao={handleDescartarSelecao}
+            descartandoSelecao={montar.isPending || atualizar.isPending}
             onEscopoChange={handleEscopoChange}
             onBuChange={handleBuChange}
             onStageIdsChange={handleStageIdsChange}
