@@ -11,10 +11,13 @@ import { toast } from 'sonner';
  * (`parcela_inicial_paga_em` / `parcela_inicial_paga_por`) exatamente para não
  * acordar nada financeiro:
  *  - NÃO usa `consortium_installments` nº 1 pago (alimenta comissão/payout/KPI);
- *  - NÃO grava em `consortium_cards` (o trigger de webhook de saída observa
- *    `status`, `valor_credito`, `parcelas_pagas_empresa`, `grupo`, `cota`, etc.);
  *  - NÃO gera título, boleto, cobrança nem previsão de caixa.
+ *
+ * A única escrita em `consortium_cards` é a conversão reserva → contratação
+ * (`tipo_registro` / `data_contratacao`), campos fora da lista observada pelo
+ * trigger de webhook de saída — ver `useMarcarParcelaInicial`.
  */
+
 export interface CotaCadastrada {
   id: string;
   nome: string;
