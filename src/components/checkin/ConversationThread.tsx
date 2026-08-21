@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, isSameYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, Check, CheckCheck, Clock } from 'lucide-react';
 import { Download, FileText, Loader2 } from 'lucide-react';
