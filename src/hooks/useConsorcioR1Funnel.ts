@@ -197,19 +197,68 @@ export function useConsorcioR1Funnel(
             .range(from, to),
       );
 
+      // 3.1) Fallback de identidade em LOTE (nunca por linha):
+      //      muitos attendees nascem sem attendee_name/attendee_phone (webhook,
+      //      criação via slot). O vínculo contact_id/deal_id continua íntegro,
+      //      então resolvemos nome/telefone a partir de crm_contacts e crm_deals.
+      const contactIds = Array.from(
+        new Set(rows.map((a) => a.contact_id).filter(Boolean) as string[]),
+      );
+      const dealIds = Array.from(
+        new Set(rows.map((a) => a.deal_id).filter(Boolean) as string[]),
+      );
+
+      const [contactRows, dealRows] = await Promise.all([
+        contactIds.length
+          ? fetchAllByIds<any>(contactIds, (lote, from, to) =>
+              supabase
+                .from('crm_contacts')
+                .select('id, name, phone')
+                .in('id', lote)
+                .order('id', { ascending: true })
+                .range(from, to),
+            )
+          : Promise.resolve([] as any[]),
+        dealIds.length
+          ? fetchAllByIds<any>(dealIds, (lote, from, to) =>
+              supabase
+                .from('crm_deals')
+                .select('id, name')
+                .in('id', lote)
+                .order('id', { ascending: true })
+                .range(from, to),
+            )
+          : Promise.resolve([] as any[]),
+      ]);
+
+      const contactById = new Map<string, any>(contactRows.map((c) => [c.id, c]));
+      const dealNameById = new Map<string, string>(dealRows.map((d) => [d.id, d.name]));
+
+      /** '' e '   ' contam como ausente — `||` sozinho deixava passar espaços. */
+      const limpo = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
       const now = Date.now();
       const participants: R1FunnelParticipant[] = rows.map((a) => {
         const slot = slotById.get(a.meeting_slot_id);
         const status = String(a.status || '').toLowerCase();
         const scheduledAt = slot?.scheduled_at || '';
         const passou = scheduledAt ? new Date(scheduledAt).getTime() < now : false;
+        const contato = a.contact_id ? contactById.get(a.contact_id) : null;
+        // attendee → contato → negócio → '—'
+        const nome =
+          limpo(a.attendee_name) ||
+          limpo(contato?.name) ||
+          (a.deal_id ? limpo(dealNameById.get(a.deal_id)) : '') ||
+          '—';
+        // attendee → contato → '' (a tela já exibe '—' quando vazio)
+        const telefone = limpo(a.attendee_phone) || limpo(contato?.phone) || '';
         return {
           id: a.id,
           meeting_slot_id: a.meeting_slot_id,
           deal_id: a.deal_id || null,
           contact_id: a.contact_id || null,
-          lead_name: a.attendee_name || '—',
-          lead_phone: a.attendee_phone || '',
+          lead_name: nome,
+          lead_phone: telefone,
           scheduled_at: scheduledAt,
           closer_name: (slot?.closer_id && closerName.get(slot.closer_id)) || '—',
           status,
@@ -222,6 +271,7 @@ export function useConsorcioR1Funnel(
           outcome_reason_note: a.outcome_reason_note || null,
         };
       });
+
 
       const deduped = dedupComCap(participants);
       deduped.sort((a, b) => (b.scheduled_at || '').localeCompare(a.scheduled_at || ''));
