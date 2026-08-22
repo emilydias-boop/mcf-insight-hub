@@ -10,6 +10,8 @@ import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProd
 import { formatBRLInput } from '@/lib/brlMask';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
+import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+
 import {
   MAX_CARTAS_POR_PROPOSTA,
   PARCELAS_MARCAVEIS,
@@ -40,7 +42,13 @@ export function CartasProposalEditor({
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
   const { data: objetivoOptions = [] } = useConsorcioObjetivoOptions();
-  const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
+  const { data: categoriaCatalogo = [] } = useConsorcioCategoriaOptions();
+  // Mesma fonte do formulário completo (OpenCotaModal): catálogo quando houver
+  // opções ativas, senão a lista canônica em código (inside / life).
+  const categoriaOptions = categoriaCatalogo.length > 0
+    ? categoriaCatalogo.map(o => ({ name: o.name, label: o.label }))
+    : CATEGORIA_OPTIONS.map(o => ({ name: o.value, label: o.label }));
+
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
