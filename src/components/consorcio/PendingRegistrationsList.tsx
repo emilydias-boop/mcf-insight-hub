@@ -82,15 +82,8 @@ const STATUS_LABELS: Record<string, string> = {
 /** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
 const SEM_COTA = ['aguardando_abertura'];
 
-/**
- * Idade do cadastro na fila: hoje − (aceite_date ?? created_at) — a mesma data
- * que a coluna "Solicitado em" exibe. `null` quando as duas datas faltam.
- */
-function idadeFilaDias(reg: { aceite_date?: string | null; created_at?: string | null }): number | null {
-  const base = reg.aceite_date || (reg.created_at ? String(reg.created_at).slice(0, 10) : null);
-  if (!base) return null;
-  return diasParados(base);
-}
+
+/** Ordem de processo: o que exige ação primeiro em `asc`. */
 
 
 
