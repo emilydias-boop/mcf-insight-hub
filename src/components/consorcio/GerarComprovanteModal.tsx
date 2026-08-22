@@ -36,13 +36,30 @@ function expiraEm2Anos() {
   return d.toISOString();
 }
 
+/** Linha do cronograma no modal — carrega id/status para poder gravar na parcela. */
+type LinhaCronograma = ComprovanteParcela & { id?: string; status?: string | null };
+
+/** Parcela paga não é sobrescrita: bloqueia edição e avisa na linha. */
+const parcelaTravada = (l: LinhaCronograma) => l.status === 'pago';
+
 export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarCota }: GerarComprovanteModalProps) {
   const { data: modelos = [], isLoading: loadingModelos } = useTermoModelos(true, 'comprovante_cadastro');
   const createTermo = useCreateTermo();
+  const queryClient = useQueryClient();
   const [gerado, setGerado] = useState<ConsorcioTermo | null>(null);
-  /** Cronograma conferido pelo operador — nunca é gravado em consortium_installments. */
-  const [linhas, setLinhas] = useState<ComprovanteParcela[] | null>(null);
+  /**
+   * Cronograma editado pelo operador. É neste momento (cota já criada na Embracon)
+   * que existem as datas reais e a definição de quem paga cada parcela — então o
+   * que for editado aqui é gravado em `consortium_installments`.
+   */
+  const [linhas, setLinhas] = useState<LinhaCronograma[] | null>(null);
   const [valoresTexto, setValoresTexto] = useState<Record<number, string>>({});
+  /** Bloco de completude da cota (contrato, dia de vencimento e valores do plano). */
+  const [contrato, setContrato] = useState('');
+  const [diaVenc, setDiaVenc] = useState('');
+  const [p1a12, setP1a12] = useState('');
+  const [pDemais, setPDemais] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['consorcio-card-comprovante', cardId],
@@ -52,7 +69,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
         supabase.from('consortium_cards').select('*').eq('id', cardId).single(),
         supabase
           .from('consortium_installments')
-          .select('numero_parcela, data_vencimento, tipo')
+          .select('id, numero_parcela, data_vencimento, tipo, status')
           .eq('card_id', cardId)
           .lte('numero_parcela', 12)
           .order('numero_parcela'),
@@ -70,7 +87,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
         .maybeSingle();
       return {
         card: card as any,
-        parcelas: (parcelas || []) as unknown as ComprovanteParcela[],
+        parcelas: (parcelas || []) as unknown as LinhaCronograma[],
         dealId: (pend as any)?.deal_id ?? null,
       };
     },
@@ -88,6 +105,15 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   const card = data?.card;
   const parcelasBanco = data?.parcelas || [];
 
+  // Semeia os campos do bloco de completude a partir da cota.
+  useEffect(() => {
+    if (!open || !card) return;
+    setContrato(String(card.contrato_embracon || ''));
+    setDiaVenc(card.dia_vencimento ? String(card.dia_vencimento) : '');
+    setP1a12(card.parcela_1a_12a ? numberToBRLInput(Number(card.parcela_1a_12a)) : '');
+    setPDemais(card.parcela_demais ? numberToBRLInput(Number(card.parcela_demais)) : '');
+  }, [open, card?.id, card?.contrato_embracon, card?.dia_vencimento, card?.parcela_1a_12a, card?.parcela_demais]);
+
   // Semeia a tabela editável a partir do banco (vencimento + tipo) e do card (valor).
   // `open` entra nas deps porque o modal fica montado no drawer: sem isso, a segunda
   // abertura não semeava nada (card.id e parcelasBanco.length não mudam) e a tabela sumia.
@@ -98,6 +124,8 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       .filter((p) => p.numero_parcela <= limite)
       .sort((a, b) => a.numero_parcela - b.numero_parcela)
       .map((p) => ({
+        id: p.id,
+        status: p.status,
         numero_parcela: p.numero_parcela,
         data_vencimento: p.data_vencimento,
         tipo: p.tipo,
@@ -109,7 +137,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
 
   const parcelas = linhas ?? parcelasBanco;
 
-  const atualizarLinha = (numero: number, patch: Partial<ComprovanteParcela>) =>
+  const atualizarLinha = (numero: number, patch: Partial<LinhaCronograma>) =>
     setLinhas((prev) => (prev || []).map((p) => (p.numero_parcela === numero ? { ...p, ...patch } : p)));
 
   const faltandoCard = useMemo(() => (card ? validarDadosComprovante(card, parcelas) : []), [card, parcelas]);
@@ -131,6 +159,97 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
   const dados = useMemo(() => (card ? montarDadosComprovante(card, parcelas) : null), [card, parcelas]);
   const preview = useMemo(() => (modelo && dados ? renderTermo(modelo.conteudo, dados) : ''), [modelo, dados]);
 
+  const semParcelas = parcelasBanco.length === 0;
+  const faltamCamposCota =
+    !String(contrato || '').trim() || !Number(diaVenc) || !parseBRLInput(p1a12) || semParcelas;
+
+  const invalidar = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['consorcio-card-comprovante', cardId] });
+    await queryClient.invalidateQueries({ queryKey: ['consorcio-card-detail', cardId] });
+    await queryClient.invalidateQueries({ queryKey: ['consorcio-cards'] });
+  };
+
+  /**
+   * Grava contrato, dia de vencimento e valores do plano na cota.
+   * Nenhum desses campos é observado pelo trigger de webhook de saída do consórcio,
+   * então nada é enviado para FinanceHub / MCF Pay / Asaas.
+   */
+  const salvarDadosCota = async () => {
+    const dia = Number(diaVenc);
+    if (dia && (dia < 1 || dia > 31)) {
+      toast.error('Dia de vencimento deve estar entre 1 e 31');
+      return false;
+    }
+    const { error } = await supabase
+      .from('consortium_cards')
+      .update({
+        contrato_embracon: String(contrato || '').trim() || null,
+        dia_vencimento: dia || null,
+        parcela_1a_12a: parseBRLInput(p1a12) || null,
+        parcela_demais: parseBRLInput(pDemais) || null,
+      })
+      .eq('id', cardId);
+    if (error) {
+      toast.error('Erro ao salvar dados da cota: ' + error.message);
+      return false;
+    }
+    return true;
+  };
+
+  const handleSalvarCota = async () => {
+    setSalvando(true);
+    try {
+      if (await salvarDadosCota()) {
+        await invalidar();
+        toast.success('Dados da cota salvos');
+      }
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  /** Reaproveita o gerador oficial da cota (`gerarCronogramaSeFaltando`) — não duplica. */
+  const handleGerarParcelas = async () => {
+    setSalvando(true);
+    try {
+      if (!(await salvarDadosCota())) return;
+      const qtd = await gerarCronogramaSeFaltando(cardId);
+      await invalidar();
+      toast.success(qtd > 0 ? `${qtd} parcelas geradas` : 'A cota já tinha parcelas geradas');
+    } catch (e: any) {
+      toast.error('Erro ao gerar parcelas: ' + (e?.message || e));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  /** Grava vencimento e quem paga de cada parcela editável (paga nunca é sobrescrita). */
+  const persistirCronograma = async () => {
+    const editaveis = (linhas || []).filter((l) => l.id && !parcelaTravada(l));
+    for (const l of editaveis) {
+      const original = parcelasBanco.find((p) => p.id === l.id);
+      if (original && original.data_vencimento === l.data_vencimento && original.tipo === l.tipo) continue;
+      const { error } = await supabase
+        .from('consortium_installments')
+        .update({ data_vencimento: l.data_vencimento, tipo: l.tipo })
+        .eq('id', l.id!);
+      if (error) throw error;
+    }
+  };
+
+  const handleSalvarCronograma = async () => {
+    setSalvando(true);
+    try {
+      await persistirCronograma();
+      await invalidar();
+      toast.success('Cronograma salvo na cota');
+    } catch (e: any) {
+      toast.error('Erro ao salvar cronograma: ' + (e?.message || e));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const copyLink = async (token: string) => {
     await navigator.clipboard.writeText(termoPublicUrl(token));
     toast.success('Link copiado');
@@ -138,6 +257,12 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
 
   const handleGerar = async () => {
     if (!card || !modelo || !dados || faltando.length > 0) return;
+    try {
+      await persistirCronograma();
+    } catch (e: any) {
+      toast.error('Erro ao salvar cronograma na cota: ' + (e?.message || e));
+      return;
+    }
     const termo = await createTermo.mutateAsync({
       tipo: 'comprovante_cadastro',
       cardId: card.id,
@@ -148,8 +273,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       conteudoRenderizado: preview,
       expiresAt: expiraEm2Anos(),
     });
+    await invalidar();
     setGerado(termo);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
