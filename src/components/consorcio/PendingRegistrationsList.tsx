@@ -233,14 +233,18 @@ export function PendingRegistrationsList({
 
 
 
-  /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
+  /**
+   * Maior número de "dias parados" entre as linhas da fila LIBERADA (as mesmas
+   * que exibem "aguardando abertura há") — mesma âncora (created_at) e mesmos
+   * limiares (2/6) do selo da linha. É o número que dispara ação.
+   */
   const maisAntigoFila = useMemo(() => {
     const idades = registrations
-      .filter((r) => r.status === 'aguardando_abertura')
-      .map((r) => idadeFilaDias(r))
+      .filter((r) => r.status === 'aguardando_abertura' && !estaTravado(r))
+      .map((r) => diasDesde(r.created_at))
       .filter((d): d is number => d != null);
     return idades.length ? Math.max(...idades) : null;
-  }, [registrations]);
+  }, [registrations, estaTravado]);
   const deleteMut = useDeletePendingRegistration();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
