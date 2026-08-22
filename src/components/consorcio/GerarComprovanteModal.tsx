@@ -334,21 +334,81 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                       <li key={f.campo}>{f.label}</li>
                     ))}
                   </ul>
-                  <p className="mt-2">
-                    {faltandoCard.length > 0
-                      ? 'Complete os dados da cota (inclusive o número do contrato Embracon) e volte aqui.'
-                      : 'Preencha as parcelas destacadas no cronograma abaixo para liberar a emissão.'}
-                  </p>
+                  <p className="mt-2">Preencha abaixo, sem sair desta tela.</p>
                 </AlertDescription>
               </Alert>
             )}
+
+            {faltamCamposCota && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <div>
+                  <Label className="text-sm font-medium">Completar dados da cota</Label>
+                  <p className="text-xs text-muted-foreground">
+                    A cota já existe na Embracon: é agora que o contrato, o dia de vencimento e os valores do plano são
+                    conhecidos. O que você preencher aqui é gravado na cota.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Nº do contrato Embracon</Label>
+                    <Input className="h-9" value={contrato} onChange={(e) => setContrato(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Dia de vencimento (1–31)</Label>
+                    <Input
+                      className="h-9"
+                      inputMode="numeric"
+                      value={diaVenc}
+                      onChange={(e) => setDiaVenc(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Parcela 1ª à 12ª</Label>
+                    <Input
+                      className="h-9"
+                      inputMode="numeric"
+                      value={p1a12}
+                      onChange={(e) => setP1a12(formatBRLInput(e.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Demais parcelas</Label>
+                    <Input
+                      className="h-9"
+                      inputMode="numeric"
+                      value={pDemais}
+                      onChange={(e) => setPDemais(formatBRLInput(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSalvarCota} disabled={salvando}>
+                    {salvando && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                    Salvar dados da cota
+                  </Button>
+                  {semParcelas && (
+                    <Button size="sm" onClick={handleGerarParcelas} disabled={salvando || !Number(diaVenc)}>
+                      {salvando && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                      Gerar as 12 primeiras parcelas
+                    </Button>
+                  )}
+                </div>
+                {semParcelas && !Number(diaVenc) && (
+                  <p className="text-xs text-muted-foreground">
+                    Informe o dia de vencimento para liberar a geração das parcelas.
+                  </p>
+                )}
+              </div>
+            )}
+
             {linhas && linhas.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Cronograma — confira antes de emitir</Label>
+                <Label className="text-sm font-medium">Cronograma da cota</Label>
                 <p className="text-xs text-muted-foreground">
-                  Ajustes aqui valem só para este comprovante. Para mudar a parcela de verdade, use a aba Parcelas da
-                  cota.
+                  O que você editar aqui altera a cota: vencimento e quem paga são gravados na parcela. Parcelas já
+                  pagas ficam bloqueadas.
                 </p>
+
                 <div className="rounded-lg border overflow-x-auto max-h-[38vh] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 sticky top-0">
