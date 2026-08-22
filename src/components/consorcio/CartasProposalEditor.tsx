@@ -10,6 +10,8 @@ import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProd
 import { formatBRLInput } from '@/lib/brlMask';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
+import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+
 import {
   MAX_CARTAS_POR_PROPOSTA,
   PARCELAS_MARCAVEIS,
