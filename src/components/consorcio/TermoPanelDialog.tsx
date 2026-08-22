@@ -217,7 +217,7 @@ export function TermoPanelDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
-          {!temPendente && (
+          {!temPendente && !temAssinado && (
             <Button
               onClick={() => {
                 onOpenChange(false);
