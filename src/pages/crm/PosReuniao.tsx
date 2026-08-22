@@ -974,7 +974,7 @@ function TotalCreditoSummary({
   title,
   className,
 }: {
-  propostas: Array<{ valor_credito?: number | null; closer_name?: string | null; created_at?: string | null }>;
+  propostas: Array<{ valor_credito?: number | null; closer_name?: string | null; created_at?: string | null; cartas?: unknown[]; qtd_cartas?: number | null }>;
   title: string;
   className?: string;
 }) {
@@ -999,18 +999,23 @@ function TotalCreditoSummary({
     [propostasAposMin, mesFilter],
   );
 
-  const { total, porCloser, porMes } = useMemo(() => {
+  const { total, totalCartas, porCloser, porMes } = useMemo(() => {
     let total = 0;
+    let totalCartas = 0;
     const map = new Map<string, number>();
-    const mesMap = new Map<string, { valor: number; count: number }>();
+    const mesMap = new Map<string, { valor: number; count: number; cartas: number }>();
     for (const p of filtered) {
       const v = Number(p.valor_credito) || 0;
+      // Mesma fórmula do funil (FunilConsorcioTimeline.tsx:147): soma de
+      // p.cartas?.length, fallback qtd_cartas, fallback 1 (propostas legadas).
+      const nCartas = p.cartas?.length || p.qtd_cartas || 1;
       total += v;
+      totalCartas += nCartas;
       const key = p.closer_name || '— Sem Closer';
       map.set(key, (map.get(key) || 0) + v);
       const mesKey = (p.created_at || '').slice(0, 7) || '— Sem data';
-      const cur = mesMap.get(mesKey) || { valor: 0, count: 0 };
-      mesMap.set(mesKey, { valor: cur.valor + v, count: cur.count + 1 });
+      const cur = mesMap.get(mesKey) || { valor: 0, count: 0, cartas: 0 };
+      mesMap.set(mesKey, { valor: cur.valor + v, count: cur.count + 1, cartas: cur.cartas + nCartas });
     }
     const porCloser = Array.from(map.entries())
       .map(([name, valor]) => ({ name, valor }))
@@ -1018,7 +1023,7 @@ function TotalCreditoSummary({
     const porMes = Array.from(mesMap.entries())
       .map(([mes, v]) => ({ mes, ...v }))
       .sort((a, b) => (a.mes < b.mes ? 1 : -1));
-    return { total, porCloser, porMes };
+    return { total, totalCartas, porCloser, porMes };
   }, [filtered]);
 
   const fmt = (v: number) =>
@@ -1039,7 +1044,7 @@ function TotalCreditoSummary({
             <div className="min-w-[220px]">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
               <p className="text-2xl font-bold text-primary">{fmt(total)}</p>
-              <p className="text-xs text-muted-foreground">{filtered.length} cartas</p>
+              <p className="text-xs text-muted-foreground">{filtered.length} {filtered.length === 1 ? 'venda' : 'vendas'} · {totalCartas} {totalCartas === 1 ? 'carta' : 'cartas'}</p>
             </div>
             <div className="min-w-[180px]">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Filtrar por mês</p>
@@ -1079,7 +1084,7 @@ function TotalCreditoSummary({
                   <div key={m.mes} className="rounded-md border bg-background px-3 py-1.5">
                     <p className="text-[11px] text-muted-foreground leading-tight capitalize">{fmtMes(m.mes)}</p>
                     <p className="text-sm font-semibold leading-tight">{fmt(m.valor)}</p>
-                    <p className="text-[10px] text-muted-foreground leading-tight">{m.count} cartas</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{m.count} {m.count === 1 ? 'venda' : 'vendas'} · {m.cartas} {m.cartas === 1 ? 'carta' : 'cartas'}</p>
                   </div>
                 ))}
               </div>
