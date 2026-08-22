@@ -999,18 +999,23 @@ function TotalCreditoSummary({
     [propostasAposMin, mesFilter],
   );
 
-  const { total, porCloser, porMes } = useMemo(() => {
+  const { total, totalCartas, porCloser, porMes } = useMemo(() => {
     let total = 0;
+    let totalCartas = 0;
     const map = new Map<string, number>();
-    const mesMap = new Map<string, { valor: number; count: number }>();
+    const mesMap = new Map<string, { valor: number; count: number; cartas: number }>();
     for (const p of filtered) {
       const v = Number(p.valor_credito) || 0;
+      // Mesma fórmula do funil (FunilConsorcioTimeline.tsx:147): soma de
+      // p.cartas?.length, fallback qtd_cartas, fallback 1 (propostas legadas).
+      const nCartas = p.cartas?.length || p.qtd_cartas || 1;
       total += v;
+      totalCartas += nCartas;
       const key = p.closer_name || '— Sem Closer';
       map.set(key, (map.get(key) || 0) + v);
       const mesKey = (p.created_at || '').slice(0, 7) || '— Sem data';
-      const cur = mesMap.get(mesKey) || { valor: 0, count: 0 };
-      mesMap.set(mesKey, { valor: cur.valor + v, count: cur.count + 1 });
+      const cur = mesMap.get(mesKey) || { valor: 0, count: 0, cartas: 0 };
+      mesMap.set(mesKey, { valor: cur.valor + v, count: cur.count + 1, cartas: cur.cartas + nCartas });
     }
     const porCloser = Array.from(map.entries())
       .map(([name, valor]) => ({ name, valor }))
@@ -1018,7 +1023,7 @@ function TotalCreditoSummary({
     const porMes = Array.from(mesMap.entries())
       .map(([mes, v]) => ({ mes, ...v }))
       .sort((a, b) => (a.mes < b.mes ? 1 : -1));
-    return { total, porCloser, porMes };
+    return { total, totalCartas, porCloser, porMes };
   }, [filtered]);
 
   const fmt = (v: number) =>
