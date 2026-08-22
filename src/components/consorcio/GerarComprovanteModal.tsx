@@ -420,13 +420,19 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                       </tr>
                     </thead>
                     <tbody>
-                      {linhas.map((p) => (
+                      {linhas.map((p) => {
+                        const travada = parcelaTravada(p);
+                        return (
                         <tr key={p.numero_parcela} className="border-t">
-                          <td className="p-2 text-muted-foreground">{p.numero_parcela}ª</td>
+                          <td className="p-2 text-muted-foreground">
+                            {p.numero_parcela}ª
+                            {travada && <span className="block text-[10px] text-amber-600">paga — bloqueada</span>}
+                          </td>
                           <td className="p-2">
                             <Input
                               type="date"
                               className="h-8"
+                              disabled={travada}
                               value={p.data_vencimento ?? ''}
                               onChange={(e) =>
                                 atualizarLinha(p.numero_parcela, { data_vencimento: e.target.value || null })
@@ -437,6 +443,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                             <Input
                               className="h-8"
                               inputMode="numeric"
+                              disabled={travada}
                               value={valoresTexto[p.numero_parcela] ?? ''}
                               onChange={(e) => {
                                 const masked = formatBRLInput(e.target.value);
@@ -448,6 +455,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                           <td className="p-2">
                             <Select
                               value={p.tipo}
+                              disabled={travada}
                               onValueChange={(v) =>
                                 atualizarLinha(p.numero_parcela, { tipo: v as ComprovanteParcela['tipo'] })
                               }
@@ -462,12 +470,20 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                             </Select>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={handleSalvarCronograma} disabled={salvando}>
+                    {salvando && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                    Salvar cronograma na cota
+                  </Button>
+                </div>
               </div>
             )}
+
             <div className="rounded-lg border bg-card p-5 text-sm max-h-[45vh] overflow-y-auto">
               <TermoMarkdown content={preview} />
             </div>
