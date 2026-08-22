@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { AlertTriangle, Check, Copy, FileBadge, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,6 +21,8 @@ import {
   valorParcelaDoCard,
   type ComprovanteParcela,
 } from '@/lib/consorcioComprovante';
+import { gerarCronogramaSeFaltando } from '@/lib/consorcioCronograma';
+
 
 interface GerarComprovanteModalProps {
   open: boolean;
