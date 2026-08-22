@@ -53,7 +53,7 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { camposCadastroFaltantes, resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
-import { diasParados } from '@/hooks/useConsorcioCotasOrigem';
+import { SeloDiasParados, diasDesde, DIAS_PARADOS_MINIMO, DIAS_PARADOS_VERMELHO } from '@/components/consorcio/SeloDiasParados';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
@@ -62,7 +62,7 @@ import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
-import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
+
 import { CotaCadastradaModal } from '@/components/consorcio/CotaCadastradaModal';
 import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
 import {
@@ -82,15 +82,8 @@ const STATUS_LABELS: Record<string, string> = {
 /** Só `aguardando_abertura` ainda não tem cota — é a fila de trabalho. */
 const SEM_COTA = ['aguardando_abertura'];
 
-/**
- * Idade do cadastro na fila: hoje − (aceite_date ?? created_at) — a mesma data
- * que a coluna "Solicitado em" exibe. `null` quando as duas datas faltam.
- */
-function idadeFilaDias(reg: { aceite_date?: string | null; created_at?: string | null }): number | null {
-  const base = reg.aceite_date || (reg.created_at ? String(reg.created_at).slice(0, 10) : null);
-  if (!base) return null;
-  return diasParados(base);
-}
+
+/** Ordem de processo: o que exige ação primeiro em `asc`. */
 
 
 
@@ -240,14 +233,18 @@ export function PendingRegistrationsList({
 
 
 
-  /** Cadastro mais antigo ainda esperando abertura de cota — é o número que dispara ação. */
+  /**
+   * Maior número de "dias parados" entre as linhas da fila LIBERADA (as mesmas
+   * que exibem "aguardando abertura há") — mesma âncora (created_at) e mesmos
+   * limiares (2/6) do selo da linha. É o número que dispara ação.
+   */
   const maisAntigoFila = useMemo(() => {
     const idades = registrations
-      .filter((r) => r.status === 'aguardando_abertura')
-      .map((r) => idadeFilaDias(r))
+      .filter((r) => r.status === 'aguardando_abertura' && !estaTravado(r))
+      .map((r) => diasDesde(r.created_at))
       .filter((d): d is number => d != null);
     return idades.length ? Math.max(...idades) : null;
-  }, [registrations]);
+  }, [registrations, estaTravado]);
   const deleteMut = useDeletePendingRegistration();
   const declineMut = useDeclinePendingRegistration();
   const undeclineMut = useUndeclinePendingRegistration();
@@ -430,9 +427,9 @@ export function PendingRegistrationsList({
                 <Badge
                   variant="outline"
                   className={`cursor-help text-[10px] tabular-nums ${
-                    maisAntigoFila > 15
+                    maisAntigoFila >= DIAS_PARADOS_VERMELHO
                       ? 'border-destructive/60 bg-destructive/10 text-destructive'
-                      : maisAntigoFila >= 8
+                      : maisAntigoFila >= DIAS_PARADOS_MINIMO
                         ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                         : 'border-border text-muted-foreground'
                   }`}
@@ -442,9 +439,9 @@ export function PendingRegistrationsList({
               </TooltipTrigger>
               <TooltipContent className="max-w-[260px]">
                 <p className="text-xs">
-                  Cadastro aguardando abertura de cota há mais tempo no período, contado da data em
-                  "Solicitado em". Semáforo igual ao de "Dias parados" da etapa 5: âmbar a partir de 8
-                  dias, vermelho acima de 15.
+                  Maior número de "dias parados" entre as linhas da fila liberada (as que exibem
+                  "aguardando abertura há"), contado desde a criação do cadastro — mesma âncora e
+                  mesmos limiares do selo da linha: âmbar a partir de 2 dias, vermelho a partir de 6.
                 </p>
               </TooltipContent>
             </Tooltip>

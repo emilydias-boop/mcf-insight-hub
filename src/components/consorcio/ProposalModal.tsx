@@ -37,8 +37,9 @@ interface ProposalModalProps {
  * Lançamento da venda em UM formulário (decisão do dono):
  *  - Bloco 1 (obrigatório): cartas, marcação das parcelas MCF, detalhes, origem.
  *  - Bloco 2 (opcional): dados cadastrais do cliente + documentos. Se ficar
- *    incompleto, a venda segue para as Cotas a Fazer como cadastro incompleto —
- *    pendência visível, com selo de dias parados.
+ *    incompleto, a venda vai para Termos de Adesão Pendentes (etapa 3) — só
+ *    chega em Cotas a Fazer (etapa 4) depois do termo assinado; o que ficou em
+ *    branco aqui aparece lá como pendência de cadastro, com selo de dias parados.
  */
 export function ProposalModal({
   open, onOpenChange, dealId, dealName, contactName, originId, vendedorName,
@@ -124,7 +125,7 @@ export function ProposalModal({
         }
       } else {
         toast.info(
-          `Venda lançada sem os dados cadastrais — complete depois em ${CONSORCIO_LABELS.cotasAFazer}.`,
+          `Venda lançada sem os dados cadastrais — está em ${CONSORCIO_LABELS.termosPendentes}; complete os dados lá ou depois, em ${CONSORCIO_LABELS.cotasAFazer}.`,
         );
       }
 
