@@ -186,8 +186,9 @@ export function ProposalModal({
                       2. Dados cadastrais do cliente <span className="font-normal text-muted-foreground">(opcional)</span>
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Se ficar em branco ou incompleto, a venda entra em {CONSORCIO_LABELS.cotasAFazer} como
-                      cadastro incompleto — a pendência fica visível, com selo de dias parados.
+                      A venda entra em {CONSORCIO_LABELS.termosPendentes}. Depois do termo assinado ela vai
+                      para {CONSORCIO_LABELS.cotasAFazer}, e o que ficar em branco aqui aparece lá como
+                      pendência de cadastro, com selo de dias parados.
                     </p>
                   </div>
                   {cadastroAberto ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
