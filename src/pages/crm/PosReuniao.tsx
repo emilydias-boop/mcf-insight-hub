@@ -1044,7 +1044,7 @@ function TotalCreditoSummary({
             <div className="min-w-[220px]">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
               <p className="text-2xl font-bold text-primary">{fmt(total)}</p>
-              <p className="text-xs text-muted-foreground">{filtered.length} cartas</p>
+              <p className="text-xs text-muted-foreground">{filtered.length} {filtered.length === 1 ? 'venda' : 'vendas'} · {totalCartas} {totalCartas === 1 ? 'carta' : 'cartas'}</p>
             </div>
             <div className="min-w-[180px]">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Filtrar por mês</p>
