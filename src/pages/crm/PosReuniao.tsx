@@ -974,7 +974,7 @@ function TotalCreditoSummary({
   title,
   className,
 }: {
-  propostas: Array<{ valor_credito?: number | null; closer_name?: string | null; created_at?: string | null }>;
+  propostas: Array<{ valor_credito?: number | null; closer_name?: string | null; created_at?: string | null; cartas?: unknown[]; qtd_cartas?: number | null }>;
   title: string;
   className?: string;
 }) {
