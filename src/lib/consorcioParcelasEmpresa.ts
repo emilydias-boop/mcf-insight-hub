@@ -55,7 +55,7 @@ export function getParcelasEmpresa(input: GetParcelasEmpresaInput): ParcelaEmpre
     } else {
       isEmpresa = i <= qtd;
     }
-    if (isEmpresa) out.push({ numero: i, valor: valorParcela });
+    if (isEmpresa) out.push({ numero: i, valor: valorDaParcela(i) });
   }
   return out;
 }
