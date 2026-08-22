@@ -62,6 +62,7 @@ export function TermoPanelDialog({
   };
 
   const temPendente = !isComprovante && termos.some((t) => t.status === 'pendente');
+  const temAssinado = !isComprovante && termos.some((t) => t.status === 'assinado');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,7 +217,7 @@ export function TermoPanelDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
-          {!temPendente && (
+          {!temPendente && !temAssinado && (
             <Button
               onClick={() => {
                 onOpenChange(false);
