@@ -203,8 +203,9 @@ export function ProposalModal({
 
           {pendencias && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-              O cadastro está incompleto. A venda será lançada e aparecerá em {CONSORCIO_LABELS.cotasAFazer} como
-              pendência de cadastro.
+              O cadastro está incompleto. A venda será lançada e ficará em {CONSORCIO_LABELS.termosPendentes};
+              após a assinatura do termo, entra em {CONSORCIO_LABELS.cotasAFazer} com a pendência de cadastro
+              sinalizada.
             </div>
           )}
         </div>
