@@ -535,6 +535,13 @@ export function PendingRegistrationsList({
             registrationId={completarId}
             mode="edit"
             focusPlano
+            onSaved={() => {
+              if (voltarCadastradaId) {
+                const id = voltarCadastradaId;
+                setVoltarCadastradaId(null);
+                setCadastradaId(id);
+              }
+            }}
           />
         )}
         {cadastradaId && (
@@ -542,7 +549,10 @@ export function PendingRegistrationsList({
             open={!!cadastradaId}
             onOpenChange={(o) => !o && setCadastradaId(null)}
             registrationId={cadastradaId}
-            onAbrirFormularioCompleto={() => setOpenId(cadastradaId)}
+            onAbrirFormularioCompleto={() => {
+              setVoltarCadastradaId(cadastradaId);
+              setCompletarId(cadastradaId);
+            }}
           />
         )}
         {dossieId && (
