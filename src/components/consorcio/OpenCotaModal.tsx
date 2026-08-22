@@ -99,9 +99,11 @@ interface OpenCotaModalProps {
   startEditing?: boolean;
   /** Rola até o bloco "Dados da Cota" ao abrir. */
   focusPlano?: boolean;
+  /** Chamado após salvar no modo `edit` (usado para voltar ao modal de origem). */
+  onSaved?: () => void;
 }
 
-export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false }: OpenCotaModalProps) {
+export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false, onSaved }: OpenCotaModalProps) {
   const editOnly = mode === 'edit';
   const isViewMode = mode === 'view' || editOnly;
   const [isEditing, setIsEditing] = useState(startEditing || editOnly);
@@ -582,8 +584,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         } : {}),
       },
     });
-    if (editOnly) onOpenChange(false);
-    else setIsEditing(false);
+    if (editOnly) {
+      onOpenChange(false);
+      onSaved?.();
+    } else setIsEditing(false);
   };
 
   return (
