@@ -53,7 +53,7 @@ import {
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { camposCadastroFaltantes, resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
-import { diasParados } from '@/hooks/useConsorcioCotasOrigem';
+import { SeloDiasParados, diasDesde, DIAS_PARADOS_MINIMO, DIAS_PARADOS_VERMELHO } from '@/components/consorcio/SeloDiasParados';
 import { loadXLSX } from '@/lib/lazyExport';
 import { isInPeriod, PENDING_REGISTRATION_ALL_STATUSES } from '@/components/consorcio/FunilConsorcioTimeline';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
@@ -62,7 +62,7 @@ import { useTableSortUrl } from '@/hooks/useTableSortUrl';
 import { ordenarPor } from '@/lib/ordenacaoTabela';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 import { FilaDuasListas } from '@/components/consorcio/FilaDuasListas';
-import { SeloDiasParados } from '@/components/consorcio/SeloDiasParados';
+
 import { CotaCadastradaModal } from '@/components/consorcio/CotaCadastradaModal';
 import { DossieCadastroDialog } from '@/components/consorcio/DossieCadastroDialog';
 import {
