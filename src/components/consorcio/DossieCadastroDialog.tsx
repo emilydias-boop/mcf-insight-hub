@@ -134,6 +134,8 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
             tipo_contrato: reg.tipo_contrato,
             valor_credito: reg.valor_credito,
             empresa_paga_parcelas: reg.empresa_paga_parcelas,
+            parcela_1a_12a: reg.parcela_1a_12a,
+            parcela_demais: reg.parcela_demais,
           })
         : [],
     [reg],
