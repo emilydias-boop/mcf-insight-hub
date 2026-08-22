@@ -119,7 +119,7 @@ export function ProposalModal({
 
         if (!cliente.checklistOk || !cliente.docsOk) {
           toast.warning(
-            `Venda lançada com cadastro incompleto — vai aparecer em ${CONSORCIO_LABELS.cotasAFazer} como pendência.`,
+            `Venda lançada e em ${CONSORCIO_LABELS.termosPendentes}, aguardando a assinatura do termo. O cadastro incompleto ficará marcado como pendência quando ela chegar em ${CONSORCIO_LABELS.cotasAFazer}.`,
           );
         }
       } else {
