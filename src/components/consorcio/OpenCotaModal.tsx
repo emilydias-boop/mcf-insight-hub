@@ -582,8 +582,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         } : {}),
       },
     });
-    if (editOnly) onOpenChange(false);
-    else setIsEditing(false);
+    if (editOnly) {
+      onOpenChange(false);
+      onSaved?.();
+    } else setIsEditing(false);
   };
 
   return (
