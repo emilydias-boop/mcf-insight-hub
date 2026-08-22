@@ -324,21 +324,6 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
           </div>
         ) : (
           <div className="space-y-4">
-            {faltando.length > 0 && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Dados obrigatórios faltando</AlertTitle>
-                <AlertDescription>
-                  <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                    {faltando.map((f) => (
-                      <li key={f.campo}>{f.label}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2">Preencha abaixo, sem sair desta tela.</p>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {faltamCamposCota && (
               <div className="space-y-3 rounded-lg border p-3">
                 <div>
@@ -350,11 +335,17 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Nº do contrato Embracon</Label>
+                    <Label className="text-xs">
+                      Nº do contrato Embracon{' '}
+                      {!String(contrato || '').trim() && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input className="h-9" value={contrato} onChange={(e) => setContrato(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Dia de vencimento (1–31)</Label>
+                    <Label className="text-xs">
+                      Dia de vencimento (1–31){' '}
+                      {!Number(diaVenc) && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input
                       className="h-9"
                       inputMode="numeric"
@@ -363,7 +354,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Parcela 1ª à 12ª</Label>
+                    <Label className="text-xs">
+                      Parcela 1ª à 12ª{' '}
+                      {!parseBRLInput(p1a12) && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input
                       className="h-9"
                       inputMode="numeric"
@@ -422,6 +416,8 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                     <tbody>
                       {linhas.map((p) => {
                         const travada = parcelaTravada(p);
+                        const semValor = !travada && !Number(p.valor);
+                        const semVenc = !travada && !p.data_vencimento;
                         return (
                         <tr key={p.numero_parcela} className="border-t">
                           <td className="p-2 text-muted-foreground">
@@ -438,6 +434,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                                 atualizarLinha(p.numero_parcela, { data_vencimento: e.target.value || null })
                               }
                             />
+                            {semVenc && <span className="block text-[10px] text-amber-600 mt-0.5">obrigatório</span>}
                           </td>
                           <td className="p-2">
                             <Input
@@ -451,6 +448,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                                 atualizarLinha(p.numero_parcela, { valor: parseBRLInput(masked) });
                               }}
                             />
+                            {semValor && <span className="block text-[10px] text-amber-600 mt-0.5">obrigatório</span>}
                           </td>
                           <td className="p-2">
                             <Select
@@ -504,10 +502,18 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
           )}
 
           {!gerado && modelo && (
-            <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
-              {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Gerar comprovante e link
-            </Button>
+            <span
+              title={
+                faltando.length > 0
+                  ? 'Falta: ' + faltando.map((f) => f.label).join('; ')
+                  : 'Gerar comprovante e link público'
+              }
+            >
+              <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
+                {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Gerar comprovante e link
+              </Button>
+            </span>
           )}
         </DialogFooter>
       </DialogContent>
