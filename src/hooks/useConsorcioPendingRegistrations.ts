@@ -60,6 +60,9 @@ export interface PendingRegistration {
   tipo_produto: string | null;
   produto_codigo: string | null;
   condicao_pagamento: string | null;
+  /** Plano informado no lançamento — fonte de verdade do valor da parcela. */
+  parcela_1a_12a: number | null;
+  parcela_demais: number | null;
   inclui_seguro: boolean | null;
   empresa_paga_parcelas: string | null;
   tipo_contrato: string | null;
