@@ -730,7 +730,10 @@ function RegistrationRow({
           {nome || '—'}
         </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground">
+              {travadaAssinatura ? 'aguardando assinatura há' : 'aguardando abertura há'}
+            </span>
             {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
                 termo (ou da criação, quando o termo ainda não existe). */}
             <SeloDiasParados
