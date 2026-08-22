@@ -183,6 +183,8 @@ export function PendingRegistrationsList({
   /** Dossiê do cadastro: tudo para efetivar a cota, em um clique. */
   const [dossieId, setDossieId] = useState<string | null>(null);
   const [completarId, setCompletarId] = useState<string | null>(null);
+  /** Cadastro cujo modal "Cota cadastrada na Embracon" deve reabrir após salvar a edição. */
+  const [voltarCadastradaId, setVoltarCadastradaId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EnrichedPendingRegistration | null>(null);
   const [declineTarget, setDeclineTarget] = useState<EnrichedPendingRegistration | null>(null);
