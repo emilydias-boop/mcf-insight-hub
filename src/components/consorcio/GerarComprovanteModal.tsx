@@ -335,11 +335,17 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Nº do contrato Embracon</Label>
+                    <Label className="text-xs">
+                      Nº do contrato Embracon{' '}
+                      {!String(contrato || '').trim() && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input className="h-9" value={contrato} onChange={(e) => setContrato(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Dia de vencimento (1–31)</Label>
+                    <Label className="text-xs">
+                      Dia de vencimento (1–31){' '}
+                      {!Number(diaVenc) && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input
                       className="h-9"
                       inputMode="numeric"
@@ -348,7 +354,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Parcela 1ª à 12ª</Label>
+                    <Label className="text-xs">
+                      Parcela 1ª à 12ª{' '}
+                      {!parseBRLInput(p1a12) && <span className="text-amber-600">* obrigatório para emitir</span>}
+                    </Label>
                     <Input
                       className="h-9"
                       inputMode="numeric"
