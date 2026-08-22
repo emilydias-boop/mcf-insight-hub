@@ -427,9 +427,9 @@ export function PendingRegistrationsList({
                 <Badge
                   variant="outline"
                   className={`cursor-help text-[10px] tabular-nums ${
-                    maisAntigoFila > 15
+                    maisAntigoFila >= DIAS_PARADOS_VERMELHO
                       ? 'border-destructive/60 bg-destructive/10 text-destructive'
-                      : maisAntigoFila >= 8
+                      : maisAntigoFila >= DIAS_PARADOS_MINIMO
                         ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                         : 'border-border text-muted-foreground'
                   }`}
@@ -439,9 +439,9 @@ export function PendingRegistrationsList({
               </TooltipTrigger>
               <TooltipContent className="max-w-[260px]">
                 <p className="text-xs">
-                  Cadastro aguardando abertura de cota há mais tempo no período, contado da data em
-                  "Solicitado em". Semáforo igual ao de "Dias parados" da etapa 5: âmbar a partir de 8
-                  dias, vermelho acima de 15.
+                  Maior número de "dias parados" entre as linhas da fila liberada (as que exibem
+                  "aguardando abertura há"), contado desde a criação do cadastro — mesma âncora e
+                  mesmos limiares do selo da linha: âmbar a partir de 2 dias, vermelho a partir de 6.
                 </p>
               </TooltipContent>
             </Tooltip>
