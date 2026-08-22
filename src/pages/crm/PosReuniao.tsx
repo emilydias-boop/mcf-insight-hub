@@ -1084,7 +1084,7 @@ function TotalCreditoSummary({
                   <div key={m.mes} className="rounded-md border bg-background px-3 py-1.5">
                     <p className="text-[11px] text-muted-foreground leading-tight capitalize">{fmtMes(m.mes)}</p>
                     <p className="text-sm font-semibold leading-tight">{fmt(m.valor)}</p>
-                    <p className="text-[10px] text-muted-foreground leading-tight">{m.count} cartas</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{m.count} {m.count === 1 ? 'venda' : 'vendas'} · {m.cartas} {m.cartas === 1 ? 'carta' : 'cartas'}</p>
                   </div>
                 ))}
               </div>
