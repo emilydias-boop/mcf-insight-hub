@@ -416,6 +416,8 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                     <tbody>
                       {linhas.map((p) => {
                         const travada = parcelaTravada(p);
+                        const semValor = !travada && !Number(p.valor);
+                        const semVenc = !travada && !p.data_vencimento;
                         return (
                         <tr key={p.numero_parcela} className="border-t">
                           <td className="p-2 text-muted-foreground">
@@ -432,6 +434,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                                 atualizarLinha(p.numero_parcela, { data_vencimento: e.target.value || null })
                               }
                             />
+                            {semVenc && <span className="block text-[10px] text-amber-600 mt-0.5">obrigatório</span>}
                           </td>
                           <td className="p-2">
                             <Input
@@ -445,6 +448,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                                 atualizarLinha(p.numero_parcela, { valor: parseBRLInput(masked) });
                               }}
                             />
+                            {semValor && <span className="block text-[10px] text-amber-600 mt-0.5">obrigatório</span>}
                           </td>
                           <td className="p-2">
                             <Select
