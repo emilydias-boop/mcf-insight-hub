@@ -498,10 +498,11 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
             {gerado ? 'Fechar' : 'Cancelar'}
           </Button>
           {!gerado && faltandoCard.length > 0 && onCompletarCota && (
-            <Button variant="outline" onClick={onCompletarCota}>
-              Completar dados da cota
+            <Button variant="ghost" onClick={onCompletarCota}>
+              Abrir cota completa
             </Button>
           )}
+
           {!gerado && modelo && (
             <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
               {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
