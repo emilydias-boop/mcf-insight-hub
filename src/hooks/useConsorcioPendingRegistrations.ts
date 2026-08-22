@@ -102,6 +102,7 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   parcelas_pagas_empresa,
   tipo_produto,
   parcela_1a_12a,
+  parcela_demais,
   categoria,
   origem,
 
@@ -314,6 +315,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           tipo_contrato: r.tipo_contrato,
           valor_credito: r.valor_credito,
           empresa_paga_parcelas: r.empresa_paga_parcelas,
+          parcela_1a_12a: r.parcela_1a_12a,
+          parcela_demais: r.parcela_demais,
         });
 
         const ownerRawVal = r.deal?.owner_id as string | null | undefined;
