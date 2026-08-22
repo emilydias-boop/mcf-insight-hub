@@ -832,7 +832,6 @@ function RegistrationRow({
                 ? format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })
                 : '—'}
           </span>
-          {reg.status === 'aguardando_abertura' && <IdadeFilaBadge dias={idadeFilaDias(reg)} />}
         </div>
       </TableCell>
       {variant === 'pendentes' && (
