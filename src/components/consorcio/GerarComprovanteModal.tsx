@@ -502,10 +502,18 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
           )}
 
           {!gerado && modelo && (
-            <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
-              {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Gerar comprovante e link
-            </Button>
+            <span
+              title={
+                faltando.length > 0
+                  ? 'Falta: ' + faltando.map((f) => f.label).join('; ')
+                  : 'Gerar comprovante e link público'
+              }
+            >
+              <Button onClick={handleGerar} disabled={faltando.length > 0 || createTermo.isPending}>
+                {createTermo.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Gerar comprovante e link
+              </Button>
+            </span>
           )}
         </DialogFooter>
       </DialogContent>
