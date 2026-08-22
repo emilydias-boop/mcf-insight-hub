@@ -324,21 +324,6 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
           </div>
         ) : (
           <div className="space-y-4">
-            {faltando.length > 0 && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Dados obrigatórios faltando</AlertTitle>
-                <AlertDescription>
-                  <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                    {faltando.map((f) => (
-                      <li key={f.campo}>{f.label}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2">Preencha abaixo, sem sair desta tela.</p>
-                </AlertDescription>
-              </Alert>
-            )}
-
             {faltamCamposCota && (
               <div className="space-y-3 rounded-lg border p-3">
                 <div>
