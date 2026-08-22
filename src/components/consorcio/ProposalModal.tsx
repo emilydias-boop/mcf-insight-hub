@@ -119,7 +119,7 @@ export function ProposalModal({
 
         if (!cliente.checklistOk || !cliente.docsOk) {
           toast.warning(
-            `Venda lançada com cadastro incompleto — vai aparecer em ${CONSORCIO_LABELS.cotasAFazer} como pendência.`,
+            `Venda lançada e em ${CONSORCIO_LABELS.termosPendentes}, aguardando a assinatura do termo. O cadastro incompleto ficará marcado como pendência quando ela chegar em ${CONSORCIO_LABELS.cotasAFazer}.`,
           );
         }
       } else {
@@ -186,8 +186,9 @@ export function ProposalModal({
                       2. Dados cadastrais do cliente <span className="font-normal text-muted-foreground">(opcional)</span>
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Se ficar em branco ou incompleto, a venda entra em {CONSORCIO_LABELS.cotasAFazer} como
-                      cadastro incompleto — a pendência fica visível, com selo de dias parados.
+                      A venda entra em {CONSORCIO_LABELS.termosPendentes}. Depois do termo assinado ela vai
+                      para {CONSORCIO_LABELS.cotasAFazer}, e o que ficar em branco aqui aparece lá como
+                      pendência de cadastro, com selo de dias parados.
                     </p>
                   </div>
                   {cadastroAberto ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
@@ -202,8 +203,9 @@ export function ProposalModal({
 
           {pendencias && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-              O cadastro está incompleto. A venda será lançada e aparecerá em {CONSORCIO_LABELS.cotasAFazer} como
-              pendência de cadastro.
+              O cadastro está incompleto. A venda será lançada e ficará em {CONSORCIO_LABELS.termosPendentes};
+              após a assinatura do termo, entra em {CONSORCIO_LABELS.cotasAFazer} com a pendência de cadastro
+              sinalizada.
             </div>
           )}
         </div>

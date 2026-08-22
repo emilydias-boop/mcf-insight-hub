@@ -92,25 +92,8 @@ function idadeFilaDias(reg: { aceite_date?: string | null; created_at?: string |
   return diasParados(base);
 }
 
-/**
- * Semáforo de idade da fila. Usa OS MESMOS limiares do "Dias parados" da etapa 5
- * (neutro até 7, âmbar de 8 a 15, vermelho acima de 15) para não existirem dois
- * semáforos com cortes diferentes na mesma tela.
- */
-function IdadeFilaBadge({ dias }: { dias: number | null }) {
-  if (dias == null) return null;
-  const tom =
-    dias > 15
-      ? 'border-destructive/60 bg-destructive/10 text-destructive'
-      : dias >= 8
-        ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-        : 'border-border text-muted-foreground';
-  return (
-    <Badge variant="outline" className={`mt-1 text-[10px] tabular-nums ${tom}`}>
-      {dias}d parado{dias === 1 ? '' : 's'}
-    </Badge>
-  );
-}
+
+
 
 /** Ordem de processo: o que exige ação primeiro em `asc`. */
 const RANK_STATUS: Record<string, number> = {
@@ -730,7 +713,10 @@ function RegistrationRow({
           {nome || '—'}
         </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground">
+              {travadaAssinatura ? 'aguardando assinatura há' : 'aguardando abertura há'}
+            </span>
             {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
                 termo (ou da criação, quando o termo ainda não existe). */}
             <SeloDiasParados
@@ -832,7 +818,6 @@ function RegistrationRow({
                 ? format(new Date(reg.created_at), 'dd/MM/yyyy', { locale: ptBR })
                 : '—'}
           </span>
-          {reg.status === 'aguardando_abertura' && <IdadeFilaBadge dias={idadeFilaDias(reg)} />}
         </div>
       </TableCell>
       {variant === 'pendentes' && (
