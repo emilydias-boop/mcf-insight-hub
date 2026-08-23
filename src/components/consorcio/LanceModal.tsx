@@ -88,8 +88,10 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
     setValor('');
     setObservacao('');
     setSimulacao(null);
+    setMostrarErros(false);
     onOpenChange(false);
   };
+
 
   if (!card) return null;
 
