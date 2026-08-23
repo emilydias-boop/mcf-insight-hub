@@ -210,7 +210,11 @@ export function useConsorcioPlanosFaltando() {
           a.valorCredito - b.valorCredito,
       );
 
-      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, porCarta };
+      const porChave: Record<string, CombinacaoFaltante> = {};
+      combinacoes.forEach((c) => { porChave[c.key] = c; });
+
+      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, porCarta, porChave };
+
     },
   });
 }
