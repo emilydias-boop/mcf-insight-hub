@@ -51,7 +51,7 @@ import {
   type PendingStatusFilter,
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
-import { camposCadastroFaltantes, resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
+import { resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { SeloDiasParados, diasDesde, DIAS_PARADOS_MINIMO, DIAS_PARADOS_VERMELHO } from '@/components/consorcio/SeloDiasParados';
 import { loadXLSX } from '@/lib/lazyExport';
@@ -419,8 +419,11 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} ({filtered.length}
-          {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
+          {/* Os dois números vivem em universos diferentes — o rótulo diz qual é
+              qual: filtros atuais x tudo que foi criado no período. */}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} (
+          {filtered.length} com os filtros atuais
+          {filtered.length !== registrations.length ? ` · ${registrations.length} no período` : ''})
           {variant === 'pendentes' && maisAntigoFila != null && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -751,14 +754,11 @@ function RegistrationRow({
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
                     cadastro incompleto
-                    {camposCadastroFaltantes(reg as any).length > 0
-                      ? ` (${camposCadastroFaltantes(reg as any).length})`
-                      : ''}
+                    {/* Mesma lista que o Dossiê mostra (vem do hook, campo único). */}
+                    {reg.campos_faltantes.length > 0 ? ` (${reg.campos_faltantes.length})` : ''}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>
-                  {resumoCamposFaltantes(camposCadastroFaltantes(reg as any))}
-                </TooltipContent>
+                <TooltipContent>{resumoCamposFaltantes(reg.campos_faltantes)}</TooltipContent>
               </Tooltip>
             )}
             {reg.documentos_faltando && (
@@ -878,7 +878,9 @@ function RegistrationRow({
             </>
           )}
 
-          {variant === 'declinadas' && (
+          {/* Reverter declínio também na etapa 4: quem declinou por engano
+              desfaz na mesma tela, sem precisar ir à aba Cartas Declinadas. */}
+          {(variant === 'declinadas' || reg.status === 'declinada') && (
             <Button
               size="sm"
               variant="outline"

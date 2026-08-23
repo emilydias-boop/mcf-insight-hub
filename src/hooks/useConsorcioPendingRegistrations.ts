@@ -12,6 +12,7 @@ import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelas
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
+import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
 
 export interface PendingRegistration {
   id: string;
@@ -169,6 +170,8 @@ export interface EnrichedPendingRegistration {
   consortium_card_id?: string | null;
   /** Checklist de dados do cadastro incompleto (campos obrigatórios faltando). */
   checklist_incompleto: boolean;
+  /** Rótulos dos campos obrigatórios vazios — mesma lista que o Dossiê mostra. */
+  campos_faltantes: string[];
   /** Nenhum documento anexado ao cadastro pendente. */
   documentos_faltando: boolean;
 }
@@ -193,15 +196,11 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       // docs do próprio pending_registration_id OU do card vinculado a ele.
       const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
-      // Sem valor de parcela o Termo de Adesão não sai: conta como incompleto.
-      // Categoria e Origem também são cobradas: sem elas a cota não abre na
-      // Embracon nem entra certa no relatório de canal.
-      const isChecklistIncompleto = (r: any) =>
-        !(Number(r.parcela_1a_12a) > 0) ||
-        !r.categoria || !r.origem ||
-        (r.tipo_pessoa === 'pj'
-          ? !(r.razao_social && r.cnpj && r.telefone_comercial && r.email_comercial && r.endereco_comercial && r.faturamento_mensal)
-          : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda));
+      // Regra ÚNICA de cadastro incompleto: `camposCadastroFaltantes` — a mesma
+      // função que o Dossiê usa. Antes havia uma cópia da regra aqui, avaliada
+      // sobre um objeto que não trazia endereço/renda/parcela: o selo contava
+      // campos vazios que na verdade estavam preenchidos.
+      const camposFaltantesDe = (r: any) => camposCadastroFaltantes(r);
 
 
       // Resolver nomes de closer (owner_id → profiles/employees) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
@@ -374,7 +373,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           motivo_declinio: r.motivo_declinio ?? null,
           declinada_at: r.declinada_at ?? null,
           consortium_card_id: r.consortium_card_id ?? null,
-          checklist_incompleto: isChecklistIncompleto(r),
+          campos_faltantes: camposFaltantesDe(r),
+          checklist_incompleto: camposFaltantesDe(r).length > 0,
           documentos_faltando: !regsWithDocs.has(r.id),
         };
       });
@@ -704,17 +704,43 @@ export function useDeclinePendingRegistration() {
         .eq('id', params.registrationId)
         .maybeSingle();
 
-      // 2. Abater da meta: proposta vinculada → status='recusada' (mesmo efeito do Sem Sucesso)
-      if ((reg as any)?.proposal_id) {
+      const proposalId = (reg as any)?.proposal_id as string | undefined;
+      const agora = new Date().toISOString();
+
+      // 2. Abater da meta POR CARTA: marca a carta como declinada. O trigger
+      //    `tg_sync_proposal_cartas_agregado` refaz o total da venda somando só
+      //    as cartas ativas — a venda inteira só é recusada se não sobrar carta.
+      if (proposalId) {
         await supabase
-          .from('consorcio_proposals')
+          .from('consorcio_proposal_cartas')
           .update({
-            status: 'recusada',
-            motivo_recusa: motivo,
-            recusada_at: new Date().toISOString(),
-            recusada_by: user?.id ?? null,
+            declinada_at: agora,
+            motivo_declinio: motivo,
+            declinada_by: user?.id ?? null,
           } as any)
-          .eq('id', (reg as any).proposal_id);
+          .eq('proposal_id', proposalId)
+          .eq('pending_registration_id', params.registrationId)
+          .is('declinada_at', null);
+
+        // Sobrou carta ativa? A venda continua aceita, só menor.
+        const { data: cartas } = await supabase
+          .from('consorcio_proposal_cartas')
+          .select('id, declinada_at')
+          .eq('proposal_id', proposalId);
+        const total = (cartas || []).length;
+        const ativas = (cartas || []).filter((c: any) => !c.declinada_at).length;
+        // Sem cartas cadastradas (venda antiga) mantém o comportamento anterior.
+        if (total === 0 || ativas === 0) {
+          await supabase
+            .from('consorcio_proposals')
+            .update({
+              status: 'recusada',
+              motivo_recusa: motivo,
+              recusada_at: agora,
+              recusada_by: user?.id ?? null,
+            } as any)
+            .eq('id', proposalId);
+        }
       }
 
       // 3. Atualizar cadastro pendente para declinada
@@ -723,7 +749,7 @@ export function useDeclinePendingRegistration() {
         .update({
           status: 'declinada',
           motivo_declinio: motivo,
-          declinada_at: new Date().toISOString(),
+          declinada_at: agora,
           declinada_by: user?.id || null,
         } as any)
         .eq('id', params.registrationId);
@@ -750,7 +776,15 @@ export function useUndeclinePendingRegistration() {
         .select('id, proposal_id')
         .eq('id', registrationId)
         .maybeSingle();
-      if ((reg as any)?.proposal_id) {
+      const proposalId = (reg as any)?.proposal_id as string | undefined;
+      if (proposalId) {
+        // Reativa a CARTA (o trigger devolve o valor ao total da venda)…
+        await supabase
+          .from('consorcio_proposal_cartas')
+          .update({ declinada_at: null, motivo_declinio: null, declinada_by: null } as any)
+          .eq('proposal_id', proposalId)
+          .eq('pending_registration_id', registrationId);
+        // …e a venda volta a 'aceita' caso tivesse sido recusada por inteiro.
         await supabase
           .from('consorcio_proposals')
           .update({
@@ -759,7 +793,7 @@ export function useUndeclinePendingRegistration() {
             recusada_at: null,
             recusada_by: null,
           } as any)
-          .eq('id', (reg as any).proposal_id);
+          .eq('id', proposalId);
       }
       const { error } = await supabase
         .from('consorcio_pending_registrations')

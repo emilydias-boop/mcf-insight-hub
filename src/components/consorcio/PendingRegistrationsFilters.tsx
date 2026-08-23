@@ -23,7 +23,10 @@ export type PendingStatusFilter =
   | 'todos';
 
 export const PENDING_STATUS_FILTERS: { value: PendingStatusFilter; label: string; statuses: string[] | null }[] = [
-  { value: 'pendentes_cota', label: 'Pendentes de cota', statuses: ['aguardando_abertura'] },
+  // Inclui 'declinada' para a carta recém-declinada não desaparecer da tela no
+  // filtro padrão: ela passa a aparecer no grupo "Tratadas", onde é possível
+  // reverter o declínio.
+  { value: 'pendentes_cota', label: 'Pendentes de cota', statuses: ['aguardando_abertura', 'declinada'] },
   { value: 'aguardando_abertura', label: 'Aguardando abertura', statuses: ['aguardando_abertura'] },
   { value: 'com_cota', label: 'Já viraram cota', statuses: ['cota_aberta', 'vinculada'] },
   { value: 'declinada', label: 'Declinadas', statuses: ['declinada'] },

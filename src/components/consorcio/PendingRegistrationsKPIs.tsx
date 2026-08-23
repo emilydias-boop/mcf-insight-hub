@@ -129,7 +129,9 @@ export function PendingRegistrationsKPIs({ registrations, variant = 'pendentes' 
           icon: Activity,
           label: 'No período',
           value: String(stats.totalPeriodo),
-          sub: 'cadastros criados · todos os status',
+          // Universo explícito: este card não é o mesmo número do título da
+          // tabela (que conta os filtros atuais) nem inclui vendas travadas.
+          sub: 'cadastros criados · todos os status · exceto aguardando assinatura',
         }]
       : []),
   ];
