@@ -116,7 +116,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   const openCota = useOpenCota();
   const updatePending = useUpdatePendingRegistration();
 
-  const planoHidratado = useRef(false);
+  /**
+   * Id do cadastro já hidratado nesta montagem. Antes era um booleano que nunca
+   * era resetado: se o registro chegasse depois da primeira renderização, ou se
+   * o modal fosse reaberto para OUTRO cadastro, o bloco do plano (Objetivo,
+   * parcela) ficava em branco — e o "Salvar" gravava esse branco por cima.
+   */
+  const hidratadoDe = useRef<string | null>(null);
+  /**
+   * Patch equivalente ao que estava no formulário no momento em que ele acabou
+   * de ser hidratado. É a base do diff do save (ver `src/lib/formDiff.ts`).
+   */
+  const snapshotPatch = useRef<Record<string, unknown> | null>(null);
+
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
   /**
