@@ -449,10 +449,14 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
           />
         </div>
         {plano.semValorTabelado && (
-          <div className="sm:col-span-2">
-            <p className="text-xs text-amber-500">sem valor tabelado para esta combinação</p>
+          <div className="sm:col-span-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Não existe parcela cadastrada na tabela para esta combinação:{' '}
+              <span className="font-medium">{plano.combinacaoSemTabela}</span>. Pode informar as parcelas à mão acima.
+            </p>
           </div>
         )}
+
         {!oculto('diaVencimento') && (
           <div className="space-y-2">
             <Label>Dia de vencimento</Label>
