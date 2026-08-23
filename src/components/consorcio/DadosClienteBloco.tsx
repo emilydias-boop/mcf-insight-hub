@@ -225,7 +225,9 @@ export function useDadosCliente(opts?: { nomeInicial?: string }): DadosClienteBl
   }, [tipoPessoa, pfDocuments, pjContratoSocial, pjRgSocios, pjCartaoCnpj, comprovanteResidencia]);
 
   const dadosLimpos = useCallback((data: any) => {
-    const pjOnly = [...CAMPOS_PJ, 'num_funcionarios', 'socios'] as string[];
+    // renda e patrimonio sao campos de PF: ao salvar como PJ, nao devem chegar ao banco.
+    // (campos PJ ja entram via CAMPOS_PJ; socios e num_funcionarios sao exclusivos de PJ.)
+    const pjOnly = [...CAMPOS_PJ, 'num_funcionarios', 'socios', 'renda', 'patrimonio'] as string[];
     const pfOnly = ['nome_completo', 'rg', 'cpf', 'cpf_conjuge', 'profissao'];
     const excluir = tipoPessoa === 'pf' ? pjOnly : pfOnly;
     return Object.fromEntries(Object.entries(data || {}).filter(([k]) => !excluir.includes(k)));
