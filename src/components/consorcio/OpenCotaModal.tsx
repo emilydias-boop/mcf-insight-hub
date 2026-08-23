@@ -426,7 +426,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     condicao: condicaoPagamento || '',
     setPrazo: (v) => form.setValue('prazo_meses', v ? Number(v) : (null as any), { shouldValidate: true }),
     setCondicao: (v) => form.setValue('condicao_pagamento', v, { shouldValidate: true }),
-  });
+  }, { tipoProduto: tipoProduto ?? null });
 
   /** Espelho dos valores do plano para leitura fora do render (snapshot). */
   const planoValoresRef = useRef(plano.valores);

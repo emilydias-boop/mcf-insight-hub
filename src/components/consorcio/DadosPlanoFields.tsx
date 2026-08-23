@@ -13,8 +13,14 @@ import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+import { produtosElegiveisParaCarta, taxaAntecipadaTipoDeProduto } from '@/lib/consorcioParcelaOficial';
+
 
 const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
+
+const fmtBRL = (n: number) =>
+  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 
 /** Converte campo BRL em número preservando o zero legítimo (vazio → undefined). */
 const brlOuUndefined = (s: string): number | undefined => {
@@ -43,7 +49,16 @@ export interface DadosPlanoControlled {
   setCondicao: (v: string) => void;
 }
 
-export function useDadosPlano(controlled?: DadosPlanoControlled) {
+/**
+ * `tipoProduto` da carta ('select' | 'parcelinha'): quando informado, o seletor de
+ * plano passa a mostrar SÓ os planos dos produtos elegíveis para aquela carta
+ * (tipo de taxa antecipada + faixa de crédito). Sem ele, nada muda.
+ */
+export interface DadosPlanoOpcoes {
+  tipoProduto?: string | null;
+}
+
+export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosPlanoOpcoes) {
   const { data: creditos = [] } = useAllConsorcioCreditos();
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: objetivos = [] } = useConsorcioObjetivoOptions();
@@ -69,10 +84,28 @@ export function useDadosPlano(controlled?: DadosPlanoControlled) {
   const creditosAtivos = useMemo(() => creditos.filter((c) => c.ativo), [creditos]);
   const creditoSelecionado = creditos.find((c) => c.id === creditoId);
   const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
+
+  // ===== Filtro do seletor pelo produto da carta =====
+  const tipoProdutoCarta = opcoes?.tipoProduto ?? null;
+  const valorCreditoNum = brlOuUndefined(valorCreditoStr) ?? 0;
+  /** Produtos elegíveis para (tipo de produto + faixa de crédito) — pode ser mais de um. */
+  const produtosElegiveis = useMemo(() => {
+    if (!tipoProdutoCarta || valorCreditoNum <= 0) return [];
+    return produtosElegiveisParaCarta(produtos as any[], valorCreditoNum, tipoProdutoCarta);
+  }, [produtos, tipoProdutoCarta, valorCreditoNum]);
+  const filtroProdutoAtivo = !!tipoProdutoCarta && valorCreditoNum > 0;
+  /** Lista que o seletor mostra: filtrada quando há produto resolvido, completa quando não há. */
+  const planosVisiveis = useMemo(() => {
+    if (!filtroProdutoAtivo) return creditosAtivos;
+    const ids = new Set(produtosElegiveis.map((p: any) => p.id));
+    return creditosAtivos.filter((c) => ids.has(c.produto_id));
+  }, [creditosAtivos, produtosElegiveis, filtroProdutoAtivo]);
+
   const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
     ? produtoDoPlano.prazos_disponiveis
     : [200, 220, 240];
   const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
+
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
@@ -156,6 +189,11 @@ export function useDadosPlano(controlled?: DadosPlanoControlled) {
 
   return {
     creditos, creditosAtivos, produtos, objetivos,
+    planosVisiveis, produtosElegiveis, filtroProdutoAtivo,
+    tipoProdutoCarta, valorCreditoNum,
+    taxaAntecipadaTipoCarta: taxaAntecipadaTipoDeProduto(tipoProdutoCarta),
+    condSuffix,
+
     creditoId, planoOpen, setPlanoOpen, selecionarPlano,
     valorCreditoStr, setValorCreditoStr,
     prazo, setPrazo, condicao, setCondicao,
@@ -213,13 +251,20 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
           <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
             Nenhum plano cadastrado. Cadastre em Cadastros → Planos.
           </p>
+        ) : plano.filtroProdutoAtivo && plano.planosVisiveis.length === 0 ? (
+          /* Filtro ligado e nada casou: diz QUAL produto foi resolvido e por que a lista está vazia. */
+          <p className="text-xs text-amber-500 rounded-md border border-dashed p-2">
+            {plano.produtosElegiveis.length === 0
+              ? `Nenhum produto ativo cobre ${fmtBRL(plano.valorCreditoNum)} para ${plano.tipoProdutoCarta} (taxa antecipada ${plano.taxaAntecipadaTipoCarta}). Sem produto resolvido não há plano para listar — informe as parcelas manualmente.`
+              : `Produto resolvido: ${plano.produtosElegiveis.map((p: any) => `${p.codigo} — ${p.nome}`).join(' ou ')}. Não há plano cadastrado dele para o crédito de ${fmtBRL(plano.valorCreditoNum)} — informe as parcelas manualmente ou cadastre o plano em Cadastros → Planos.`}
+          </p>
         ) : (
           <Popover open={plano.planoOpen} onOpenChange={plano.setPlanoOpen}>
             <PopoverTrigger asChild>
               <Button type="button" variant="outline" disabled={disabled} className="w-full justify-between font-normal">
                 <span className="truncate">
                   {plano.creditoSelecionado
-                    ? `${plano.creditoSelecionado.codigo_credito} — ${Number(plano.creditoSelecionado.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                    ? `${plano.creditoSelecionado.codigo_credito} — ${fmtBRL(Number(plano.creditoSelecionado.valor_credito))}${plano.produtoDoPlano ? ` · ${plano.produtoDoPlano.codigo} — ${plano.produtoDoPlano.nome}` : ''}`
                     : 'Selecione o plano'}
                 </span>
                 <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
@@ -227,23 +272,35 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
             </PopoverTrigger>
             <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Buscar por código ou valor..." />
+                <CommandInput placeholder="Buscar por código, valor ou produto..." />
                 <CommandList>
                   <CommandEmpty>Nenhum plano encontrado.</CommandEmpty>
                   <CommandGroup>
-                    {plano.creditosAtivos.map((c) => {
+                    {plano.planosVisiveis.map((c) => {
                       const prod = plano.produtos.find((p) => p.id === c.produto_id);
                       if (!prod) return null;
-                      const valor = Number(c.valor_credito).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                      const valor = fmtBRL(Number(c.valor_credito));
+                      // Parcelas daquele plano para o prazo/condição atuais — conferência a olho.
+                      const prz = Number(plano.prazo);
+                      const temPrazo = [200, 220, 240].includes(prz);
+                      const p1 = temPrazo ? (c as any)[`parcela_1a_12a_${plano.condSuffix(plano.condicao)}_${prz}`] : null;
+                      const p2 = temPrazo ? (c as any)[`parcela_demais_${plano.condSuffix(plano.condicao)}_${prz}`] : null;
                       return (
                         <CommandItem
                           key={c.id}
-                          value={`${c.codigo_credito} ${valor} ${prod.codigo}`}
+                          value={`${c.codigo_credito} ${valor} ${prod.codigo} ${prod.nome}`}
                           onSelect={() => plano.selecionarPlano(c.id)}
                         >
-                          <span className="truncate">
-                            {c.codigo_credito} — {valor}
-                            <span className="text-muted-foreground text-xs"> · {prod.codigo}</span>
+                          <span className="flex flex-col gap-0.5 min-w-0">
+                            <span className="font-medium truncate">{prod.codigo} — {prod.nome}</span>
+                            <span className="text-xs text-muted-foreground truncate">
+                              {c.codigo_credito} · {valor}
+                              {temPrazo && (p1 || p2)
+                                ? ` · ${prz}x ${plano.condicao}: ${fmtBRL(Number(p1 || 0))} / ${fmtBRL(Number(p2 || 0))}`
+                                : temPrazo
+                                  ? ` · ${prz}x ${plano.condicao}: sem valor tabelado`
+                                  : ' · escolha o prazo para ver as parcelas'}
+                            </span>
                           </span>
                         </CommandItem>
                       );
@@ -254,12 +311,19 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
             </PopoverContent>
           </Popover>
         )}
+        {plano.filtroProdutoAtivo && plano.produtosElegiveis.length > 1 && (
+          <p className="text-xs text-amber-500">
+            {plano.produtosElegiveis.length} produtos atendem este crédito
+            ({plano.produtosElegiveis.map((p: any) => p.codigo).join(', ')}) — confira o produto na opção antes de escolher.
+          </p>
+        )}
         {plano.creditoSelecionado && !plano.prazo && (
           <p className="text-xs text-muted-foreground">
             Escolha o prazo para preencher os valores da tabela.
           </p>
         )}
       </div>
+
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {!oculto('valorCredito') && (
