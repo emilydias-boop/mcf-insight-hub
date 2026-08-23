@@ -14,6 +14,7 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -379,21 +380,19 @@ export function DadosClienteFields({
                   formulário continua numérico. */}
               <FormField control={form.control} name="renda" render={({ field }) => (
                 <FormItem><FormLabel>Renda Mensal (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite a renda"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="patrimonio" render={({ field }) => (
                 <FormItem><FormLabel>Patrimônio (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite o patrimônio"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
@@ -551,11 +550,10 @@ export function DadosClienteFields({
               {/* Mesma máscara de centavos de Crédito/Renda: 150000 -> 1.500,00. */}
               <FormField control={form.control} name="faturamento_mensal" render={({ field }) => (
                 <FormItem><FormLabel>Faturamento Mensal (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite o faturamento"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
@@ -582,11 +580,11 @@ export function DadosClienteFields({
                   )} />
                   <FormField control={form.control} name={`socios.${index}.renda`} render={({ field }) => (
                     <FormItem className="flex-1"><FormLabel>Renda (R$)</FormLabel><FormControl>
-                      <Input
-                        inputMode="numeric"
-                        placeholder="0,00"
+                      <CurrencyInput
                         value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                        onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                        onNumberChange={(n) => field.onChange(n)}
+                        placeholder="Digite a renda"
+                        inputClassName="h-9"
                       />
                     </FormControl><FormMessage /></FormItem>
                   )} />
