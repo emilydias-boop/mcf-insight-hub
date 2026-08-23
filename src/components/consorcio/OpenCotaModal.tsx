@@ -437,6 +437,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     if (!open) {
       hidratadoDe.current = null;
       snapshotPatch.current = null;
+      setSnapshotPronto(false);
     }
   }, [open, registrationId]);
 
@@ -468,6 +469,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         planoValoresRef.current,
         registration.tipo_pessoa,
       );
+      setSnapshotPronto(true);
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -650,6 +652,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * cota) não passa por aqui — ele usa `onSubmit`.
    */
   const handleSavePendingEdit = async () => {
+    /**
+     * Trava dura: sem snapshot não há como saber o que o usuário mudou, e
+     * mandar o patch inteiro nesse estado apagaria campo não hidratado.
+     */
+    if (!snapshotPatch.current) {
+      toast.error(
+        'Não é possível salvar: os dados do cadastro ainda não foram carregados. Aguarde um instante ou feche e abra novamente.',
+      );
+      return;
+    }
     const completo = montarPatchCadastro(form.getValues(), plano.valores, registration.tipo_pessoa);
     const patch = diffContraSnapshot(snapshotPatch.current, completo);
 
@@ -683,7 +695,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             {isViewMode && (
               <div className="flex items-center gap-2">
                 {editOnly ? (
-                  <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                  <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                     {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
                     Salvar alterações
                   </Button>
@@ -696,7 +709,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={updatePending.isPending}>
                       Cancelar
                     </Button>
-                    <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                    <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                       {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
                       Salvar
                     </Button>
@@ -1365,7 +1379,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           {readOnly ? 'Fechar' : 'Cancelar'}
                         </Button>
                         {editOnly && (
-                          <Button type="button" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                          <Button type="button" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                             {updatePending.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Salvar alterações
                           </Button>
