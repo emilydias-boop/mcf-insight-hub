@@ -582,8 +582,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       // anular eventual default/trigger da coluna no banco.
       ...(modoAbertura.current === 'reserva' ? { data_reserva: data.data_contratacao } : {}),
       produto_codigo: produtoDetectado?.codigo || data.produto_codigo || 'auto',
-      parcela_1a_12a: calculoParcela?.parcela1a12,
-      parcela_demais: calculoParcela?.parcelaDemais,
+      // A parcela gravada na cota é a MESMA dos campos do plano (tabela/digitado),
+      // exatamente o que o cadastro pendente grava e o que o Termo mostra.
+      // Vazio fica vazio: não caímos no valor calculado, que divergiria em silêncio.
+      parcela_1a_12a: plano.valores.parcela_1a_12a ?? null,
+      parcela_demais: plano.valores.parcela_demais ?? null,
+
       // O objetivo que vale é o que está na tela no momento do submit.
       objetivo: plano.valores.objetivo ?? null,
       parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
