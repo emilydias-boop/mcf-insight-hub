@@ -169,7 +169,7 @@ export function AcceptProposalModal({
       // Cartas da proposta: cada carta ainda sem cadastro gera 1 cadastro pendente.
       const { data: cartas } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, pending_registration_id')
+        .select('id, ordem, valor_credito, prazo_meses, tipo_produto, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, pending_registration_id')
         .eq('proposal_id', proposalId)
         .order('ordem', { ascending: true });
 
