@@ -400,6 +400,28 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const { data: produtos } = useConsorcioProdutos();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
   const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
+  /**
+   * Catálogo de categoria: hoje as duas linhas de `consorcio_categoria_options`
+   * estão com `is_active = false`, então a lista chegava VAZIA e o select abria
+   * em branco mesmo com a cota tendo `categoria = 'inside'`. Fallback fixo +
+   * garantia de que o valor atual da cota sempre tem item na lista.
+   */
+  const categoriasDisponiveis = useMemo(() => {
+    const ativas = categoriaOptions.filter((o) => o.is_active);
+    const base = (ativas.length > 0 ? ativas : categoriaOptions).map((o) => ({
+      name: o.name,
+      label: o.label,
+      display_order: o.display_order ?? 0,
+    }));
+    const lista = base.length > 0
+      ? base
+      : [
+          { name: 'inside', label: 'Inside Consórcio', display_order: 0 },
+          { name: 'life', label: 'Life Consórcio', display_order: 1 },
+        ];
+    return lista.sort((a, b) => a.display_order - b.display_order);
+  }, [categoriaOptions]);
+
   const createCard = useCreateConsorcioCard();
   const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
