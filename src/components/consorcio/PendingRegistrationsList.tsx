@@ -875,7 +875,9 @@ function RegistrationRow({
             </>
           )}
 
-          {variant === 'declinadas' && (
+          {/* Reverter declínio também na etapa 4: quem declinou por engano
+              desfaz na mesma tela, sem precisar ir à aba Cartas Declinadas. */}
+          {(variant === 'declinadas' || reg.status === 'declinada') && (
             <Button
               size="sm"
               variant="outline"
