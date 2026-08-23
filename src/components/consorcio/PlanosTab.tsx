@@ -173,35 +173,112 @@ export function PlanosTab() {
         {!isLoading && ordered.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">Nenhum plano cadastrado.</p>
         )}
-        {ordered.map((c) => (
-          <div
-            key={c.id}
-            className={`flex items-center gap-3 p-3 bg-muted/50 rounded-lg text-sm ${c.ativo ? '' : 'opacity-60'}`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate flex items-center gap-2">
-                {c.codigo_credito} — {brl(c.valor_credito)}
-                {!c.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
+        {ordered.map((c) => {
+          const combos = combinacoesDoPlano(c);
+          const preenchidas = combos.filter((k) => k.completa);
+          const faltando = combos.filter((k) => !k.completa);
+          const aberto = expandidos.has(c.id);
+          return (
+            <div
+              key={c.id}
+              className={`bg-muted/50 rounded-lg text-sm ${c.ativo ? '' : 'opacity-60'}`}
+            >
+              <div className="flex items-center gap-3 p-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  aria-label={aberto ? 'Recolher combinações' : 'Ver as 9 combinações'}
+                  onClick={() => toggleExpandido(c.id)}
+                >
+                  {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate flex items-center gap-2">
+                    {c.codigo_credito} — {brl(c.valor_credito)}
+                    {!c.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
+                    <Badge
+                      variant={preenchidas.length === 9 ? 'secondary' : 'outline'}
+                      className={`text-[10px] ${preenchidas.length === 9 ? '' : 'border-amber-500 text-amber-700 dark:text-amber-400'}`}
+                    >
+                      {preenchidas.length}/9 combinações
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    Produto: <strong>{produtoLabel(c.produto_id)}</strong> ·
+                    {' '}Conv. 240: {brl(c.parcela_1a_12a_conv_240)} / {brl(c.parcela_demais_conv_240)}
+                  </div>
+                  {faltando.length > 0 && (
+                    <div className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Falta cadastrar: {faltando.map((k) => `${k.condicaoLabel} / ${k.prazo}`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
+                  Editar
+                </Button>
+                {c.ativo ? (
+                  <Button variant="ghost" size="icon" onClick={() => setToDelete(c)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => reactivate.mutate(c.id)}>
+                    <RotateCcw className="h-4 w-4 mr-1" /> Reativar
+                  </Button>
+                )}
               </div>
-              <div className="text-xs text-muted-foreground truncate">
-                Produto: <strong>{produtoLabel(c.produto_id)}</strong> ·
-                {' '}Conv. 240: {brl(c.parcela_1a_12a_conv_240)} / {brl(c.parcela_demais_conv_240)}
-              </div>
+
+              {aberto && (
+                <div className="px-3 pb-3">
+                  <div className="overflow-x-auto rounded-md border bg-background">
+                    <table className="w-full text-xs min-w-[520px]">
+                      <thead>
+                        <tr className="text-muted-foreground border-b">
+                          <th className="text-left font-medium p-2">Condição</th>
+                          {PRAZOS.map((p) => (
+                            <th key={p} className="text-left font-medium p-2">{p} meses</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {CONDICOES.map((cond) => (
+                          <tr key={cond.key} className="border-b last:border-0">
+                            <td className="p-2 whitespace-nowrap">{cond.label}</td>
+                            {PRAZOS.map((p) => {
+                              const k = combos.find((x) => x.key === `${cond.key}_${p}`)!;
+                              return (
+                                <td key={p} className="p-2 align-top">
+                                  {k.completa || k.primeiras != null || k.demais != null ? (
+                                    <div className="space-y-0.5">
+                                      <div>
+                                        <span className="text-muted-foreground">1ª à 12ª: </span>
+                                        <span className="font-medium tabular-nums">{brl(k.primeiras)}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Demais: </span>
+                                        <span className="font-medium tabular-nums">{brl(k.demais)}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">Não cadastrado</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Valores oficiais da tabela Embracon para este plano. Use esta grade para conferir plano por plano.
+                  </p>
+                </div>
+              )}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
-              Editar
-            </Button>
-            {c.ativo ? (
-              <Button variant="ghost" size="icon" onClick={() => setToDelete(c)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => reactivate.mutate(c.id)}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Reativar
-              </Button>
-            )}
-          </div>
-        ))}
+          );
+        })}
+
       </div>
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
