@@ -934,20 +934,17 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     setPendingDocuments(prev => prev.filter((_, i) => i !== index));
   };
 
-  const onSubmit = async (data: FormData) => {
-    // Calculate parcelas_pagas_empresa based on empresa_paga_parcelas
-    let calculatedParcelas = 0;
-    if (data.empresa_paga_parcelas === 'sim') {
-      // Para ambos os modos (normal e intercalado), usar o valor digitado pelo usuário
-      calculatedParcelas = data.parcelas_pagas_empresa || 0;
-    }
-
-    // Derivar tipo_produto automaticamente do produto selecionado
-    const tipoProdutoDerivado: 'select' | 'parcelinha' = produtoSelecionado
-      ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
-      : data.tipo_produto;
-
-    const input: CreateConsorcioCardInput = {
+  /**
+   * Payload COMPLETO da carta a partir dos valores do formulário.
+   * A mesma função monta o snapshot da hidratação e o estado atual do save —
+   * é isso que permite comparar chave por chave sem falso positivo.
+   */
+  const montarPayloadCarta = (
+    data: FormData,
+    opts: { tipoProduto: 'select' | 'parcelinha'; parcela1a12?: number | null; parcelaDemais?: number | null },
+  ): CreateConsorcioCardInput => {
+    const calculatedParcelas = data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0;
+    return {
       tipo_pessoa: data.tipo_pessoa,
       categoria: data.categoria,
       grupo: data.grupo,
@@ -955,7 +952,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       contrato_embracon: data.contrato_embracon ?? '',
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
-      tipo_produto: tipoProdutoDerivado,
+      tipo_produto: opts.tipoProduto,
       tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
       parcelas_pagas_empresa: calculatedParcelas,
       tipo_registro: data.tipo_registro,
@@ -984,8 +981,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       email: data.email,
       profissao: data.profissao,
       tipo_servidor: data.tipo_servidor || undefined,
-      renda: data.renda || undefined,
-      patrimonio: data.patrimonio || undefined,
+      renda: data.renda ?? undefined,
+      patrimonio: data.patrimonio ?? undefined,
       pix: data.pix,
       razao_social: data.razao_social,
       cnpj: data.cnpj,
@@ -1001,36 +998,62 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       endereco_comercial_estado: data.endereco_comercial_estado,
       telefone_comercial: data.telefone_comercial,
       email_comercial: data.email_comercial,
-      faturamento_mensal: data.faturamento_mensal || undefined,
-      num_funcionarios: data.num_funcionarios || undefined,
+      faturamento_mensal: data.faturamento_mensal ?? undefined,
+      num_funcionarios: data.num_funcionarios ?? undefined,
       // Controle adicional
-      valor_comissao: data.valor_comissao || undefined,
+      valor_comissao: data.valor_comissao ?? undefined,
       e_transferencia: data.e_transferencia || false,
       transferido_de: data.transferido_de,
       observacoes: data.observacoes,
-      
+
       // Composição da parcela
       produto_embracon: data.produto_codigo || undefined,
       condicao_pagamento: data.condicao_pagamento || undefined,
       inclui_seguro_vida: data.inclui_seguro || false,
       objetivo: data.objetivo as any,
-      parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
-      parcela_demais: calculoParcela?.parcelaDemais || undefined,
-      
+      parcela_1a_12a: opts.parcela1a12 ?? undefined,
+      parcela_demais: opts.parcelaDemais ?? undefined,
+
       // Cadastro retroativo
       parcelas_pagas_cliente: data.parcelas_pagas_cliente || undefined,
       data_ultimo_pagamento_cliente: data.data_ultimo_pagamento_cliente
         ? formatDateForDB(data.data_ultimo_pagamento_cliente)
         : undefined,
-      
+
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
+  };
+
+  const onSubmit = async (data: FormData) => {
+    // Derivar tipo_produto automaticamente do produto selecionado
+    const tipoProdutoDerivado: 'select' | 'parcelinha' = produtoSelecionado
+      ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
+      : data.tipo_produto;
+
+    const input = montarPayloadCarta(data, {
+      tipoProduto: tipoProdutoDerivado,
+      parcela1a12: calculoParcela?.parcela1a12,
+      parcelaDemais: calculoParcela?.parcelaDemais,
+    });
 
     if (isEditing && card) {
-      await updateCard.mutateAsync({ id: card.id, ...input });
+      // Edição: só o que o usuário mudou (diff contra o snapshot da hidratação).
+      // Campo intocado fica fora do payload; campo limpo de propósito vai vazio.
+      const alterado = diffContraSnapshot(
+        snapshotPayload.current as unknown as Record<string, unknown>,
+        input as unknown as Record<string, unknown>,
+      );
+      if (nenhumaAlteracao(alterado)) {
+        toast.info('Nenhuma alteração para salvar.');
+        onOpenChange(false);
+        return;
+      }
+      await updateCard.mutateAsync({ id: card.id, ...(alterado as any) });
+      snapshotPayload.current = input;
     } else {
+      // Criação (nova carta e duplicação) segue com o payload completo.
       const newCard = await createCard.mutateAsync(input);
-      
+
       // Upload pending documents if any
       if (pendingDocuments.length > 0 && newCard?.id) {
         await batchUpload.mutateAsync({
@@ -1039,11 +1062,42 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         });
       }
     }
-    
+
     onOpenChange(false);
     form.reset();
     setPendingDocuments([]);
   };
+
+  /**
+   * Validação reprovada: hoje o clique só acendia um pontinho vermelho na aba.
+   * Agora leva o usuário até a aba do primeiro campo inválido, rola até ele,
+   * foca e diz o que falta. Nenhuma obrigatoriedade foi criada ou removida.
+   */
+  const onInvalid = (errors: Record<string, any>) => {
+    const nomes = Object.keys(errors);
+    if (nomes.length === 0) return;
+    const ordemCampos = tabOrder.flatMap((t) => tabFieldsMap[t as keyof typeof tabFieldsMap] || []);
+    const primeiro = ordemCampos.find((f) => nomes.includes(f)) || nomes[0];
+    const aba = tabOrder.find((t) =>
+      (tabFieldsMap[t as keyof typeof tabFieldsMap] || []).includes(primeiro),
+    );
+    if (aba) setActiveTab(aba);
+
+    toast.error(
+      `Complete os campos obrigatórios: ${nomes.map((n) => CAMPO_LABELS[n] || n).join(', ')}`,
+    );
+
+    setTimeout(() => {
+      const root = dialogContentRef.current;
+      if (!root) return;
+      const alvo =
+        (root.querySelector(`[name="${primeiro}"]`) as HTMLElement | null) ||
+        (root.querySelector('[aria-invalid="true"]') as HTMLElement | null);
+      alvo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      alvo?.focus?.();
+    }, 120);
+  };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
