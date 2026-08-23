@@ -232,12 +232,124 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+/**
+ * Valores do formulário a partir de uma cota (edição) ou da cota de origem
+ * (duplicação). Uma função só para os dois caminhos: é isso que garante que a
+ * duplicação herde o plano inteiro e que o snapshot do diff represente
+ * exatamente o que foi colocado na tela.
+ */
+function valoresDaCarta(c: any): Partial<FormData> {
+  return {
+    tipo_pessoa: (c.tipo_pessoa as 'pf' | 'pj') || 'pf',
+    categoria: (c.categoria as 'inside' | 'life') || undefined,
+    tipo_registro: ((c.tipo_registro as 'reserva' | 'contratacao') || 'contratacao'),
+    tipo_produto: (c.tipo_produto as 'select' | 'parcelinha') || 'select',
+    empresa_paga_parcelas: (Number(c.parcelas_pagas_empresa) > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
+    tipo_contrato: (c.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar') || undefined,
+    parcelas_pagas_empresa: Number(c.parcelas_pagas_empresa) || 0,
+    dia_vencimento: c.dia_vencimento ?? undefined,
+    origem: (c.origem as any) || undefined,
+    origem_detalhe: c.origem_detalhe || undefined,
+    grupo: c.grupo || '',
+    cota: c.cota || '',
+    contrato_embracon: c.contrato_embracon || '',
+    valor_credito: c.valor_credito != null ? Number(c.valor_credito) : 0,
+    prazo_meses: c.prazo_meses ?? undefined,
+    data_contratacao: c.data_contratacao ? parseDateWithoutTimezone(c.data_contratacao) : undefined,
+    data_reserva: c.data_reserva ? parseDateWithoutTimezone(c.data_reserva) : undefined,
+    vendedor_id: c.vendedor_id || undefined,
+    vendedor_name: c.vendedor_name || undefined,
+    // Composição da parcela / plano
+    produto_codigo: c.produto_embracon || 'auto',
+    condicao_pagamento: ((c.condicao_pagamento || 'convencional') as 'convencional' | '50' | '25'),
+    inclui_seguro: c.inclui_seguro_vida || false,
+    objetivo: c.objetivo || '',
+    // Controle adicional
+    valor_comissao: c.valor_comissao != null ? Number(c.valor_comissao) : undefined,
+    e_transferencia: c.e_transferencia || false,
+    transferido_de: c.transferido_de || undefined,
+    observacoes: c.observacoes || undefined,
+    // PF
+    nome_completo: c.nome_completo || '',
+    data_nascimento: c.data_nascimento ? parseDateWithoutTimezone(c.data_nascimento) : undefined,
+    cpf: c.cpf || '',
+    rg: c.rg || '',
+    estado_civil: (c.estado_civil as any) || undefined,
+    cpf_conjuge: c.cpf_conjuge || '',
+    endereco_cep: c.endereco_cep || '',
+    endereco_rua: c.endereco_rua || '',
+    endereco_numero: c.endereco_numero || '',
+    endereco_complemento: c.endereco_complemento || '',
+    endereco_bairro: c.endereco_bairro || '',
+    endereco_cidade: c.endereco_cidade || '',
+    endereco_estado: c.endereco_estado || '',
+    telefone: c.telefone || '',
+    email: c.email || '',
+    profissao: c.profissao || '',
+    tipo_servidor: (c.tipo_servidor as any) || undefined,
+    renda: c.renda != null ? Number(c.renda) : undefined,
+    patrimonio: c.patrimonio != null ? Number(c.patrimonio) : undefined,
+    pix: c.pix || '',
+    // PJ
+    razao_social: c.razao_social || '',
+    cnpj: c.cnpj || '',
+    natureza_juridica: c.natureza_juridica || '',
+    inscricao_estadual: c.inscricao_estadual || '',
+    data_fundacao: c.data_fundacao ? parseDateWithoutTimezone(c.data_fundacao) : undefined,
+    endereco_comercial_cep: c.endereco_comercial_cep || '',
+    endereco_comercial_rua: c.endereco_comercial_rua || '',
+    endereco_comercial_numero: c.endereco_comercial_numero || '',
+    endereco_comercial_complemento: c.endereco_comercial_complemento || '',
+    endereco_comercial_bairro: c.endereco_comercial_bairro || '',
+    endereco_comercial_cidade: c.endereco_comercial_cidade || '',
+    endereco_comercial_estado: c.endereco_comercial_estado || '',
+    telefone_comercial: c.telefone_comercial || '',
+    email_comercial: c.email_comercial || '',
+    faturamento_mensal: c.faturamento_mensal != null ? Number(c.faturamento_mensal) : undefined,
+    num_funcionarios: c.num_funcionarios != null ? Number(c.num_funcionarios) : undefined,
+    partners: (c.partners || []).map((p: any) => ({
+      nome: p.nome,
+      cpf: p.cpf,
+      renda: p.renda != null ? Number(p.renda) : undefined,
+    })),
+  };
+}
+
+/** Rótulos para a mensagem de validação (não altera obrigatoriedade de nada). */
+const CAMPO_LABELS: Record<string, string> = {
+  tipo_pessoa: 'Tipo de Pessoa',
+  categoria: 'Categoria',
+  grupo: 'Grupo',
+  cota: 'Cota',
+  contrato_embracon: 'Contrato Embracon',
+  valor_credito: 'Valor do Crédito',
+  prazo_meses: 'Prazo (meses)',
+  tipo_produto: 'Tipo de Produto',
+  condicao_pagamento: 'Condição de Pagamento',
+  objetivo: 'Objetivo da Carta',
+  empresa_paga_parcelas: 'Empresa paga parcelas?',
+  tipo_contrato: 'Tipo de Contrato',
+  parcelas_pagas_empresa: 'Qtd de Parcelas',
+  dia_vencimento: 'Dia de Vencimento',
+  data_contratacao: 'Data de Contratação',
+  data_reserva: 'Data de Reserva',
+  origem: 'Origem',
+  nome_completo: 'Nome Completo',
+  cpf: 'CPF',
+  razao_social: 'Razão Social',
+  cnpj: 'CNPJ',
+  email: 'E-mail',
+  email_comercial: 'E-mail Comercial',
+  partners: 'Sócios',
+};
+
 interface ConsorcioCardFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   card?: ConsorcioCardWithDetails | null;
   duplicateFrom?: Partial<import('@/types/consorcio').ConsorcioCard> | null;
 }
+
 
 /**
  * Aviso de atribuição: o Painel Comercial do Consórcio conta a cota para o
