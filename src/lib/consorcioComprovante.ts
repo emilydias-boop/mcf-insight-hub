@@ -219,7 +219,7 @@ export function montarDadosComprovante(
     cliente_email: comprovanteEmailCliente(card) || '—',
     cliente_endereco: enderecoCliente(card),
     administradora: ADMINISTRADORA_CONSORCIO,
-    produto: card.produto_embracon || card.tipo_produto || '—',
+    produto: comprovanteProdutoLabel(card),
     objetivo: card.objetivo === 'imovel' ? 'Imóvel' : card.objetivo === 'auto' ? 'Automóvel' : '—',
     grupo: String(card.grupo || '—'),
     cota: String(card.cota || '—'),
