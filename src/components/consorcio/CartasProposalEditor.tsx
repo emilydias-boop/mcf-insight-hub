@@ -37,7 +37,14 @@ interface CartasProposalEditorProps {
   tipoOptions: { name: string; label: string }[];
   /** Destaca as linhas incompletas (após tentativa de gravar). */
   mostrarErros?: boolean;
+  /**
+   * Permissão EXPLÍCITA de quem chama para pré-selecionar Parcelinha/240/
+   * Convencional em cartas novas. Default `false`: editar proposta existente
+   * nunca pré-seleciona nada.
+   */
+  preSelecionarPadrao?: boolean;
 }
+
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
