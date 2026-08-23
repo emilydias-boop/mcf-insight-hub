@@ -264,26 +264,24 @@ export function CartasProposalEditor({
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div>
                       <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        className="h-9"
+                      {/* Segue opcional: sem `required` não aparece linha de vazio. */}
+                      <CurrencyInput
                         value={c.parcela1a12Str}
-                        onChange={e => patch(c.key, { parcela1a12Str: formatBRLInput(e.target.value) })}
-                        placeholder="0,00"
+                        onChange={masked => patch(c.key, { parcela1a12Str: masked })}
+                        placeholder="Digite o valor da parcela"
+                        inputClassName="h-9"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Demais parcelas (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        className="h-9"
+                      <CurrencyInput
                         value={c.parcelaDemaisStr}
-                        onChange={e => patch(c.key, { parcelaDemaisStr: formatBRLInput(e.target.value) })}
-                        placeholder="0,00"
+                        onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
+                        placeholder="Digite o valor da parcela"
+                        inputClassName="h-9"
                       />
                     </div>
+
                     <div>
                       <Label className="text-xs">Condição de pagamento</Label>
                       <Select
