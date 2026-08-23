@@ -84,6 +84,9 @@ export function PlanosTab() {
   const [showInativos, setShowInativos] = useState(false);
   const [toDelete, setToDelete] = useState<ConsorcioCredito | null>(null);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+  const [prefill, setPrefill] = useState<CombinacaoFaltante | null>(null);
+  const [formKey, setFormKey] = useState(0);
+
 
   const toggleExpandido = (id: string) =>
     setExpandidos((prev) => {
