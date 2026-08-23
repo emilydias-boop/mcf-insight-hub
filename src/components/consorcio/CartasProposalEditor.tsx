@@ -150,6 +150,7 @@ export function CartasProposalEditor({
   const aplicarPlano = (key: string, plano: PlanoCartaOption) => {
     setPlanoPorCarta(m => ({ ...m, [key]: plano.id }));
     setManualPorCarta(m => ({ ...m, [key]: false }));
+    limparPerdido(key);
     patch(key, {
       valorStr: numberToBRLInput(plano.valorCredito),
       parcela1a12Str: numberToBRLInput(plano.parcela1a12),
@@ -161,6 +162,7 @@ export function CartasProposalEditor({
   const virarManual = (key: string) => {
     setPlanoPorCarta(m => ({ ...m, [key]: '' }));
     setManualPorCarta(m => ({ ...m, [key]: true }));
+    limparPerdido(key);
   };
 
 
