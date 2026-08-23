@@ -15313,6 +15313,10 @@ export type Database = {
         }
         Returns: Json
       }
+      consorcio_gerar_parcelas: {
+        Args: { p_card_id: string; p_parcelas: Json }
+        Returns: number
+      }
       corrigir_agendador_reuniao: {
         Args: { p_attendee_id: string; p_booked_by: string }
         Returns: Json
