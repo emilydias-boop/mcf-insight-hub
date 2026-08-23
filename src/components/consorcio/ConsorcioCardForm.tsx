@@ -1097,6 +1097,17 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     });
 
     if (isEditing && card) {
+      /**
+       * Trava dura: sem snapshot da cota completa não existe save de edição.
+       * Salvar o payload inteiro a partir de um formulário hidratado só com o
+       * objeto parcial da listagem apagaria RG, renda, endereço e categoria.
+       */
+      if (!snapshotPayload.current) {
+        toast.error(
+          'Não é possível salvar: os dados completos da cota não foram carregados. Feche e abra novamente, ou use "Tentar de novo".',
+        );
+        return;
+      }
       // Edição: só o que o usuário mudou (diff contra o snapshot da hidratação).
       // Campo intocado fica fora do payload; campo limpo de propósito vai vazio.
       const alterado = diffContraSnapshot(
@@ -1104,12 +1115,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         input as unknown as Record<string, unknown>,
       );
       if (nenhumaAlteracao(alterado)) {
+        // Fecha SEM nenhuma escrita: nada de mutateAsync neste caminho.
         toast.info('Nenhuma alteração para salvar.');
         onOpenChange(false);
         return;
       }
       await updateCard.mutateAsync({ id: card.id, ...(alterado as any) });
       snapshotPayload.current = input;
+
     } else {
       // Criação (nova carta e duplicação) segue com o payload completo.
       const newCard = await createCard.mutateAsync(input);
