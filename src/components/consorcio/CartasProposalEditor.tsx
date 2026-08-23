@@ -169,7 +169,14 @@ export function CartasProposalEditor({
         <div className="space-y-2">
           {cartas.map((c, i) => {
             const invalida = !!mostrarErros && !cartaDraftValida(c);
+            const manual = ehManual(c);
+            const { opcoes: planos, faltando, prazoForaDaTabela } = filtrarPlanosCarta(
+              tabelaPlanos,
+              { tipoProduto: c.tipoProduto, prazoMeses: c.prazoMeses, condicaoPagamento: c.condicaoPagamento },
+            );
+            const planoSel = planos.find(p => p.id === planoPorCarta[c.key]);
             return (
+
               <div
                 key={c.key}
                 className={`rounded-md border p-2.5 space-y-2 ${invalida ? 'border-destructive bg-destructive/5' : 'border-border'}`}
