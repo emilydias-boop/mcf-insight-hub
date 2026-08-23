@@ -183,12 +183,20 @@ export function CartasProposalEditor({
                     <Input
                       type="text"
                       inputMode="numeric"
-                      className="h-9"
+                      className={`h-9 ${invalida && !c.valorStr ? 'border-destructive' : ''}`}
                       value={c.valorStr}
                       onChange={e => patch(c.key, { valorStr: formatBRLInput(e.target.value) })}
-                      placeholder="150.000,00"
+                      /* Nunca use um número como placeholder: cinza claro parecendo
+                         valor preenchido foi o que travou o lançamento em produção. */
+                      placeholder="Digite o valor do crédito"
                     />
+                    {!c.valorStr && (
+                      <p className={`mt-1 text-[11px] ${invalida ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        Campo vazio — digite o crédito.
+                      </p>
+                    )}
                   </div>
+
                   <div>
                     <Label className="text-xs">Prazo (meses)</Label>
                     <Select
