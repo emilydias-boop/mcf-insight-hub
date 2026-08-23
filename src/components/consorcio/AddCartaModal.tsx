@@ -206,7 +206,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     ),
   ].filter(Boolean) as string[];
 
-  const podeSalvar = pendencias.length === 0;
+  
 
 
   const resetar = () => {
