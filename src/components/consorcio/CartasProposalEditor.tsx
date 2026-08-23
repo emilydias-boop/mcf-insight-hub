@@ -244,22 +244,24 @@ export function CartasProposalEditor({
                   </div>
                 </div>
 
+                {/* 1) Filtro do plano: produto → prazo → condição. Trocar
+                    qualquer um destes NUNCA apaga crédito ou parcela já
+                    preenchidos — filtro é filtro, não é reset. */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <Label className="text-xs">Crédito (R$)</Label>
-                    {/* `required` aqui só controla o aviso visual de vazio — a regra
-                        de salvar continua sendo `cartaDraftValida`, intocada. */}
-                    <CurrencyInput
-                      value={c.valorStr}
-                      onChange={masked => patch(c.key, { valorStr: masked })}
-                      required
-                      showError={invalida}
-                      placeholder="Digite o valor do crédito"
-                      emptyHint="Campo vazio — digite o crédito."
-                      inputClassName="h-9"
-                    />
+                    <Label className="text-xs">Tipo de produto</Label>
+                    <Select value={c.tipoProduto} onValueChange={v => patch(c.key, { tipoProduto: v })}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Produto" /></SelectTrigger>
+                      <SelectContent>
+                        {tipoOptions.map(o => (
+                          <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                        ))}
+                        {c.tipoProduto && !tipoOptions.some(o => o.name === c.tipoProduto) && (
+                          <SelectItem value={c.tipoProduto}>{c.tipoProduto} (legado)</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
-
 
                   <div>
                     <Label className="text-xs">Prazo (meses)</Label>
@@ -288,50 +290,125 @@ export function CartasProposalEditor({
                       />
                     )}
                   </div>
+
                   <div>
-                    <Label className="text-xs">Tipo de produto</Label>
-                    <Select value={c.tipoProduto} onValueChange={v => patch(c.key, { tipoProduto: v })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Produto" /></SelectTrigger>
+                    <Label className="text-xs">Condição de pagamento</Label>
+                    <Select
+                      value={c.condicaoPagamento}
+                      onValueChange={v => patch(c.key, { condicaoPagamento: v })}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
                       <SelectContent>
-                        {tipoOptions.map(o => (
-                          <SelectItem key={o.name} value={o.name}>{o.label}</SelectItem>
+                        {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                         ))}
-                        {c.tipoProduto && !tipoOptions.some(o => o.name === c.tipoProduto) && (
-                          <SelectItem value={c.tipoProduto}>{c.tipoProduto} (legado)</SelectItem>
-                        )}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                {/* Dados do plano da carta. Opcionais no lançamento — mas sem o
-                    valor da parcela o cadastro nasce como cadastro incompleto e
-                    o Termo de Adesão não sai. Nada é calculado aqui: o valor é o
-                    da tabela da Embracon, digitado pela pessoa. */}
+                {/* 2) Plano da tabela Embracon. Opt-in: escolher preenche
+                    crédito e as duas parcelas com o valor tabelado, sem
+                    digitação. Nunca obrigatório, nunca trava a venda. */}
                 <div className="space-y-2 rounded-md border border-dashed p-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-xs">
                       Plano da carta {i + 1}
-                      {(() => {
-                        const digits = c.valorStr.replace(/\D/g, '');
-                        const v = digits ? Number(digits) / 100 : 0;
-                        return v > 0 ? ` · ${fmtBRL(v)}` : '';
-                      })()}
                       <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
                     </Label>
-                    {cartaSemParcela(c) && (
-                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                        sem parcela → cadastro incompleto
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {!manual && planoSel && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {planoSel.produtoCodigo} · tabela oficial
+                        </Badge>
+                      )}
+                      {manual && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500 text-[10px] text-amber-600 dark:text-amber-400"
+                        >
+                          plano fora da tabela
+                        </Badge>
+                      )}
+                      {cartaSemParcela(c) && (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                          sem parcela → cadastro incompleto
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+
+                  <Select
+                    value={planoPorCarta[c.key] || (manual ? '__manual__' : '')}
+                    onValueChange={v => {
+                      if (v === '__manual__') { virarManual(c.key); return; }
+                      const p = planos.find(o => o.id === v);
+                      if (p) aplicarPlano(c.key, p);
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Escolher plano da tabela" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {planos.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {fmtBRL(p.valorCredito)} — 1ª à 12ª {fmtBRLc(p.parcela1a12)} · demais{' '}
+                          {fmtBRLc(p.parcelaDemais)} ({p.produtoCodigo})
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__manual__">
+                        Meu plano não está na lista — informar manualmente
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Sem vermelho: a tela explica o que falta, o botão de salvar
+                      da tela segue clicável e o caminho manual segue aberto. */}
+                  {carregandoPlanos && (
+                    <p className="text-[11px] text-muted-foreground">Carregando planos da tabela…</p>
+                  )}
+                  {!carregandoPlanos && faltando.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Escolha {faltando.join(', ')} acima para a lista de planos aparecer — ou informe
+                      crédito e parcela manualmente.
+                    </p>
+                  )}
+                  {!carregandoPlanos && faltando.length === 0 && prazoForaDaTabela && (
+                    <p className="text-[11px] text-muted-foreground">
+                      A tabela só tem planos para 200, 220 e 240 meses. Para {c.prazoMeses} meses,
+                      informe crédito e parcela manualmente.
+                    </p>
+                  )}
+                  {!carregandoPlanos && faltando.length === 0 && !prazoForaDaTabela && planos.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhum plano cadastrado para esta combinação de produto, prazo e condição.
+                      Informe crédito e parcela manualmente — a venda pode ser lançada assim.
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div>
+                      <Label className="text-xs">Crédito (R$)</Label>
+                      {/* `required` aqui só controla o aviso visual de vazio — a regra
+                          de salvar continua sendo `cartaDraftValida`, intocada. */}
+                      <CurrencyInput
+                        value={c.valorStr}
+                        onChange={masked => patch(c.key, { valorStr: masked })}
+                        required
+                        showError={invalida}
+                        disabled={!manual}
+                        placeholder="Digite o valor do crédito"
+                        emptyHint="Campo vazio — digite o crédito."
+                        inputClassName="h-9"
+                      />
+                    </div>
                     <div>
                       <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
                       {/* Segue opcional: sem `required` não aparece linha de vazio. */}
                       <CurrencyInput
                         value={c.parcela1a12Str}
                         onChange={masked => patch(c.key, { parcela1a12Str: masked })}
+                        disabled={!manual}
                         placeholder="Digite o valor da parcela"
                         inputClassName="h-9"
                       />
@@ -341,25 +418,43 @@ export function CartasProposalEditor({
                       <CurrencyInput
                         value={c.parcelaDemaisStr}
                         onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
+                        disabled={!manual}
                         placeholder="Digite o valor da parcela"
                         inputClassName="h-9"
                       />
                     </div>
+                  </div>
 
+                  {!manual && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-muted-foreground"
+                      onClick={() => virarManual(c.key)}
+                    >
+                      <Pencil className="mr-1 h-3 w-3" /> editar manualmente
+                    </Button>
+                  )}
+
+                  {manual && (
                     <div>
-                      <Label className="text-xs">Condição de pagamento</Label>
-                      <Select
-                        value={c.condicaoPagamento}
-                        onValueChange={v => patch(c.key, { condicaoPagamento: v })}
-                      >
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
-                        <SelectContent>
-                          {CONDICAO_PAGAMENTO_OPTIONS.map(o => (
-                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-xs">Observação do plano (opcional)</Label>
+                      <Input
+                        className="h-9"
+                        value={obsPorCarta[c.key] || ''}
+                        onChange={e => setObsPorCarta(m => ({ ...m, [c.key]: e.target.value }))}
+                        placeholder="Ex: crédito novo da Embracon, 264x sem tabela"
+                        maxLength={120}
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Anotação de apoio desta tela. Para registrar junto da venda, repita em
+                        “Detalhes da Proposta”.
+                      </p>
                     </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div>
                       <Label className="text-xs">Categoria</Label>
                       <Select value={c.categoria} onValueChange={v => patch(c.key, { categoria: v })}>
@@ -390,6 +485,7 @@ export function CartasProposalEditor({
                     </div>
                   </div>
                 </div>
+
 
 
                 {/* Intenção do closer: quais das 12 primeiras parcelas a MCF paga.
