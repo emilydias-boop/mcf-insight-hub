@@ -175,6 +175,12 @@ export function CartasProposalEditor({
           {cartas.map((c, i) => {
             const invalida = !!mostrarErros && !cartaDraftValida(c);
             const manual = ehManual(c);
+            // "fora da tabela" ≠ "campos destravados". Só acende quando o
+            // operador ESCOLHEU manual: `__manual__` no seletor, ou "editar
+            // manualmente" depois de um plano aplicado. Carta sem plano
+            // escolhido (a maioria) não recebe badge — senão o alerta vira
+            // ruído e ninguém lê mais.
+            const foraDaTabela = manualPorCarta[c.key] === true;
             const { opcoes: planos, faltando, prazoForaDaTabela } = filtrarPlanosCarta(
               tabelaPlanos,
               { tipoProduto: c.tipoProduto, prazoMeses: c.prazoMeses, condicaoPagamento: c.condicaoPagamento },
@@ -327,7 +333,7 @@ export function CartasProposalEditor({
                           {planoSel.produtoCodigo} · tabela oficial
                         </Badge>
                       )}
-                      {manual && (
+                      {foraDaTabela && (
                         <Badge
                           variant="outline"
                           className="border-amber-500 text-[10px] text-amber-600 dark:text-amber-400"
@@ -344,7 +350,7 @@ export function CartasProposalEditor({
                   </div>
 
                   <Select
-                    value={planoPorCarta[c.key] || (manual ? '__manual__' : '')}
+                    value={planoPorCarta[c.key] || (foraDaTabela ? '__manual__' : '')}
                     onValueChange={v => {
                       if (v === '__manual__') { virarManual(c.key); return; }
                       const p = planos.find(o => o.id === v);
@@ -355,15 +361,19 @@ export function CartasProposalEditor({
                       <SelectValue placeholder="Escolher plano da tabela" />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Saída de emergência no TOPO, com separador logo abaixo.
+                          Não pode ficar escondida no fim de uma lista de
+                          dezenas de planos. */}
+                      <SelectItem value="__manual__">
+                        Meu plano não está na lista — informar manualmente
+                      </SelectItem>
+                      <div className="-mx-1 my-1 h-px bg-border" />
                       {planos.map(p => (
                         <SelectItem key={p.id} value={p.id}>
                           {fmtBRL(p.valorCredito)} — 1ª à 12ª {fmtBRLc(p.parcela1a12)} · demais{' '}
                           {fmtBRLc(p.parcelaDemais)} ({p.produtoCodigo})
                         </SelectItem>
                       ))}
-                      <SelectItem value="__manual__">
-                        Meu plano não está na lista — informar manualmente
-                      </SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -442,7 +452,7 @@ export function CartasProposalEditor({
                     </Button>
                   )}
 
-                  {manual && (
+                  {foraDaTabela && (
                     <div>
                       <Label className="text-xs">Observação do plano (anotação de tela)</Label>
                       <Input
