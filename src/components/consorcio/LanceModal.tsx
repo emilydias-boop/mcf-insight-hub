@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { numberToBRLInput, parseBRLInput } from '@/lib/brlMask';
 import { simularChanceLance, getCorChanceLance } from '@/lib/contemplacao';
 import { useRegistrarLance } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
@@ -18,48 +20,60 @@ interface Props {
 
 export function LanceModal({ open, onOpenChange, card }: Props) {
   const [percentual, setPercentual] = useState('');
+  /** Valor do lance em string mascarada (pt-BR), como o CurrencyInput trabalha. */
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
   const [simulacao, setSimulacao] = useState<SimulacaoLance | null>(null);
+  const [mostrarErros, setMostrarErros] = useState(false);
 
   const lanceMutation = useRegistrarLance();
 
   const credito = card ? Number(card.valor_credito) : 0;
+  const valorNumero = parseBRLInput(valor);
 
   const handlePercentualChange = (v: string) => {
     setPercentual(v);
     setSimulacao(null);
     const p = parseFloat(v);
     if (!isNaN(p) && credito > 0) {
-      setValor(((credito * p) / 100).toFixed(2));
+      setValor(numberToBRLInput((credito * p) / 100));
     } else {
       setValor('');
     }
   };
 
-  const handleValorChange = (v: string) => {
-    setValor(v);
+  const handleValorChange = (masked: string) => {
+    setValor(masked);
     setSimulacao(null);
-    const val = parseFloat(v);
-    if (!isNaN(val) && credito > 0) {
+    const val = parseBRLInput(masked);
+    if (val > 0 && credito > 0) {
       setPercentual(((val / credito) * 100).toFixed(2));
     } else {
       setPercentual('');
     }
   };
 
+
+  const percentualNumero = parseFloat(percentual);
+  const percentualValido = !isNaN(percentualNumero) && percentualNumero > 0;
+  const pendencias: string[] = [];
+  if (!percentualValido) pendencias.push('Informe o percentual do lance (ou o valor, que calcula o percentual).');
+  if (!credito) pendencias.push('Esta cota não tem valor de crédito cadastrado — sem ele não há simulação.');
+
   const handleSimular = () => {
-    const p = parseFloat(percentual);
-    if (isNaN(p) || !credito) return;
-    setSimulacao(simularChanceLance(credito, p));
+    // Botão sempre clicável: se falta algo, a tela explica em vez de ficar cinza mudo.
+    if (pendencias.length > 0) { setMostrarErros(true); return; }
+    setMostrarErros(false);
+    setSimulacao(simularChanceLance(credito, percentualNumero));
   };
 
   const handleSalvar = async (registrarContemplacao: boolean) => {
     if (!card || !simulacao) return;
     await lanceMutation.mutateAsync({
       cardId: card.id,
-      percentualLance: parseFloat(percentual),
-      valorLance: parseFloat(valor),
+      percentualLance: percentualNumero,
+      valorLance: valorNumero,
+
       chanceClassificacao: simulacao.chanceContemplacao,
       posicaoEstimada: simulacao.posicaoEstimada,
       observacao: observacao || undefined,
@@ -74,8 +88,10 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
     setValor('');
     setObservacao('');
     setSimulacao(null);
+    setMostrarErros(false);
     onOpenChange(false);
   };
+
 
   if (!card) return null;
 
@@ -95,26 +111,30 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Percentual (%)</Label>
               <Input
                 type="number"
                 value={percentual}
                 onChange={(e) => handlePercentualChange(e.target.value)}
-                placeholder="25"
+                placeholder="Percentual do lance"
                 step="0.1"
               />
+              {!percentualValido && (
+                <p className={mostrarErros ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+                  Campo vazio — digite o percentual.
+                </p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                value={valor}
-                onChange={(e) => handleValorChange(e.target.value)}
-                placeholder="50000"
-                step="0.01"
-              />
-            </div>
+            <CurrencyInput
+              label="Valor do lance"
+              value={valor}
+              onChange={handleValorChange}
+              placeholder="Digite o valor do lance"
+              emptyHint="Campo vazio — digite o valor ou o percentual."
+              required
+              showError={mostrarErros}
+            />
           </div>
 
           <div className="space-y-2">
@@ -126,8 +146,17 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
             />
           </div>
 
-          <Button onClick={handleSimular} disabled={!percentual} className="w-full">
+          {mostrarErros && pendencias.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
+              {pendencias.map((p) => (
+                <p key={p} className="text-xs text-amber-700 dark:text-amber-400">• {p}</p>
+              ))}
+            </div>
+          )}
+
+          <Button onClick={handleSimular} className="w-full">
             Simular
+
           </Button>
 
           {simulacao && (
