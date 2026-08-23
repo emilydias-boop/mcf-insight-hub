@@ -10,6 +10,10 @@ interface ParcelaComposicaoProps {
   incluiSeguro: boolean;
   taxaAntecipadaTipo: 'primeira_parcela' | 'dividida_12';
   usandoTabelaOficial?: boolean;
+  /** Valor do plano/tabela (o que vale de verdade) para comparar com a estimativa. */
+  valorOficial1a12?: number | null;
+  /** Valor do plano/tabela das parcelas de 13ª em diante. */
+  valorOficialDemais?: number | null;
 }
 
 export function ParcelaComposicao({
@@ -18,7 +22,24 @@ export function ParcelaComposicao({
   incluiSeguro,
   taxaAntecipadaTipo,
   usandoTabelaOficial,
+  valorOficial1a12,
+  valorOficialDemais,
 }: ParcelaComposicaoProps) {
+  const estimado1a12 =
+    taxaAntecipadaTipo === 'primeira_parcela' && !usandoTabelaOficial
+      ? calculo.parcela1a12 + calculo.taxaAntecipada
+      : calculo.parcela1a12;
+  const centavos = (n: number) => Math.round(n * 100);
+  const div1a12 =
+    valorOficial1a12 != null && valorOficial1a12 > 0 && centavos(valorOficial1a12) !== centavos(estimado1a12)
+      ? valorOficial1a12 - estimado1a12
+      : null;
+  const divDemais =
+    valorOficialDemais != null && valorOficialDemais > 0 && centavos(valorOficialDemais) !== centavos(calculo.parcelaDemais)
+      ? valorOficialDemais - calculo.parcelaDemais
+      : null;
+  const temDivergencia = div1a12 != null || divDemais != null;
+
   return (
     <Card className="bg-muted/30 border-primary/20">
       <CardHeader className="pb-3">
