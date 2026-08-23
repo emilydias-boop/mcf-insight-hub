@@ -318,7 +318,7 @@ export function CartasProposalEditor({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <Label className="text-xs">Tipo de produto</Label>
-                    <Select value={c.tipoProduto} onValueChange={v => patch(c.key, { tipoProduto: v })}>
+                    <Select value={c.tipoProduto} onValueChange={v => trocarFiltro(c, { tipoProduto: v })}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Produto" /></SelectTrigger>
                       <SelectContent>
                         {tipoOptions.map(o => (
@@ -336,8 +336,8 @@ export function CartasProposalEditor({
                     <Select
                       value={c.prazoOutro ? 'outro' : (c.prazoMeses || '')}
                       onValueChange={v => {
-                        if (v === 'outro') patch(c.key, { prazoOutro: true, prazoMeses: '' });
-                        else patch(c.key, { prazoOutro: false, prazoMeses: v });
+                        if (v === 'outro') trocarFiltro(c, { prazoOutro: true, prazoMeses: '' });
+                        else trocarFiltro(c, { prazoOutro: false, prazoMeses: v });
                       }}
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Prazo" /></SelectTrigger>
@@ -353,7 +353,7 @@ export function CartasProposalEditor({
                         className="mt-1.5 h-9"
                         type="number"
                         value={c.prazoMeses}
-                        onChange={e => patch(c.key, { prazoMeses: e.target.value })}
+                        onChange={e => trocarFiltro(c, { prazoMeses: e.target.value })}
                         placeholder="Meses"
                       />
                     )}
@@ -363,7 +363,7 @@ export function CartasProposalEditor({
                     <Label className="text-xs">Condição de pagamento</Label>
                     <Select
                       value={c.condicaoPagamento}
-                      onValueChange={v => patch(c.key, { condicaoPagamento: v })}
+                      onValueChange={v => trocarFiltro(c, { condicaoPagamento: v })}
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
                       <SelectContent>
@@ -385,7 +385,7 @@ export function CartasProposalEditor({
                       <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
                     </Label>
                     <div className="flex items-center gap-1.5">
-                      {!manual && planoSel && (
+                      {!manual && planoBate && planoSel && (
                         <Badge variant="secondary" className="text-[10px]">
                           {planoSel.produtoCodigo} · tabela oficial
                         </Badge>
