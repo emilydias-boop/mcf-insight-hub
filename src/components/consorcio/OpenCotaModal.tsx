@@ -1183,8 +1183,11 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                         prazo={prazoMeses}
                         incluiSeguro={incluiSeguro || false}
                         taxaAntecipadaTipo={tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12'}
+                        valorOficial1a12={plano.valores.parcela_1a_12a ?? null}
+                        valorOficialDemais={plano.valores.parcela_demais ?? null}
                       />
                     )}
+
 
                     {/* Dados do plano (valores que vão para o Termo de Adesão) */}
                     <div className="rounded-lg border p-3 space-y-3">
