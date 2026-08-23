@@ -333,7 +333,7 @@ export function CartasProposalEditor({
                           {planoSel.produtoCodigo} · tabela oficial
                         </Badge>
                       )}
-                      {manual && (
+                      {foraDaTabela && (
                         <Badge
                           variant="outline"
                           className="border-amber-500 text-[10px] text-amber-600 dark:text-amber-400"
