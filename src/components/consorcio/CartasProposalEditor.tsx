@@ -1,16 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import { numberToBRLInput } from '@/lib/brlMask';
+import {
+  filtrarPlanosCarta,
+  useConsorcioPlanosTabela,
+  type PlanoCartaOption,
+} from '@/hooks/useConsorcioPlanosCarta';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+
 
 import {
   MAX_CARTAS_POR_PROPOSTA,
