@@ -632,212 +632,122 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     return fields.some(field => field in errors);
   };
 
-  // Reset form when modal opens/closes
+  /**
+   * Hidratação do formulário.
+   *
+   * Edição: a listagem entrega um objeto PARCIAL (sem RG, profissão, renda,
+   * patrimônio, PIX e endereço), por isso esperamos a consulta detalhada antes
+   * de tirar o snapshot. Snapshot tirado com o objeto parcial faria o diff
+   * enxergar a hidratação como mudança do usuário e reenviar tudo.
+   */
   useEffect(() => {
-    if (open) {
-      setActiveTab('dados');
-      setPendingDocuments([]);
-      
-      if (card) {
-        // Edit mode - load card data
-        form.reset({
-          tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
-          categoria: (card.categoria as 'inside' | 'life') || 'inside',
-          tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
-          tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
-          empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
-          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
-          parcelas_pagas_empresa: card.parcelas_pagas_empresa,
-          dia_vencimento: card.dia_vencimento,
-          origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
-          origem_detalhe: card.origem_detalhe || undefined,
-          grupo: card.grupo,
-          cota: card.cota,
-          contrato_embracon: (card as any).contrato_embracon || '',
-          valor_credito: Number(card.valor_credito),
-          prazo_meses: card.prazo_meses,
-          data_contratacao: card.data_contratacao ? parseDateWithoutTimezone(card.data_contratacao) : undefined,
-          data_reserva: (card as any).data_reserva ? parseDateWithoutTimezone((card as any).data_reserva) : undefined,
-          vendedor_id: card.vendedor_id || undefined,
-          vendedor_name: card.vendedor_name || undefined,
-          nome_completo: card.nome_completo || undefined,
-          data_nascimento: card.data_nascimento ? parseDateWithoutTimezone(card.data_nascimento) : undefined,
-          cpf: card.cpf || undefined,
-          rg: card.rg || undefined,
-          estado_civil: card.estado_civil as any || undefined,
-          cpf_conjuge: card.cpf_conjuge || undefined,
-          endereco_cep: card.endereco_cep || undefined,
-          endereco_rua: card.endereco_rua || undefined,
-          endereco_numero: card.endereco_numero || undefined,
-          endereco_complemento: card.endereco_complemento || undefined,
-          endereco_bairro: card.endereco_bairro || undefined,
-          endereco_cidade: card.endereco_cidade || undefined,
-          endereco_estado: card.endereco_estado || undefined,
-          telefone: card.telefone || undefined,
-          email: card.email || undefined,
-          profissao: card.profissao || undefined,
-          tipo_servidor: card.tipo_servidor as any || undefined,
-          renda: card.renda ? Number(card.renda) : undefined,
-          patrimonio: card.patrimonio ? Number(card.patrimonio) : undefined,
-          pix: card.pix || undefined,
-          razao_social: card.razao_social || undefined,
-          cnpj: card.cnpj || undefined,
-          natureza_juridica: card.natureza_juridica || undefined,
-          inscricao_estadual: card.inscricao_estadual || undefined,
-          data_fundacao: card.data_fundacao ? parseDateWithoutTimezone(card.data_fundacao) : undefined,
-          endereco_comercial_cep: card.endereco_comercial_cep || undefined,
-          endereco_comercial_rua: card.endereco_comercial_rua || undefined,
-          endereco_comercial_numero: card.endereco_comercial_numero || undefined,
-          endereco_comercial_complemento: card.endereco_comercial_complemento || undefined,
-          endereco_comercial_bairro: card.endereco_comercial_bairro || undefined,
-          endereco_comercial_cidade: card.endereco_comercial_cidade || undefined,
-          endereco_comercial_estado: card.endereco_comercial_estado || undefined,
-          telefone_comercial: card.telefone_comercial || undefined,
-          email_comercial: card.email_comercial || undefined,
-          faturamento_mensal: card.faturamento_mensal ? Number(card.faturamento_mensal) : undefined,
-          num_funcionarios: card.num_funcionarios ? Number(card.num_funcionarios) : undefined,
-          partners: card.partners?.map(p => ({ nome: p.nome, cpf: p.cpf, renda: p.renda ? Number(p.renda) : undefined })) || [],
-          // Composição da parcela
-          produto_codigo: (card as any).produto_embracon || 'auto',
-          condicao_pagamento: ((card as any).condicao_pagamento || 'convencional') as 'convencional' | '50' | '25',
-          inclui_seguro: (card as any).inclui_seguro_vida || false,
-          objetivo: ((card as any).objetivo as 'auto' | 'imovel') || 'imovel',
-          // Controle adicional
-          valor_comissao: card.valor_comissao ? Number(card.valor_comissao) : undefined,
-          e_transferencia: card.e_transferencia || false,
-          transferido_de: card.transferido_de || undefined,
-          observacoes: card.observacoes || undefined,
-        });
-      } else if (duplicateFrom) {
-        // Duplicate mode - pre-fill personal data, leave cota fields empty
-        const d = duplicateFrom;
-        form.reset({
-          tipo_pessoa: (d.tipo_pessoa as 'pf' | 'pj') || 'pf',
-          categoria: (d.categoria as 'inside' | 'life') || 'inside',
-          tipo_produto: (d.tipo_produto as 'select' | 'parcelinha') || 'select',
-          empresa_paga_parcelas: 'nao',
-          tipo_contrato: undefined,
-          parcelas_pagas_empresa: 0,
-          dia_vencimento: 10,
-          origem: (d.origem as any) || 'socio',
-          origem_detalhe: d.origem_detalhe || undefined,
-          vendedor_id: d.vendedor_id || undefined,
-          vendedor_name: d.vendedor_name || undefined,
-          partners: [],
-          // Cota fields empty
-          grupo: '',
-          cota: '',
-          contrato_embracon: '',
-          valor_credito: 0,
-          prazo_meses: 0,
-          produto_codigo: 'auto',
-          condicao_pagamento: 'convencional',
-          inclui_seguro: false,
-          objetivo: (d as any).objetivo || 'imovel',
-          // Controle
-          valor_comissao: undefined,
-          e_transferencia: d.e_transferencia || false,
-          transferido_de: d.transferido_de || undefined,
-          observacoes: d.observacoes || undefined,
-          // PF
-          nome_completo: d.nome_completo || '',
-          data_nascimento: d.data_nascimento ? parseDateWithoutTimezone(d.data_nascimento) : undefined,
-          cpf: d.cpf || '',
-          rg: d.rg || '',
-          estado_civil: (d.estado_civil as any) || undefined,
-          cpf_conjuge: d.cpf_conjuge || '',
-          endereco_cep: d.endereco_cep || '',
-          endereco_rua: d.endereco_rua || '',
-          endereco_numero: d.endereco_numero || '',
-          endereco_complemento: d.endereco_complemento || '',
-          endereco_bairro: d.endereco_bairro || '',
-          endereco_cidade: d.endereco_cidade || '',
-          endereco_estado: d.endereco_estado || '',
-          telefone: d.telefone || '',
-          email: d.email || '',
-          profissao: d.profissao || '',
-          tipo_servidor: (d.tipo_servidor as any) || undefined,
-          renda: d.renda ? Number(d.renda) : undefined,
-          patrimonio: d.patrimonio ? Number(d.patrimonio) : undefined,
-          pix: d.pix || '',
-          // PJ
-          razao_social: d.razao_social || '',
-          cnpj: d.cnpj || '',
-          natureza_juridica: d.natureza_juridica || '',
-          inscricao_estadual: d.inscricao_estadual || '',
-          data_fundacao: d.data_fundacao ? parseDateWithoutTimezone(d.data_fundacao) : undefined,
-          endereco_comercial_cep: d.endereco_comercial_cep || '',
-          endereco_comercial_rua: d.endereco_comercial_rua || '',
-          endereco_comercial_numero: d.endereco_comercial_numero || '',
-          endereco_comercial_complemento: d.endereco_comercial_complemento || '',
-          endereco_comercial_bairro: d.endereco_comercial_bairro || '',
-          endereco_comercial_cidade: d.endereco_comercial_cidade || '',
-          endereco_comercial_estado: d.endereco_comercial_estado || '',
-          telefone_comercial: d.telefone_comercial || '',
-          email_comercial: d.email_comercial || '',
-          faturamento_mensal: d.faturamento_mensal ? Number(d.faturamento_mensal) : undefined,
-          num_funcionarios: d.num_funcionarios ? Number(d.num_funcionarios) : undefined,
-        });
-      } else {
-        // Create mode - reset to empty values
-        form.reset({
-          tipo_pessoa: 'pf',
-          categoria: 'inside',
-          tipo_produto: 'select',
-          empresa_paga_parcelas: 'nao',
-          tipo_contrato: undefined,
-          parcelas_pagas_empresa: 0,
-          dia_vencimento: 10,
-          origem: 'socio',
-          partners: [],
-          grupo: '',
-          cota: '',
-          contrato_embracon: '',
-          valor_credito: 0,
-          prazo_meses: 0,
-          nome_completo: '',
-          data_nascimento: undefined,
-          cpf: '',
-          rg: '',
-          estado_civil: undefined,
-          cpf_conjuge: '',
-          endereco_cep: '',
-          endereco_rua: '',
-          endereco_numero: '',
-          endereco_complemento: '',
-          endereco_bairro: '',
-          endereco_cidade: '',
-          endereco_estado: '',
-          telefone: '',
-          email: '',
-          profissao: '',
-          tipo_servidor: undefined,
-          renda: undefined,
-          patrimonio: undefined,
-          pix: '',
-          razao_social: '',
-          cnpj: '',
-          natureza_juridica: '',
-          inscricao_estadual: '',
-          data_fundacao: undefined,
-          endereco_comercial_cep: '',
-          endereco_comercial_rua: '',
-          endereco_comercial_numero: '',
-          endereco_comercial_complemento: '',
-          endereco_comercial_bairro: '',
-          endereco_comercial_cidade: '',
-          endereco_comercial_estado: '',
-          telefone_comercial: '',
-          email_comercial: '',
-          faturamento_mensal: undefined,
-          num_funcionarios: undefined,
-          origem_detalhe: '',
-          vendedor_id: undefined,
-          vendedor_name: undefined,
-        });
-      }
+    if (!open) {
+      hidratadoDe.current = null;
+      snapshotPayload.current = null;
+      return;
     }
-  }, [open, card, duplicateFrom, form]);
+
+    if (card) {
+      const detalhado = detalheCarta && detalheCarta.id === card.id ? detalheCarta : null;
+      const fonte: any = detalhado || card;
+      const chave = `${card.id}:${detalhado ? 'detalhe' : 'parcial'}`;
+      if (hidratadoDe.current === chave) return;
+      hidratadoDe.current = chave;
+      setPendingDocuments([]);
+      if (!detalhado) setActiveTab('dados');
+      form.reset(valoresDaCarta(fonte));
+      // Snapshot SÓ com a cota completa em mão.
+      snapshotPayload.current = detalhado
+        ? montarPayloadCarta(form.getValues(), {
+            tipoProduto: (form.getValues('tipo_produto') as 'select' | 'parcelinha') || 'select',
+            parcela1a12: fonte.parcela_1a_12a != null ? Number(fonte.parcela_1a_12a) : undefined,
+            parcelaDemais: fonte.parcela_demais != null ? Number(fonte.parcela_demais) : undefined,
+          })
+        : null;
+      return;
+    }
+
+    if (hidratadoDe.current === 'novo') return;
+    hidratadoDe.current = 'novo';
+    setActiveTab('dados');
+    setPendingDocuments([]);
+    snapshotPayload.current = null;
+
+    if (duplicateFrom) {
+      /**
+       * Duplicar carta: herda TUDO do original (plano, categoria, origem,
+       * parcelas da empresa, vencimento, dados pessoais e endereço). Ficam em
+       * branco só o que é único de cada cota: grupo, cota e contrato Embracon.
+       */
+      form.reset({
+        ...valoresDaCarta(duplicateFrom as any),
+        grupo: '',
+        cota: '',
+        contrato_embracon: '',
+        partners: [],
+      });
+      return;
+    }
+
+    // Criação de carta nova - valores vazios
+    form.reset({
+      tipo_pessoa: 'pf',
+      categoria: 'inside',
+      tipo_produto: 'select',
+      empresa_paga_parcelas: 'nao',
+      tipo_contrato: undefined,
+      parcelas_pagas_empresa: 0,
+      dia_vencimento: 10,
+      origem: 'socio',
+      partners: [],
+      grupo: '',
+      cota: '',
+      contrato_embracon: '',
+      valor_credito: 0,
+      prazo_meses: 0,
+      nome_completo: '',
+      data_nascimento: undefined,
+      cpf: '',
+      rg: '',
+      estado_civil: undefined,
+      cpf_conjuge: '',
+      endereco_cep: '',
+      endereco_rua: '',
+      endereco_numero: '',
+      endereco_complemento: '',
+      endereco_bairro: '',
+      endereco_cidade: '',
+      endereco_estado: '',
+      telefone: '',
+      email: '',
+      profissao: '',
+      tipo_servidor: undefined,
+      renda: undefined,
+      patrimonio: undefined,
+      pix: '',
+      razao_social: '',
+      cnpj: '',
+      natureza_juridica: '',
+      inscricao_estadual: '',
+      data_fundacao: undefined,
+      endereco_comercial_cep: '',
+      endereco_comercial_rua: '',
+      endereco_comercial_numero: '',
+      endereco_comercial_complemento: '',
+      endereco_comercial_bairro: '',
+      endereco_comercial_cidade: '',
+      endereco_comercial_estado: '',
+      telefone_comercial: '',
+      email_comercial: '',
+      faturamento_mensal: undefined,
+      num_funcionarios: undefined,
+      origem_detalhe: '',
+      vendedor_id: undefined,
+      vendedor_name: undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, card, detalheCarta, duplicateFrom]);
+
 
   // Auto-set default parcelas when changing to intercalado (only for NEW cards)
   useEffect(() => {
