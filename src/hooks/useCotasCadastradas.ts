@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 export interface CotaCadastrada {
   id: string;
   nome: string;
+  /** Documento do titular (CPF ou CNPJ), usado na busca da etapa 5. */
+  documento: string | null;
   tipo_pessoa: string | null;
   grupo: string | null;
   cota: string | null;
@@ -59,7 +61,7 @@ export function useCotasCadastradas(range: { startDate?: Date; endDate?: Date })
         let q = supabase
           .from('consorcio_pending_registrations')
           .select(
-            'id, nome_completo, razao_social, tipo_pessoa, grupo, cota, valor_credito, vendedor_name, vendedor_name_cota, parcelas_pagas_empresa, consortium_card_id, cota_aberta_at, created_at, parcela_inicial_paga_em',
+            'id, nome_completo, razao_social, cpf, cnpj, tipo_pessoa, grupo, cota, valor_credito, vendedor_name, vendedor_name_cota, parcelas_pagas_empresa, consortium_card_id, cota_aberta_at, created_at, parcela_inicial_paga_em',
           )
           .in('status', ['cota_aberta', 'vinculada'])
           .not('consortium_card_id', 'is', null)
@@ -75,6 +77,7 @@ export function useCotasCadastradas(range: { startDate?: Date; endDate?: Date })
         .map((r) => ({
           id: r.id,
           nome: r.nome_completo || r.razao_social || 'sem nome',
+          documento: r.cpf || r.cnpj || null,
           tipo_pessoa: r.tipo_pessoa ?? null,
           grupo: r.grupo ?? null,
           cota: r.cota ?? null,
