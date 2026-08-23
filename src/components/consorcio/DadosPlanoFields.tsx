@@ -13,6 +13,8 @@ import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
 import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+import { produtosElegiveisParaCarta, taxaAntecipadaTipoDeProduto } from '@/lib/consorcioParcelaOficial';
+
 
 const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
 
