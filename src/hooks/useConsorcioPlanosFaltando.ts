@@ -87,7 +87,9 @@ export interface PlanosFaltandoResultado {
 /**
  * Chave da combinação a partir dos campos já gravados (carta OU cadastro
  * pendente, que não guarda o id da carta). Retorna null quando não dá para
- * comparar (sem crédito, ou prazo sem coluna na tabela).
+ * comparar (sem crédito, crédito abaixo do piso de saneamento, ou prazo sem
+ * coluna na tabela). Crédito abaixo de R$ 1.000 é erro de digitação e não gera
+ * aviso "Plano fora da tabela" no Dossiê.
  */
 export function chaveDaCombinacao(reg: {
   tipo_produto?: string | null;
@@ -97,7 +99,7 @@ export function chaveDaCombinacao(reg: {
 }): string | null {
   const cent = centavos(reg.valor_credito);
   const prazo = Number(reg.prazo_meses || 0);
-  if (cent <= 0 || !(PRAZOS as readonly number[]).includes(prazo)) return null;
+  if (cent <= 0 || cent < MIN_CREDITO_CENTAVOS || !(PRAZOS as readonly number[]).includes(prazo)) return null;
   const tipoTaxa = taxaAntecipadaTipoDeProduto(reg.tipo_produto);
   const cond = condKeyDaCarta(reg.condicao_pagamento);
   return `${tipoTaxa}|${cent}|${prazo}|${cond ?? '?'}`;
@@ -107,6 +109,7 @@ const VAZIO: PlanosFaltandoResultado = {
   combinacoes: [],
   cartasAnalisadas: 0,
   cartasPrazoForaDaTabela: 0,
+  cartasCreditoAbaixoMinimo: 0,
   porCarta: {},
   porChave: {},
 };
