@@ -410,7 +410,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                   pagas ficam bloqueadas.
                 </p>
 
-                <div className="rounded-lg border overflow-x-auto max-h-[38vh] overflow-y-auto">
+                <div className="rounded-lg border overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                       <tr>
@@ -489,7 +489,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
               </div>
             )}
 
-            <div className="rounded-lg border bg-card p-5 text-sm max-h-[45vh] overflow-y-auto">
+            <div className="rounded-lg border bg-card p-5 text-sm">
               <TermoMarkdown content={preview} />
             </div>
             <p className="text-xs text-muted-foreground">
