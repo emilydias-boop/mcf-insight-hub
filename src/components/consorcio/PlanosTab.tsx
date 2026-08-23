@@ -110,12 +110,15 @@ export function PlanosTab() {
       .filter((c) => {
         if (!showInativos && !c.ativo) return false;
         if (!term) return true;
+        const digits = term.replace(/\D/g, '');
         return (
           (c.codigo_credito || '').toLowerCase().includes(term) ||
-          String(c.valor_credito || '').includes(term.replace(/\D/g, '')) ||
-          brl(c.valor_credito).toLowerCase().includes(term)
+          String(c.valor_credito || '').includes(digits) ||
+          brl(c.valor_credito).toLowerCase().includes(term) ||
+          planoTemParcela(c, digits)
         );
       });
+
   }, [creditos, search, produtos, showInativos]);
 
   const handleSave = (data: Record<string, any>) => {
