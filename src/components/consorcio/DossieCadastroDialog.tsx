@@ -124,6 +124,15 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
     [reg],
   );
 
+  // Somente leitura: a combinação de plano desta cota existe na tabela oficial?
+  const { data: planosFaltando } = useConsorcioPlanosFaltando();
+  const planoFaltante = useMemo(() => {
+    if (!reg || !planosFaltando) return null;
+    const chave = chaveDaCombinacao(reg as any);
+    return (chave && planosFaltando.porChave[chave]) || null;
+  }, [reg, planosFaltando]);
+
+
 
   const parcelasEmpresa = useMemo(
     () =>
