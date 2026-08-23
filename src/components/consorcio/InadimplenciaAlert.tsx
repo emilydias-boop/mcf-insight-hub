@@ -33,7 +33,7 @@ export function InadimplenciaAlert({ info, onRegularizar }: InadimplenciaAlertPr
   const getBgClass = () => {
     switch (info.risco) {
       case 'medio':
-        return 'border-warning/50 bg-warning/10 text-foreground';
+        return 'border-warning/50 bg-warning/10 text-foreground [&>svg]:text-warning';
       case 'alto':
         return 'border-destructive/50 bg-destructive/10';
       case 'cancelamento':
