@@ -452,7 +452,7 @@ export function CartasProposalEditor({
                     </Button>
                   )}
 
-                  {manual && (
+                  {foraDaTabela && (
                     <div>
                       <Label className="text-xs">Observação do plano (anotação de tela)</Label>
                       <Input
