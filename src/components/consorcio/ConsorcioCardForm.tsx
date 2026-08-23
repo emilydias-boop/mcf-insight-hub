@@ -1132,6 +1132,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         snapshotPayload.current as unknown as Record<string, unknown>,
         input as unknown as Record<string, unknown>,
       );
+      /**
+       * Auditoria em tela: chave que entra no diff sem o campo estar "dirty" é
+       * bug de montagem do payload, não edição do usuário. Fica no console para
+       * dar para conferir na hora.
+       */
+      const chavesDoDiff = Object.keys(alterado);
+      const naoTocadas = chavesDoDiff.filter((k) => !dirty[k]);
+      console.info('[carta:edit] diff enviado', {
+        cardId: card.id,
+        chaves: chavesDoDiff,
+        camposTocados: Object.keys(dirty),
+        suspeitas_nao_tocadas: naoTocadas,
+        diff: alterado,
+      });
+      if (naoTocadas.length > 0) {
+        console.warn(
+          '[carta:edit] chaves no diff sem edição do usuário (possível bug):',
+          naoTocadas,
+        );
+      }
+
       if (nenhumaAlteracao(alterado)) {
         // Fecha SEM nenhuma escrita: nada de mutateAsync neste caminho.
         toast.info('Nenhuma alteração para salvar.');
