@@ -51,7 +51,8 @@ interface CartaPlanoBlocoProps {
  * carta e são somente leitura aqui (quem edita é o lançamento da venda).
  */
 function CartaPlanoBloco({ carta, index, total, onChange, copia, onRepetir }: CartaPlanoBlocoProps) {
-  const plano = useDadosPlano();
+  // O seletor de plano só mostra os planos do produto DESTA carta (tipo_produto + faixa de crédito).
+  const plano = useDadosPlano(undefined, { tipoProduto: carta.tipo_produto ?? null });
   const hidratado = useRef(false);
 
   useEffect(() => {
