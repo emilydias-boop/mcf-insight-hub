@@ -23,6 +23,26 @@ const CATEGORIES: { value: CardActivityCategory | "all"; label: string }[] = [
   { value: "carta", label: "Carta" },
 ];
 
+const brlFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+function formatHistoryCurrency(description: string): string {
+  return description.replace(/R\$\s*([\d.,]+)/g, (_, rawValue: string) => {
+    const lastComma = rawValue.lastIndexOf(",");
+    const lastDot = rawValue.lastIndexOf(".");
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const decimalIndex = Math.max(lastComma, lastDot);
+    const hasDecimalPlaces = decimalIndex >= 0 && rawValue.length - decimalIndex - 1 === 2;
+    const normalized = hasDecimalPlaces
+      ? `${rawValue.slice(0, decimalIndex).replace(/[.,]/g, "")}.${rawValue.slice(decimalIndex + 1)}`
+      : rawValue.replace(/[.,]/g, "");
+    const value = Number(normalized);
+    return Number.isFinite(value) ? brlFormatter.format(value) : `R$ ${rawValue}`;
+  });
+}
+
 function iconFor(event: CardActivityLog["event_type"]) {
   switch (event) {
     case "installment_paid": return <CircleDollarSign className="h-4 w-4" />;
@@ -137,7 +157,7 @@ export function CardActivityHistoryTab({ cardId }: Props) {
                                 <div className="mt-0.5 text-muted-foreground">{iconFor(ev.event_type)}</div>
                                 <div className="min-w-0">
                                   <div className="text-sm font-medium leading-snug break-words">
-                                    {ev.description}
+                                    {formatHistoryCurrency(ev.description)}
                                   </div>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                     <Badge variant="outline" className={st.badge}>
