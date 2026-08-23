@@ -180,22 +180,19 @@ export function CartasProposalEditor({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <Label className="text-xs">Crédito (R$)</Label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      className={`h-9 ${invalida && !c.valorStr ? 'border-destructive' : ''}`}
+                    {/* `required` aqui só controla o aviso visual de vazio — a regra
+                        de salvar continua sendo `cartaDraftValida`, intocada. */}
+                    <CurrencyInput
                       value={c.valorStr}
-                      onChange={e => patch(c.key, { valorStr: formatBRLInput(e.target.value) })}
-                      /* Nunca use um número como placeholder: cinza claro parecendo
-                         valor preenchido foi o que travou o lançamento em produção. */
+                      onChange={masked => patch(c.key, { valorStr: masked })}
+                      required
+                      showError={invalida}
                       placeholder="Digite o valor do crédito"
+                      emptyHint="Campo vazio — digite o crédito."
+                      inputClassName="h-9"
                     />
-                    {!c.valorStr && (
-                      <p className={`mt-1 text-[11px] ${invalida ? 'text-destructive' : 'text-muted-foreground'}`}>
-                        Campo vazio — digite o crédito.
-                      </p>
-                    )}
                   </div>
+
 
                   <div>
                     <Label className="text-xs">Prazo (meses)</Label>
