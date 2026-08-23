@@ -251,6 +251,22 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
           <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
             Nenhum plano cadastrado. Cadastre em Cadastros → Planos.
           </p>
+        ) : !plano.tipoProdutoCarta ? (
+          /* Sem tipo de produto: a parcela depende do tipo, então a lista fica vazia até a escolha.
+             Não é erro — é a ordem de preenchimento. As parcelas continuam digitáveis à mão abaixo. */
+          <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
+            Escolha primeiro o tipo de produto desta carta. A parcela depende do tipo de produto,
+            então a lista de planos só aparece depois dessa escolha. Enquanto isso, dá pra digitar
+            as parcelas à mão logo abaixo.
+          </p>
+        ) : plano.valorCreditoNum <= 0 ? (
+          /* Com tipo de produto, mas sem crédito: o plano é encontrado pelo valor do crédito.
+             Não é erro — é a ordem de preenchimento. As parcelas continuam digitáveis à mão abaixo. */
+          <p className="text-xs text-muted-foreground rounded-md border border-dashed p-2">
+            Informe primeiro o valor do crédito desta carta. O plano é encontrado pelo valor do
+            crédito, então a lista só aparece depois que o crédito estiver preenchido. Enquanto
+            isso, dá pra digitar as parcelas à mão logo abaixo.
+          </p>
         ) : plano.filtroProdutoAtivo && plano.planosVisiveis.length === 0 ? (
           /* Filtro ligado e nada casou: diz QUAL produto foi resolvido e por que a lista está vazia. */
           <p className="text-xs text-amber-500 rounded-md border border-dashed p-2">
