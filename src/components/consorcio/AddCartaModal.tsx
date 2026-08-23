@@ -304,10 +304,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
 
   const handleSubmit = async () => {
-    if (!lead) { toast.error('Selecione o lead no CRM — é dele que sai o termo e a atribuição.'); return; }
-    if (!origem) { toast.error('Informe a origem da venda.'); return; }
-    if (!closerId) { toast.error('Informe o closer responsável.'); return; }
-    if (!cartasOk) { setMostrarErros(true); return; }
+    if (pendencias.length > 0) {
+      setMostrarErros(true);
+      toast.error(`Falta preencher: ${pendencias.join(' ')}`);
+      return;
+    }
+    if (!lead) return;
+
 
     setSalvando(true);
     try {
