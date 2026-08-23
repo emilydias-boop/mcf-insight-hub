@@ -8,19 +8,33 @@ export interface InadimplenciaInfo {
   corBadge: string;
 }
 
+/**
+ * A 1ª parcela é a ENTRADA: vence na própria data do cadastro e é paga no ato.
+ * Por isso ela só entra na conta de atraso depois de uma carência de 5 dias —
+ * sem isso a cota nascia exibindo "1 parcela em atraso" no dia da criação.
+ */
+const CARENCIA_ENTRADA_DIAS = 5;
+
 export function contarParcelasAtrasadas(installments: ConsorcioInstallment[]): number {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
-  
+
   return installments.filter(inst => {
     if (inst.status === 'pago') return false;
-    
+
     const dataVencimento = new Date(inst.data_vencimento);
     dataVencimento.setHours(0, 0, 0, 0);
-    
+
+    if (inst.numero_parcela === 1) {
+      const limite = new Date(dataVencimento);
+      limite.setDate(limite.getDate() + CARENCIA_ENTRADA_DIAS);
+      return limite < hoje;
+    }
+
     return dataVencimento < hoje;
   }).length;
 }
+
 
 export function verificarRiscoCancelamento(installments: ConsorcioInstallment[]): InadimplenciaInfo {
   const parcelasAtrasadas = contarParcelasAtrasadas(installments);

@@ -90,6 +90,22 @@ const CONDICAO_LABELS: Record<string, string> = {
   '25': 'Mais por Menos 25%',
 };
 
+/**
+ * Produto do comprovante = o mesmo que a cota exibe na tela (`tipo_produto`:
+ * Parcelinha / Select). `produto_embracon` guarda o código/categoria da
+ * administradora (ex.: "auto") e por isso não serve como nome do produto.
+ */
+const PRODUTO_LABELS: Record<string, string> = {
+  parcelinha: 'Parcelinha',
+  select: 'Select',
+};
+
+export function comprovanteProdutoLabel(card: ComprovanteSourceCard): string {
+  const tipo = String(card.tipo_produto || '').toLowerCase();
+  return PRODUTO_LABELS[tipo] || card.tipo_produto || '—';
+}
+
+
 export function comprovanteNomeCliente(card: ComprovanteSourceCard): string {
   return (card.tipo_pessoa === 'pj' ? card.razao_social : card.nome_completo)
     || card.nome_completo || card.razao_social || '';
@@ -203,7 +219,7 @@ export function montarDadosComprovante(
     cliente_email: comprovanteEmailCliente(card) || '—',
     cliente_endereco: enderecoCliente(card),
     administradora: ADMINISTRADORA_CONSORCIO,
-    produto: card.produto_embracon || card.tipo_produto || '—',
+    produto: comprovanteProdutoLabel(card),
     objetivo: card.objetivo === 'imovel' ? 'Imóvel' : card.objetivo === 'auto' ? 'Automóvel' : '—',
     grupo: String(card.grupo || '—'),
     cota: String(card.cota || '—'),

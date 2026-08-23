@@ -2,6 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { resolverParcelaOficial, valorParcelaOficial } from '@/lib/consorcioParcelaOficial';
+
 
 /**
  * Cronograma de parcelas da cota.
@@ -24,15 +26,29 @@ export interface ParamsCronograma {
   tipoContrato?: string | null;
   parcelasEmpresa?: number;
   inicioSegundaParcela?: string | null;
+  /** Condição de pagamento da cota — define a coluna da tabela Embracon. */
+  condicaoPagamento?: string | null;
+  /** Seguro de vida compõe a parcela quando não há linha tabelada. */
+  incluiSeguro?: boolean;
   /** Reserva → parcelas nascem como 'previsto'. */
   isReserva?: boolean;
 }
+
 
 /** Offset em meses da 2ª parcela em relação à data base. */
 export function offsetSegundaParcela(baseDate: Date, inicio?: string | null): number {
   if (inicio === 'proximo_mes') return 1;
   if (inicio === 'pular_mes') return 2;
   return baseDate.getDate() > 16 ? 2 : 1;
+}
+
+/**
+ * Quantas parcelas o cronograma gera: as 12 primeiras (decisão do dono).
+ * Prazo menor que 12 gera só o que existe.
+ */
+export function qtdParcelasGeradas(prazoMeses: number): number {
+  const prazo = Number(prazoMeses || 0);
+  return prazo > 0 ? Math.min(12, prazo) : 0;
 }
 
 /** Monta as linhas de `consortium_installments` (sem gravar). */
@@ -45,8 +61,18 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
   const parcelasEmpresa = p.parcelasEmpresa || 0;
   const ctxComissao = await getProdutoComissaoContext(p.valorCredito, p.tipoProduto as any);
 
+  // Fonte de verdade do valor da parcela: tabela Embracon (nunca crédito ÷ prazo).
+  const oficial = await resolverParcelaOficial({
+    valorCredito: p.valorCredito,
+    prazoMeses: p.prazoMeses,
+    tipoProduto: p.tipoProduto,
+    condicaoPagamento: p.condicaoPagamento,
+    incluiSeguro: p.incluiSeguro,
+  });
+
+  const total = qtdParcelasGeradas(p.prazoMeses);
   const parcelas: any[] = [];
-  for (let i = 1; i <= p.prazoMeses; i++) {
+  for (let i = 1; i <= total; i++) {
     let dataVencimento: Date;
     if (i === 1) {
       dataVencimento = dataBase;
@@ -77,7 +103,9 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
       card_id: p.cardId,
       numero_parcela: i,
       tipo,
-      valor_parcela: p.valorCredito / p.prazoMeses,
+      valor_parcela: oficial
+        ? valorParcelaOficial(oficial, i)
+        : p.valorCredito / p.prazoMeses,
       valor_comissao: valorComissao,
       data_vencimento: dataVencimento.toISOString().split('T')[0],
       status: p.isReserva ? 'previsto' : 'pendente',
@@ -86,16 +114,20 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
   return parcelas;
 }
 
-/** Grava as parcelas em blocos (evita payload grande em prazos de 200+ meses). */
+/**
+ * Grava as parcelas em UMA transação via RPC, que registra um único lançamento
+ * no histórico da cota ("Cronograma de N parcelas gerado").
+ */
 export async function inserirParcelas(parcelas: any[]): Promise<void> {
-  const CHUNK_SIZE = 8;
-  for (let i = 0; i < parcelas.length; i += CHUNK_SIZE) {
-    const { error } = await supabase
-      .from('consortium_installments')
-      .insert(parcelas.slice(i, i + CHUNK_SIZE));
-    if (error) throw error;
-  }
+  if (!parcelas.length) return;
+  const cardId = parcelas[0]?.card_id;
+  const { error } = await supabase.rpc('consorcio_gerar_parcelas' as any, {
+    p_card_id: cardId,
+    p_parcelas: parcelas.map(({ card_id, ...rest }) => rest),
+  });
+  if (error) throw error;
 }
+
 
 /**
  * Gera o cronograma de uma cota que ainda não tem parcelas — usado quando o dia
@@ -105,7 +137,7 @@ export async function inserirParcelas(parcelas: any[]): Promise<void> {
 export async function gerarCronogramaSeFaltando(cardId: string): Promise<number> {
   const { data: card, error } = await supabase
     .from('consortium_cards')
-    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, tipo_registro, data_contratacao, data_reserva')
+    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, tipo_registro, data_contratacao, data_reserva, condicao_pagamento, inclui_seguro_vida')
     .eq('id', cardId)
     .single();
   if (error) throw error;
@@ -132,7 +164,10 @@ export async function gerarCronogramaSeFaltando(cardId: string): Promise<number>
     tipoProduto: String(card.tipo_produto),
     tipoContrato: (card as any).tipo_contrato,
     parcelasEmpresa: Number((card as any).parcelas_pagas_empresa || 0),
+    condicaoPagamento: (card as any).condicao_pagamento,
+    incluiSeguro: !!(card as any).inclui_seguro_vida,
     isReserva,
+
   });
   await inserirParcelas(parcelas);
   return parcelas.length;

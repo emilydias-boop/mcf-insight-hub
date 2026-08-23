@@ -218,7 +218,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
       if (!(await salvarDadosCota())) return;
       const qtd = await gerarCronogramaSeFaltando(cardId);
       await invalidar();
-      toast.success(qtd > 0 ? `${qtd} parcelas geradas` : 'A cota já tinha parcelas geradas');
+      toast.success(qtd > 0 ? `Cronograma gerado: ${qtd} primeiras parcelas` : 'A cota já tinha parcelas geradas');
     } catch (e: any) {
       toast.error('Erro ao gerar parcelas: ' + (e?.message || e));
     } finally {
