@@ -1158,9 +1158,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
        * Auditoria em tela: chave que entra no diff sem o campo estar "dirty" é
        * bug de montagem do payload, não edição do usuário. Fica no console para
        * dar para conferir na hora.
+       *
+       * O nome da coluna no payload não é sempre o nome do campo no formulário
+       * (`produto_embracon` vem de `produto_codigo`, a parcela vem do bloco de
+       * plano inteiro...). Sem este mapa a auditoria acusaria falso positivo em
+       * toda edição e o log viraria ruído.
        */
+      const camposDoPlanoParaAuditoria = [...camposDoPlano] as string[];
+      const origemDaChave: Record<string, string[]> = {
+        produto_embracon: ['produto_codigo'],
+        inclui_seguro_vida: ['inclui_seguro'],
+        tipo_produto: ['tipo_produto', 'produto_codigo'],
+        parcela_1a_12a: camposDoPlanoParaAuditoria,
+        parcela_demais: camposDoPlanoParaAuditoria,
+        tipo_contrato: ['tipo_contrato', 'empresa_paga_parcelas'],
+        parcelas_pagas_empresa: ['parcelas_pagas_empresa', 'empresa_paga_parcelas'],
+      };
       const chavesDoDiff = Object.keys(alterado);
-      const naoTocadas = chavesDoDiff.filter((k) => !dirty[k]);
+      const naoTocadas = chavesDoDiff.filter(
+        (k) => !(origemDaChave[k] ?? [k]).some((campo) => !!dirty[campo]),
+      );
+
       console.info('[carta:edit] diff enviado', {
         cardId: card.id,
         chaves: chavesDoDiff,
