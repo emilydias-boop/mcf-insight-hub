@@ -607,8 +607,9 @@ export function PendingRegistrationsList({
         <DialogHeader>
           <DialogTitle>Declinar carta</DialogTitle>
           <DialogDescription>
-            O parceiro desistiu da aquisição desta carta. O valor da venda será abatido da meta e deduzido do saldo acumulado. O registro fica arquivado na aba <strong>Cartas Declinadas</strong> com o motivo informado.
+            O parceiro desistiu da aquisição desta carta. Só o valor <strong>desta carta</strong> é abatido da meta e do saldo acumulado — as outras cartas da mesma venda continuam valendo. A carta continua listada aqui mesmo, em <strong>Cotas a Fazer</strong>, marcada como declinada, e a ação pode ser revertida a qualquer momento pelo menu da linha (<strong>Reverter declínio</strong>).
           </DialogDescription>
+
         </DialogHeader>
         <div className="space-y-2 py-2">
           <Label htmlFor="decline-reason">Motivo do declínio <span className="text-destructive">*</span></Label>
