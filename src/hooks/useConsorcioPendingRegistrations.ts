@@ -508,21 +508,7 @@ export function useCreatePendingRegistration() {
       }
 
 
-      // 1. Atualizar proposta para 'aceita' PRIMEIRO (operação segura)
-      const { error: proposalError } = await supabase
-        .from('consorcio_proposals')
-        .update({
-          status: 'aceita',
-          // aceite_date (date) mantido: funil e relatórios dependem dele.
-          aceite_date: new Date().toISOString().split('T')[0],
-          aceite_at: new Date().toISOString(),
-          aceite_by: user.id,
-        } as any)
-        .eq('id', input.proposal_id);
-
-      if (proposalError) throw proposalError;
-
-      // 2. Sanitizar: converter strings vazias em null para evitar erros de tipo no banco
+      // 1. Sanitizar: converter strings vazias em null para evitar erros de tipo no banco
       const dateColumns = ['data_contratacao', 'data_fundacao', 'aceite_date'];
       const sanitized = Object.fromEntries(
         Object.entries(registrationData)
@@ -533,7 +519,9 @@ export function useCreatePendingRegistration() {
           ])
       );
 
-      // 3. Criar registro pendente (se falhar, o botão "Cadastrar Cota" permite retentar)
+      // 2. Criar o cadastro pendente PRIMEIRO. Se ele falhar, a proposta NÃO pode
+      //    ficar marcada como 'aceita' — esse era o estado impossível
+      //    ("Cadastrada" sem cadastro nenhum) que escondia a falha.
       const { data: registration, error: regError } = await supabase
         .from('consorcio_pending_registrations')
         .insert({
@@ -547,8 +535,23 @@ export function useCreatePendingRegistration() {
 
       if (regError) {
         console.error('Erro ao criar registro pendente:', regError);
-        throw new Error('Proposta aceita, mas erro ao criar cadastro pendente: ' + regError.message);
+        throw new Error('Erro ao criar cadastro pendente (a venda NÃO foi marcada como aceita): ' + regError.message);
       }
+
+      // 3. Só então marcar a proposta como 'aceita'.
+      const { error: proposalError } = await supabase
+        .from('consorcio_proposals')
+        .update({
+          status: 'aceita',
+          // aceite_date (date) mantido: funil e relatórios dependem dele.
+          aceite_date: new Date().toISOString().split('T')[0],
+          aceite_at: new Date().toISOString(),
+          aceite_by: user.id,
+        } as any)
+        .eq('id', input.proposal_id);
+
+      if (proposalError) throw proposalError;
+
 
       // 3a. Vincula a carta da proposta ao cadastro criado (rastreio 1:1).
       if (carta_id) {
