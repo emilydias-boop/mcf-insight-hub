@@ -444,7 +444,7 @@ export function CartasProposalEditor({
 
                   {manual && (
                     <div>
-                      <Label className="text-xs">Observação do plano (opcional)</Label>
+                      <Label className="text-xs">Observação do plano (anotação de tela)</Label>
                       <Input
                         className="h-9"
                         value={obsPorCarta[c.key] || ''}
@@ -453,9 +453,11 @@ export function CartasProposalEditor({
                         maxLength={120}
                       />
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        Anotação de apoio desta tela. Para registrar junto da venda, repita em
-                        “Detalhes da Proposta”.
+                        Esta anotação NÃO é gravada: serve só de apoio enquanto a tela está aberta e
+                        some ao fechar. Para registrar junto da venda, escreva em “Detalhes da
+                        Proposta”.
                       </p>
+
                     </div>
                   )}
 
