@@ -99,7 +99,9 @@ export function CurrencyInput({
           onChange={e => handleChange(e.target.value)}
           className={cn(
             prefix && 'pl-10',
+            inputClassName,
             mostrarVazio && showError && 'border-destructive focus-visible:ring-destructive',
+
           )}
         />
       </div>
