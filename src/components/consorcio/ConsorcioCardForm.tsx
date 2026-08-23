@@ -408,12 +408,25 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
    * profissão, renda, patrimônio, PIX e endereço), o que fazia o formulário de
    * edição abrir esses campos em branco.
    */
-  const { data: detalheCarta } = useConsorcioCardDetails(card?.id ?? null);
+  const {
+    data: detalheCarta,
+    isLoading: carregandoDetalhe,
+    isError: erroDetalhe,
+    refetch: recarregarDetalhe,
+    isFetching: buscandoDetalhe,
+  } = useConsorcioCardDetails(card?.id ?? null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
   /** Chave do que já foi hidratado nesta abertura (`<id>:detalhe` | `novo`). */
   const hidratadoDe = useRef<string | null>(null);
   /** Payload equivalente ao formulário recém-hidratado — base do diff do save. */
   const snapshotPayload = useRef<CreateConsorcioCardInput | null>(null);
+  /**
+   * Espelho em estado do snapshot: sem snapshot NÃO existe save de edição.
+   * Se o detalhe não chegar (rede, RLS, lentidão), o botão fica desabilitado —
+   * salvar sem saber o que mudou é justamente o bug que estamos corrigindo.
+   */
+  const [snapshotPronto, setSnapshotPronto] = useState(false);
+
 
 
   const form = useForm<FormData>({
