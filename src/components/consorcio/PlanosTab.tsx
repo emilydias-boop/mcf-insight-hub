@@ -25,6 +25,12 @@ import {
 } from '@/hooks/useConsorcioCreditosAdmin';
 import { ConsorcioCredito, ConsorcioProduto } from '@/types/consorcioProdutos';
 import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+import {
+  useConsorcioPlanosFaltando,
+  type CombinacaoFaltante,
+} from '@/hooks/useConsorcioPlanosFaltando';
+import { produtosElegiveisParaCarta } from '@/lib/consorcioParcelaOficial';
+
 
 const brl = (v?: number | null) =>
   typeof v === 'number' ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
@@ -84,6 +90,9 @@ export function PlanosTab() {
   const [showInativos, setShowInativos] = useState(false);
   const [toDelete, setToDelete] = useState<ConsorcioCredito | null>(null);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+  const [prefill, setPrefill] = useState<CombinacaoFaltante | null>(null);
+  const [formKey, setFormKey] = useState(0);
+
 
   const toggleExpandido = (id: string) =>
     setExpandidos((prev) => {
@@ -137,9 +146,10 @@ export function PlanosTab() {
         <p className="text-sm text-muted-foreground">
           Cadastre os planos (créditos) de cada produto com os valores oficiais de parcela por condição e prazo.
         </p>
-        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }}>
+        <Button size="sm" onClick={() => { setEditing(null); setPrefill(null); setFormKey((k) => k + 1); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo plano
         </Button>
+
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -158,15 +168,27 @@ export function PlanosTab() {
         </div>
       </div>
 
+      <PlanosFaltandoBlock
+        onCadastrar={(combo) => {
+          setEditing(null);
+          setPrefill(combo);
+          setFormKey((k) => k + 1);
+          setShowForm(true);
+        }}
+      />
+
       {showForm && (
         <PlanoForm
+          key={formKey}
           produtos={produtos}
           initial={editing}
-          onCancel={() => { setEditing(null); setShowForm(false); }}
+          prefill={editing ? null : prefill}
+          onCancel={() => { setEditing(null); setPrefill(null); setShowForm(false); }}
           onSave={handleSave}
           isPending={create.isPending || update.isPending}
         />
       )}
+
 
       <div className="space-y-2">
         {isLoading && <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>}
@@ -214,7 +236,7 @@ export function PlanosTab() {
                     </div>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setPrefill(null); setFormKey((k) => k + 1); setShowForm(true); }}>
                   Editar
                 </Button>
                 {c.ativo ? (
@@ -305,22 +327,121 @@ export function PlanosTab() {
   );
 }
 
+/**
+ * Fila de cadastro: combinações que as vendas já usaram e a tabela não tem.
+ * Só informa e pré-preenche produto/crédito — NUNCA sugere valor de parcela.
+ * Se não há nada faltando, o bloco não aparece.
+ */
+function PlanosFaltandoBlock({
+  onCadastrar,
+}: {
+  onCadastrar: (combo: CombinacaoFaltante) => void;
+}) {
+  const { data } = useConsorcioPlanosFaltando();
+  const [aberto, setAberto] = useState(true);
+
+  const combos = data?.combinacoes || [];
+  const prazoFora = data?.cartasPrazoForaDaTabela || 0;
+  if (combos.length === 0 && prazoFora === 0) return null;
+
+  const totalCartas = combos.reduce((a, c) => a + c.cartas, 0);
+
+  return (
+    <div className="border rounded-lg bg-muted/30">
+      {combos.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setAberto((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+          >
+            {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span className="text-sm font-medium">
+              {combos.length} combinaç{combos.length === 1 ? 'ão' : 'ões'} usada
+              {combos.length === 1 ? '' : 's'} em vendas sem plano cadastrado
+            </span>
+            <span className="text-xs text-muted-foreground">
+              · {totalCartas} carta{totalCartas === 1 ? '' : 's'}
+            </span>
+          </button>
+
+          {aberto && (
+            <div className="px-4 pb-3 space-y-1">
+              <p className="text-xs text-muted-foreground pb-1">
+                Trabalho de fila, não urgência. Os valores de parcela vêm da tabela oficial da
+                Embracon — o sistema não sugere nenhum.
+              </p>
+              {combos.map((c) => (
+                <div
+                  key={c.key}
+                  className="flex flex-wrap items-center gap-2 justify-between rounded-md border bg-background px-3 py-2"
+                >
+                  <div className="text-sm">
+                    <span className="font-medium">{c.tipoTaxaLabel}</span>
+                    <span className="text-muted-foreground"> · </span>
+                    {brl(c.valorCredito)}
+                    <span className="text-muted-foreground"> · {c.prazoMeses}x · </span>
+                    <span className={c.condKey ? '' : 'text-amber-600 dark:text-amber-500'}>
+                      {c.condicaoLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {c.cartas} carta{c.cartas === 1 ? '' : 's'}
+                    </Badge>
+                    <Button size="sm" variant="outline" onClick={() => onCadastrar(c)}>
+                      Cadastrar plano
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {prazoFora > 0 && (
+        <p className="px-4 py-3 text-xs text-muted-foreground border-t">
+          {prazoFora} carta{prazoFora === 1 ? '' : 's'} com prazo fora de 200/220/240 — a tabela não
+          tem coluna para esse prazo; cadastrar plano não resolve.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PlanoForm({
   produtos,
   initial,
+  prefill,
   onSave,
   onCancel,
   isPending,
 }: {
   produtos: ConsorcioProduto[];
   initial: ConsorcioCredito | null;
+  prefill?: CombinacaoFaltante | null;
   onSave: (data: Record<string, any>) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const [produtoId, setProdutoId] = useState(initial?.produto_id || '');
+  // Prefill: produto (só quando UM produto é elegível), crédito, e destaque das
+  // colunas de prazo/condição pedidas. Nenhum valor de parcela é sugerido.
+  const produtoPreSelecionado = useMemo(() => {
+    if (!prefill) return '';
+    const elegiveis = produtosElegiveisParaCarta(
+      produtos as any[],
+      prefill.valorCredito,
+      prefill.tipoTaxa === 'primeira_parcela' ? 'select' : 'parcelinha',
+    );
+    return elegiveis.length === 1 ? String((elegiveis[0] as any).id) : '';
+  }, [prefill, produtos]);
+
+  const [produtoId, setProdutoId] = useState(initial?.produto_id || produtoPreSelecionado);
   const [codigo, setCodigo] = useState(initial?.codigo_credito || '');
-  const [valor, setValor] = useState(numberToBRLInput(initial?.valor_credito));
+  const [valor, setValor] = useState(
+    numberToBRLInput(initial?.valor_credito ?? prefill?.valorCredito),
+  );
   const [ativo, setAtivo] = useState(initial?.ativo ?? true);
   const [parcelas, setParcelas] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -329,6 +450,7 @@ function PlanoForm({
     });
     return init;
   });
+
 
   const setParcela = (col: string, raw: string) =>
     setParcelas((p) => ({ ...p, [col]: formatBRLInput(raw) }));
@@ -353,6 +475,19 @@ function PlanoForm({
   return (
     <div className="space-y-4 p-4 border rounded-lg bg-card">
       <h4 className="font-semibold text-sm">{initial ? 'Editar plano' : 'Novo plano'}</h4>
+
+      {!initial && prefill && (
+        <p className="text-xs text-muted-foreground">
+          Combinação pedida por {prefill.cartas} carta{prefill.cartas === 1 ? '' : 's'}:{' '}
+          <span className="font-medium text-foreground">
+            {prefill.tipoTaxaLabel} · {brl(prefill.valorCredito)} · {prefill.prazoMeses}x ·{' '}
+            {prefill.condicaoLabel}
+          </span>
+          . Preencha as parcelas com os valores da tabela oficial da Embracon
+          {prefill.condKey ? '' : ' — confirme a condição antes de cadastrar'}.
+        </p>
+      )}
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
+import { useConsorcioPlanosFaltando, chaveDaCombinacao } from '@/hooks/useConsorcioPlanosFaltando';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -124,6 +125,15 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
     [reg],
   );
 
+  // Somente leitura: a combinação de plano desta cota existe na tabela oficial?
+  const { data: planosFaltando } = useConsorcioPlanosFaltando();
+  const planoFaltante = useMemo(() => {
+    if (!reg || !planosFaltando) return null;
+    const chave = chaveDaCombinacao(reg as any);
+    return (chave && planosFaltando.porChave[chave]) || null;
+  }, [reg, planosFaltando]);
+
+
 
   const parcelasEmpresa = useMemo(
     () =>
@@ -216,6 +226,18 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
                   <p className="text-muted-foreground">{camposFaltantes.join(' · ')}</p>
                 </div>
               )}
+
+              {/* Informativo, nunca bloqueante e sem contar em nada: o plano desta
+                  combinação não existe na tabela. Não é "cadastro incompleto". */}
+              {planoFaltante && (
+                <p className="text-xs text-muted-foreground">
+                  Plano fora da tabela — {planoFaltante.tipoTaxaLabel} ·{' '}
+                  {formatCurrency(planoFaltante.valorCredito)} · {planoFaltante.prazoMeses}x ·{' '}
+                  {planoFaltante.condicaoLabel}. A equipe de cadastro pode cadastrá-lo em Planos;
+                  o cadastro desta cota segue normalmente.
+                </p>
+              )}
+
 
 
 
