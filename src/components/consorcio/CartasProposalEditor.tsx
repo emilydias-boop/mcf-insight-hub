@@ -65,6 +65,9 @@ export function CartasProposalEditor({
   const [planoPorCarta, setPlanoPorCarta] = useState<Record<string, string>>({});
   const [manualPorCarta, setManualPorCarta] = useState<Record<string, boolean>>({});
   const [obsPorCarta, setObsPorCarta] = useState<Record<string, string>>({});
+  // Carta que tinha plano aplicado e perdeu o vínculo ao trocar produto/prazo/
+  // condição: guarda a combinação pedida só para explicar em texto.
+  const [planoPerdido, setPlanoPerdido] = useState<Record<string, { prazo: string; condicao: string }>>({});
   const { data: tabelaPlanos, isLoading: carregandoPlanos } = useConsorcioPlanosTabela();
 
   /** Carta sem plano escolhido, ou destravada de propósito, é manual. */
@@ -73,6 +76,49 @@ export function CartasProposalEditor({
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
+
+  const limparPerdido = (key: string) =>
+    setPlanoPerdido(m => {
+      if (!(key in m)) return m;
+      const n = { ...m };
+      delete n[key];
+      return n;
+    });
+
+  /**
+   * Trocar produto, prazo ou condição com plano aplicado REAPLICA o plano na
+   * nova combinação — o rótulo do seletor e os campos nunca podem divergir.
+   * Se o plano não existir na nova combinação, só o vínculo cai (campos
+   * destravam com o que já estava; nada é apagado).
+   */
+  const trocarFiltro = (c: PropostaCartaDraft, p: Partial<PropostaCartaDraft>) => {
+    const planoId = planoPorCarta[c.key];
+    if (!planoId || manualPorCarta[c.key]) { patch(c.key, p); return; }
+    const alvo = { ...c, ...p };
+    const { opcoes } = filtrarPlanosCarta(tabelaPlanos, {
+      tipoProduto: alvo.tipoProduto,
+      prazoMeses: alvo.prazoMeses,
+      condicaoPagamento: alvo.condicaoPagamento,
+    });
+    const plano = opcoes.find(o => o.id === planoId);
+    if (!plano) {
+      setPlanoPorCarta(m => ({ ...m, [c.key]: '' }));
+      setPlanoPerdido(m => ({
+        ...m,
+        [c.key]: { prazo: String(alvo.prazoMeses || ''), condicao: String(alvo.condicaoPagamento || '') },
+      }));
+      patch(c.key, p);
+      return;
+    }
+    limparPerdido(c.key);
+    patch(c.key, {
+      ...p,
+      valorStr: numberToBRLInput(plano.valorCredito),
+      parcela1a12Str: numberToBRLInput(plano.parcela1a12),
+      parcelaDemaisStr: numberToBRLInput(plano.parcelaDemais),
+    });
+  };
+
 
   /**
    * Pré-seleção Parcelinha / 240 / Convencional — o caso comum (175 de 177
@@ -104,6 +150,7 @@ export function CartasProposalEditor({
   const aplicarPlano = (key: string, plano: PlanoCartaOption) => {
     setPlanoPorCarta(m => ({ ...m, [key]: plano.id }));
     setManualPorCarta(m => ({ ...m, [key]: false }));
+    limparPerdido(key);
     patch(key, {
       valorStr: numberToBRLInput(plano.valorCredito),
       parcela1a12Str: numberToBRLInput(plano.parcela1a12),
@@ -115,6 +162,7 @@ export function CartasProposalEditor({
   const virarManual = (key: string) => {
     setPlanoPorCarta(m => ({ ...m, [key]: '' }));
     setManualPorCarta(m => ({ ...m, [key]: true }));
+    limparPerdido(key);
   };
 
 
@@ -186,6 +234,15 @@ export function CartasProposalEditor({
               { tipoProduto: c.tipoProduto, prazoMeses: c.prazoMeses, condicaoPagamento: c.condicaoPagamento },
             );
             const planoSel = planos.find(p => p.id === planoPorCarta[c.key]);
+            // O selo "tabela oficial" só pode existir quando os três campos são,
+            // byte a byte, o que a tabela tem para a combinação escolhida agora.
+            const planoBate = !!planoSel
+              && c.valorStr === numberToBRLInput(planoSel.valorCredito)
+              && c.parcela1a12Str === numberToBRLInput(planoSel.parcela1a12)
+              && c.parcelaDemaisStr === numberToBRLInput(planoSel.parcelaDemais);
+            const perdido = planoPerdido[c.key];
+            const condicaoLabel = (v?: string) =>
+              CONDICAO_PAGAMENTO_OPTIONS.find(o => o.value === v)?.label || v || '—';
             return (
 
               <div
@@ -261,7 +318,7 @@ export function CartasProposalEditor({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <Label className="text-xs">Tipo de produto</Label>
-                    <Select value={c.tipoProduto} onValueChange={v => patch(c.key, { tipoProduto: v })}>
+                    <Select value={c.tipoProduto} onValueChange={v => trocarFiltro(c, { tipoProduto: v })}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Produto" /></SelectTrigger>
                       <SelectContent>
                         {tipoOptions.map(o => (
@@ -279,8 +336,8 @@ export function CartasProposalEditor({
                     <Select
                       value={c.prazoOutro ? 'outro' : (c.prazoMeses || '')}
                       onValueChange={v => {
-                        if (v === 'outro') patch(c.key, { prazoOutro: true, prazoMeses: '' });
-                        else patch(c.key, { prazoOutro: false, prazoMeses: v });
+                        if (v === 'outro') trocarFiltro(c, { prazoOutro: true, prazoMeses: '' });
+                        else trocarFiltro(c, { prazoOutro: false, prazoMeses: v });
                       }}
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Prazo" /></SelectTrigger>
@@ -296,7 +353,7 @@ export function CartasProposalEditor({
                         className="mt-1.5 h-9"
                         type="number"
                         value={c.prazoMeses}
-                        onChange={e => patch(c.key, { prazoMeses: e.target.value })}
+                        onChange={e => trocarFiltro(c, { prazoMeses: e.target.value })}
                         placeholder="Meses"
                       />
                     )}
@@ -306,7 +363,7 @@ export function CartasProposalEditor({
                     <Label className="text-xs">Condição de pagamento</Label>
                     <Select
                       value={c.condicaoPagamento}
-                      onValueChange={v => patch(c.key, { condicaoPagamento: v })}
+                      onValueChange={v => trocarFiltro(c, { condicaoPagamento: v })}
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Condição" /></SelectTrigger>
                       <SelectContent>
@@ -328,7 +385,7 @@ export function CartasProposalEditor({
                       <span className="ml-1 font-normal text-muted-foreground">(opcional)</span>
                     </Label>
                     <div className="flex items-center gap-1.5">
-                      {!manual && planoSel && (
+                      {!manual && planoBate && planoSel && (
                         <Badge variant="secondary" className="text-[10px]">
                           {planoSel.produtoCodigo} · tabela oficial
                         </Badge>
@@ -398,6 +455,13 @@ export function CartasProposalEditor({
                     <p className="text-[11px] text-muted-foreground">
                       Nenhum plano cadastrado para esta combinação de produto, prazo e condição.
                       Informe crédito e parcela manualmente — a venda pode ser lançada assim.
+                    </p>
+                  )}
+                  {perdido && (
+                    <p className="text-[11px] text-muted-foreground">
+                      A tabela não tem esse plano em {perdido.prazo || '—'} meses /{' '}
+                      {condicaoLabel(perdido.condicao)}. Os valores continuam como estavam — escolha
+                      outro plano ou confira à mão.
                     </p>
                   )}
 
