@@ -72,7 +72,7 @@ export function CurrencyInput({
 
   const handleChange = (raw: string) => {
     const masked = formatBRLInput(raw);
-    onChange(masked);
+    onChange?.(masked);
     onNumberChange?.(parseBRLInput(masked));
   };
 
