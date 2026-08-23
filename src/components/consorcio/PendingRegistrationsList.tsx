@@ -51,7 +51,7 @@ import {
   type PendingStatusFilter,
 } from './PendingRegistrationsFilters';
 import { formatCurrency } from '@/lib/consorcioCalculos';
-import { camposCadastroFaltantes, resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
+import { resumoCamposFaltantes } from '@/lib/consorcioCadastroIncompleto';
 import { tipoContratoLabel } from '@/lib/consorcioParcelasEmpresa';
 import { SeloDiasParados, diasDesde, DIAS_PARADOS_MINIMO, DIAS_PARADOS_VERMELHO } from '@/components/consorcio/SeloDiasParados';
 import { loadXLSX } from '@/lib/lazyExport';
