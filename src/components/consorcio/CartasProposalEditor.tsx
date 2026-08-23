@@ -55,10 +55,63 @@ export function CartasProposalEditor({
   const categoriaOptions = categoriaCatalogo.length > 0
     ? categoriaCatalogo.map(o => ({ name: o.name, label: o.label }))
     : CATEGORIA_OPTIONS.map(o => ({ name: o.value, label: o.label }));
+  // Plano escolhido por carta (id do registro em `consorcio_creditos`) e
+  // anotação de apoio. É estado de TELA: nada disso vai para o banco nesta fase.
+  const [planoPorCarta, setPlanoPorCarta] = useState<Record<string, string>>({});
+  const [manualPorCarta, setManualPorCarta] = useState<Record<string, boolean>>({});
+  const [obsPorCarta, setObsPorCarta] = useState<Record<string, string>>({});
+  const { data: tabelaPlanos, isLoading: carregandoPlanos } = useConsorcioPlanosTabela();
 
+  /** Carta sem plano escolhido, ou destravada de propósito, é manual. */
+  const ehManual = (c: PropostaCartaDraft) =>
+    manualPorCarta[c.key] === true || !planoPorCarta[c.key];
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
+
+  /**
+   * Pré-seleção Parcelinha / 240 / Convencional — o caso comum (175 de 177
+   * cartas). Só em carta NOVA (sem `id`) e só em campo vazio: carta que veio do
+   * banco nunca é tocada, senão o `formDiff` acusaria mudança que ninguém fez.
+   */
+  const tipoPadrao = useMemo(
+    () => tipoOptions.find(o => /parcelinha/i.test(o.name) || /parcelinha/i.test(o.label))?.name,
+    [tipoOptions],
+  );
+
+  useEffect(() => {
+    let mudou = false;
+    const proximas = cartas.map(c => {
+      if (c.id) return c;
+      const p: Partial<PropostaCartaDraft> = {};
+      if (!c.tipoProduto && tipoPadrao) p.tipoProduto = tipoPadrao;
+      if (!c.prazoMeses && !c.prazoOutro) p.prazoMeses = '240';
+      if (!c.condicaoPagamento) p.condicaoPagamento = 'convencional';
+      if (Object.keys(p).length === 0) return c;
+      mudou = true;
+      return { ...c, ...p };
+    });
+    if (mudou) onChange(proximas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartas, tipoPadrao]);
+
+  /** Escolher o plano preenche os três campos e trava. Formato: `numberToBRLInput`. */
+  const aplicarPlano = (key: string, plano: PlanoCartaOption) => {
+    setPlanoPorCarta(m => ({ ...m, [key]: plano.id }));
+    setManualPorCarta(m => ({ ...m, [key]: false }));
+    patch(key, {
+      valorStr: numberToBRLInput(plano.valorCredito),
+      parcela1a12Str: numberToBRLInput(plano.parcela1a12),
+      parcelaDemaisStr: numberToBRLInput(plano.parcelaDemais),
+    });
+  };
+
+  /** "Meu plano não está na lista" e "editar manualmente": destrava, não apaga. */
+  const virarManual = (key: string) => {
+    setPlanoPorCarta(m => ({ ...m, [key]: '' }));
+    setManualPorCarta(m => ({ ...m, [key]: true }));
+  };
+
 
   const adicionar = () => {
     if (cartas.length >= MAX_CARTAS_POR_PROPOSTA) return;
