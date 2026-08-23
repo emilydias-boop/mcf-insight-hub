@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Search, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Search, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -28,6 +28,47 @@ import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 
 const brl = (v?: number | null) =>
   typeof v === 'number' ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+
+/** As 9 combinações (3 condições × 3 prazos) de um plano, com o par 1ª-à-12ª / demais. */
+type Combinacao = {
+  key: string;
+  condicaoLabel: string;
+  prazo: number;
+  primeiras: number | null;
+  demais: number | null;
+  completa: boolean;
+};
+
+function combinacoesDoPlano(c: ConsorcioCredito): Combinacao[] {
+  const out: Combinacao[] = [];
+  for (const cond of CONDICOES) {
+    for (const p of PRAZOS) {
+      const primeiras = (c as any)[`parcela_1a_12a_${cond.key}_${p}`] ?? null;
+      const demais = (c as any)[`parcela_demais_${cond.key}_${p}`] ?? null;
+      out.push({
+        key: `${cond.key}_${p}`,
+        condicaoLabel: cond.label,
+        prazo: p,
+        primeiras: typeof primeiras === 'number' ? primeiras : null,
+        demais: typeof demais === 'number' ? demais : null,
+        completa: typeof primeiras === 'number' && typeof demais === 'number',
+      });
+    }
+  }
+  return out;
+}
+
+/** Dígitos de um termo de busca comparados contra os dígitos de qualquer valor de parcela. */
+function planoTemParcela(c: ConsorcioCredito, termDigits: string): boolean {
+  if (!termDigits) return false;
+  return PARCELA_COLUMNS.some((col) => {
+    const v = (c as any)[col];
+    if (typeof v !== 'number') return false;
+    const asBr = v.toFixed(2).replace('.', ',');
+    return asBr.replace(/\D/g, '').includes(termDigits) || asBr.includes(termDigits);
+  });
+}
+
 
 export function PlanosTab() {
   const { data: produtos = [] } = useConsorcioProdutos();
