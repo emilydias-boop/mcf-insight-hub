@@ -1,5 +1,16 @@
 import { supabase } from '@/integrations/supabase/client';
 
+/** Compara nomes ignorando caixa, acentos e espaços extras ("João" = "Joao"). */
+function normalizarNome(nome?: string | null): string {
+  return (nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+
 /**
  * `consortium_cards.vendedor_id` tem FK para `consorcio_vendedor_options(id)`.
  * Cadastros pendentes podem carregar um uuid de outra tabela (ex.: `profiles.id`),
