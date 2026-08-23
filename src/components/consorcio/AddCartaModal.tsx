@@ -190,7 +190,24 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   })();
 
   const cartasOk = cartas.length > 0 && cartas.every(cartaDraftValida);
-  const podeSalvar = !!lead && cartasOk && !!origem && !!closerId;
+
+  /**
+   * O que falta para lançar, em texto. O botão NUNCA fica travado em silêncio:
+   * ele sempre é clicável e o clique explica a pendência.
+   */
+  const pendencias: string[] = [
+    !lead && 'Vincule o lead no CRM (busque ou crie).',
+    !origem && 'Selecione a origem da venda.',
+    !closerId && 'Selecione o closer responsável.',
+    ...cartas.map((c, i) =>
+      cartaDraftValida(c)
+        ? ''
+        : `Carta ${i + 1}: preencha crédito, prazo e produto (os três são obrigatórios).`,
+    ),
+  ].filter(Boolean) as string[];
+
+  
+
 
   const resetar = () => {
     setLead(null); setLeadSearch(''); setOrigem(''); setOrigemDetalhe('');
@@ -287,10 +304,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
 
   const handleSubmit = async () => {
-    if (!lead) { toast.error('Selecione o lead no CRM — é dele que sai o termo e a atribuição.'); return; }
-    if (!origem) { toast.error('Informe a origem da venda.'); return; }
-    if (!closerId) { toast.error('Informe o closer responsável.'); return; }
-    if (!cartasOk) { setMostrarErros(true); return; }
+    if (pendencias.length > 0) {
+      setMostrarErros(true);
+      toast.error(`Falta preencher: ${pendencias.join(' ')}`);
+      return;
+    }
+    if (!lead) return;
+
 
     setSalvando(true);
     try {
@@ -573,13 +593,24 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           </Collapsible>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={salvando || !podeSalvar}>
-            {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {salvando ? 'Lançando...' : 'Lançar carta'}
-          </Button>
+        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-col sm:items-stretch">
+          {pendencias.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-left text-xs text-amber-700 dark:text-amber-300">
+              <p className="font-medium">Falta preencher antes de lançar:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {pendencias.map(p => <li key={p}>{p}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={salvando}>
+              {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {salvando ? 'Lançando...' : 'Lançar carta'}
+            </Button>
+          </div>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
