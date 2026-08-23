@@ -164,7 +164,10 @@ export async function gerarCronogramaSeFaltando(cardId: string): Promise<number>
     tipoProduto: String(card.tipo_produto),
     tipoContrato: (card as any).tipo_contrato,
     parcelasEmpresa: Number((card as any).parcelas_pagas_empresa || 0),
+    condicaoPagamento: (card as any).condicao_pagamento,
+    incluiSeguro: !!(card as any).inclui_seguro,
     isReserva,
+
   });
   await inserirParcelas(parcelas);
   return parcelas.length;
