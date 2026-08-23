@@ -623,7 +623,7 @@ export function DadosClienteFields({
                 {i.comprovanteResidencia && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>}
               </div>
             </div>
-          </>
+          </Fragment>
         )}
         {children}
       </div>
