@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { numberToBRLInput, parseBRLInput } from '@/lib/brlMask';
 import { simularChanceLance, getCorChanceLance } from '@/lib/contemplacao';
 import { useRegistrarLance } from '@/hooks/useContemplacao';
 import { ConsorcioCard } from '@/types/consorcio';
@@ -18,35 +20,39 @@ interface Props {
 
 export function LanceModal({ open, onOpenChange, card }: Props) {
   const [percentual, setPercentual] = useState('');
+  /** Valor do lance em string mascarada (pt-BR), como o CurrencyInput trabalha. */
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
   const [simulacao, setSimulacao] = useState<SimulacaoLance | null>(null);
+  const [mostrarErros, setMostrarErros] = useState(false);
 
   const lanceMutation = useRegistrarLance();
 
   const credito = card ? Number(card.valor_credito) : 0;
+  const valorNumero = parseBRLInput(valor);
 
   const handlePercentualChange = (v: string) => {
     setPercentual(v);
     setSimulacao(null);
     const p = parseFloat(v);
     if (!isNaN(p) && credito > 0) {
-      setValor(((credito * p) / 100).toFixed(2));
+      setValor(numberToBRLInput((credito * p) / 100));
     } else {
       setValor('');
     }
   };
 
-  const handleValorChange = (v: string) => {
-    setValor(v);
+  const handleValorChange = (masked: string) => {
+    setValor(masked);
     setSimulacao(null);
-    const val = parseFloat(v);
-    if (!isNaN(val) && credito > 0) {
+    const val = parseBRLInput(masked);
+    if (val > 0 && credito > 0) {
       setPercentual(((val / credito) * 100).toFixed(2));
     } else {
       setPercentual('');
     }
   };
+
 
   const handleSimular = () => {
     const p = parseFloat(percentual);
