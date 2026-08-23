@@ -204,6 +204,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * de ser hidratado. É a base do diff do save (ver `src/lib/formDiff.ts`).
    */
   const snapshotPatch = useRef<Record<string, unknown> | null>(null);
+  /**
+   * Espelho em estado do snapshot. Sem snapshot o save de edição fica
+   * BLOQUEADO — nunca cai no patch inteiro, que apagaria campo não carregado.
+   */
+  const [snapshotPronto, setSnapshotPronto] = useState(false);
+
 
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
