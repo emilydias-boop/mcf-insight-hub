@@ -243,6 +243,8 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
     inicioSegundaParcela, setInicioSegundaParcela,
     objetivo, setObjetivo, incluiSeguro, setIncluiSeguro,
     creditoSelecionado, produtoDoPlano, prazosDisponiveis, prazoSemTabela, semValorTabelado,
+    valoresTabelaAtuais, combinacaoSemTabela,
+
     termoIncompleto, hidratar,
     valores: {
       credito_id: creditoId || undefined,
