@@ -54,18 +54,26 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
   };
 
 
+  const percentualNumero = parseFloat(percentual);
+  const percentualValido = !isNaN(percentualNumero) && percentualNumero > 0;
+  const pendencias: string[] = [];
+  if (!percentualValido) pendencias.push('Informe o percentual do lance (ou o valor, que calcula o percentual).');
+  if (!credito) pendencias.push('Esta cota não tem valor de crédito cadastrado — sem ele não há simulação.');
+
   const handleSimular = () => {
-    const p = parseFloat(percentual);
-    if (isNaN(p) || !credito) return;
-    setSimulacao(simularChanceLance(credito, p));
+    // Botão sempre clicável: se falta algo, a tela explica em vez de ficar cinza mudo.
+    if (pendencias.length > 0) { setMostrarErros(true); return; }
+    setMostrarErros(false);
+    setSimulacao(simularChanceLance(credito, percentualNumero));
   };
 
   const handleSalvar = async (registrarContemplacao: boolean) => {
     if (!card || !simulacao) return;
     await lanceMutation.mutateAsync({
       cardId: card.id,
-      percentualLance: parseFloat(percentual),
-      valorLance: parseFloat(valor),
+      percentualLance: percentualNumero,
+      valorLance: valorNumero,
+
       chanceClassificacao: simulacao.chanceContemplacao,
       posicaoEstimada: simulacao.posicaoEstimada,
       observacao: observacao || undefined,
