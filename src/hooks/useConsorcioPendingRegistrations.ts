@@ -12,6 +12,7 @@ import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelas
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
+import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
 
 export interface PendingRegistration {
   id: string;
