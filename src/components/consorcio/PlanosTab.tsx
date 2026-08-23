@@ -25,6 +25,12 @@ import {
 } from '@/hooks/useConsorcioCreditosAdmin';
 import { ConsorcioCredito, ConsorcioProduto } from '@/types/consorcioProdutos';
 import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+import {
+  useConsorcioPlanosFaltando,
+  type CombinacaoFaltante,
+} from '@/hooks/useConsorcioPlanosFaltando';
+import { produtosElegiveisParaCarta } from '@/lib/consorcioParcelaOficial';
+
 
 const brl = (v?: number | null) =>
   typeof v === 'number' ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
