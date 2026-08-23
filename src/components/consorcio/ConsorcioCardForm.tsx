@@ -1084,16 +1084,35 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   };
 
   const onSubmit = async (data: FormData) => {
+    /**
+     * Campos que definem o plano da carta. Em EDIÇÃO, se nenhum deles foi
+     * tocado, os valores de parcela e o tipo de produto do banco são a verdade:
+     * recalcular pela tabela aqui é o que fazia o diff acusar mudança em
+     * `parcela_1a_12a` / `parcela_demais` num formulário intocado e sobrescrever
+     * parcela negociada à mão (1.500 / 200) pelo valor tabelado.
+     */
+    const camposDoPlano = [
+      'valor_credito', 'prazo_meses', 'condicao_pagamento', 'inclui_seguro',
+      'produto_codigo', 'tipo_produto', 'objetivo',
+    ] as const;
+    const dirty = form.formState.dirtyFields as Record<string, unknown>;
+    const planoTocado = camposDoPlano.some((c) => !!dirty[c]);
+    const snap = snapshotPayload.current;
+    const preservarPlano = isEditing && !!snap && !planoTocado;
+
     // Derivar tipo_produto automaticamente do produto selecionado
-    const tipoProdutoDerivado: 'select' | 'parcelinha' = produtoSelecionado
-      ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
-      : data.tipo_produto;
+    const tipoProdutoDerivado: 'select' | 'parcelinha' = preservarPlano
+      ? ((snap!.tipo_produto as 'select' | 'parcelinha') || data.tipo_produto)
+      : produtoSelecionado
+        ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
+        : data.tipo_produto;
 
     const input = montarPayloadCarta(data, {
       tipoProduto: tipoProdutoDerivado,
-      parcela1a12: calculoParcela?.parcela1a12,
-      parcelaDemais: calculoParcela?.parcelaDemais,
+      parcela1a12: preservarPlano ? snap!.parcela_1a_12a : calculoParcela?.parcela1a12,
+      parcelaDemais: preservarPlano ? snap!.parcela_demais : calculoParcela?.parcelaDemais,
     });
+
 
     if (isEditing && card) {
       /**
