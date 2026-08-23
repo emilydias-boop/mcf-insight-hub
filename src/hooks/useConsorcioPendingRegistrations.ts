@@ -193,15 +193,11 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
       // docs do próprio pending_registration_id OU do card vinculado a ele.
       const regsWithDocs = await fetchPendingRegsWithDocs(rows as any[]);
 
-      // Sem valor de parcela o Termo de Adesão não sai: conta como incompleto.
-      // Categoria e Origem também são cobradas: sem elas a cota não abre na
-      // Embracon nem entra certa no relatório de canal.
-      const isChecklistIncompleto = (r: any) =>
-        !(Number(r.parcela_1a_12a) > 0) ||
-        !r.categoria || !r.origem ||
-        (r.tipo_pessoa === 'pj'
-          ? !(r.razao_social && r.cnpj && r.telefone_comercial && r.email_comercial && r.endereco_comercial && r.faturamento_mensal)
-          : !(r.nome_completo && r.cpf && r.telefone && r.email && r.endereco_completo && r.renda));
+      // Regra ÚNICA de cadastro incompleto: `camposCadastroFaltantes` — a mesma
+      // função que o Dossiê usa. Antes havia uma cópia da regra aqui, avaliada
+      // sobre um objeto que não trazia endereço/renda/parcela: o selo contava
+      // campos vazios que na verdade estavam preenchidos.
+      const camposFaltantesDe = (r: any) => camposCadastroFaltantes(r);
 
 
       // Resolver nomes de closer (owner_id → profiles/employees) e SDR (original_sdr_email → employees.email_pessoal / profiles.email)
