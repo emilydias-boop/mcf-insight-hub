@@ -37,7 +37,14 @@ interface CartasProposalEditorProps {
   tipoOptions: { name: string; label: string }[];
   /** Destaca as linhas incompletas (após tentativa de gravar). */
   mostrarErros?: boolean;
+  /**
+   * Permissão EXPLÍCITA de quem chama para pré-selecionar Parcelinha/240/
+   * Convencional em cartas novas. Default `false`: editar proposta existente
+   * nunca pré-seleciona nada.
+   */
+  preSelecionarPadrao?: boolean;
 }
+
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -49,7 +56,7 @@ const fmtBRLc = (n: number) =>
 
 
 export function CartasProposalEditor({
-  cartas, onChange, tipoOptions, mostrarErros,
+  cartas, onChange, tipoOptions, mostrarErros, preSelecionarPadrao = false,
 }: CartasProposalEditorProps) {
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
@@ -131,6 +138,7 @@ export function CartasProposalEditor({
   );
 
   useEffect(() => {
+    if (!preSelecionarPadrao) return;
     let mudou = false;
     const proximas = cartas.map(c => {
       if (c.id) return c;
@@ -144,7 +152,7 @@ export function CartasProposalEditor({
     });
     if (mudou) onChange(proximas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartas, tipoPadrao]);
+  }, [cartas, tipoPadrao, preSelecionarPadrao]);
 
   /** Escolher o plano preenche os três campos e trava. Formato: `numberToBRLInput`. */
   const aplicarPlano = (key: string, plano: PlanoCartaOption) => {

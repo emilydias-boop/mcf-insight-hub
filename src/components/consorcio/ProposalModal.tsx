@@ -166,6 +166,7 @@ export function ProposalModal({
               onChange={setCartas}
               tipoOptions={tipoOptions.map(o => ({ name: o.name, label: o.label }))}
               mostrarErros={mostrarErros}
+              preSelecionarPadrao
             />
             <div>
               <Label>Detalhes da Proposta</Label>

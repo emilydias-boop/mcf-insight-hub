@@ -525,6 +525,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
               onChange={setCartas}
               tipoOptions={tipoOptions.map(o => ({ name: o.name, label: o.label }))}
               mostrarErros={mostrarErros}
+              preSelecionarPadrao
             />
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
