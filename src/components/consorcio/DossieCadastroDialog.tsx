@@ -217,6 +217,18 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
                 </div>
               )}
 
+              {/* Informativo, nunca bloqueante e sem contar em nada: o plano desta
+                  combinação não existe na tabela. Não é "cadastro incompleto". */}
+              {planoFaltante && (
+                <p className="text-xs text-muted-foreground">
+                  Plano fora da tabela — {planoFaltante.tipoTaxaLabel} ·{' '}
+                  {formatCurrency(planoFaltante.valorCredito)} · {planoFaltante.prazoMeses}x ·{' '}
+                  {planoFaltante.condicaoLabel}. A equipe de cadastro pode cadastrá-lo em Planos;
+                  o cadastro desta cota segue normalmente.
+                </p>
+              )}
+
+
 
 
               {/* Documentos primeiro: é o que trava o cadastro na Embracon. */}
