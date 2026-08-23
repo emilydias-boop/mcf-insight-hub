@@ -111,26 +111,30 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Percentual (%)</Label>
               <Input
                 type="number"
                 value={percentual}
                 onChange={(e) => handlePercentualChange(e.target.value)}
-                placeholder="25"
+                placeholder="Percentual do lance"
                 step="0.1"
               />
+              {!percentualValido && (
+                <p className={mostrarErros ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+                  Campo vazio — digite o percentual.
+                </p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                value={valor}
-                onChange={(e) => handleValorChange(e.target.value)}
-                placeholder="50000"
-                step="0.01"
-              />
-            </div>
+            <CurrencyInput
+              label="Valor do lance"
+              value={valor}
+              onChange={handleValorChange}
+              placeholder="Digite o valor do lance"
+              emptyHint="Campo vazio — digite o valor ou o percentual."
+              required
+              showError={mostrarErros}
+            />
           </div>
 
           <div className="space-y-2">
@@ -142,8 +146,17 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
             />
           </div>
 
-          <Button onClick={handleSimular} disabled={!percentual} className="w-full">
+          {mostrarErros && pendencias.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
+              {pendencias.map((p) => (
+                <p key={p} className="text-xs text-amber-700 dark:text-amber-400">• {p}</p>
+              ))}
+            </div>
+          )}
+
+          <Button onClick={handleSimular} className="w-full">
             Simular
+
           </Button>
 
           {simulacao && (
