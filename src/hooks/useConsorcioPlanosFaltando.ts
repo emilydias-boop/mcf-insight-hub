@@ -235,7 +235,7 @@ export function useConsorcioPlanosFaltando() {
       const porChave: Record<string, CombinacaoFaltante> = {};
       combinacoes.forEach((c) => { porChave[c.key] = c; });
 
-      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, porCarta, porChave };
+      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, cartasCreditoAbaixoMinimo, porCarta, porChave };
 
     },
   });
