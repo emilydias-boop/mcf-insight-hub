@@ -2,6 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcularComissao } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularProximoDiaUtil } from '@/lib/businessDays';
+import { resolverParcelaOficial, valorParcelaOficial } from '@/lib/consorcioParcelaOficial';
+
 
 /**
  * Cronograma de parcelas da cota.
