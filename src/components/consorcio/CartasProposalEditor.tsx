@@ -457,6 +457,13 @@ export function CartasProposalEditor({
                       Informe crédito e parcela manualmente — a venda pode ser lançada assim.
                     </p>
                   )}
+                  {perdido && (
+                    <p className="text-[11px] text-muted-foreground">
+                      A tabela não tem esse plano em {perdido.prazo || '—'} meses /{' '}
+                      {condicaoLabel(perdido.condicao)}. Os valores continuam como estavam — escolha
+                      outro plano ou confira à mão.
+                    </p>
+                  )}
 
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div>
