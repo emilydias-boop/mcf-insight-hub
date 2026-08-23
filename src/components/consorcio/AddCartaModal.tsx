@@ -211,10 +211,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
   /** Abre o campo de criação já com o que foi digitado na busca. */
   const abrirCriacaoLead = () => {
+    console.log('[AddCartaModal] abrirCriacaoLead', { leadSearch, criandoLead });
+    setCriandoLead(false); // destrava caso uma tentativa anterior tenha ficado presa
     setNovoLeadNome(prev => prev || leadSearch.trim());
     setNovoLeadAberto(true);
     setLeadOpen(false);
   };
+
 
   /** Cria contato + negócio de verdade na esteira do consórcio. */
   const criarLeadNovo = async (nomeInformado: string) => {
