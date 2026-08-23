@@ -261,7 +261,9 @@ export function useGruposDisponiveis() {
         .select('grupo')
         .order('grupo', { ascending: true });
       if (error) throw error;
-      const unique = [...new Set((data || []).map((d: any) => d.grupo))].sort((a, b) => Number(a) - Number(b));
+      // Uma linha com grupo nulo virava <CommandItem value={null}> e derrubava a aba inteira
+      // (cmdk faz "current" in null => TypeError). Filtra nulo/vazio antes de virar opção.
+      const unique = [...new Set((data || []).map((d: any) => d.grupo).filter((g) => g != null && String(g).trim() !== ''))].sort((a, b) => Number(a) - Number(b));
       return unique as string[];
     },
   });
