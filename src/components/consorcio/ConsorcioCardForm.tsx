@@ -290,6 +290,18 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const createCard = useCreateConsorcioCard();
   const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
+  /**
+   * Cota completa: a listagem da etapa 6 entrega um objeto parcial (sem RG,
+   * profissão, renda, patrimônio, PIX e endereço), o que fazia o formulário de
+   * edição abrir esses campos em branco.
+   */
+  const { data: detalheCarta } = useConsorcioCardDetails(card?.id ?? null);
+  const dialogContentRef = useRef<HTMLDivElement | null>(null);
+  /** Chave do que já foi hidratado nesta abertura (`<id>:detalhe` | `novo`). */
+  const hidratadoDe = useRef<string | null>(null);
+  /** Payload equivalente ao formulário recém-hidratado — base do diff do save. */
+  const snapshotPayload = useRef<CreateConsorcioCardInput | null>(null);
+
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
