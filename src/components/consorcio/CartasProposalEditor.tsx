@@ -42,6 +42,11 @@ interface CartasProposalEditorProps {
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
+/** Igual ao fmtBRL, com centavos — parcela sem centavos esconde a diferença. */
+const fmtBRLc = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+
+
 
 export function CartasProposalEditor({
   cartas, onChange, tipoOptions, mostrarErros,
