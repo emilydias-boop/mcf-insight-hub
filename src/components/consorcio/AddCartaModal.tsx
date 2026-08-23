@@ -194,6 +194,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
   const resetar = () => {
     setLead(null); setLeadSearch(''); setOrigem(''); setOrigemDetalhe('');
+    setNovoLeadAberto(false); setNovoLeadNome('');
     setCloserId(''); setAceiteDate(new Date().toISOString().split('T')[0]);
     setObs(''); setCartas([novaCartaDraft()]); setMostrarErros(false);
     cliente.form.reset();
@@ -205,15 +206,24 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     if (m.contact_phone) cliente.form.setValue('telefone', m.contact_phone);
     if (m.contact_email) cliente.form.setValue('email', m.contact_email);
     setLeadOpen(false);
+    setNovoLeadAberto(false);
+  };
+
+  /** Abre o campo de criação já com o que foi digitado na busca. */
+  const abrirCriacaoLead = () => {
+    setNovoLeadNome(prev => prev || leadSearch.trim());
+    setNovoLeadAberto(true);
+    setLeadOpen(false);
   };
 
   /** Cria contato + negócio de verdade na esteira do consórcio. */
-  const criarLeadNovo = async () => {
-    const nome = leadSearch.trim();
+  const criarLeadNovo = async (nomeInformado: string) => {
+    const nome = nomeInformado.trim();
     if (nome.length < 3) {
-      toast.error('Digite o nome do cliente na busca para criar o lead.');
+      toast.error('Informe o nome completo do cliente (mínimo 3 letras).');
       return;
     }
+
     setCriandoLead(true);
     try {
       const { data: contato, error: cErr } = await supabase
