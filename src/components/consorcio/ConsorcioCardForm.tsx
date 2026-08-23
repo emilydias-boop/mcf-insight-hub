@@ -1179,13 +1179,22 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         (k) => !(origemDaChave[k] ?? [k]).some((campo) => !!dirty[campo]),
       );
 
-      console.info('[carta:edit] diff enviado', {
-        cardId: card.id,
-        chaves: chavesDoDiff,
-        camposTocados: Object.keys(dirty),
-        suspeitas_nao_tocadas: naoTocadas,
-        diff: alterado,
-      });
+      const semAlteracao = nenhumaAlteracao(alterado);
+
+      // O rótulo diz se HOUVE escrita: log antes da checagem enganava a leitura.
+      console.info(
+        semAlteracao
+          ? '[carta:edit] nada enviado (nenhuma alteração)'
+          : '[carta:edit] diff enviado',
+        {
+          cardId: card.id,
+          enviado: !semAlteracao,
+          chaves: chavesDoDiff,
+          camposTocados: Object.keys(dirty),
+          suspeitas_nao_tocadas: naoTocadas,
+          diff: alterado,
+        },
+      );
       if (naoTocadas.length > 0) {
         console.warn(
           '[carta:edit] chaves no diff sem edição do usuário (possível bug):',
@@ -1193,12 +1202,13 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         );
       }
 
-      if (nenhumaAlteracao(alterado)) {
+      if (semAlteracao) {
         // Fecha SEM nenhuma escrita: nada de mutateAsync neste caminho.
         toast.info('Nenhuma alteração para salvar.');
         onOpenChange(false);
         return;
       }
+
       await updateCard.mutateAsync({ id: card.id, ...(alterado as any) });
       snapshotPayload.current = input;
 
