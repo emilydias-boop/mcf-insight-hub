@@ -73,6 +73,11 @@ const Negocios = () => {
   const { role, user, allRoles } = useAuth();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+  // Persistência da seleção da barra lateral (pipeline + sub-origem) por BU.
+  // Sem isso, ao recarregar a tela a seleção voltava ao padrão e o "Novo Negócio"
+  // mostrava "Pipeline selecionada" — nascendo na origem errada, que é justo o
+  // que define quem entra em fluxo automático de mensagem.
+  const seletorStorageKey = (bu?: string | null) => `crm:negocios:selecao:${bu || '__global__'}`;
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
     dateRange: undefined,
@@ -260,6 +265,29 @@ const Negocios = () => {
     if (pipelines && pipelines.length > 0 && defaultSetForBU.current !== buKey && !isLoadingBU && !isBuMappingLoading) {
       defaultSetForBU.current = buKey;
       setSelectedOriginId(null);
+
+      // 0a. Restaurar a última seleção salva desta BU, se a pipeline ainda existe.
+      try {
+        const salvo = localStorage.getItem(seletorStorageKey(activeBU));
+        if (salvo) {
+          const { pipelineId, originId } = JSON.parse(salvo) as {
+            pipelineId?: string | null;
+            originId?: string | null;
+          };
+          const pipelineValida =
+            !!pipelineId &&
+            (pipelines.some((p: any) => p.id === pipelineId) ||
+              buAllowedGroups.includes(pipelineId) ||
+              (isSdr && sdrScopedOverride.includes(pipelineId)));
+          if (pipelineValida) {
+            setSelectedPipelineId(pipelineId!);
+            if (originId) setSelectedOriginId(originId);
+            return;
+          }
+        }
+      } catch {
+        // storage indisponível: segue para os padrões abaixo
+      }
       
       // 0. Se SDR tem override individual válido NA BU ATIVA, usar o primeiro dele
       if (isSdr && sdrScopedOverride.length > 0) {
@@ -314,6 +342,19 @@ const Negocios = () => {
     }
   }, [pipelines, isSdr, activeBU, isLoadingBU, isBuMappingLoading, buMapping, buAllowedGroups, sdrScopedOverride]);
   
+  // Salvar a seleção corrente para restaurar no próximo carregamento.
+  useEffect(() => {
+    if (!selectedPipelineId) return;
+    try {
+      localStorage.setItem(
+        seletorStorageKey(activeBU),
+        JSON.stringify({ pipelineId: selectedPipelineId, originId: selectedOriginId }),
+      );
+    } catch {
+      // storage indisponível: apenas não persiste
+    }
+  }, [selectedPipelineId, selectedOriginId, activeBU]);
+
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
     queryKey: ['user-profile', user?.id],
