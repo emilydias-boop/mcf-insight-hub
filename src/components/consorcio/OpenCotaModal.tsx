@@ -534,73 +534,35 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   if (!registration) return null;
 
+  /**
+   * Save do modo `edit`/`view` (cadastro pendente): manda SÓ o que o usuário
+   * mudou, por diff contra o snapshot tirado na hidratação. Campo intocado não
+   * entra no payload (não pode ser zerado por acidente); campo apagado de
+   * propósito entra como vazio (é mudança real). O modo `open` (abertura de
+   * cota) não passa por aqui — ele usa `onSubmit`.
+   */
   const handleSavePendingEdit = async () => {
-    const data = form.getValues();
-    await updatePending.mutateAsync({
-      id: registrationId,
-      patch: {
-        // cliente
-        nome_completo: data.cliente_nome || null,
-        cpf: data.cliente_cpf ? data.cliente_cpf.replace(/\D/g, '') : null,
-        rg: data.cliente_rg || null,
-        cpf_conjuge: data.cliente_cpf_conjuge ? data.cliente_cpf_conjuge.replace(/\D/g, '') : null,
-        profissao: data.cliente_profissao || null,
-        telefone: data.cliente_telefone || null,
-        email: data.cliente_email || null,
-        endereco_completo: data.cliente_endereco || null,
-        endereco_cep: data.cliente_cep || null,
-        renda: numOuNull(data.cliente_renda),
-        patrimonio: numOuNull(data.cliente_patrimonio),
-        pix: data.cliente_pix || null,
-        // cota
-        valor_credito: numOuNull(data.valor_credito),
-        prazo_meses: data.prazo_meses || null,
-        tipo_produto: data.tipo_produto || null,
-        categoria: data.categoria || null,
-        grupo: data.grupo || null,
-        cota: data.cota || null,
-        inclui_seguro: !!data.inclui_seguro,
-        empresa_paga_parcelas: data.empresa_paga_parcelas || null,
-        tipo_contrato: data.tipo_contrato || null,
-        parcelas_pagas_empresa: data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
-        dia_vencimento: data.dia_vencimento ? Number(data.dia_vencimento) : null,
-        inicio_segunda_parcela: data.inicio_segunda_parcela || null,
-        data_contratacao: data.data_contratacao || null,
-        valor_comissao: numOuNull(data.valor_comissao),
-        e_transferencia: !!data.e_transferencia,
-        transferido_de: data.transferido_de || null,
-        origem: data.origem || null,
-        origem_detalhe: data.origem_detalhe || null,
-        vendedor_id: data.vendedor_id || null,
-        vendedor_name_cota: data.vendedor_name || null,
-        observacoes: data.observacoes || null,
-        // plano (Termo de Adesão) — o que vale é o que está digitado, não o cálculo
-        credito_id: plano.valores.credito_id ?? null,
-        condicao_pagamento: data.condicao_pagamento || null,
-        parcela_1a_12a: plano.valores.parcela_1a_12a ?? null,
-        parcela_demais: plano.valores.parcela_demais ?? null,
-        objetivo: plano.valores.objetivo ?? null,
-        // PJ
-        ...(registration.tipo_pessoa === 'pj' ? {
-          razao_social: data.pj_razao_social || null,
-          cnpj: data.pj_cnpj ? String(data.pj_cnpj).replace(/\D/g, '') : null,
-          natureza_juridica: data.pj_natureza_juridica || null,
-          inscricao_estadual: data.pj_inscricao_estadual || null,
-          data_fundacao: data.pj_data_fundacao || null,
-          telefone_comercial: data.pj_telefone || null,
-          email_comercial: data.pj_email || null,
-          endereco_comercial: data.pj_endereco || null,
-          endereco_comercial_cep: data.pj_cep || null,
-          num_funcionarios: numOuNull(data.pj_num_funcionarios),
-          faturamento_mensal: numOuNull(data.pj_faturamento),
-        } : {}),
-      },
-    });
+    const completo = montarPatchCadastro(form.getValues(), plano.valores, registration.tipo_pessoa);
+    const patch = diffContraSnapshot(snapshotPatch.current, completo);
+
+    if (nenhumaAlteracao(patch)) {
+      toast.info('Nenhuma alteração para salvar.');
+      if (editOnly) {
+        onOpenChange(false);
+        onSaved?.();
+      } else setIsEditing(false);
+      return;
+    }
+
+    await updatePending.mutateAsync({ id: registrationId, patch: patch as any });
+    // Novo ponto de partida: o que acabou de ser gravado.
+    snapshotPatch.current = completo;
     if (editOnly) {
       onOpenChange(false);
       onSaved?.();
     } else setIsEditing(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
