@@ -373,7 +373,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           motivo_declinio: r.motivo_declinio ?? null,
           declinada_at: r.declinada_at ?? null,
           consortium_card_id: r.consortium_card_id ?? null,
-          checklist_incompleto: isChecklistIncompleto(r),
+          campos_faltantes: camposFaltantesDe(r),
+          checklist_incompleto: camposFaltantesDe(r).length > 0,
           documentos_faltando: !regsWithDocs.has(r.id),
         };
       });
