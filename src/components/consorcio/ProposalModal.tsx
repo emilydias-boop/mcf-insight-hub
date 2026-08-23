@@ -131,8 +131,15 @@ export function ProposalModal({
 
       onOpenChange(false);
       resetar();
-    } catch {
-      // Os hooks já mostram o erro em toast; mantém o modal aberto para correção.
+    } catch (err: any) {
+      // Um save que falha pela metade não pode passar por sucesso: a venda pode já
+      // ter sido criada e o cadastro não. Mostra o erro real e mantém o modal aberto.
+      console.error('[ProposalModal] Falha ao lançar venda / criar cadastro:', err);
+      toast.error(
+        `A venda pode ter sido criada, mas o cadastro da cota FALHOU: ${err?.message || 'erro desconhecido'}. ` +
+        `Confira a venda em ${CONSORCIO_LABELS.termosPendentes} e use "Inserir Dados" para concluir o cadastro.`,
+        { duration: 12000 },
+      );
     } finally {
       setSalvando(false);
     }
