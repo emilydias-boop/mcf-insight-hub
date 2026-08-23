@@ -496,9 +496,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
               Modelo: {modelo.nome} — versão {modelo.versao}
             </p>
           </div>
-        )}
+         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {gerado ? 'Fechar' : 'Cancelar'}
           </Button>
