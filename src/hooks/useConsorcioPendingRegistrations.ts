@@ -169,6 +169,8 @@ export interface EnrichedPendingRegistration {
   consortium_card_id?: string | null;
   /** Checklist de dados do cadastro incompleto (campos obrigatórios faltando). */
   checklist_incompleto: boolean;
+  /** Rótulos dos campos obrigatórios vazios — mesma lista que o Dossiê mostra. */
+  campos_faltantes: string[];
   /** Nenhum documento anexado ao cadastro pendente. */
   documentos_faltando: boolean;
 }
