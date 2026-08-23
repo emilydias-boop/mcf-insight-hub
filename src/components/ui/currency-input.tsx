@@ -40,6 +40,9 @@ export interface CurrencyInputProps {
   inputClassName?: string;
   /** Prefixo exibido dentro do campo. */
   prefix?: string;
+}
+
+
 
 
 export function CurrencyInput({
