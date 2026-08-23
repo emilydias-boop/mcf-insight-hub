@@ -34,6 +34,49 @@ function normalizarCondicao(c?: string | null): CondicaoPagamento {
   return c === '50' || c === '25' ? c : 'convencional';
 }
 
+/**
+ * ÚNICA regra de mapeamento tipo_produto → taxa_antecipada_tipo.
+ * 'select' → 'primeira_parcela' · qualquer outro (parcelinha) → 'dividida_12'.
+ * Quem precisar dessa tradução deve chamar aqui, e não repetir o ternário.
+ */
+export function taxaAntecipadaTipoDeProduto(
+  tipoProduto?: string | null,
+): 'dividida_12' | 'primeira_parcela' {
+  return tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12';
+}
+
+/** Forma mínima de produto que a resolução por faixa precisa. */
+export interface ProdutoElegivelShape {
+  ativo?: boolean | null;
+  taxa_antecipada_tipo?: string | null;
+  faixa_credito_min?: number | null;
+  faixa_credito_max?: number | null;
+}
+
+/**
+ * MESMO predicado que `resolverParcelaOficial` usa no banco (ativo +
+ * taxa_antecipada_tipo + faixa de crédito), aplicado a uma lista já carregada.
+ * Diferença deliberada: NÃO faz `limit(1)` — devolve TODOS os elegíveis, porque
+ * faixas sobrepostas (SEP/TEP × SEP_ALTO/TEP_ALTO entre 1,0M e 1,2M) precisam ser
+ * decididas por quem opera, não pelo primeiro registro que o banco devolver.
+ */
+export function produtosElegiveisParaCarta<T extends ProdutoElegivelShape>(
+  produtos: T[],
+  valorCredito: number,
+  tipoProduto?: string | null,
+): T[] {
+  const valor = Number(valorCredito || 0);
+  if (valor <= 0) return [];
+  const tipoTaxa = taxaAntecipadaTipoDeProduto(tipoProduto);
+  return produtos.filter(
+    (p) =>
+      p.ativo !== false &&
+      p.taxa_antecipada_tipo === tipoTaxa &&
+      Number(p.faixa_credito_min ?? 0) <= valor &&
+      Number(p.faixa_credito_max ?? Infinity) >= valor,
+  );
+}
+
 export async function resolverParcelaOficial(
   p: ParcelaOficialParams,
 ): Promise<ParcelaOficial | undefined> {
@@ -41,8 +84,8 @@ export async function resolverParcelaOficial(
   const prazo = Number(p.prazoMeses || 0);
   if (valorCredito <= 0 || prazo <= 0) return undefined;
 
-  const taxaAntecipadaTipo: 'dividida_12' | 'primeira_parcela' =
-    p.tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12';
+  const taxaAntecipadaTipo = taxaAntecipadaTipoDeProduto(p.tipoProduto);
+
 
   const { data: produtoRow } = await supabase
     .from('consorcio_produtos')
