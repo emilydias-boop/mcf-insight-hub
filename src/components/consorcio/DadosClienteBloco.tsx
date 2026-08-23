@@ -289,7 +289,7 @@ export function DadosClienteFields({
     <Form {...form}>
       <div className="space-y-4">
         {tipoPessoa === 'pf' ? (
-          <>
+          <Fragment key="pf">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Dados Pessoais</h3>
               <Button type="button" variant="outline" size="sm" onClick={() => i.setShowChecklist(!i.showChecklist)}>
@@ -435,9 +435,9 @@ export function DadosClienteFields({
                 <p className="text-xs text-muted-foreground"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>
               )}
             </div>
-          </>
+          </Fragment>
         ) : (
-          <>
+          <Fragment key="pj">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Dados da Empresa</h3>
               <Button type="button" variant="outline" size="sm" onClick={() => i.setShowChecklistPJ(!i.showChecklistPJ)}>
