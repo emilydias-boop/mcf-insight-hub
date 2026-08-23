@@ -476,6 +476,19 @@ function PlanoForm({
     <div className="space-y-4 p-4 border rounded-lg bg-card">
       <h4 className="font-semibold text-sm">{initial ? 'Editar plano' : 'Novo plano'}</h4>
 
+      {!initial && prefill && (
+        <p className="text-xs text-muted-foreground">
+          Combinação pedida por {prefill.cartas} carta{prefill.cartas === 1 ? '' : 's'}:{' '}
+          <span className="font-medium text-foreground">
+            {prefill.tipoTaxaLabel} · {brl(prefill.valorCredito)} · {prefill.prazoMeses}x ·{' '}
+            {prefill.condicaoLabel}
+          </span>
+          . Preencha as parcelas com os valores da tabela oficial da Embracon
+          {prefill.condKey ? '' : ' — confirme a condição antes de cadastrar'}.
+        </p>
+      )}
+
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label>Produto *</Label>
