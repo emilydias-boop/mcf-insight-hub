@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useCancelTermo, termoPublicUrl, type ConsorcioTermo, type TermoTipo } from '@/hooks/useConsorcioTermos';
 import { imprimirDocumento } from '@/lib/consorcioTermo';
+import { formatCpfCnpj } from '@/lib/cpfCnpjMask';
 
 const STATUS_LABEL: Record<string, string> = {
   pendente: 'Aguardando assinatura',
@@ -143,7 +144,7 @@ export function TermoPanelDialog({
               {!isComprovante && t.status === 'assinado' && (
                 <div className="text-sm space-y-1">
                   <p>
-                    Assinado por <strong>{t.assinante_nome}</strong> (CPF {t.assinante_cpf}) em{' '}
+                    Assinado por <strong>{t.assinante_nome}</strong> (CPF {formatCpfCnpj(t.assinante_cpf) || t.assinante_cpf || '—'}) em{' '}
                     {t.assinado_em
                       ? new Date(t.assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
                       : '—'}

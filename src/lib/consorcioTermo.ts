@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatCurrency } from '@/lib/consorcioCalculos';
 import { abrirJanelaImpressao, escreverImpressao, escapeHtml } from '@/lib/documentoPapel';
+import { formatCpfCnpj } from '@/lib/cpfCnpjMask';
 
 /** Administradora do consórcio — usada no placeholder {{administradora}}. */
 export const ADMINISTRADORA_CONSORCIO = 'Embracon Administradora de Consórcio Ltda';
@@ -421,7 +422,8 @@ export function certificadoHtml(cert: TermoCertificado): string {
     : '—';
   const pares: CertificadoHtmlParte[] = [
     { label: 'Signatário', valor: cert.assinante_nome || '—' },
-    { label: 'CPF', valor: cert.assinante_cpf || '—' },
+    // Guardamos só dígitos; a pontuação é de exibição.
+    { label: 'CPF', valor: formatCpfCnpj(cert.assinante_cpf) || cert.assinante_cpf || '—' },
     { label: 'Data e hora (Brasília)', valor: dataBr },
     { label: 'Endereço IP', valor: cert.assinante_ip || '—' },
   ];
