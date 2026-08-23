@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useClosersFromBu } from '@/hooks/useClosersFromBu';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -43,7 +43,8 @@ import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { toast } from 'sonner';
-import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConsorcio';
+import { useCreateConsorcioCard, useUpdateConsorcioCard, useConsorcioCardDetails } from '@/hooks/useConsorcio';
+import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
