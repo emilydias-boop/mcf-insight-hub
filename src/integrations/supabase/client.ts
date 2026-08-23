@@ -2,6 +2,7 @@
 // Using hardcoded values to ensure consistency across preview/published environments
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { brokeredPreviewStorage } from './previewAuthStorage';
 
 // Hardcoded project configuration (public/anon key is safe to expose)
 const SUPABASE_URL = 'https://rehcfgqvigfcekiipqkc.supabase.co';
@@ -17,7 +18,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: localStorage,
+    storage: brokeredPreviewStorage(),
     persistSession: true,
     autoRefreshToken: true,
   }

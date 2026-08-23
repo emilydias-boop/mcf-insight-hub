@@ -149,7 +149,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
+      <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Dossiê do cadastro {nome ? `— ${nome}` : ''}</DialogTitle>
           <DialogDescription>
@@ -164,7 +164,10 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
         ) : !reg ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Cadastro não encontrado.</p>
         ) : (
-          <ScrollArea className="max-h-[70vh] flex-1 pr-4">
+          // `min-h-0 flex-1` em vez de `max-h-[70vh]`: com o cabeçalho somando
+          // altura, o teto fixo empurrava o fim do conteúdo (vendedor, origem,
+          // observações) para fora do modal.
+          <ScrollArea className="min-h-0 flex-1 pr-4">
             <div className="space-y-6">
               {/* Seletor de cartas: só aparece quando a venda tem mais de uma. */}
               {regs.length > 1 && (

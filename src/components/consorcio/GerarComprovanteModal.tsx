@@ -283,7 +283,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+      {/* Altura limitada à viewport, corpo rolando por dentro e rodapé fixo: com o
+          cronograma de 12 linhas aberto o botão de emitir precisa continuar visível. */}
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden p-0">
+        <div className="shrink-0 px-6 pt-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileBadge className="h-5 w-5" /> Gerar Comprovante de Cadastro
@@ -292,6 +295,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
             Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das primeiras parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
           </DialogDescription>
         </DialogHeader>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6">
+
 
         {isLoading || loadingModelos ? (
           <div className="flex justify-center py-10">
@@ -403,7 +410,7 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
                   pagas ficam bloqueadas.
                 </p>
 
-                <div className="rounded-lg border overflow-x-auto max-h-[38vh] overflow-y-auto">
+                <div className="rounded-lg border overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 sticky top-0">
                       <tr>
@@ -482,16 +489,17 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
               </div>
             )}
 
-            <div className="rounded-lg border bg-card p-5 text-sm max-h-[45vh] overflow-y-auto">
+            <div className="rounded-lg border bg-card p-5 text-sm">
               <TermoMarkdown content={preview} />
             </div>
             <p className="text-xs text-muted-foreground">
               Modelo: {modelo.nome} — versão {modelo.versao}
             </p>
           </div>
-        )}
+         )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {gerado ? 'Fechar' : 'Cancelar'}
           </Button>

@@ -48,19 +48,25 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
   const [comprovanteCardId, setComprovanteCardId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
 
-  // Busca por nome, CPF/CNPJ, grupo e cota — mesmo padrão das outras etapas.
-  // Só filtra a exibição: não altera contagem de período nem cálculo nenhum.
+  // Busca por nome, CPF/CNPJ, grupo e cota — casa em QUALQUER um dos campos.
+  // Regra dos dígitos: só busca por documento/grupo/cota por dígitos quando o
+  // termo é numérico (aceitando . - / e espaço) e tem 3+ dígitos. Antes, um termo
+  // como "QA2" virava dígito "2" e casava com quase toda a base pelo CPF, sem
+  // que o operador percebesse. Só filtra exibição: não altera nenhum cálculo.
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return cotas;
     const digitos = termo.replace(/\D/g, '');
+    const termoNumerico = /^[\d.\-/\s]+$/.test(termo) && digitos.length >= 3;
     return cotas.filter((c) => {
       const doc = String(c.documento || '').replace(/\D/g, '');
       return (
         String(c.nome || '').toLowerCase().includes(termo) ||
         String(c.grupo || '').toLowerCase().includes(termo) ||
         String(c.cota || '').toLowerCase().includes(termo) ||
-        (!!digitos && doc.includes(digitos))
+        (termoNumerico && (doc.includes(digitos) ||
+          String(c.grupo || '').includes(digitos) ||
+          String(c.cota || '').includes(digitos)))
       );
     });
   }, [cotas, busca]);
