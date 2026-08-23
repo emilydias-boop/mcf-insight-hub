@@ -56,7 +56,7 @@ const fmtBRLc = (n: number) =>
 
 
 export function CartasProposalEditor({
-  cartas, onChange, tipoOptions, mostrarErros,
+  cartas, onChange, tipoOptions, mostrarErros, preSelecionarPadrao = false,
 }: CartasProposalEditorProps) {
   // Quantidade do atalho "×N" por linha (repetição em massa).
   const [repetir, setRepetir] = useState<Record<string, string>>({});
@@ -138,6 +138,7 @@ export function CartasProposalEditor({
   );
 
   useEffect(() => {
+    if (!preSelecionarPadrao) return;
     let mudou = false;
     const proximas = cartas.map(c => {
       if (c.id) return c;
@@ -151,7 +152,7 @@ export function CartasProposalEditor({
     });
     if (mudou) onChange(proximas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartas, tipoPadrao]);
+  }, [cartas, tipoPadrao, preSelecionarPadrao]);
 
   /** Escolher o plano preenche os três campos e trava. Formato: `numberToBRLInput`. */
   const aplicarPlano = (key: string, plano: PlanoCartaOption) => {
