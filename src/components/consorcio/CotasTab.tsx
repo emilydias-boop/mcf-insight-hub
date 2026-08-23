@@ -838,7 +838,9 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                 <SortableTableHead field="criada_por" active={field} dir={dir} onSort={toggle}>Criada por</SortableTableHead>
                 <SortableTableHead field="criada_em" active={field} dir={dir} onSort={toggle}>Criada em</SortableTableHead>
                 <SortableTableHead field="comissao" active={field} dir={dir} onSort={toggle} className="text-right" align="right">Comissão</SortableTableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                {/* Ações fixas à direita: a tabela tem 17 colunas e rola na
+                    horizontal — sem sticky, "Excluir carta" ficava fora da tela. */}
+                <TableHead className="sticky right-0 z-20 w-24 border-l bg-background">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -934,7 +936,7 @@ export function CotasTab({ range, onlyDoFunil, onlyExternas, onClearQuickFilter 
                       <TableCell className="text-right">
                         {card.valor_comissao_total ? formatCurrencyFull(card.valor_comissao_total) : '-'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="sticky right-0 z-10 border-l bg-background">
                         <div className="flex items-center gap-1">
                           <Button 
                             variant="ghost" 

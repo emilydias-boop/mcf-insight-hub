@@ -784,17 +784,32 @@ export function useUndeclinePendingRegistration() {
           .update({ declinada_at: null, motivo_declinio: null, declinada_by: null } as any)
           .eq('proposal_id', proposalId)
           .eq('pending_registration_id', registrationId);
-        // …e a venda volta a 'aceita' caso tivesse sido recusada por inteiro.
-        await supabase
+        // …e a venda só volta a 'aceita' se ela estava 'recusada' (isto é, tinha
+        // sido recusada por queda da última carta) E agora existe carta ativa.
+        // Qualquer outro status da proposta é dado legítimo: não sobrescrever.
+        const { data: prop } = await supabase
           .from('consorcio_proposals')
-          .update({
-            status: 'aceita',
-            motivo_recusa: null,
-            recusada_at: null,
-            recusada_by: null,
-          } as any)
-          .eq('id', proposalId);
+          .select('id, status')
+          .eq('id', proposalId)
+          .maybeSingle();
+        const { data: cartas } = await supabase
+          .from('consorcio_proposal_cartas')
+          .select('id, declinada_at')
+          .eq('proposal_id', proposalId);
+        const ativas = (cartas || []).filter((c: any) => !c.declinada_at).length;
+        if ((prop as any)?.status === 'recusada' && ativas > 0) {
+          await supabase
+            .from('consorcio_proposals')
+            .update({
+              status: 'aceita',
+              motivo_recusa: null,
+              recusada_at: null,
+              recusada_by: null,
+            } as any)
+            .eq('id', proposalId);
+        }
       }
+
       const { error } = await supabase
         .from('consorcio_pending_registrations')
         .update({

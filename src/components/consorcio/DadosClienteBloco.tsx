@@ -23,6 +23,8 @@ import {
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { buscarCep } from '@/lib/cepUtils';
+import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+
 import { TipoDocumento } from '@/types/consorcio';
 
 // ===== Máscaras =====
@@ -362,12 +364,30 @@ export function DadosClienteFields({
 
             <h3 className="font-semibold text-sm">Dados Financeiros</h3>
             <div className="grid grid-cols-3 gap-3">
+              {/* Renda e Patrimônio usam a MESMA máscara de centavos do Crédito e
+                  das parcelas: digitar 150000 vira 1.500,00. O valor guardado no
+                  formulário continua numérico. */}
               <FormField control={form.control} name="renda" render={({ field }) => (
-                <FormItem><FormLabel>Renda Mensal</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Renda Mensal (R$)</FormLabel><FormControl>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="0,00"
+                    value={field.value ? numberToBRLInput(Number(field.value)) : ''}
+                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                  />
+                </FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="patrimonio" render={({ field }) => (
-                <FormItem><FormLabel>Patrimônio</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Patrimônio (R$)</FormLabel><FormControl>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="0,00"
+                    value={field.value ? numberToBRLInput(Number(field.value)) : ''}
+                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                  />
+                </FormControl><FormMessage /></FormItem>
               )} />
+
               <FormField control={form.control} name="pix" render={({ field }) => (
                 <FormItem><FormLabel>Chave PIX</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
