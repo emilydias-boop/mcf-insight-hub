@@ -407,6 +407,13 @@ function PlanosFaltandoBlock({
           tem coluna para esse prazo; cadastrar plano não resolve.
         </p>
       )}
+
+      {creditoAbaixo > 0 && (
+        <p className="px-4 py-3 text-xs text-muted-foreground border-t">
+          {creditoAbaixo} carta{creditoAbaixo === 1 ? '' : 's'} com crédito abaixo de R$ 1.000 — provável
+          erro de digitação na venda; cadastrar plano não resolve.
+        </p>
+      )}
     </div>
   );
 }
