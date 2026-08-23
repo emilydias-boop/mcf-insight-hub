@@ -1316,13 +1316,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                      {categoriaOptions
-                        .filter(opt => opt.is_active)
-                        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-                        .map(opt => (
-                          <SelectItem key={opt.name} value={opt.name}>{opt.label}</SelectItem>
-                        ))}
+                      {categoriasDisponiveis.map(opt => (
+                        <SelectItem key={opt.name} value={opt.name}>{opt.label}</SelectItem>
+                      ))}
+                      {field.value && !categoriasDisponiveis.some(o => o.name === field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
                         </SelectContent>
+
                       </Select>
                       <FormMessage />
                     </FormItem>
