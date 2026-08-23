@@ -283,7 +283,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+      {/* Altura limitada à viewport, corpo rolando por dentro e rodapé fixo: com o
+          cronograma de 12 linhas aberto o botão de emitir precisa continuar visível. */}
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden p-0">
+        <div className="shrink-0 px-6 pt-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileBadge className="h-5 w-5" /> Gerar Comprovante de Cadastro
