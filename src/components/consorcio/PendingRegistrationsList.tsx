@@ -419,8 +419,11 @@ export function PendingRegistrationsList({
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
-          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} ({filtered.length}
-          {filtered.length !== registrations.length ? ` de ${registrations.length}` : ''})
+          {/* Os dois números vivem em universos diferentes — o rótulo diz qual é
+              qual: filtros atuais x tudo que foi criado no período. */}
+          {variant === 'declinadas' ? 'Cartas Declinadas' : CONSORCIO_LABELS.cotasAFazer} (
+          {filtered.length} com os filtros atuais
+          {filtered.length !== registrations.length ? ` · ${registrations.length} no período` : ''})
           {variant === 'pendentes' && maisAntigoFila != null && (
             <Tooltip>
               <TooltipTrigger asChild>
