@@ -36,9 +36,11 @@ export interface CurrencyInputProps {
   disabled?: boolean;
   id?: string;
   className?: string;
+  /** Classes do <input> — telas densas usam h-9. */
+  inputClassName?: string;
   /** Prefixo exibido dentro do campo. */
   prefix?: string;
-}
+
 
 export function CurrencyInput({
   value,
