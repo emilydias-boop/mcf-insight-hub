@@ -132,6 +132,9 @@ export function useDadosCliente(opts?: { nomeInicial?: string }): DadosClienteBl
   const [pjContratoSocial, setPjContratoSocial] = useState<File | null>(null);
   const [pjRgSocios, setPjRgSocios] = useState<File | null>(null);
   const [pjCartaoCnpj, setPjCartaoCnpj] = useState<File | null>(null);
+  // Comprovante de residência vale para PF e PJ. Opcional: sem ele o cadastro
+  // nasce e o selo "incompleto" avisa — não bloqueia o envio.
+  const [comprovanteResidencia, setComprovanteResidencia] = useState<File | null>(null);
 
   const form = useForm<any>({
     defaultValues: {
@@ -214,8 +217,11 @@ export function useDadosCliente(opts?: { nomeInicial?: string }): DadosClienteBl
       if (pjRgSocios) out.push({ file: pjRgSocios, tipo: 'cnh' });
       if (pjCartaoCnpj) out.push({ file: pjCartaoCnpj, tipo: 'cartao_cnpj' });
     }
+    if (comprovanteResidencia) {
+      out.push({ file: comprovanteResidencia, tipo: 'comprovante_residencia' as TipoDocumento });
+    }
     return out;
-  }, [tipoPessoa, pfDocuments, pjContratoSocial, pjRgSocios, pjCartaoCnpj]);
+  }, [tipoPessoa, pfDocuments, pjContratoSocial, pjRgSocios, pjCartaoCnpj, comprovanteResidencia]);
 
   const dadosLimpos = useCallback((data: any) => {
     const pjOnly = [...CAMPOS_PJ, 'num_funcionarios', 'socios'] as string[];
@@ -242,6 +248,7 @@ export function useDadosCliente(opts?: { nomeInicial?: string }): DadosClienteBl
       pjContratoSocial, setPjContratoSocial,
       pjRgSocios, setPjRgSocios,
       pjCartaoCnpj, setPjCartaoCnpj,
+      comprovanteResidencia, setComprovanteResidencia,
     },
   };
 }
@@ -416,6 +423,18 @@ export function DadosClienteFields({
                   </Button>
                 </div>
               ))}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Comprovante de residência (PDF, JPG, JPEG) — opcional</Label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg"
+                onChange={e => i.setComprovanteResidencia(e.target.files?.[0] || null)}
+              />
+              {i.comprovanteResidencia && (
+                <p className="text-xs text-muted-foreground"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>
+              )}
             </div>
           </>
         ) : (
@@ -599,6 +618,11 @@ export function DadosClienteFields({
                 <Label>Cartão CNPJ (PDF)</Label>
                 <Input type="file" accept=".pdf" onChange={e => i.setPjCartaoCnpj(e.target.files?.[0] || null)} />
                 {i.pjCartaoCnpj && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{i.pjCartaoCnpj.name}</p>}
+              </div>
+              <div>
+                <Label>Comprovante de residência (PDF, JPG, JPEG) — opcional</Label>
+                <Input type="file" accept=".pdf,.jpg,.jpeg" onChange={e => i.setComprovanteResidencia(e.target.files?.[0] || null)} />
+                {i.comprovanteResidencia && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>}
               </div>
             </div>
           </>
