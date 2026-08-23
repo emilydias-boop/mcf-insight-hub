@@ -23,15 +23,13 @@ export async function resolveVendedorOptionId(
       if (data?.id) return data.id;
     }
 
-    const nome = (vendedorName || '').trim();
+    const nome = normalizarNome(vendedorName);
     if (nome) {
-      const { data } = await supabase
-        .from('consorcio_vendedor_options')
-        .select('id, name')
-        .ilike('name', nome)
-        .limit(1);
-      if (data?.[0]?.id) return data[0].id;
+      const { data } = await supabase.from('consorcio_vendedor_options').select('id, name');
+      const achado = (data || []).find((o) => normalizarNome(o.name) === nome);
+      if (achado?.id) return achado.id;
     }
+
   } catch {
     // Falha na resolução nunca pode impedir a criação da cota.
   }
