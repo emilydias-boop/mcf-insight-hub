@@ -790,6 +790,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     if (!open) {
       hidratadoDe.current = null;
       snapshotPayload.current = null;
+      setSnapshotPronto(false);
       return;
     }
 
@@ -802,7 +803,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       setPendingDocuments([]);
       if (!detalhado) setActiveTab('dados');
       form.reset(valoresDaCarta(fonte));
-      // Snapshot SÓ com a cota completa em mão.
+      // Snapshot SÓ com a cota completa em mão. Sem ele o save fica bloqueado.
       snapshotPayload.current = detalhado
         ? montarPayloadCarta(form.getValues(), {
             tipoProduto: (form.getValues('tipo_produto') as 'select' | 'parcelinha') || 'select',
@@ -810,6 +811,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
             parcelaDemais: fonte.parcela_demais != null ? Number(fonte.parcela_demais) : undefined,
           })
         : null;
+      setSnapshotPronto(!!detalhado);
       return;
     }
 
@@ -818,6 +820,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     setActiveTab('dados');
     setPendingDocuments([]);
     snapshotPayload.current = null;
+    setSnapshotPronto(false);
+
 
     if (duplicateFrom) {
       /**
