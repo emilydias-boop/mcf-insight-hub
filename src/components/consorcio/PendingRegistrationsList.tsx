@@ -751,14 +751,11 @@ function RegistrationRow({
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400">
                     cadastro incompleto
-                    {camposCadastroFaltantes(reg as any).length > 0
-                      ? ` (${camposCadastroFaltantes(reg as any).length})`
-                      : ''}
+                    {/* Mesma lista que o Dossiê mostra (vem do hook, campo único). */}
+                    {reg.campos_faltantes.length > 0 ? ` (${reg.campos_faltantes.length})` : ''}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent>
-                  {resumoCamposFaltantes(camposCadastroFaltantes(reg as any))}
-                </TooltipContent>
+                <TooltipContent>{resumoCamposFaltantes(reg.campos_faltantes)}</TooltipContent>
               </Tooltip>
             )}
             {reg.documentos_faltando && (
