@@ -204,6 +204,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * de ser hidratado. É a base do diff do save (ver `src/lib/formDiff.ts`).
    */
   const snapshotPatch = useRef<Record<string, unknown> | null>(null);
+  /**
+   * Espelho em estado do snapshot. Sem snapshot o save de edição fica
+   * BLOQUEADO — nunca cai no patch inteiro, que apagaria campo não carregado.
+   */
+  const [snapshotPronto, setSnapshotPronto] = useState(false);
+
 
   const cotaBlockRef = useRef<HTMLDivElement | null>(null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
@@ -428,10 +434,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   // Fecha o modal / troca de cadastro: a próxima abertura hidrata de novo.
   useEffect(() => {
-    if (!open) {
-      hidratadoDe.current = null;
-      snapshotPatch.current = null;
-    }
+    // Fechou o modal OU trocou de cadastro: o snapshot antigo não vale mais.
+    hidratadoDe.current = null;
+    snapshotPatch.current = null;
+    setSnapshotPronto(false);
   }, [open, registrationId]);
 
   /**
@@ -462,6 +468,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
         planoValoresRef.current,
         registration.tipo_pessoa,
       );
+      setSnapshotPronto(true);
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -644,6 +651,16 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
    * cota) não passa por aqui — ele usa `onSubmit`.
    */
   const handleSavePendingEdit = async () => {
+    /**
+     * Trava dura: sem snapshot não há como saber o que o usuário mudou, e
+     * mandar o patch inteiro nesse estado apagaria campo não hidratado.
+     */
+    if (!snapshotPatch.current) {
+      toast.error(
+        'Não é possível salvar: os dados do cadastro ainda não foram carregados. Aguarde um instante ou feche e abra novamente.',
+      );
+      return;
+    }
     const completo = montarPatchCadastro(form.getValues(), plano.valores, registration.tipo_pessoa);
     const patch = diffContraSnapshot(snapshotPatch.current, completo);
 
@@ -677,7 +694,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
             {isViewMode && (
               <div className="flex items-center gap-2">
                 {editOnly ? (
-                  <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                  <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                     {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
                     Salvar alterações
                   </Button>
@@ -690,7 +708,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                     <Button type="button" size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={updatePending.isPending}>
                       Cancelar
                     </Button>
-                    <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                    <Button type="button" size="sm" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                       {updatePending.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
                       Salvar
                     </Button>
@@ -1359,7 +1378,8 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           {readOnly ? 'Fechar' : 'Cancelar'}
                         </Button>
                         {editOnly && (
-                          <Button type="button" onClick={handleSavePendingEdit} disabled={updatePending.isPending}>
+                          <Button type="button" onClick={handleSavePendingEdit} disabled={updatePending.isPending || !snapshotPronto}
+                    title={!snapshotPronto ? 'Carregando dados do cadastro…' : undefined}>
                             {updatePending.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Salvar alterações
                           </Button>

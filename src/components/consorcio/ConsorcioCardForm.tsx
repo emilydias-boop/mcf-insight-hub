@@ -408,12 +408,24 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
    * profissão, renda, patrimônio, PIX e endereço), o que fazia o formulário de
    * edição abrir esses campos em branco.
    */
-  const { data: detalheCarta } = useConsorcioCardDetails(card?.id ?? null);
+  const {
+    data: detalheCarta,
+    isError: erroDetalhe,
+    refetch: recarregarDetalhe,
+    isFetching: buscandoDetalhe,
+  } = useConsorcioCardDetails(card?.id ?? null);
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
   /** Chave do que já foi hidratado nesta abertura (`<id>:detalhe` | `novo`). */
   const hidratadoDe = useRef<string | null>(null);
   /** Payload equivalente ao formulário recém-hidratado — base do diff do save. */
   const snapshotPayload = useRef<CreateConsorcioCardInput | null>(null);
+  /**
+   * Espelho em estado do snapshot: sem snapshot NÃO existe save de edição.
+   * Se o detalhe não chegar (rede, RLS, lentidão), o botão fica desabilitado —
+   * salvar sem saber o que mudou é justamente o bug que estamos corrigindo.
+   */
+  const [snapshotPronto, setSnapshotPronto] = useState(false);
+
 
 
   const form = useForm<FormData>({
@@ -777,6 +789,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     if (!open) {
       hidratadoDe.current = null;
       snapshotPayload.current = null;
+      setSnapshotPronto(false);
       return;
     }
 
@@ -789,7 +802,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       setPendingDocuments([]);
       if (!detalhado) setActiveTab('dados');
       form.reset(valoresDaCarta(fonte));
-      // Snapshot SÓ com a cota completa em mão.
+      // Snapshot SÓ com a cota completa em mão. Sem ele o save fica bloqueado.
       snapshotPayload.current = detalhado
         ? montarPayloadCarta(form.getValues(), {
             tipoProduto: (form.getValues('tipo_produto') as 'select' | 'parcelinha') || 'select',
@@ -797,6 +810,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
             parcelaDemais: fonte.parcela_demais != null ? Number(fonte.parcela_demais) : undefined,
           })
         : null;
+      setSnapshotPronto(!!detalhado);
       return;
     }
 
@@ -805,6 +819,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     setActiveTab('dados');
     setPendingDocuments([]);
     snapshotPayload.current = null;
+    setSnapshotPronto(false);
+
 
     if (duplicateFrom) {
       /**
@@ -1080,6 +1096,17 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     });
 
     if (isEditing && card) {
+      /**
+       * Trava dura: sem snapshot da cota completa não existe save de edição.
+       * Salvar o payload inteiro a partir de um formulário hidratado só com o
+       * objeto parcial da listagem apagaria RG, renda, endereço e categoria.
+       */
+      if (!snapshotPayload.current) {
+        toast.error(
+          'Não é possível salvar: os dados completos da cota não foram carregados. Feche e abra novamente, ou use "Tentar de novo".',
+        );
+        return;
+      }
       // Edição: só o que o usuário mudou (diff contra o snapshot da hidratação).
       // Campo intocado fica fora do payload; campo limpo de propósito vai vazio.
       const alterado = diffContraSnapshot(
@@ -1087,12 +1114,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         input as unknown as Record<string, unknown>,
       );
       if (nenhumaAlteracao(alterado)) {
+        // Fecha SEM nenhuma escrita: nada de mutateAsync neste caminho.
         toast.info('Nenhuma alteração para salvar.');
         onOpenChange(false);
         return;
       }
       await updateCard.mutateAsync({ id: card.id, ...(alterado as any) });
       snapshotPayload.current = input;
+
     } else {
       // Criação (nova carta e duplicação) segue com o payload completo.
       const newCard = await createCard.mutateAsync(input);
@@ -2988,15 +3017,58 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-end gap-4 pt-4">
+            <div className="flex flex-wrap items-center justify-end gap-4 pt-4">
+              {/* Edição sem os dados completos = save bloqueado, não payload inteiro. */}
+              {isEditing && !snapshotPronto && (
+                <div className="mr-auto flex items-center gap-2 text-sm">
+                  {erroDetalhe ? (
+                    <>
+                      <span className="text-destructive">
+                        Não foi possível carregar os dados completos da cota. Salvar está bloqueado para não apagar informação.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => recarregarDetalhe()}
+                        disabled={buscandoDetalhe}
+                      >
+                        {buscandoDetalhe && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+                        Tentar de novo
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Carregando dados da cota…
+                    </span>
+                  )}
+                </div>
+              )}
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createCard.isPending || updateCard.isPending || batchUpload.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  createCard.isPending ||
+                  updateCard.isPending ||
+                  batchUpload.isPending ||
+                  (isEditing && !snapshotPronto)
+                }
+                title={
+                  isEditing && !snapshotPronto
+                    ? erroDetalhe
+                      ? 'Dados completos da cota não carregados — salvar bloqueado'
+                      : 'Carregando dados da cota…'
+                    : undefined
+                }
+              >
                 {(createCard.isPending || updateCard.isPending || batchUpload.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isEditing ? 'Salvar Alterações' : 'Cadastrar Carta'}
               </Button>
             </div>
+
           </form>
         </Form>
       </DialogContent>
