@@ -1,89 +1,86 @@
-# BLOCO D — desenho: escolher o plano no "Lançar Venda"
+# Fase D2 — avisar quem cadastra plano, a partir do que já está gravado
 
-Rodada de desenho. Nada de código, nada de migration. Abaixo as cinco respostas.
+Somente leitura. Nenhuma migração, nenhuma coluna nova, nenhum backfill, nenhum UPDATE. Nenhum botão fica `disabled`.
 
-## 0. Um fato que muda o desenho
+## 1. O que conta como "plano faltando"
 
-A **condição de pagamento já existe na carta hoje** (`condicaoPagamento` no bloco "Plano da carta" de `CartasProposalEditor`, gravado em `consorcio_proposal_cartas.condicao_pagamento`). Ela não é um campo novo — é um campo existente que quase ninguém preenche: **10 de 177 cartas** têm condição gravada. As outras 167 caem em `convencional` por normalização silenciosa. Foi isso que fez o dono não achar o 508,92: não faltava campo, faltava a condição ter sido escolhida.
+Uma carta de `consorcio_proposal_cartas` é **coberta** quando existe uma linha ativa em `consorcio_creditos` tal que:
 
-Prazo: 175 de 177 em 200/220/240; 2 fora.
+- o produto casa pela mesma regra que a D1 já usa (`taxaAntecipadaTipoDeProduto(tipo_produto)` contra `consorcio_produtos.taxa_antecipada_tipo`);
+- `valor_credito` da carta == `valor_credito` do plano (comparação em centavos arredondados, para não perder por dízima);
+- `prazo_meses` ∈ {200, 220, 240};
+- as duas colunas daquela condição/prazo (`parcela_1a_12a_<cond>_<prazo>` e `parcela_demais_<cond>_<prazo>`) estão preenchidas (> 0).
 
-## 1. Onde o seletor entra e o que acontece com o crédito digitado
+Qualquer carta que não satisfaça tudo isso entra na lista como pedido de cadastro.
 
-**Proposta: o crédito deixa de ser digitado no caminho comum e passa a vir do plano — mas o campo não desaparece.**
+### Os 167 sem `condicao_pagamento` — como trato
 
-O bloco da carta fica assim, na ordem em que a decisão acontece:
+Não assumo `convencional` e não invento condição. Divido em dois grupos com pesos diferentes:
+
+- **Pedido firme** — carta com `condicao_pagamento` preenchida (10 hoje). A combinação é inequívoca: produto · crédito · prazo · condição. Aparece no bloco principal.
+- **Pedido provável** — carta sem condição (167 hoje). Verifico se o crédito/prazo existe na tabela em **qualquer** das três condições. Se existe em pelo menos uma, a carta **não** é pedido: a tabela cobre aquele crédito e o que falta é dado da venda, não plano. Se o crédito/prazo não existe em nenhuma condição, é pedido real — listado como "condição não informada", e o cadastro é feito nas três colunas ou na que a Emily/Antony confirmarem.
+
+Isso reduz o ruído no ponto exato que você apontou: dos 33 sem plano exato, só entram os que faltam de fato por crédito/prazo; os 167 não geram 167 linhas de aviso. Agrupamento final por combinação, não por carta — a lista tem ordem de dezenas de linhas, não 177.
+
+Ainda ficam de fora do cálculo: cartas de propostas excluídas/declinadas (`status = 'excluida'` e cartas declinadas), e prazos fora de 200/220/240 aparecem em um contador separado ("prazo sem coluna na tabela — 2 cartas"), porque cadastrar plano não resolve isso; é decisão de estrutura.
+
+## 2. O aviso na tela de Planos
+
+Um bloco recolhível no topo do `PlanosTab`, tom neutro/âmbar, título tipo **"N combinações usadas em vendas sem plano cadastrado"**. Recolhido por padrão se N = 0, aberto com contagem se N > 0. Sem vermelho, sem toast, sem badge de erro.
+
+Cada linha é uma combinação agível:
 
 ```text
-Carta 1
-  Tipo de produto  [Parcelinha ▾]     Prazo [240 ▾]     Condição [Convencional ▾]
-  Plano            [ R$ 150.000 — parcela R$ 2.293,75 / R$ 1.026,40  ▾ ]
-                   (lista filtrada por produto + prazo + condição)
-  Crédito  R$ 150.000,00   Parcela 1ª–12ª  R$ 2.293,75   Demais  R$ 1.026,40
-                   ↑ preenchidos pelo plano, somente leitura, com "editar manualmente"
+Parcelinha · R$ 480.000 · 240 · Convencional        6 cartas   [Cadastrar plano]
+Parcelinha · R$ 355.000 · 240 · condição não inf.   3 cartas   [Cadastrar plano]
+Bem Leve   · R$ 90.000  · 220 · Mais por Menos 50%  1 carta    [Cadastrar plano]
 ```
 
-Por quê assim e não "o crédito some":
+Ordenado por número de cartas desc. "Cadastrar plano" só abre o formulário que já existe, pré-preenchido com produto/crédito e o campo de parcela da combinação pedida — o cadastro em si é o fluxo atual, sem atalho novo de escrita. Um "ver cartas" opcional expande os nomes das vendas para conferência.
 
-- O crédito é o número que o closer negocia e fala com o cliente. Ele tem que ficar visível na carta, não escondido dentro do rótulo de um select.
-- 33 cartas históricas não têm plano correspondente. Se o crédito só existir como consequência do plano, essas vendas não podem nascer. O campo tem que continuar existindo como saída.
-- `EditProposalModal` reabre cartas antigas com crédito que talvez não case com nenhum plano ativo. Campo derivado puro faria a carta abrir vazia — perda de dado na cara do usuário.
+## 3. A pendência na etapa 4 / Dossiê
 
-Então: **crédito e as duas parcelas ficam preenchidos e travados enquanto houver plano escolhido**, com um botão discreto "editar manualmente" que destrava os três e marca a carta como manual. Escolher um plano de novo volta a travar e sobrescreve.
+Onde entra: no `DossieCadastroDialog`, **abaixo** do bloco "Cadastro incompleto" que já existe, como linha informativa cinza/âmbar clara:
 
-## 2. Ordem de preenchimento
+> Plano fora da tabela — Parcelinha · R$ 480.000 · 240. A equipe de cadastro pode cadastrar esse plano em Planos.
 
-Ordem proposta: **Tipo de produto → Prazo → Condição → Plano**. Os três primeiros são o filtro; o Plano só habilita quando os três existem, com texto cinza dizendo exatamente o que falta ("escolha o prazo para ver os planos"), no mesmo padrão que já usamos em `DadosPlanoFields`.
+Como se distingue do "cadastro incompleto":
 
-Sobre trazer a condição: **não é campo novo, é subir um campo que já está ali para cima e torná-lo obrigatório no caminho do plano.** Custo real:
+| | Cadastro incompleto | Plano fora da tabela |
+|---|---|---|
+| Sobre o quê | campos do cliente/cota que faltam | a tabela de planos, não a venda |
+| Quem age | quem faz o cadastro | quem cadastra plano (`cobranca_consorcio`) |
+| Efeito | conta no selo de incompleto | zero efeito: não conta, não bloqueia, não some botão |
 
-- Baixo na tela: um select que já existe muda de lugar e de peso.
-- O custo verdadeiro é de processo: hoje 94% das cartas não declaram condição e o sistema assume `convencional`. Tornar isso explícito vai expor divergências reais entre o que foi vendido e o que estava sendo assumido. Isso é ganho, não regressão — mas é conversa com a equipe, não só código.
-- Defaults: pré-selecionar `Convencional` mantém o caso comum em um clique zero. **Prazo 240 e Parcelinha também vêm pré-selecionados** (175/177), então o caso comum é: abre a carta, escolhe o plano, pronto.
+Na lista da etapa 4 (`PendingRegistrationsList`) fica no máximo um ícone/tooltip discreto, sem contador próprio e sem entrar em nenhum KPI — para não duplicar o aviso.
 
-## 3. A saída obrigatória — "meu plano não está na lista"
+## 4. Custo
 
-A venda **nunca** para. Desenho:
+Uma consulta a mais, agregada em memória e cacheada:
 
-1. No fim da lista de planos, uma opção fixa: **"Meu plano não está na lista — informar manualmente"**.
-2. Escolhendo isso, crédito e parcelas destravam e voltam a ser digitados exatamente como hoje. Nada muda no salvamento.
-3. A carta ganha um selo âmbar **"plano fora da tabela"** e um campo opcional de observação de uma linha ("240x sem tabela", "crédito novo da Embracon").
-4. Quando a lista está filtrada mas vazia, a tela diz o motivo em cinza — "nenhum plano cadastrado para Parcelinha · 240 · Convencional" — e oferece a mesma saída, sem vermelho.
+- Um hook novo, `useConsorcioPlanosFaltando`, com `staleTime` de 5 min: lê `consorcio_proposal_cartas` (id, proposal_id, tipo_produto, valor_credito, prazo_meses, condicao_pagamento) de cartas vivas, reaproveita `useConsorcioPlanosTabela` (já cacheada) e monta um `Set` de chaves `tipoTaxa|centavos|prazo|cond` a partir dos 111 créditos — uma passada. Cada carta faz lookup O(1) no Set. Nada de 177 × 111.
+- O resultado é um mapa por combinação **e** um mapa `cartaId → combinação faltante`, então o Dossiê não faz consulta nova: consome o mesmo cache.
 
-Como a equipe de cadastro fica sabendo: usar o que já existe em vez de inventar canal novo.
+## 5. Arquivos que eu tocaria
 
-- A carta manual entra no **Dossiê do cadastro** e no bloco de pendências da etapa 4 com a linha "plano fora da tabela — cadastrar plano".
-- A tela **Planos** (que já mostra `N/9 combinações`) ganha uma faixa no topo: "N cartas lançadas sem plano correspondente", com a lista de combinações pedidas (produto · crédito · prazo · condição) e quantas cartas cada uma representa. Quem tem o papel `cobranca_consorcio` cadastra a partir dali.
-- Nada disso bloqueia termo, cadastro ou comissão. É informação, não trava.
+- `src/hooks/useConsorcioPlanosFaltando.ts` (novo, leitura)
+- `src/components/consorcio/PlanosTab.tsx` (bloco no topo)
+- `src/components/consorcio/DossieCadastroDialog.tsx` (linha informativa)
+- `src/components/consorcio/PendingRegistrationsList.tsx` (ícone discreto — opcional, ver corte abaixo)
 
-## 4. O que muda no que é gravado — nada de formato
-
-Confirmo: dá para fazer sem tocar no formato, pelo mesmo caminho da migração do `CurrencyInput`.
-
-- O plano devolve `number`. Ele passa por `numberToBRLInput()` — a mesma função que `cartasParaDrafts` já usa para hidratar `valorStr`, `parcela1a12Str` e `parcelaDemaisStr` a partir do banco.
-- Ou seja: escolher o plano produz **a string idêntica** à que a hidratação produziria para aquele mesmo número. `draftsParaInput` continua desmascarando com o mesmo `replace(/\D/g,'')/100`.
-- Consequência para o `formDiff`: escolher um plano cujos valores são iguais aos gravados gera **zero diff** — o comportamento correto. Só um plano diferente produz diff, e só nos três campos que mudaram.
-- Colunas gravadas seguem as mesmas: `valor_credito`, `parcela_1a_12a`, `parcela_demais`, `condicao_pagamento`, `prazo_meses`, `tipo_produto`. Nenhum campo novo é obrigatório no banco para a Fase 1.
-
-## 5. Risco, e onde eu dividiria
-
-É a tela onde a venda nasce, e ela é usada por três modais (`ProposalModal`, `AddCartaModal`, `EditProposalModal`). O que pode dar errado:
+## 6. Risco
 
 | Risco | Redução |
 |---|---|
-| Carta antiga abre no `EditProposalModal`, nenhum plano casa, campos abrem vazios | Hidratação nunca depende de plano: carta existente abre **em modo manual** com os valores do banco. Plano é opt-in ao clicar. |
-| Trocar produto/prazo/condição limpa crédito e parcelas de uma carta já preenchida | Mudança de filtro **não apaga nada**; só reduz a lista. Sobrescrever exige escolher um plano. |
-| "×N Duplicar" copiando plano parcialmente | O duplicar copia os mesmos campos de hoje (strings) — plano escolhido não é estado extra a copiar se derivarmos o selecionado dos valores. |
-| Fase 4 (Cotas a Fazer) já grava parcela; conflito de fonte | Fase 1 não encosta na etapa 4. A etapa 5 segue sendo a verdade oficial. |
-| Regressão silenciosa no `formDiff` | `numberToBRLInput` como único caminho de formatação, e um teste manual: abrir carta, salvar sem tocar → diff vazio. |
+| Aviso vira ruído por causa dos 167 sem condição | regra do "pedido provável": só entra se o crédito/prazo não existe em nenhuma condição |
+| Emily/Antony cadastrarem plano com número chutado para "limpar a lista" | a lista pede combinação, nunca sugere valor de parcela; o valor vem da tabela oficial Embracon |
+| Divergência de centavos criando pedidos fantasma | comparação em centavos inteiros; se ainda aparecerem casos de 1 centavo, prefiro deixar a linha aparecer do que casar por tolerância e mentir |
+| Duplicação de aviso na etapa 4 | um único lugar com texto ("Plano fora da tabela"), fora do selo de incompleto e fora de qualquer contagem |
 
-**Divisão que eu recomendo — duas fases, e não fazer tudo agora:**
+## 7. O que eu cortaria
 
-- **Fase D1 (baixo risco, entrega o valor da ideia):** subir a condição, pré-selecionar produto/prazo/condição, seletor de plano com preenchimento dos três campos, saída manual, selo "plano fora da tabela". Só `CartasProposalEditor` e um hook de leitura. Sem migration.
-- **Fase D2 (depois, separada):** a faixa de "planos faltando" na tela Planos e a pendência no Dossiê/etapa 4. Toca outras telas e pode virar migration se quisermos registrar o pedido de plano como dado, não como derivação.
+- **A marcação por carta na lista da etapa 4** (`PendingRegistrationsList`). É onde o aviso tem menos chance de ser lido e mais chance de virar poluição. Manteria só no Dossiê.
+- **"Ver cartas" expandindo nomes** na tela de Planos: bonito, provavelmente pouco usado. Faria só se a Emily pedir.
+- O que eu **manteria a todo custo** é o bloco na tela de Planos: é a única parte que realmente fecha o ciclo da ideia do dono.
 
-O pedaço que eu **não** faria nesta rodada: tornar o plano obrigatório, ou usar o plano para recalcular cartas já lançadas. REGRA ZERO — nada gravado é alterado.
-
----
-
-Nenhuma linha de código foi escrita. Aguardo a autorização do dono, e de preferência só da Fase D1 primeiro.
+Se você quiser um sinal gravado de verdade ("esta carta nasceu no caminho manual"), isso exige **coluna nova** em `consorcio_proposal_cartas` — digo em voz alta e não faço: fora do escopo desta rodada, decisão sua.
