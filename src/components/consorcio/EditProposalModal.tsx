@@ -46,7 +46,9 @@ function cartasParaDrafts(
         pending_registration_id: null, consortium_card_id: null,
       } as PropostaCarta];
 
-  return base.map((c, i) => ({
+  const usouFallback = !(cartas && cartas.length > 0);
+
+  const drafts = base.map((c, i) => ({
     key: c.id || `fallback-${i}`,
     id: c.id || undefined,
     valorStr: c.valor_credito ? numberToBRLInput(c.valor_credito) : '',
@@ -63,6 +65,21 @@ function cartasParaDrafts(
 
   }));
 
+  // Instrumentação TEMPORÁRIA para medir o caso do crédito vazio. Sem dado de
+  // cliente: só formato dos campos. Remover depois do diagnóstico.
+  console.info('[MCF][EditProposta]', {
+    initialCartasLength: cartas?.length ?? 0,
+    usouFallback,
+    drafts: drafts.map(d => ({
+      temId: !!d.id,
+      valorStr: d.valorStr,
+      parcela1a12Str: d.parcela1a12Str,
+      parcelaDemaisStr: d.parcelaDemaisStr,
+      condicaoPagamento: d.condicaoPagamento,
+    })),
+  });
+
+  return drafts;
 }
 
 export function EditProposalModal({
