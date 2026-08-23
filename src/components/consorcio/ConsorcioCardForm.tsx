@@ -622,9 +622,17 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       ? ['endereco_cep', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado']
       : ['endereco_comercial_cep', 'endereco_comercial_rua', 'endereco_comercial_numero', 'endereco_comercial_bairro', 'endereco_comercial_cidade', 'endereco_comercial_estado'],
     documentos: [],
-    cota: ['grupo', 'cota', 'contrato_embracon', 'valor_credito', 'prazo_meses', 'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem'],
+    // Categoria, Objetivo e companhia moram nesta aba e também bloqueiam o
+    // submit — sem estar nesta lista o selo da aba e o foco erravam o alvo.
+    cota: [
+      'categoria', 'grupo', 'cota', 'contrato_embracon', 'valor_credito', 'prazo_meses',
+      'tipo_produto', 'condicao_pagamento', 'objetivo', 'empresa_paga_parcelas',
+      'tipo_contrato', 'parcelas_pagas_empresa', 'tipo_registro',
+      'data_contratacao', 'data_reserva', 'dia_vencimento', 'origem', 'origem_detalhe',
+    ],
     socios: ['partners'],
   }), [tipoPessoa]);
+
 
   const getTabHasErrors = (tabKey: string) => {
     const fields = tabFieldsMap[tabKey as keyof typeof tabFieldsMap] || [];
