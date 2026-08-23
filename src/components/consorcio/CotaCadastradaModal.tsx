@@ -81,7 +81,15 @@ export function CotaCadastradaModal({ open, onOpenChange, registrationId, onAbri
     if (!reg) return;
     setErro(null);
     const hoje = new Date().toISOString().slice(0, 10);
+    // `consortium_cards.vendedor_id` tem FK para `consorcio_vendedor_options`:
+    // um uuid de outra origem derrubava o insert inteiro (409). Resolvemos aqui e,
+    // se não resolver, seguimos sem vínculo — preservando o nome do vendedor.
+    const vendedorIdValido = await resolveVendedorOptionId(
+      reg.vendedor_id,
+      reg.vendedor_name_cota || reg.vendedor_name,
+    );
     try {
+
       await openCota.mutateAsync({
         registrationId: reg.id,
         registration: reg,
