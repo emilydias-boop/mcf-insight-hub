@@ -1047,13 +1047,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent ref={dialogContentRef} className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Carta de Consórcio' : duplicateFrom ? 'Duplicar Carta de Consórcio' : 'Nova Carta de Consórcio'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+
             {/* Tipo de Pessoa */}
             <FormField
               control={form.control}
