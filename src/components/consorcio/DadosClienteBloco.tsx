@@ -389,11 +389,10 @@ export function DadosClienteFields({
               )} />
               <FormField control={form.control} name="patrimonio" render={({ field }) => (
                 <FormItem><FormLabel>Patrimônio (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite o patrimônio"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
