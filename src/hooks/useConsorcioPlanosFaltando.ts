@@ -45,6 +45,15 @@ function condKeyDaCarta(c?: string | null): CondKey | null {
 
 const centavos = (v: unknown) => Math.round(Number(v || 0) * 100);
 
+/**
+ * Piso de saneamento: abaixo de R$ 1.000,00 (100.000 centavos) não existe carta
+ * de consórcio — é erro de digitação na venda. Essas cartas não entram na fila de
+ * cadastro de plano (cadastrar plano não resolve erro de digitação) e viram um
+ * contador neutro. R$ 40.000 continua na fila: é crédito plausível, só não está
+ * cadastrado. O corte é só contra o absurdo.
+ */
+export const MIN_CREDITO_CENTAVOS = 100_000;
+
 export interface CombinacaoFaltante {
   /** Chave estável: tipoTaxa|centavos|prazo|condKey ('?' quando não informada). */
   key: string;
