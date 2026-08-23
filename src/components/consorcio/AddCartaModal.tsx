@@ -593,13 +593,24 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           </Collapsible>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={salvando || !podeSalvar}>
-            {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {salvando ? 'Lançando...' : 'Lançar carta'}
-          </Button>
+        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-col sm:items-stretch">
+          {pendencias.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-left text-xs text-amber-700 dark:text-amber-300">
+              <p className="font-medium">Falta preencher antes de lançar:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {pendencias.map(p => <li key={p}>{p}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={salvando}>
+              {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {salvando ? 'Lançando...' : 'Lançar carta'}
+            </Button>
+          </div>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
