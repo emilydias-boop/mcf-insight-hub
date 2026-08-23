@@ -384,7 +384,26 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                         </div>
                       )}
                       {!isSearching && leadMatches.length === 0 && (
-                        <CommandEmpty>Nenhum lead encontrado.</CommandEmpty>
+                        <CommandEmpty>
+                          <div className="space-y-2 p-1 text-center">
+                            <p className="text-sm text-muted-foreground">Nenhum lead encontrado.</p>
+                            {leadSearch.trim().length >= 3 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => criarLeadNovo(leadSearch)}
+                                disabled={criandoLead}
+                              >
+                                {criandoLead
+                                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  : <UserPlus className="mr-2 h-4 w-4" />}
+                                Criar "{leadSearch.trim()}" no CRM
+                              </Button>
+                            )}
+                          </div>
+                        </CommandEmpty>
                       )}
                       <CommandGroup>
                         {leadMatches.map(m => (
@@ -403,8 +422,8 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                 </PopoverContent>
               </Popover>
 
-              <Button variant="secondary" onClick={criarLeadNovo} disabled={criandoLead}>
-                {criandoLead ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+              <Button variant="secondary" onClick={abrirCriacaoLead} disabled={criandoLead}>
+                <UserPlus className="mr-2 h-4 w-4" />
                 Criar lead novo no CRM
               </Button>
 
@@ -414,7 +433,48 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                 </Badge>
               )}
             </div>
+
+            {novoLeadAberto && !lead && (
+              <div className="space-y-2 rounded-md border border-dashed p-3">
+                <Label htmlFor="novo-lead-nome" className="text-xs">
+                  Nome completo do cliente
+                </Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    id="novo-lead-nome"
+                    autoFocus
+                    className="w-[280px]"
+                    value={novoLeadNome}
+                    onChange={e => setNovoLeadNome(e.target.value)}
+                    placeholder="Ex: Maria Aparecida da Silva"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); criarLeadNovo(novoLeadNome); }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => criarLeadNovo(novoLeadNome)}
+                    disabled={criandoLead || novoLeadNome.trim().length < 3}
+                  >
+                    {criandoLead && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Criar lead
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { setNovoLeadAberto(false); setNovoLeadNome(''); }}
+                    disabled={criandoLead}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cria contato + negócio na esteira do consórcio (Efeito Alavanca + Clube · Parceiros).
+                </p>
+              </div>
+            )}
           </div>
+
 
           {/* ===== Venda ===== */}
           <div className="space-y-4 rounded-lg border p-3">
