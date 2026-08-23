@@ -65,6 +65,9 @@ export function CartasProposalEditor({
   const [planoPorCarta, setPlanoPorCarta] = useState<Record<string, string>>({});
   const [manualPorCarta, setManualPorCarta] = useState<Record<string, boolean>>({});
   const [obsPorCarta, setObsPorCarta] = useState<Record<string, string>>({});
+  // Carta que tinha plano aplicado e perdeu o vínculo ao trocar produto/prazo/
+  // condição: guarda a combinação pedida só para explicar em texto.
+  const [planoPerdido, setPlanoPerdido] = useState<Record<string, { prazo: string; condicao: string }>>({});
   const { data: tabelaPlanos, isLoading: carregandoPlanos } = useConsorcioPlanosTabela();
 
   /** Carta sem plano escolhido, ou destravada de propósito, é manual. */
@@ -73,6 +76,49 @@ export function CartasProposalEditor({
 
   const patch = (key: string, p: Partial<PropostaCartaDraft>) =>
     onChange(cartas.map(c => (c.key === key ? { ...c, ...p } : c)));
+
+  const limparPerdido = (key: string) =>
+    setPlanoPerdido(m => {
+      if (!(key in m)) return m;
+      const n = { ...m };
+      delete n[key];
+      return n;
+    });
+
+  /**
+   * Trocar produto, prazo ou condição com plano aplicado REAPLICA o plano na
+   * nova combinação — o rótulo do seletor e os campos nunca podem divergir.
+   * Se o plano não existir na nova combinação, só o vínculo cai (campos
+   * destravam com o que já estava; nada é apagado).
+   */
+  const trocarFiltro = (c: PropostaCartaDraft, p: Partial<PropostaCartaDraft>) => {
+    const planoId = planoPorCarta[c.key];
+    if (!planoId || manualPorCarta[c.key]) { patch(c.key, p); return; }
+    const alvo = { ...c, ...p };
+    const { opcoes } = filtrarPlanosCarta(tabelaPlanos, {
+      tipoProduto: alvo.tipoProduto,
+      prazoMeses: alvo.prazoMeses,
+      condicaoPagamento: alvo.condicaoPagamento,
+    });
+    const plano = opcoes.find(o => o.id === planoId);
+    if (!plano) {
+      setPlanoPorCarta(m => ({ ...m, [c.key]: '' }));
+      setPlanoPerdido(m => ({
+        ...m,
+        [c.key]: { prazo: String(alvo.prazoMeses || ''), condicao: String(alvo.condicaoPagamento || '') },
+      }));
+      patch(c.key, p);
+      return;
+    }
+    limparPerdido(c.key);
+    patch(c.key, {
+      ...p,
+      valorStr: numberToBRLInput(plano.valorCredito),
+      parcela1a12Str: numberToBRLInput(plano.parcela1a12),
+      parcelaDemaisStr: numberToBRLInput(plano.parcelaDemais),
+    });
+  };
+
 
   /**
    * Pré-seleção Parcelinha / 240 / Convencional — o caso comum (175 de 177
