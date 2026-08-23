@@ -23,7 +23,8 @@ function sanitizarPlaceholder(placeholder?: string): string {
 export interface CurrencyInputProps {
   /** Sempre mascarado no padrão pt-BR: "150.000,00". */
   value: string;
-  onChange: (masked: string) => void;
+  /** Opcional: telas que guardam número no estado usam só `onNumberChange`. */
+  onChange?: (masked: string) => void;
   /** Conveniência para telas que guardam número no estado. */
   onNumberChange?: (value: number) => void;
   label?: string;
