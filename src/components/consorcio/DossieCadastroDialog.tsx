@@ -149,7 +149,7 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
+      <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Dossiê do cadastro {nome ? `— ${nome}` : ''}</DialogTitle>
           <DialogDescription>
