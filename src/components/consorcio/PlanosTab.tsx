@@ -342,7 +342,8 @@ function PlanosFaltandoBlock({
 
   const combos = data?.combinacoes || [];
   const prazoFora = data?.cartasPrazoForaDaTabela || 0;
-  if (combos.length === 0 && prazoFora === 0) return null;
+  const creditoAbaixo = data?.cartasCreditoAbaixoMinimo || 0;
+  if (combos.length === 0 && prazoFora === 0 && creditoAbaixo === 0) return null;
 
   const totalCartas = combos.reduce((a, c) => a + c.cartas, 0);
 
