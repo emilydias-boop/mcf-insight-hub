@@ -76,6 +76,8 @@ export interface PlanosFaltandoResultado {
   cartasAnalisadas: number;
   /** Cartas com prazo sem coluna na tabela — cadastrar plano NÃO resolve. */
   cartasPrazoForaDaTabela: number;
+  /** Cartas com crédito abaixo de R$ 1.000 — erro de digitação; cadastrar plano não resolve. */
+  cartasCreditoAbaixoMinimo: number;
   /** Mapa cartaId → chave da combinação faltante (para o Dossiê). */
   porCarta: Record<string, string>;
   /** Índice chave → combinação, para telas que só têm os campos do cadastro. */
