@@ -190,7 +190,24 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   })();
 
   const cartasOk = cartas.length > 0 && cartas.every(cartaDraftValida);
-  const podeSalvar = !!lead && cartasOk && !!origem && !!closerId;
+
+  /**
+   * O que falta para lançar, em texto. O botão NUNCA fica travado em silêncio:
+   * ele sempre é clicável e o clique explica a pendência.
+   */
+  const pendencias: string[] = [
+    !lead && 'Vincule o lead no CRM (busque ou crie).',
+    !origem && 'Selecione a origem da venda.',
+    !closerId && 'Selecione o closer responsável.',
+    ...cartas.map((c, i) =>
+      cartaDraftValida(c)
+        ? ''
+        : `Carta ${i + 1}: preencha crédito, prazo e produto (os três são obrigatórios).`,
+    ),
+  ].filter(Boolean) as string[];
+
+  const podeSalvar = pendencias.length === 0;
+
 
   const resetar = () => {
     setLead(null); setLeadSearch(''); setOrigem(''); setOrigemDetalhe('');
