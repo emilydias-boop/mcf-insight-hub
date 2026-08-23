@@ -112,6 +112,9 @@ export interface DadosClienteBloco {
     pjRgSocios: File | null;
     setPjRgSocios: (f: File | null) => void;
     pjCartaoCnpj: File | null;
+    /** Comprovante de residência — OPCIONAL, mas cobrado pelo dossiê. */
+    comprovanteResidencia: File | null;
+    setComprovanteResidencia: (f: File | null) => void;
     setPjCartaoCnpj: (f: File | null) => void;
   };
 }
