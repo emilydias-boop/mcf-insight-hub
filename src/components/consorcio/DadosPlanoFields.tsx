@@ -43,7 +43,16 @@ export interface DadosPlanoControlled {
   setCondicao: (v: string) => void;
 }
 
-export function useDadosPlano(controlled?: DadosPlanoControlled) {
+/**
+ * `tipoProduto` da carta ('select' | 'parcelinha'): quando informado, o seletor de
+ * plano passa a mostrar SÓ os planos dos produtos elegíveis para aquela carta
+ * (tipo de taxa antecipada + faixa de crédito). Sem ele, nada muda.
+ */
+export interface DadosPlanoOpcoes {
+  tipoProduto?: string | null;
+}
+
+export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosPlanoOpcoes) {
   const { data: creditos = [] } = useAllConsorcioCreditos();
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: objetivos = [] } = useConsorcioObjetivoOptions();
@@ -69,10 +78,28 @@ export function useDadosPlano(controlled?: DadosPlanoControlled) {
   const creditosAtivos = useMemo(() => creditos.filter((c) => c.ativo), [creditos]);
   const creditoSelecionado = creditos.find((c) => c.id === creditoId);
   const produtoDoPlano = produtos.find((p) => p.id === creditoSelecionado?.produto_id);
+
+  // ===== Filtro do seletor pelo produto da carta =====
+  const tipoProdutoCarta = opcoes?.tipoProduto ?? null;
+  const valorCreditoNum = brlOuUndefined(valorCreditoStr) ?? 0;
+  /** Produtos elegíveis para (tipo de produto + faixa de crédito) — pode ser mais de um. */
+  const produtosElegiveis = useMemo(() => {
+    if (!tipoProdutoCarta || valorCreditoNum <= 0) return [];
+    return produtosElegiveisParaCarta(produtos as any[], valorCreditoNum, tipoProdutoCarta);
+  }, [produtos, tipoProdutoCarta, valorCreditoNum]);
+  const filtroProdutoAtivo = !!tipoProdutoCarta && valorCreditoNum > 0;
+  /** Lista que o seletor mostra: filtrada quando há produto resolvido, completa quando não há. */
+  const planosVisiveis = useMemo(() => {
+    if (!filtroProdutoAtivo) return creditosAtivos;
+    const ids = new Set(produtosElegiveis.map((p: any) => p.id));
+    return creditosAtivos.filter((c) => ids.has(c.produto_id));
+  }, [creditosAtivos, produtosElegiveis, filtroProdutoAtivo]);
+
   const prazosDisponiveis = produtoDoPlano?.prazos_disponiveis?.length
     ? produtoDoPlano.prazos_disponiveis
     : [200, 220, 240];
   const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
+
 
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
