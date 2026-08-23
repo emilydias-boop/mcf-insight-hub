@@ -185,6 +185,11 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
 
   return {
     creditos, creditosAtivos, produtos, objetivos,
+    planosVisiveis, produtosElegiveis, filtroProdutoAtivo,
+    tipoProdutoCarta, valorCreditoNum,
+    taxaAntecipadaTipoCarta: taxaAntecipadaTipoDeProduto(tipoProdutoCarta),
+    condSuffix,
+
     creditoId, planoOpen, setPlanoOpen, selecionarPlano,
     valorCreditoStr, setValorCreditoStr,
     prazo, setPrazo, condicao, setCondicao,
