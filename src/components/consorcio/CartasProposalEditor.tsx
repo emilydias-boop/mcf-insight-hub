@@ -350,7 +350,7 @@ export function CartasProposalEditor({
                   </div>
 
                   <Select
-                    value={planoPorCarta[c.key] || (manual ? '__manual__' : '')}
+                    value={planoPorCarta[c.key] || (foraDaTabela ? '__manual__' : '')}
                     onValueChange={v => {
                       if (v === '__manual__') { virarManual(c.key); return; }
                       const p = planos.find(o => o.id === v);
