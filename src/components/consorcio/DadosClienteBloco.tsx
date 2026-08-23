@@ -550,11 +550,10 @@ export function DadosClienteFields({
               {/* Mesma máscara de centavos de Crédito/Renda: 150000 -> 1.500,00. */}
               <FormField control={form.control} name="faturamento_mensal" render={({ field }) => (
                 <FormItem><FormLabel>Faturamento Mensal (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite o faturamento"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
