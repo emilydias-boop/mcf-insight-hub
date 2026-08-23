@@ -361,15 +361,19 @@ export function CartasProposalEditor({
                       <SelectValue placeholder="Escolher plano da tabela" />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Saída de emergência no TOPO, com separador logo abaixo.
+                          Não pode ficar escondida no fim de uma lista de
+                          dezenas de planos. */}
+                      <SelectItem value="__manual__">
+                        Meu plano não está na lista — informar manualmente
+                      </SelectItem>
+                      <div className="-mx-1 my-1 h-px bg-border" />
                       {planos.map(p => (
                         <SelectItem key={p.id} value={p.id}>
                           {fmtBRL(p.valorCredito)} — 1ª à 12ª {fmtBRLc(p.parcela1a12)} · demais{' '}
                           {fmtBRLc(p.parcelaDemais)} ({p.produtoCodigo})
                         </SelectItem>
                       ))}
-                      <SelectItem value="__manual__">
-                        Meu plano não está na lista — informar manualmente
-                      </SelectItem>
                     </SelectContent>
                   </Select>
 
