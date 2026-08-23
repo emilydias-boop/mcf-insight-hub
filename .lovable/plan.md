@@ -1,59 +1,33 @@
-# Rodada 0 — apresentação do funil de consórcio
+# Rodada 1 — proteção contra perda de dados
 
-## Diagnóstico somente leitura
+## Objetivo
+Corrigir somente os formulários de cadastro pendente e carta de consórcio para que edições persistam exclusivamente os campos realmente alterados pelo usuário.
 
-### D1 — campos nulos em `consorcio_pending_registrations`
+## Implementação
+1. **Editar Cadastro Pendente**
+   - Reinicializar a hidratação sempre que o modal abrir ou mudar de cadastro.
+   - Criar o snapshot somente depois que todos os valores do registro, inclusive o bloco de plano, forem colocados no formulário.
+   - No modo de edição, normalizar os valores atuais e gerar um patch contendo apenas chaves cujo valor difere do snapshot; uma limpeza intencional continuará sendo enviada como `null`/vazio normalizado.
 
-| Status | Total | Objetivo NULL | Vendedor NULL |
-|---|---:|---:|---:|
-| aguardando_abertura | 31 | 4 | 10 |
-| cota_aberta | 187 | 180 | 7 |
-| vinculada | 159 | 159 | 37 |
-| declinada | 74 | 74 | 13 |
+2. **Editar Carta de Consórcio**
+   - Garantir que o formulário receba a cota detalhada, incluindo RG, profissão, renda, patrimônio, PIX, endereço completo e categoria.
+   - Capturar o snapshot dos valores efetivamente hidratados e enviar ao hook de atualização somente o diff em edições. A criação continuará usando o payload completo necessário para uma nova cota.
 
-### D2 — campos vazios/NULL em `consortium_cards` (1.781 cotas)
+3. **Duplicar carta**
+   - Herdar dados pessoais/endereço e todos os campos de plano solicitados: categoria, crédito, prazo, produto, condição, objetivo, seguro, pagamento pela empresa, quantidade, vencimento, tipo de contrato e origem.
+   - Limpar exclusivamente grupo, cota e contrato Embracon.
 
-| Campo | Vazios/NULL |
-|---|---:|
-| RG | 1.549 |
-| Profissão | 1.549 |
-| Renda | 1.554 |
-| Patrimônio | 1.609 |
-| Chave Pix (`pix`) | 1.548 |
-| CEP (`endereco_cep`) | 1.548 |
-| Endereço (`endereco_rua`) | 1.559 |
-| Categoria NULL | 0 |
-
-### D3 — vazios com edição posterior superior a 1 minuto
-
-Em cadastros pendentes, contagem de registros com pelo menos um dos campos do D1 vazio e edição posterior:
-
-| Status | Registros |
-|---|---:|
-| aguardando_abertura | 1 |
-| cota_aberta | 181 |
-| vinculada | 109 |
-| declinada | 57 |
-
-Recorte por campo: objetivo NULL/editado = 0, 180, 109 e 57; vendedor NULL/editado = 1, 7, 37 e 12, respectivamente.
-
-Em cotas, **876** têm pelo menos um campo do D2 vazio e `updated_at > created_at + 1 minuto`. Por campo: RG 819; profissão 822; renda 824; patrimônio 865; Pix 819; CEP 818; endereço 829; categoria 0.
-
-> Esse recorte prova que houve edição posterior, mas não prova sozinho que a edição zerou o campo: o valor pode já ter nascido vazio.
-
-## Alterações de apresentação
-
-1. **Alerta de inadimplência** — trocar cores literais por tokens semânticos `warning` e `destructive`, garantindo contraste de ícone, título, descrição e botão nos temas claro/escuro.
-2. **Dias parados** — em `PendingRegistrationsList`, calcular a mesma idade usada pelo selo: exibir “desde hoje/desde ontem” para 0/1 dia; preservar rótulo + selo a partir de 2 dias.
-3. **Drawer da cota**
-   - Histórico: formatar, somente na apresentação, valores monetários contidos nas descrições para BRL pt-BR.
-   - Parcelas: alinhar os chips à classificação visual da lista, contando pagas e todas as parcelas exibidas como pendentes.
+4. **Validação visível**
+   - Tornar telefone efetivamente obrigatório no schema adequado a PF/PJ.
+   - Ao falhar, identificar o primeiro campo inválido pela ordem das abas, abrir essa aba, rolar até o controle, focá-lo e exibir mensagem com o nome do campo.
 
 ## Arquivos previstos
+- `src/components/consorcio/OpenCotaModal.tsx`
+- `src/components/consorcio/ConsorcioCardForm.tsx`
+- `src/components/consorcio/CotasTab.tsx`
+- Eventualmente `src/hooks/useConsorcio.ts` apenas se o hook atual impedir o patch parcial de edição.
 
-- `src/components/consorcio/InadimplenciaAlert.tsx`
-- `src/components/consorcio/PendingRegistrationsList.tsx`
-- `src/components/consorcio/CardActivityHistoryTab.tsx`
-- `src/components/consorcio/InstallmentsPaginated.tsx`
-
-Nenhum hook, query, schema, migration, escrita no banco ou outra tela será alterado.
+## Verificação
+- Executar os testes relevantes disponíveis e conferir o build automático.
+- Validar no preview: hidratação de cadastro, edição sem zerar campos, limpeza intencional, duplicação e navegação/foco da validação.
+- Não executar migrations nem qualquer escrita manual no banco.
