@@ -437,7 +437,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                 </PopoverContent>
               </Popover>
 
-              <Button variant="secondary" onClick={abrirCriacaoLead} disabled={criandoLead}>
+              <Button type="button" variant="secondary" onClick={abrirCriacaoLead} disabled={criandoLead}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Criar lead novo no CRM
               </Button>
@@ -463,18 +463,20 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                     onChange={e => setNovoLeadNome(e.target.value)}
                     placeholder="Ex: Maria Aparecida da Silva"
                     onKeyDown={e => {
-                      if (e.key === 'Enter') { e.preventDefault(); criarLeadNovo(novoLeadNome); }
+                      if (e.key === 'Enter') { e.preventDefault(); void criarLeadNovo(novoLeadNome); }
                     }}
                   />
                   <Button
+                    type="button"
                     size="sm"
-                    onClick={() => criarLeadNovo(novoLeadNome)}
+                    onClick={() => { void criarLeadNovo(novoLeadNome); }}
                     disabled={criandoLead || novoLeadNome.trim().length < 3}
                   >
                     {criandoLead && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Criar lead
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => { setNovoLeadAberto(false); setNovoLeadNome(''); }}
@@ -483,6 +485,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                     Cancelar
                   </Button>
                 </div>
+
                 <p className="text-xs text-muted-foreground">
                   Cria contato + negócio na esteira do consórcio (Efeito Alavanca + Clube · Parceiros).
                 </p>
