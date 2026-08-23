@@ -137,9 +137,10 @@ export function PlanosTab() {
         <p className="text-sm text-muted-foreground">
           Cadastre os planos (créditos) de cada produto com os valores oficiais de parcela por condição e prazo.
         </p>
-        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }}>
+        <Button size="sm" onClick={() => { setEditing(null); setPrefill(null); setFormKey((k) => k + 1); setShowForm(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo plano
         </Button>
+
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
