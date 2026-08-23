@@ -776,7 +776,15 @@ export function useUndeclinePendingRegistration() {
         .select('id, proposal_id')
         .eq('id', registrationId)
         .maybeSingle();
-      if ((reg as any)?.proposal_id) {
+      const proposalId = (reg as any)?.proposal_id as string | undefined;
+      if (proposalId) {
+        // Reativa a CARTA (o trigger devolve o valor ao total da venda)…
+        await supabase
+          .from('consorcio_proposal_cartas')
+          .update({ declinada_at: null, motivo_declinio: null, declinada_by: null } as any)
+          .eq('proposal_id', proposalId)
+          .eq('pending_registration_id', registrationId);
+        // …e a venda volta a 'aceita' caso tivesse sido recusada por inteiro.
         await supabase
           .from('consorcio_proposals')
           .update({
@@ -785,7 +793,7 @@ export function useUndeclinePendingRegistration() {
             recusada_at: null,
             recusada_by: null,
           } as any)
-          .eq('id', (reg as any).proposal_id);
+          .eq('id', proposalId);
       }
       const { error } = await supabase
         .from('consorcio_pending_registrations')
