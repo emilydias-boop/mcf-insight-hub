@@ -346,10 +346,27 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     setCondicao: (v) => form.setValue('condicao_pagamento', v, { shouldValidate: true }),
   });
 
-  // Hidrata o bloco do plano com o que já está gravado no cadastro pendente.
+  /** Espelho dos valores do plano para leitura fora do render (snapshot). */
+  const planoValoresRef = useRef(plano.valores);
+  planoValoresRef.current = plano.valores;
+
+  // Fecha o modal / troca de cadastro: a próxima abertura hidrata de novo.
   useEffect(() => {
-    if (!registration || planoHidratado.current) return;
-    planoHidratado.current = true;
+    if (!open) {
+      hidratadoDe.current = null;
+      snapshotPatch.current = null;
+    }
+  }, [open, registrationId]);
+
+  /**
+   * Hidrata o bloco do plano com o que já está gravado no cadastro pendente e,
+   * logo depois (no tick seguinte, quando o estado do plano já está aplicado),
+   * tira o SNAPSHOT do formulário — a base do diff do save.
+   */
+  useEffect(() => {
+    if (!open || !registration) return;
+    if (hidratadoDe.current === registration.id) return;
+    hidratadoDe.current = registration.id;
     // Só hidrata: a tabela nunca é reaplicada aqui, senão sobrescreve valor ajustado manualmente.
     plano.hidratar({
       creditoId: (registration as any).credito_id,
@@ -363,8 +380,17 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       objetivo: (registration as any).objetivo,
       incluiSeguro: registration.inclui_seguro,
     });
+    const t = setTimeout(() => {
+      snapshotPatch.current = montarPatchCadastro(
+        form.getValues(),
+        planoValoresRef.current,
+        registration.tipo_pessoa,
+      );
+    }, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registration]);
+  }, [open, registration]);
+
 
   /**
    * Prazo e condição vivem no formulário da cota. A tabela é reaplicada apenas quando o
