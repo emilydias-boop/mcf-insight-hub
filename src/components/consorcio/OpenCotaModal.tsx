@@ -521,6 +521,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     telefone: clienteTelefone || (registration?.tipo_pessoa === 'pj' ? registration?.telefone_comercial : null),
     nome: clienteNome || (registration?.tipo_pessoa === 'pj' ? registration?.razao_social : null),
     excludeRegistrationId: registrationId,
+    // Cartas irmãs da mesma venda têm o mesmo CPF/nome por construção.
+    excludeProposalId: (registration as any)?.proposal_id ?? null,
+
     enabled: open,
   });
 
