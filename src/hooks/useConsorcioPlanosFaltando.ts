@@ -69,6 +69,27 @@ export interface PlanosFaltandoResultado {
   cartasPrazoForaDaTabela: number;
   /** Mapa cartaId → chave da combinação faltante (para o Dossiê). */
   porCarta: Record<string, string>;
+  /** Índice chave → combinação, para telas que só têm os campos do cadastro. */
+  porChave: Record<string, CombinacaoFaltante>;
+}
+
+/**
+ * Chave da combinação a partir dos campos já gravados (carta OU cadastro
+ * pendente, que não guarda o id da carta). Retorna null quando não dá para
+ * comparar (sem crédito, ou prazo sem coluna na tabela).
+ */
+export function chaveDaCombinacao(reg: {
+  tipo_produto?: string | null;
+  valor_credito?: number | string | null;
+  prazo_meses?: number | string | null;
+  condicao_pagamento?: string | null;
+}): string | null {
+  const cent = centavos(reg.valor_credito);
+  const prazo = Number(reg.prazo_meses || 0);
+  if (cent <= 0 || !(PRAZOS as readonly number[]).includes(prazo)) return null;
+  const tipoTaxa = taxaAntecipadaTipoDeProduto(reg.tipo_produto);
+  const cond = condKeyDaCarta(reg.condicao_pagamento);
+  return `${tipoTaxa}|${cent}|${prazo}|${cond ?? '?'}`;
 }
 
 const VAZIO: PlanosFaltandoResultado = {
@@ -76,7 +97,9 @@ const VAZIO: PlanosFaltandoResultado = {
   cartasAnalisadas: 0,
   cartasPrazoForaDaTabela: 0,
   porCarta: {},
+  porChave: {},
 };
+
 
 export function useConsorcioPlanosFaltando() {
   return useQuery({
