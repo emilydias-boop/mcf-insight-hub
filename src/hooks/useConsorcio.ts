@@ -291,6 +291,14 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
         if (filters.grupo) q = q.eq('consortium_cards.grupo', filters.grupo);
         if (filters.origem) q = q.eq('consortium_cards.origem', filters.origem);
         if (filters.objetivo) q = q.eq('consortium_cards.objetivo', filters.objetivo);
+        // A busca também vale aqui: sem isso o card "Crédito com 1ª parcela
+        // baixada" era o único a ignorar o filtro de nome/telefone/e-mail.
+        if (filters.search) {
+          q = q.or(
+            `nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`,
+            { referencedTable: 'consortium_cards' },
+          );
+        }
         return q.range(from, to);
       });
 
