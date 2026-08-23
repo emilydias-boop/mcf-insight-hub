@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Trash2, Search, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Search, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -29,6 +29,47 @@ import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 const brl = (v?: number | null) =>
   typeof v === 'number' ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
 
+/** As 9 combinações (3 condições × 3 prazos) de um plano, com o par 1ª-à-12ª / demais. */
+type Combinacao = {
+  key: string;
+  condicaoLabel: string;
+  prazo: number;
+  primeiras: number | null;
+  demais: number | null;
+  completa: boolean;
+};
+
+function combinacoesDoPlano(c: ConsorcioCredito): Combinacao[] {
+  const out: Combinacao[] = [];
+  for (const cond of CONDICOES) {
+    for (const p of PRAZOS) {
+      const primeiras = (c as any)[`parcela_1a_12a_${cond.key}_${p}`] ?? null;
+      const demais = (c as any)[`parcela_demais_${cond.key}_${p}`] ?? null;
+      out.push({
+        key: `${cond.key}_${p}`,
+        condicaoLabel: cond.label,
+        prazo: p,
+        primeiras: typeof primeiras === 'number' ? primeiras : null,
+        demais: typeof demais === 'number' ? demais : null,
+        completa: typeof primeiras === 'number' && typeof demais === 'number',
+      });
+    }
+  }
+  return out;
+}
+
+/** Dígitos de um termo de busca comparados contra os dígitos de qualquer valor de parcela. */
+function planoTemParcela(c: ConsorcioCredito, termDigits: string): boolean {
+  if (!termDigits) return false;
+  return PARCELA_COLUMNS.some((col) => {
+    const v = (c as any)[col];
+    if (typeof v !== 'number') return false;
+    const asBr = v.toFixed(2).replace('.', ',');
+    return asBr.replace(/\D/g, '').includes(termDigits) || asBr.includes(termDigits);
+  });
+}
+
+
 export function PlanosTab() {
   const { data: produtos = [] } = useConsorcioProdutos();
   const { data: creditos = [], isLoading } = useAllConsorcioCreditos();
@@ -42,6 +83,15 @@ export function PlanosTab() {
   const [search, setSearch] = useState('');
   const [showInativos, setShowInativos] = useState(false);
   const [toDelete, setToDelete] = useState<ConsorcioCredito | null>(null);
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
+  const toggleExpandido = (id: string) =>
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
 
   const produtoLabel = (id?: string | null) => {
     const p = produtos.find((x) => x.id === id);
@@ -60,12 +110,15 @@ export function PlanosTab() {
       .filter((c) => {
         if (!showInativos && !c.ativo) return false;
         if (!term) return true;
+        const digits = term.replace(/\D/g, '');
         return (
           (c.codigo_credito || '').toLowerCase().includes(term) ||
-          String(c.valor_credito || '').includes(term.replace(/\D/g, '')) ||
-          brl(c.valor_credito).toLowerCase().includes(term)
+          String(c.valor_credito || '').includes(digits) ||
+          brl(c.valor_credito).toLowerCase().includes(term) ||
+          planoTemParcela(c, digits)
         );
       });
+
   }, [creditos, search, produtos, showInativos]);
 
   const handleSave = (data: Record<string, any>) => {
@@ -94,7 +147,7 @@ export function PlanosTab() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Buscar por código ou valor do crédito..."
+            placeholder="Buscar por código, valor do crédito ou valor da parcela (ex: 508,92)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -120,35 +173,112 @@ export function PlanosTab() {
         {!isLoading && ordered.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">Nenhum plano cadastrado.</p>
         )}
-        {ordered.map((c) => (
-          <div
-            key={c.id}
-            className={`flex items-center gap-3 p-3 bg-muted/50 rounded-lg text-sm ${c.ativo ? '' : 'opacity-60'}`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate flex items-center gap-2">
-                {c.codigo_credito} — {brl(c.valor_credito)}
-                {!c.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
+        {ordered.map((c) => {
+          const combos = combinacoesDoPlano(c);
+          const preenchidas = combos.filter((k) => k.completa);
+          const faltando = combos.filter((k) => !k.completa);
+          const aberto = expandidos.has(c.id);
+          return (
+            <div
+              key={c.id}
+              className={`bg-muted/50 rounded-lg text-sm ${c.ativo ? '' : 'opacity-60'}`}
+            >
+              <div className="flex items-center gap-3 p-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  aria-label={aberto ? 'Recolher combinações' : 'Ver as 9 combinações'}
+                  onClick={() => toggleExpandido(c.id)}
+                >
+                  {aberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate flex items-center gap-2">
+                    {c.codigo_credito} — {brl(c.valor_credito)}
+                    {!c.ativo && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
+                    <Badge
+                      variant={preenchidas.length === 9 ? 'secondary' : 'outline'}
+                      className={`text-[10px] ${preenchidas.length === 9 ? '' : 'border-amber-500 text-amber-700 dark:text-amber-400'}`}
+                    >
+                      {preenchidas.length}/9 combinações
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    Produto: <strong>{produtoLabel(c.produto_id)}</strong> ·
+                    {' '}Conv. 240: {brl(c.parcela_1a_12a_conv_240)} / {brl(c.parcela_demais_conv_240)}
+                  </div>
+                  {faltando.length > 0 && (
+                    <div className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Falta cadastrar: {faltando.map((k) => `${k.condicaoLabel} / ${k.prazo}`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
+                  Editar
+                </Button>
+                {c.ativo ? (
+                  <Button variant="ghost" size="icon" onClick={() => setToDelete(c)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => reactivate.mutate(c.id)}>
+                    <RotateCcw className="h-4 w-4 mr-1" /> Reativar
+                  </Button>
+                )}
               </div>
-              <div className="text-xs text-muted-foreground truncate">
-                Produto: <strong>{produtoLabel(c.produto_id)}</strong> ·
-                {' '}Conv. 240: {brl(c.parcela_1a_12a_conv_240)} / {brl(c.parcela_demais_conv_240)}
-              </div>
+
+              {aberto && (
+                <div className="px-3 pb-3">
+                  <div className="overflow-x-auto rounded-md border bg-background">
+                    <table className="w-full text-xs min-w-[520px]">
+                      <thead>
+                        <tr className="text-muted-foreground border-b">
+                          <th className="text-left font-medium p-2">Condição</th>
+                          {PRAZOS.map((p) => (
+                            <th key={p} className="text-left font-medium p-2">{p} meses</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {CONDICOES.map((cond) => (
+                          <tr key={cond.key} className="border-b last:border-0">
+                            <td className="p-2 whitespace-nowrap">{cond.label}</td>
+                            {PRAZOS.map((p) => {
+                              const k = combos.find((x) => x.key === `${cond.key}_${p}`)!;
+                              return (
+                                <td key={p} className="p-2 align-top">
+                                  {k.completa || k.primeiras != null || k.demais != null ? (
+                                    <div className="space-y-0.5">
+                                      <div>
+                                        <span className="text-muted-foreground">1ª à 12ª: </span>
+                                        <span className="font-medium tabular-nums">{brl(k.primeiras)}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Demais: </span>
+                                        <span className="font-medium tabular-nums">{brl(k.demais)}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">Não cadastrado</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Valores oficiais da tabela Embracon para este plano. Use esta grade para conferir plano por plano.
+                  </p>
+                </div>
+              )}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
-              Editar
-            </Button>
-            {c.ativo ? (
-              <Button variant="ghost" size="icon" onClick={() => setToDelete(c)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => reactivate.mutate(c.id)}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Reativar
-              </Button>
-            )}
-          </div>
-        ))}
+          );
+        })}
+
       </div>
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
