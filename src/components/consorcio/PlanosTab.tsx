@@ -158,15 +158,27 @@ export function PlanosTab() {
         </div>
       </div>
 
+      <PlanosFaltandoBlock
+        onCadastrar={(combo) => {
+          setEditing(null);
+          setPrefill(combo);
+          setFormKey((k) => k + 1);
+          setShowForm(true);
+        }}
+      />
+
       {showForm && (
         <PlanoForm
+          key={formKey}
           produtos={produtos}
           initial={editing}
-          onCancel={() => { setEditing(null); setShowForm(false); }}
+          prefill={editing ? null : prefill}
+          onCancel={() => { setEditing(null); setPrefill(null); setShowForm(false); }}
           onSave={handleSave}
           isPending={create.isPending || update.isPending}
         />
       )}
+
 
       <div className="space-y-2">
         {isLoading && <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>}
