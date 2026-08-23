@@ -234,6 +234,15 @@ export function CartasProposalEditor({
               { tipoProduto: c.tipoProduto, prazoMeses: c.prazoMeses, condicaoPagamento: c.condicaoPagamento },
             );
             const planoSel = planos.find(p => p.id === planoPorCarta[c.key]);
+            // O selo "tabela oficial" só pode existir quando os três campos são,
+            // byte a byte, o que a tabela tem para a combinação escolhida agora.
+            const planoBate = !!planoSel
+              && c.valorStr === numberToBRLInput(planoSel.valorCredito)
+              && c.parcela1a12Str === numberToBRLInput(planoSel.parcela1a12)
+              && c.parcelaDemaisStr === numberToBRLInput(planoSel.parcelaDemais);
+            const perdido = planoPerdido[c.key];
+            const condicaoLabel = (v?: string) =>
+              CONDICAO_PAGAMENTO_OPTIONS.find(o => o.value === v)?.label || v || '—';
             return (
 
               <div
