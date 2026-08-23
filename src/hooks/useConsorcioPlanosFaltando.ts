@@ -171,6 +171,7 @@ export function useConsorcioPlanosFaltando() {
       const porCarta: Record<string, string> = {};
       let cartasAnalisadas = 0;
       let cartasPrazoForaDaTabela = 0;
+      let cartasCreditoAbaixoMinimo = 0;
 
       for (const c of (cartasRes.data || []) as Array<Record<string, any>>) {
         if (c.proposal_id && mortas.has(String(c.proposal_id))) continue;
@@ -179,6 +180,13 @@ export function useConsorcioPlanosFaltando() {
         const prazo = Number(c.prazo_meses || 0);
         const cent = centavos(c.valor_credito);
         if (cent <= 0) continue;
+        // Crédito abaixo de R$ 1.000 é erro de digitação — não existe consórcio
+        // nessa faixa. Não entra na fila nem no mapa porCarta (logo, não gera
+        // aviso no Dossiê). Cadastrar plano não resolve erro de digitação.
+        if (cent < MIN_CREDITO_CENTAVOS) {
+          cartasCreditoAbaixoMinimo += 1;
+          continue;
+        }
         if (!(PRAZOS as readonly number[]).includes(prazo)) {
           cartasPrazoForaDaTabela += 1;
           continue;
