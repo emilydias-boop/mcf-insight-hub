@@ -526,8 +526,16 @@ export function DadosClienteFields({
               <FormField control={form.control} name="num_funcionarios" render={({ field }) => (
                 <FormItem><FormLabel>Nº Funcionários</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
               )} />
+              {/* Mesma máscara de centavos de Crédito/Renda: 150000 -> 1.500,00. */}
               <FormField control={form.control} name="faturamento_mensal" render={({ field }) => (
-                <FormItem><FormLabel>Faturamento Mensal</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Faturamento Mensal (R$)</FormLabel><FormControl>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="0,00"
+                    value={field.value ? numberToBRLInput(Number(field.value)) : ''}
+                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                  />
+                </FormControl><FormMessage /></FormItem>
               )} />
             </div>
 
@@ -551,7 +559,14 @@ export function DadosClienteFields({
                     <FormItem className="flex-1"><FormLabel>CPF do Sócio</FormLabel><FormControl><Input {...field} onChange={e => field.onChange(formatCpf(e.target.value))} /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name={`socios.${index}.renda`} render={({ field }) => (
-                    <FormItem className="flex-1"><FormLabel>Renda</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                    <FormItem className="flex-1"><FormLabel>Renda (R$)</FormLabel><FormControl>
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0,00"
+                        value={field.value ? numberToBRLInput(Number(field.value)) : ''}
+                        onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                      />
+                    </FormControl><FormMessage /></FormItem>
                   )} />
                   {i.socioFields.length > 1 && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => i.removeSocio(index)}>

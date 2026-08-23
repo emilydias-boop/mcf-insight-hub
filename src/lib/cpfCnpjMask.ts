@@ -24,11 +24,13 @@ export function apenasDigitos(value?: string | null): string {
 }
 
 /**
- * Valor canônico para gravar no certificado de assinatura: formatado quando o
- * documento está completo (11 ou 14 dígitos), senão os dígitos como digitados.
+ * Valor canônico para GRAVAR: sempre só os dígitos.
+ *
+ * Guardar formatado criaria duas gramáticas na mesma coluna (registros antigos
+ * com dígitos crus, novos com pontuação) e quebraria comparação, busca e JOIN
+ * por `assinante_cpf`. A pontuação é assunto de exibição — use
+ * `formatCpfCnpj()` na tela.
  */
 export function documentoCanonico(value?: string | null): string {
-  const d = apenasDigitos(value);
-  if (d.length === 11 || d.length === 14) return formatCpfCnpj(d);
-  return d;
+  return apenasDigitos(value);
 }
