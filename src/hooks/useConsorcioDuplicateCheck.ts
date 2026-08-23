@@ -28,6 +28,13 @@ interface Params {
   nome?: string | null;
   excludeRegistrationId?: string | null;
   excludeCardId?: string | null;
+  /**
+   * Venda (proposta) da carta que está sendo editada. Numa venda multi-carta as
+   * outras cartas têm, por construção, o MESMO CPF/nome — apontá-las como
+   * "duplicidade" fazia o alerta disparar sempre e virar ruído. Cadastros (e as
+   * cotas geradas por eles) da MESMA proposta ficam fora da checagem.
+   */
+  excludeProposalId?: string | null;
   enabled?: boolean;
 }
 
@@ -39,6 +46,7 @@ export function useConsorcioDuplicateCheck({
   nome,
   excludeRegistrationId,
   excludeCardId,
+  excludeProposalId,
   enabled = true,
 }: Params) {
   const cpfD = onlyDigits(cpf);
@@ -51,11 +59,25 @@ export function useConsorcioDuplicateCheck({
   const hasAnyKey = !!(cpfD || cnpjD || emailN || (phoneSuffix && phoneSuffix.length >= 8) || (nomeN && nomeN.length >= 4));
 
   return useQuery({
-    queryKey: ['consorcio-duplicate-check', cpfD, cnpjD, emailN, phoneSuffix, nomeN, excludeRegistrationId, excludeCardId],
+    queryKey: ['consorcio-duplicate-check', cpfD, cnpjD, emailN, phoneSuffix, nomeN, excludeRegistrationId, excludeCardId, excludeProposalId],
     enabled: enabled && hasAnyKey,
     staleTime: 30_000,
     queryFn: async (): Promise<DuplicateMatch[]> => {
       const results: DuplicateMatch[] = [];
+
+      // Irmãos da mesma venda: cadastros e cotas que não são duplicidade.
+      const irmaosRegIds = new Set<string>();
+      const irmaosCardIds = new Set<string>();
+      if (excludeProposalId) {
+        const { data: irmaos } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('id, consortium_card_id')
+          .eq('proposal_id', excludeProposalId);
+        for (const r of irmaos || []) {
+          irmaosRegIds.add((r as any).id);
+          if ((r as any).consortium_card_id) irmaosCardIds.add((r as any).consortium_card_id);
+        }
+      }
 
       // ---- consortium_cards
       const orClausesCards: string[] = [];
@@ -73,6 +95,7 @@ export function useConsorcioDuplicateCheck({
         if (excludeCardId) q = q.neq('id', excludeCardId);
         const { data } = await q;
         for (const c of data || []) {
+          if (irmaosCardIds.has((c as any).id)) continue;
           const matched: string[] = [];
           if (cpfD && onlyDigits((c as any).cpf) === cpfD) matched.push('CPF');
           if (cnpjD && onlyDigits((c as any).cnpj) === cnpjD) matched.push('CNPJ');
@@ -114,6 +137,7 @@ export function useConsorcioDuplicateCheck({
         if (excludeRegistrationId) q = q.neq('id', excludeRegistrationId);
         const { data } = await q;
         for (const c of data || []) {
+          if (irmaosRegIds.has((c as any).id)) continue;
           const matched: string[] = [];
           if (cpfD && onlyDigits((c as any).cpf) === cpfD) matched.push('CPF');
           if (cnpjD && onlyDigits((c as any).cnpj) === cnpjD) matched.push('CNPJ');
