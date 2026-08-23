@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Copy, Plus, Trash2 } from 'lucide-react';
 import { PRAZO_OPTIONS, CONDICAO_PAGAMENTO_OPTIONS } from '@/types/consorcioProdutos';
-import { formatBRLInput } from '@/lib/brlMask';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CATEGORIA_OPTIONS } from '@/types/consorcio';
@@ -180,22 +180,19 @@ export function CartasProposalEditor({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <Label className="text-xs">Crédito (R$)</Label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      className={`h-9 ${invalida && !c.valorStr ? 'border-destructive' : ''}`}
+                    {/* `required` aqui só controla o aviso visual de vazio — a regra
+                        de salvar continua sendo `cartaDraftValida`, intocada. */}
+                    <CurrencyInput
                       value={c.valorStr}
-                      onChange={e => patch(c.key, { valorStr: formatBRLInput(e.target.value) })}
-                      /* Nunca use um número como placeholder: cinza claro parecendo
-                         valor preenchido foi o que travou o lançamento em produção. */
+                      onChange={masked => patch(c.key, { valorStr: masked })}
+                      required
+                      showError={invalida}
                       placeholder="Digite o valor do crédito"
+                      emptyHint="Campo vazio — digite o crédito."
+                      inputClassName="h-9"
                     />
-                    {!c.valorStr && (
-                      <p className={`mt-1 text-[11px] ${invalida ? 'text-destructive' : 'text-muted-foreground'}`}>
-                        Campo vazio — digite o crédito.
-                      </p>
-                    )}
                   </div>
+
 
                   <div>
                     <Label className="text-xs">Prazo (meses)</Label>
@@ -264,26 +261,24 @@ export function CartasProposalEditor({
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div>
                       <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        className="h-9"
+                      {/* Segue opcional: sem `required` não aparece linha de vazio. */}
+                      <CurrencyInput
                         value={c.parcela1a12Str}
-                        onChange={e => patch(c.key, { parcela1a12Str: formatBRLInput(e.target.value) })}
-                        placeholder="0,00"
+                        onChange={masked => patch(c.key, { parcela1a12Str: masked })}
+                        placeholder="Digite o valor da parcela"
+                        inputClassName="h-9"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Demais parcelas (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        className="h-9"
+                      <CurrencyInput
                         value={c.parcelaDemaisStr}
-                        onChange={e => patch(c.key, { parcelaDemaisStr: formatBRLInput(e.target.value) })}
-                        placeholder="0,00"
+                        onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
+                        placeholder="Digite o valor da parcela"
+                        inputClassName="h-9"
                       />
                     </div>
+
                     <div>
                       <Label className="text-xs">Condição de pagamento</Label>
                       <Select

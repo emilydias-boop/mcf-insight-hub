@@ -36,9 +36,14 @@ export interface CurrencyInputProps {
   disabled?: boolean;
   id?: string;
   className?: string;
+  /** Classes do <input> — telas densas usam h-9. */
+  inputClassName?: string;
   /** Prefixo exibido dentro do campo. */
   prefix?: string;
 }
+
+
+
 
 export function CurrencyInput({
   value,
@@ -53,7 +58,9 @@ export function CurrencyInput({
   disabled,
   id,
   className,
+  inputClassName,
   prefix = 'R$',
+
 }: CurrencyInputProps) {
   const autoId = React.useId();
   const inputId = id || autoId;
@@ -92,7 +99,9 @@ export function CurrencyInput({
           onChange={e => handleChange(e.target.value)}
           className={cn(
             prefix && 'pl-10',
+            inputClassName,
             mostrarVazio && showError && 'border-destructive focus-visible:ring-destructive',
+
           )}
         />
       </div>
