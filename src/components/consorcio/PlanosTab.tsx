@@ -342,7 +342,8 @@ function PlanosFaltandoBlock({
 
   const combos = data?.combinacoes || [];
   const prazoFora = data?.cartasPrazoForaDaTabela || 0;
-  if (combos.length === 0 && prazoFora === 0) return null;
+  const creditoAbaixo = data?.cartasCreditoAbaixoMinimo || 0;
+  if (combos.length === 0 && prazoFora === 0 && creditoAbaixo === 0) return null;
 
   const totalCartas = combos.reduce((a, c) => a + c.cartas, 0);
 
@@ -404,6 +405,13 @@ function PlanosFaltandoBlock({
         <p className="px-4 py-3 text-xs text-muted-foreground border-t">
           {prazoFora} carta{prazoFora === 1 ? '' : 's'} com prazo fora de 200/220/240 — a tabela não
           tem coluna para esse prazo; cadastrar plano não resolve.
+        </p>
+      )}
+
+      {creditoAbaixo > 0 && (
+        <p className="px-4 py-3 text-xs text-muted-foreground border-t">
+          {creditoAbaixo} carta{creditoAbaixo === 1 ? '' : 's'} com crédito abaixo de R$ 1.000 — provável
+          erro de digitação na venda; cadastrar plano não resolve.
         </p>
       )}
     </div>

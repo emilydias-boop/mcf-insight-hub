@@ -45,6 +45,15 @@ function condKeyDaCarta(c?: string | null): CondKey | null {
 
 const centavos = (v: unknown) => Math.round(Number(v || 0) * 100);
 
+/**
+ * Piso de saneamento: abaixo de R$ 1.000,00 (100.000 centavos) não existe carta
+ * de consórcio — é erro de digitação na venda. Essas cartas não entram na fila de
+ * cadastro de plano (cadastrar plano não resolve erro de digitação) e viram um
+ * contador neutro. R$ 40.000 continua na fila: é crédito plausível, só não está
+ * cadastrado. O corte é só contra o absurdo.
+ */
+export const MIN_CREDITO_CENTAVOS = 100_000;
+
 export interface CombinacaoFaltante {
   /** Chave estável: tipoTaxa|centavos|prazo|condKey ('?' quando não informada). */
   key: string;
@@ -67,6 +76,8 @@ export interface PlanosFaltandoResultado {
   cartasAnalisadas: number;
   /** Cartas com prazo sem coluna na tabela — cadastrar plano NÃO resolve. */
   cartasPrazoForaDaTabela: number;
+  /** Cartas com crédito abaixo de R$ 1.000 — erro de digitação; cadastrar plano não resolve. */
+  cartasCreditoAbaixoMinimo: number;
   /** Mapa cartaId → chave da combinação faltante (para o Dossiê). */
   porCarta: Record<string, string>;
   /** Índice chave → combinação, para telas que só têm os campos do cadastro. */
@@ -76,7 +87,9 @@ export interface PlanosFaltandoResultado {
 /**
  * Chave da combinação a partir dos campos já gravados (carta OU cadastro
  * pendente, que não guarda o id da carta). Retorna null quando não dá para
- * comparar (sem crédito, ou prazo sem coluna na tabela).
+ * comparar (sem crédito, crédito abaixo do piso de saneamento, ou prazo sem
+ * coluna na tabela). Crédito abaixo de R$ 1.000 é erro de digitação e não gera
+ * aviso "Plano fora da tabela" no Dossiê.
  */
 export function chaveDaCombinacao(reg: {
   tipo_produto?: string | null;
@@ -86,7 +99,7 @@ export function chaveDaCombinacao(reg: {
 }): string | null {
   const cent = centavos(reg.valor_credito);
   const prazo = Number(reg.prazo_meses || 0);
-  if (cent <= 0 || !(PRAZOS as readonly number[]).includes(prazo)) return null;
+  if (cent <= 0 || cent < MIN_CREDITO_CENTAVOS || !(PRAZOS as readonly number[]).includes(prazo)) return null;
   const tipoTaxa = taxaAntecipadaTipoDeProduto(reg.tipo_produto);
   const cond = condKeyDaCarta(reg.condicao_pagamento);
   return `${tipoTaxa}|${cent}|${prazo}|${cond ?? '?'}`;
@@ -96,6 +109,7 @@ const VAZIO: PlanosFaltandoResultado = {
   combinacoes: [],
   cartasAnalisadas: 0,
   cartasPrazoForaDaTabela: 0,
+  cartasCreditoAbaixoMinimo: 0,
   porCarta: {},
   porChave: {},
 };
@@ -157,6 +171,7 @@ export function useConsorcioPlanosFaltando() {
       const porCarta: Record<string, string> = {};
       let cartasAnalisadas = 0;
       let cartasPrazoForaDaTabela = 0;
+      let cartasCreditoAbaixoMinimo = 0;
 
       for (const c of (cartasRes.data || []) as Array<Record<string, any>>) {
         if (c.proposal_id && mortas.has(String(c.proposal_id))) continue;
@@ -165,6 +180,13 @@ export function useConsorcioPlanosFaltando() {
         const prazo = Number(c.prazo_meses || 0);
         const cent = centavos(c.valor_credito);
         if (cent <= 0) continue;
+        // Crédito abaixo de R$ 1.000 é erro de digitação — não existe consórcio
+        // nessa faixa. Não entra na fila nem no mapa porCarta (logo, não gera
+        // aviso no Dossiê). Cadastrar plano não resolve erro de digitação.
+        if (cent < MIN_CREDITO_CENTAVOS) {
+          cartasCreditoAbaixoMinimo += 1;
+          continue;
+        }
         if (!(PRAZOS as readonly number[]).includes(prazo)) {
           cartasPrazoForaDaTabela += 1;
           continue;
@@ -213,7 +235,7 @@ export function useConsorcioPlanosFaltando() {
       const porChave: Record<string, CombinacaoFaltante> = {};
       combinacoes.forEach((c) => { porChave[c.key] = c; });
 
-      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, porCarta, porChave };
+      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, cartasCreditoAbaixoMinimo, porCarta, porChave };
 
     },
   });
