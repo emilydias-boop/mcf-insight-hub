@@ -23,6 +23,8 @@ import {
 import { parseChecklistPF, parseChecklistPJ } from '@/lib/checklistParser';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { buscarCep } from '@/lib/cepUtils';
+import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
+
 import { TipoDocumento } from '@/types/consorcio';
 
 // ===== Máscaras =====
