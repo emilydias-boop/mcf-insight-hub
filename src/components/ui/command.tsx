@@ -101,16 +101,19 @@ CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 const CommandItem = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.Item
-    ref={ref}
-    className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
-      className,
-    )}
-    {...props}
-  />
-));
+  >(({ className, value, ...props }, ref) => (
+    <CommandPrimitive.Item
+      ref={ref}
+      // undefined faz o cmdk cair no textContent; null estoura ("current" in null).
+      // É a diferença entre a tela funcionar e a tela cair.
+      value={value ?? undefined}
+      className={cn(
+        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  ));
 
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
