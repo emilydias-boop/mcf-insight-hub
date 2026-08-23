@@ -4841,7 +4841,10 @@ export type Database = {
           consortium_card_id: string | null
           created_at: string
           created_by: string | null
+          declinada_at: string | null
+          declinada_by: string | null
           id: string
+          motivo_declinio: string | null
           objetivo: string | null
           ordem: number
           parcela_1a_12a: number | null
@@ -4859,7 +4862,10 @@ export type Database = {
           consortium_card_id?: string | null
           created_at?: string
           created_by?: string | null
+          declinada_at?: string | null
+          declinada_by?: string | null
           id?: string
+          motivo_declinio?: string | null
           objetivo?: string | null
           ordem?: number
           parcela_1a_12a?: number | null
@@ -4877,7 +4883,10 @@ export type Database = {
           consortium_card_id?: string | null
           created_at?: string
           created_by?: string | null
+          declinada_at?: string | null
+          declinada_by?: string | null
           id?: string
+          motivo_declinio?: string | null
           objetivo?: string | null
           ordem?: number
           parcela_1a_12a?: number | null
