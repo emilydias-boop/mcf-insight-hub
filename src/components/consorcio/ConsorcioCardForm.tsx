@@ -3018,15 +3018,58 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-end gap-4 pt-4">
+            <div className="flex flex-wrap items-center justify-end gap-4 pt-4">
+              {/* Edição sem os dados completos = save bloqueado, não payload inteiro. */}
+              {isEditing && !snapshotPronto && (
+                <div className="mr-auto flex items-center gap-2 text-sm">
+                  {erroDetalhe ? (
+                    <>
+                      <span className="text-destructive">
+                        Não foi possível carregar os dados completos da cota. Salvar está bloqueado para não apagar informação.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => recarregarDetalhe()}
+                        disabled={buscandoDetalhe}
+                      >
+                        {buscandoDetalhe && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+                        Tentar de novo
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Carregando dados da cota…
+                    </span>
+                  )}
+                </div>
+              )}
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createCard.isPending || updateCard.isPending || batchUpload.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  createCard.isPending ||
+                  updateCard.isPending ||
+                  batchUpload.isPending ||
+                  (isEditing && !snapshotPronto)
+                }
+                title={
+                  isEditing && !snapshotPronto
+                    ? erroDetalhe
+                      ? 'Dados completos da cota não carregados — salvar bloqueado'
+                      : 'Carregando dados da cota…'
+                    : undefined
+                }
+              >
                 {(createCard.isPending || updateCard.isPending || batchUpload.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isEditing ? 'Salvar Alterações' : 'Cadastrar Carta'}
               </Button>
             </div>
+
           </form>
         </Form>
       </DialogContent>
