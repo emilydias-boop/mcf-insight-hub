@@ -83,7 +83,7 @@ export function InstallmentsPaginated({
   // Overall summary
   const overallSummary = useMemo(() => {
     const pagas = installments.filter(i => i.status === 'pago').length;
-    const pendentes = installments.filter(i => i.status === 'pendente').length;
+    const pendentes = installments.filter(i => i.status !== 'pago').length;
     const atrasadas = installments.filter(i => i.status === 'atrasado').length;
     return { pagas, pendentes, atrasadas, total: installments.length };
   }, [installments]);

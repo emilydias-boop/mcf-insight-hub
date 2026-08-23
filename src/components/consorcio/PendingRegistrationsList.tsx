@@ -693,6 +693,9 @@ function RegistrationRow({
   const termoAssinado = termos.find((t) => t.status === 'assinado');
   const semCota = SEM_COTA.includes(reg.status);
   const termoPendente = termos.find((t) => t.status === 'pendente');
+  const esperaDesde = travadaAssinatura ? (esperandoDesde ?? reg.created_at) : reg.created_at;
+  const diasEsperando = diasDesde(esperaDesde);
+  const acaoEspera = travadaAssinatura ? 'aguardando assinatura' : 'aguardando abertura';
   const termoBadge = termoAssinado
     ? { label: 'Termo assinado', className: 'border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10' }
     : termoPendente
@@ -711,19 +714,25 @@ function RegistrationRow({
         </button>
         {variant === 'pendentes' && reg.status === 'aguardando_abertura' && (
           <div className="mt-1 flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground">
-              {travadaAssinatura ? 'aguardando assinatura há' : 'aguardando abertura há'}
-            </span>
-            {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
-                termo (ou da criação, quando o termo ainda não existe). */}
-            <SeloDiasParados
-              desde={travadaAssinatura ? (esperandoDesde ?? reg.created_at) : reg.created_at}
-              motivo={
-                travadaAssinatura
-                  ? 'Dias desde a geração do Termo de Adesão (ou da criação do cadastro, quando ainda não há termo), esperando a assinatura do cliente. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
-                  : 'Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
-              }
-            />
+            {diasEsperando != null && diasEsperando < DIAS_PARADOS_MINIMO ? (
+              <span className="text-[10px] text-muted-foreground">
+                {acaoEspera} desde {diasEsperando === 0 ? 'hoje' : 'ontem'}
+              </span>
+            ) : (
+              <>
+                <span className="text-[10px] text-muted-foreground">{acaoEspera} há</span>
+                {/* Liberadas: dias desde a criação. Travadas: dias desde a geração do
+                    termo (ou da criação, quando o termo ainda não existe). */}
+                <SeloDiasParados
+                  dias={diasEsperando}
+                  motivo={
+                    travadaAssinatura
+                      ? 'Dias desde a geração do Termo de Adesão (ou da criação do cadastro, quando ainda não há termo), esperando a assinatura do cliente. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                      : 'Dias desde a criação do cadastro, ainda aguardando abertura de cota. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
+                  }
+                />
+              </>
+            )}
           </div>
         )}
 

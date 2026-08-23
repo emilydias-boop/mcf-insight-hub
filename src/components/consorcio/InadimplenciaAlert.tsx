@@ -16,11 +16,11 @@ export function InadimplenciaAlert({ info, onRegularizar }: InadimplenciaAlertPr
   const getIcon = () => {
     switch (info.risco) {
       case 'medio':
-        return <AlertCircle className="h-5 w-5 text-yellow-600" />;
+        return <AlertCircle className="h-5 w-5 text-warning" />;
       case 'alto':
-        return <AlertTriangle className="h-5 w-5 text-red-600" />;
+        return <AlertTriangle className="h-5 w-5 text-destructive" />;
       case 'cancelamento':
-        return <XCircle className="h-5 w-5 text-red-700" />;
+        return <XCircle className="h-5 w-5 text-destructive" />;
       default:
         return null;
     }
@@ -33,11 +33,11 @@ export function InadimplenciaAlert({ info, onRegularizar }: InadimplenciaAlertPr
   const getBgClass = () => {
     switch (info.risco) {
       case 'medio':
-        return 'bg-yellow-50 border-yellow-200';
+        return 'border-warning/50 bg-warning/10 text-foreground [&>svg]:text-warning';
       case 'alto':
-        return 'bg-red-50 border-red-200';
+        return 'border-destructive/50 bg-destructive/10';
       case 'cancelamento':
-        return 'bg-red-100 border-red-300';
+        return 'border-destructive/60 bg-destructive/15';
       default:
         return '';
     }
@@ -46,7 +46,7 @@ export function InadimplenciaAlert({ info, onRegularizar }: InadimplenciaAlertPr
   return (
     <Alert variant={getVariant()} className={getBgClass()}>
       {getIcon()}
-      <AlertTitle className="flex items-center justify-between">
+      <AlertTitle className="flex flex-wrap items-center justify-between gap-3">
         <span>
           {info.risco === 'cancelamento' ? 'Cota em Cancelamento' : 
            info.risco === 'alto' ? 'Risco de Cancelamento' : 
@@ -57,6 +57,7 @@ export function InadimplenciaAlert({ info, onRegularizar }: InadimplenciaAlertPr
             size="sm" 
             variant={info.risco === 'alto' ? 'destructive' : 'outline'}
             onClick={onRegularizar}
+            className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             Regularizar Parcelas
           </Button>
