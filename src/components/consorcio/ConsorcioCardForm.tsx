@@ -657,19 +657,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     [objetivoOptions, objetivoWatch]
   );
 
-  // Find product that matches selected code or auto-detect from credit value
-  const produtoSelecionado = useMemo(() => {
-    if (!produtos) return undefined;
-    
-    if (produtoCodigo && produtoCodigo !== 'auto') {
-      return produtos.find(p => p.codigo === produtoCodigo);
-    }
-    
-    // Auto-detect based on credit value and tipo_produto
+  // Auto-detect candidates: never pick "the first" when more than one matches.
+  const candidatosAuto = useMemo(() => {
+    if (!produtos || valorCredito <= 0) return [];
+
     const tipoProduto = form.watch('tipo_produto');
     const taxaTipo = tipoProduto === 'parcelinha' ? 'dividida_12' : 'primeira_parcela';
-    
-    return produtos.find(p =>
+
+    return produtos.filter(p =>
       p.ativo &&
       valorCredito >= p.faixa_credito_min &&
       valorCredito <= p.faixa_credito_max &&
@@ -677,7 +672,33 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       // Filter by objetivo when selected; products linked to an objetivo only apply to that one
       (!objetivoSelecionado || !p.objetivo_option_id || p.objetivo_option_id === objetivoSelecionado.id)
     );
-  }, [produtos, produtoCodigo, valorCredito, form, objetivoSelecionado]);
+  }, [produtos, valorCredito, form, objetivoSelecionado]);
+
+  const escolhaManual = !!produtoCodigo && produtoCodigo !== 'auto';
+
+  // Find product that matches selected code, or resolve automatically ONLY when unambiguous
+  const produtoSelecionado = useMemo(() => {
+    if (!produtos) return undefined;
+
+    if (escolhaManual) {
+      return produtos.find(p => p.codigo === produtoCodigo);
+    }
+
+    // Ambiguous (>1) or no match: do not guess, leave unresolved
+    return candidatosAuto.length === 1 ? candidatosAuto[0] : undefined;
+  }, [produtos, produtoCodigo, escolhaManual, candidatosAuto]);
+
+  // Estado da detecção automática, para explicar em texto o que aconteceu
+  const autoStatus: 'manual' | 'sem_credito' | 'unico' | 'ambiguo' | 'nenhum' = escolhaManual
+    ? 'manual'
+    : valorCredito <= 0
+      ? 'sem_credito'
+      : candidatosAuto.length === 1
+        ? 'unico'
+        : candidatosAuto.length > 1
+          ? 'ambiguo'
+          : 'nenhum';
+
 
   // Fetch credits for the selected product to get tabulated values
   const { data: creditos } = useConsorcioCreditos(produtoSelecionado?.id);
@@ -1470,11 +1491,37 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                             ))}
                           </SelectContent>
                         </Select>
-                        {produtoSelecionado && (!field.value || field.value === 'auto') && (
+                        {autoStatus === 'sem_credito' && (
                           <p className="text-xs text-muted-foreground">
-                            Detectado: {produtoSelecionado.codigo} - {produtoSelecionado.nome}
+                            Informe o valor do crédito para o sistema procurar o produto. Se preferir, escolha o produto aqui na lista.
                           </p>
                         )}
+                        {autoStatus === 'unico' && produtoSelecionado && (
+                          <p className="text-xs text-muted-foreground">
+                            O sistema escolheu automaticamente: <strong>{produtoSelecionado.codigo} - {produtoSelecionado.nome}</strong> (único produto com faixa compatível). Se não for esse, escolha o produto aqui na lista.
+                          </p>
+                        )}
+                        {autoStatus === 'ambiguo' && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 space-y-1">
+                            <p>
+                              Mais de um produto atende este crédito, então o Auto-detectar não escolhe por você. Selecione um aqui na lista:
+                            </p>
+                            <ul className="list-disc pl-4">
+                              {candidatosAuto.map(p => (
+                                <li key={p.codigo}>{p.codigo} - {p.nome}</li>
+                              ))}
+                            </ul>
+                            <p className="text-muted-foreground">
+                              Enquanto não escolher, o produto e a parcela ficam em branco — dá para salvar a cota assim e completar depois.
+                            </p>
+                          </div>
+                        )}
+                        {autoStatus === 'nenhum' && (
+                          <p className="text-xs text-muted-foreground">
+                            Nenhum produto ativo tem faixa de crédito compatível com este valor (confira também tipo de produto e objetivo). Escolha o produto aqui na lista ou digite as parcelas à mão.
+                          </p>
+                        )}
+
                       </FormItem>
                     )}
                   />
