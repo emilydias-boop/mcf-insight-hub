@@ -175,6 +175,12 @@ export function CartasProposalEditor({
           {cartas.map((c, i) => {
             const invalida = !!mostrarErros && !cartaDraftValida(c);
             const manual = ehManual(c);
+            // "fora da tabela" ≠ "campos destravados". Só acende quando o
+            // operador ESCOLHEU manual: `__manual__` no seletor, ou "editar
+            // manualmente" depois de um plano aplicado. Carta sem plano
+            // escolhido (a maioria) não recebe badge — senão o alerta vira
+            // ruído e ninguém lê mais.
+            const foraDaTabela = manualPorCarta[c.key] === true;
             const { opcoes: planos, faltando, prazoForaDaTabela } = filtrarPlanosCarta(
               tabelaPlanos,
               { tipoProduto: c.tipoProduto, prazoMeses: c.prazoMeses, condicaoPagamento: c.condicaoPagamento },
