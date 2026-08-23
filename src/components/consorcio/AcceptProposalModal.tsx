@@ -268,6 +268,9 @@ export function AcceptProposalModal({
         // `tipo_produto` decide o produto e a comissão de TODAS as parcelas no
         // "Abrir cota"; `origem` é o crédito da origem do lead.
         tipo_produto: carta?.tipo_produto || (proposal as any)?.tipo_produto || undefined,
+        // A categoria nasce na carta e desce para o cadastro — sem isso todo
+        // cadastro nascia "incompleto (1)" pedindo categoria já escolhida.
+        categoria: carta?.categoria || undefined,
         origem: (proposal as any)?.origem_lead || undefined,
         observacoes: proposal?.proposal_details?.trim() || undefined,
         ...cleanData,
