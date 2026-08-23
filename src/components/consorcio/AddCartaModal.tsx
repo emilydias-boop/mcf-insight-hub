@@ -211,14 +211,18 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
   /** Abre o campo de criação já com o que foi digitado na busca. */
   const abrirCriacaoLead = () => {
+    console.log('[AddCartaModal] abrirCriacaoLead', { leadSearch, criandoLead });
+    setCriandoLead(false); // destrava caso uma tentativa anterior tenha ficado presa
     setNovoLeadNome(prev => prev || leadSearch.trim());
     setNovoLeadAberto(true);
     setLeadOpen(false);
   };
 
+
   /** Cria contato + negócio de verdade na esteira do consórcio. */
   const criarLeadNovo = async (nomeInformado: string) => {
-    const nome = nomeInformado.trim();
+    console.log('[AddCartaModal] criarLeadNovo INICIADO', { nomeInformado, criandoLead });
+    const nome = (nomeInformado || '').trim();
     if (nome.length < 3) {
       toast.error('Informe o nome completo do cliente (mínimo 3 letras).');
       return;
@@ -226,12 +230,15 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
     setCriandoLead(true);
     try {
+      console.log('[AddCartaModal] inserindo crm_contacts...', nome);
       const { data: contato, error: cErr } = await supabase
         .from('crm_contacts')
-        .insert({ name: nome } as any)
+        .insert({ name: nome, clint_id: `local-${Date.now()}` } as any)
         .select('id, name')
         .single();
+      console.log('[AddCartaModal] resposta crm_contacts', { contato, cErr });
       if (cErr) throw cErr;
+      if (!contato?.id) throw new Error('Contato criado sem ID retornado.');
 
       const { data: deal, error: dErr } = await supabase
         .from('crm_deals')
@@ -240,10 +247,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           contact_id: contato.id,
           origin_id: EA_ORIGIN_ID,
           stage_id: EA_ENTRADA_STAGE_ID,
+          clint_id: `manual_${Date.now()}_${String(contato.id).slice(0, 8)}`,
         } as any)
         .select('id')
         .single();
+      console.log('[AddCartaModal] resposta crm_deals', { deal, dErr });
       if (dErr) throw dErr;
+      if (!deal?.id) throw new Error('Negócio criado sem ID retornado.');
 
       selecionarLead({
         deal_id: deal.id,
@@ -259,16 +269,22 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
       toast.success('Lead criado no CRM do consórcio.');
 
     } catch (e: any) {
-      const msg = String(e?.message || '');
+      console.error('[AddCartaModal] ERRO ao criar lead', e);
+      const msg =
+        e?.message ||
+        e?.details ||
+        e?.hint ||
+        (typeof e === 'string' ? e : JSON.stringify(e));
       toast.error(
-        msg.includes('duplicate_contact')
+        String(msg).includes('duplicate_contact')
           ? 'Já existe contato com esse e-mail/telefone — busque o lead existente.'
-          : 'Erro ao criar o lead: ' + msg,
+          : `Erro ao criar o lead: ${msg}`,
       );
     } finally {
       setCriandoLead(false);
     }
   };
+
 
   const handleSubmit = async () => {
     if (!lead) { toast.error('Selecione o lead no CRM — é dele que sai o termo e a atribuição.'); return; }
@@ -424,7 +440,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                 </PopoverContent>
               </Popover>
 
-              <Button variant="secondary" onClick={abrirCriacaoLead} disabled={criandoLead}>
+              <Button type="button" variant="secondary" onClick={abrirCriacaoLead} disabled={criandoLead}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Criar lead novo no CRM
               </Button>
@@ -450,18 +466,20 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                     onChange={e => setNovoLeadNome(e.target.value)}
                     placeholder="Ex: Maria Aparecida da Silva"
                     onKeyDown={e => {
-                      if (e.key === 'Enter') { e.preventDefault(); criarLeadNovo(novoLeadNome); }
+                      if (e.key === 'Enter') { e.preventDefault(); void criarLeadNovo(novoLeadNome); }
                     }}
                   />
                   <Button
+                    type="button"
                     size="sm"
-                    onClick={() => criarLeadNovo(novoLeadNome)}
+                    onClick={() => { void criarLeadNovo(novoLeadNome); }}
                     disabled={criandoLead || novoLeadNome.trim().length < 3}
                   >
                     {criandoLead && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Criar lead
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => { setNovoLeadAberto(false); setNovoLeadNome(''); }}
@@ -470,6 +488,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                     Cancelar
                   </Button>
                 </div>
+
                 <p className="text-xs text-muted-foreground">
                   Cria contato + negócio na esteira do consórcio (Efeito Alavanca + Clube · Parceiros).
                 </p>
