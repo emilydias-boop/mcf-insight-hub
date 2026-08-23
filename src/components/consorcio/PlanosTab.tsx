@@ -83,6 +83,15 @@ export function PlanosTab() {
   const [search, setSearch] = useState('');
   const [showInativos, setShowInativos] = useState(false);
   const [toDelete, setToDelete] = useState<ConsorcioCredito | null>(null);
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
+  const toggleExpandido = (id: string) =>
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
 
   const produtoLabel = (id?: string | null) => {
     const p = produtos.find((x) => x.id === id);
