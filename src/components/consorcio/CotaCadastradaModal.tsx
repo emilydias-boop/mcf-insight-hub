@@ -9,6 +9,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { usePendingRegistration, useOpenCota } from '@/hooks/useConsorcioPendingRegistrations';
+import { resolveVendedorOptionId } from '@/lib/consorcioVendedor';
+
+/** Extrai mensagem legível de um erro do Supabase (PostgrestError não é Error). */
+function extrairMensagemErro(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const err = e as { message?: string; details?: string; hint?: string; code?: string };
+    const partes = [err.message, err.details, err.hint].filter(
+      (p): p is string => typeof p === 'string' && p.trim().length > 0,
+    );
+    if (partes.length > 0) {
+      return err.code ? `${partes.join(' — ')} (código ${err.code})` : partes.join(' — ');
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 
 interface Props {
   open: boolean;
@@ -81,7 +98,15 @@ export function CotaCadastradaModal({ open, onOpenChange, registrationId, onAbri
     if (!reg) return;
     setErro(null);
     const hoje = new Date().toISOString().slice(0, 10);
+    // `consortium_cards.vendedor_id` tem FK para `consorcio_vendedor_options`:
+    // um uuid de outra origem derrubava o insert inteiro (409). Resolvemos aqui e,
+    // se não resolver, seguimos sem vínculo — preservando o nome do vendedor.
+    const vendedorIdValido = await resolveVendedorOptionId(
+      reg.vendedor_id,
+      reg.vendedor_name_cota || reg.vendedor_name,
+    );
     try {
+
       await openCota.mutateAsync({
         registrationId: reg.id,
         registration: reg,
@@ -108,7 +133,7 @@ export function CotaCadastradaModal({ open, onOpenChange, registrationId, onAbri
           data_reserva: hoje,
           origem: String(reg.origem),
           origem_detalhe: reg.origem_detalhe || undefined,
-          vendedor_id: reg.vendedor_id || undefined,
+          vendedor_id: vendedorIdValido || undefined,
           vendedor_name: reg.vendedor_name_cota || reg.vendedor_name || undefined,
           valor_comissao: reg.valor_comissao ?? undefined,
           observacoes: reg.observacoes || undefined,
@@ -116,9 +141,11 @@ export function CotaCadastradaModal({ open, onOpenChange, registrationId, onAbri
       });
       onOpenChange(false);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
+      console.error('[CotaCadastradaModal] falha ao criar cota', e);
+      setErro(extrairMensagemErro(e));
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
