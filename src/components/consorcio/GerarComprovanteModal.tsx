@@ -295,6 +295,10 @@ export function GerarComprovanteModal({ open, onOpenChange, cardId, onCompletarC
             Comprova o cadastro da cota na Embracon (grupo, cota e contrato) e mostra o cronograma das primeiras parcelas, indicando quais a MCF paga. É só leitura — o cliente não assina este documento.
           </DialogDescription>
         </DialogHeader>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6">
+
 
         {isLoading || loadingModelos ? (
           <div className="flex justify-center py-10">
