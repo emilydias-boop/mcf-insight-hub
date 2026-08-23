@@ -434,11 +434,10 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
   // Fecha o modal / troca de cadastro: a próxima abertura hidrata de novo.
   useEffect(() => {
-    if (!open) {
-      hidratadoDe.current = null;
-      snapshotPatch.current = null;
-      setSnapshotPronto(false);
-    }
+    // Fechou o modal OU trocou de cadastro: o snapshot antigo não vale mais.
+    hidratadoDe.current = null;
+    snapshotPatch.current = null;
+    setSnapshotPronto(false);
   }, [open, registrationId]);
 
   /**

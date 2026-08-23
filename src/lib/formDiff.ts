@@ -30,8 +30,21 @@ export function normalizarParaDiff(valor: unknown): unknown {
   }
 }
 
+/** `true` quando o valor representa um número (aceita string numérica). */
+function ehNumerico(valor: unknown): boolean {
+  if (typeof valor === 'number') return Number.isFinite(valor);
+  if (typeof valor === 'string' && valor.trim() !== '') return Number.isFinite(Number(valor));
+  return false;
+}
+
 export function valorMudou(antes: unknown, depois: unknown): boolean {
-  return normalizarParaDiff(antes) !== normalizarParaDiff(depois);
+  const a = normalizarParaDiff(antes);
+  const b = normalizarParaDiff(depois);
+  if (a === b) return false;
+  // Numeric.toString: o formulário devolve "150000" onde o banco tem 150000.
+  // Sem esta comparação numérica o diff mandaria campo que ninguém tocou.
+  if (ehNumerico(a) && ehNumerico(b)) return Number(a) !== Number(b);
+  return true;
 }
 
 /**
