@@ -163,6 +163,10 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   const [leadOpen, setLeadOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [criandoLead, setCriandoLead] = useState(false);
+  /** Campo próprio de criação: o clique no botão fechava o popover e descartava a busca. */
+  const [novoLeadAberto, setNovoLeadAberto] = useState(false);
+  const [novoLeadNome, setNovoLeadNome] = useState('');
+
 
   const [origem, setOrigem] = useState('');
   const [origemDetalhe, setOrigemDetalhe] = useState('');
