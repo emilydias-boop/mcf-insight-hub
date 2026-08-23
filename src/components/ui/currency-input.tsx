@@ -58,7 +58,9 @@ export function CurrencyInput({
   disabled,
   id,
   className,
+  inputClassName,
   prefix = 'R$',
+
 }: CurrencyInputProps) {
   const autoId = React.useId();
   const inputId = id || autoId;
