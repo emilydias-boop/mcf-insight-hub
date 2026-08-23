@@ -147,7 +147,7 @@ export function PlanosTab() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Buscar por código ou valor do crédito..."
+            placeholder="Buscar por código, valor do crédito ou valor da parcela (ex: 508,92)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
