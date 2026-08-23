@@ -400,6 +400,28 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const { data: produtos } = useConsorcioProdutos();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
   const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
+  /**
+   * Catálogo de categoria: hoje as duas linhas de `consorcio_categoria_options`
+   * estão com `is_active = false`, então a lista chegava VAZIA e o select abria
+   * em branco mesmo com a cota tendo `categoria = 'inside'`. Fallback fixo +
+   * garantia de que o valor atual da cota sempre tem item na lista.
+   */
+  const categoriasDisponiveis = useMemo(() => {
+    const ativas = categoriaOptions.filter((o) => o.is_active);
+    const base = (ativas.length > 0 ? ativas : categoriaOptions).map((o) => ({
+      name: o.name,
+      label: o.label,
+      display_order: o.display_order ?? 0,
+    }));
+    const lista = base.length > 0
+      ? base
+      : [
+          { name: 'inside', label: 'Inside Consórcio', display_order: 0 },
+          { name: 'life', label: 'Life Consórcio', display_order: 1 },
+        ];
+    return lista.sort((a, b) => a.display_order - b.display_order);
+  }, [categoriaOptions]);
+
   const createCard = useCreateConsorcioCard();
   const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
@@ -1084,16 +1106,35 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   };
 
   const onSubmit = async (data: FormData) => {
+    /**
+     * Campos que definem o plano da carta. Em EDIÇÃO, se nenhum deles foi
+     * tocado, os valores de parcela e o tipo de produto do banco são a verdade:
+     * recalcular pela tabela aqui é o que fazia o diff acusar mudança em
+     * `parcela_1a_12a` / `parcela_demais` num formulário intocado e sobrescrever
+     * parcela negociada à mão (1.500 / 200) pelo valor tabelado.
+     */
+    const camposDoPlano = [
+      'valor_credito', 'prazo_meses', 'condicao_pagamento', 'inclui_seguro',
+      'produto_codigo', 'tipo_produto', 'objetivo',
+    ] as const;
+    const dirty = form.formState.dirtyFields as Record<string, unknown>;
+    const planoTocado = camposDoPlano.some((c) => !!dirty[c]);
+    const snap = snapshotPayload.current;
+    const preservarPlano = isEditing && !!snap && !planoTocado;
+
     // Derivar tipo_produto automaticamente do produto selecionado
-    const tipoProdutoDerivado: 'select' | 'parcelinha' = produtoSelecionado
-      ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
-      : data.tipo_produto;
+    const tipoProdutoDerivado: 'select' | 'parcelinha' = preservarPlano
+      ? ((snap!.tipo_produto as 'select' | 'parcelinha') || data.tipo_produto)
+      : produtoSelecionado
+        ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
+        : data.tipo_produto;
 
     const input = montarPayloadCarta(data, {
       tipoProduto: tipoProdutoDerivado,
-      parcela1a12: calculoParcela?.parcela1a12,
-      parcelaDemais: calculoParcela?.parcelaDemais,
+      parcela1a12: preservarPlano ? snap!.parcela_1a_12a : calculoParcela?.parcela1a12,
+      parcelaDemais: preservarPlano ? snap!.parcela_demais : calculoParcela?.parcelaDemais,
     });
+
 
     if (isEditing && card) {
       /**
@@ -1113,6 +1154,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         snapshotPayload.current as unknown as Record<string, unknown>,
         input as unknown as Record<string, unknown>,
       );
+      /**
+       * Auditoria em tela: chave que entra no diff sem o campo estar "dirty" é
+       * bug de montagem do payload, não edição do usuário. Fica no console para
+       * dar para conferir na hora.
+       */
+      const chavesDoDiff = Object.keys(alterado);
+      const naoTocadas = chavesDoDiff.filter((k) => !dirty[k]);
+      console.info('[carta:edit] diff enviado', {
+        cardId: card.id,
+        chaves: chavesDoDiff,
+        camposTocados: Object.keys(dirty),
+        suspeitas_nao_tocadas: naoTocadas,
+        diff: alterado,
+      });
+      if (naoTocadas.length > 0) {
+        console.warn(
+          '[carta:edit] chaves no diff sem edição do usuário (possível bug):',
+          naoTocadas,
+        );
+      }
+
       if (nenhumaAlteracao(alterado)) {
         // Fecha SEM nenhuma escrita: nada de mutateAsync neste caminho.
         toast.info('Nenhuma alteração para salvar.');
@@ -1254,13 +1316,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                      {categoriaOptions
-                        .filter(opt => opt.is_active)
-                        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-                        .map(opt => (
-                          <SelectItem key={opt.name} value={opt.name}>{opt.label}</SelectItem>
-                        ))}
+                      {categoriasDisponiveis.map(opt => (
+                        <SelectItem key={opt.name} value={opt.name}>{opt.label}</SelectItem>
+                      ))}
+                      {field.value && !categoriasDisponiveis.some(o => o.name === field.value) && (
+                        <SelectItem value={field.value}>{field.value}</SelectItem>
+                      )}
                         </SelectContent>
+
                       </Select>
                       <FormMessage />
                     </FormItem>
