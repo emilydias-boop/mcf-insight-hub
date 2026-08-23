@@ -704,17 +704,43 @@ export function useDeclinePendingRegistration() {
         .eq('id', params.registrationId)
         .maybeSingle();
 
-      // 2. Abater da meta: proposta vinculada → status='recusada' (mesmo efeito do Sem Sucesso)
-      if ((reg as any)?.proposal_id) {
+      const proposalId = (reg as any)?.proposal_id as string | undefined;
+      const agora = new Date().toISOString();
+
+      // 2. Abater da meta POR CARTA: marca a carta como declinada. O trigger
+      //    `tg_sync_proposal_cartas_agregado` refaz o total da venda somando só
+      //    as cartas ativas — a venda inteira só é recusada se não sobrar carta.
+      if (proposalId) {
         await supabase
-          .from('consorcio_proposals')
+          .from('consorcio_proposal_cartas')
           .update({
-            status: 'recusada',
-            motivo_recusa: motivo,
-            recusada_at: new Date().toISOString(),
-            recusada_by: user?.id ?? null,
+            declinada_at: agora,
+            motivo_declinio: motivo,
+            declinada_by: user?.id ?? null,
           } as any)
-          .eq('id', (reg as any).proposal_id);
+          .eq('proposal_id', proposalId)
+          .eq('pending_registration_id', params.registrationId)
+          .is('declinada_at', null);
+
+        // Sobrou carta ativa? A venda continua aceita, só menor.
+        const { data: cartas } = await supabase
+          .from('consorcio_proposal_cartas')
+          .select('id, declinada_at')
+          .eq('proposal_id', proposalId);
+        const total = (cartas || []).length;
+        const ativas = (cartas || []).filter((c: any) => !c.declinada_at).length;
+        // Sem cartas cadastradas (venda antiga) mantém o comportamento anterior.
+        if (total === 0 || ativas === 0) {
+          await supabase
+            .from('consorcio_proposals')
+            .update({
+              status: 'recusada',
+              motivo_recusa: motivo,
+              recusada_at: agora,
+              recusada_by: user?.id ?? null,
+            } as any)
+            .eq('id', proposalId);
+        }
       }
 
       // 3. Atualizar cadastro pendente para declinada
@@ -723,7 +749,7 @@ export function useDeclinePendingRegistration() {
         .update({
           status: 'declinada',
           motivo_declinio: motivo,
-          declinada_at: new Date().toISOString(),
+          declinada_at: agora,
           declinada_by: user?.id || null,
         } as any)
         .eq('id', params.registrationId);
