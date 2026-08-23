@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { CheckCircle2, FileBadge, Loader2 } from 'lucide-react';
+import { CheckCircle2, FileBadge, Loader2, Search } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -46,20 +46,38 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
   const [alvo, setAlvo] = useState<CotaCadastrada | null>(null);
   const [dataPagamento, setDataPagamento] = useState(hojeYmd());
   const [comprovanteCardId, setComprovanteCardId] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
+
+  // Busca por nome, CPF/CNPJ, grupo e cota — mesmo padrão das outras etapas.
+  // Só filtra a exibição: não altera contagem de período nem cálculo nenhum.
+  const filtradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return cotas;
+    const digitos = termo.replace(/\D/g, '');
+    return cotas.filter((c) => {
+      const doc = String(c.documento || '').replace(/\D/g, '');
+      return (
+        String(c.nome || '').toLowerCase().includes(termo) ||
+        String(c.grupo || '').toLowerCase().includes(termo) ||
+        String(c.cota || '').toLowerCase().includes(termo) ||
+        (!!digitos && doc.includes(digitos))
+      );
+    });
+  }, [cotas, busca]);
 
   const aguardando = useMemo(
     () =>
-      cotas
+      filtradas
         .filter((c) => !c.parcela_inicial_paga_em)
         .sort((a, b) => (a.cadastrada_em || '').localeCompare(b.cadastrada_em || '')),
-    [cotas],
+    [filtradas],
   );
   const pagas = useMemo(
     () =>
-      cotas
+      filtradas
         .filter((c) => !!c.parcela_inicial_paga_em)
         .sort((a, b) => (b.parcela_inicial_paga_em || '').localeCompare(a.parcela_inicial_paga_em || '')),
-    [cotas],
+    [filtradas],
   );
   const expiradas = useMemo(() => aguardando.filter(prazoExpirado).length, [aguardando]);
 
@@ -157,7 +175,9 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
     <Card>
       <CardHeader className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">Cotas Cadastradas ({cotas.length})</CardTitle>
+          <CardTitle className="text-base">
+            Cotas Cadastradas ({busca.trim() ? `${filtradas.length} de ${cotas.length}` : cotas.length})
+          </CardTitle>
           {expiradas > 0 && (
             <Badge variant="outline" className="border-destructive/60 bg-destructive/10 text-destructive">
               {expiradas} com prazo expirado
@@ -172,6 +192,15 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
         </p>
       </CardHeader>
       <CardContent>
+        <div className="relative mb-4 max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Buscar por nome, CPF/CNPJ, grupo ou cota…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
         {isLoading ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
         ) : (
