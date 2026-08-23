@@ -657,19 +657,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     [objetivoOptions, objetivoWatch]
   );
 
-  // Find product that matches selected code or auto-detect from credit value
-  const produtoSelecionado = useMemo(() => {
-    if (!produtos) return undefined;
-    
-    if (produtoCodigo && produtoCodigo !== 'auto') {
-      return produtos.find(p => p.codigo === produtoCodigo);
-    }
-    
-    // Auto-detect based on credit value and tipo_produto
+  // Auto-detect candidates: never pick "the first" when more than one matches.
+  const candidatosAuto = useMemo(() => {
+    if (!produtos || valorCredito <= 0) return [];
+
     const tipoProduto = form.watch('tipo_produto');
     const taxaTipo = tipoProduto === 'parcelinha' ? 'dividida_12' : 'primeira_parcela';
-    
-    return produtos.find(p =>
+
+    return produtos.filter(p =>
       p.ativo &&
       valorCredito >= p.faixa_credito_min &&
       valorCredito <= p.faixa_credito_max &&
@@ -677,7 +672,33 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       // Filter by objetivo when selected; products linked to an objetivo only apply to that one
       (!objetivoSelecionado || !p.objetivo_option_id || p.objetivo_option_id === objetivoSelecionado.id)
     );
-  }, [produtos, produtoCodigo, valorCredito, form, objetivoSelecionado]);
+  }, [produtos, valorCredito, form, objetivoSelecionado]);
+
+  const escolhaManual = !!produtoCodigo && produtoCodigo !== 'auto';
+
+  // Find product that matches selected code, or resolve automatically ONLY when unambiguous
+  const produtoSelecionado = useMemo(() => {
+    if (!produtos) return undefined;
+
+    if (escolhaManual) {
+      return produtos.find(p => p.codigo === produtoCodigo);
+    }
+
+    // Ambiguous (>1) or no match: do not guess, leave unresolved
+    return candidatosAuto.length === 1 ? candidatosAuto[0] : undefined;
+  }, [produtos, produtoCodigo, escolhaManual, candidatosAuto]);
+
+  // Estado da detecção automática, para explicar em texto o que aconteceu
+  const autoStatus: 'manual' | 'sem_credito' | 'unico' | 'ambiguo' | 'nenhum' = escolhaManual
+    ? 'manual'
+    : valorCredito <= 0
+      ? 'sem_credito'
+      : candidatosAuto.length === 1
+        ? 'unico'
+        : candidatosAuto.length > 1
+          ? 'ambiguo'
+          : 'nenhum';
+
 
   // Fetch credits for the selected product to get tabulated values
   const { data: creditos } = useConsorcioCreditos(produtoSelecionado?.id);
