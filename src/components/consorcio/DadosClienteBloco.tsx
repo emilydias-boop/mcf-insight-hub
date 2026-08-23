@@ -7,7 +7,7 @@
  * mesmos nos dois lugares: quem decide se o bloco é obrigatório é a tela que o
  * usa, não este componente.
  */
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import { useForm, useFieldArray, type UseFormReturn } from 'react-hook-form';
 import { Loader2, Plus, Trash2, FileText, X } from 'lucide-react';
 import {
