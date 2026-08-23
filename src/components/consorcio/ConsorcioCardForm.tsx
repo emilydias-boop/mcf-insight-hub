@@ -410,7 +410,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
    */
   const {
     data: detalheCarta,
-    isLoading: carregandoDetalhe,
     isError: erroDetalhe,
     refetch: recarregarDetalhe,
     isFetching: buscandoDetalhe,
