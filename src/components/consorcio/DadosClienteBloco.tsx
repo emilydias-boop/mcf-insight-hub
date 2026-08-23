@@ -7,7 +7,7 @@
  * mesmos nos dois lugares: quem decide se o bloco é obrigatório é a tela que o
  * usa, não este componente.
  */
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import { useForm, useFieldArray, type UseFormReturn } from 'react-hook-form';
 import { Loader2, Plus, Trash2, FileText, X } from 'lucide-react';
 import {
@@ -289,7 +289,7 @@ export function DadosClienteFields({
     <Form {...form}>
       <div className="space-y-4">
         {tipoPessoa === 'pf' ? (
-          <>
+          <Fragment key="pf">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Dados Pessoais</h3>
               <Button type="button" variant="outline" size="sm" onClick={() => i.setShowChecklist(!i.showChecklist)}>
@@ -435,9 +435,9 @@ export function DadosClienteFields({
                 <p className="text-xs text-muted-foreground"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>
               )}
             </div>
-          </>
+          </Fragment>
         ) : (
-          <>
+          <Fragment key="pj">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">Dados da Empresa</h3>
               <Button type="button" variant="outline" size="sm" onClick={() => i.setShowChecklistPJ(!i.showChecklistPJ)}>
@@ -623,7 +623,7 @@ export function DadosClienteFields({
                 {i.comprovanteResidencia && <p className="text-xs text-muted-foreground mt-1"><FileText className="h-3 w-3 inline mr-1" />{i.comprovanteResidencia.name}</p>}
               </div>
             </div>
-          </>
+          </Fragment>
         )}
         {children}
       </div>
