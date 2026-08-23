@@ -580,11 +580,11 @@ export function DadosClienteFields({
                   )} />
                   <FormField control={form.control} name={`socios.${index}.renda`} render={({ field }) => (
                     <FormItem className="flex-1"><FormLabel>Renda (R$)</FormLabel><FormControl>
-                      <Input
-                        inputMode="numeric"
-                        placeholder="0,00"
+                      <CurrencyInput
                         value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                        onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                        onNumberChange={(n) => field.onChange(n)}
+                        placeholder="Digite a renda"
+                        inputClassName="h-9"
                       />
                     </FormControl><FormMessage /></FormItem>
                   )} />
