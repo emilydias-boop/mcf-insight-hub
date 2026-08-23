@@ -255,7 +255,9 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         stage_name: 'Parceiros',
       });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+      setNovoLeadNome('');
       toast.success('Lead criado no CRM do consórcio.');
+
     } catch (e: any) {
       const msg = String(e?.message || '');
       toast.error(
