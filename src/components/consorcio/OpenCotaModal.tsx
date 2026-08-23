@@ -6,6 +6,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, FileText, ExternalLink, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { formatarCep } from '@/lib/cepUtils';
+import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
+
 
 function formatCep(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
