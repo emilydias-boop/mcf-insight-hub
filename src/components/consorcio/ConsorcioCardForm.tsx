@@ -1491,11 +1491,37 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                             ))}
                           </SelectContent>
                         </Select>
-                        {produtoSelecionado && (!field.value || field.value === 'auto') && (
+                        {autoStatus === 'sem_credito' && (
                           <p className="text-xs text-muted-foreground">
-                            Detectado: {produtoSelecionado.codigo} - {produtoSelecionado.nome}
+                            Informe o valor do crédito para o sistema procurar o produto. Se preferir, escolha o produto aqui na lista.
                           </p>
                         )}
+                        {autoStatus === 'unico' && produtoSelecionado && (
+                          <p className="text-xs text-muted-foreground">
+                            O sistema escolheu automaticamente: <strong>{produtoSelecionado.codigo} - {produtoSelecionado.nome}</strong> (único produto com faixa compatível). Se não for esse, escolha o produto aqui na lista.
+                          </p>
+                        )}
+                        {autoStatus === 'ambiguo' && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 space-y-1">
+                            <p>
+                              Mais de um produto atende este crédito, então o Auto-detectar não escolhe por você. Selecione um aqui na lista:
+                            </p>
+                            <ul className="list-disc pl-4">
+                              {candidatosAuto.map(p => (
+                                <li key={p.codigo}>{p.codigo} - {p.nome}</li>
+                              ))}
+                            </ul>
+                            <p className="text-muted-foreground">
+                              Enquanto não escolher, o produto e a parcela ficam em branco — dá para salvar a cota assim e completar depois.
+                            </p>
+                          </div>
+                        )}
+                        {autoStatus === 'nenhum' && (
+                          <p className="text-xs text-muted-foreground">
+                            Nenhum produto ativo tem faixa de crédito compatível com este valor (confira também tipo de produto e objetivo). Escolha o produto aqui na lista ou digite as parcelas à mão.
+                          </p>
+                        )}
+
                       </FormItem>
                     )}
                   />
