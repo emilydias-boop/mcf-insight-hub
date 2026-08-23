@@ -380,11 +380,10 @@ export function DadosClienteFields({
                   formulário continua numérico. */}
               <FormField control={form.control} name="renda" render={({ field }) => (
                 <FormItem><FormLabel>Renda Mensal (R$)</FormLabel><FormControl>
-                  <Input
-                    inputMode="numeric"
-                    placeholder="0,00"
+                  <CurrencyInput
                     value={field.value ? numberToBRLInput(Number(field.value)) : ''}
-                    onChange={e => field.onChange(parseBRLInput(formatBRLInput(e.target.value)))}
+                    onNumberChange={(n) => field.onChange(n)}
+                    placeholder="Digite a renda"
                   />
                 </FormControl><FormMessage /></FormItem>
               )} />
