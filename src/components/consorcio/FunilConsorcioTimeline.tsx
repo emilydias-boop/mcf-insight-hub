@@ -291,7 +291,7 @@ export function FunilConsorcioTimeline({
     {
       key: 'pendentes',
       label: CONSORCIO_LABELS.cotasAFazer,
-      hint: 'liberadas para cadastro — termo assinado',
+      hint: 'cadastros liberados criados no período (termo assinado, avulsos ou anteriores a 19/08/2026) — não é o estoque atual da lista',
       count: pendentesCount,
       rateCohort: cadastrosDeCoorteAnterior,
       rateTooltip:
