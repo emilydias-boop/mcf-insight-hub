@@ -18,6 +18,10 @@ import { produtosElegiveisParaCarta, taxaAntecipadaTipoDeProduto } from '@/lib/c
 
 const condSuffix = (c: string) => (c === '50' ? '50' : c === '25' ? '25' : 'conv');
 
+const fmtBRL = (n: number) =>
+  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+
 /** Converte campo BRL em número preservando o zero legítimo (vazio → undefined). */
 const brlOuUndefined = (s: string): number | undefined => {
   if (s == null || String(s).trim() === '') return undefined;
