@@ -6,6 +6,7 @@ import { TermoMarkdown } from '@/components/consorcio/TermoMarkdown';
 import { PapelBrand } from '@/components/consorcio/PapelBrand';
 import { imprimirDocumento } from '@/lib/consorcioTermo';
 import { PAPEL_CSS, PAPEL_PAGE_CSS } from '@/lib/documentoPapel';
+import { apenasDigitos, documentoCanonico, formatCpfCnpj } from '@/lib/cpfCnpjMask';
 
 export default function TermoAssinatura() {
   const { token } = useParams<{ token: string }>();
@@ -29,7 +30,8 @@ export default function TermoAssinatura() {
     setErro(null);
     setEnviando(true);
     try {
-      await assinar(nome.trim(), cpf.trim());
+      // O certificado recebe o documento no mesmo padrão do CRM.
+      await assinar(nome.trim(), documentoCanonico(cpf));
     } catch (e: any) {
       setErro(e.message || 'Não foi possível assinar o termo.');
     } finally {
@@ -152,7 +154,7 @@ ${PAPEL_PAGE_CSS}
               </div>
               <div>
                 <b>CPF / CNPJ</b>
-                <span>{cert?.assinante_cpf || '—'}</span>
+                <span>{cert?.assinante_cpf ? formatCpfCnpj(cert.assinante_cpf) || cert.assinante_cpf : '—'}</span>
               </div>
               <div>
                 <b>Data e hora (Brasília)</b>
@@ -191,7 +193,12 @@ ${PAPEL_PAGE_CSS}
             </label>
             <label className="mcf-field">
               <span>CPF / CNPJ</span>
-              <input value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" />
+              <input
+                value={cpf}
+                onChange={(e) => setCpf(formatCpfCnpj(e.target.value))}
+                inputMode="numeric"
+                placeholder="000.000.000-00"
+              />
             </label>
 
             <label className="chk">
@@ -227,7 +234,12 @@ ${PAPEL_PAGE_CSS}
 
             <button
               onClick={submit}
-              disabled={!nome.trim() || !cpf.trim() || !aceite || enviando}
+              disabled={
+                !nome.trim() ||
+                ![11, 14].includes(apenasDigitos(cpf).length) ||
+                !aceite ||
+                enviando
+              }
               className="mcf-btn"
             >
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
