@@ -107,15 +107,28 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
   const prazoSemTabela = !!prazo && ![200, 220, 240].includes(Number(prazo));
 
 
+  /** Lê o par de valores da tabela para (plano + condição + prazo). Null quando não há linha. */
+  const lerValoresTabela = (
+    credito: any,
+    cond: string,
+    prz: string | number,
+  ): { p12: number | null; pDemais: number | null } | null => {
+    if (!credito || !prz) return null;
+    if (![200, 220, 240].includes(Number(prz))) return null;
+    const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
+    const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
+    if (!c1 && !c2) return null;
+    return { p12: c1 ?? null, pDemais: c2 ?? null };
+  };
+
   const aplicarValoresTabela = (credito: any, cond: string, prz: string) => {
     if (!credito || !prz) return;
     // Colunas de parcela só existem para 200/220/240 — não apague o que o closer digitou, nem mexa no selo.
     if (![200, 220, 240].includes(Number(prz))) return;
-    const c1 = credito[`parcela_1a_12a_${condSuffix(cond)}_${prz}`];
-    const c2 = credito[`parcela_demais_${condSuffix(cond)}_${prz}`];
-    if (c1 || c2) {
-      setParcela1a12State(numberToBRLInput(c1 ?? null));
-      setParcelaDemaisState(numberToBRLInput(c2 ?? null));
+    const tab = lerValoresTabela(credito, cond, prz);
+    if (tab) {
+      setParcela1a12State(numberToBRLInput(tab.p12));
+      setParcelaDemaisState(numberToBRLInput(tab.pDemais));
       setParcelasFonte('tabela');
     } else {
       // Prazo válido sem valor cadastrado nesta combinação: mantém o digitado,
@@ -124,8 +137,36 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
     }
   };
 
+  /**
+   * Valores oficiais da combinação atual (plano + prazo + condição), lidos da
+   * tabela — independentes de o closer ter mexido em algo nesta sessão.
+   */
+  const valoresTabelaAtuais = useMemo(
+    () => lerValoresTabela(creditoSelecionado, condicao, prazo),
+    [creditoSelecionado, condicao, prazo],
+  );
+
+  /**
+   * O aviso agora consulta A TABELA: só acende quando realmente não existe linha
+   * para (plano + prazo + condição). Abrir um cadastro já salvo não acende nada.
+   */
   const semValorTabelado =
-    !!creditoSelecionado && !!prazo && !prazoSemTabela && parcelasFonte === null;
+    !!creditoSelecionado && !!prazo && !prazoSemTabela && valoresTabelaAtuais === null;
+
+  /** Descrição da combinação que não tem valor, para o aviso não ser genérico. */
+  const combinacaoSemTabela = useMemo(() => {
+    if (!semValorTabelado) return '';
+    const produto = produtoDoPlano
+      ? `${produtoDoPlano.codigo ?? ''}${produtoDoPlano.nome ? ` — ${produtoDoPlano.nome}` : ''}`.trim()
+      : 'produto não identificado';
+    const credito = creditoSelecionado?.valor_credito
+      ? fmtBRL(Number(creditoSelecionado.valor_credito))
+      : 'crédito não informado';
+    const condLabel =
+      CONDICAO_PAGAMENTO_OPTIONS.find((o) => o.value === condicao)?.label || condicao || 'condição não informada';
+    return `${produto} · crédito ${credito} · prazo ${prazo} meses · ${condLabel}`;
+  }, [semValorTabelado, produtoDoPlano, creditoSelecionado, prazo, condicao]);
+
 
   const selecionarPlano = (id: string) => {
     const credito = creditos.find((c) => c.id === id);
@@ -202,6 +243,8 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
     inicioSegundaParcela, setInicioSegundaParcela,
     objetivo, setObjetivo, incluiSeguro, setIncluiSeguro,
     creditoSelecionado, produtoDoPlano, prazosDisponiveis, prazoSemTabela, semValorTabelado,
+    valoresTabelaAtuais, combinacaoSemTabela,
+
     termoIncompleto, hidratar,
     valores: {
       credito_id: creditoId || undefined,
@@ -406,10 +449,14 @@ export function DadosPlanoFields({ plano, hide = [], disabled, showAviso = true 
           />
         </div>
         {plano.semValorTabelado && (
-          <div className="sm:col-span-2">
-            <p className="text-xs text-amber-500">sem valor tabelado para esta combinação</p>
+          <div className="sm:col-span-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Não existe parcela cadastrada na tabela para esta combinação:{' '}
+              <span className="font-medium">{plano.combinacaoSemTabela}</span>. Pode informar as parcelas à mão acima.
+            </p>
           </div>
         )}
+
         {!oculto('diaVencimento') && (
           <div className="space-y-2">
             <Label>Dia de vencimento</Label>
