@@ -26,9 +26,14 @@ export interface ParamsCronograma {
   tipoContrato?: string | null;
   parcelasEmpresa?: number;
   inicioSegundaParcela?: string | null;
+  /** Condição de pagamento da cota — define a coluna da tabela Embracon. */
+  condicaoPagamento?: string | null;
+  /** Seguro de vida compõe a parcela quando não há linha tabelada. */
+  incluiSeguro?: boolean;
   /** Reserva → parcelas nascem como 'previsto'. */
   isReserva?: boolean;
 }
+
 
 /** Offset em meses da 2ª parcela em relação à data base. */
 export function offsetSegundaParcela(baseDate: Date, inicio?: string | null): number {
