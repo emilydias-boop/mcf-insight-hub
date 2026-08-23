@@ -227,7 +227,7 @@ export function PlanosTab() {
                     </div>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setShowForm(true); }}>
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setPrefill(null); setFormKey((k) => k + 1); setShowForm(true); }}>
                   Editar
                 </Button>
                 {c.ativo ? (
