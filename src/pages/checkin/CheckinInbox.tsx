@@ -27,8 +27,15 @@ export default function CheckinInbox() {
   const canSeeAll = hasAnyRole('admin', 'manager');
 
   const [scope, setScope] = useState<WaScope>('mine');
+  /** Filtro por responsável, só usado no escopo "Todas". */
+  const [responsavelId, setResponsavelId] = useState<string | null>(null);
+  const { data: responsaveis = [] } = useWaResponsaveis();
   const [novaConversaAberto, setNovaConversaAberto] = useState(false);
-  const { data: conversations = [], isLoading, isFetching, refetch } = useWaConversations(scope);
+  const { data: conversations = [], isLoading, isFetching, refetch } = useWaConversations(
+    scope,
+    scope === 'all' ? responsavelId : null,
+  );
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
