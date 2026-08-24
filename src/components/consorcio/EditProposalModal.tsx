@@ -234,34 +234,36 @@ export function EditProposalModal({
                 </Alert>
               )}
 
-              {cadastros.length === 0 ? (
+              {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Esta venda ainda não tem cadastro de cliente.
                 </p>
               ) : (
                 <div className="divide-y rounded-md border">
-                  {cadastros.map((r: any, i) => (
-                    <div key={r.id} className="p-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          Carta {i + 1} — {nomeCadastro(r)}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {r.tipo_pessoa === 'pj' ? 'CNPJ' : 'CPF'} {docCadastro(r)}
-                          {r.valor_credito ? ` · ${fmtBRL(Number(r.valor_credito))}` : ''}
-                        </p>
+                  {grupos.map((g) => {
+                    const primeiro: any = g.cadastros[0];
+                    return (
+                      <div key={g.chave} className="p-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{nomeCadastro(primeiro)}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {primeiro.tipo_pessoa === 'pj' ? 'CNPJ' : 'CPF'} {docCadastro(primeiro)}
+                            {' · '}
+                            {g.cadastros.length === 1 ? '1 carta' : `${g.cadastros.length} cartas`}
+                          </p>
+                        </div>
+                        {podeEditarCliente && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditandoGrupo(g.chave)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Editar dados
+                          </Button>
+                        )}
                       </div>
-                      {podeEditarCliente && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setEditRegId(r.id)}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar dados
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
