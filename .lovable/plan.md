@@ -1,64 +1,109 @@
-# Editar dados do cliente na etapa 3 (antes da assinatura)
+# Produção Gerada — medição de agosto/2026 e recomendação
 
-## A resposta que derruba o pedido como está formulado: é SNAPSHOT
+Investigação só. Nada de código, migração ou dado tocado.
 
-O termo é congelado no momento da geração. Evidência:
+## Veredito curto
 
-- `src/hooks/useConsorcioTermos.ts` → `useCreateTermo` grava `dados_snapshot` (os dados do cliente), `conteudo_renderizado` (o texto final já montado) e `conteudo_hash` (SHA-256 do texto).
-- `supabase/functions/termo-assinatura/index.ts` → o que o cliente vê é `t.conteudo_renderizado` (linha 79) e o nome/documento mascarado vêm de `t.dados_snapshot` (linha 69). Não há releitura de nenhuma tabela na hora de exibir ou assinar.
-- Pior: a conferência da assinatura compara o que o cliente digita contra o **snapshot** (`docEsperado`/`nomeEsperado`, linhas 152-166). Se o dono corrigir o CPF ou o nome agora, o cliente **continua tendo que assinar com o dado errado** — o certo é rejeitado com `doc_mismatch` / `name_mismatch`.
+Sua proposta (união de duas pernas, deduplicada, cada venda contada uma única vez na primeira aparição) **se sustenta no dado** — com uma correção importante: hoje o funil é praticamente irrelevante em volume. Em agosto, **56 das 57 cotas contratadas não têm proposta nenhuma vinculada**. A perna B não é um resíduo: é 74% do número. A tese "a perna B vai a zero sozinha" continua válida como desenho, mas só se o funil virar porta de entrada de verdade em setembro — hoje ele não é.
 
-Conclusão, dita na cara: **editar dado de cliente com termo já gerado e não assinado exige cancelar o termo, gerar de novo e reenviar o link.** Sem isso, a edição é cosmética no CRM e cria um documento assinado divergente do cadastro — buraco maior que o de hoje. Hoje há 3 termos `pendente` e 21 `assinado`.
+A consequência que você previu **se confirma**: Produção Gerada (R$ 13,52 mi) > Consórcio Efetivado (R$ 10,18 mi). Formato saudável.
 
-## 1. Onde moram os dados do cliente
+## Os números de agosto/2026
 
-Os dados que o termo usa vivem **só** em `consorcio_pending_registrations` (um registro por carta). `montarDadosTermoMulti()` em `src/lib/consorcioTermo.ts` recebe exatamente esses registros.
+### 1. Perna A isolada — cartas de propostas lançadas (status `aceita`, etapa 3 em diante), âncora `aceite_date` (fallback `proposal_date`)
 
-- PF: `nome_completo`, `cpf`, `rg`, `profissao`, `telefone`, `email`, `endereco_completo`, `endereco_cep`, `renda`, `patrimonio`, `pix`.
-- PJ: `razao_social`, `cnpj`, `natureza_juridica`, `inscricao_estadual`, `data_fundacao`, `telefone_comercial`, `email_comercial`, `endereco_comercial`, `endereco_comercial_cep`, `faturamento_mensal`, sócios.
+| Closer | Vendas | Cartas | Crédito |
+|---|---|---|---|
+| João Pedro Martins Vieira | 4 | 9 | R$ 2.290.000 |
+| Andre dos Santos Duarte | 3 | 3 | R$ 1.200.000 |
+| **Total** | **7** | **12** | **R$ 3.490.000** |
 
-`crm_contacts` (name/phone/email) aparece na etapa 3 apenas em **leitura**, para preencher a coluna Contato (`useConsorcioPostMeeting.ts`, joins nas linhas 274/408/663). Nenhum caminho de edição do cadastro pendente escreve em `crm_contacts`. **Portanto a edição aqui não contamina o contato do CRM usado por outras BUs** — e o desenho abaixo mantém isso.
+Contexto histórico: 100 propostas `aceita` no total (fev–ago), 90 `pendente`, 17 `recusada`. 177 cartas na base, **0 declinadas até hoje**.
 
-## 2. Já existe caminho de edição — dá para reaproveitar inteiro
+### 2. Perna B isolada — cotas sem proposta nenhuma, por data candidata
 
-`OpenCotaModal` já tem `mode='edit'`: "SÓ edição do cadastro pendente (etapa 4): nunca abre cota". Tem `startEditing`, tem `onSaved` (para voltar ao modal de origem), tem diff de snapshot (`src/lib/formDiff.ts`) para não gravar campo em branco, e usa `useUpdatePendingRegistration`. É o mesmo formulário usado pelo "Editar cadastro" da etapa 4 e pelo atalho "Completar cadastro" do `GerarTermoModal`.
+| Âncora | Cotas | Crédito |
+|---|---|---|
+| `created_at` | 62 | R$ 11.162.195 |
+| `data_contratacao` | 56 | R$ 10.030.000 |
+| `data_reserva` | 40 | R$ 6.810.000 |
 
-Não é preciso construir bloco novo. A resposta certa é **abrir o que já existe** a partir do Editar Proposta.
+Por vendedor (`vendedor_name`):
 
-## 3. Os três estados do termo, em código
+| Vendedor | contratação (n / R$) | created_at (n / R$) | reserva (n / R$) |
+|---|---|---|---|
+| Joao Pedro Martins Vieira | 44 / 7.750.000 | 45 / 7.870.000 | 29 / 4.680.000 |
+| André Duarte | 12 / 2.280.000 | 15 / 3.120.000 | 11 / 2.130.000 |
+| Luis Felipe S. O. Ramos | 0 | 1 / 52.195 | 0 |
+| Victoria Paz | 0 | 1 / 120.000 | 0 |
 
-Fonte: `useTermosByProposal()` (mais recente primeiro) em `src/pages/crm/PosReuniao.tsx`.
+**Qual data eu defendo: `data_contratacao`, com fallback `data_reserva` e só então `created_at`.** Razões: (a) é a mesma âncora do Consórcio Efetivado, então as duas colunas ficam comparáveis lado a lado na mesma linha; (b) `created_at` é data de digitação — o cadastro pode entrar semanas depois e joga produção no mês errado (é ela que traz os 6 cotas/R$ 1,1 mi extras, incluindo dois vendedores que não aparecem por contratação); (c) `data_reserva` está preenchida em só 40 das 62 cotas, buraco grande demais para ser âncora primária.
 
-- (a) nunca gerado: `termosDe(p).length === 0` → linha mostra "Gerar Termo de Adesão".
-- (b) gerado, aguardando: `termosDe(p)[0].status === 'pendente'` → selo âmbar "Termo aguardando assinatura".
-- (c) assinado: `termosDe(p).find(t => t.status === 'assinado')` (`termoAssinadoDe`) → selo verde; a venda cai na lista "Tratados".
+### 3. União deduplicada — o que a coluna mostraria hoje
 
-## 4. A trava — e o buraco que já existe
+Com âncora `data_contratacao` na perna B:
 
-Hoje `EditProposalModal` **não olha o termo**: `useEditarProposta` altera `consorcio_proposal_cartas` (valor de crédito, prazo, produto, parcelas) mesmo com termo assinado. Único freio: carta com `pending_registration_id`/`consortium_card_id` fica `travada` no editor. Ou seja, **sim, hoje dá para mudar as cartas de uma venda com termo assinado** — o documento assinado passa a divergir do CRM. É buraco pré-existente e o desenho abaixo fecha os dois.
+| Closer | Perna A | Perna B | **Produção Gerada** |
+|---|---|---|---|
+| João Pedro | 2.290.000 | 7.750.000 | **R$ 10.040.000** |
+| André | 1.200.000 | 2.280.000 | **R$ 3.480.000** |
+| **Total** | 3.490.000 | 10.030.000 | **R$ 13.520.000** |
 
-## 5. Permissão hoje
+Com `created_at` na perna B seriam R$ 14.652.195 (JP 10,16 mi; André 4,32 mi; + Luis 52.195; + Victoria 120.000).
 
-- Cartas / proposta: RLS `Authenticated users can manage proposals` e `... proposal cartas` com `USING true` — **qualquer usuário autenticado edita**. O lápis na tela também não tem gate de papel.
-- Cadastro pendente: `UPDATE` só para `admin`, `manager`, `coordenador`; leitura por `can_access_consorcio_pii(auth.uid())`. Ou seja, um closer comum verá o bloco de cliente mas o save será negado pelo banco — precisa ser escondido, não descoberto no erro.
-- Cancelar termo: `admin`, `manager`, `coordenador`, `assistente_administrativo` ou o criador, e só com `status='pendente'` (a policy proíbe tocar termo assinado).
+### 4. Comparação com as colunas existentes
 
-## Desenho proposto
+| Métrica | Valor |
+|---|---|
+| Consórcio Efetivado (total) | R$ 10.180.000 (JP 7.750.000 · André 2.430.000) |
+| Cotas Contratadas | 57 |
+| Produção Gerada (proposta) | R$ 13.520.000 |
 
-**No `EditProposalModal`, um segundo bloco "Dados do cliente", recolhido, com comportamento por estado do termo:**
+Produção Gerada é **33% maior** que o Efetivado — direção correta. Note que o Efetivado do João Pedro (7,75 mi) é **exatamente** a perna B dele: nenhuma cota dele em agosto veio do funil. Já o André tem R$ 150.000 de diferença (2,43 mi Efetivado vs 2,28 mi perna B) — é a única cota de agosto vinculada a proposta, corretamente removida da perna B pelo dedup.
 
-- (a) **sem termo** — bloco liberado. Botão "Editar dados do cliente" abre `OpenCotaModal` em `mode='edit'` `startEditing` para o cadastro da carta (via `useCadastrosDaVenda`), e ao salvar volta para o Editar Proposta (`onSaved`). Zero código de formulário novo.
-- (b) **termo pendente** — bloco liberado, mas com aviso âmbar fixo: "o termo já enviado continua com os dados antigos; ao salvar será necessário cancelar e gerar um novo termo". Ao salvar, o modal oferece **"Cancelar termo e gerar novo"**, encadeando no `GerarTermoModal` (fluxo já existente). Sem isso a alteração não é aplicada ao documento — e é essa consequência que precisa ser aceita antes.
-- (c) **termo assinado** — bloco somente leitura, com "Termo assinado em dd/mm — dados travados". **E, no mesmo movimento, travar as cartas**: `CartasProposalEditor` em modo leitura quando existe termo assinado, fechando o buraco do item 4.
-- **Permissão**: o bloco de cliente só fica editável para `admin`/`manager`/`coordenador` (espelhando a RLS); os demais veem em leitura.
-- Nada de escrita em `crm_contacts`.
+### 5. Cotas de agosto sem proposta vinculada
 
-## Detalhes técnicos
+**56 de 57 cotas (98%), somando R$ 10.030.000.** Na base inteira só 51 cotas (de 1.780) têm qualquer vínculo com proposta.
 
-- Arquivos tocados: `src/components/consorcio/EditProposalModal.tsx` (bloco novo + gate), `src/pages/crm/PosReuniao.tsx` (passar os termos da proposta ao modal), reuso de `OpenCotaModal` (`mode='edit'`), `useCadastrosDaVenda`, `useCancelTermo`, `GerarTermoModal`.
-- Sem migração, sem alteração de RLS, sem toque em dado existente.
-- Uma venda pode ter várias cartas → vários cadastros pendentes; o bloco lista os cadastros na ordem das cartas e edita um por vez (mesma ordenação já usada na geração do termo).
+## Dedup: qual vínculo usar
 
-## Fora de escopo desta rodada
+Os três caminhos, na base inteira:
 
-Regenerar termo automaticamente sem confirmação; editar dados na etapa 4/5; qualquer alteração em `crm_contacts`; mexer no comprovante de cadastro.
+- `consorcio_proposals.consortium_card_id` → 51
+- `consorcio_proposal_cartas.consortium_card_id` → 51
+- `consorcio_proposal_cartas.pending_registration_id` → `consorcio_pending_registrations.consortium_card_id` → 1
+
+**Use a UNIÃO dos três.** Há exatamente **1 cota vinculada só pelo caminho do cadastro pendente** e não pelo `consortium_card_id` da carta. Um só caminho perde essa cota e ela seria contada duas vezes. Custo de usar os três é zero.
+
+## Decisões que precisam da sua palavra
+
+### A. Carta declinada / desistência conta?
+
+- **Contar (leitura do dono):** "o closer gerou" é o que ele disse; simples de explicar; a coluna nunca diminui retroativamente. Contra: um mês com muita desistência infla a produção sem lastro nenhum.
+- **Não contar:** aproxima a coluna de receita futura. Contra: contradiz a definição dele e faz a coluna encolher no retrovisor, exatamente o que o Efetivado já faz.
+
+**Como distinguir declínio de exclusão em código** — os campos existem e são distintos:
+- Declínio da carta: `consorcio_proposal_cartas.declinada_at` / `motivo_declinio` / `declinada_by`. Hoje: **0 registros**.
+- Proposta apagada por engano: `consorcio_proposals.deleted_at` (hoje 0) e `carta_excluida` + `carta_excluida_em/por/motivo` (hoje 2 propostas, 1 `aceita` e 1 `recusada`).
+
+Recomendo: **contar declinadas, excluir sempre `deleted_at is not null` e `carta_excluida = true`.** A distinção é limpa e não depende de heurística.
+
+### B. Atribuição ao closer
+
+**Perna A** — encadeamento `proposals.created_by` → `profiles.email` → `closers.email`. Funciona, com dois furos reais medidos:
+1. **João Pedro tem DUAS linhas em `closers`** com o mesmo e-mail (uma `is_active=false`). Um join ingênuo por e-mail **duplica a produção dele**. Tem que colapsar por e-mail e preferir a linha ativa.
+2. **`created_by` nem sempre é o closer.** 2 propostas `aceita` foram criadas pelo Antony (equipe de cadastro), que não tem linha em `closers` → produção órfã. Precisa do fallback: dono do deal → closer da reunião.
+
+**Perna B** — `consortium_cards.vendedor_name`, o mesmo que a coluna atual usa (via `nameKey` normalizado em `useConsorcioCotasContratadas.ts`). Consistente, mas os nomes divergem entre as pernas ("Joao Pedro Martins Vieira" na cota vs "João Pedro Martins Vieira " no perfil, com acento e espaço final). A normalização por NFD/caixa alta que o hook já faz resolve; a chave final de merge tem que ser **o `closer_id`**, nunca a string.
+
+### C. Consequência a aceitar
+
+Confirmado com dado: **Produção Gerada > Consórcio Efetivado** (13,52 vs 10,18 mi). Não deu o contrário — a definição está de pé. Duas coisas que o dono precisa aceitar junto:
+- A coluna **conta a venda no mês em que ela apareceu**, então uma cota lançada em julho e contratada em agosto aparece na Produção de julho e no Efetivado de agosto. Meses não fecham entre si por construção.
+- **Ticket Médio não muda**: ele é derivado de Cotas Contratadas, que continua intacta. Mas ter três valores de crédito na mesma tabela (Gerada, Efetivado, Ticket) exige tooltip em cada um.
+
+## Recomendação de desenho (se aprovada, vira implementação numa próxima rodada)
+
+Um hook novo `useConsorcioProducaoGerada(start, end)` que devolve `Map<closerId, { credito, cartas, vendas }>`, com as duas pernas e o dedup pelos três vínculos, âncora `data_contratacao` → `data_reserva` → `created_at` na perna B. A coluna entra entre *Vendas Realizadas* e *Cotas Contratadas* em `ConsorcioCloserSummaryTable.tsx`, com tooltip declarando: "soma o crédito de todas as vendas lançadas (termo pendente em diante), contando cada venda uma vez; inclui vendas que ainda não se efetivaram". Nada nas colunas existentes é tocado.
+
+**Sobre setembro:** o desenho está certo, mas a premissa não está cumprida. Se em setembro os closers continuarem lançando cota direto sem passar por proposta, a perna B não vai a zero e a coluna vira permanentemente uma soma de duas portas. Vale medir isso em outubro: se a perna B não cair, o problema é de processo, não de métrica.
