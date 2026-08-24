@@ -155,10 +155,12 @@ export function ConsorcioCloserSummaryTable({
 
   // Texto único do aviso de lançamento retroativo: o crédito NÃO está na coluna,
   // ele foi contado no mês do aceite. Sem isso o mês do lançamento fica mudo.
-  const retroTexto = (qtd: number, credito: number) =>
-    `${qtd} venda(s) lançada(s) neste período com data de aceite de mês anterior` +
-    `${producaoRetroMeses.length > 0 ? ` (${producaoRetroMeses.join(", ")})` : ""}` +
-    `. O crédito de ${brl(credito)} NÃO está somado aqui: ele conta no mês do aceite.`;
+  // `meses` vem SEMPRE do próprio registro da linha (ou do agregado, no Total).
+  const retroTexto = (qtd: number, credito: number, meses: string[] = []) =>
+    `${qtd} venda(s) lançada(s) neste período, mas com data de aceite de mês anterior` +
+    `${meses.length > 0 ? ` (${meses.join(", ")})` : ""}` +
+    `. Esses ${brl(credito)} já foram contados naquele mês e por isso não aparecem` +
+    ` nesta coluna — não há dupla contagem.`;
 
   // Procedência da perna C (cota legada sem cadastro, ancorada na contratação).
   // Mostramos sempre que houver, sem piso arbitrário: procedência não é anomalia
@@ -294,7 +296,7 @@ export function ConsorcioCloserSummaryTable({
                             ? ` · ${producao.antedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producao.antedatadosCredito)}), incluída(s) na soma`
                             : "") +
                           (producao.lancadosRetroativos > 0
-                            ? ` · ${retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}`
+                            ? ` · ${retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito, producao.lancadosRetroativosMeses)}`
                             : "")
                         : undefined
                     }
@@ -307,8 +309,8 @@ export function ConsorcioCloserSummaryTable({
                     )}
                     {producao && producao.lancadosRetroativos > 0 && (
                       <span
-                        className="ml-1 text-[10px] text-amber-400 align-top"
-                        title={retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}
+                        className="ml-1 text-[10px] text-sky-400/80 align-top"
+                        title={retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito, producao.lancadosRetroativosMeses)}
                       >
                         ↩{producao.lancadosRetroativos}
                       </span>
@@ -446,7 +448,7 @@ export function ConsorcioCloserSummaryTable({
                     producaoAntedatados > 0
                       ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
                       : "",
-                    producaoRetro > 0 ? retroTexto(producaoRetro, producaoRetroCredito) : "",
+                    producaoRetro > 0 ? retroTexto(producaoRetro, producaoRetroCredito, producaoRetroMeses) : "",
                   ]
                     .filter(Boolean)
                     .join(" · ") || undefined
@@ -458,8 +460,8 @@ export function ConsorcioCloserSummaryTable({
                 )}
                 {producaoRetro > 0 && (
                   <span
-                    className="ml-1 text-[10px] text-amber-400 align-top"
-                    title={retroTexto(producaoRetro, producaoRetroCredito)}
+                    className="ml-1 text-[10px] text-sky-400/80 align-top"
+                    title={retroTexto(producaoRetro, producaoRetroCredito, producaoRetroMeses)}
                   >
                     ↩{producaoRetro}
                   </span>
@@ -496,7 +498,7 @@ export function ConsorcioCloserSummaryTable({
       </p>
 
       {pernaCCredito > 0 && (
-        <p className="px-4 pb-2 text-xs text-amber-400/90">
+        <p className="px-4 pb-2 text-xs text-muted-foreground">
           Procedência: {brl(pernaCCredito)} da Produção Gerada ({pernaCPct}% do total) vem de{" "}
           {producaoPernaC?.cartas || 0} cota(s) histórica(s) sem cadastro no sistema — para elas não
           existe data de lançamento, então a âncora é a data de contratação, não a de aceite.
@@ -504,8 +506,8 @@ export function ConsorcioCloserSummaryTable({
       )}
 
       {producaoRetro > 0 && (
-        <p className="px-4 pb-2 text-xs text-amber-400/90">
-          {retroTexto(producaoRetro, producaoRetroCredito)}
+        <p className="px-4 pb-2 text-xs text-muted-foreground">
+          <span className="text-sky-400/80">↩</span> {retroTexto(producaoRetro, producaoRetroCredito, producaoRetroMeses)}
         </p>
       )}
 
