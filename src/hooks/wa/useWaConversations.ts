@@ -75,7 +75,7 @@ export function useWaConversations(scope: WaScope = 'mine', responsavelId?: stri
 
 
   const query = useQuery({
-    queryKey: ['wa-conversations', scope, uid],
+    queryKey: ['wa-conversations', scope, uid, responsavelId ?? null],
     staleTime: 15_000,
     // Rede de segurança: se o realtime cair, badge e ordenação ainda aparecem.
     refetchInterval: 20_000,
@@ -91,7 +91,10 @@ export function useWaConversations(scope: WaScope = 'mine', responsavelId?: stri
       if (scope === 'mine') {
         if (!uid) return [] as WaConversation[];
         q = q.eq('assigned_to', uid);
+      } else if (responsavelId) {
+        q = q.eq('assigned_to', responsavelId);
       }
+
 
       const { data, error } = await q;
       if (error) throw error;
