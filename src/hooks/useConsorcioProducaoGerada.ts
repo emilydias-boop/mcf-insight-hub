@@ -65,7 +65,14 @@ export interface ProducaoGeradaLinha {
   lancadosRetroativos: number;
   /** Crédito desses registros, contado em OUTRO mês (o do aceite). */
   lancadosRetroativosCredito: number;
+  /**
+   * Meses-âncora (YYYY-MM) DOS REGISTROS DESTA LINHA — onde o crédito deles foi
+   * contado. Por linha, nunca global: o aviso do closer não pode citar mês de
+   * retroativo de outro closer.
+   */
+  lancadosRetroativosMeses: string[];
 }
+
 
 export interface ConsorcioProducaoGerada {
   byCloser: Map<string, ProducaoGeradaLinha>;
@@ -88,6 +95,7 @@ const zero = (): ProducaoGeradaLinha => ({
   antedatadosCredito: 0,
   lancadosRetroativos: 0,
   lancadosRetroativosCredito: 0,
+  lancadosRetroativosMeses: [],
 });
 
 const EMPTY: ConsorcioProducaoGerada = {
@@ -228,10 +236,13 @@ export function useConsorcioProducaoGerada(
        * Aviso do mês do LANÇAMENTO. NÃO toca `credito`, `cartas` nem `vendas` —
        * o crédito desses registros é contado no mês do aceite, não aqui.
        */
-      const addRetro = (closerId: string, credito: number) => {
+      const addRetro = (closerId: string, credito: number, mesAncora: string) => {
         const alvo = byCloser.get(closerId) || zero();
         alvo.lancadosRetroativos += 1;
         alvo.lancadosRetroativosCredito += credito;
+        if (mesAncora && !alvo.lancadosRetroativosMeses.includes(mesAncora)) {
+          alvo.lancadosRetroativosMeses = [...alvo.lancadosRetroativosMeses, mesAncora].sort();
+        }
         byCloser.set(closerId, alvo);
       };
 
@@ -523,8 +534,9 @@ export function useConsorcioProducaoGerada(
           .forEach((r) => {
             const nome = r.vendedor_name_cota || r.vendedor_name;
             const closerId = nomeParaCloser.get(nameKey(nome) || "") || SEM_ATRIBUICAO;
-            addRetro(closerId, Number(r.valor_credito || 0));
-            retroMeses.add(String(r.aceite_date).slice(0, 7));
+            const mesAncora = String(r.aceite_date).slice(0, 7);
+            addRetro(closerId, Number(r.valor_credito || 0), mesAncora);
+            retroMeses.add(mesAncora);
           });
       }
 
@@ -587,6 +599,9 @@ export function useConsorcioProducaoGerada(
         total.antedatadosCredito += l.antedatadosCredito;
         total.lancadosRetroativos += l.lancadosRetroativos;
         total.lancadosRetroativosCredito += l.lancadosRetroativosCredito;
+        l.lancadosRetroativosMeses.forEach((m) => {
+          if (!total.lancadosRetroativosMeses.includes(m)) total.lancadosRetroativosMeses.push(m);
+        });
       });
       total.credito += semAtribuicao.credito;
       total.cartas += semAtribuicao.cartas;
@@ -595,6 +610,10 @@ export function useConsorcioProducaoGerada(
       total.antedatadosCredito += semAtribuicao.antedatadosCredito;
       total.lancadosRetroativos += semAtribuicao.lancadosRetroativos;
       total.lancadosRetroativosCredito += semAtribuicao.lancadosRetroativosCredito;
+      semAtribuicao.lancadosRetroativosMeses.forEach((m) => {
+        if (!total.lancadosRetroativosMeses.includes(m)) total.lancadosRetroativosMeses.push(m);
+      });
+      total.lancadosRetroativosMeses.sort();
 
       return {
         byCloser,
