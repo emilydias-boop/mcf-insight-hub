@@ -1,110 +1,127 @@
-# Produção Gerada — o furo das etapas 4 e 5, medido
+# Produção Gerada — ponte 13.520.000 → 14.680.000, prova do dedup e tamanho da perna C
 
 Rodada de medição. Nenhum código, nenhuma migração, nenhum dado tocado.
 
-## Veredito: o mecanismo que você descreveu está certo, mas o tamanho é outro
+## 1. A ponte, linha a linha
 
-Confirmado ponto por ponto:
+```text
+13.520.000   Produção Gerada publicada hoje (A 3.490.000 + B_antiga 10.030.000)
+  − 150.000   1 cota — caminho 4 reconheceu o vínculo com proposta (dedup)
+  − 120.000   1 cadastro — aceite_date de julho, sai de agosto (deslocamento de mês)
++1.190.000   11 cadastros de etapa 4 órfã (sem cota aberta) entram
+  + 240.000   2 cadastros de etapa 5 órfã (cota em reserva) entram
+14.680.000   Produção Gerada nova (A 3.490.000 + B_nova 11.190.000 + C 0)
+```
 
-- `consortium_cards` só nasce na transição 4 → 5. **Etapa 4 não tem linha em `consortium_cards`** — só `consorcio_pending_registrations`.
-- Perna B exige `tipo_registro='contratacao'` + `data_contratacao` no mês. Etapa 5 (reserva) fica fora: `tipo_registro='reserva'` tem **`data_contratacao` nula em 100% dos casos** (2 de 2).
-- Valores reais de `tipo_registro` na tabela, sem supor: **`contratacao` 1.778** (1.778 com `data_contratacao`, 901 com `data_reserva`) e **`reserva` 2** (0 com contratação). Não existe terceiro valor.
+Fechamento da perna B nova, medido: 9.760.000 (54 cotas contratadas de agosto, agora
+contadas pelo cadastro) + 1.190.000 (etapa 4) + 240.000 (etapa 5) = **11.190.000**.
+Para essas 54, o crédito do cadastro e o crédito da cota são **idênticos** (9.760.000 nos
+dois lados) — a troca de unidade não mexeu em valor nenhum.
 
-**Onde eu te derrubo:** o buraco não é R$ 2,45 mi. É **R$ 1,93 mi**, porque **R$ 2,09 mi dos cadastros da etapa 4 já estão contados na perna A** — e a razão disso é um furo novo, mais grave que o próprio delta (ver "O quarto caminho", abaixo).
+## 2. De onde vinham os R$ 620.000 que faltavam
 
----
+Sua aritmética estava certa; os números da rodada anterior é que tinham âncora diferente.
 
-## 1. Etapa 4 órfã (agosto/2026)
+- **R$ 500.000 — 1 cadastro (Rodrigo Costa, status `declinada`), aceite 03/07, lançado 03/08.**
+  Na rodada anterior a etapa 4 órfã foi medida por `created_at` (12 registros, R$ 1.690.000).
+  Com a âncora aprovada (`aceite_date`), ele conta em **julho**, não em agosto: 11 registros,
+  R$ 1.190.000. É exatamente o caso de antedatação que eu citei — e é o item 2 abaixo.
+- **R$ 120.000 — 1 cadastro (Sirleia Aparecida Vieira), aceite 09/07, lançado 06/08, cota
+  contratada 11/08.** Esse é o deslocamento de mês real. Eu havia rotulado errado: o registro
+  de R$ 150.000 que você subtraiu como deslocamento é o do item 3 (dedup), não deslocamento.
 
-Campo de data: **`created_at` do cadastro**, para a triagem. Motivo: é o único evento que existe com certeza para um cadastro sem cota (`cadastrada_at` está nulo em 91/91, `cota_aberta_at` em 84/91). Ver item 6 para a âncora que eu defendo de verdade.
+500.000 + 120.000 = **620.000**. Nada sobra fora dos itens 1 a 4.
 
-91 cadastros criados em agosto. 31 sem linha em `consortium_cards`. Pelos **três** caminhos de vínculo que você fixou, 24 aparecem como "sem proposta", somando **R$ 3.780.000**. Mas:
+## 3. O que saiu pelo caminho 4 — sua hipótese está certa, com uma correção
 
-| Recorte | n | Crédito |
-|---|---|---|
-| Sem card, "sem proposta" pelos 3 caminhos | 24 | R$ 3.780.000 |
-| — desses, com `proposal_id` preenchido (já em perna A) | 12 | R$ 2.090.000 |
-| **Etapa 4 órfã de verdade** | **12** | **R$ 1.690.000** |
+- **1 cadastro, R$ 150.000** (Nelson Alves de Oliveira), cota contratada em 19/08.
+- Proposta: `8d0f3213-1ecc-40d2-8907-9dbe47e57de4`, `status = aceita`, `deleted_at` nulo,
+  `carta_excluida = false`, âncora `aceite_date = 14/08` — **dentro de agosto**.
+- Essa proposta tem **1 carta de R$ 300.000** e **2 cadastros de R$ 150.000** apontando para ela.
 
-Órfã de verdade, por closer:
+A correção à sua leitura: o crédito não "passou a ser representado" pela perna A — ele **já
+estava** na perna A. No número publicado ele aparecia duas vezes: R$ 300.000 na carta (perna A)
+e mais R$ 150.000 na cota (perna B antiga). O caminho 4 não moveu dinheiro, **removeu uma dupla
+contagem**. É dedup funcionando, e o número velho estava R$ 150.000 inflado.
 
-| Vendedor | n | Crédito |
-|---|---|---|
-| André Duarte | 9 | R$ 1.460.000 |
-| Joao Pedro Martins Vieira | 3 | R$ 230.000 |
+## 4. Prova nos dois sentidos — zero real desaparecido
 
-1 dos 12 está em `status='declinada'` (R$ 500.000, André) — pela sua regra 2, conta.
+- **B → A:** o único real que saiu da perna B pelo caminho 4 são os R$ 150.000 acima, e a carta
+  de R$ 300.000 da proposta correspondente está na perna A de agosto (âncora 14/08, aceita, não
+  excluída, não apagada). A carta cobre os dois cadastros de R$ 150.000 da mesma venda.
+- **A → B:** a perna A não foi tocada nesta rodada — soma R$ 3.490.000 antes e depois, mesmo
+  código, mesmo filtro. Nenhuma carta saiu de A, então não existe crédito que tenha saído de
+  uma perna sem entrar na outra.
+- Não há nenhum outro cadastro de agosto excluído pelo caminho 4. Os demais registros com
+  `proposal_id` de agosto já estavam fora da perna B antiga pelos caminhos 1 a 3.
+- Os 3 cadastros com `consortium_card_id` inexistente: nenhum deles cai em agosto
+  (0 registros na perna B de agosto por FK quebrada), e o comportamento é o descrito — o
+  cadastro conta, a cota não existe para contar.
 
-## 2. Etapa 5 órfã (agosto/2026)
+## 5. Sinalizador de antedatação — você está certo, ele não protege nada hoje
 
-**2 cotas, R$ 240.000, ambas do André Duarte**, `data_reserva` 20 e 21/08, nenhuma vinculada a proposta. É o piso: a etapa 5 é minúscula porque hoje a equipe grava reserva e confirmação quase no mesmo instante — só 2 linhas `reserva` existem na base inteira.
+Confirmado pelo dado: o único caso de agosto (Rodrigo Costa, R$ 500.000, aceite 03/07, lançado
+03/08) acende em **julho**, mês já fechado. Quem abre agosto não vê nada.
 
-## 3. Quanto já está na perna A
+Opções, sem escolha da minha parte:
 
-**R$ 2.090.000, em 12 cadastros, de 4 propostas `aceita` de agosto.** As quatro têm exatamente 1 carta cada, e o crédito da carta é idêntico à soma dos cadastros que ela gerou (ex.: 1 carta de R$ 960.000 → 8 cadastros de R$ 120.000). Somar a etapa 4 crua contaria esse dinheiro duas vezes.
+**(a) Conta na âncora (julho), mas o aviso aparece também no mês do lançamento (agosto).**
+Prós: quem está no mês corrente vê o que foi feito ali; a soma não muda. Contras: o mesmo
+registro aparece em dois meses com papéis diferentes — quem lê rápido acha que foi contado duas
+vezes; exige texto claro separando "contado aqui" de "lançado aqui".
 
-### O quarto caminho — o furo que eu não tinha visto
+**(b) Contador separado "lançamentos retroativos feitos neste mês", fora da soma.**
+Prós: não encosta na coluna nem na soma; é o mais fácil de explicar. Contras: é mais um número
+na tela; ninguém olha um contador que fica quieto — precisa de destaque para funcionar.
 
-Esses 12 cadastros **têm `proposal_id` preenchido** e ainda assim escapam do conjunto vinculado, porque nenhum dos três caminhos passa por `consorcio_pending_registrations.proposal_id`: não têm card (caminhos 1 e 3 morrem) e não têm linha em `consorcio_proposal_cartas.pending_registration_id` (caminho 2 morre). **O conjunto de dedup precisa de um quarto caminho: `consorcio_pending_registrations.proposal_id`.** Sem ele, qualquer correção que inclua a etapa 4 infla R$ 2,09 mi em agosto.
+**(c) Só o mês do aceite (o que está hoje).**
+Prós: uma única âncora, uma única verdade; nenhum risco de leitura dupla. Contras: é auditoria,
+não vigilância — só serve para quem volta em mês fechado.
 
-## 4. O delta
+**(d) Aviso no momento do lançamento**, na própria tela de aceite/venda, quando o `aceite_date`
+cai em mês anterior ao corrente. Prós: age antes do dado virar histórico, é onde a pessoa pode
+corrigir. Contras: não deixa rastro agregado nenhum para a liderança; some depois de salvo.
 
-| Closer | Hoje | Etapa 4 órfã | Etapa 5 órfã | Corrigido |
-|---|---|---|---|---|
-| João Pedro | 10.040.000 | +230.000 | — | **10.270.000** |
-| André Duarte | 3.480.000 | +1.460.000 | +240.000 | **5.180.000** |
-| **Total** | **13.520.000** | **+1.690.000** | **+240.000** | **R$ 15.450.000** |
+**(e) Relatório/aba de auditoria de retroativos**, filtrável por mês de lançamento, listando
+cadastro, closer, aceite, lançamento e crédito. Prós: rastro permanente, serve para revisão de
+fechamento; independe de qual mês está aberto na tela. Contras: é uma tela nova, e só ajuda
+quem decide entrar nela.
 
-## 5. Deslocamento entre meses
+**(f) Janela de tolerância declarada** (por exemplo, aceite retroativo até o dia N do mês
+seguinte é normal; além disso sinaliza). Prós: reduz o ruído dos casos legítimos e faz o aviso
+significar algo. Contras: é uma regra de negócio nova, precisa de decisão do dono sobre o prazo.
 
-**a. Sai de agosto: R$ 0, zero cotas.** Das 56 cotas órfãs contratadas em agosto, **todas as 56** têm o cadastro criado também em agosto (`min(created_at)` do cadastro dentro do mês). Nenhuma tem primeira aparição em julho ou antes. O furo de âncora que você apontou é **real na definição e nulo em agosto** — ele só começa a doer quando a equipe deixar cota virar o mês.
+Nenhuma delas é excludente — (a) ou (b) resolvem a visibilidade no mês corrente, e (e) é o que
+dá memória. (f) só faz sentido depois de escolher onde o aviso aparece.
 
-**b. Entra em agosto:** os R$ 1.930.000 do item 4.
+## 6. Perna C no histórico — o processo mudou mesmo
 
-**Saldo líquido: +R$ 1.930.000.** Trocar a âncora para "primeira aparição" não muda nada retroativo em agosto; muda o comportamento a partir de setembro.
+Cotas `contratacao` sem cadastro nenhum e sem proposta, por mês de `data_contratacao`:
 
-## 6. Qual data representa "a venda apareceu no sistema"
+```text
+2026-01     89 cotas    R$  15.530.000
+2026-02    124 cotas    R$  26.770.000
+2026-03    189 cotas    R$  33.710.000
+2026-04    136 cotas    R$  21.880.000
+2026-05     47 cotas    R$  10.500.000
+2026-06     89 cotas    R$  14.530.000
+2026-07    410 cotas    R$  53.580.000
+2026-08      0 cotas    R$           0
+```
 
-Nulos em agosto, nos 91 cadastros: `created_at` 0 · `aceite_date` 0 · `data_contratacao` 25 · `vinculada_at` 39 · `cota_aberta_at` 84 · `cadastrada_at` 91.
+Acumulado do ano (jan–ago/2026): **1.084 cotas, R$ 176.500.000.**
+Base histórica inteira (todos os anos): **1.463 cotas, R$ 303.782.195** — e todos os 1.463 cards
+sem cadastro são `tipo_registro = 'contratacao'`, não há resíduo em outros tipos.
 
-- **Cadastro pendente sem cota:** `aceite_date` (0 nulos, é a data do aceite comercial informada pelo closer). `created_at` também está 100% preenchido, mas é digitação — e há divergência real: 8 cadastros com `aceite_date` 14/08 foram digitados em 19/08, e 1 declinado tem `aceite_date` 03/07 com `created_at` 03/08. **Defendo `aceite_date`.**
-- **Cota aberta não contratada:** `data_reserva` (2 de 2 preenchidas). Se a cota tem cadastro, prefira o `aceite_date` do cadastro — é anterior e é a mesma venda.
-- **Cota contratada:** hoje `data_contratacao`. Para "primeira aparição", o correto é o `aceite_date` do cadastro que a originou — existe em 100% das 56 órfãs de agosto.
-- **Cota contratada sem cadastro nenhum:** **1.463 dos 1.780 cards não têm cadastro pendente.** Para elas **não existe data de primeira aparição confiável** — `created_at` é importação/digitação e `data_reserva` está nula em quase metade. Não vou inventar coalesce: para esse grupo a âncora honesta continua `data_contratacao` estrita, e isso tem que ser dito no tooltip.
+Leitura: em agosto **todas** as 56 cotas contratadas órfãs de proposta têm cadastro, então a
+perna C zera por mérito do processo, não por filtro. Julho, com 410 cotas, é a última safra
+grande de importação/digitação sem cadastro. A consequência prática: qualquer comparação de
+Produção Gerada entre agosto e meses anteriores compara duas realidades de origem de dado —
+antes de agosto o número é dominado pela perna C, com âncora `data_contratacao`.
 
-## 7. Dupla contagem no tempo
+## 7. O que eu recomendo decidir antes de publicar
 
-A chave de identidade é **`consorcio_pending_registrations.id`**, e o elo para a cota é `consorcio_pending_registrations.consortium_card_id`. Ela é confiável, com dois defeitos medidos:
-
-- **1.463 cards sem cadastro** — legado/externo. Não quebra a chave, mas define o grupo que fica na âncora antiga.
-- **17 cards com mais de um cadastro apontando para eles** na base inteira; **0 em agosto**.
-- **3 cadastros apontam para um `consortium_card_id` que não existe** na tabela (1 deles de agosto). Não há FK. São 3 casos, e eles seriam contados na etapa 4 e de novo se o card reaparecer.
-
-**O que impede a dupla contagem:** contar o **cadastro** como unidade, uma única vez, e usar o card apenas quando não existe cadastro. Assim um cadastro de agosto que vira cota contratada em setembro continua sendo o mesmo registro, contado em agosto. Contar cadastro e card como duas unidades independentes é o que geraria a dupla contagem.
-
-## 8. Conversa com os cards do funil
-
-Não vão bater exatamente, e por motivo legítimo:
-
-- **"Cotas a Fazer" 80 no período** conta cadastros criados no mês **e liberados** (venda com termo assinado, avulso, ou anterior a 19/08). 91 foram criados; ~11 estão travados esperando assinatura. Produção Gerada **não pode** aplicar esse filtro — a venda foi gerada mesmo sem assinatura, foi a sua própria regra 2.
-- **"Cotas" 57** é contagem de cotas contratadas; Produção Gerada é crédito por venda única. Uma carta de R$ 960.000 vira 8 cotas — os eixos são diferentes por construção.
-- A etapa 5 do funil usa `data_reserva`, um terceiro eixo de data.
-
-Se você quiser que a coluna converse com o funil, o candidato é a **unidade cadastro**, que é o que a etapa 4 já conta.
-
-## Recomendação de âncora, com os contras na cara
-
-**Âncora híbrida declarada, unidade = cadastro:**
-
-1. **Perna A** intacta: cartas de propostas `aceita`, `coalesce(aceite_date, proposal_date)`.
-2. **Perna B passa a ser o cadastro pendente**, não a cota: todo `consorcio_pending_registrations` não vinculado a proposta (pelos **quatro** caminhos), âncora `aceite_date`, qualquer status — inclusive `aguardando_abertura`, `cota_aberta` e `declinada`.
-3. **Perna C, resíduo:** `consortium_cards` **sem cadastro nenhum** e sem proposta, âncora `data_contratacao` estrita.
-
-**Contras que você precisa aceitar:**
-- A coluna passa a ter **três** âncoras, e o tooltip fica mais longo e menos vendável.
-- `aceite_date` é **digitada pelo closer** — ele pode antedatar e puxar produção para o mês fechado. `data_contratacao` não tinha essa exposição.
-- A perna C mantém a deriva de mês que você quer matar, e ela é grande hoje (1.463 cards históricos), mesmo que quase nada dela caia em agosto.
-- Trocar a unidade de cota para cadastro **muda o significado de "cartas/vendas"** na coluna; os números de contagem que hoje aparecem no hook mudam, ainda que o crédito de agosto só suba.
-- Nada disso mexe em Vendas Realizadas, Consórcio Efetivado, Cotas Contratadas ou Ticket Médio.
-
-**A alternativa mais barata**, se você quiser evitar as três âncoras: manter tudo como está e só **acrescentar as etapas 4 e 5 órfãs com o quarto caminho de dedup**, mantendo `data_contratacao` para as cotas já contratadas. Isso fecha o furo do estoque invisível (+R$ 1,93 mi) e deixa o problema de âncora para quando ele tiver tamanho — que hoje, medido, é R$ 0.
+- O número **R$ 14.680.000** está fechado e explicado: cada movimento tem valor, quantidade e
+  motivo, e a única saída de dinheiro era dupla contagem.
+- Publicar agosto isolado é seguro. Publicar comparação com julho **não é**, pelo motivo do
+  item 6 — e isso é conversa de âncora histórica, não de código novo.
