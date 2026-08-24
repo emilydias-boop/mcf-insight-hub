@@ -4818,6 +4818,7 @@ export type Database = {
           comissao_base: string
           comissao_schedule: Json | null
           created_at: string | null
+          created_by: string | null
           descricao: string | null
           faixa_credito_max: number
           faixa_credito_min: number
@@ -4835,6 +4836,7 @@ export type Database = {
           taxa_antecipada_percentual: number
           taxa_antecipada_tipo: string
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           ativo?: boolean | null
@@ -4842,6 +4844,7 @@ export type Database = {
           comissao_base?: string
           comissao_schedule?: Json | null
           created_at?: string | null
+          created_by?: string | null
           descricao?: string | null
           faixa_credito_max: number
           faixa_credito_min: number
@@ -4859,6 +4862,7 @@ export type Database = {
           taxa_antecipada_percentual: number
           taxa_antecipada_tipo: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           ativo?: boolean | null
@@ -4866,6 +4870,7 @@ export type Database = {
           comissao_base?: string
           comissao_schedule?: Json | null
           created_at?: string | null
+          created_by?: string | null
           descricao?: string | null
           faixa_credito_max?: number
           faixa_credito_min?: number
@@ -4883,6 +4888,7 @@ export type Database = {
           taxa_antecipada_percentual?: number
           taxa_antecipada_tipo?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
