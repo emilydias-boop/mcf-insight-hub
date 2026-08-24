@@ -224,6 +224,16 @@ export function useConsorcioProducaoGerada(
         alvo.antedatadosCredito += antedatadosCredito;
         byCloser.set(closerId, alvo);
       };
+      /**
+       * Aviso do mês do LANÇAMENTO. NÃO toca `credito`, `cartas` nem `vendas` —
+       * o crédito desses registros é contado no mês do aceite, não aqui.
+       */
+      const addRetro = (closerId: string, credito: number) => {
+        const alvo = byCloser.get(closerId) || zero();
+        alvo.lancadosRetroativos += 1;
+        alvo.lancadosRetroativosCredito += credito;
+        byCloser.set(closerId, alvo);
+      };
 
 
       // ══ PERNA A — cartas de propostas lançadas (etapa 3 em diante) ════════
