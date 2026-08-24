@@ -6,37 +6,55 @@ import { nameKey } from "@/hooks/useConsorcioCotasContratadas";
 /**
  * PRODUÇÃO GERADA — crédito de TODAS as vendas lançadas, de "Termo de Adesão
  * Pendente" (etapa 3) em diante, contando cada venda UMA única vez, no mês em
- * que ela apareceu no sistema.
+ * que ela APARECEU no sistema. A venda nunca sai desse mês: nem se contratar
+ * depois, nem se nunca contratar.
  *
- * União de duas fontes, deduplicada:
+ * TRÊS PERNAS DECLARADAS, deduplicadas:
  *  - Perna A (funil): cartas de propostas `status='aceita'`, âncora
  *    `coalesce(aceite_date, proposal_date)`. Cartas DECLINADAS contam (o closer
  *    gerou a venda). Propostas apagadas (`deleted_at`) ou marcadas
  *    `carta_excluida` NÃO contam — e essa é a única exclusão.
- *  - Perna B (legado/avulso): cotas de `consortium_cards`
- *    (`tipo_registro='contratacao'`) que NÃO vieram de proposta nenhuma,
- *    âncora `data_contratacao` ESTRITA (sem fallback em `data_reserva` nem
- *    `created_at`, para a coluna ser comparável ao Consórcio Efetivado).
+ *  - Perna B (avulso): a unidade é o CADASTRO (`consorcio_pending_registrations`),
+ *    não a cota. Todo cadastro não vinculado a proposta pelos QUATRO caminhos,
+ *    âncora `aceite_date`, QUALQUER status (`aguardando_abertura`, `cota_aberta`,
+ *    `vinculada`, `declinada` — sem lista branca de status, de propósito: status
+ *    novo entra sozinho). Cadastro parado na etapa 4 ou 5 conta igual.
+ *  - Perna C (resíduo legado): `consortium_cards` SEM cadastro nenhum apontando
+ *    para eles e sem proposta, âncora `data_contratacao` ESTRITA. É a base
+ *    histórica/importada, onde não existe data confiável de primeira aparição.
+ *    Encolhe sozinha.
  *
- * Dedup: o conjunto "vinculado" é a UNIÃO dos três caminhos
- * (`consorcio_proposals.consortium_card_id`,
- *  `consorcio_proposal_cartas.consortium_card_id` e
- *  `consorcio_proposal_cartas.pending_registration_id` →
- *  `consorcio_pending_registrations.consortium_card_id`). Existe cota que só
- * aparece pelo terceiro caminho: usar menos que os três conta ela duas vezes.
+ * REGRA ANTI-DUPLA-CONTAGEM NO TEMPO (explícita): o CADASTRO é a unidade; o card
+ * só entra (perna C) quando NÃO existe cadastro apontando para ele. Um cadastro
+ * de agosto que vira cota contratada em setembro continua sendo o mesmo registro,
+ * contado uma única vez, em agosto.
  *
- * À medida que o funil vira a única porta de entrada, a perna B cai a zero
- * sozinha — a definição da coluna não muda.
+ * DEDUP — QUATRO caminhos, e esta lista é o coração da coluna:
+ *  1. `consorcio_proposals.consortium_card_id`
+ *  2. `consorcio_proposal_cartas.consortium_card_id`
+ *  3. `consorcio_proposal_cartas.pending_registration_id` → `…​.consortium_card_id`
+ *  4. `consorcio_pending_registrations.proposal_id`
+ * ATENÇÃO: REMOVER QUALQUER UM DESTES CAMINHOS DUPLICA DINHEIRO. O caminho 4 é
+ * o único que pega cadastro de proposta que ainda não abriu cota (etapa 4) —
+ * sem ele, agosto/2026 infla R$ 2,09 mi contando o mesmo crédito na perna A e
+ * na perna B.
+ *
+ * SINALIZADOR DE ANTEDATAÇÃO: cadastro cujo `aceite_date` é de um mês ANTERIOR
+ * ao mês do `created_at`. Só marca; o crédito conta normalmente. Sem severidade.
  *
  * 100% leitura. Nenhuma escrita, nenhum backfill.
  */
 
 export interface ProducaoGeradaLinha {
   credito: number;
-  /** Cartas (perna A) + cotas sem proposta (perna B). */
+  /** Cartas (perna A) + cadastros (perna B) + cotas legadas (perna C). */
   cartas: number;
-  /** Vendas: propostas (perna A) + clientes distintos das cotas avulsas (perna B). */
+  /** Vendas: propostas (perna A) + clientes distintos nas pernas B e C. */
   vendas: number;
+  /** Registros com `aceite_date` em mês anterior ao do lançamento (só sinaliza). */
+  antedatados: number;
+  /** Crédito desses registros — contado normalmente na soma. */
+  antedatadosCredito: number;
 }
 
 export interface ConsorcioProducaoGerada {
@@ -44,12 +62,19 @@ export interface ConsorcioProducaoGerada {
   /** Balde explícito: nunca descartamos nem chutamos atribuição. */
   semAtribuicao: ProducaoGeradaLinha;
   total: ProducaoGeradaLinha;
-  /** Diagnóstico das duas pernas, para conferência. */
+  /** Diagnóstico das três pernas, para conferência. */
   pernaA: ProducaoGeradaLinha;
   pernaB: ProducaoGeradaLinha;
+  pernaC: ProducaoGeradaLinha;
 }
 
-const zero = (): ProducaoGeradaLinha => ({ credito: 0, cartas: 0, vendas: 0 });
+const zero = (): ProducaoGeradaLinha => ({
+  credito: 0,
+  cartas: 0,
+  vendas: 0,
+  antedatados: 0,
+  antedatadosCredito: 0,
+});
 
 const EMPTY: ConsorcioProducaoGerada = {
   byCloser: new Map(),
@@ -57,7 +82,9 @@ const EMPTY: ConsorcioProducaoGerada = {
   total: zero(),
   pernaA: zero(),
   pernaB: zero(),
+  pernaC: zero(),
 };
+
 
 const SEM_ATRIBUICAO = "__sem_atribuicao__";
 
