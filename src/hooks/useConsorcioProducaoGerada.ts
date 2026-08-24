@@ -55,6 +55,16 @@ export interface ProducaoGeradaLinha {
   antedatados: number;
   /** Crédito desses registros — contado normalmente na soma. */
   antedatadosCredito: number;
+  /**
+   * AVISO, NÃO NÚMERO. Registros LANÇADOS neste período (`created_at` dentro do
+   * filtro) cujo `aceite_date` é de mês anterior — ou seja, o crédito deles NÃO
+   * está em `credito` aqui: ele conta no mês do aceite. Nunca somar isto na
+   * coluna nem no total; serve só para o mês do lançamento poder dizer que
+   * alguém lançou venda com data de aceite retroativa.
+   */
+  lancadosRetroativos: number;
+  /** Crédito desses registros, contado em OUTRO mês (o do aceite). */
+  lancadosRetroativosCredito: number;
 }
 
 export interface ConsorcioProducaoGerada {
@@ -66,6 +76,8 @@ export interface ConsorcioProducaoGerada {
   pernaA: ProducaoGeradaLinha;
   pernaB: ProducaoGeradaLinha;
   pernaC: ProducaoGeradaLinha;
+  /** Meses de âncora (YYYY-MM) onde o crédito dos lançamentos retroativos conta. */
+  retroMesesAncora: string[];
 }
 
 const zero = (): ProducaoGeradaLinha => ({
@@ -74,6 +86,8 @@ const zero = (): ProducaoGeradaLinha => ({
   vendas: 0,
   antedatados: 0,
   antedatadosCredito: 0,
+  lancadosRetroativos: 0,
+  lancadosRetroativosCredito: 0,
 });
 
 const EMPTY: ConsorcioProducaoGerada = {
@@ -83,7 +97,9 @@ const EMPTY: ConsorcioProducaoGerada = {
   pernaA: zero(),
   pernaB: zero(),
   pernaC: zero(),
+  retroMesesAncora: [],
 };
+
 
 
 const SEM_ATRIBUICAO = "__sem_atribuicao__";
