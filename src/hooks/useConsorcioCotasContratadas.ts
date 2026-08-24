@@ -110,7 +110,7 @@ const EMPTY: ConsorcioCotasContratadas = {
 };
 
 /** Normaliza nome para casar "André Duarte" com "Andre dos Santos Duarte". */
-function nameKey(name?: string | null): string | null {
+export function nameKey(name?: string | null): string | null {
   if (!name) return null;
   const clean = name
     .normalize("NFD")

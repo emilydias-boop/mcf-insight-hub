@@ -118,26 +118,30 @@ export function useConsorcioProducaoGerada(
         .eq("bu", bu);
       if (closersError) throw closersError;
 
-      const canonicoPorEmail = new Map<string, { id: string; name: string | null }>();
-      const semEmail: { id: string; name: string | null }[] = [];
-      (closers || []).forEach((c) => {
+      type CloserRow = { id: string; name: string | null; email: string | null; is_active: boolean | null; created_at: string | null };
+      const linhas = (closers || []) as CloserRow[];
+      const canonicoPorEmail = new Map<string, CloserRow>();
+      const semEmail: CloserRow[] = [];
+      linhas.forEach((c) => {
         const ek = emailKey(c.email);
         if (!ek) {
-          semEmail.push({ id: c.id, name: c.name });
+          semEmail.push(c);
           return;
         }
-        const atual = (closers || []).find((x) => x.id === canonicoPorEmail.get(ek)?.id);
+        const atual = canonicoPorEmail.get(ek);
         if (!atual) {
-          canonicoPorEmail.set(ek, { id: c.id, name: c.name });
+          canonicoPorEmail.set(ek, c);
           return;
         }
-        const melhorAtivo = (atual.is_active === true) !== (c.is_active === true)
+        const ativoDesempata = (atual.is_active === true) !== (c.is_active === true);
+        const vencedor = ativoDesempata
           ? (c.is_active === true ? c : atual)
           : String(c.created_at || "") < String(atual.created_at || "")
             ? c
             : atual;
-        canonicoPorEmail.set(ek, { id: melhorAtivo.id, name: melhorAtivo.name });
+        canonicoPorEmail.set(ek, vencedor);
       });
+
 
       /** id de qualquer linha de `closers` da BU → id canônico. */
       const idCanonico = new Map<string, string>();
