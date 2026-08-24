@@ -1,109 +1,110 @@
-# Produção Gerada — medição de agosto/2026 e recomendação
+# Produção Gerada — o furo das etapas 4 e 5, medido
 
-Investigação só. Nada de código, migração ou dado tocado.
+Rodada de medição. Nenhum código, nenhuma migração, nenhum dado tocado.
 
-## Veredito curto
+## Veredito: o mecanismo que você descreveu está certo, mas o tamanho é outro
 
-Sua proposta (união de duas pernas, deduplicada, cada venda contada uma única vez na primeira aparição) **se sustenta no dado** — com uma correção importante: hoje o funil é praticamente irrelevante em volume. Em agosto, **56 das 57 cotas contratadas não têm proposta nenhuma vinculada**. A perna B não é um resíduo: é 74% do número. A tese "a perna B vai a zero sozinha" continua válida como desenho, mas só se o funil virar porta de entrada de verdade em setembro — hoje ele não é.
+Confirmado ponto por ponto:
 
-A consequência que você previu **se confirma**: Produção Gerada (R$ 13,52 mi) > Consórcio Efetivado (R$ 10,18 mi). Formato saudável.
+- `consortium_cards` só nasce na transição 4 → 5. **Etapa 4 não tem linha em `consortium_cards`** — só `consorcio_pending_registrations`.
+- Perna B exige `tipo_registro='contratacao'` + `data_contratacao` no mês. Etapa 5 (reserva) fica fora: `tipo_registro='reserva'` tem **`data_contratacao` nula em 100% dos casos** (2 de 2).
+- Valores reais de `tipo_registro` na tabela, sem supor: **`contratacao` 1.778** (1.778 com `data_contratacao`, 901 com `data_reserva`) e **`reserva` 2** (0 com contratação). Não existe terceiro valor.
 
-## Os números de agosto/2026
+**Onde eu te derrubo:** o buraco não é R$ 2,45 mi. É **R$ 1,93 mi**, porque **R$ 2,09 mi dos cadastros da etapa 4 já estão contados na perna A** — e a razão disso é um furo novo, mais grave que o próprio delta (ver "O quarto caminho", abaixo).
 
-### 1. Perna A isolada — cartas de propostas lançadas (status `aceita`, etapa 3 em diante), âncora `aceite_date` (fallback `proposal_date`)
+---
 
-| Closer | Vendas | Cartas | Crédito |
-|---|---|---|---|
-| João Pedro Martins Vieira | 4 | 9 | R$ 2.290.000 |
-| Andre dos Santos Duarte | 3 | 3 | R$ 1.200.000 |
-| **Total** | **7** | **12** | **R$ 3.490.000** |
+## 1. Etapa 4 órfã (agosto/2026)
 
-Contexto histórico: 100 propostas `aceita` no total (fev–ago), 90 `pendente`, 17 `recusada`. 177 cartas na base, **0 declinadas até hoje**.
+Campo de data: **`created_at` do cadastro**, para a triagem. Motivo: é o único evento que existe com certeza para um cadastro sem cota (`cadastrada_at` está nulo em 91/91, `cota_aberta_at` em 84/91). Ver item 6 para a âncora que eu defendo de verdade.
 
-### 2. Perna B isolada — cotas sem proposta nenhuma, por data candidata
+91 cadastros criados em agosto. 31 sem linha em `consortium_cards`. Pelos **três** caminhos de vínculo que você fixou, 24 aparecem como "sem proposta", somando **R$ 3.780.000**. Mas:
 
-| Âncora | Cotas | Crédito |
+| Recorte | n | Crédito |
 |---|---|---|
-| `created_at` | 62 | R$ 11.162.195 |
-| `data_contratacao` | 56 | R$ 10.030.000 |
-| `data_reserva` | 40 | R$ 6.810.000 |
+| Sem card, "sem proposta" pelos 3 caminhos | 24 | R$ 3.780.000 |
+| — desses, com `proposal_id` preenchido (já em perna A) | 12 | R$ 2.090.000 |
+| **Etapa 4 órfã de verdade** | **12** | **R$ 1.690.000** |
 
-Por vendedor (`vendedor_name`):
+Órfã de verdade, por closer:
 
-| Vendedor | contratação (n / R$) | created_at (n / R$) | reserva (n / R$) |
-|---|---|---|---|
-| Joao Pedro Martins Vieira | 44 / 7.750.000 | 45 / 7.870.000 | 29 / 4.680.000 |
-| André Duarte | 12 / 2.280.000 | 15 / 3.120.000 | 11 / 2.130.000 |
-| Luis Felipe S. O. Ramos | 0 | 1 / 52.195 | 0 |
-| Victoria Paz | 0 | 1 / 120.000 | 0 |
+| Vendedor | n | Crédito |
+|---|---|---|
+| André Duarte | 9 | R$ 1.460.000 |
+| Joao Pedro Martins Vieira | 3 | R$ 230.000 |
 
-**Qual data eu defendo: `data_contratacao`, com fallback `data_reserva` e só então `created_at`.** Razões: (a) é a mesma âncora do Consórcio Efetivado, então as duas colunas ficam comparáveis lado a lado na mesma linha; (b) `created_at` é data de digitação — o cadastro pode entrar semanas depois e joga produção no mês errado (é ela que traz os 6 cotas/R$ 1,1 mi extras, incluindo dois vendedores que não aparecem por contratação); (c) `data_reserva` está preenchida em só 40 das 62 cotas, buraco grande demais para ser âncora primária.
+1 dos 12 está em `status='declinada'` (R$ 500.000, André) — pela sua regra 2, conta.
 
-### 3. União deduplicada — o que a coluna mostraria hoje
+## 2. Etapa 5 órfã (agosto/2026)
 
-Com âncora `data_contratacao` na perna B:
+**2 cotas, R$ 240.000, ambas do André Duarte**, `data_reserva` 20 e 21/08, nenhuma vinculada a proposta. É o piso: a etapa 5 é minúscula porque hoje a equipe grava reserva e confirmação quase no mesmo instante — só 2 linhas `reserva` existem na base inteira.
 
-| Closer | Perna A | Perna B | **Produção Gerada** |
-|---|---|---|---|
-| João Pedro | 2.290.000 | 7.750.000 | **R$ 10.040.000** |
-| André | 1.200.000 | 2.280.000 | **R$ 3.480.000** |
-| **Total** | 3.490.000 | 10.030.000 | **R$ 13.520.000** |
+## 3. Quanto já está na perna A
 
-Com `created_at` na perna B seriam R$ 14.652.195 (JP 10,16 mi; André 4,32 mi; + Luis 52.195; + Victoria 120.000).
+**R$ 2.090.000, em 12 cadastros, de 4 propostas `aceita` de agosto.** As quatro têm exatamente 1 carta cada, e o crédito da carta é idêntico à soma dos cadastros que ela gerou (ex.: 1 carta de R$ 960.000 → 8 cadastros de R$ 120.000). Somar a etapa 4 crua contaria esse dinheiro duas vezes.
 
-### 4. Comparação com as colunas existentes
+### O quarto caminho — o furo que eu não tinha visto
 
-| Métrica | Valor |
-|---|---|
-| Consórcio Efetivado (total) | R$ 10.180.000 (JP 7.750.000 · André 2.430.000) |
-| Cotas Contratadas | 57 |
-| Produção Gerada (proposta) | R$ 13.520.000 |
+Esses 12 cadastros **têm `proposal_id` preenchido** e ainda assim escapam do conjunto vinculado, porque nenhum dos três caminhos passa por `consorcio_pending_registrations.proposal_id`: não têm card (caminhos 1 e 3 morrem) e não têm linha em `consorcio_proposal_cartas.pending_registration_id` (caminho 2 morre). **O conjunto de dedup precisa de um quarto caminho: `consorcio_pending_registrations.proposal_id`.** Sem ele, qualquer correção que inclua a etapa 4 infla R$ 2,09 mi em agosto.
 
-Produção Gerada é **33% maior** que o Efetivado — direção correta. Note que o Efetivado do João Pedro (7,75 mi) é **exatamente** a perna B dele: nenhuma cota dele em agosto veio do funil. Já o André tem R$ 150.000 de diferença (2,43 mi Efetivado vs 2,28 mi perna B) — é a única cota de agosto vinculada a proposta, corretamente removida da perna B pelo dedup.
+## 4. O delta
 
-### 5. Cotas de agosto sem proposta vinculada
+| Closer | Hoje | Etapa 4 órfã | Etapa 5 órfã | Corrigido |
+|---|---|---|---|---|
+| João Pedro | 10.040.000 | +230.000 | — | **10.270.000** |
+| André Duarte | 3.480.000 | +1.460.000 | +240.000 | **5.180.000** |
+| **Total** | **13.520.000** | **+1.690.000** | **+240.000** | **R$ 15.450.000** |
 
-**56 de 57 cotas (98%), somando R$ 10.030.000.** Na base inteira só 51 cotas (de 1.780) têm qualquer vínculo com proposta.
+## 5. Deslocamento entre meses
 
-## Dedup: qual vínculo usar
+**a. Sai de agosto: R$ 0, zero cotas.** Das 56 cotas órfãs contratadas em agosto, **todas as 56** têm o cadastro criado também em agosto (`min(created_at)` do cadastro dentro do mês). Nenhuma tem primeira aparição em julho ou antes. O furo de âncora que você apontou é **real na definição e nulo em agosto** — ele só começa a doer quando a equipe deixar cota virar o mês.
 
-Os três caminhos, na base inteira:
+**b. Entra em agosto:** os R$ 1.930.000 do item 4.
 
-- `consorcio_proposals.consortium_card_id` → 51
-- `consorcio_proposal_cartas.consortium_card_id` → 51
-- `consorcio_proposal_cartas.pending_registration_id` → `consorcio_pending_registrations.consortium_card_id` → 1
+**Saldo líquido: +R$ 1.930.000.** Trocar a âncora para "primeira aparição" não muda nada retroativo em agosto; muda o comportamento a partir de setembro.
 
-**Use a UNIÃO dos três.** Há exatamente **1 cota vinculada só pelo caminho do cadastro pendente** e não pelo `consortium_card_id` da carta. Um só caminho perde essa cota e ela seria contada duas vezes. Custo de usar os três é zero.
+## 6. Qual data representa "a venda apareceu no sistema"
 
-## Decisões que precisam da sua palavra
+Nulos em agosto, nos 91 cadastros: `created_at` 0 · `aceite_date` 0 · `data_contratacao` 25 · `vinculada_at` 39 · `cota_aberta_at` 84 · `cadastrada_at` 91.
 
-### A. Carta declinada / desistência conta?
+- **Cadastro pendente sem cota:** `aceite_date` (0 nulos, é a data do aceite comercial informada pelo closer). `created_at` também está 100% preenchido, mas é digitação — e há divergência real: 8 cadastros com `aceite_date` 14/08 foram digitados em 19/08, e 1 declinado tem `aceite_date` 03/07 com `created_at` 03/08. **Defendo `aceite_date`.**
+- **Cota aberta não contratada:** `data_reserva` (2 de 2 preenchidas). Se a cota tem cadastro, prefira o `aceite_date` do cadastro — é anterior e é a mesma venda.
+- **Cota contratada:** hoje `data_contratacao`. Para "primeira aparição", o correto é o `aceite_date` do cadastro que a originou — existe em 100% das 56 órfãs de agosto.
+- **Cota contratada sem cadastro nenhum:** **1.463 dos 1.780 cards não têm cadastro pendente.** Para elas **não existe data de primeira aparição confiável** — `created_at` é importação/digitação e `data_reserva` está nula em quase metade. Não vou inventar coalesce: para esse grupo a âncora honesta continua `data_contratacao` estrita, e isso tem que ser dito no tooltip.
 
-- **Contar (leitura do dono):** "o closer gerou" é o que ele disse; simples de explicar; a coluna nunca diminui retroativamente. Contra: um mês com muita desistência infla a produção sem lastro nenhum.
-- **Não contar:** aproxima a coluna de receita futura. Contra: contradiz a definição dele e faz a coluna encolher no retrovisor, exatamente o que o Efetivado já faz.
+## 7. Dupla contagem no tempo
 
-**Como distinguir declínio de exclusão em código** — os campos existem e são distintos:
-- Declínio da carta: `consorcio_proposal_cartas.declinada_at` / `motivo_declinio` / `declinada_by`. Hoje: **0 registros**.
-- Proposta apagada por engano: `consorcio_proposals.deleted_at` (hoje 0) e `carta_excluida` + `carta_excluida_em/por/motivo` (hoje 2 propostas, 1 `aceita` e 1 `recusada`).
+A chave de identidade é **`consorcio_pending_registrations.id`**, e o elo para a cota é `consorcio_pending_registrations.consortium_card_id`. Ela é confiável, com dois defeitos medidos:
 
-Recomendo: **contar declinadas, excluir sempre `deleted_at is not null` e `carta_excluida = true`.** A distinção é limpa e não depende de heurística.
+- **1.463 cards sem cadastro** — legado/externo. Não quebra a chave, mas define o grupo que fica na âncora antiga.
+- **17 cards com mais de um cadastro apontando para eles** na base inteira; **0 em agosto**.
+- **3 cadastros apontam para um `consortium_card_id` que não existe** na tabela (1 deles de agosto). Não há FK. São 3 casos, e eles seriam contados na etapa 4 e de novo se o card reaparecer.
 
-### B. Atribuição ao closer
+**O que impede a dupla contagem:** contar o **cadastro** como unidade, uma única vez, e usar o card apenas quando não existe cadastro. Assim um cadastro de agosto que vira cota contratada em setembro continua sendo o mesmo registro, contado em agosto. Contar cadastro e card como duas unidades independentes é o que geraria a dupla contagem.
 
-**Perna A** — encadeamento `proposals.created_by` → `profiles.email` → `closers.email`. Funciona, com dois furos reais medidos:
-1. **João Pedro tem DUAS linhas em `closers`** com o mesmo e-mail (uma `is_active=false`). Um join ingênuo por e-mail **duplica a produção dele**. Tem que colapsar por e-mail e preferir a linha ativa.
-2. **`created_by` nem sempre é o closer.** 2 propostas `aceita` foram criadas pelo Antony (equipe de cadastro), que não tem linha em `closers` → produção órfã. Precisa do fallback: dono do deal → closer da reunião.
+## 8. Conversa com os cards do funil
 
-**Perna B** — `consortium_cards.vendedor_name`, o mesmo que a coluna atual usa (via `nameKey` normalizado em `useConsorcioCotasContratadas.ts`). Consistente, mas os nomes divergem entre as pernas ("Joao Pedro Martins Vieira" na cota vs "João Pedro Martins Vieira " no perfil, com acento e espaço final). A normalização por NFD/caixa alta que o hook já faz resolve; a chave final de merge tem que ser **o `closer_id`**, nunca a string.
+Não vão bater exatamente, e por motivo legítimo:
 
-### C. Consequência a aceitar
+- **"Cotas a Fazer" 80 no período** conta cadastros criados no mês **e liberados** (venda com termo assinado, avulso, ou anterior a 19/08). 91 foram criados; ~11 estão travados esperando assinatura. Produção Gerada **não pode** aplicar esse filtro — a venda foi gerada mesmo sem assinatura, foi a sua própria regra 2.
+- **"Cotas" 57** é contagem de cotas contratadas; Produção Gerada é crédito por venda única. Uma carta de R$ 960.000 vira 8 cotas — os eixos são diferentes por construção.
+- A etapa 5 do funil usa `data_reserva`, um terceiro eixo de data.
 
-Confirmado com dado: **Produção Gerada > Consórcio Efetivado** (13,52 vs 10,18 mi). Não deu o contrário — a definição está de pé. Duas coisas que o dono precisa aceitar junto:
-- A coluna **conta a venda no mês em que ela apareceu**, então uma cota lançada em julho e contratada em agosto aparece na Produção de julho e no Efetivado de agosto. Meses não fecham entre si por construção.
-- **Ticket Médio não muda**: ele é derivado de Cotas Contratadas, que continua intacta. Mas ter três valores de crédito na mesma tabela (Gerada, Efetivado, Ticket) exige tooltip em cada um.
+Se você quiser que a coluna converse com o funil, o candidato é a **unidade cadastro**, que é o que a etapa 4 já conta.
 
-## Recomendação de desenho (se aprovada, vira implementação numa próxima rodada)
+## Recomendação de âncora, com os contras na cara
 
-Um hook novo `useConsorcioProducaoGerada(start, end)` que devolve `Map<closerId, { credito, cartas, vendas }>`, com as duas pernas e o dedup pelos três vínculos, âncora `data_contratacao` → `data_reserva` → `created_at` na perna B. A coluna entra entre *Vendas Realizadas* e *Cotas Contratadas* em `ConsorcioCloserSummaryTable.tsx`, com tooltip declarando: "soma o crédito de todas as vendas lançadas (termo pendente em diante), contando cada venda uma vez; inclui vendas que ainda não se efetivaram". Nada nas colunas existentes é tocado.
+**Âncora híbrida declarada, unidade = cadastro:**
 
-**Sobre setembro:** o desenho está certo, mas a premissa não está cumprida. Se em setembro os closers continuarem lançando cota direto sem passar por proposta, a perna B não vai a zero e a coluna vira permanentemente uma soma de duas portas. Vale medir isso em outubro: se a perna B não cair, o problema é de processo, não de métrica.
+1. **Perna A** intacta: cartas de propostas `aceita`, `coalesce(aceite_date, proposal_date)`.
+2. **Perna B passa a ser o cadastro pendente**, não a cota: todo `consorcio_pending_registrations` não vinculado a proposta (pelos **quatro** caminhos), âncora `aceite_date`, qualquer status — inclusive `aguardando_abertura`, `cota_aberta` e `declinada`.
+3. **Perna C, resíduo:** `consortium_cards` **sem cadastro nenhum** e sem proposta, âncora `data_contratacao` estrita.
+
+**Contras que você precisa aceitar:**
+- A coluna passa a ter **três** âncoras, e o tooltip fica mais longo e menos vendável.
+- `aceite_date` é **digitada pelo closer** — ele pode antedatar e puxar produção para o mês fechado. `data_contratacao` não tinha essa exposição.
+- A perna C mantém a deriva de mês que você quer matar, e ela é grande hoje (1.463 cards históricos), mesmo que quase nada dela caia em agosto.
+- Trocar a unidade de cota para cadastro **muda o significado de "cartas/vendas"** na coluna; os números de contagem que hoje aparecem no hook mudam, ainda que o crédito de agosto só suba.
+- Nada disso mexe em Vendas Realizadas, Consórcio Efetivado, Cotas Contratadas ou Ticket Médio.
+
+**A alternativa mais barata**, se você quiser evitar as três âncoras: manter tudo como está e só **acrescentar as etapas 4 e 5 órfãs com o quarto caminho de dedup**, mantendo `data_contratacao` para as cotas já contratadas. Isso fecha o furo do estoque invisível (+R$ 1,93 mi) e deixa o problema de âncora para quando ele tiver tamanho — que hoje, medido, é R$ 0.
