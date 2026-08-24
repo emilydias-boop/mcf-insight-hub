@@ -131,6 +131,8 @@ const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento")
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
 const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEquipe"));
+const ConsorcioCloserDetalhe = lazy(() => import("./pages/bu-consorcio/CloserDetalheConsorcio"));
+
 const ConsorcioAuditoriaVinculos = lazy(() => import("./pages/bu-consorcio/AuditoriaVinculos"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
 // Visão Chairman - desativada (item de menu/rota comentados abaixo). Mantida para rollback.
@@ -234,7 +236,7 @@ const App = () => (
               <Route path="consorcio/fechamento/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoConfig /></RoleGuard>} />
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
-              <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><CloserMeetingsDetailPage /></BUProvider></RoleGuard>} />
+              <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><ConsorcioCloserDetalhe /></BUProvider></RoleGuard>} />
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
               <Route path="consorcio/auditoria-vinculos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioAuditoriaVinculos /></RoleGuard>} />
               
