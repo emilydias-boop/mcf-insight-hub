@@ -462,6 +462,14 @@ function ProdutosTab() {
                 Taxa antecipada: {p.taxa_antecipada_percentual}% ({p.taxa_antecipada_tipo === 'dividida_12' ? 'dividida em 12' : '1ª parcela'}) ·
                 Prazo máx: {p.prazo_maximo_venda ?? '—'}
               </div>
+              <div className="text-[11px] text-muted-foreground/80 mt-0.5">
+                {p.created_by
+                  ? `Criado por ${autores[p.created_by] ?? 'usuário não identificado'} em ${fmtData(p.created_at)}`
+                  : 'Criado: sem registro de autoria'}
+                {p.updated_by
+                  ? ` · Alterado por ${autores[p.updated_by] ?? 'usuário não identificado'} em ${fmtData(p.updated_at)}`
+                  : ' · Alterado: sem registro de autoria'}
+              </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setEditing(p); setShowForm(true); }}>
               Editar
