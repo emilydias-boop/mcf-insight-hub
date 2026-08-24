@@ -495,6 +495,21 @@ export function ConsorcioCloserSummaryTable({
         Cotas Contratadas. O Total é o mesmo nas abas SDRs e Closers.
       </p>
 
+      {pernaCCredito > 0 && (
+        <p className="px-4 pb-2 text-xs text-amber-400/90">
+          Procedência: {brl(pernaCCredito)} da Produção Gerada ({pernaCPct}% do total) vem de{" "}
+          {producaoPernaC?.cartas || 0} cota(s) histórica(s) sem cadastro no sistema — para elas não
+          existe data de lançamento, então a âncora é a data de contratação, não a de aceite.
+        </p>
+      )}
+
+      {producaoRetro > 0 && (
+        <p className="px-4 pb-2 text-xs text-amber-400/90">
+          {retroTexto(producaoRetro, producaoRetroCredito)}
+        </p>
+      )}
+
+
       <ResiduoDetalheModal
         open={detalheOpen}
         onOpenChange={setDetalheOpen}
