@@ -36,12 +36,43 @@ export interface WaConversationPatch {
   pedido_saida_em?: string | null;
 }
 
-export function useWaConversations(scope: WaScope = 'mine') {
+/** Responsável com contagem de conversas, para o seletor do inbox. */
+export interface WaResponsavel {
+  assigned_to: string | null;
+  nome: string;
+  total: number;
+  nao_lidas: number;
+  precisa_resposta: number;
+}
+
+/**
+ * Lista de responsáveis com contagem. A RPC devolve vazio para quem não é
+ * admin/manager, então o hook pode ser chamado sem gate extra.
+ */
+export function useWaResponsaveis() {
+  return useQuery({
+    queryKey: ['wa-responsaveis'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('wa_responsaveis_conversas');
+      if (error) throw error;
+      return (data ?? []) as WaResponsavel[];
+    },
+  });
+}
+
+/**
+ * @param scope 'mine' limita às conversas do usuário logado.
+ * @param responsavelId quando informado, filtra no SERVIDOR por responsável
+ * (a query tem limit(500); filtrar no cliente deixaria buracos).
+ */
+export function useWaConversations(scope: WaScope = 'mine', responsavelId?: string | null) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const uid = user?.id ?? null;
   /** Sufixo por instância: evita duas assinaturas disputando o mesmo canal. */
   const sufixoCanal = useRef(Math.random().toString(36).slice(2, 8));
+
 
   const query = useQuery({
     queryKey: ['wa-conversations', scope, uid],
