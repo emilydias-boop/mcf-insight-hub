@@ -76,9 +76,6 @@ function cartasParaDrafts(
   }));
 }
 
-const fmtBRL = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
 const fmtData = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
 
