@@ -207,6 +207,8 @@ export function ConsorcioCloserSummaryTable({
               const cotas = cotasByCloser?.get(row.closer_id) || 0;
               const clientes = clientesByCloser?.get(row.closer_id) || 0;
               const credito = creditoByCloser?.get(row.closer_id) || 0;
+              const producao = producaoByCloser?.get(row.closer_id);
+
               const ticket = clientes > 0 ? credito / clientes : null;
               const taxaVenda = row.r1_realizada > 0
                 ? (clientes / row.r1_realizada) * 100
