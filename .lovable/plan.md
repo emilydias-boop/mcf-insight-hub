@@ -1,96 +1,79 @@
-# Levantamento: Antony e Emily criando produtos (tabelas Embracon)
+# Diagnóstico: "Cotas com cadastro a ajustar" não sai da lista após "Trocar lead"
 
-Nenhum código, migração ou dado foi tocado. Só leitura de banco e de código.
+Sua leitura está **correta**. O alerta não pede lead vinculado — pede **reunião conduzida por closer da BU Consórcio**. "Trocar lead" grava o vínculo, mas nas 4 linhas atuais **nenhum** lead candidato tem reunião de consórcio, então a condição de saída não pode ser satisfeita por esse botão. O dono clicaria para sempre.
 
-## A. Policies de `consorcio_produtos`
+## A. Condição exata de entrada e de saída
 
-Existe **uma única policy** na tabela:
+Monta a lista: `src/hooks/useConsorcioCotasContratadas.ts` (100% leitura, sem RPC).
 
-| Comando | Policy | Papéis | Condição |
-|---|---|---|---|
-| SELECT | "Usuários autenticados podem ler produtos" | `authenticated` | `true` |
-| INSERT | **não existe** | — | — |
-| UPDATE | **não existe** | — | — |
-| DELETE | **não existe** | — | — |
+- Universo: `consortium_cards` com `tipo_registro = 'contratacao'` e `data_contratacao` no período (linhas 181-188).
+- A linha entra no resíduo quando o **CLIENTE** (CPF/CNPJ, senão nome normalizado) não tem SDR atribuído: `clienteSdr.get(pessoa)` vazio (linhas 500-508, 555-566).
+- `clienteSdr` só é preenchido a partir de `dealBooker`, que exige, para algum deal de alguma cota do cliente, um `meeting_slot_attendees` que satisfaça **todas** estas condições (linhas 283-334):
+  1. `meeting_slot_id` → `meeting_slots.closer_id` pertencente a `closers` com `bu = 'consorcio'` (linhas 283-286);
+  2. `status NOT IN ('cancelled','invited')` (linha 290);
+  3. `booked_by NOT NULL` (linha 304);
+  4. `profiles.email` do `booked_by` preenchido (linhas 310-317, 328).
 
-RLS está ligada. Com RLS ligada e nenhuma policy para o comando, o comando é negado para **todos** os papéis do Data API. Foi exatamente isso que barrou o INSERT do Antony.
+Predicado de saída, literal: existe attendee de qualquer cota do mesmo cliente com slot de closer de BU consórcio, status ≠ cancelled/invited, `booked_by` não nulo e e-mail de perfil presente. Nada além disso tira a linha.
 
-Para comparação, a tabela irmã `consorcio_creditos` (planos/valores tabelados) **tem** as quatro:
-- SELECT: `authenticated`, `true`
-- INSERT / UPDATE / DELETE: `has_role(admin) OR has_role(manager) OR has_role(cobranca_consorcio)`
+O motivo exibido vem do diagnóstico em cascata `diagnosticarCota` (linhas 402-462); `sem_reuniao_bu` é o ramo da linha 430-437, disparado por `!dealTemReuniaoBU.has(dealId)`.
 
-Ou seja: hoje qualquer um desses três papéis cria/edita/apaga **plano**, mas ninguém — nem admin — cria **produto**.
+## B. O selo `ajustado`
 
-## B. Quem são eles no banco
+É **estado gravado**, e é **ortogonal ao alerta**. Colunas `deal_vinculo_ajustado_por` / `deal_vinculo_ajustado_em` / `deal_vinculo_anterior` em `consorcio_pending_registrations`, lidas em `useConsorcioCotasContratadas.ts` linhas 195-199 e montadas em `ajuste` (linhas 379-385). Renderizado por `SeloAutoria` em `src/components/sdr/ResiduoDetalheModal.tsx` (linhas 83-100).
 
-Cinco perfis casam com os nomes. Os relevantes:
+Ele registra apenas **quem mexeu no vínculo e quando** — trilha de autoria. Não participa do predicado de saída em nenhum ponto. Não é a lista "ignorando o selo": é decisão de desenho — o selo documenta a intervenção, a saída depende da reunião. O efeito prático, porém, é o que o dono viu: selo verde de "ajustado" convivendo com linha pendente. O modal já tenta ser honesto nisso (aviso âmbar "Vínculo salvo, mas o caso continua na lista: …", linhas ~196-215 do modal), mas o botão continua sendo oferecido.
 
-- **Antony Nicolas Gomes Rosa** — `antony.nicolas@minhacasafinanciada.com` — papéis: `admin`, `assistente_administrativo`, `cobranca_consorcio`
-- **Emily Caroline Dias** — `emily.dias@minhacasafinanciada.com` — papéis: `admin`, `cobranca_consorcio`
+## C. O que "Trocar lead" faz
 
-Homônimos/duplicados que existem e não devem ser confundidos:
-- Antony Elias Monteiro da Silva — `antony.elias@…` — papel: `sdr`
-- Emily Segundario — `emily.carolinedias@gmail.com` — papel: `sdr`
-- Emily Dias — `emily.dias@minhacasafinanciada.com` (mesmo e-mail do perfil acima) — **sem papel nenhum**
+`CorrigirVinculoCotaModal` → RPC `consorcio_corrigir_vinculo_cota` (SECURITY DEFINER, auditada). Ela grava **um único campo funcional**: `consorcio_pending_registrations.deal_id` (+ `updated_at`), mais a trilha de autoria e um `audit_logs` de impacto. Não cria reunião, não toca `meeting_slots`, `meeting_slot_attendees` nem `booked_by`.
 
-Dois pontos que merecem decisão do dono, fora do pedido: os dois principais já têm `admin` acumulado, e existe um perfil duplicado com o e-mail da Emily. `user_roles` não guarda data de concessão (não há coluna de timestamp), então não é possível dizer desde quando.
+**Com todas as letras: trocar o lead só satisfaz a condição de saída se o lead novo (ou outra cota do mesmo cliente) já tiver R1 de Consórcio elegível com agendador.** Quando nenhum lead do cliente tem essa reunião, a ação é inócua para o alerta — grava o vínculo e a linha permanece.
 
-## C. Por que o Antony falhou tendo `admin`
+## D. Os quatro casos reais (consulta ao banco)
 
-Porque a policy **não é sobre papel** — não há policy alguma para INSERT. `admin` não é privilegiado no Postgres; ele só passa onde alguma policy escreve `has_role(auth.uid(),'admin')`. Em `consorcio_produtos` isso nunca foi criado: a migração original liberou leitura e esqueceu escrita. Consequência prática: **os 7 produtos ativos hoje foram criados por migração/SQL direto, não pela tela.** A tela de produto nunca funcionou para ninguém.
+| Cliente | Grupo/Cota | card_id | Deal vinculado hoje | Attendees do deal |
+|---|---|---|---|---|
+| RODRIGO MOREIRA ROBERTO (CPF 385.446.388-05) | 7274/57 | df8071bb… | `a28592fa-afca-4ecb-bcde-944a17c608b1` — "Rodrigo Moreira Roberto" (origem `00 - GERENTES DE RELACIONAMENTO`) | **zero** |
+| RODRIGO MOREIRA ROBERTO | 7274/678 | cd5bd31c… | mesmo deal `a28592fa…` | **zero** |
+| ROSANGELA MARIA DOS PASSOS FERREIRA (CPF 039.138.426-08) | 7272/2682 | d13d2931… | `6858e59a-b37e-4957-b928-5373825f893f` — "Rosângela Maria dos Passos Ferreira - Efeito Alavanca" | **zero** |
+| ROSANGELA MARIA DOS PASSOS FERREIRA | 7272/4549 | 1abd6a9f… | mesmo deal `6858e59a…` | **zero** |
 
-## D. O que a tela grava
+`select … from meeting_slot_attendees where deal_id in (a28592fa…, 6858e59a…)` retorna **conjunto vazio** — não é "reunião de outra BU", não é "sem agendador": não existe reunião nenhuma para esses leads.
 
-O modal "Criar produto" (`ConsorcioConfigModal.tsx` → `ProdutosTab`/`ProdutoForm`, via `useCreateConsorcioProduto`) grava em **uma só tabela**: `consorcio_produtos`. O cronograma de comissão não é tabela separada — é a coluna `comissao_schedule` (jsonb) na própria linha, junto de `comissao_base`. Não há segunda escrita, então não existe risco de "produto criado pela metade" nesse fluxo.
+Busca por telefone (sufixo 9 dígitos: `983647601`, `981087575`) sobre `crm_deals`/`crm_contacts` encontra **exatamente esses dois deals** e nenhum outro; ambos com `att_total = 0` e `r1_cons = 0`. Varredura por nome também não achou outro deal desses titulares com R1 de consórcio.
 
-A segunda tabela aparece só na **aba Planos** (`PlanosTab`, `useConsorcioCreditosAdmin`), que grava `consorcio_creditos` — e essa já permite `admin`/`manager`/`cobranca_consorcio`. Se o pedido do dono inclui digitar os valores tabelados por faixa de crédito, essa parte **já está liberada** para os dois.
+Conclusão por linha: **falta uma reunião de consórcio que não existe** — não falta vínculo, não falta agendador. Os dois selos `ajustado` do Rodrigo (21/08, 19:23 e 19:56) apenas registram que o vínculo foi (re)apontado para o mesmo deal sem reunião.
 
-Detalhe estrutural: `consorcio_creditos.produto_id` referencia `consorcio_produtos` com **ON DELETE CASCADE**. Um DELETE real de produto levaria embora todos os planos dele.
+Contexto dos cadastros: ambos sem `proposal_id` (venda lançada direto), `aceite_date` 20/08 e 10/08, status `cota_aberta` / `vinculada`.
 
-## E. Estrago possível
+## E. Existe caminho de saída hoje?
 
-**Propostas/cartas já gravadas:** não são alteradas por criar ou editar produto. O consumo é sempre em tempo de cálculo, na hora que alguém preenche/salva um formulário: `resolverParcelaOficial` (`src/lib/consorcioParcelaOficial.ts`) e `getProdutoComissaoContext` (`src/lib/produtoComissaoLookup.ts`) leem a tabela sob demanda e o resultado é gravado como valor no registro da carta/cota. Não há view materializada nem cache persistido apontando para produto.
+**Não pela tela.** É esse o caso: vendas que entraram por fora do funil de R1 (Rodrigo via Gerentes de Relacionamento, Rosângela via Efeito Alavanca + Clube). Sem R1 de Consórcio, o alerta é **permanente por construção**.
 
-**FK / trigger / cache que propague:**
-- FKs referenciando `consorcio_produtos`: apenas `consorcio_creditos.produto_id` (CASCADE em delete).
-- Triggers na tabela: apenas `update_consorcio_produtos_updated_at` (toca só `updated_at`).
-- Nenhum trigger propaga para `consortium_cards`, `consorcio_pending_registrations`, `consorcio_proposals` ou termos.
-- **O vetor retroativo real é manual:** `useRecalculateCommissions` (botão "Recalcular", hoje restrito a `admin`/`coordenador` em `CotasTab`) reprocessa comissões de registros existentes usando o produto **vigente**. Produto errado + alguém clicando em recalcular = comissões antigas reescritas.
+"Informar quem agendou" existe (`InformarAgendadorModal`, disparado quando `problema === 'sem_agendador'`, modal linhas ~297-306) e resolve **outro** caso: reunião elegível que existe mas está sem `booked_by`. Ela não aparece nessas 4 linhas porque o diagnóstico parou antes — `sem_reuniao_bu` — e o hook só popula `agendamento` quando há attendee de consórcio (linhas 293-301). Não há attendee: não há o que informar.
 
-**Criar × editar × apagar não são o mesmo risco:**
-- **Criar** é o menos perigoso, com uma ressalva: `resolverParcelaOficial` escolhe o produto com `limit(1) … maybeSingle()` **sem ordenação determinística**, filtrando por `ativo` + `taxa_antecipada_tipo` + faixa de crédito. Um produto novo com faixa **sobreposta** a um existente pode passar a ganhar a disputa de forma imprevisível e mudar a parcela sugerida de vendas futuras inteiras.
-- **Editar** é mais perigoso: altera silenciosamente a base de cálculo de tudo que vier depois, e alimenta o recálculo de comissão retroativo.
-- **Apagar** pela tela é *soft delete* (`ativo = false`), então não dispara o CASCADE; mas some com o produto do matching e, por consequência, os planos ligados a ele deixam de ser encontrados (o lookup filtra por produto ativo). Um DELETE real (fora da tela) apagaria os planos em cascata.
+## F. O texto do aviso
 
-## F. Trilha de auditoria
+`src/components/sdr/CadastroSemLeadAlerta.tsx` linhas 82-85 e 103 descrevem dois casos: (1) reunião existe sem agendador; (2) cota aponta para lead sem reunião. As 4 linhas são o **caso 2** — mas o conselho do caso 2 ("troque para o lead que teve a R1") pressupõe que exista, em outro lugar, um lead **com** R1 de consórcio. Para esses dois clientes não existe. **Confirmado: o conselho é impossível de seguir nessas 4 linhas.**
 
-Praticamente não há. Colunas da tabela: sem `created_by`, sem `updated_by`. Só `created_at` e `updated_at`. Não existe tabela de auditoria para produto (`consortium_card_activity_log` cobre cota, não produto). **Resposta curta: não há trilha de quem criou ou alterou um produto.**
+## G. Impacto no número (R$ 540.000)
 
-## G. Comportamento da tela hoje
+**Dentro dos dois números — o alerta não mexe em dinheiro.**
 
-Pior dos mundos, confirmado. O botão que abre o modal de configuração em `CotasTab.tsx` (linha 557) **não tem gate de papel nenhum** — quem chega na tela de Cotas vê. Dentro dele, a aba Produtos, o botão "Novo produto" e o "Criar produto" também não checam papel; a lixeira só pede um `confirm()`. Ou seja: qualquer usuário com acesso à tela preenche o formulário inteiro e só descobre no envio, via toast vermelho, que não pode — e o formulário fica com o trabalho perdido. E hoje isso vale para **todo mundo, admin incluído**.
+- **Consórcio Efetivado**: ancorado em `consortium_cards.tipo_registro='contratacao'` + `data_contratacao`. As 4 cotas têm contratação em 20/08 e 10/08/2026 e estão nesse universo — são, inclusive, as mesmas linhas que o hook do alerta leu (linhas 181-188). A ausência de SDR não remove a cota do total; ela cai na linha residual "Sem agendamento de consórcio", que soma no Total (linhas 525-528: `total++` e `totalCredito += credito` acontecem antes de qualquer diagnóstico).
+- **Produção Gerada**: os cadastros têm `aceite_date` em agosto (20/08 e 10/08) e entram pela perna de cadastros sem proposta, com atribuição por `created_by`/vendedor — que está preenchido em todos (André Duarte, João Pedro).
 
-## H. Opções (sem escolher)
+Ou seja: o texto "o crédito da venda não está perdido" **está certo**, e agora por query. O que se perde é a **atribuição de SDR** — os R$ 540.000 aparecem sem SDR, não fora do total.
 
-Nota comum às três: como não existe policy de escrita, **qualquer** caminho exige criar policy nova — não há como "só dar um papel" e resolver.
+## Saídas possíveis (sem escolha minha)
 
-**Opção 1 — dar a eles o papel que já tem essa permissão**
-Não existe tal papel para produto. O papel que tem escrita na tabela *irmã* (`consorcio_creditos`) é `admin`/`manager`/`cobranca_consorcio`, e os dois **já têm** `admin` e `cobranca_consorcio`. Portanto essa opção é inaplicável ao pedido; nada a conceder.
+1. **Esconder o botão quando ele não pode resolver.** Quando nenhum deal candidato do cliente tem R1 de consórcio, trocar "Trocar lead" por texto ("nenhum lead deste cliente tem R1 de Consórcio"). Prós: nenhuma migração, elimina o clique infinito. Contras: a linha continua na lista para sempre; não dá desfecho.
+2. **Marcar como "venda fora do funil" (reconhecimento explícito).** Uma coluna/tabela de exceção que remove a linha do alerta mantendo trilha de quem reconheceu. Prós: dá desfecho e some do painel. Contras: exige migração e regra de quem pode marcar; risco de virar tapa-buraco para cadastro realmente ruim.
+3. **Separar em duas caixas: "corrigível" vs "sem R1 nesta BU".** Mantém tudo visível, mas em blocos com ação diferente (segundo bloco sem botão, só CSV). Prós: só UI, honesto. Contras: continua acumulando linhas; não resolve o incômodo do dono.
+4. **Permitir informar o agendador mesmo sem reunião** (atribuir o SDR manualmente à venda). Prós: fecha o caso e dá SDR à venda. Contras: cria atribuição sem reunião de lastro, o que fura a regra "SDR = quem agendou a R1" e pode contaminar métricas de agendamento; exige migração e auditoria forte.
+5. **Excluir do alerta as origens que não passam por R1** (ex.: Gerentes de Relacionamento, Efeito Alavanca) por configuração. Prós: silencia a classe inteira sem tocar dado. Contras: esconde também casos legítimos dessas origens; depende de manter a lista de origens.
 
-**Opção 2 — criar policies de escrita espelhando `consorcio_creditos`** (`admin OR manager OR cobranca_consorcio`)
-- Prós: consistente com a tabela irmã, uma migração pequena, os dois passam sem tocar em papéis.
-- Contras / **o que libera além do pedido**: libera **todo** `admin`, **todo** `manager` e **todo** `cobranca_consorcio` — não só os dois. Se as policies incluírem UPDATE e DELETE, libera também **editar e apagar** produto, que o dono não pediu. Sem trilha (item F), não se saberá quem mexeu.
+## Restrições respeitadas nesta rodada
 
-**Opção 3 — policy só de INSERT, sem UPDATE/DELETE**
-- Prós: entrega exatamente "criar tabelas da Embracon" e nada mais; editar/apagar continua bloqueado para todos, como hoje.
-- Contras: a tela mantém botões `Editar` e lixeira que vão continuar explodindo em toast (item G) — a UI ficaria mentindo para o usuário. E ninguém poderia corrigir um produto criado errado pela tela.
-
-**Opção 4 — permissão específica** (recurso novo em `role_permissions`, ou papel dedicado tipo `config_consorcio`)
-- Prós: granularidade real, dá para separar criar de apagar e para gatear o botão na UI pelo mesmo sinal, sem inflar `admin`/`cobranca_consorcio`.
-- Contras: mais superfície — enum/tabela de permissão, policy usando o novo sinal, tela de gerenciamento de usuários e gate de UI. Mais caro que o pedido.
-
-**Itens ortogonais que o levantamento expôs** (registrar, não consertar agora): o botão sem gate de papel (G), a ausência de trilha (F), o `limit(1)` sem ordenação em faixas sobrepostas (E), o CASCADE de planos no delete real (D) e o perfil duplicado da Emily sem papel (B).
-
-## Próximo passo
-
-Diga qual opção do item H seguir — e se ela deve incluir editar e apagar, ou apenas criar. Só então escrevo a migração.
+Nenhum código, nenhuma migração, nenhum dado tocado. Todas as consultas foram `SELECT`.

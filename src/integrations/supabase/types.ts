@@ -9912,6 +9912,208 @@ export type Database = {
         }
         Relationships: []
       }
+      meetgeek_sync_state: {
+        Row: {
+          id: boolean
+          last_cursor: string | null
+          last_meeting_end_at: string | null
+          last_synced_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          last_cursor?: string | null
+          last_meeting_end_at?: string | null
+          last_synced_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          last_cursor?: string | null
+          last_meeting_end_at?: string | null
+          last_synced_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meeting_ai_reviews: {
+        Row: {
+          aderencia_pct: number | null
+          closer_id: string | null
+          created_at: string
+          etapas: Json
+          id: string
+          meeting_slot_id: string | null
+          meeting_type: string | null
+          modelo: string | null
+          nota_geral: number | null
+          pontos_fortes: string[] | null
+          pontos_melhoria: string[] | null
+          recording_id: string
+          resumo: string | null
+          script_versao: number | null
+        }
+        Insert: {
+          aderencia_pct?: number | null
+          closer_id?: string | null
+          created_at?: string
+          etapas?: Json
+          id?: string
+          meeting_slot_id?: string | null
+          meeting_type?: string | null
+          modelo?: string | null
+          nota_geral?: number | null
+          pontos_fortes?: string[] | null
+          pontos_melhoria?: string[] | null
+          recording_id: string
+          resumo?: string | null
+          script_versao?: number | null
+        }
+        Update: {
+          aderencia_pct?: number | null
+          closer_id?: string | null
+          created_at?: string
+          etapas?: Json
+          id?: string
+          meeting_slot_id?: string | null
+          meeting_type?: string | null
+          modelo?: string | null
+          nota_geral?: number | null
+          pontos_fortes?: string[] | null
+          pontos_melhoria?: string[] | null
+          recording_id?: string
+          resumo?: string | null
+          script_versao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_ai_reviews_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_ai_reviews_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_ai_reviews_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_recordings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_recordings: {
+        Row: {
+          analysis_status: string
+          calendar_event_id: string | null
+          closer_id: string | null
+          created_at: string
+          duration_minutes: number | null
+          ended_at: string | null
+          highlights: Json | null
+          host_email: string | null
+          id: string
+          ingest_attempts: number
+          ingest_error: string | null
+          ingest_status: string
+          ingested_at: string | null
+          join_link: string | null
+          language: string | null
+          match_method: string | null
+          meetgeek_meeting_id: string
+          meeting_slot_id: string | null
+          participant_emails: string[] | null
+          source: string | null
+          started_at: string | null
+          summary: Json | null
+          title: string | null
+          transcript: Json | null
+          transcript_chars: number | null
+          transcript_purged_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_status?: string
+          calendar_event_id?: string | null
+          closer_id?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          highlights?: Json | null
+          host_email?: string | null
+          id?: string
+          ingest_attempts?: number
+          ingest_error?: string | null
+          ingest_status?: string
+          ingested_at?: string | null
+          join_link?: string | null
+          language?: string | null
+          match_method?: string | null
+          meetgeek_meeting_id: string
+          meeting_slot_id?: string | null
+          participant_emails?: string[] | null
+          source?: string | null
+          started_at?: string | null
+          summary?: Json | null
+          title?: string | null
+          transcript?: Json | null
+          transcript_chars?: number | null
+          transcript_purged_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_status?: string
+          calendar_event_id?: string | null
+          closer_id?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          highlights?: Json | null
+          host_email?: string | null
+          id?: string
+          ingest_attempts?: number
+          ingest_error?: string | null
+          ingest_status?: string
+          ingested_at?: string | null
+          join_link?: string | null
+          language?: string | null
+          match_method?: string | null
+          meetgeek_meeting_id?: string
+          meeting_slot_id?: string | null
+          participant_emails?: string[] | null
+          source?: string | null
+          started_at?: string | null
+          summary?: Json | null
+          title?: string | null
+          transcript?: Json | null
+          transcript_chars?: number | null
+          transcript_purged_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_recordings_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_recordings_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_reminder_settings: {
         Row: {
           ac_field_ids: Json | null
@@ -12288,6 +12490,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sales_script_steps: {
+        Row: {
+          bu: string | null
+          created_at: string
+          criterio: string
+          descricao: string | null
+          etapa: string
+          id: string
+          is_active: boolean
+          meeting_type: string
+          obrigatoria: boolean
+          ordem: number
+          peso: number
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          bu?: string | null
+          created_at?: string
+          criterio: string
+          descricao?: string | null
+          etapa: string
+          id?: string
+          is_active?: boolean
+          meeting_type?: string
+          obrigatoria?: boolean
+          ordem: number
+          peso?: number
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          bu?: string | null
+          created_at?: string
+          criterio?: string
+          descricao?: string | null
+          etapa?: string
+          id?: string
+          is_active?: boolean
+          meeting_type?: string
+          obrigatoria?: boolean
+          ordem?: number
+          peso?: number
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: []
       }
       sdr: {
         Row: {
@@ -16202,6 +16452,7 @@ export type Database = {
         Returns: boolean
       }
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
+      is_closer_do_usuario: { Args: { _closer_id: string }; Returns: boolean }
       is_fechamento_leader: { Args: never; Returns: boolean }
       is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
       is_my_employee_folder: { Args: { _folder: string }; Returns: boolean }
@@ -16250,6 +16501,11 @@ export type Database = {
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
       mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
       mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
+      meetgeek_parear_gravacao: {
+        Args: { _recording_id: string }
+        Returns: Json
+      }
+      meetgeek_purgar_transcricoes: { Args: { _dias?: number }; Returns: Json }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
