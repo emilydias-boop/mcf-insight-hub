@@ -28,6 +28,8 @@ import { CadastroSemLeadAlerta } from "@/components/sdr/CadastroSemLeadAlerta";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
 import { useConsorcioCotasContratadas } from "@/hooks/useConsorcioCotasContratadas";
 import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelineMetricsByCloser";
+import { useConsorcioProducaoGerada } from "@/hooks/useConsorcioProducaoGerada";
+
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
 import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
@@ -314,6 +316,10 @@ export default function ConsorcioPainelEquipe() {
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
   const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
+  // Produção Gerada — crédito de todas as vendas lançadas (etapa 3 em diante),
+  // deduplicada. Coluna isolada: não entra em nenhum outro cálculo.
+  const { data: producaoGerada } = useConsorcioProducaoGerada(start, end, BU_SQUAD);
+
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
   // closer_id). As colunas que não são de agenda (outside, R2, reembolsos) seguem
