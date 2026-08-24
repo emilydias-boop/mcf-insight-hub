@@ -94,11 +94,17 @@ export default function CheckinInbox() {
 
     const naLista = conversations.some((c) => c.id === alvoDeepLink);
     if (!naLista) {
+      // O filtro por responsável pode estar escondendo a conversa do deep link.
+      if (responsavelId) {
+        setResponsavelId(null);
+        return;
+      }
       // A troca automática para escopo "all" tem prioridade sobre o retry.
       if (scope !== 'all' && canSeeAll) {
         setScope('all');
         return;
       }
+
       // Sem permissão de ver tudo: dá uma segunda chance (refetch) antes de
       // desistir — cobre a janela entre a invalidação assíncrona e o refetch.
       if (tentativasDeepLink.current === 0) {
