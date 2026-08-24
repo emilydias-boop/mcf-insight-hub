@@ -6,8 +6,6 @@ import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Calendar, Users, Download, Briefcase, TrendingUp, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { SetorRow } from "@/components/dashboard/SetorRow";
-import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,13 +20,7 @@ import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
-import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
-import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
-import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
-import { useConsorcioProdutosFechadosMetrics } from "@/hooks/useConsorcioProdutosFechadosMetrics";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
-import { useSdrWeekdayTargets, resolveWeekdayTarget } from "@/hooks/useSdrWeekdayTargets";
-import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
@@ -63,8 +55,6 @@ import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
-import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
-import { useConsorcioSummary } from "@/hooks/useConsorcio";
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 
 const BU_SQUAD = "consorcio";
@@ -210,8 +200,6 @@ export default function ConsorcioPainelEquipe() {
   });
 
   const { teamKPIs: dayKPIs } = useTeamMeetingsData({ startDate: dayStart, endDate: dayEnd, squad: BU_SQUAD });
-  const { teamKPIs: weekKPIs } = useTeamMeetingsData({ startDate: weekStartDate, endDate: weekEndDate, squad: BU_SQUAD });
-  const { teamKPIs: monthKPIs } = useTeamMeetingsData({ startDate: monthStartDate, endDate: monthEndDate, squad: BU_SQUAD });
 
 
   const { data: allSdrsData } = useSdrsAll();
@@ -313,33 +301,6 @@ export default function ConsorcioPainelEquipe() {
     return map;
   }, [consorcioEmployeeAdmissaoData, activeSdrsList, start, end]);
 
-  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
-  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
-  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
-  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
-  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
-  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
-
-  // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
-  // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
-  // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
-  // Agregação feita no BANCO (poucas linhas por funil), não linha a linha.
-  const { data: totaisDayRows } = useConsorcioAgendaTotais(dayStart, dayEnd);
-  const { data: totaisWeekRows } = useConsorcioAgendaTotais(weekStartDate, weekEndDate);
-  const { data: totaisMonthRows } = useConsorcioAgendaTotais(monthStartDate, monthEndDate);
-
-  const fatosDayTotals = useMemo(
-    () => sumConsorcioTotais(totaisDayRows, allowedOriginNames),
-    [totaisDayRows, allowedOriginNames],
-  );
-  const fatosWeekTotals = useMemo(
-    () => sumConsorcioTotais(totaisWeekRows, allowedOriginNames),
-    [totaisWeekRows, allowedOriginNames],
-  );
-  const fatosMonthTotals = useMemo(
-    () => sumConsorcioTotais(totaisMonthRows, allowedOriginNames),
-    [totaisMonthRows, allowedOriginNames],
-  );
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
@@ -349,16 +310,10 @@ export default function ConsorcioPainelEquipe() {
   // Reuniões "sem status" (já passaram e não foram atualizadas) — só exibido na BU Consórcio
   const { data: semStatusCount } = useMeetingsSemStatus(start, end, BU_SQUAD);
 
-  // Consórcio pipeline metrics (deals by stage)
-  const pipelineMetrics = useConsorcioPipelineMetrics();
-  const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
   const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
   // Metas da Equipe: MESMA fonte, só mudando a janela (Dia / Semana / Mês).
-  const { data: cotasDay } = useConsorcioCotasContratadas(dayStart, dayEnd, allowedOriginNames, BU_SQUAD);
-  const { data: cotasWeek } = useConsorcioCotasContratadas(weekStartDate, weekEndDate, allowedOriginNames, BU_SQUAD);
-  const { data: cotasMonth } = useConsorcioCotasContratadas(monthStartDate, monthEndDate, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
@@ -424,23 +379,7 @@ export default function ConsorcioPainelEquipe() {
   }, [fatos, cotasContratadas]);
 
   // Consórcio team targets
-  const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
-  const { data: consorcioWeekdayOverrides } = useSdrWeekdayTargets(new Date(), BU_PREFIX);
-  const todayDow = new Date().getDay();
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
-
-  // Helper to get target value by suffix
-  const getTargetValue = (suffix: string): number => {
-    const targetType = `${BU_PREFIX}${suffix}`;
-    const target = consorcioTargets?.find(t => t.target_type === targetType);
-    return target?.target_value ?? 0;
-  };
-
-  // Meta do dia: override do dia da semana de hoje, com fallback no valor único
-  const getDayTargetValue = (suffix: string): number => {
-    const targetType = `${BU_PREFIX}${suffix}`;
-    return resolveWeekdayTarget(consorcioWeekdayOverrides, targetType, todayDow, getTargetValue(suffix));
-  };
 
   // Helper to check if a meeting matches the selected pipeline
   const matchesPipeline = (originName: string | null) => {
