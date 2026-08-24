@@ -4721,6 +4721,27 @@ export type Database = {
           },
         ]
       }
+      consorcio_planos_faltando_ignorados: {
+        Row: {
+          combinacao_key: string
+          created_at: string
+          id: string
+          ignorado_por: string | null
+        }
+        Insert: {
+          combinacao_key: string
+          created_at?: string
+          id?: string
+          ignorado_por?: string | null
+        }
+        Update: {
+          combinacao_key?: string
+          created_at?: string
+          id?: string
+          ignorado_por?: string | null
+        }
+        Relationships: []
+      }
       consorcio_produto_adquirido_options: {
         Row: {
           created_at: string | null

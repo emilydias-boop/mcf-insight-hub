@@ -18,7 +18,8 @@
  *
  * Nada aqui escreve, recalcula ou corrige o que está gravado.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { taxaAntecipadaTipoDeProduto } from '@/lib/consorcioParcelaOficial';
 import { CONDICOES, PRAZOS } from '@/hooks/useConsorcioCreditosAdmin';
@@ -70,8 +71,17 @@ export interface CombinacaoFaltante {
   colunas: string[];
 }
 
+/** Sugestão que a equipe decidiu ignorar (ex.: crédito que é soma de cartas). */
+export interface SugestaoIgnorada extends CombinacaoFaltante {
+  ignoradoPorNome: string | null;
+  ignoradoEm: string | null;
+}
+
 export interface PlanosFaltandoResultado {
+  /** Fila ativa (já sem as ignoradas). */
   combinacoes: CombinacaoFaltante[];
+  /** Sugestões ignoradas — nunca somem, dá para restaurar. */
+  ignoradas: SugestaoIgnorada[];
   /** Total de cartas vivas cobertas pelo cálculo. */
   cartasAnalisadas: number;
   /** Cartas com prazo sem coluna na tabela — cadastrar plano NÃO resolve. */
@@ -80,7 +90,7 @@ export interface PlanosFaltandoResultado {
   cartasCreditoAbaixoMinimo: number;
   /** Mapa cartaId → chave da combinação faltante (para o Dossiê). */
   porCarta: Record<string, string>;
-  /** Índice chave → combinação, para telas que só têm os campos do cadastro. */
+  /** Índice chave → combinação ATIVA (ignoradas ficam fora, de propósito). */
   porChave: Record<string, CombinacaoFaltante>;
 }
 
@@ -107,6 +117,7 @@ export function chaveDaCombinacao(reg: {
 
 const VAZIO: PlanosFaltandoResultado = {
   combinacoes: [],
+  ignoradas: [],
   cartasAnalisadas: 0,
   cartasPrazoForaDaTabela: 0,
   cartasCreditoAbaixoMinimo: 0,
@@ -120,7 +131,7 @@ export function useConsorcioPlanosFaltando() {
     queryKey: ['consorcio-planos-faltando'],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<PlanosFaltandoResultado> => {
-      const [cartasRes, propostasRes, creditosRes, produtosRes] = await Promise.all([
+      const [cartasRes, propostasRes, creditosRes, produtosRes, ignoradosRes] = await Promise.all([
         supabase
           .from('consorcio_proposal_cartas')
           .select('id, proposal_id, tipo_produto, valor_credito, prazo_meses, condicao_pagamento')
@@ -128,6 +139,9 @@ export function useConsorcioPlanosFaltando() {
         supabase.from('consorcio_proposals').select('id, status'),
         supabase.from('consorcio_creditos').select('*').eq('ativo', true),
         supabase.from('consorcio_produtos').select('id, taxa_antecipada_tipo, ativo'),
+        supabase
+          .from('consorcio_planos_faltando_ignorados')
+          .select('combinacao_key, ignorado_por, created_at'),
       ]);
       if (cartasRes.error) throw cartasRes.error;
       if (creditosRes.error) throw creditosRes.error;
@@ -225,19 +239,96 @@ export function useConsorcioPlanosFaltando() {
         porCarta[String(c.id)] = key;
       }
 
-      const combinacoes = [...acc.values()].sort(
+      const todas = [...acc.values()].sort(
         (a, b) =>
           b.cartas - a.cartas ||
           a.tipoTaxaLabel.localeCompare(b.tipoTaxaLabel) ||
           a.valorCredito - b.valorCredito,
       );
 
+      // Sugestões que a equipe marcou como "ignorar" (ex.: o crédito gravado é a
+      // soma de várias cartas, não o crédito de um plano). Só filtra a fila —
+      // nenhuma carta é alterada.
+      const ignoradosRows = ((ignoradosRes as any)?.data || []) as Array<{
+        combinacao_key: string;
+        ignorado_por: string | null;
+        created_at: string;
+      }>;
+      const nomePorUser = new Map<string, string>();
+      const userIds = [...new Set(ignoradosRows.map(r => r.ignorado_por).filter(Boolean))] as string[];
+      if (userIds.length > 0) {
+        const { data: perfis } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
+        (perfis || []).forEach((p: any) => nomePorUser.set(String(p.id), p.full_name || ''));
+      }
+      const metaIgnorada = new Map(ignoradosRows.map(r => [r.combinacao_key, r]));
+
+      const combinacoes = todas.filter(c => !metaIgnorada.has(c.key));
+      const ignoradas: SugestaoIgnorada[] = todas
+        .filter(c => metaIgnorada.has(c.key))
+        .map(c => {
+          const m = metaIgnorada.get(c.key)!;
+          return {
+            ...c,
+            ignoradoPorNome: (m.ignorado_por && nomePorUser.get(m.ignorado_por)) || null,
+            ignoradoEm: m.created_at || null,
+          };
+        });
+
       const porChave: Record<string, CombinacaoFaltante> = {};
       combinacoes.forEach((c) => { porChave[c.key] = c; });
 
-      return { combinacoes, cartasAnalisadas, cartasPrazoForaDaTabela, cartasCreditoAbaixoMinimo, porCarta, porChave };
+      return {
+        combinacoes,
+        ignoradas,
+        cartasAnalisadas,
+        cartasPrazoForaDaTabela,
+        cartasCreditoAbaixoMinimo,
+        porCarta,
+        porChave,
+      };
 
     },
+  });
+}
+
+/** Ignora uma sugestão da fila de cadastro de plano. Reversível. */
+export function useIgnorarSugestaoPlano() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await supabase
+        .from('consorcio_planos_faltando_ignorados')
+        .insert({ combinacao_key: key } as any);
+      // 23505 = duas pessoas clicaram junto; o estado final é o mesmo.
+      if (error && (error as any).code !== '23505') throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consorcio-planos-faltando'] });
+      toast.success('Sugestão ignorada');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao ignorar sugestão'),
+  });
+}
+
+/** Devolve a sugestão para a fila (apaga a linha de "ignorada"). */
+export function useRestaurarSugestaoPlano() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await supabase
+        .from('consorcio_planos_faltando_ignorados')
+        .delete()
+        .eq('combinacao_key', key);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['consorcio-planos-faltando'] });
+      toast.success('Sugestão restaurada');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao restaurar sugestão'),
   });
 }
 
