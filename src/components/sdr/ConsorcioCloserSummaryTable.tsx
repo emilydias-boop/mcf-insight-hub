@@ -38,6 +38,12 @@ interface ConsorcioCloserSummaryTableProps {
   producaoByCloser?: Map<string, ProducaoGeradaLinha>;
   /** Produção Gerada que não resolveu closer — balde explícito. */
   producaoSemAtribuicao?: ProducaoGeradaLinha;
+  /** Perna C (cota legada sem cadastro, ancorada na contratação) — só procedência. */
+  producaoPernaC?: ProducaoGeradaLinha;
+  /** Total da Produção Gerada do período, para medir o peso da perna C. */
+  producaoTotalPeriodo?: number;
+  /** Meses (YYYY-MM) onde o crédito dos lançamentos retroativos foi contado. */
+  producaoRetroMeses?: string[];
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
   cotasSemCloser?: number;
   /** Clientes distintos e crédito da linha residual de vendedor. */
@@ -66,6 +72,11 @@ export function ConsorcioCloserSummaryTable({
   creditoByCloser,
   producaoByCloser,
   producaoSemAtribuicao,
+  producaoPernaC,
+  producaoTotalPeriodo = 0,
+  producaoRetroMeses = [],
+
+
 
   cotasSemCloser = 0,
   clientesSemCloser = 0,
@@ -132,11 +143,32 @@ export function ConsorcioCloserSummaryTable({
   let producaoTotal = producaoSemAtribuicao?.credito || 0;
   let producaoAntedatados = producaoSemAtribuicao?.antedatados || 0;
   let producaoAntedatadosCredito = producaoSemAtribuicao?.antedatadosCredito || 0;
+  let producaoRetro = producaoSemAtribuicao?.lancadosRetroativos || 0;
+  let producaoRetroCredito = producaoSemAtribuicao?.lancadosRetroativosCredito || 0;
   producaoByCloser?.forEach((l) => {
     producaoTotal += l.credito;
     producaoAntedatados += l.antedatados;
     producaoAntedatadosCredito += l.antedatadosCredito;
+    producaoRetro += l.lancadosRetroativos;
+    producaoRetroCredito += l.lancadosRetroativosCredito;
   });
+
+  // Texto único do aviso de lançamento retroativo: o crédito NÃO está na coluna,
+  // ele foi contado no mês do aceite. Sem isso o mês do lançamento fica mudo.
+  const retroTexto = (qtd: number, credito: number) =>
+    `${qtd} venda(s) lançada(s) neste período com data de aceite de mês anterior` +
+    `${producaoRetroMeses.length > 0 ? ` (${producaoRetroMeses.join(", ")})` : ""}` +
+    `. O crédito de ${brl(credito)} NÃO está somado aqui: ele conta no mês do aceite.`;
+
+  // Procedência da perna C (cota legada sem cadastro, ancorada na contratação).
+  // Mostramos sempre que houver, sem piso arbitrário: procedência não é anomalia
+  // de tamanho — quem lê o número precisa saber que parte dele veio de outra
+  // âncora, mesmo que pequena. O percentual dá a dimensão.
+  const pernaCCredito = producaoPernaC?.credito || 0;
+  const baseTotal = producaoTotalPeriodo || producaoTotal;
+  const pernaCPct = baseTotal > 0 ? Math.round((pernaCCredito / baseTotal) * 100) : 0;
+
+
 
 
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
@@ -260,6 +292,9 @@ export function ConsorcioCloserSummaryTable({
                         ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` +
                           (producao.antedatados > 0
                             ? ` · ${producao.antedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producao.antedatadosCredito)}), incluída(s) na soma`
+                            : "") +
+                          (producao.lancadosRetroativos > 0
+                            ? ` · ${retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}`
                             : "")
                         : undefined
                     }
@@ -270,7 +305,16 @@ export function ConsorcioCloserSummaryTable({
                         ·{producao.antedatados}
                       </span>
                     )}
+                    {producao && producao.lancadosRetroativos > 0 && (
+                      <span
+                        className="ml-1 text-[10px] text-amber-400 align-top"
+                        title={retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}
+                      >
+                        ↩{producao.lancadosRetroativos}
+                      </span>
+                    )}
                   </TableCell>
+
 
                   <TableCell className="text-center">
 
@@ -398,16 +442,30 @@ export function ConsorcioCloserSummaryTable({
               <TableCell
                 className="text-center whitespace-nowrap"
                 title={
-                  producaoAntedatados > 0
-                    ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
-                    : undefined
+                  [
+                    producaoAntedatados > 0
+                      ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
+                      : "",
+                    producaoRetro > 0 ? retroTexto(producaoRetro, producaoRetroCredito) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
                 }
               >
                 {producaoTotal > 0 ? brl(producaoTotal) : "—"}
                 {producaoAntedatados > 0 && (
                   <span className="ml-1 text-[10px] text-muted-foreground align-top">·{producaoAntedatados}</span>
                 )}
+                {producaoRetro > 0 && (
+                  <span
+                    className="ml-1 text-[10px] text-amber-400 align-top"
+                    title={retroTexto(producaoRetro, producaoRetroCredito)}
+                  >
+                    ↩{producaoRetro}
+                  </span>
+                )}
               </TableCell>
+
 
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
@@ -436,6 +494,21 @@ export function ConsorcioCloserSummaryTable({
         Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em
         Cotas Contratadas. O Total é o mesmo nas abas SDRs e Closers.
       </p>
+
+      {pernaCCredito > 0 && (
+        <p className="px-4 pb-2 text-xs text-amber-400/90">
+          Procedência: {brl(pernaCCredito)} da Produção Gerada ({pernaCPct}% do total) vem de{" "}
+          {producaoPernaC?.cartas || 0} cota(s) histórica(s) sem cadastro no sistema — para elas não
+          existe data de lançamento, então a âncora é a data de contratação, não a de aceite.
+        </p>
+      )}
+
+      {producaoRetro > 0 && (
+        <p className="px-4 pb-2 text-xs text-amber-400/90">
+          {retroTexto(producaoRetro, producaoRetroCredito)}
+        </p>
+      )}
+
 
       <ResiduoDetalheModal
         open={detalheOpen}

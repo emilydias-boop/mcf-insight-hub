@@ -55,6 +55,16 @@ export interface ProducaoGeradaLinha {
   antedatados: number;
   /** Crédito desses registros — contado normalmente na soma. */
   antedatadosCredito: number;
+  /**
+   * AVISO, NÃO NÚMERO. Registros LANÇADOS neste período (`created_at` dentro do
+   * filtro) cujo `aceite_date` é de mês anterior — ou seja, o crédito deles NÃO
+   * está em `credito` aqui: ele conta no mês do aceite. Nunca somar isto na
+   * coluna nem no total; serve só para o mês do lançamento poder dizer que
+   * alguém lançou venda com data de aceite retroativa.
+   */
+  lancadosRetroativos: number;
+  /** Crédito desses registros, contado em OUTRO mês (o do aceite). */
+  lancadosRetroativosCredito: number;
 }
 
 export interface ConsorcioProducaoGerada {
@@ -66,6 +76,8 @@ export interface ConsorcioProducaoGerada {
   pernaA: ProducaoGeradaLinha;
   pernaB: ProducaoGeradaLinha;
   pernaC: ProducaoGeradaLinha;
+  /** Meses de âncora (YYYY-MM) onde o crédito dos lançamentos retroativos conta. */
+  retroMesesAncora: string[];
 }
 
 const zero = (): ProducaoGeradaLinha => ({
@@ -74,6 +86,8 @@ const zero = (): ProducaoGeradaLinha => ({
   vendas: 0,
   antedatados: 0,
   antedatadosCredito: 0,
+  lancadosRetroativos: 0,
+  lancadosRetroativosCredito: 0,
 });
 
 const EMPTY: ConsorcioProducaoGerada = {
@@ -83,7 +97,9 @@ const EMPTY: ConsorcioProducaoGerada = {
   pernaA: zero(),
   pernaB: zero(),
   pernaC: zero(),
+  retroMesesAncora: [],
 };
+
 
 
 const SEM_ATRIBUICAO = "__sem_atribuicao__";
@@ -206,6 +222,16 @@ export function useConsorcioProducaoGerada(
         alvo.vendas += vendas;
         alvo.antedatados += antedatados;
         alvo.antedatadosCredito += antedatadosCredito;
+        byCloser.set(closerId, alvo);
+      };
+      /**
+       * Aviso do mês do LANÇAMENTO. NÃO toca `credito`, `cartas` nem `vendas` —
+       * o crédito desses registros é contado no mês do aceite, não aqui.
+       */
+      const addRetro = (closerId: string, credito: number) => {
+        const alvo = byCloser.get(closerId) || zero();
+        alvo.lancadosRetroativos += 1;
+        alvo.lancadosRetroativosCredito += credito;
         byCloser.set(closerId, alvo);
       };
 
@@ -447,6 +473,63 @@ export function useConsorcioProducaoGerada(
         pernaB.vendas += pessoas.size;
       });
 
+      // ══ AVISO — lançamentos RETROATIVOS feitos DENTRO deste período ════════
+      // Cadastro CRIADO no período (`created_at`) cujo `aceite_date` é de mês
+      // ANTERIOR: o crédito dele conta no mês do aceite, NÃO aqui. Isto é aviso,
+      // nunca número: não soma em `credito`, não entra em `total.credito`, não
+      // aparece como valor da coluna. Existe porque o sinalizador de antedatação,
+      // ancorado no aceite, só acenderia num mês já fechado — ninguém veria.
+      // Mesmo recorte da perna B (cadastro avulso, dedup pelos quatro caminhos):
+      // é lá que o cadastro é a unidade de contagem.
+      const retroMeses = new Set<string>();
+      const { data: retroRaw, error: retroError } = await supabase
+        .from("consorcio_pending_registrations")
+        .select(
+          "id, proposal_id, consortium_card_id, aceite_date, created_at, valor_credito, vendedor_name, vendedor_name_cota",
+        )
+        .gte("created_at", `${ini}T00:00:00`)
+        .lte("created_at", `${fim}T23:59:59.999`);
+      if (retroError) throw retroError;
+
+      const retroCandidatos = ((retroRaw || []) as RegRow[]).filter(
+        (r) =>
+          !!r.aceite_date &&
+          !!r.created_at &&
+          String(r.aceite_date).slice(0, 7) < String(r.created_at).slice(0, 7),
+      );
+
+      if (retroCandidatos.length > 0) {
+        const retroComCarta = new Set<string>();
+        for (const parte of chunk(retroCandidatos.map((r) => r.id))) {
+          if (parte.length === 0) continue;
+          const { data: cartasReg } = await supabase
+            .from("consorcio_proposal_cartas")
+            .select("pending_registration_id")
+            .in("pending_registration_id", parte);
+          (cartasReg || []).forEach((c) => {
+            if (c.pending_registration_id) retroComCarta.add(c.pending_registration_id);
+          });
+        }
+        const retroCardsVinc = await cardsVinculados(
+          retroCandidatos.map((r) => r.consortium_card_id).filter(Boolean) as string[],
+        );
+        retroCandidatos
+          .filter((r) => {
+            if (r.proposal_id) return false;
+            if (retroComCarta.has(r.id)) return false;
+            if (r.consortium_card_id && retroCardsVinc.has(r.consortium_card_id)) return false;
+            return true;
+          })
+          .forEach((r) => {
+            const nome = r.vendedor_name_cota || r.vendedor_name;
+            const closerId = nomeParaCloser.get(nameKey(nome) || "") || SEM_ATRIBUICAO;
+            addRetro(closerId, Number(r.valor_credito || 0));
+            retroMeses.add(String(r.aceite_date).slice(0, 7));
+          });
+      }
+
+
+
       // ══ PERNA C — resíduo legado: card SEM cadastro nenhum e sem proposta ══
       // Âncora `data_contratacao` estrita. Para esse grupo não existe data de
       // primeira aparição confiável (importação/digitação), e é exatamente por
@@ -502,14 +585,27 @@ export function useConsorcioProducaoGerada(
         total.vendas += l.vendas;
         total.antedatados += l.antedatados;
         total.antedatadosCredito += l.antedatadosCredito;
+        total.lancadosRetroativos += l.lancadosRetroativos;
+        total.lancadosRetroativosCredito += l.lancadosRetroativosCredito;
       });
       total.credito += semAtribuicao.credito;
       total.cartas += semAtribuicao.cartas;
       total.vendas += semAtribuicao.vendas;
       total.antedatados += semAtribuicao.antedatados;
       total.antedatadosCredito += semAtribuicao.antedatadosCredito;
+      total.lancadosRetroativos += semAtribuicao.lancadosRetroativos;
+      total.lancadosRetroativosCredito += semAtribuicao.lancadosRetroativosCredito;
 
-      return { byCloser, semAtribuicao, total, pernaA, pernaB, pernaC };
+      return {
+        byCloser,
+        semAtribuicao,
+        total,
+        pernaA,
+        pernaB,
+        pernaC,
+        retroMesesAncora: [...retroMeses].sort(),
+      };
+
     },
     enabled: !!startDate && !!endDate,
   });
