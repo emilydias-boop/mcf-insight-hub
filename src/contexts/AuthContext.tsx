@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { getRolesFromToken } from '@/utils/jwt';
 import { useInactivityLogout } from '@/hooks/useInactivityLogout';
 
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo' | 'cobranca_consorcio';
 
 const ROLE_PRIORITY: Record<string, number> = {
   admin: 1,
