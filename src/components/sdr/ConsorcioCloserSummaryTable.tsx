@@ -308,6 +308,29 @@ export function ConsorcioCloserSummaryTable({
               </TableRow>
             )}
 
+            {producaoSemAtribuicao && producaoSemAtribuicao.credito > 0 && (
+              <TableRow
+                className="italic text-muted-foreground hover:bg-muted/20"
+                title="Produção Gerada cujo closer não foi resolvido por nenhum caminho (criador da proposta, dono do negócio ou closer da reunião). Aparece aqui para o Total nunca esconder crédito."
+              >
+                <TableCell className="font-normal underline decoration-dotted">
+                  Produção sem atribuição
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {brl(producaoSemAtribuicao.credito)}
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {onCloserClick && <TableCell />}
+              </TableRow>
+            )}
+
             {unassignedRow && (
               <TableRow className="italic text-muted-foreground hover:bg-muted/20" title={unassignedTooltip}>
                 <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
@@ -319,9 +342,11 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 {onCloserClick && <TableCell />}
               </TableRow>
             )}
+
 
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
