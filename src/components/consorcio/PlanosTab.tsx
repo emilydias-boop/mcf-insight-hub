@@ -338,9 +338,13 @@ function PlanosFaltandoBlock({
   onCadastrar: (combo: CombinacaoFaltante) => void;
 }) {
   const { data } = useConsorcioPlanosFaltando();
+  const ignorar = useIgnorarSugestaoPlano();
+  const restaurar = useRestaurarSugestaoPlano();
   const [aberto, setAberto] = useState(true);
+  const [ignoradasAbertas, setIgnoradasAbertas] = useState(false);
 
   const combos = data?.combinacoes || [];
+  const ignoradas = data?.ignoradas || [];
   const prazoFora = data?.cartasPrazoForaDaTabela || 0;
   const creditoAbaixo = data?.cartasCreditoAbaixoMinimo || 0;
   if (combos.length === 0 && prazoFora === 0 && creditoAbaixo === 0) return null;
@@ -390,6 +394,13 @@ function PlanosFaltandoBlock({
                     <Badge variant="secondary" className="text-xs">
                       {c.cartas} carta{c.cartas === 1 ? '' : 's'}
                     </Badge>
+                    <button
+                      type="button"
+                      onClick={() => ignorar.mutate(c.key)}
+                      className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    >
+                      Ignorar
+                    </button>
                     <Button size="sm" variant="outline" onClick={() => onCadastrar(c)}>
                       Cadastrar plano
                     </Button>
@@ -413,6 +424,50 @@ function PlanosFaltandoBlock({
           {creditoAbaixo} carta{creditoAbaixo === 1 ? '' : 's'} com crédito abaixo de R$ 1.000 — provável
           erro de digitação na venda; cadastrar plano não resolve.
         </p>
+      )}
+
+      {ignoradas.length > 0 && (
+        <div className="border-t">
+          <button
+            type="button"
+            onClick={() => setIgnoradasAbertas((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs text-muted-foreground"
+          >
+            {ignoradasAbertas ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {ignoradas.length} sugest{ignoradas.length === 1 ? 'ão ignorada' : 'ões ignoradas'}
+          </button>
+          {ignoradasAbertas && (
+            <div className="px-4 pb-3 space-y-1">
+              {ignoradas.map((c) => (
+                <div
+                  key={c.key}
+                  className="flex flex-wrap items-center gap-2 justify-between rounded-md border bg-background/60 px-3 py-2"
+                >
+                  <div className="text-xs text-muted-foreground">
+                    <span className="text-foreground">{c.tipoTaxaLabel}</span> · {brl(c.valorCredito)} ·{' '}
+                    {c.prazoMeses}x · {c.condicaoLabel} · {c.cartas} carta{c.cartas === 1 ? '' : 's'}
+                    {(c.ignoradoPorNome || c.ignoradoEm) && (
+                      <>
+                        {' — ignorada'}
+                        {c.ignoradoPorNome ? ` por ${c.ignoradoPorNome}` : ''}
+                        {c.ignoradoEm
+                          ? ` em ${new Date(c.ignoradoEm).toLocaleString('pt-BR')}`
+                          : ''}
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => restaurar.mutate(c.key)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  >
+                    Restaurar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
