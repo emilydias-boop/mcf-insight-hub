@@ -116,6 +116,22 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
     setAlvo(null);
   };
 
+  const abrirReversao = (cota: CotaCadastrada, modo: '5-4' | '6-5') => {
+    setMotivo('');
+    setReversao({ cota, modo });
+  };
+
+  const confirmarReversao = async () => {
+    if (!reversao) return;
+    const args = { registroId: reversao.cota.id, motivo: motivo.trim() };
+    if (reversao.modo === '5-4') await reverter54.mutateAsync(args);
+    else await desfazer65.mutateAsync(args);
+    setReversao(null);
+    setMotivo('');
+  };
+
+  const revertendo = reverter54.isPending || desfazer65.isPending;
+
   const renderTabela = (linhas: CotaCadastrada[]) => (
     <Table>
       <TableHeader>
@@ -132,6 +148,8 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
       <TableBody>
         {linhas.map((c) => {
           const paga = !!c.parcela_inicial_paga_em;
+          const st = statusPorRegistro[c.id];
+          const bloqueio = motivoBloqueio(st);
           return (
             <TableRow key={c.id}>
               <TableCell className="font-medium">
@@ -141,6 +159,17 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
                   {!paga && prazoExpirado(c) && (
                     <Badge variant="outline" className="border-destructive/60 bg-destructive/10 text-[10px] text-destructive">
                       não paga — prazo expirado
+                    </Badge>
+                  )}
+                  {/* Aviso só quando o evento consorcio.venda.criada está `sent`.
+                      Evento `failed` ou inexistente não gera alarme. */}
+                  {st?.dash_anunciado && (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500/60 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400"
+                      title="Se esta venda voltar de etapa, o Dash continuará com ela — reconcilie manualmente."
+                    >
+                      já anunciada ao Dash — reconciliar
                     </Badge>
                   )}
                 </div>
@@ -161,7 +190,7 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
               </TableCell>
               <TableCell>{c.vendedor_name || '—'}</TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   {c.consortium_card_id && (
                     <Button
                       size="sm"
@@ -172,19 +201,36 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
                       <FileBadge className="mr-1 h-3.5 w-3.5" /> Comprovante
                     </Button>
                   )}
-                  {paga ? (
+                  {/* Botão que some sem explicar não passa: quando há bloqueio, o
+                      motivo aparece escrito no lugar do botão. */}
+                  {bloqueio ? (
+                    <span className="max-w-[15rem] text-right text-[11px] leading-tight text-muted-foreground">
+                      {bloqueio}
+                    </span>
+                  ) : paga ? (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => marcar.mutate({ id: c.id, data: null })}
-                      disabled={marcar.isPending}
+                      onClick={() => abrirReversao(c, '6-5')}
+                      disabled={revertendo}
                     >
-                      Desfazer
+                      <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer parcela inicial
                     </Button>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={() => abrirConfirm(c)}>
-                      Parcela inicial paga
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => abrirConfirm(c)}>
+                        Parcela inicial paga
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => abrirReversao(c, '5-4')}
+                        disabled={revertendo}
+                        title="Devolve o cadastro para Cotas a Fazer. A cota não é apagada."
+                      >
+                        <Undo2 className="mr-1 h-3.5 w-3.5" /> Voltar p/ Cotas a Fazer
+                      </Button>
+                    </>
                   )}
                 </div>
               </TableCell>
@@ -194,6 +240,7 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
       </TableBody>
     </Table>
   );
+
 
   return (
     <Card>
