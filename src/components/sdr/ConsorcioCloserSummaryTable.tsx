@@ -143,11 +143,32 @@ export function ConsorcioCloserSummaryTable({
   let producaoTotal = producaoSemAtribuicao?.credito || 0;
   let producaoAntedatados = producaoSemAtribuicao?.antedatados || 0;
   let producaoAntedatadosCredito = producaoSemAtribuicao?.antedatadosCredito || 0;
+  let producaoRetro = producaoSemAtribuicao?.lancadosRetroativos || 0;
+  let producaoRetroCredito = producaoSemAtribuicao?.lancadosRetroativosCredito || 0;
   producaoByCloser?.forEach((l) => {
     producaoTotal += l.credito;
     producaoAntedatados += l.antedatados;
     producaoAntedatadosCredito += l.antedatadosCredito;
+    producaoRetro += l.lancadosRetroativos;
+    producaoRetroCredito += l.lancadosRetroativosCredito;
   });
+
+  // Texto único do aviso de lançamento retroativo: o crédito NÃO está na coluna,
+  // ele foi contado no mês do aceite. Sem isso o mês do lançamento fica mudo.
+  const retroTexto = (qtd: number, credito: number) =>
+    `${qtd} venda(s) lançada(s) neste período com data de aceite de mês anterior` +
+    `${producaoRetroMeses.length > 0 ? ` (${producaoRetroMeses.join(", ")})` : ""}` +
+    `. O crédito de ${brl(credito)} NÃO está somado aqui: ele conta no mês do aceite.`;
+
+  // Procedência da perna C (cota legada sem cadastro, ancorada na contratação).
+  // Mostramos sempre que houver, sem piso arbitrário: procedência não é anomalia
+  // de tamanho — quem lê o número precisa saber que parte dele veio de outra
+  // âncora, mesmo que pequena. O percentual dá a dimensão.
+  const pernaCCredito = producaoPernaC?.credito || 0;
+  const baseTotal = producaoTotalPeriodo || producaoTotal;
+  const pernaCPct = baseTotal > 0 ? Math.round((pernaCCredito / baseTotal) * 100) : 0;
+
+
 
 
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
