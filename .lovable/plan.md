@@ -1,116 +1,117 @@
-# Voltar etapa no funil Consórcio — correção do mapa, com evidência
+# Painel Comercial do Consórcio — "Consórcio Efetivado" e "Produção Gerada"
 
-Você estava certo: eu me contradisse. A contradição está resolvida abaixo com código e dados.
-Ainda é rodada de desenho.
+Rodada de levantamento. Nenhum código, nenhuma migração, nenhum dado alterado.
 
-## 1. Onde nasce a linha em `consortium_cards` — numeração sem ambiguidade
+## 1. O que "Crédito Contratado" soma hoje
 
-A linha nasce na **4 → 5**, não na 5 → 6.
+Fonte única: `src/hooks/useConsorcioCotasContratadas.ts`.
 
-- **4 → 5 (Cotas a Fazer → Cotas Cadastradas):** `OpenCotaModal` → hook de criação em
-  `src/hooks/useConsorcioPendingRegistrations.ts` (~1180): `supabase.from('consortium_cards').insert(...)`
-  com `tipo_registro: isReserva ? 'reserva' : 'contratacao'`. Na mesma transação: parceiros PJ,
-  cronograma em `consortium_installments`, `consortium_documents.card_id` migrado, cadastro pendente
-  para `status = 'cota_aberta'` + `cota_aberta_at` + `consortium_card_id`, e
-  `consorcio_proposals.consortium_card_id`. O `INSERT` na cota dispara
-  `trg_enqueue_outbound_consorcio_webhook` → `consorcio.venda.criada` na `outbound_webhook_queue`.
-- **5 → 6 (Cotas Cadastradas → Cotas):** `useMarcarParcelaInicial` (`useCotasCadastradas.ts:113`) —
-  grava `parcela_inicial_paga_em/_por` no cadastro e faz `UPDATE` na cota já existente:
-  `tipo_registro = 'contratacao'` + `data_contratacao`. Nenhum `INSERT`, e nenhuma dessas duas colunas
-  está na lista observada pelo trigger → **nenhum evento sai**. (`useConvertReservaToContratacao` é o
-  outro caminho da mesma transição, com recálculo do cronograma.)
+```ts
+.from("consortium_cards")
+.select("id, vendedor_name, data_contratacao, nome_completo, grupo, cota, valor_credito, cpf, cnpj")
+.eq("tipo_registro", "contratacao")
+.gte("data_contratacao", format(startDate, "yyyy-MM-dd"))
+.lte("data_contratacao", format(endDate, "yyyy-MM-dd"))
+```
 
-**Condição de cada aba:**
-- Etapa 5 (`useCotasCadastradas`): cadastro com `status in ('cota_aberta','vinculada')`,
-  `consortium_card_id IS NOT NULL`, e grupo/cota preenchidos.
-- Etapa 6 (Cotas): cota com `data_contratacao` preenchida.
+- Tabela: `consortium_cards` (cota real na Embracon), só `tipo_registro = 'contratacao'` — reserva não entra.
+- **Data de referência: `data_contratacao`** (não é data de proposta, nem de reserva, nem de cadastro).
+- Valor: `sum(valor_credito)` das cotas, agregado em `creditoByCloser`.
+- Closer: `consortium_cards.vendedor_name` casado por nome (primeiro|último) contra `closers` da BU consórcio. Quem não casa vai para a linha residual "sem closer", que entra no Total.
+- SDR: cota → `consorcio_pending_registrations.deal_id` → quem agendou a última reunião conduzida por closer da BU.
 
-Portanto o que eu chamei de "5 → 4 segura" era o **desfazer da 5 → 6** — esse sim é interno.
-O desfazer da criação da cota (5 → 4) é a transição **arriscada**.
+**Sobre o rótulo:** "Consórcio Efetivado" descreve fielmente o que a coluna soma. `tipo_registro = 'contratacao'` é exatamente "a Embracon confirmou"; reserva fica de fora por construção. Renomear é seguro. A única ressalva é temporal: é "efetivado **no mês da contratação**", não "efetivado a partir de uma venda deste mês" — a explicação da coluna precisa dizer isso.
 
-## 2. Estado real da cota do THIAGO FELIPE FAUSTINO (grupo 7274 / cota 1000)
+Conferência no banco (agosto/2026, `data_contratacao`):
 
-Consultado agora no banco:
+| vendedor | cotas | crédito |
+|---|---|---|
+| Joao Pedro Martins Vieira | 44 | R$ 7.750.000 |
+| André Duarte | 13 | R$ 2.430.000 |
 
-- **Não existe mais linha em `consortium_cards`.** O id `ab0758fc-2357-4970-9ab0-c6d7edd6a940`
-  não retorna nada. A cota foi **excluída** — a proposta `68a1624b…` está com
-  `carta_excluida = true`, `carta_excluida_em = 2026-08-24 00:24`, por *Grimaldo de Oliveira Melo Neto*,
-  motivo *"teste do grima ."*, `consortium_card_id` nulo e `status = 'recusada'`.
-  Logo: `tipo_registro` e `data_contratacao` não existem mais para consultar.
-- **O cadastro pendente `808473fd…` continua `status = 'cota_aberta'`**, `cota_aberta_at 22/08 12:33`,
-  com `consortium_card_id` ainda apontando para a cota apagada. Não há FK nessa coluna
-  (`consorcio_pending_registrations` só tem FK em `credito_id`, `deal_id`, `proposal_id`) — o ponteiro
-  ficou **pendurado**. É exatamente por isso que ele continua aparecendo em Cotas Cadastradas: a aba
-  pede `consortium_card_id IS NOT NULL`, e o ponteiro morto satisfaz a condição.
-- **Evento para o Dash:** saiu **1** evento `consorcio.venda.criada` em 22/08 12:33 para o config
-  *Consórcio - Vendas para Grima*, e ele está **`failed`**: 3 tentativas, `last_error = HTTP 400`,
-  `sent_at` nulo. **Nunca foi entregue.**
-- **Bônus com evidência — as "11 travadas":** a fila tem exatamente **11** `consorcio.venda.criada`
-  com `status = 'failed'`, todos `HTTP 400` com 3 tentativas e `sent_at` nulo (de 03/05 a 22/08,
-  incluindo o THIAGO, três do RODRIGO MOREIRA ROBERTO no grupo 7274 e o PAULO SERGIO). Contra 1.128
-  `sent`. As 11 travadas são **falha de entrega no consumidor** (o endpoint devolve 400), não um campo
-  faltando no nosso lado — não existe coluna `data_venda` em nenhum caminho do Consórcio. O *porquê*
-  do 400 é do lado do Dash e ainda **não está diagnosticado**; nenhum "voltar etapa" deve mexer nisso.
+Bate com a tela.
 
-## 3. Classificação refeita
+## 2. "Cotas Contratadas" e "Vendas Realizadas" — mesma régua
 
-**A pergunta direta — tirar o THIAGO da aba Cotas Cadastradas e devolver para Cotas a Fazer dispara
-algo para fora do sistema?**
+As três colunas saem do **mesmo hook, mesma query, mesmo filtro e mesma data** (`data_contratacao`). Só muda a agregação:
 
-**Não.** No caso dele a cota já não existe, então não há `UPDATE` em `consortium_cards` para disparar
-trigger nenhum; o único evento que existia falhou e nunca chegou ao Dash. O "voltar" dele é
-puramente: cadastro `cota_aberta` → `aguardando_abertura` e limpar o ponteiro morto.
+- **Cotas Contratadas** = contagem de linhas de `consortium_cards` (`byCloser`).
+- **Vendas Realizadas** = contagem de **clientes distintos** (`clientesByCloser`), identidade por CPF/CNPJ e fallback no nome normalizado. Um cliente com 3 cotas = 1 venda e 3 cotas.
+- **Crédito Contratado** = `sum(valor_credito)`.
+- Ticket Médio = crédito ÷ clientes; Conv. Vendas/Reunião = clientes ÷ reuniões realizadas.
 
-**No caso geral, com a cota viva, o voltar 5 → 4 é arriscado** — a cota já foi anunciada (`sent`) e a
-reserva já pode estar feita na Embracon. Digo na cara: nesses casos a venda **já foi anunciada ao
-Dash** e o sistema não pode fingir que não foi. Sua leitura do meu texto é a correta e é o desenho:
-**a cota não é apagada.** Ela fica viva, marcada como revertida, fora do funil, para reconciliação
-manual com o Dash e com a Embracon. Nenhum evento de cancelamento é enfileirado — cancelar é decisão
-comercial, não consequência de um botão de correção.
+Ou seja: hoje o painel tem um único eixo de data. Nada nele fala de proposta ou de termo.
 
-**Seguras (nenhum efeito externo):**
-- 1 → 2 (status do attendee) — já existe (`Voltar p/ Agendada`).
-- **6 → 5** — desfazer "Parcela inicial paga": só `tipo_registro`/`data_contratacao`/marcador e
-  parcelas `pendente` → `previsto`. Nenhum campo observado pelo trigger. Bloqueado se houver parcela paga.
-- **5 → 4 quando a cota não existe ou o evento está `failed`/nunca enviado** — caso THIAGO.
+## 3. Como seria "Produção Gerada" pelo termo assinado
 
-**Arriscadas:**
-- **5 → 4 com cota viva e evento `sent`** — divergência sistema × Dash × Embracon. Exige selo de
-  revertida + fila de reconciliação, não só um botão.
-- **4 → 3** — o aceite já disparou automação (e-mail/WhatsApp) e o webhook do Make; o cliente foi tocado.
-- **3 → 2** — mexe em realizado/meta de Consórcio e em métrica de mês possivelmente fechado.
+Assinatura fica em `consorcio_termos`: `tipo = 'adesao'`, `status = 'assinado'`, data em **`assinado_em`** (timestamptz). O termo é **um por venda** (proposta), grava `proposal_id`, `deal_id` e o `pending_registration_id` só da primeira carta.
 
-## 4. O que dá para entregar hoje, sem dívida
+Caminho até o valor e até o closer — **não existe atalho**:
 
-**Entrega 1 — "Voltar para Cotas a Fazer" na etapa 5.** Botão na linha, motivo obrigatório
-(≥ 15 caracteres), disponível para **todo mundo que já usa a tela** (closer e SDR incluídos, sem
-restrição de papel), com selo visível de revertido. O que ele faz:
-- cadastro pendente → `status = 'aguardando_abertura'`, limpa `cota_aberta_at/by`, limpa
-  `consortium_card_id` e o marcador `parcela_inicial_paga_em/_por`;
-- **cota nunca é apagada**: se existir, é marcada como revertida e sai do funil (ver decisão abaixo);
-- grava a reversão no histórico: quem, quando, de qual etapa para qual, motivo;
-- preserva `webhook_carta_cadastrada_enviado_em` (zero reenvio) e não enfileira nenhum evento;
-- **bloqueia** (botão não aparece) se houver parcela paga, contemplação, transferência ou mês fechado;
-- quando existe `consorcio.venda.criada` com `status = 'sent'`, mostra um aviso explícito
-  "já anunciada ao Dash — reconciliar" na linha revertida, sem tentar corrigir nada automaticamente.
+```text
+consorcio_termos (assinado_em, proposal_id)
+  → consorcio_proposals (status, aceite_date, created_by)
+      → consorcio_proposal_cartas.valor_credito   (soma = crédito da venda)
+  closer: proposals.created_by → profiles.email → closers.email
+          fallback: crm_deals.owner_id → closers.email
+          fallback: meeting_slot_attendees → meeting_slots.closer_id
+```
 
-**Entrega 2 — desfazer 6 → 5** já existe parcialmente; só falta liberá-lo quando não há `data_reserva`
-(hoje ele desiste silenciosamente) e passar a gravar no mesmo histórico.
+Esse é exatamente o encadeamento que `useConsorcioRealizadoByCloser.ts` já usa. **Não** use `consorcio_pending_registrations.vendedor_name` como atribuição: os valores reais em produção incluem "Reverter", ".", "Efeito Alavanca + Clube" — o campo está sujo e atribuiria produção a strings que não são pessoas.
 
-Fica fora de hoje: 4 → 3 e 3 → 2, e qualquer conserto do HTTP 400 do Dash.
+## 4. O número real — e é aqui que a hipótese cai
 
-### O que precisa da sua decisão (não assumo permissão)
+O fluxo de termo eletrônico **começou em 19/08/2026** (`min(assinado_em) = 2026-08-19`, e `DATA_PRIMEIRO_TERMO_ADESAO = '2026-08-19'` em `src/lib/consorcioLiberacaoCadastro.ts`). Toda a base existe há 4 dias.
 
-1. **Tabela nova** `consorcio_funil_reversoes` (entidade, entidade_id, de_etapa, para_etapa, motivo,
-   revertido_por, created_at) — migração nova, nenhum `ALTER` em tabela existente.
-2. **Marcador de cota revertida:** preciso de coluna nova em `consortium_cards`
-   (`revertida_em` / `revertida_por` / `revertida_motivo`, nullable, sem default — fora da lista do
-   trigger, logo sem evento) **ou** uma tabela lateral. Recomendo as colunas; a tabela lateral evita o
-   `ALTER` mas obriga todo hook de listagem a filtrar por ela.
-3. **Consertar o caso THIAGO exige tocar dado existente** — limpar o `consortium_card_id` pendurado do
-   cadastro `808473fd…` e devolvê-lo para `aguardando_abertura`. Não faço isso sem sua palavra. Vale
-   avaliar depois, em rodada própria, se `consortium_card_id` deveria ter FK com `ON DELETE SET NULL`
-   para impedir novos ponteiros mortos — isso também é `ALTER` em tabela existente.
+Crédito das vendas com termo de adesão assinado em agosto/2026, por closer (via `created_by` da proposta):
 
-**O que eu faria primeiro, se fosse só uma:** a Entrega 1. É o pedido literal do dono, resolve o caso
-concreto que hoje só tem saída por exclusão, e no caso dele não produz nenhum efeito externo.
+| closer | vendas com termo assinado | crédito |
+|---|---|---|
+| André Duarte | 2 | R$ 600.000 |
+| João Pedro | 1 | R$ 960.000 |
+| (proposta criada por Grimaldo, deal do João Pedro) | 1 | R$ 500.000 |
+| **Total** | **4** | **R$ 2.060.000** |
+
+Contra a tela de hoje: João Pedro R$ 7.750.000 e André R$ 2.430.000 (total R$ 10.180.000).
+
+Ampliando o critério para "proposta aceita em agosto" (sem exigir termo), ainda dá pouco: João Pedro R$ 2.290.000 e André R$ 1.200.000 — R$ 3.490.000. E a etapa 4 inteira, hoje, em toda a base: 30 cadastros em `aguardando_abertura`, R$ 4.150.000.
+
+Motivo: as 57 cotas contratadas de agosto **não nasceram do fluxo de proposta**. Dos 91 cadastros criados em agosto com crédito (R$ 15.450.000), a maioria vem de carga/cadastro direto, sem proposta e sem termo. Então "Produção Gerada" medida por termo assinado sairia **cinco vezes menor** que "Consórcio Efetivado" — e o painel viraria uma denúncia de subnotificação, não uma métrica de produção.
+
+## 5. A data de referência — o risco que você apontou, confirmado e ampliado
+
+Lado a lado, com "Produção Gerada" por `assinado_em` e "Consórcio Efetivado" por `data_contratacao`:
+
+- As duas colunas **nunca fecham entre si dentro do mês**, e isso é correto: são dois momentos diferentes da mesma venda. Assinada em julho, contratada em agosto → aparece só na segunda.
+- Pior no seu caso concreto: em agosto a produção (R$ 2,06 M) fica **abaixo** do efetivado (R$ 10,18 M), o que é contraintuitivo — "gerei menos do que efetivei". Enquanto a base histórica não tiver termo, essa inversão é permanente e vai ser lida como bug.
+- Mitigação obrigatória na tela: as duas colunas precisam de tooltip explicitando a âncora ("assinatura do termo" vs. "confirmação da Embracon"), e a coluna nova precisa de nota de cobertura — "considera apenas vendas com termo eletrônico, disponível desde 19/08/2026". Sem essa nota, a primeira segunda-feira gera o ticket.
+
+## 6. Impacto em Ticket Médio, Conv. Vendas/Reunião e Total
+
+- **Ticket Médio** e **Conv. Vendas/Reunião** derivam de `clientes` e `credito` **do bloco contratado**. Como a coluna nova é aditiva e não substitui `creditoByCloser`, **nada quebra** — desde que a nova coluna não seja plugada nesses divisores.
+- **Total**: só fecha se a coluna nova tiver a mesma disciplina de residual que a atual (`creditoSemCloser`). Produção com closer não resolvido precisa de linha "Não atribuído", senão a soma das linhas fica menor que o Total e o painel se contradiz.
+- Ordem pedida (entre *Vendas Realizadas* e *Cotas Contratadas*) coloca dinheiro no meio de duas contagens; funciona, mas fica menos legível que colocar produção **antes** de Vendas Realizadas.
+
+## Sobre as cartas com crédito somado
+
+O alerta procede e limita o desenho: cartas em `consorcio_proposal_cartas` que carregam a soma de várias cotas (5 × 120k gravadas como uma carta de 600k).
+
+- Para **somar crédito** (é o que "Produção Gerada" faz): não distorce. `sum(valor_credito)` dá o mesmo total.
+- Para **contar cartas**: distorce, e por isso a coluna nova **não deve exibir contagem de cartas** nem alimentar ticket médio de produção. Se um dia mostrar "N cartas geradas", o número estará errado por construção.
+- Confirmação no banco: das 4 propostas com termo assinado, uma tem 3 cartas e as outras 1 — e a soma das cartas bate com o agregado `consorcio_proposals.valor_credito` em todas. O agregado serve de conferência, não de fonte.
+
+## Recomendação
+
+**Renomear "Crédito Contratado" → "Consórcio Efetivado": aprovado, o rótulo é fiel.** Só acrescente ao tooltip que a âncora é a data de contratação.
+
+**"Produção Gerada" a partir de Cotas a Fazer / termo assinado: não agora.** O raciocínio do dono está certo conceitualmente — a assinatura é o marco em que o closer cumpriu a parte dele — mas a base tem 4 dias e cobre 20% do volume. A coluna entraria mostrando um número menor que o efetivado.
+
+Etapa que eu defendo no lugar, se o dono quiser a coluna já nesta rodada:
+
+- **Âncora: `consorcio_proposals.aceite_date` com `status = 'aceita'`** (proposta aceita = venda gerada), somando `consorcio_proposal_cartas.valor_credito`, atribuição pelo encadeamento do item 3. Cobre mais que o termo (R$ 3,49 M em agosto), tem data de negócio limpa e não depende do fluxo novo. Mesmo assim continua abaixo do efetivado.
+- **Ou** manter a intenção do dono e entregar a coluna com **selo de cobertura parcial** visível no cabeçalho, aceitando conscientemente que agosto e setembro serão meses de transição.
+
+O que eu preciso que você decida antes de qualquer código:
+
+1. Âncora da coluna nova: `assinado_em` do termo (fiel à ideia, cobertura de 4 dias) ou `aceite_date` da proposta (cobertura maior, marco um passo antes da assinatura)?
+2. A coluna deve incluir vendas que **já** efetivaram no mesmo mês (produção total gerada) ou só as ainda não efetivadas (pipeline)? O primeiro é comparável mês a mês; o segundo muda de valor sozinho conforme a Embracon confirma.
