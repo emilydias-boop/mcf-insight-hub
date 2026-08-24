@@ -38,6 +38,7 @@ import {
   useCreateConsorcioProduto,
   useUpdateConsorcioProduto,
   useDeleteConsorcioProduto,
+  useProdutoAutores,
 } from '@/hooks/useConsorcioProdutos';
 import { ConsorcioProduto, ComissaoScheduleItem, ComissaoBase, COMISSAO_BASE_OPTIONS } from '@/types/consorcioProdutos';
 import { PlanosTab } from '@/components/consorcio/PlanosTab';
@@ -409,6 +410,12 @@ function ProdutosTab() {
   const remove = useDeleteConsorcioProduto();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ConsorcioProduto | null>(null);
+  const { data: autores = {} } = useProdutoAutores(
+    produtos.flatMap((p) => [p.created_by, p.updated_by]),
+  );
+
+  const fmtData = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
 
   const handleSave = (data: any) => {
     if (editing) {
