@@ -303,6 +303,12 @@ export default function BIConsorcio() {
         )}
       </div>
 
+      {/* Movidos do Painel Comercial: faixa BU Consórcio + Metas da Equipe */}
+      <ConsorcioBUProgressCard />
+      <ConsorcioTeamGoalsCard />
+
+
+
       {previewCampaign && <CampaignCarousel onClose={() => setPreviewCampaign(false)} />}
       <CampaignManagerDialog open={manageCampaign} onOpenChange={setManageCampaign} />
 
