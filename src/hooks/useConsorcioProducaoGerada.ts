@@ -6,37 +6,55 @@ import { nameKey } from "@/hooks/useConsorcioCotasContratadas";
 /**
  * PRODUÇÃO GERADA — crédito de TODAS as vendas lançadas, de "Termo de Adesão
  * Pendente" (etapa 3) em diante, contando cada venda UMA única vez, no mês em
- * que ela apareceu no sistema.
+ * que ela APARECEU no sistema. A venda nunca sai desse mês: nem se contratar
+ * depois, nem se nunca contratar.
  *
- * União de duas fontes, deduplicada:
+ * TRÊS PERNAS DECLARADAS, deduplicadas:
  *  - Perna A (funil): cartas de propostas `status='aceita'`, âncora
  *    `coalesce(aceite_date, proposal_date)`. Cartas DECLINADAS contam (o closer
  *    gerou a venda). Propostas apagadas (`deleted_at`) ou marcadas
  *    `carta_excluida` NÃO contam — e essa é a única exclusão.
- *  - Perna B (legado/avulso): cotas de `consortium_cards`
- *    (`tipo_registro='contratacao'`) que NÃO vieram de proposta nenhuma,
- *    âncora `data_contratacao` ESTRITA (sem fallback em `data_reserva` nem
- *    `created_at`, para a coluna ser comparável ao Consórcio Efetivado).
+ *  - Perna B (avulso): a unidade é o CADASTRO (`consorcio_pending_registrations`),
+ *    não a cota. Todo cadastro não vinculado a proposta pelos QUATRO caminhos,
+ *    âncora `aceite_date`, QUALQUER status (`aguardando_abertura`, `cota_aberta`,
+ *    `vinculada`, `declinada` — sem lista branca de status, de propósito: status
+ *    novo entra sozinho). Cadastro parado na etapa 4 ou 5 conta igual.
+ *  - Perna C (resíduo legado): `consortium_cards` SEM cadastro nenhum apontando
+ *    para eles e sem proposta, âncora `data_contratacao` ESTRITA. É a base
+ *    histórica/importada, onde não existe data confiável de primeira aparição.
+ *    Encolhe sozinha.
  *
- * Dedup: o conjunto "vinculado" é a UNIÃO dos três caminhos
- * (`consorcio_proposals.consortium_card_id`,
- *  `consorcio_proposal_cartas.consortium_card_id` e
- *  `consorcio_proposal_cartas.pending_registration_id` →
- *  `consorcio_pending_registrations.consortium_card_id`). Existe cota que só
- * aparece pelo terceiro caminho: usar menos que os três conta ela duas vezes.
+ * REGRA ANTI-DUPLA-CONTAGEM NO TEMPO (explícita): o CADASTRO é a unidade; o card
+ * só entra (perna C) quando NÃO existe cadastro apontando para ele. Um cadastro
+ * de agosto que vira cota contratada em setembro continua sendo o mesmo registro,
+ * contado uma única vez, em agosto.
  *
- * À medida que o funil vira a única porta de entrada, a perna B cai a zero
- * sozinha — a definição da coluna não muda.
+ * DEDUP — QUATRO caminhos, e esta lista é o coração da coluna:
+ *  1. `consorcio_proposals.consortium_card_id`
+ *  2. `consorcio_proposal_cartas.consortium_card_id`
+ *  3. `consorcio_proposal_cartas.pending_registration_id` → `…​.consortium_card_id`
+ *  4. `consorcio_pending_registrations.proposal_id`
+ * ATENÇÃO: REMOVER QUALQUER UM DESTES CAMINHOS DUPLICA DINHEIRO. O caminho 4 é
+ * o único que pega cadastro de proposta que ainda não abriu cota (etapa 4) —
+ * sem ele, agosto/2026 infla R$ 2,09 mi contando o mesmo crédito na perna A e
+ * na perna B.
+ *
+ * SINALIZADOR DE ANTEDATAÇÃO: cadastro cujo `aceite_date` é de um mês ANTERIOR
+ * ao mês do `created_at`. Só marca; o crédito conta normalmente. Sem severidade.
  *
  * 100% leitura. Nenhuma escrita, nenhum backfill.
  */
 
 export interface ProducaoGeradaLinha {
   credito: number;
-  /** Cartas (perna A) + cotas sem proposta (perna B). */
+  /** Cartas (perna A) + cadastros (perna B) + cotas legadas (perna C). */
   cartas: number;
-  /** Vendas: propostas (perna A) + clientes distintos das cotas avulsas (perna B). */
+  /** Vendas: propostas (perna A) + clientes distintos nas pernas B e C. */
   vendas: number;
+  /** Registros com `aceite_date` em mês anterior ao do lançamento (só sinaliza). */
+  antedatados: number;
+  /** Crédito desses registros — contado normalmente na soma. */
+  antedatadosCredito: number;
 }
 
 export interface ConsorcioProducaoGerada {
@@ -44,12 +62,19 @@ export interface ConsorcioProducaoGerada {
   /** Balde explícito: nunca descartamos nem chutamos atribuição. */
   semAtribuicao: ProducaoGeradaLinha;
   total: ProducaoGeradaLinha;
-  /** Diagnóstico das duas pernas, para conferência. */
+  /** Diagnóstico das três pernas, para conferência. */
   pernaA: ProducaoGeradaLinha;
   pernaB: ProducaoGeradaLinha;
+  pernaC: ProducaoGeradaLinha;
 }
 
-const zero = (): ProducaoGeradaLinha => ({ credito: 0, cartas: 0, vendas: 0 });
+const zero = (): ProducaoGeradaLinha => ({
+  credito: 0,
+  cartas: 0,
+  vendas: 0,
+  antedatados: 0,
+  antedatadosCredito: 0,
+});
 
 const EMPTY: ConsorcioProducaoGerada = {
   byCloser: new Map(),
@@ -57,7 +82,9 @@ const EMPTY: ConsorcioProducaoGerada = {
   total: zero(),
   pernaA: zero(),
   pernaB: zero(),
+  pernaC: zero(),
 };
+
 
 const SEM_ATRIBUICAO = "__sem_atribuicao__";
 
@@ -164,13 +191,24 @@ export function useConsorcioProducaoGerada(
       const byCloser = new Map<string, ProducaoGeradaLinha>();
       const pernaA = zero();
       const pernaB = zero();
-      const add = (closerId: string, credito: number, cartas: number, vendas: number) => {
+      const pernaC = zero();
+      const add = (
+        closerId: string,
+        credito: number,
+        cartas: number,
+        vendas: number,
+        antedatados = 0,
+        antedatadosCredito = 0,
+      ) => {
         const alvo = byCloser.get(closerId) || zero();
         alvo.credito += credito;
         alvo.cartas += cartas;
         alvo.vendas += vendas;
+        alvo.antedatados += antedatados;
+        alvo.antedatadosCredito += antedatadosCredito;
         byCloser.set(closerId, alvo);
       };
+
 
       // ══ PERNA A — cartas de propostas lançadas (etapa 3 em diante) ════════
       const { data: propsRaw, error: propsError } = await supabase
@@ -275,7 +313,144 @@ export function useConsorcioProducaoGerada(
         pernaA.vendas += 1;
       });
 
-      // ══ PERNA B — cotas sem proposta nenhuma ═════════════════════════════
+      // ══ PERNA B — CADASTROS sem proposta, âncora `aceite_date` ════════════
+      // A unidade é o cadastro, não a cota: cadastro parado na etapa 4 (sem cota
+      // aberta) ou na etapa 5 (reserva não contratada) conta igual. QUALQUER
+      // status entra — não existe lista branca aqui de propósito.
+      const { data: regsRaw, error: regsError } = await supabase
+        .from("consorcio_pending_registrations")
+        .select(
+          "id, proposal_id, consortium_card_id, aceite_date, created_at, valor_credito, vendedor_name, vendedor_name_cota, cpf, cnpj, nome_completo, razao_social, status",
+        )
+        .gte("aceite_date", ini)
+        .lte("aceite_date", fim);
+      if (regsError) throw regsError;
+
+      type RegRow = {
+        id: string;
+        proposal_id: string | null;
+        consortium_card_id: string | null;
+        aceite_date: string | null;
+        created_at: string | null;
+        valor_credito: number | null;
+        vendedor_name: string | null;
+        vendedor_name_cota: string | null;
+        cpf: string | null;
+        cnpj: string | null;
+        nome_completo: string | null;
+        razao_social: string | null;
+        status: string | null;
+      };
+      const regs = (regsRaw || []) as RegRow[];
+
+      /**
+       * Cards vinculados a proposta pelos caminhos 1, 2 e 3.
+       * REMOVER UM CAMINHO DUPLICA DINHEIRO — ver o cabeçalho deste arquivo.
+       */
+      const cardsVinculados = async (ids: string[]) => {
+        const out = new Set<string>();
+        for (const parte of chunk(ids.filter(Boolean))) {
+          if (parte.length === 0) continue;
+          const [viaProposta, viaCarta, viaCadastro] = await Promise.all([
+            // caminho 1
+            supabase.from("consorcio_proposals").select("consortium_card_id").in("consortium_card_id", parte),
+            // caminho 2
+            supabase
+              .from("consorcio_proposal_cartas")
+              .select("consortium_card_id")
+              .in("consortium_card_id", parte),
+            // caminho 3 (parte 1): cadastros que apontam para esses cards
+            supabase
+              .from("consorcio_pending_registrations")
+              .select("id, consortium_card_id, proposal_id")
+              .in("consortium_card_id", parte),
+          ]);
+          (viaProposta.data || []).forEach((r) => r.consortium_card_id && out.add(r.consortium_card_id));
+          (viaCarta.data || []).forEach((r) => r.consortium_card_id && out.add(r.consortium_card_id));
+
+          const ligados = (viaCadastro.data || []).filter((r) => r.consortium_card_id);
+          // caminho 4 aplicado ao card: cadastro com proposta já traz o card.
+          ligados.forEach((r) => {
+            if (r.proposal_id && r.consortium_card_id) out.add(r.consortium_card_id);
+          });
+          // caminho 3 (parte 2): cadastro referenciado por uma carta.
+          const regIds = ligados.map((r) => r.id);
+          const regsComCarta = new Set<string>();
+          for (const regParte of chunk(regIds)) {
+            if (regParte.length === 0) continue;
+            const { data: cartasReg } = await supabase
+              .from("consorcio_proposal_cartas")
+              .select("pending_registration_id")
+              .in("pending_registration_id", regParte);
+            (cartasReg || []).forEach((c) => {
+              if (c.pending_registration_id) regsComCarta.add(c.pending_registration_id);
+            });
+          }
+          ligados.forEach((r) => {
+            if (regsComCarta.has(r.id) && r.consortium_card_id) out.add(r.consortium_card_id);
+          });
+        }
+        return out;
+      };
+
+      // Vínculo dos cadastros do período: caminho 4 (proposal_id direto),
+      // caminho 2 (carta que referencia o cadastro) e caminhos 1/3 (o card do
+      // cadastro já é um card de proposta).
+      const regsComCartaPeriodo = new Set<string>();
+      for (const parte of chunk(regs.map((r) => r.id))) {
+        if (parte.length === 0) continue;
+        const { data: cartasReg } = await supabase
+          .from("consorcio_proposal_cartas")
+          .select("pending_registration_id")
+          .in("pending_registration_id", parte);
+        (cartasReg || []).forEach((c) => {
+          if (c.pending_registration_id) regsComCartaPeriodo.add(c.pending_registration_id);
+        });
+      }
+      const cardsVincPeriodo = await cardsVinculados(
+        regs.map((r) => r.consortium_card_id).filter(Boolean) as string[],
+      );
+
+      const regsAvulsos = regs.filter((r) => {
+        if (r.proposal_id) return false; // caminho 4
+        if (regsComCartaPeriodo.has(r.id)) return false; // caminho 2
+        if (r.consortium_card_id && cardsVincPeriodo.has(r.consortium_card_id)) return false; // 1 e 3
+        return true;
+      });
+
+      /** Antedatação: mês do aceite anterior ao mês do lançamento. Só sinaliza. */
+      const antedatado = (r: RegRow) =>
+        !!r.aceite_date &&
+        !!r.created_at &&
+        String(r.aceite_date).slice(0, 7) < String(r.created_at).slice(0, 7);
+
+      const pessoasPorCloserB = new Map<string, Set<string>>();
+      regsAvulsos.forEach((r) => {
+        const credito = Number(r.valor_credito || 0);
+        const nome = r.vendedor_name_cota || r.vendedor_name;
+        const closerId = nomeParaCloser.get(nameKey(nome) || "") || SEM_ATRIBUICAO;
+        const flag = antedatado(r);
+        add(closerId, credito, 1, 0, flag ? 1 : 0, flag ? credito : 0);
+        if (!pessoasPorCloserB.has(closerId)) pessoasPorCloserB.set(closerId, new Set());
+        pessoasPorCloserB
+          .get(closerId)!
+          .add(clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social }));
+        pernaB.credito += credito;
+        pernaB.cartas += 1;
+        if (flag) {
+          pernaB.antedatados += 1;
+          pernaB.antedatadosCredito += credito;
+        }
+      });
+      pessoasPorCloserB.forEach((pessoas, closerId) => {
+        add(closerId, 0, 0, pessoas.size);
+        pernaB.vendas += pessoas.size;
+      });
+
+      // ══ PERNA C — resíduo legado: card SEM cadastro nenhum e sem proposta ══
+      // Âncora `data_contratacao` estrita. Para esse grupo não existe data de
+      // primeira aparição confiável (importação/digitação), e é exatamente por
+      // isso que ele fica numa perna separada e declarada.
       const { data: cards, error: cardsError } = await supabase
         .from("consortium_cards")
         .select("id, vendedor_name, valor_credito, cpf, cnpj, nome_completo")
@@ -285,56 +460,36 @@ export function useConsorcioProducaoGerada(
       if (cardsError) throw cardsError;
 
       const cardIds = (cards || []).map((c) => c.id);
-
-      // Conjunto vinculado: UNIÃO dos três caminhos.
-      const vinculadas = new Set<string>();
+      const cardsComCadastro = new Set<string>();
       for (const parte of chunk(cardIds)) {
         if (parte.length === 0) continue;
-        const [viaProposta, viaCarta, viaCadastro] = await Promise.all([
-          supabase.from("consorcio_proposals").select("consortium_card_id").in("consortium_card_id", parte),
-          supabase.from("consorcio_proposal_cartas").select("consortium_card_id").in("consortium_card_id", parte),
-          supabase
-            .from("consorcio_pending_registrations")
-            .select("consortium_card_id, id")
-            .in("consortium_card_id", parte),
-        ]);
-        (viaProposta.data || []).forEach((r) => r.consortium_card_id && vinculadas.add(r.consortium_card_id));
-        (viaCarta.data || []).forEach((r) => r.consortium_card_id && vinculadas.add(r.consortium_card_id));
-
-        // Terceiro caminho: cadastro pendente que é referenciado por uma carta.
-        const regs = (viaCadastro.data || []).filter((r) => r.consortium_card_id);
-        const regIds = regs.map((r) => r.id);
-        const regsComCarta = new Set<string>();
-        for (const regParte of chunk(regIds)) {
-          if (regParte.length === 0) continue;
-          const { data: cartasReg } = await supabase
-            .from("consorcio_proposal_cartas")
-            .select("pending_registration_id")
-            .in("pending_registration_id", regParte);
-          (cartasReg || []).forEach((c) => {
-            if (c.pending_registration_id) regsComCarta.add(c.pending_registration_id);
-          });
-        }
-        regs.forEach((r) => {
-          if (regsComCarta.has(r.id) && r.consortium_card_id) vinculadas.add(r.consortium_card_id);
-        });
+        const { data: regsDoCard } = await supabase
+          .from("consorcio_pending_registrations")
+          .select("consortium_card_id")
+          .in("consortium_card_id", parte);
+        (regsDoCard || []).forEach((r) => r.consortium_card_id && cardsComCadastro.add(r.consortium_card_id));
       }
+      const cardsVincC = await cardsVinculados(cardIds);
 
-      const avulsas = (cards || []).filter((c) => !vinculadas.has(c.id));
-      // Vendas da perna B = clientes distintos (uma pessoa com 3 cotas = 1 venda).
-      const pessoasPorCloser = new Map<string, Set<string>>();
-      avulsas.forEach((card) => {
+      const residuo = (cards || []).filter(
+        // Card com cadastro NÃO entra aqui: ele já é (ou será) contado como
+        // cadastro na perna B, no mês do aceite. É esta linha que impede a
+        // dupla contagem entre meses.
+        (c) => !cardsComCadastro.has(c.id) && !cardsVincC.has(c.id),
+      );
+      const pessoasPorCloserC = new Map<string, Set<string>>();
+      residuo.forEach((card) => {
         const credito = Number(card.valor_credito || 0);
         const closerId = nomeParaCloser.get(nameKey(card.vendedor_name) || "") || SEM_ATRIBUICAO;
         add(closerId, credito, 1, 0);
-        if (!pessoasPorCloser.has(closerId)) pessoasPorCloser.set(closerId, new Set());
-        pessoasPorCloser.get(closerId)!.add(clientePessoaKey(card));
-        pernaB.credito += credito;
-        pernaB.cartas += 1;
+        if (!pessoasPorCloserC.has(closerId)) pessoasPorCloserC.set(closerId, new Set());
+        pessoasPorCloserC.get(closerId)!.add(clientePessoaKey(card));
+        pernaC.credito += credito;
+        pernaC.cartas += 1;
       });
-      pessoasPorCloser.forEach((pessoas, closerId) => {
+      pessoasPorCloserC.forEach((pessoas, closerId) => {
         add(closerId, 0, 0, pessoas.size);
-        pernaB.vendas += pessoas.size;
+        pernaC.vendas += pessoas.size;
       });
 
       const semAtribuicao = byCloser.get(SEM_ATRIBUICAO) || zero();
@@ -345,13 +500,18 @@ export function useConsorcioProducaoGerada(
         total.credito += l.credito;
         total.cartas += l.cartas;
         total.vendas += l.vendas;
+        total.antedatados += l.antedatados;
+        total.antedatadosCredito += l.antedatadosCredito;
       });
       total.credito += semAtribuicao.credito;
       total.cartas += semAtribuicao.cartas;
       total.vendas += semAtribuicao.vendas;
+      total.antedatados += semAtribuicao.antedatados;
+      total.antedatadosCredito += semAtribuicao.antedatadosCredito;
 
-      return { byCloser, semAtribuicao, total, pernaA, pernaB };
+      return { byCloser, semAtribuicao, total, pernaA, pernaB, pernaC };
     },
     enabled: !!startDate && !!endDate,
   });
 }
+

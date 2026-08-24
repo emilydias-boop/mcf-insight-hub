@@ -18,7 +18,8 @@ import type { ProducaoGeradaLinha } from "@/hooks/useConsorcioProducaoGerada";
 
 /** Texto aprovado pelo dono — não alterar sem decisão dele. */
 export const PRODUCAO_GERADA_TOOLTIP =
-  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema. Inclui vendas que ainda não se efetivaram.";
+  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema, e ela nunca sai desse mês — nem se contratar depois, nem se nunca contratar. Inclui vendas que ainda não se efetivaram. Três âncoras de data, nesta ordem: (1) venda vinda de proposta usa a data de aceite da proposta; (2) cadastro lançado fora de proposta usa a data de aceite do cadastro, em qualquer situação (aguardando abertura, cota aberta, cadastrada ou declinada); (3) cota histórica que não tem cadastro nenhum no sistema usa a data de contratação, porque para ela não existe data de lançamento registrada.";
+
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
@@ -129,9 +130,14 @@ export function ConsorcioCloserSummaryTable({
   // hook (mesmo de closer que não aparece na tabela) mais o balde sem
   // atribuição, para o Total nunca esconder crédito.
   let producaoTotal = producaoSemAtribuicao?.credito || 0;
+  let producaoAntedatados = producaoSemAtribuicao?.antedatados || 0;
+  let producaoAntedatadosCredito = producaoSemAtribuicao?.antedatadosCredito || 0;
   producaoByCloser?.forEach((l) => {
     producaoTotal += l.credito;
+    producaoAntedatados += l.antedatados;
+    producaoAntedatadosCredito += l.antedatadosCredito;
   });
+
 
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
   const totalTaxaVenda = totals.r1_realizada > 0
@@ -249,10 +255,23 @@ export function ConsorcioCloserSummaryTable({
                   </TableCell>
                   <TableCell
                     className="text-center whitespace-nowrap"
-                    title={producao ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` : undefined}
+                    title={
+                      producao
+                        ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` +
+                          (producao.antedatados > 0
+                            ? ` · ${producao.antedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producao.antedatadosCredito)}), incluída(s) na soma`
+                            : "")
+                        : undefined
+                    }
                   >
                     {producao && producao.credito > 0 ? brl(producao.credito) : "—"}
+                    {producao && producao.antedatados > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground align-top">
+                        ·{producao.antedatados}
+                      </span>
+                    )}
                   </TableCell>
+
                   <TableCell className="text-center">
 
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
@@ -376,9 +395,20 @@ export function ConsorcioCloserSummaryTable({
                   {totals.clientes}
                 </Badge>
               </TableCell>
-              <TableCell className="text-center whitespace-nowrap">
+              <TableCell
+                className="text-center whitespace-nowrap"
+                title={
+                  producaoAntedatados > 0
+                    ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
+                    : undefined
+                }
+              >
                 {producaoTotal > 0 ? brl(producaoTotal) : "—"}
+                {producaoAntedatados > 0 && (
+                  <span className="ml-1 text-[10px] text-muted-foreground align-top">·{producaoAntedatados}</span>
+                )}
               </TableCell>
+
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                   {totals.cotas}
