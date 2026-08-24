@@ -250,10 +250,23 @@ export function ConsorcioCloserSummaryTable({
                   </TableCell>
                   <TableCell
                     className="text-center whitespace-nowrap"
-                    title={producao ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` : undefined}
+                    title={
+                      producao
+                        ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` +
+                          (producao.antedatados > 0
+                            ? ` · ${producao.antedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producao.antedatadosCredito)}), incluída(s) na soma`
+                            : "")
+                        : undefined
+                    }
                   >
                     {producao && producao.credito > 0 ? brl(producao.credito) : "—"}
+                    {producao && producao.antedatados > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground align-top">
+                        ·{producao.antedatados}
+                      </span>
+                    )}
                   </TableCell>
+
                   <TableCell className="text-center">
 
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
