@@ -191,13 +191,24 @@ export function useConsorcioProducaoGerada(
       const byCloser = new Map<string, ProducaoGeradaLinha>();
       const pernaA = zero();
       const pernaB = zero();
-      const add = (closerId: string, credito: number, cartas: number, vendas: number) => {
+      const pernaC = zero();
+      const add = (
+        closerId: string,
+        credito: number,
+        cartas: number,
+        vendas: number,
+        antedatados = 0,
+        antedatadosCredito = 0,
+      ) => {
         const alvo = byCloser.get(closerId) || zero();
         alvo.credito += credito;
         alvo.cartas += cartas;
         alvo.vendas += vendas;
+        alvo.antedatados += antedatados;
+        alvo.antedatadosCredito += antedatadosCredito;
         byCloser.set(closerId, alvo);
       };
+
 
       // ══ PERNA A — cartas de propostas lançadas (etapa 3 em diante) ════════
       const { data: propsRaw, error: propsError } = await supabase
