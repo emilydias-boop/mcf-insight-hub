@@ -17,9 +17,15 @@ import { toast } from 'sonner';
  *  - Nenhum evento financeiro: nada de título, cobrança, comissão, MCF Pay,
  *    Asaas ou adm.mcfcapital.com.br.
  *  - Motivo obrigatório, mínimo 15 caracteres — validado no cliente E no banco.
- *  - Sem restrição de papel: quem já usa a tela pode voltar etapa. Por isso as
- *    escritas passam por RPC SECURITY DEFINER (a policy de UPDATE de
- *    `consorcio_pending_registrations` é só admin/manager/coordenador).
+ *  - Papel: só quem opera a tela Venda Consórcio pode voltar etapa. A trava real
+ *    está DENTRO das RPCs (`can_reverter_etapa_consorcio`), não no botão —
+ *    viewer/marketing puros recebem recusa mesmo chamando a API direto. As
+ *    escritas passam por RPC SECURITY DEFINER porque a policy de UPDATE de
+ *    `consorcio_pending_registrations` é só admin/manager/coordenador.
+ *  - As RPCs também validam a ETAPA DE ORIGEM: nunca escrevem no id que vier.
+ *  - Nenhuma data é inventada: sem `data_reserva` gravada, o desfazer é recusado
+ *    com instrução, em vez de ancorar uma data que ninguém registrou.
+
  */
 
 export const MOTIVO_MIN = 15;
