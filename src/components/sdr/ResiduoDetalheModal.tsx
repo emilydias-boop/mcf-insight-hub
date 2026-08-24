@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Download, ExternalLink, Link2, ShieldCheck, UserCog } from "lucide-react";
+import { Download, ExternalLink, FileWarning, Link2, ShieldCheck, UserCog } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/formatters";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
@@ -17,6 +17,8 @@ import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { useState } from "react";
 import { CorrigirVinculoCotaModal } from "@/components/consorcio/CorrigirVinculoCotaModal";
 import { InformarAgendadorModal } from "@/components/consorcio/InformarAgendadorModal";
+import { ReconhecerForaFunilModal } from "@/components/consorcio/ReconhecerForaFunilModal";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useProfileName } from "@/hooks/useCorrigirVinculoCota";
 import { CheckCircle2, Info } from "lucide-react";
@@ -40,8 +42,11 @@ type Props =
       esperado: number;
       /** Habilita a coluna de correção do vínculo cota → lead. */
       permitirCorrigirVinculo?: boolean;
+      /** Habilita reconhecer a venda como fora do funil de R1 de Consórcio. */
+      permitirForaFunil?: boolean;
       /** Habilita a ação de abrir a cota para corrigir o vendedor. */
       permitirCorrigirVendedor?: boolean;
+
     }
   | {
       open: boolean;
@@ -104,9 +109,12 @@ export function ResiduoDetalheModal(props: Props) {
   const { open, onOpenChange, kind, titulo, descricao, items, esperado } = props;
   const permitirCorrigirVinculo = kind === "cota" && props.permitirCorrigirVinculo === true;
   const permitirCorrigirVendedor = kind === "cota" && props.permitirCorrigirVendedor === true;
+  const permitirForaFunil = kind === "cota" && props.permitirForaFunil === true;
   const temAcaoCota = permitirCorrigirVinculo || permitirCorrigirVendedor;
   const [corrigindo, setCorrigindo] = useState<CotaResiduoItem | null>(null);
   const [informandoAgendador, setInformandoAgendador] = useState<CotaResiduoItem | null>(null);
+  const [reconhecendo, setReconhecendo] = useState<CotaResiduoItem | null>(null);
+
   /** Cota corrigida nesta sessão do modal — base do feedback honesto pós-gravação. */
   const [ultimaCorrecao, setUltimaCorrecao] = useState<
     { cardId: string; acao: "vinculo" | "agendador" } | null
@@ -288,7 +296,32 @@ export function ResiduoDetalheModal(props: Props) {
                         {temAcaoCota && (
                           <TableCell className="text-right">
                             {permitirCorrigirVinculo ? (
-                              // Regra: botão que não resolve o caso não aparece.
+                              permitirForaFunil && i.semSaidaPorVinculo ? (
+                                // Nenhum lead deste cliente tem R1 de Consórcio:
+                                // trocar o lead não credita ninguém. O desfecho
+                                // honesto é reconhecer a venda como fora do funil,
+                                // e a troca de lead vira ação secundária.
+                                <div className="flex flex-col items-end gap-1">
+                                  <Button size="sm" onClick={() => setReconhecendo(i)}>
+                                    <FileWarning className="h-3.5 w-3.5 mr-1" />
+                                    Reconhecer fora do funil
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 text-[11px] text-muted-foreground"
+                                    onClick={() =>
+                                      i.problema === "sem_agendador"
+                                        ? setInformandoAgendador(i)
+                                        : setCorrigindo(i)
+                                    }
+                                  >
+                                    {i.problema === "sem_agendador"
+                                      ? "Informar agendador"
+                                      : "Trocar lead"}
+                                  </Button>
+                                </div>
+                              ) : // Regra: botão que não resolve o caso não aparece.
                               i.problema === "sem_agendador" ? (
                                 <Button
                                   size="sm"
@@ -313,11 +346,17 @@ export function ResiduoDetalheModal(props: Props) {
                                   <Link2 className="h-3.5 w-3.5 mr-1" />
                                   Vincular lead
                                 </Button>
+                              ) : permitirForaFunil ? (
+                                <Button size="sm" variant="outline" onClick={() => setReconhecendo(i)}>
+                                  <FileWarning className="h-3.5 w-3.5 mr-1" />
+                                  Reconhecer fora do funil
+                                </Button>
                               ) : (
                                 <span className="text-[11px] text-muted-foreground italic">
                                   sem correção por vínculo
                                 </span>
                               )
+
 
                             ) : (
                               <Button size="sm" variant="outline" asChild>
@@ -403,6 +442,15 @@ export function ResiduoDetalheModal(props: Props) {
             />
           </>
         )}
+
+        {permitirForaFunil && (
+          <ReconhecerForaFunilModal
+            item={reconhecendo}
+            open={!!reconhecendo}
+            onOpenChange={(o) => !o && setReconhecendo(null)}
+          />
+        )}
+
       </DialogContent>
     </Dialog>
   );

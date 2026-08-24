@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ChevronRight, UserCog } from "lucide-react";
+import { AlertTriangle, ChevronRight, FileWarning, UserCog } from "lucide-react";
 import { ResiduoDetalheModal } from "./ResiduoDetalheModal";
+import { ForaFunilListaModal } from "./ForaFunilListaModal";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
 
 interface Props {
@@ -8,7 +9,10 @@ interface Props {
   cotas: number;
   credito: number;
   items: CotaResiduoItem[];
+  /** Cotas já reconhecidas como venda fora do funil — visíveis, sem pendência. */
+  foraFunilItems?: CotaResiduoItem[];
 }
+
 
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -50,8 +54,8 @@ function Caixa({
  *    `booked_by` ou o lead não passou por R1 de consórcio
  * Nenhuma das duas entra na soma das linhas da tabela.
  */
-export function CadastroSemLeadAlerta({ items }: Props) {
-  const [aberta, setAberta] = useState<"vinculo" | "agendador" | null>(null);
+export function CadastroSemLeadAlerta({ items, foraFunilItems = [] }: Props) {
+  const [aberta, setAberta] = useState<"vinculo" | "agendador" | "foraFunil" | null>(null);
 
   const { semVinculo, semAgendador } = useMemo(() => {
     const linkFaltando = new Set(["sem_cadastro", "sem_lead", "deal_inexistente", undefined as any]);
@@ -63,7 +67,7 @@ export function CadastroSemLeadAlerta({ items }: Props) {
 
   const soma = (rs: CotaResiduoItem[]) => rs.reduce((s, r) => s + (Number(r.valorCredito) || 0), 0);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && foraFunilItems.length === 0) return null;
 
   return (
     <div className="space-y-2">
@@ -85,6 +89,29 @@ export function CadastroSemLeadAlerta({ items }: Props) {
         />
       )}
 
+      {foraFunilItems.length > 0 && (
+        // Reconhecidas: sem pendência, mas nunca invisíveis.
+        <button
+          type="button"
+          onClick={() => setAberta("foraFunil")}
+          className="w-full text-left rounded-md border border-border bg-muted/40 px-3 py-2 flex items-start gap-2 hover:bg-muted transition-colors"
+        >
+          <FileWarning className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <span className="flex-1 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {foraFunilItems.length} venda{foraFunilItems.length === 1 ? "" : "s"} reconhecida
+              {foraFunilItems.length === 1 ? "" : "s"} como fora do funil
+            </span>
+            <span className="block text-[11px]">
+              {brl(soma(foraFunilItems))} em crédito. Não é pendência: a equipe registrou que a
+              venda não passou por R1 de Consórcio. Nenhum número do painel muda por isso — abra
+              para ver motivo, autor e desfazer.
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+        </button>
+      )}
+
       <ResiduoDetalheModal
         open={aberta === "vinculo"}
         onOpenChange={(o) => setAberta(o ? "vinculo" : null)}
@@ -94,17 +121,25 @@ export function CadastroSemLeadAlerta({ items }: Props) {
         items={semVinculo}
         esperado={semVinculo.length}
         permitirCorrigirVinculo
+        permitirForaFunil
       />
       <ResiduoDetalheModal
         open={aberta === "agendador"}
         onOpenChange={(o) => setAberta(o ? "agendador" : null)}
         kind="cota"
         titulo="Cotas com cadastro a ajustar"
-        descricao="Alerta de qualidade de cadastro. O crédito da venda não está perdido: quando o cliente já tem atribuição por outra cota, o SDR aparece no selo da linha. Quando a reunião existe sem agendador, informe quem agendou; quando a cota aponta para um lead sem reunião, troque para o lead que teve a R1."
+        descricao="Alerta de qualidade de cadastro. O crédito da venda não está perdido: quando o cliente já tem atribuição por outra cota, o SDR aparece no selo da linha. Quando a reunião existe sem agendador, informe quem agendou; quando a cota aponta para um lead sem reunião, troque para o lead que teve a R1. Quando nenhum lead do cliente tem R1 de Consórcio, a saída é reconhecer a venda como fora do funil."
         items={semAgendador}
         esperado={semAgendador.length}
         permitirCorrigirVinculo
+        permitirForaFunil
+      />
+      <ForaFunilListaModal
+        open={aberta === "foraFunil"}
+        onOpenChange={(o) => setAberta(o ? "foraFunil" : null)}
+        items={foraFunilItems}
       />
     </div>
   );
+
 }

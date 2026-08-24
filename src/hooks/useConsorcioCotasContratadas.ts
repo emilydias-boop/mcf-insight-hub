@@ -38,6 +38,20 @@ export interface CotaResiduoItem {
   pendingRegId: string | null;
   /** Quando o cliente já teve o resultado atribuído por OUTRA cota, o nome do SDR. */
   atribuidoA?: string | null;
+  /**
+   * `true` quando NENHUM lead vinculado a alguma cota deste cliente tem reunião
+   * de consórcio elegível. Nesse caso trocar o lead não tem como limpar a linha:
+   * não existe R1 desta BU para creditar. A UI usa isso para não destacar uma
+   * ação inócua e oferecer o reconhecimento de venda fora do funil.
+   */
+  semSaidaPorVinculo?: boolean;
+  /** Reconhecimento ATIVO de venda fora do funil (quando existe). */
+  foraFunil?: {
+    id: string;
+    motivo: string;
+    porNome: string | null;
+    em: string | null;
+  } | null;
   /** Autoria de correção manual do vínculo, quando houve. */
   ajuste?: {
     porId: string | null;
@@ -45,6 +59,7 @@ export interface CotaResiduoItem {
     dealAnterior: string | null;
   } | null;
 }
+
 
 export interface ConsorcioCotasContratadas {
   /** Total de cotas contratadas no período (após filtro de funil). */
@@ -77,10 +92,22 @@ export interface ConsorcioCotasContratadas {
   semCloser: number;
   /** Detalhe das cotas de clientes sem agendamento de consórcio. */
   semVinculoItems: CotaResiduoItem[];
-  /** Qualidade de cadastro: cotas cuja própria linha não tem lead/agendador resolvível. */
+  /**
+   * Qualidade de cadastro: cotas cuja própria linha não tem lead/agendador
+   * resolvível E que ainda NÃO foram reconhecidas como venda fora do funil.
+   */
   cadastroSemLead: number;
   creditoCadastroSemLead: number;
   cadastroSemLeadItems: CotaResiduoItem[];
+  /**
+   * Cotas com reconhecimento ATIVO de venda fora do funil: saem das pendências
+   * do alerta, mas continuam visíveis e auditáveis (nunca somem da tela).
+   * Não afetam nenhuma métrica — só o recorte deste alerta.
+   */
+  foraFunil: number;
+  creditoForaFunil: number;
+  foraFunilItems: CotaResiduoItem[];
+
   /** Detalhe das cotas sem vendedor casado com closer da BU. */
   semCloserItems: CotaResiduoItem[];
 }
@@ -106,6 +133,10 @@ const EMPTY: ConsorcioCotasContratadas = {
   cadastroSemLead: 0,
   creditoCadastroSemLead: 0,
   cadastroSemLeadItems: [],
+  foraFunil: 0,
+  creditoForaFunil: 0,
+  foraFunilItems: [],
+
   semCloserItems: [],
 };
 
@@ -190,6 +221,30 @@ export function useConsorcioCotasContratadas(
       if (!cards || cards.length === 0) return EMPTY;
 
       const cardIds = cards.map((c) => c.id);
+
+      // Reconhecimentos ATIVOS de venda fora do funil (100% leitura). Só
+      // reclassificam a linha dentro deste alerta — nenhuma métrica olha isto.
+      const { data: foraFunilRows, error: foraFunilError } = await supabase
+        .from("consorcio_cotas_fora_funil")
+        .select("id, consortium_card_id, motivo, reconhecido_por_nome, created_at")
+        .in("consortium_card_id", cardIds)
+        .is("desfeito_em", null);
+      if (foraFunilError) throw foraFunilError;
+      const foraFunilByCard = new Map<
+        string,
+        { id: string; motivo: string; porNome: string | null; em: string | null }
+      >();
+      (foraFunilRows || []).forEach((r: any) => {
+        if (r.consortium_card_id) {
+          foraFunilByCard.set(String(r.consortium_card_id), {
+            id: String(r.id),
+            motivo: String(r.motivo || ""),
+            porNome: r.reconhecido_por_nome ?? null,
+            em: r.created_at ?? null,
+          });
+        }
+      });
+
 
       // Vínculo cota → cadastro pendente → deal
       const { data: regs, error: regsError } = await supabase
@@ -353,7 +408,11 @@ export function useConsorcioCotasContratadas(
       const cadastroSemLeadItems: CotaResiduoItem[] = [];
       let cadastroSemLead = 0;
       let creditoCadastroSemLead = 0;
+      const foraFunilItems: CotaResiduoItem[] = [];
+      let foraFunil = 0;
+      let creditoForaFunil = 0;
       const semCloserItems: CotaResiduoItem[] = [];
+
 
       const baseItem = (
         card: any,
@@ -522,6 +581,19 @@ export function useConsorcioCotasContratadas(
         if (melhor) clienteDiag.set(pessoa, melhor);
       });
 
+      /**
+       * Cliente cujos leads vinculados NÃO têm nenhuma reunião de consórcio
+       * elegível: trocar o lead não tem como creditar a venda a ninguém, porque
+       * não existe R1 desta BU em nenhum deles.
+       */
+      const clienteSemSaidaPorVinculo = new Set<string>();
+      porCliente.forEach((rs, pessoa) => {
+        const algumElegivel = rs.some((r) => !!r.dealId && dealTemReuniaoElegivel.has(r.dealId));
+        if (!algumElegivel) clienteSemSaidaPorVinculo.add(pessoa);
+      });
+
+
+
       linhas.forEach(({ card, dealId, credito, pessoa }) => {
         total++;
         totalCredito += credito;
@@ -579,12 +651,24 @@ export function useConsorcioCotasContratadas(
         const temBookerProprio = !!(dealId && dealBooker.get(dealId));
         if (!temBookerProprio) {
           const diag = diagnosticarCota(card.id, dealId ?? null);
-          cadastroSemLead++;
-          creditoCadastroSemLead += credito;
           const item = baseItem(card, dealId ?? null, diag.motivo, diag.problema, diag.agendamento);
+          item.semSaidaPorVinculo = clienteSemSaidaPorVinculo.has(pessoa);
+          const reconhecida = foraFunilByCard.get(card.id) || null;
+          item.foraFunil = reconhecida;
           (item as any).__sdrEmail = sdrEmail || null;
-          cadastroSemLeadItems.push(item);
+          if (reconhecida) {
+            // Reconhecida como venda fora do funil: sai das pendências, mas
+            // continua na tela em bloco próprio (nunca desaparece).
+            foraFunil++;
+            creditoForaFunil += credito;
+            foraFunilItems.push(item);
+          } else {
+            cadastroSemLead++;
+            creditoCadastroSemLead += credito;
+            cadastroSemLeadItems.push(item);
+          }
         }
+
       });
 
       // Nomes dos SDRs atribuídos (inclui quem não teve atividade na agenda do período).
@@ -602,7 +686,7 @@ export function useConsorcioCotasContratadas(
       }
 
       // Selo por linha: o resultado deste cliente já foi creditado por outra cota.
-      cadastroSemLeadItems.forEach((item) => {
+      [...cadastroSemLeadItems, ...foraFunilItems].forEach((item) => {
         const email = (item as any).__sdrEmail as string | null;
         delete (item as any).__sdrEmail;
         item.atribuidoA = email ? sdrNames.get(email) || email : null;
@@ -612,12 +696,15 @@ export function useConsorcioCotasContratadas(
         String(b.dataContratacao || "").localeCompare(String(a.dataContratacao || ""));
       semVinculoItems.sort(porData);
       cadastroSemLeadItems.sort(porData);
+      foraFunilItems.sort(porData);
       semCloserItems.sort(porData);
 
       return {
         total, byCloser, bySdr, sdrNames, semVinculo, semCloser,
         semVinculoItems, semCloserItems,
         cadastroSemLead, creditoCadastroSemLead, cadastroSemLeadItems,
+        foraFunil, creditoForaFunil, foraFunilItems,
+
         clientesByCloser: new Map(
           Array.from(clientesCloserSets.entries()).map(([k, s]) => [k, s.size]),
         ),

@@ -3950,6 +3950,50 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_cotas_fora_funil: {
+        Row: {
+          consortium_card_id: string
+          created_at: string
+          desfeito_em: string | null
+          desfeito_por: string | null
+          desfeito_por_nome: string | null
+          id: string
+          motivo: string
+          reconhecido_por: string | null
+          reconhecido_por_nome: string | null
+        }
+        Insert: {
+          consortium_card_id: string
+          created_at?: string
+          desfeito_em?: string | null
+          desfeito_por?: string | null
+          desfeito_por_nome?: string | null
+          id?: string
+          motivo: string
+          reconhecido_por?: string | null
+          reconhecido_por_nome?: string | null
+        }
+        Update: {
+          consortium_card_id?: string
+          created_at?: string
+          desfeito_em?: string | null
+          desfeito_por?: string | null
+          desfeito_por_nome?: string | null
+          id?: string
+          motivo?: string
+          reconhecido_por?: string | null
+          reconhecido_por_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_cotas_fora_funil_consortium_card_id_fkey"
+            columns: ["consortium_card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_creditos: {
         Row: {
           ativo: boolean | null
@@ -9951,7 +9995,8 @@ export type Database = {
           pontos_melhoria: string[] | null
           recording_id: string
           resumo: string | null
-          script_versao: number | null
+          script_versao: number
+          updated_at: string
         }
         Insert: {
           aderencia_pct?: number | null
@@ -9967,7 +10012,8 @@ export type Database = {
           pontos_melhoria?: string[] | null
           recording_id: string
           resumo?: string | null
-          script_versao?: number | null
+          script_versao: number
+          updated_at?: string
         }
         Update: {
           aderencia_pct?: number | null
@@ -9983,7 +10029,8 @@ export type Database = {
           pontos_melhoria?: string[] | null
           recording_id?: string
           resumo?: string | null
-          script_versao?: number | null
+          script_versao?: number
+          updated_at?: string
         }
         Relationships: [
           {
@@ -10007,10 +10054,19 @@ export type Database = {
             referencedRelation: "meeting_recordings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "meeting_ai_reviews_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_recordings_lista"
+            referencedColumns: ["id"]
+          },
         ]
       }
       meeting_recordings: {
         Row: {
+          analysis_attempts: number
+          analysis_error: string | null
           analysis_status: string
           calendar_event_id: string | null
           closer_id: string | null
@@ -10040,6 +10096,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analysis_attempts?: number
+          analysis_error?: string | null
           analysis_status?: string
           calendar_event_id?: string | null
           closer_id?: string | null
@@ -10069,6 +10127,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analysis_attempts?: number
+          analysis_error?: string | null
           analysis_status?: string
           calendar_event_id?: string | null
           closer_id?: string | null
@@ -15442,6 +15502,84 @@ export type Database = {
           },
         ]
       }
+      meeting_recordings_lista: {
+        Row: {
+          analysis_status: string | null
+          closer_id: string | null
+          created_at: string | null
+          duration_minutes: number | null
+          ended_at: string | null
+          host_email: string | null
+          id: string | null
+          ingest_status: string | null
+          language: string | null
+          match_method: string | null
+          meetgeek_meeting_id: string | null
+          meeting_slot_id: string | null
+          source: string | null
+          started_at: string | null
+          title: string | null
+          transcript_chars: number | null
+          transcript_purged_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          analysis_status?: string | null
+          closer_id?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          host_email?: string | null
+          id?: string | null
+          ingest_status?: string | null
+          language?: string | null
+          match_method?: string | null
+          meetgeek_meeting_id?: string | null
+          meeting_slot_id?: string | null
+          source?: string | null
+          started_at?: string | null
+          title?: string | null
+          transcript_chars?: number | null
+          transcript_purged_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          analysis_status?: string | null
+          closer_id?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          host_email?: string | null
+          id?: string | null
+          ingest_status?: string | null
+          language?: string | null
+          match_method?: string | null
+          meetgeek_meeting_id?: string | null
+          meeting_slot_id?: string | null
+          source?: string | null
+          started_at?: string | null
+          title?: string | null
+          transcript_chars?: number | null
+          transcript_purged_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_recordings_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_recordings_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_performance_summary: {
         Row: {
           commission_rate: number | null
@@ -15641,6 +15779,7 @@ export type Database = {
         Returns: string
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
+      closers_do_usuario: { Args: never; Returns: string[] }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
       consorcio_corrigir_vinculo_cota: {
         Args: {
@@ -15651,6 +15790,7 @@ export type Database = {
         }
         Returns: Json
       }
+      consorcio_desfazer_fora_funil: { Args: { p_id: string }; Returns: Json }
       consorcio_desfazer_parcela_inicial: {
         Args: { p_motivo: string; p_registro_id: string }
         Returns: Json
@@ -16501,11 +16641,30 @@ export type Database = {
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
       mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
       mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
+      meetgeek_destravar_presos: { Args: never; Returns: Json }
       meetgeek_parear_gravacao: {
         Args: { _recording_id: string }
         Returns: Json
       }
       meetgeek_purgar_transcricoes: { Args: { _dias?: number }; Returns: Json }
+      meetgeek_reivindicar_analise: {
+        Args: { _lote?: number }
+        Returns: {
+          analysis_attempts: number
+          closer_id: string
+          id: string
+          meeting_slot_id: string
+          meeting_type: string
+        }[]
+      }
+      meetgeek_reivindicar_ingest: {
+        Args: { _lote?: number }
+        Returns: {
+          id: string
+          ingest_attempts: number
+          meetgeek_meeting_id: string
+        }[]
+      }
       merge_duplicate_contacts: {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined

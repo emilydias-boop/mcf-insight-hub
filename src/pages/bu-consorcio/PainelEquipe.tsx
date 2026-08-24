@@ -654,6 +654,8 @@ export default function ConsorcioPainelEquipe() {
               cotas={cotasContratadas?.cadastroSemLead || 0}
               credito={cotasContratadas?.creditoCadastroSemLead || 0}
               items={cotasContratadas?.cadastroSemLeadItems || []}
+              foraFunilItems={cotasContratadas?.foraFunilItems || []}
+
             />
           </div>
           {activeTab === "sdrs" ? (
