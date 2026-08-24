@@ -53,11 +53,18 @@ const hojeYmd = () => format(new Date(), 'yyyy-MM-dd');
 export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endDate?: Date } }) {
   const { data: cotas = [], isLoading } = useCotasCadastradas(range);
   const marcar = useMarcarParcelaInicial();
+  const reverter54 = useReverterEtapa5Para4();
+  const desfazer65 = useDesfazerParcelaInicial();
 
   const [alvo, setAlvo] = useState<CotaCadastrada | null>(null);
   const [dataPagamento, setDataPagamento] = useState(hojeYmd());
   const [comprovanteCardId, setComprovanteCardId] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
+  const [reversao, setReversao] = useState<Reversao | null>(null);
+  const [motivo, setMotivo] = useState('');
+
+  const { data: statusPorRegistro = {} } = useReversaoStatus(cotas.map((c) => c.id));
+
 
   // Busca por nome, CPF/CNPJ, grupo e cota — casa em QUALQUER um dos campos.
   // Regra dos dígitos: só busca por documento/grupo/cota por dígitos quando o
