@@ -66,9 +66,15 @@ export function usePropagarDadosCliente() {
       if (error) throw error;
       return params.ids.length;
     },
-    onSuccess: () => {
+    onSuccess: (_count, variables) => {
       queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-cadastros-da-venda'] });
+      // Invalidação por id — mesma chave que useUpdatePendingRegistration invalida,
+      // para que consultas de um único cadastro (ex.: drawer de detalhe) enxerguem
+      // a propagação e não sirvam dados obsoletos.
+      for (const id of variables.ids) {
+        queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registration', id] });
+      }
     },
     onError: (e: Error) => toast.error('Erro ao propagar dados do cliente: ' + e.message),
   });
