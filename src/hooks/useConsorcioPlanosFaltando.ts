@@ -71,8 +71,17 @@ export interface CombinacaoFaltante {
   colunas: string[];
 }
 
+/** Sugestão que a equipe decidiu ignorar (ex.: crédito que é soma de cartas). */
+export interface SugestaoIgnorada extends CombinacaoFaltante {
+  ignoradoPorNome: string | null;
+  ignoradoEm: string | null;
+}
+
 export interface PlanosFaltandoResultado {
+  /** Fila ativa (já sem as ignoradas). */
   combinacoes: CombinacaoFaltante[];
+  /** Sugestões ignoradas — nunca somem, dá para restaurar. */
+  ignoradas: SugestaoIgnorada[];
   /** Total de cartas vivas cobertas pelo cálculo. */
   cartasAnalisadas: number;
   /** Cartas com prazo sem coluna na tabela — cadastrar plano NÃO resolve. */
@@ -81,7 +90,7 @@ export interface PlanosFaltandoResultado {
   cartasCreditoAbaixoMinimo: number;
   /** Mapa cartaId → chave da combinação faltante (para o Dossiê). */
   porCarta: Record<string, string>;
-  /** Índice chave → combinação, para telas que só têm os campos do cadastro. */
+  /** Índice chave → combinação ATIVA (ignoradas ficam fora, de propósito). */
   porChave: Record<string, CombinacaoFaltante>;
 }
 
