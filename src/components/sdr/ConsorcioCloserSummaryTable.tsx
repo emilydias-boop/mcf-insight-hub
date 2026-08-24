@@ -38,6 +38,12 @@ interface ConsorcioCloserSummaryTableProps {
   producaoByCloser?: Map<string, ProducaoGeradaLinha>;
   /** Produção Gerada que não resolveu closer — balde explícito. */
   producaoSemAtribuicao?: ProducaoGeradaLinha;
+  /** Perna C (cota legada sem cadastro, ancorada na contratação) — só procedência. */
+  producaoPernaC?: ProducaoGeradaLinha;
+  /** Total da Produção Gerada do período, para medir o peso da perna C. */
+  producaoTotalPeriodo?: number;
+  /** Meses (YYYY-MM) onde o crédito dos lançamentos retroativos foi contado. */
+  producaoRetroMeses?: string[];
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
   cotasSemCloser?: number;
   /** Clientes distintos e crédito da linha residual de vendedor. */
