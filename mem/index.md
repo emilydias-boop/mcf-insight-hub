@@ -34,3 +34,4 @@
 - [Venda Consórcio Formulário Fundido](mem://business-logic/venda-consorcio-formulario-fundido) — Bloco cadastral compartilhado e opcional, parcelas_mcf por carta (intenção), cadastro incompleto na etapa 4.
 - [Etapa 5 Parcela Inicial](mem://business-logic/etapa5-parcela-inicial-marcador-interno) — Marcador interno da parcela inicial em consorcio_pending_registrations, isolado de finanças.
 - [Adicionar Carta etapa 3](mem://features/adicionar-carta-etapa3) — Venda manual cria proposta+cartas+cadastros, lead obrigatório, entra na trava de termo assinado.
+- [Termo snapshot e assinatura](mem://business-logic/termo-adesao-snapshot-assinatura) — Termo congela dados; assinatura confere nome/CPF contra o snapshot; editar depois exige cancelar e gerar novo termo.
