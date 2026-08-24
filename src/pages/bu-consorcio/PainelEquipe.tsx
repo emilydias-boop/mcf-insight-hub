@@ -692,6 +692,9 @@ export default function ConsorcioPainelEquipe() {
               clientesByCloser={cotasContratadas?.clientesByCloser}
               totalClientesDistintos={cotasContratadas?.totalClientes || 0}
               creditoByCloser={cotasContratadas?.creditoByCloser}
+              producaoByCloser={producaoGerada?.byCloser}
+              producaoSemAtribuicao={producaoGerada?.semAtribuicao}
+
               cotasSemCloser={cotasContratadas?.semCloser || 0}
               clientesSemCloser={cotasContratadas?.clientesSemCloser || 0}
               creditoSemCloser={cotasContratadas?.creditoSemCloser || 0}
