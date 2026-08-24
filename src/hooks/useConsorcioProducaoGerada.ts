@@ -65,7 +65,14 @@ export interface ProducaoGeradaLinha {
   lancadosRetroativos: number;
   /** Crédito desses registros, contado em OUTRO mês (o do aceite). */
   lancadosRetroativosCredito: number;
+  /**
+   * Meses-âncora (YYYY-MM) DOS REGISTROS DESTA LINHA — onde o crédito deles foi
+   * contado. Por linha, nunca global: o aviso do closer não pode citar mês de
+   * retroativo de outro closer.
+   */
+  lancadosRetroativosMeses: string[];
 }
+
 
 export interface ConsorcioProducaoGerada {
   byCloser: Map<string, ProducaoGeradaLinha>;
