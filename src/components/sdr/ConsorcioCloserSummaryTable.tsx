@@ -72,6 +72,11 @@ export function ConsorcioCloserSummaryTable({
   creditoByCloser,
   producaoByCloser,
   producaoSemAtribuicao,
+  producaoPernaC,
+  producaoTotalPeriodo = 0,
+  producaoRetroMeses = [],
+
+
 
   cotasSemCloser = 0,
   clientesSemCloser = 0,
