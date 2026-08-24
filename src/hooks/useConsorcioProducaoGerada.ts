@@ -73,6 +73,24 @@ export interface ProducaoGeradaLinha {
   lancadosRetroativosMeses: string[];
 }
 
+/**
+ * Uma linha da LISTA de Produção Gerada (auditoria do closer). É só a explosão
+ * dos mesmos registros que somam a coluna — nunca uma segunda contagem.
+ */
+export interface ProducaoGeradaItem {
+  key: string;
+  /** Perna de origem: A (proposta), B (cadastro avulso), C (cota legada). */
+  perna: "A" | "B" | "C";
+  nome: string | null;
+  /** Data-âncora do registro (aceite/proposta na A e B, contratação na C). */
+  dataAncora: string | null;
+  credito: number;
+  cartas: number;
+  dealId: string | null;
+  vendedorName: string | null;
+  /** Já virou cota contratada (`tipo_registro = 'contratacao'`). */
+  efetivado: boolean;
+}
 
 export interface ConsorcioProducaoGerada {
   byCloser: Map<string, ProducaoGeradaLinha>;
@@ -85,7 +103,10 @@ export interface ConsorcioProducaoGerada {
   pernaC: ProducaoGeradaLinha;
   /** Meses de âncora (YYYY-MM) onde o crédito dos lançamentos retroativos conta. */
   retroMesesAncora: string[];
+  /** Explosão por closer dos registros somados acima (auditoria). */
+  itensByCloser: Map<string, ProducaoGeradaItem[]>;
 }
+
 
 const zero = (): ProducaoGeradaLinha => ({
   credito: 0,
@@ -106,6 +127,8 @@ const EMPTY: ConsorcioProducaoGerada = {
   pernaB: zero(),
   pernaC: zero(),
   retroMesesAncora: [],
+  itensByCloser: new Map(),
+
 };
 
 
@@ -246,6 +269,22 @@ export function useConsorcioProducaoGerada(
         byCloser.set(closerId, alvo);
       };
 
+      // Explosão em itens: mesma origem dos números acima, só detalhada. O selo
+      // de efetivação é resolvido no fim, com uma única consulta de cotas.
+      const itensFlat: { closerId: string; item: ProducaoGeradaItem; cardIds: string[] }[] = [];
+      const addItem = (
+        closerId: string,
+        item: ProducaoGeradaItem,
+        cardIds: (string | null | undefined)[] = [],
+      ) => {
+        itensFlat.push({
+          closerId,
+          item,
+          cardIds: cardIds.filter(Boolean) as string[],
+        });
+      };
+
+
 
       // ══ PERNA A — cartas de propostas lançadas (etapa 3 em diante) ════════
       const { data: propsRaw, error: propsError } = await supabase
@@ -264,21 +303,23 @@ export function useConsorcioProducaoGerada(
       const propostaIds = propostas.map((p) => p.id);
 
       // Cartas das propostas do período (declinadas incluídas de propósito).
-      const cartasPorProposta = new Map<string, { credito: number; qtd: number }>();
+      const cartasPorProposta = new Map<string, { credito: number; qtd: number; cardIds: string[] }>();
       for (const parte of chunk(propostaIds)) {
         if (parte.length === 0) continue;
         const { data: cartas, error: cartasError } = await supabase
           .from("consorcio_proposal_cartas")
-          .select("id, proposal_id, valor_credito")
+          .select("id, proposal_id, valor_credito, consortium_card_id")
           .in("proposal_id", parte);
         if (cartasError) throw cartasError;
         (cartas || []).forEach((c) => {
-          const acc = cartasPorProposta.get(c.proposal_id) || { credito: 0, qtd: 0 };
+          const acc = cartasPorProposta.get(c.proposal_id) || { credito: 0, qtd: 0, cardIds: [] };
           acc.credito += Number(c.valor_credito || 0);
           acc.qtd += 1;
+          if (c.consortium_card_id) acc.cardIds.push(c.consortium_card_id);
           cartasPorProposta.set(c.proposal_id, acc);
         });
       }
+
 
       // Cadeia de atribuição: created_by → perfil → closer.
       const criadorIds = [...new Set(propostas.map((p) => p.created_by).filter(Boolean) as string[])];
@@ -295,14 +336,17 @@ export function useConsorcioProducaoGerada(
       // Fallback 1: dono do deal (owner_id guarda e-mail).
       const dealIdsA = [...new Set(propostas.map((p) => p.deal_id).filter(Boolean) as string[])];
       const dealParaCloser = new Map<string, string>();
+      const dealNome = new Map<string, string>();
       for (const parte of chunk(dealIdsA)) {
         if (parte.length === 0) continue;
-        const { data: deals } = await supabase.from("crm_deals").select("id, owner_id").in("id", parte);
+        const { data: deals } = await supabase.from("crm_deals").select("id, owner_id, name").in("id", parte);
         (deals || []).forEach((d) => {
+          if (d.name) dealNome.set(d.id, d.name);
           const cid = emailParaCloser.get(emailKey(d.owner_id) || "");
           if (cid) dealParaCloser.set(d.id, cid);
         });
       }
+
 
       // Fallback 2: closer da reunião (a mais recente do deal).
       const dealParaCloserReuniao = new Map<string, { closerId: string; at: string }>();
@@ -344,7 +388,23 @@ export function useConsorcioProducaoGerada(
         if (p.created_by) closerId = criadorParaCloser.get(p.created_by);
         if (!closerId && p.deal_id) closerId = dealParaCloser.get(p.deal_id);
         if (!closerId && p.deal_id) closerId = dealParaCloserReuniao.get(p.deal_id)?.closerId;
-        add(closerId || SEM_ATRIBUICAO, agg.credito, agg.qtd, 1);
+        const alvo = closerId || SEM_ATRIBUICAO;
+        add(alvo, agg.credito, agg.qtd, 1);
+        addItem(
+          alvo,
+          {
+            key: `A:${p.id}`,
+            perna: "A",
+            nome: (p.deal_id ? dealNome.get(p.deal_id) : null) || null,
+            dataAncora: String(p.aceite_date || p.proposal_date || "").slice(0, 10) || null,
+            credito: agg.credito,
+            cartas: agg.qtd,
+            dealId: p.deal_id || null,
+            vendedorName: null,
+            efetivado: false,
+          },
+          agg.cardIds,
+        );
         pernaA.credito += agg.credito;
         pernaA.cartas += agg.qtd;
         pernaA.vendas += 1;
@@ -357,11 +417,12 @@ export function useConsorcioProducaoGerada(
       const { data: regsRaw, error: regsError } = await supabase
         .from("consorcio_pending_registrations")
         .select(
-          "id, proposal_id, consortium_card_id, aceite_date, created_at, valor_credito, vendedor_name, vendedor_name_cota, cpf, cnpj, nome_completo, razao_social, status",
+          "id, proposal_id, consortium_card_id, aceite_date, created_at, valor_credito, vendedor_name, vendedor_name_cota, cpf, cnpj, nome_completo, razao_social, status, deal_id",
         )
         .gte("aceite_date", ini)
         .lte("aceite_date", fim);
       if (regsError) throw regsError;
+
 
       type RegRow = {
         id: string;
@@ -377,7 +438,9 @@ export function useConsorcioProducaoGerada(
         nome_completo: string | null;
         razao_social: string | null;
         status: string | null;
+        deal_id?: string | null;
       };
+
       const regs = (regsRaw || []) as RegRow[];
 
       /**
@@ -472,6 +535,22 @@ export function useConsorcioProducaoGerada(
         pessoasPorCloserB
           .get(closerId)!
           .add(clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social }));
+        addItem(
+          closerId,
+          {
+            key: `B:${r.id}`,
+            perna: "B",
+            nome: r.nome_completo || r.razao_social || null,
+            dataAncora: r.aceite_date ? String(r.aceite_date).slice(0, 10) : null,
+            credito,
+            cartas: 1,
+            dealId: r.deal_id || null,
+            vendedorName: nome || null,
+            efetivado: false,
+          },
+          [r.consortium_card_id],
+        );
+
         pernaB.credito += credito;
         pernaB.cartas += 1;
         if (flag) {
@@ -548,7 +627,7 @@ export function useConsorcioProducaoGerada(
       // isso que ele fica numa perna separada e declarada.
       const { data: cards, error: cardsError } = await supabase
         .from("consortium_cards")
-        .select("id, vendedor_name, valor_credito, cpf, cnpj, nome_completo")
+        .select("id, vendedor_name, valor_credito, cpf, cnpj, nome_completo, data_contratacao")
         .eq("tipo_registro", "contratacao")
         .gte("data_contratacao", ini)
         .lte("data_contratacao", fim);
@@ -579,9 +658,22 @@ export function useConsorcioProducaoGerada(
         add(closerId, credito, 1, 0);
         if (!pessoasPorCloserC.has(closerId)) pessoasPorCloserC.set(closerId, new Set());
         pessoasPorCloserC.get(closerId)!.add(clientePessoaKey(card));
+        addItem(closerId, {
+          key: `C:${card.id}`,
+          perna: "C",
+          nome: card.nome_completo || null,
+          dataAncora: card.data_contratacao ? String(card.data_contratacao).slice(0, 10) : null,
+          credito,
+          cartas: 1,
+          dealId: null,
+          vendedorName: card.vendedor_name || null,
+          // Perna C é, por definição, cota contratada no período.
+          efetivado: true,
+        });
         pernaC.credito += credito;
         pernaC.cartas += 1;
       });
+
       pessoasPorCloserC.forEach((pessoas, closerId) => {
         add(closerId, 0, 0, pessoas.size);
         pernaC.vendas += pessoas.size;
@@ -615,6 +707,31 @@ export function useConsorcioProducaoGerada(
       });
       total.lancadosRetroativosMeses.sort();
 
+      // Selo de efetivação: dos cards citados pelos itens, quais já são cota
+      // contratada. Leitura pura, não altera nenhum número da coluna.
+      const cardsCitados = [...new Set(itensFlat.flatMap((i) => i.cardIds))];
+      const cardsContratados = new Set<string>();
+      for (const parte of chunk(cardsCitados)) {
+        if (parte.length === 0) continue;
+        const { data: contratados } = await supabase
+          .from("consortium_cards")
+          .select("id")
+          .eq("tipo_registro", "contratacao")
+          .in("id", parte);
+        (contratados || []).forEach((c) => cardsContratados.add(c.id));
+      }
+
+      const itensByCloser = new Map<string, ProducaoGeradaItem[]>();
+      itensFlat.forEach(({ closerId, item, cardIds }) => {
+        const efetivado = item.efetivado || cardIds.some((id) => cardsContratados.has(id));
+        const lista = itensByCloser.get(closerId) || [];
+        lista.push({ ...item, efetivado });
+        itensByCloser.set(closerId, lista);
+      });
+      itensByCloser.forEach((lista) =>
+        lista.sort((a, b) => String(b.dataAncora || "").localeCompare(String(a.dataAncora || ""))),
+      );
+
       return {
         byCloser,
         semAtribuicao,
@@ -623,7 +740,9 @@ export function useConsorcioProducaoGerada(
         pernaB,
         pernaC,
         retroMesesAncora: [...retroMeses].sort(),
+        itensByCloser,
       };
+
 
     },
     enabled: !!startDate && !!endDate,
