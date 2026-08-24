@@ -125,8 +125,17 @@ export function ConsorcioCloserSummaryTable({
     credito: baseTotals.credito + creditoSemCloser,
   };
 
+  // Produção Gerada: total isolado das outras colunas. Soma TODAS as linhas do
+  // hook (mesmo de closer que não aparece na tabela) mais o balde sem
+  // atribuição, para o Total nunca esconder crédito.
+  let producaoTotal = producaoSemAtribuicao?.credito || 0;
+  producaoByCloser?.forEach((l) => {
+    producaoTotal += l.credito;
+  });
+
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
   const totalTaxaVenda = totals.r1_realizada > 0
+
     ? (totals.clientes / totals.r1_realizada) * 100
     : 0;
   const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
