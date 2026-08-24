@@ -292,6 +292,9 @@ export function ConsorcioCloserSummaryTable({
                         ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` +
                           (producao.antedatados > 0
                             ? ` · ${producao.antedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producao.antedatadosCredito)}), incluída(s) na soma`
+                            : "") +
+                          (producao.lancadosRetroativos > 0
+                            ? ` · ${retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}`
                             : "")
                         : undefined
                     }
@@ -302,7 +305,16 @@ export function ConsorcioCloserSummaryTable({
                         ·{producao.antedatados}
                       </span>
                     )}
+                    {producao && producao.lancadosRetroativos > 0 && (
+                      <span
+                        className="ml-1 text-[10px] text-amber-400 align-top"
+                        title={retroTexto(producao.lancadosRetroativos, producao.lancadosRetroativosCredito)}
+                      >
+                        ↩{producao.lancadosRetroativos}
+                      </span>
+                    )}
                   </TableCell>
+
 
                   <TableCell className="text-center">
 
