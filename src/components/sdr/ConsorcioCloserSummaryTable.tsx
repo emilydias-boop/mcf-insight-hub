@@ -349,11 +349,15 @@ export function ConsorcioCloserSummaryTable({
                   {totals.clientes}
                 </Badge>
               </TableCell>
+              <TableCell className="text-center whitespace-nowrap">
+                {producaoTotal > 0 ? brl(producaoTotal) : "—"}
+              </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                   {totals.cotas}
                 </Badge>
               </TableCell>
+
               <TableCell className="text-center whitespace-nowrap">
                 {totals.credito > 0 ? brl(totals.credito) : "—"}
               </TableCell>
