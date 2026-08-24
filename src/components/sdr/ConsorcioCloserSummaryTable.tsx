@@ -63,6 +63,9 @@ export function ConsorcioCloserSummaryTable({
   clientesByCloser,
   totalClientesDistintos = 0,
   creditoByCloser,
+  producaoByCloser,
+  producaoSemAtribuicao,
+
   cotasSemCloser = 0,
   clientesSemCloser = 0,
   creditoSemCloser = 0,
