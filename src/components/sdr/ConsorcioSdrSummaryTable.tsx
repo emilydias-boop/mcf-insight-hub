@@ -180,13 +180,13 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Soma do valor de crédito das cotas contratadas no período."
+                title="Soma do crédito das cotas confirmadas pela Embracon (tipo de registro 'contratação'), pelo mês da data de contratação — não da proposta nem da reserva."
               >
-                Crédito Contratado
+                Consórcio Efetivado
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Crédito Contratado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
+                title="Consórcio Efetivado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
               >
                 Ticket Médio
               </TableHead>
