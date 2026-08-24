@@ -421,12 +421,11 @@ export default function CloserDetalheConsorcio() {
         </div>
       </div>
 
-      {/* Cards — as mesmas colunas do Painel Comercial */}
+      {/* Cards — mesma ordem das abas: volume de reunião, depois venda, depois dinheiro */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard titulo="Reuniões Agendadas" valor={String(reunioes.agendadas.length)} isLoading={reunioes.isLoading} />
         <KpiCard titulo="Reuniões Realizadas" valor={String(reunioes.realizadas.length)} isLoading={reunioes.isLoading} />
         <KpiCard titulo="No-Show" valor={String(reunioes.noShows.length)} isLoading={reunioes.isLoading} />
-        <KpiCard titulo="Contrato Pago (agenda)" valor={String(reunioes.contratoPago.length)} isLoading={reunioes.isLoading} />
         <KpiCard
           titulo="Vendas Realizadas"
           valor={String(cotas?.vendas ?? 0)}
@@ -442,7 +441,7 @@ export default function CloserDetalheConsorcio() {
         <KpiCard
           titulo="Produção Gerada"
           valor={moeda(linhaProducao?.credito ?? 0)}
-          detalhe={`${linhaProducao?.vendas ?? 0} vendas · ${linhaProducao?.cartas ?? 0} registros`}
+          detalhe={`${itensProducao.length} registros · ${linhaProducao?.cartas ?? 0} cartas`}
           isLoading={loadingProducao}
         />
         <KpiCard
@@ -453,6 +452,7 @@ export default function CloserDetalheConsorcio() {
           isLoading={loadingProducao}
         />
       </div>
+
 
       <Tabs defaultValue="realizadas" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
