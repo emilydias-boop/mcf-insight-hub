@@ -319,6 +319,59 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!reversao} onOpenChange={(v) => !v && (setReversao(null), setMotivo(''))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {reversao?.modo === '5-4' ? 'Voltar para Cotas a Fazer' : 'Desfazer parcela inicial'}
+            </DialogTitle>
+            <DialogDescription>
+              {reversao?.cota.nome} — grupo {reversao?.cota.grupo || '—'} / cota {reversao?.cota.cota || '—'}.
+              {reversao?.modo === '5-4' ? (
+                <>
+                  {' '}O cadastro volta para <strong>Cotas a Fazer</strong>. A cota <strong>não é apagada</strong>: fica
+                  viva, marcada como revertida e fora do funil. Nenhuma cobrança, comissão ou webhook é enviado ou
+                  cancelado.
+                </>
+              ) : (
+                <>
+                  {' '}A cota volta para <strong>reserva</strong> e sai da etapa <strong>Cotas</strong>. Nada é cobrado,
+                  cancelado ou enviado para fora.
+                </>
+              )}
+              {statusPorRegistro[reversao?.cota.id || '']?.dash_anunciado && (
+                <>
+                  {' '}Atenção: esta venda <strong>já foi anunciada ao Dash</strong> — depois de voltar, reconcilie por
+                  lá manualmente.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 py-2">
+            <Label htmlFor="rev-motivo">Motivo (obrigatório, mínimo {MOTIVO_MIN} caracteres)</Label>
+            <Textarea
+              id="rev-motivo"
+              rows={3}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ex.: cota lançada no grupo errado, será cadastrada novamente"
+            />
+            <p className="text-xs text-muted-foreground">
+              Fica registrado quem voltou, quando e de qual etapa para qual. {motivo.trim().length}/{MOTIVO_MIN}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setReversao(null); setMotivo(''); }}>Cancelar</Button>
+            <Button disabled={motivo.trim().length < MOTIVO_MIN || revertendo} onClick={confirmarReversao}>
+              {revertendo && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
       {comprovanteCardId && (
         <GerarComprovanteModal
           open={!!comprovanteCardId}
