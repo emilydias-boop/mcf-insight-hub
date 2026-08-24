@@ -27,6 +27,8 @@ import { ConsorcioCredito, ConsorcioProduto } from '@/types/consorcioProdutos';
 import { formatBRLInput, parseBRLInput, numberToBRLInput } from '@/lib/brlMask';
 import {
   useConsorcioPlanosFaltando,
+  useIgnorarSugestaoPlano,
+  useRestaurarSugestaoPlano,
   type CombinacaoFaltante,
 } from '@/hooks/useConsorcioPlanosFaltando';
 import { produtosElegiveisParaCarta } from '@/lib/consorcioParcelaOficial';
