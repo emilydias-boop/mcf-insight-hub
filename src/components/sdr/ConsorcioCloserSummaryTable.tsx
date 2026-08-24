@@ -296,7 +296,9 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{clientesSemCloser}</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{cotasSemCloser}</TableCell>
+
                 <TableCell className="text-center whitespace-nowrap">
                   {creditoSemCloser > 0 ? brl(creditoSemCloser) : "—"}
                 </TableCell>
