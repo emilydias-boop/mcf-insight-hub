@@ -203,6 +203,7 @@ function CotasTable({ itens, isLoading }: { itens: CotaDetalheItem[]; isLoading:
 function FaturamentoTab({
   itens,
   producaoCredito,
+  producaoCartas,
   efetivadoCredito,
   cotas,
   isLoading,
@@ -210,6 +211,7 @@ function FaturamentoTab({
 }: {
   itens: ProducaoGeradaItem[];
   producaoCredito: number;
+  producaoCartas: number;
   efetivadoCredito: number;
   cotas: number;
   isLoading: boolean;
@@ -224,7 +226,12 @@ function FaturamentoTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard titulo="Produção Gerada" valor={moeda(producaoCredito)} detalhe={`${itens.length} registros`} isLoading={isLoading} />
+        <KpiCard
+          titulo="Produção Gerada"
+          valor={moeda(producaoCredito)}
+          detalhe={`${itens.length} registros · ${producaoCartas} cartas`}
+          isLoading={isLoading}
+        />
         <KpiCard titulo="Consórcio Efetivado" valor={moeda(efetivadoCredito)} detalhe={`${cotas} cotas contratadas`} isLoading={isLoading} />
         <KpiCard
           titulo="A efetivar"
@@ -233,6 +240,7 @@ function FaturamentoTab({
           isLoading={isLoading}
         />
       </div>
+
 
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
