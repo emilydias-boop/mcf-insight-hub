@@ -442,16 +442,30 @@ export function ConsorcioCloserSummaryTable({
               <TableCell
                 className="text-center whitespace-nowrap"
                 title={
-                  producaoAntedatados > 0
-                    ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
-                    : undefined
+                  [
+                    producaoAntedatados > 0
+                      ? `${producaoAntedatados} venda(s) com aceite anterior ao mês do lançamento (${brl(producaoAntedatadosCredito)}), incluída(s) na soma`
+                      : "",
+                    producaoRetro > 0 ? retroTexto(producaoRetro, producaoRetroCredito) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
                 }
               >
                 {producaoTotal > 0 ? brl(producaoTotal) : "—"}
                 {producaoAntedatados > 0 && (
                   <span className="ml-1 text-[10px] text-muted-foreground align-top">·{producaoAntedatados}</span>
                 )}
+                {producaoRetro > 0 && (
+                  <span
+                    className="ml-1 text-[10px] text-amber-400 align-top"
+                    title={retroTexto(producaoRetro, producaoRetroCredito)}
+                  >
+                    ↩{producaoRetro}
+                  </span>
+                )}
               </TableCell>
+
 
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
