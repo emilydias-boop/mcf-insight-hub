@@ -6,8 +6,6 @@ import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Calendar, Users, Download, Briefcase, TrendingUp, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { SetorRow } from "@/components/dashboard/SetorRow";
-import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,13 +20,7 @@ import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
-import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
-import { ConsorcioGoalsMatrixTable, ConsorcioMetricRow } from "@/components/sdr/ConsorcioGoalsMatrixTable";
-import { useConsorcioPipelineMetrics } from "@/hooks/useConsorcioPipelineMetrics";
-import { useConsorcioProdutosFechadosMetrics } from "@/hooks/useConsorcioProdutosFechadosMetrics";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
-import { useSdrWeekdayTargets, resolveWeekdayTarget } from "@/hooks/useSdrWeekdayTargets";
-import { TeamGoalsEditModal } from "@/components/sdr/TeamGoalsEditModal";
 import { Target, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
@@ -63,8 +55,6 @@ import { useSdrsFromSquad } from "@/hooks/useSdrsFromSquad";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
-import { BURevenueGoalsEditModal } from "@/components/sdr/BURevenueGoalsEditModal";
-import { useConsorcioSummary } from "@/hooks/useConsorcio";
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
 
 const BU_SQUAD = "consorcio";
@@ -72,120 +62,6 @@ const BU_PREFIX = "consorcio_sdr_";
 const EMPTY_FATOS: ConsorcioFatoRow[] = [];
 
 type DatePreset = "today" | "week" | "month" | "custom";
-
-function ConsorcioMetricsCard({ onEditGoals, canEdit }: { onEditGoals?: () => void; canEdit?: boolean }) {
-  const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
-  const efeitoAlavanca = setoresData?.setores.find(s => s.id === 'efeito_alavanca');
-  const credito = setoresData?.setores.find(s => s.id === 'credito');
-
-  // Calculate date ranges for all cards (not just inside)
-  const today = new Date();
-  const todayNorm = startOfDay(today);
-  const wStart = startOfWeek(todayNorm, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
-  const wEnd = endOfWeek(todayNorm, { weekStartsOn: CONSORCIO_WEEK_STARTS_ON });
-  const mStart = startOfMonth(today);
-  const mEnd = endOfMonth(today);
-  const yStart = startOfYear(today);
-  const yEnd = endOfYear(today);
-
-  // Fetch ALL consortium cards (no categoria filter) for each period
-  const { data: weeklySummary, isLoading: wLoading } = useConsorcioSummary({ startDate: wStart, endDate: wEnd });
-  const { data: monthlySummary, isLoading: mLoading } = useConsorcioSummary({ startDate: mStart, endDate: mEnd });
-  const { data: annualSummary, isLoading: yLoading } = useConsorcioSummary({ startDate: yStart, endDate: yEnd });
-
-  const summaryLoading = wLoading || mLoading || yLoading;
-
-  if (!efeitoAlavanca && !credito && !setoresLoading && !summaryLoading) return null;
-
-  // Use totalCredito from ALL cards + credito sector commission from consortium_payments
-  const combined = {
-    apuradoSemanal: (weeklySummary?.totalCredito || 0) + (credito?.apuradoSemanal || 0),
-    metaSemanal: (efeitoAlavanca?.metaSemanal || 0) + (credito?.metaSemanal || 0),
-    apuradoMensal: (monthlySummary?.totalCredito || 0) + (credito?.apuradoMensal || 0),
-    metaMensal: (efeitoAlavanca?.metaMensal || 0) + (credito?.metaMensal || 0),
-    apuradoAnual: (annualSummary?.totalCredito || 0) + (credito?.apuradoAnual || 0),
-    metaAnual: (efeitoAlavanca?.metaAnual || 0) + (credito?.metaAnual || 0),
-  };
-
-  return (
-    <div className="relative group">
-      <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-primary/60 to-primary rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300" />
-      <div className="relative">
-        <SetorRow
-          titulo="BU Consórcio"
-          icone={TrendingUp}
-          semanaLabel={setoresData?.semanaLabel || 'Semana'}
-          mesLabel={setoresData?.mesLabel || 'Mês'}
-          apuradoSemanal={combined.apuradoSemanal}
-          metaSemanal={combined.metaSemanal}
-          apuradoMensal={combined.apuradoMensal}
-          metaMensal={combined.metaMensal}
-          apuradoAnual={combined.apuradoAnual}
-          metaAnual={combined.metaAnual}
-          isLoading={setoresLoading || summaryLoading}
-        />
-        <TooltipProvider delayDuration={100}>
-          <div className="absolute top-3 right-3 flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Origem dos valores"
-                >
-                  <Info className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="left" className="max-w-sm text-xs leading-relaxed">
-                <div className="space-y-2">
-                  <div>
-                    <p className="font-semibold text-foreground">Apurado (Semana / Mês / Ano)</p>
-                    <p>
-                      Soma de <b>valor_credito</b> de todas as cotas cadastradas em
-                      <b> BU Consórcio → Controle Consórcio</b> (rota <code>/consorcio</code>),
-                      filtradas por <b>data de contratação</b> dentro do período.
-                    </p>
-                    <p className="mt-1">
-                      Cotas novas entram via <b>Adicionar Cota</b> ou aprovando em
-                      <b> Cotas a Fazer</b> (rota <code>/consorcio</code>).
-                    </p>
-                    <p className="mt-1">
-                      + Comissão do setor <b>Crédito Imobiliário</b> registrada em
-                      <b> BU Consórcio → Pagamentos</b> (rota <code>/consorcio/pagamentos</code>).
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground">Meta (Semana / Mês / Ano)</p>
-                    <p>
-                      Configurada pelo botão <b>engrenagem ⚙️</b> ao lado
-                      (permissão de admin/manager/coordenador). Chaves:
-                      <code> setor_efeito_alavanca_[semana|mes|ano] </code> +
-                      <code> setor_credito_[semana|mes|ano]</code>.
-                    </p>
-                  </div>
-                  <div className="pt-1 border-t border-border/50">
-                    <p className="text-muted-foreground">
-                      Semana: segunda a domingo · Mês: mês corrente · Ano: 2026 completo.
-                    </p>
-                  </div>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-            {canEdit && (
-              <button
-                onClick={onEditGoals}
-                className="p-1.5 rounded-md hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-                title="Editar metas"
-              >
-                <Settings2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </TooltipProvider>
-      </div>
-    </div>
-  );
-}
 
 export default function ConsorcioPainelEquipe() {
   const { role } = useAuth();
@@ -211,8 +87,6 @@ export default function ConsorcioPainelEquipe() {
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
-  const [goalsEditModalOpen, setGoalsEditModalOpen] = useState(false);
-  const [revenueGoalsEditOpen, setRevenueGoalsEditOpen] = useState(false);
 
   // BU pipeline mapping for Consórcio
   const { data: buMapping } = useBUPipelineMap('consorcio');
@@ -326,8 +200,6 @@ export default function ConsorcioPainelEquipe() {
   });
 
   const { teamKPIs: dayKPIs } = useTeamMeetingsData({ startDate: dayStart, endDate: dayEnd, squad: BU_SQUAD });
-  const { teamKPIs: weekKPIs } = useTeamMeetingsData({ startDate: weekStartDate, endDate: weekEndDate, squad: BU_SQUAD });
-  const { teamKPIs: monthKPIs } = useTeamMeetingsData({ startDate: monthStartDate, endDate: monthEndDate, squad: BU_SQUAD });
 
 
   const { data: allSdrsData } = useSdrsAll();
@@ -429,33 +301,6 @@ export default function ConsorcioPainelEquipe() {
     return map;
   }, [consorcioEmployeeAdmissaoData, activeSdrsList, start, end]);
 
-  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
-  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
-  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
-  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
-  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
-  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
-
-  // ===== Metas da Equipe: mesma fonte nova (fatos da agenda do Consórcio) =====
-  // Dia / Semana / Mês com os mesmos eixos: scheduled_at para R1 agendada /
-  // realizada / no-show e booked_at para agendamento. Sem recorte por squad.
-  // Agregação feita no BANCO (poucas linhas por funil), não linha a linha.
-  const { data: totaisDayRows } = useConsorcioAgendaTotais(dayStart, dayEnd);
-  const { data: totaisWeekRows } = useConsorcioAgendaTotais(weekStartDate, weekEndDate);
-  const { data: totaisMonthRows } = useConsorcioAgendaTotais(monthStartDate, monthEndDate);
-
-  const fatosDayTotals = useMemo(
-    () => sumConsorcioTotais(totaisDayRows, allowedOriginNames),
-    [totaisDayRows, allowedOriginNames],
-  );
-  const fatosWeekTotals = useMemo(
-    () => sumConsorcioTotais(totaisWeekRows, allowedOriginNames),
-    [totaisWeekRows, allowedOriginNames],
-  );
-  const fatosMonthTotals = useMemo(
-    () => sumConsorcioTotais(totaisMonthRows, allowedOriginNames),
-    [totaisMonthRows, allowedOriginNames],
-  );
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
@@ -465,16 +310,9 @@ export default function ConsorcioPainelEquipe() {
   // Reuniões "sem status" (já passaram e não foram atualizadas) — só exibido na BU Consórcio
   const { data: semStatusCount } = useMeetingsSemStatus(start, end, BU_SQUAD);
 
-  // Consórcio pipeline metrics (deals by stage)
-  const pipelineMetrics = useConsorcioPipelineMetrics();
-  const produtosFechados = useConsorcioProdutosFechadosMetrics();
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
   const { data: cotasContratadas } = useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD);
-  // Metas da Equipe: MESMA fonte, só mudando a janela (Dia / Semana / Mês).
-  const { data: cotasDay } = useConsorcioCotasContratadas(dayStart, dayEnd, allowedOriginNames, BU_SQUAD);
-  const { data: cotasWeek } = useConsorcioCotasContratadas(weekStartDate, weekEndDate, allowedOriginNames, BU_SQUAD);
-  const { data: cotasMonth } = useConsorcioCotasContratadas(monthStartDate, monthEndDate, allowedOriginNames, BU_SQUAD);
   const { data: propostasByCloser } = useConsorcioPipelineMetricsByCloser(start, end);
 
   // Aba Closers: as métricas de agenda vêm da MESMA lista de fatos (agrupada por
@@ -540,23 +378,7 @@ export default function ConsorcioPainelEquipe() {
   }, [fatos, cotasContratadas]);
 
   // Consórcio team targets
-  const { data: consorcioTargets, isLoading: targetsLoading } = useSdrTeamTargets(BU_PREFIX);
-  const { data: consorcioWeekdayOverrides } = useSdrWeekdayTargets(new Date(), BU_PREFIX);
-  const todayDow = new Date().getDay();
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
-
-  // Helper to get target value by suffix
-  const getTargetValue = (suffix: string): number => {
-    const targetType = `${BU_PREFIX}${suffix}`;
-    const target = consorcioTargets?.find(t => t.target_type === targetType);
-    return target?.target_value ?? 0;
-  };
-
-  // Meta do dia: override do dia da semana de hoje, com fallback no valor único
-  const getDayTargetValue = (suffix: string): number => {
-    const targetType = `${BU_PREFIX}${suffix}`;
-    return resolveWeekdayTarget(consorcioWeekdayOverrides, targetType, todayDow, getTargetValue(suffix));
-  };
 
   // Helper to check if a meeting matches the selected pipeline
   const matchesPipeline = (originName: string | null) => {
@@ -654,92 +476,7 @@ export default function ConsorcioPainelEquipe() {
     (dayKPIs?.totalR1Agendada || 0) - (dayKPIs?.totalRealizadas || 0) - (dayKPIs?.totalNoShows || 0)
   );
 
-  const dayValues = useMemo(() => ({
-    agendamento: fatosDayTotals.agendamentos,
-    r1Agendada: fatosDayTotals.r1Agendada,
-    r1Realizada: fatosDayTotals.r1Realizada,
-    noShow: fatosDayTotals.noShows,
-    contrato: dayKPIs?.totalContratos || 0,
-    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosDayTotals, dayKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
-
-  const weekValues = useMemo(() => ({
-    agendamento: fatosWeekTotals.agendamentos,
-    r1Agendada: fatosWeekTotals.r1Agendada,
-    r1Realizada: fatosWeekTotals.r1Realizada,
-    noShow: fatosWeekTotals.noShows,
-    contrato: weekKPIs?.totalContratos || 0,
-    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosWeekTotals, weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
-
-  const monthValues = useMemo(() => ({
-    agendamento: fatosMonthTotals.agendamentos,
-    r1Agendada: fatosMonthTotals.r1Agendada,
-    r1Realizada: fatosMonthTotals.r1Realizada,
-    noShow: fatosMonthTotals.noShows,
-    contrato: monthKPIs?.totalContratos || 0,
-    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
-    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
-    vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [fatosMonthTotals, monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
-
   // Build Consórcio goals matrix rows combining agenda + pipeline metrics
-  const consorcioGoalsRows = useMemo((): ConsorcioMetricRow[] => {
-    const pm = pipelineMetrics;
-    return [
-      // Agenda metrics (shared across pipelines)
-      {
-        label: 'Agendamento',
-        day: { value: dayValues.agendamento, target: getDayTargetValue('agendamento_dia') },
-        week: { value: weekValues.agendamento, target: getTargetValue('agendamento_semana') },
-        month: { value: monthValues.agendamento, target: getTargetValue('agendamento_mes') },
-      },
-      {
-        label: CONSORCIO_LABELS.reunioesAgendadas,
-        day: { value: dayValues.r1Agendada, target: getDayTargetValue('r1_agendada_dia') },
-        week: { value: weekValues.r1Agendada, target: getTargetValue('r1_agendada_semana') },
-        month: { value: monthValues.r1Agendada, target: getTargetValue('r1_agendada_mes') },
-      },
-      {
-        label: CONSORCIO_LABELS.reunioesRealizadas,
-        day: { value: dayValues.r1Realizada, target: getDayTargetValue('r1_realizada_dia') },
-        week: { value: weekValues.r1Realizada, target: getTargetValue('r1_realizada_semana') },
-        month: { value: monthValues.r1Realizada, target: getTargetValue('r1_realizada_mes') },
-      },
-      {
-        label: 'No-Show',
-        day: { value: dayValues.noShow, target: getDayTargetValue('noshow_dia') },
-        week: { value: weekValues.noShow, target: getTargetValue('noshow_semana') },
-        month: { value: monthValues.noShow, target: getTargetValue('noshow_mes') },
-      },
-      // Proposta Enviada (standalone)
-      {
-        label: 'Proposta Enviada',
-        day: { value: pm.day.propostaEnviada, target: getDayTargetValue('proposta_enviada_dia') },
-        week: { value: pm.week.propostaEnviada, target: getTargetValue('proposta_enviada_semana') },
-        month: { value: pm.month.propostaEnviada, target: getTargetValue('proposta_enviada_mes') },
-      },
-      // Cotas Contratadas — mesma fonte do card e da coluna das tabelas.
-      {
-        label: 'Cotas Contratadas',
-        day: { value: cotasDay?.total || 0, target: getDayTargetValue('cota_contratada_dia') },
-        week: { value: cotasWeek?.total || 0, target: getTargetValue('cota_contratada_semana') },
-        month: { value: cotasMonth?.total || 0, target: getTargetValue('cota_contratada_mes') },
-      },
-      // Produtos Fechados (dynamic from DB)
-      ...produtosFechados.products.map((prod) => ({
-        label: prod.label,
-        pipelineGroup: 'Produtos Fechados',
-        day: { value: prod.day, target: 0 },
-        week: { value: prod.week, target: 0 },
-        month: { value: prod.month, target: 0 },
-      })),
-    ];
-  }, [dayValues, weekValues, monthValues, pipelineMetrics, consorcioTargets, consorcioWeekdayOverrides, todayDow, produtosFechados, cotasDay, cotasWeek, cotasMonth]);
 
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
@@ -799,65 +536,9 @@ export default function ConsorcioPainelEquipe() {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
-      {/* Consórcio Metrics Card */}
-      <ConsorcioMetricsCard
-        onEditGoals={() => setRevenueGoalsEditOpen(true)}
-        canEdit={canEditGoals || false}
-      />
+      {/* Faixa "BU Consórcio" e "Metas da Equipe" foram movidos para o BI Consórcio
+          (rota /consorcio/bi-consorcio). Nada de cálculo mudou — só de lugar. */}
 
-      {/* Revenue Goals Edit Modal */}
-      <BURevenueGoalsEditModal
-        open={revenueGoalsEditOpen}
-        onOpenChange={setRevenueGoalsEditOpen}
-        title="BU Consórcio"
-        sections={[
-          { prefix: "setor_efeito_alavanca", label: "Efeito Alavanca (Valor em Carta)" },
-          { prefix: "setor_credito", label: "Crédito (Comissão)" },
-        ]}
-      />
-
-      {/* Goals Panel - Consórcio specific with both pipelines */}
-      {targetsLoading ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-3 sm:p-6">
-            <Skeleton className="h-[400px] w-full rounded-lg" />
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                  Metas da Equipe
-                </CardTitle>
-                {canEditGoals && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setGoalsEditModalOpen(true)}
-                    className="h-7 sm:h-8 px-2 text-xs sm:text-sm"
-                  >
-                    <Settings2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                    <span className="hidden sm:inline">Editar</span>
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0 px-3 sm:px-6 pb-3 sm:pb-6">
-              <ConsorcioGoalsMatrixTable rows={consorcioGoalsRows} />
-            </CardContent>
-          </Card>
-
-          <TeamGoalsEditModal
-            open={goalsEditModalOpen}
-            onOpenChange={setGoalsEditModalOpen}
-            existingTargets={consorcioTargets || []}
-            buPrefix={BU_PREFIX}
-          />
-        </>
-      )}
 
       {/* Filters */}
       <Card className="bg-card border-border">

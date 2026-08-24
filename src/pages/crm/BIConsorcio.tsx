@@ -31,6 +31,8 @@ import { CampaignManagerDialog } from "@/components/consorcio/CampaignManagerDia
 import { useConsorcioRealizadoByCloser } from "@/hooks/useConsorcioRealizadoByCloser";
 import { Users } from "lucide-react";
 import { WeekDetailDialog } from "@/components/consorcio/WeekDetailDialog";
+import { ConsorcioBUProgressCard } from "@/components/consorcio/ConsorcioBUProgressCard";
+import { ConsorcioTeamGoalsCard } from "@/components/consorcio/ConsorcioTeamGoalsCard";
 
 const ALLOWED_EDITORS = [
   "thobson.motta@minhacasafinanciada.com",
@@ -302,6 +304,12 @@ export default function BIConsorcio() {
           </Button>
         )}
       </div>
+
+      {/* Movidos do Painel Comercial: faixa BU Consórcio + Metas da Equipe */}
+      <ConsorcioBUProgressCard />
+      <ConsorcioTeamGoalsCard />
+
+
 
       {previewCampaign && <CampaignCarousel onClose={() => setPreviewCampaign(false)} />}
       <CampaignManagerDialog open={manageCampaign} onOpenChange={setManageCampaign} />
