@@ -18,7 +18,8 @@ import type { ProducaoGeradaLinha } from "@/hooks/useConsorcioProducaoGerada";
 
 /** Texto aprovado pelo dono — não alterar sem decisão dele. */
 export const PRODUCAO_GERADA_TOOLTIP =
-  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema. Inclui vendas que ainda não se efetivaram.";
+  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema, e ela nunca sai desse mês — nem se contratar depois, nem se nunca contratar. Inclui vendas que ainda não se efetivaram. Três âncoras de data, nesta ordem: (1) venda vinda de proposta usa a data de aceite da proposta; (2) cadastro lançado fora de proposta usa a data de aceite do cadastro, em qualquer situação (aguardando abertura, cota aberta, cadastrada ou declinada); (3) cota histórica que não tem cadastro nenhum no sistema usa a data de contratação, porque para ela não existe data de lançamento registrada.";
+
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
