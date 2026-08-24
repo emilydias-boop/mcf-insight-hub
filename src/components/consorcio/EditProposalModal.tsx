@@ -328,16 +328,24 @@ export function EditProposalModal({
       </Dialog>
 
       {/* Reuso do formulário completo (etapa 4): nenhum campo novo. */}
-      {editRegId && (
+      {grupoEmEdicao && (
         <OpenCotaModal
-          open={!!editRegId}
-          onOpenChange={o => !o && setEditRegId(null)}
-          registrationId={editRegId}
+          open={!!grupoEmEdicao}
+          onOpenChange={o => !o && setEditandoGrupo(null)}
+          registrationId={grupoEmEdicao.cadastros[0].id}
           mode="edit"
           startEditing
-          onSaved={() => {
+          onSaved={async (patch) => {
+            const grupo = grupoEmEdicao;
             setEditandoGrupo(null);
+            const campos = filtrarCamposCliente(patch);
+            if (Object.keys(campos).length === 0) return;
             setClienteAlterado(true);
+            const irmaos = grupo.cadastros.slice(1).map((r) => r.id);
+            if (irmaos.length === 0) return;
+            // Propaga SÓ campos da pessoa; nada da carta (crédito, plano, grupo, cota...).
+            await propagar.mutateAsync({ ids: irmaos, patch: campos });
+            toast.success(`Dados atualizados nas ${grupo.cadastros.length} cartas deste cliente.`);
           }}
         />
       )}
