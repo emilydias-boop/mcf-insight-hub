@@ -27,6 +27,30 @@ export function useConsorcioProdutos() {
   });
 }
 
+/**
+ * Nomes dos autores (created_by / updated_by) dos produtos.
+ * Retorna um mapa id -> nome. Ids sem perfil correspondente ficam de fora —
+ * a UI mostra "sem registro de autoria" nesses casos, sem chutar autor.
+ */
+export function useProdutoAutores(ids: (string | null | undefined)[]) {
+  const unique = Array.from(new Set(ids.filter(Boolean) as string[])).sort();
+  return useQuery({
+    queryKey: ['produto-autores', unique],
+    enabled: unique.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', unique);
+      if (error) throw error;
+      return Object.fromEntries(
+        (data || []).map((p: any) => [p.id, p.full_name || '—']),
+      );
+    },
+  });
+}
+
 export type ConsorcioProdutoInput = Partial<Omit<ConsorcioProduto, 'id' | 'created_at' | 'updated_at'>> & {
   codigo: string;
   nome: string;

@@ -38,6 +38,7 @@ import {
   useCreateConsorcioProduto,
   useUpdateConsorcioProduto,
   useDeleteConsorcioProduto,
+  useProdutoAutores,
 } from '@/hooks/useConsorcioProdutos';
 import { ConsorcioProduto, ComissaoScheduleItem, ComissaoBase, COMISSAO_BASE_OPTIONS } from '@/types/consorcioProdutos';
 import { PlanosTab } from '@/components/consorcio/PlanosTab';
@@ -409,6 +410,12 @@ function ProdutosTab() {
   const remove = useDeleteConsorcioProduto();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ConsorcioProduto | null>(null);
+  const { data: autores = {} } = useProdutoAutores(
+    produtos.flatMap((p) => [p.created_by, p.updated_by]),
+  );
+
+  const fmtData = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
 
   const handleSave = (data: any) => {
     if (editing) {
@@ -461,6 +468,14 @@ function ProdutosTab() {
                 Faixa: R$ {p.faixa_credito_min.toLocaleString('pt-BR')} – R$ {p.faixa_credito_max.toLocaleString('pt-BR')} ·
                 Taxa antecipada: {p.taxa_antecipada_percentual}% ({p.taxa_antecipada_tipo === 'dividida_12' ? 'dividida em 12' : '1ª parcela'}) ·
                 Prazo máx: {p.prazo_maximo_venda ?? '—'}
+              </div>
+              <div className="text-[11px] text-muted-foreground/80 mt-0.5">
+                {p.created_by
+                  ? `Criado por ${autores[p.created_by] ?? 'usuário não identificado'} em ${fmtData(p.created_at)}`
+                  : 'Criado: sem registro de autoria'}
+                {p.updated_by
+                  ? ` · Alterado por ${autores[p.updated_by] ?? 'usuário não identificado'} em ${fmtData(p.updated_at)}`
+                  : ' · Alterado: sem registro de autoria'}
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setEditing(p); setShowForm(true); }}>

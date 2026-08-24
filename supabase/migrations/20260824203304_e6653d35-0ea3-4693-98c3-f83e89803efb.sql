@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.set_consorcio_produto_updated_by() FROM PUBLIC, anon, authenticated;
