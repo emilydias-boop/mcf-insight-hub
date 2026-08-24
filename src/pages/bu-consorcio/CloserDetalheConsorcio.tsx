@@ -454,15 +454,22 @@ export default function CloserDetalheConsorcio() {
       </div>
 
 
-      <Tabs defaultValue="realizadas" className="space-y-4">
+      <Tabs defaultValue="agendadas" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="agendadas">Agendadas ({reunioes.agendadas.length})</TabsTrigger>
           <TabsTrigger value="realizadas">Reuniões Realizadas ({reunioes.realizadas.length})</TabsTrigger>
           <TabsTrigger value="noshows">No-Shows ({reunioes.noShows.length})</TabsTrigger>
-          <TabsTrigger value="agendadas">Agendadas ({reunioes.agendadas.length})</TabsTrigger>
-          <TabsTrigger value="contrato">Contrato Pago ({reunioes.contratoPago.length})</TabsTrigger>
           <TabsTrigger value="vendas">Vendas Realizadas ({cotas?.vendas ?? 0})</TabsTrigger>
           <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="agendadas">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <ReunioesTable itens={reunioes.agendadas} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="realizadas">
           <Card className="bg-card border-border">
@@ -476,27 +483,6 @@ export default function CloserDetalheConsorcio() {
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <ReunioesTable itens={reunioes.noShows} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="agendadas">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <ReunioesTable itens={reunioes.agendadas} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="contrato">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Reuniões marcadas como contrato pago na agenda — não são a métrica de venda.
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <ReunioesTable itens={reunioes.contratoPago} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -518,11 +504,13 @@ export default function CloserDetalheConsorcio() {
           <FaturamentoTab
             itens={itensProducao}
             producaoCredito={linhaProducao?.credito ?? 0}
+            producaoCartas={linhaProducao?.cartas ?? 0}
             efetivadoCredito={cotas?.credito ?? 0}
             cotas={cotas?.cotas ?? 0}
             isLoading={loadingProducao || loadingCotas}
             onAbrirLead={abrirLead}
           />
+
         </TabsContent>
       </Tabs>
 
