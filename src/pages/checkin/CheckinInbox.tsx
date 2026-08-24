@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useWaConversations, useUpdateWaConversation, WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
+import { useWaConversations, useUpdateWaConversation, useWaResponsaveis, WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
 import { useWaMessages, WaSendError } from '@/hooks/wa/useWaMessages';
 import { useWaNotificacoes } from '@/hooks/wa/useWaNotificacoes';
 import { ConversationList } from '@/components/checkin/ConversationList';
@@ -27,8 +27,15 @@ export default function CheckinInbox() {
   const canSeeAll = hasAnyRole('admin', 'manager');
 
   const [scope, setScope] = useState<WaScope>('mine');
+  /** Filtro por responsável, só usado no escopo "Todas". */
+  const [responsavelId, setResponsavelId] = useState<string | null>(null);
+  const { data: responsaveis = [] } = useWaResponsaveis();
   const [novaConversaAberto, setNovaConversaAberto] = useState(false);
-  const { data: conversations = [], isLoading, isFetching, refetch } = useWaConversations(scope);
+  const { data: conversations = [], isLoading, isFetching, refetch } = useWaConversations(
+    scope,
+    scope === 'all' ? responsavelId : null,
+  );
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -87,11 +94,17 @@ export default function CheckinInbox() {
 
     const naLista = conversations.some((c) => c.id === alvoDeepLink);
     if (!naLista) {
+      // O filtro por responsável pode estar escondendo a conversa do deep link.
+      if (responsavelId) {
+        setResponsavelId(null);
+        return;
+      }
       // A troca automática para escopo "all" tem prioridade sobre o retry.
       if (scope !== 'all' && canSeeAll) {
         setScope('all');
         return;
       }
+
       // Sem permissão de ver tudo: dá uma segunda chance (refetch) antes de
       // desistir — cobre a janela entre a invalidação assíncrona e o refetch.
       if (tentativasDeepLink.current === 0) {
@@ -125,6 +138,8 @@ export default function CheckinInbox() {
     conversations,
     filtered,
     scope,
+    responsavelId,
+
     canSeeAll,
     statusFilter,
     search,
@@ -181,6 +196,10 @@ export default function CheckinInbox() {
           scope={scope}
           onScopeChange={setScope}
           canSeeAll={canSeeAll}
+          responsaveis={responsaveis}
+          responsavelId={responsavelId}
+          onResponsavelChange={setResponsavelId}
+
         />
 
         {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo

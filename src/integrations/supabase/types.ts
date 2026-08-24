@@ -16526,6 +16526,16 @@ export type Database = {
         Args: { _codigo: string }
         Returns: undefined
       }
+      wa_responsaveis_conversas: {
+        Args: never
+        Returns: {
+          assigned_to: string
+          nao_lidas: number
+          nome: string
+          precisa_resposta: number
+          total: number
+        }[]
+      }
       wa_saldo_disparo_hoje: { Args: never; Returns: number }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }

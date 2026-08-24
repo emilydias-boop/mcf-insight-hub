@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { WaConversation, WaScope } from '@/hooks/wa/useWaConversations';
+import { WaConversation, WaScope, WaResponsavel } from '@/hooks/wa/useWaConversations';
 import { WA_STATUS_COLOR, WA_STATUS_OPTIONS, formatPhone } from './waLabels';
 import { cn } from '@/lib/utils';
 
@@ -22,9 +22,16 @@ interface Props {
   scope: WaScope;
   onScopeChange: (v: WaScope) => void;
   canSeeAll: boolean;
+  /** Responsáveis com contagem (só admin/manager recebe conteúdo). */
+  responsaveis?: WaResponsavel[];
+  responsavelId?: string | null;
+  onResponsavelChange?: (v: string | null) => void;
   /** Classes de layout vindas do inbox (visibilidade em tela pequena). */
   className?: string;
 }
+
+/** Valor sentinela do Select: Radix não aceita item com value="". */
+const TODOS = '__todos__';
 
 export function ConversationList({
   conversations,
@@ -38,6 +45,9 @@ export function ConversationList({
   scope,
   onScopeChange,
   canSeeAll,
+  responsaveis = [],
+  responsavelId = null,
+  onResponsavelChange,
   className,
 }: Props) {
   return (
@@ -51,7 +61,13 @@ export function ConversationList({
     >
 
       <div className="p-3 border-b space-y-2">
-        <h2 className="font-semibold text-sm">MCF - Atendimento</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-sm">MCF - Atendimento</h2>
+          {/* Reflete o que está na tela (já filtrado), não o total bruto. */}
+          <span className="text-[11px] text-muted-foreground shrink-0">
+            {conversations.length} {conversations.length === 1 ? 'conversa' : 'conversas'}
+          </span>
+        </div>
 
         {canSeeAll && (
           <Select value={scope} onValueChange={(v) => onScopeChange(v as WaScope)}>
@@ -59,6 +75,26 @@ export function ConversationList({
             <SelectContent>
               <SelectItem value="mine">Minhas conversas</SelectItem>
               <SelectItem value="all">Todas</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Filtrar responsável dentro das próprias conversas não tem uso. */}
+        {canSeeAll && scope === 'all' && (
+          <Select
+            value={responsavelId ?? TODOS}
+            onValueChange={(v) => onResponsavelChange?.(v === TODOS ? null : v)}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={TODOS}>Todos os responsáveis</SelectItem>
+              {responsaveis.map((r) => (
+                <SelectItem key={r.assigned_to ?? 'sem'} value={r.assigned_to ?? 'sem'} disabled={!r.assigned_to}>
+                  {r.nome} ({r.total})
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
@@ -79,6 +115,7 @@ export function ConversationList({
           </SelectContent>
         </Select>
       </div>
+
 
       {/* O Viewport do Radix ScrollArea renderiza um div interno com
           display: table, que faz o conteúdo dimensionar pela largura
