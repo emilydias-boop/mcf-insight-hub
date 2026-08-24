@@ -14,6 +14,11 @@ import { ChevronRight, Search } from "lucide-react";
 import { R1CloserMetric } from "@/hooks/useR1CloserMetrics";
 import { ResiduoDetalheModal } from "./ResiduoDetalheModal";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
+import type { ProducaoGeradaLinha } from "@/hooks/useConsorcioProducaoGerada";
+
+/** Texto aprovado pelo dono — não alterar sem decisão dele. */
+export const PRODUCAO_GERADA_TOOLTIP =
+  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema. Inclui vendas que ainda não se efetivaram.";
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
@@ -28,6 +33,10 @@ interface ConsorcioCloserSummaryTableProps {
   totalClientesDistintos?: number;
   /** Soma de valor_credito das cotas contratadas, por closer. */
   creditoByCloser?: Map<string, number>;
+  /** Produção Gerada (perna funil + cotas avulsas, deduplicada) por closer. */
+  producaoByCloser?: Map<string, ProducaoGeradaLinha>;
+  /** Produção Gerada que não resolveu closer — balde explícito. */
+  producaoSemAtribuicao?: ProducaoGeradaLinha;
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
   cotasSemCloser?: number;
   /** Clientes distintos e crédito da linha residual de vendedor. */
@@ -43,6 +52,7 @@ interface ConsorcioCloserSummaryTableProps {
     contratos: number;
   } | null;
 }
+
 
 export function ConsorcioCloserSummaryTable({
   data,
