@@ -117,6 +117,7 @@ export function chaveDaCombinacao(reg: {
 
 const VAZIO: PlanosFaltandoResultado = {
   combinacoes: [],
+  ignoradas: [],
   cartasAnalisadas: 0,
   cartasPrazoForaDaTabela: 0,
   cartasCreditoAbaixoMinimo: 0,
@@ -130,7 +131,7 @@ export function useConsorcioPlanosFaltando() {
     queryKey: ['consorcio-planos-faltando'],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<PlanosFaltandoResultado> => {
-      const [cartasRes, propostasRes, creditosRes, produtosRes] = await Promise.all([
+      const [cartasRes, propostasRes, creditosRes, produtosRes, ignoradosRes] = await Promise.all([
         supabase
           .from('consorcio_proposal_cartas')
           .select('id, proposal_id, tipo_produto, valor_credito, prazo_meses, condicao_pagamento')
@@ -138,6 +139,9 @@ export function useConsorcioPlanosFaltando() {
         supabase.from('consorcio_proposals').select('id, status'),
         supabase.from('consorcio_creditos').select('*').eq('ativo', true),
         supabase.from('consorcio_produtos').select('id, taxa_antecipada_tipo, ativo'),
+        supabase
+          .from('consorcio_planos_faltando_ignorados')
+          .select('combinacao_key, ignorado_por, created_at'),
       ]);
       if (cartasRes.error) throw cartasRes.error;
       if (creditosRes.error) throw creditosRes.error;
