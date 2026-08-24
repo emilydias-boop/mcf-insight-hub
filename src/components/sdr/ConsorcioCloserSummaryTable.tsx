@@ -14,6 +14,11 @@ import { ChevronRight, Search } from "lucide-react";
 import { R1CloserMetric } from "@/hooks/useR1CloserMetrics";
 import { ResiduoDetalheModal } from "./ResiduoDetalheModal";
 import type { CotaResiduoItem } from "@/hooks/useConsorcioCotasContratadas";
+import type { ProducaoGeradaLinha } from "@/hooks/useConsorcioProducaoGerada";
+
+/** Texto aprovado pelo dono — não alterar sem decisão dele. */
+export const PRODUCAO_GERADA_TOOLTIP =
+  "Soma do crédito de todas as vendas lançadas, de termo de adesão pendente em diante. Conta cada venda uma única vez, no mês em que ela apareceu no sistema. Inclui vendas que ainda não se efetivaram.";
 
 interface ConsorcioCloserSummaryTableProps {
   data?: R1CloserMetric[];
@@ -28,6 +33,10 @@ interface ConsorcioCloserSummaryTableProps {
   totalClientesDistintos?: number;
   /** Soma de valor_credito das cotas contratadas, por closer. */
   creditoByCloser?: Map<string, number>;
+  /** Produção Gerada (perna funil + cotas avulsas, deduplicada) por closer. */
+  producaoByCloser?: Map<string, ProducaoGeradaLinha>;
+  /** Produção Gerada que não resolveu closer — balde explícito. */
+  producaoSemAtribuicao?: ProducaoGeradaLinha;
   /** Cotas contratadas cujo vendedor não casou com nenhum closer da BU. */
   cotasSemCloser?: number;
   /** Clientes distintos e crédito da linha residual de vendedor. */
@@ -44,6 +53,7 @@ interface ConsorcioCloserSummaryTableProps {
   } | null;
 }
 
+
 export function ConsorcioCloserSummaryTable({
   data,
   isLoading,
@@ -53,6 +63,9 @@ export function ConsorcioCloserSummaryTable({
   clientesByCloser,
   totalClientesDistintos = 0,
   creditoByCloser,
+  producaoByCloser,
+  producaoSemAtribuicao,
+
   cotasSemCloser = 0,
   clientesSemCloser = 0,
   creditoSemCloser = 0,
@@ -112,8 +125,17 @@ export function ConsorcioCloserSummaryTable({
     credito: baseTotals.credito + creditoSemCloser,
   };
 
+  // Produção Gerada: total isolado das outras colunas. Soma TODAS as linhas do
+  // hook (mesmo de closer que não aparece na tabela) mais o balde sem
+  // atribuição, para o Total nunca esconder crédito.
+  let producaoTotal = producaoSemAtribuicao?.credito || 0;
+  producaoByCloser?.forEach((l) => {
+    producaoTotal += l.credito;
+  });
+
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
   const totalTaxaVenda = totals.r1_realizada > 0
+
     ? (totals.clientes / totals.r1_realizada) * 100
     : 0;
   const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
@@ -148,10 +170,17 @@ export function ConsorcioCloserSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
+                title={PRODUCAO_GERADA_TOOLTIP}
+              >
+                Produção Gerada
+              </TableHead>
+              <TableHead
+                className="text-muted-foreground text-center font-medium whitespace-nowrap"
                 title="Quantidade de CARTAS contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). Diferente de 'Vendas Realizadas': um cliente que compra 3 cotas soma 3 aqui e 1 ali."
               >
                 Cotas Contratadas
               </TableHead>
+
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
                 title="Soma do crédito das cotas confirmadas pela Embracon (tipo de registro 'contratação'), pelo mês da data de contratação — não da proposta nem da reserva."
@@ -178,6 +207,8 @@ export function ConsorcioCloserSummaryTable({
               const cotas = cotasByCloser?.get(row.closer_id) || 0;
               const clientes = clientesByCloser?.get(row.closer_id) || 0;
               const credito = creditoByCloser?.get(row.closer_id) || 0;
+              const producao = producaoByCloser?.get(row.closer_id);
+
               const ticket = clientes > 0 ? credito / clientes : null;
               const taxaVenda = row.r1_realizada > 0
                 ? (clientes / row.r1_realizada) * 100
@@ -216,7 +247,14 @@ export function ConsorcioCloserSummaryTable({
                       {clientes}
                     </Badge>
                   </TableCell>
+                  <TableCell
+                    className="text-center whitespace-nowrap"
+                    title={producao ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` : undefined}
+                  >
+                    {producao && producao.credito > 0 ? brl(producao.credito) : "—"}
+                  </TableCell>
                   <TableCell className="text-center">
+
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                       {cotas}
                     </Badge>
@@ -258,13 +296,38 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{clientesSemCloser}</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{cotasSemCloser}</TableCell>
+
                 <TableCell className="text-center whitespace-nowrap">
                   {creditoSemCloser > 0 ? brl(creditoSemCloser) : "—"}
                 </TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {clientesSemCloser > 0 ? brl(creditoSemCloser / clientesSemCloser) : "—"}
                 </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {onCloserClick && <TableCell />}
+              </TableRow>
+            )}
+
+            {producaoSemAtribuicao && producaoSemAtribuicao.credito > 0 && (
+              <TableRow
+                className="italic text-muted-foreground hover:bg-muted/20"
+                title="Produção Gerada cujo closer não foi resolvido por nenhum caminho (criador da proposta, dono do negócio ou closer da reunião). Aparece aqui para o Total nunca esconder crédito."
+              >
+                <TableCell className="font-normal underline decoration-dotted">
+                  Produção sem atribuição
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center whitespace-nowrap">
+                  {brl(producaoSemAtribuicao.credito)}
+                </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {onCloserClick && <TableCell />}
               </TableRow>
@@ -281,9 +344,11 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 {onCloserClick && <TableCell />}
               </TableRow>
             )}
+
 
             {/* Totals Row */}
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
@@ -311,11 +376,15 @@ export function ConsorcioCloserSummaryTable({
                   {totals.clientes}
                 </Badge>
               </TableCell>
+              <TableCell className="text-center whitespace-nowrap">
+                {producaoTotal > 0 ? brl(producaoTotal) : "—"}
+              </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                   {totals.cotas}
                 </Badge>
               </TableCell>
+
               <TableCell className="text-center whitespace-nowrap">
                 {totals.credito > 0 ? brl(totals.credito) : "—"}
               </TableCell>
