@@ -138,6 +138,8 @@ export default function CheckinInbox() {
     conversations,
     filtered,
     scope,
+    responsavelId,
+
     canSeeAll,
     statusFilter,
     search,
