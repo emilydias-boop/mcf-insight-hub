@@ -196,6 +196,10 @@ export default function CheckinInbox() {
           scope={scope}
           onScopeChange={setScope}
           canSeeAll={canSeeAll}
+          responsaveis={responsaveis}
+          responsavelId={responsavelId}
+          onResponsavelChange={setResponsavelId}
+
         />
 
         {/* min-h-0 é obrigatório: sem ele este wrapper flex cresce com o conteúdo
