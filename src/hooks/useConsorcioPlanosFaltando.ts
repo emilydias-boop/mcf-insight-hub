@@ -18,7 +18,8 @@
  *
  * Nada aqui escreve, recalcula ou corrige o que está gravado.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { taxaAntecipadaTipoDeProduto } from '@/lib/consorcioParcelaOficial';
 import { CONDICOES, PRAZOS } from '@/hooks/useConsorcioCreditosAdmin';
