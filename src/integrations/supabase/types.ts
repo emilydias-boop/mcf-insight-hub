@@ -4072,6 +4072,45 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_funil_reversoes: {
+        Row: {
+          consortium_card_id: string | null
+          created_at: string
+          de_etapa: number
+          entidade: string
+          entidade_id: string
+          id: string
+          motivo: string
+          para_etapa: number
+          revertido_por: string | null
+          revertido_por_nome: string | null
+        }
+        Insert: {
+          consortium_card_id?: string | null
+          created_at?: string
+          de_etapa: number
+          entidade: string
+          entidade_id: string
+          id?: string
+          motivo: string
+          para_etapa: number
+          revertido_por?: string | null
+          revertido_por_nome?: string | null
+        }
+        Update: {
+          consortium_card_id?: string | null
+          created_at?: string
+          de_etapa?: number
+          entidade?: string
+          entidade_id?: string
+          id?: string
+          motivo?: string
+          para_etapa?: number
+          revertido_por?: string | null
+          revertido_por_nome?: string | null
+        }
+        Relationships: []
+      }
       consorcio_grupo_saude: {
         Row: {
           aplic_financeiras: number | null
@@ -5599,6 +5638,9 @@ export type Database = {
           profissao: string | null
           razao_social: string | null
           renda: number | null
+          revertida_em: string | null
+          revertida_motivo: string | null
+          revertida_por: string | null
           rg: string | null
           status: string
           telefone: string | null
@@ -5678,6 +5720,9 @@ export type Database = {
           profissao?: string | null
           razao_social?: string | null
           renda?: number | null
+          revertida_em?: string | null
+          revertida_motivo?: string | null
+          revertida_por?: string | null
           rg?: string | null
           status?: string
           telefone?: string | null
@@ -5757,6 +5802,9 @@ export type Database = {
           profissao?: string | null
           razao_social?: string | null
           renda?: number | null
+          revertida_em?: string | null
+          revertida_motivo?: string | null
+          revertida_por?: string | null
           rg?: string | null
           status?: string
           telefone?: string | null
@@ -15343,9 +15391,31 @@ export type Database = {
         }
         Returns: Json
       }
+      consorcio_desfazer_parcela_inicial: {
+        Args: { p_motivo: string; p_registro_id: string }
+        Returns: Json
+      }
       consorcio_gerar_parcelas: {
         Args: { p_card_id: string; p_parcelas: Json }
         Returns: number
+      }
+      consorcio_reversao_status: {
+        Args: { p_registro_ids: string[] }
+        Returns: {
+          card_existe: boolean
+          card_id: string
+          contemplacao: boolean
+          dash_anunciado: boolean
+          mes_fechado: boolean
+          mes_referencia: string
+          parcela_paga: boolean
+          registro_id: string
+          transferencia: boolean
+        }[]
+      }
+      consorcio_reverter_etapa_5_para_4: {
+        Args: { p_motivo: string; p_registro_id: string }
+        Returns: Json
       }
       corrigir_agendador_reuniao: {
         Args: { p_attendee_id: string; p_booked_by: string }
