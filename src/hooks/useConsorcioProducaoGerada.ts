@@ -585,14 +585,27 @@ export function useConsorcioProducaoGerada(
         total.vendas += l.vendas;
         total.antedatados += l.antedatados;
         total.antedatadosCredito += l.antedatadosCredito;
+        total.lancadosRetroativos += l.lancadosRetroativos;
+        total.lancadosRetroativosCredito += l.lancadosRetroativosCredito;
       });
       total.credito += semAtribuicao.credito;
       total.cartas += semAtribuicao.cartas;
       total.vendas += semAtribuicao.vendas;
       total.antedatados += semAtribuicao.antedatados;
       total.antedatadosCredito += semAtribuicao.antedatadosCredito;
+      total.lancadosRetroativos += semAtribuicao.lancadosRetroativos;
+      total.lancadosRetroativosCredito += semAtribuicao.lancadosRetroativosCredito;
 
-      return { byCloser, semAtribuicao, total, pernaA, pernaB, pernaC };
+      return {
+        byCloser,
+        semAtribuicao,
+        total,
+        pernaA,
+        pernaB,
+        pernaC,
+        retroMesesAncora: [...retroMeses].sort(),
+      };
+
     },
     enabled: !!startDate && !!endDate,
   });
