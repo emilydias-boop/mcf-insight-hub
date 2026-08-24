@@ -130,9 +130,14 @@ export function ConsorcioCloserSummaryTable({
   // hook (mesmo de closer que não aparece na tabela) mais o balde sem
   // atribuição, para o Total nunca esconder crédito.
   let producaoTotal = producaoSemAtribuicao?.credito || 0;
+  let producaoAntedatados = producaoSemAtribuicao?.antedatados || 0;
+  let producaoAntedatadosCredito = producaoSemAtribuicao?.antedatadosCredito || 0;
   producaoByCloser?.forEach((l) => {
     producaoTotal += l.credito;
+    producaoAntedatados += l.antedatados;
+    producaoAntedatadosCredito += l.antedatadosCredito;
   });
+
 
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
   const totalTaxaVenda = totals.r1_realizada > 0
