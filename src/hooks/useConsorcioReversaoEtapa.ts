@@ -17,9 +17,15 @@ import { toast } from 'sonner';
  *  - Nenhum evento financeiro: nada de título, cobrança, comissão, MCF Pay,
  *    Asaas ou adm.mcfcapital.com.br.
  *  - Motivo obrigatório, mínimo 15 caracteres — validado no cliente E no banco.
- *  - Sem restrição de papel: quem já usa a tela pode voltar etapa. Por isso as
- *    escritas passam por RPC SECURITY DEFINER (a policy de UPDATE de
- *    `consorcio_pending_registrations` é só admin/manager/coordenador).
+ *  - Papel: só quem opera a tela Venda Consórcio pode voltar etapa. A trava real
+ *    está DENTRO das RPCs (`can_reverter_etapa_consorcio`), não no botão —
+ *    viewer/marketing puros recebem recusa mesmo chamando a API direto. As
+ *    escritas passam por RPC SECURITY DEFINER porque a policy de UPDATE de
+ *    `consorcio_pending_registrations` é só admin/manager/coordenador.
+ *  - As RPCs também validam a ETAPA DE ORIGEM: nunca escrevem no id que vier.
+ *  - Nenhuma data é inventada: sem `data_reserva` gravada, o desfazer é recusado
+ *    com instrução, em vez de ancorar uma data que ninguém registrou.
+
  */
 
 export const MOTIVO_MIN = 15;
@@ -35,17 +41,26 @@ export interface ReversaoStatus {
   mes_referencia: string | null;
   /** true só quando o evento `consorcio.venda.criada` está `sent`. */
   dash_anunciado: boolean;
+  /** Cota existe mas está sem `data_reserva` gravada: impede o desfazer 6 → 5. */
+  sem_data_reserva: boolean;
 }
 
-/** Motivo escrito do bloqueio, ou null quando a reversão está liberada. */
-export function motivoBloqueio(s?: ReversaoStatus | null): string | null {
+/**
+ * Motivo escrito do bloqueio, ou null quando a reversão está liberada.
+ * O `modo` importa: a falta de data de reserva só impede o desfazer 6 → 5.
+ */
+export function motivoBloqueio(s?: ReversaoStatus | null, modo?: '5-4' | '6-5'): string | null {
   if (!s) return null;
   if (s.parcela_paga) return 'Não dá para voltar: existe parcela paga nesta cota.';
   if (s.contemplacao) return 'Não dá para voltar: a cota tem contemplação registrada.';
   if (s.transferencia) return 'Não dá para voltar: a cota está em processo de transferência.';
   if (s.mes_fechado) return `Não dá para voltar: o mês de comissão ${s.mes_referencia || ''} já está fechado.`;
+  if (modo === '6-5' && s.sem_data_reserva) {
+    return 'Esta cota não tem data de reserva registrada — não dá para devolvê-la para reserva. Ajuste a data de reserva na cota antes de desfazer.';
+  }
   return null;
 }
+
 
 export function useReversaoStatus(registroIds: string[]) {
   const ids = [...new Set(registroIds)].sort();

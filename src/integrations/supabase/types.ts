@@ -15345,6 +15345,10 @@ export type Database = {
         Returns: boolean
       }
       can_manage_ar: { Args: { _user_id: string }; Returns: boolean }
+      can_reverter_etapa_consorcio: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       caucoes_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
@@ -15410,6 +15414,7 @@ export type Database = {
           mes_referencia: string
           parcela_paga: boolean
           registro_id: string
+          sem_data_reserva: boolean
           transferencia: boolean
         }[]
       }
