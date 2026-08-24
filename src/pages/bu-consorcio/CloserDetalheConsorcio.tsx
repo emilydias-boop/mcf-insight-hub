@@ -39,6 +39,7 @@ import {
   type ReuniaoDetalheItem,
 } from "@/hooks/useConsorcioCloserDetalhe";
 import { useConsorcioProducaoGerada, type ProducaoGeradaItem } from "@/hooks/useConsorcioProducaoGerada";
+import { DealDetailsDrawer } from "@/components/crm/DealDetailsDrawer";
 
 const BU = "consorcio";
 
@@ -351,6 +352,8 @@ export default function CloserDetalheConsorcio() {
   const linhaProducao = closerId ? producao?.byCloser.get(closerId) : undefined;
   const itensProducao = (closerId ? producao?.itensByCloser.get(closerId) : undefined) || [];
 
+  const [dealAberto, setDealAberto] = useState<string | null>(null);
+
   const voltar = () => {
     const params = new URLSearchParams();
     params.set("preset", preset);
@@ -362,7 +365,8 @@ export default function CloserDetalheConsorcio() {
     navigate(`/consorcio/painel-equipe?${params.toString()}`);
   };
 
-  const abrirLead = (dealId: string) => navigate(`/consorcio/crm?deal=${dealId}`);
+  // Atalho para o lead: abre o mesmo drawer usado no CRM, sem sair da auditoria.
+  const abrirLead = (dealId: string) => setDealAberto(dealId);
 
   if (!closerId) {
     return <div className="p-6 text-center text-muted-foreground">Closer não encontrado</div>;
@@ -513,6 +517,12 @@ export default function CloserDetalheConsorcio() {
           />
         </TabsContent>
       </Tabs>
+
+      <DealDetailsDrawer
+        dealId={dealAberto}
+        open={!!dealAberto}
+        onOpenChange={(o) => !o && setDealAberto(null)}
+      />
     </div>
   );
 }
