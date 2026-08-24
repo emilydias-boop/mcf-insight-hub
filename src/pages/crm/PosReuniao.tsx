@@ -856,7 +856,9 @@ function PropostasTab({
             initialTipoProduto={editTarget.tipo_produto || ''}
             initialDetails={editTarget.proposal_details || ''}
             initialOrigemLead={(editTarget as any).origem_lead || ''}
+            termos={termosDe(editTarget)}
           />
+
         )}
       </CardContent>
     </Card>
