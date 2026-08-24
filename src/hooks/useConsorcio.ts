@@ -67,6 +67,9 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}, options?: { en
         let query = supabase
           .from('consortium_cards')
           .select(`${CONSORCIO_CARD_LIST_SELECT}, consortium_installments(valor_comissao)`)
+          // Cotas revertidas de etapa saem do funil, mas continuam vivas no banco
+          // para reconciliação (nunca são apagadas).
+          .is('revertida_em', null)
           .order('created_at', { ascending: false })
           .order('id', { ascending: true });
 
