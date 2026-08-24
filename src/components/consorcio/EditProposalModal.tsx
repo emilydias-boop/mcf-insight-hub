@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -6,11 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { AlertTriangle, FileSignature, Lock, Pencil, ShieldAlert } from 'lucide-react';
 import { PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import { useEditarProposta } from '@/hooks/useConsorcioPostMeeting';
 import { useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { numberToBRLInput } from '@/lib/brlMask';
 import { CartasProposalEditor } from './CartasProposalEditor';
+import { OpenCotaModal } from './OpenCotaModal';
+import { GerarTermoModal } from './GerarTermoModal';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
+import { useCancelTermo, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
 import {
   PropostaCarta, PropostaCartaDraft, cartaDraftValida, draftsParaInput, novaCartaDraft,
   normalizarParcelasMcf,
@@ -31,6 +39,8 @@ interface EditProposalModalProps {
   initialTipoProduto: string;
   initialDetails: string;
   initialOrigemLead?: string;
+  /** Termos de adesão da venda (mais recente primeiro). Define a trava desta tela. */
+  termos?: ConsorcioTermo[];
 }
 
 function cartasParaDrafts(
@@ -63,10 +73,16 @@ function cartasParaDrafts(
   }));
 }
 
+const fmtBRL = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+const fmtData = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
+
 export function EditProposalModal({
   open, onOpenChange, proposalId, contactName, dealName,
   initialCartas, initialValorCredito, initialPrazoMeses, initialTipoProduto,
-  initialDetails, initialOrigemLead,
+  initialDetails, initialOrigemLead, termos = [],
 }: EditProposalModalProps) {
   const [cartas, setCartas] = useState<PropostaCartaDraft[]>([novaCartaDraft()]);
   const [details, setDetails] = useState('');
@@ -74,6 +90,25 @@ export function EditProposalModal({
   const [mostrarErros, setMostrarErros] = useState(false);
   const editar = useEditarProposta();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
+  const { hasAnyRole } = useAuth();
+  const { data: cadastros = [] } = useCadastrosDaVenda(open ? proposalId : null);
+  const cancelarTermo = useCancelTermo();
+
+  // Estado do termo — decide tudo nesta tela.
+  const termoAssinado = useMemo(() => termos.find(t => t.status === 'assinado') || null, [termos]);
+  const termoPendente = useMemo(
+    () => (termoAssinado ? null : termos.find(t => t.status === 'pendente') || null),
+    [termos, termoAssinado],
+  );
+
+  // A RLS de `consorcio_pending_registrations` só permite UPDATE para
+  // admin/manager/coordenador. Sem o papel, o bloco fica em LEITURA — nunca um
+  // botão que promete e falha no banco.
+  const podeEditarCliente = hasAnyRole('admin', 'manager', 'coordenador') && !termoAssinado;
+
+  const [editRegId, setEditRegId] = useState<string | null>(null);
+  const [clienteAlterado, setClienteAlterado] = useState(false);
+  const [gerarNovoTermo, setGerarNovoTermo] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -83,12 +118,16 @@ export function EditProposalModal({
       setDetails(initialDetails || '');
       setOrigemLead(initialOrigemLead || '');
       setMostrarErros(false);
+      setClienteAlterado(false);
+      setEditRegId(null);
+      setGerarNovoTermo(false);
     }
   }, [open, initialCartas, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead]);
 
   const tudoValido = cartas.length > 0 && cartas.every(cartaDraftValida);
 
   const handleSubmit = () => {
+    if (termoAssinado) return; // trava dura: nada muda com termo assinado
     if (!tudoValido) { setMostrarErros(true); return; }
     editar.mutate({
       proposal_id: proposalId,
@@ -100,43 +139,205 @@ export function EditProposalModal({
     });
   };
 
+  /** Cancela o termo pendente e abre a geração do novo — sempre por clique. */
+  const handleCancelarEGerar = async () => {
+    if (!termoPendente) return;
+    await cancelarTermo.mutateAsync({
+      termoId: termoPendente.id,
+      motivo: 'Dados do cliente corrigidos antes da assinatura',
+    });
+    setGerarNovoTermo(true);
+  };
+
+  const nomeCadastro = (r: any) =>
+    (r.tipo_pessoa === 'pj' ? r.razao_social : r.nome_completo) || 'sem nome';
+  const docCadastro = (r: any) => (r.tipo_pessoa === 'pj' ? r.cnpj : r.cpf) || 'sem documento';
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar Proposta</DialogTitle>
-          <DialogDescription>
-            {contactName} — {dealName}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <CartasProposalEditor
-            cartas={cartas}
-            onChange={setCartas}
-            tipoOptions={tipoOptions.map(o => ({ name: o.name, label: o.label }))}
-            mostrarErros={mostrarErros}
-          />
-          <div>
-            <Label>Detalhes da Proposta</Label>
-            <Textarea value={details} onChange={e => setDetails(e.target.value)} rows={3} />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{termoAssinado ? 'Proposta (somente leitura)' : 'Editar Proposta'}</DialogTitle>
+            <DialogDescription>
+              {contactName} — {dealName}
+            </DialogDescription>
+          </DialogHeader>
+
+          {termoAssinado && (
+            <Alert>
+              <Lock className="h-4 w-4" />
+              <AlertTitle>
+                Termo assinado em {fmtData(termoAssinado.assinado_em)} — dados travados
+              </AlertTitle>
+              <AlertDescription>
+                O documento assinado pelo cliente é a verdade da venda. Cartas e dados do cliente
+                ficam em leitura para não divergirem do que foi assinado.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            {termoAssinado ? (
+              <div className="rounded-lg border divide-y">
+                {cartas.map((c, i) => (
+                  <div key={c.key} className="p-3 text-sm flex flex-wrap gap-x-4 gap-y-1">
+                    <span className="font-medium">Carta {i + 1}</span>
+                    <span>{c.valorStr ? `R$ ${c.valorStr}` : '—'}</span>
+                    <span className="text-muted-foreground">{c.prazoMeses || '—'} meses</span>
+                    <span className="text-muted-foreground">{c.tipoProduto || '—'}</span>
+                    {c.condicaoPagamento && (
+                      <span className="text-muted-foreground">{c.condicaoPagamento}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <CartasProposalEditor
+                cartas={cartas}
+                onChange={setCartas}
+                tipoOptions={tipoOptions.map(o => ({ name: o.name, label: o.label }))}
+                mostrarErros={mostrarErros}
+              />
+            )}
+
+            {/* ── Bloco Dados do cliente ─────────────────────────────── */}
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold">Dados do cliente</h4>
+                {cadastros.length > 1 && (
+                  <Badge variant="outline">{cadastros.length} cadastros nesta venda</Badge>
+                )}
+              </div>
+
+              {termoPendente && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>O termo já enviado tem os dados antigos</AlertTitle>
+                  <AlertDescription>
+                    O documento que o cliente recebeu é uma cópia congelada dos dados. Corrigir
+                    aqui NÃO muda o termo, e a assinatura confere nome e CPF contra a cópia antiga.
+                    Depois de corrigir, cancele o termo pendente e gere um novo — o envio ao cliente
+                    continua manual.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!podeEditarCliente && !termoAssinado && (
+                <Alert>
+                  <ShieldAlert className="h-4 w-4" />
+                  <AlertTitle>Somente leitura</AlertTitle>
+                  <AlertDescription>
+                    Editar dados de cliente é permitido a admin, gestor e coordenador. Peça a
+                    correção a quem tem esse papel.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {cadastros.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Esta venda ainda não tem cadastro de cliente.
+                </p>
+              ) : (
+                <div className="divide-y rounded-md border">
+                  {cadastros.map((r: any, i) => (
+                    <div key={r.id} className="p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          Carta {i + 1} — {nomeCadastro(r)}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {r.tipo_pessoa === 'pj' ? 'CNPJ' : 'CPF'} {docCadastro(r)}
+                          {r.valor_credito ? ` · ${fmtBRL(Number(r.valor_credito))}` : ''}
+                        </p>
+                      </div>
+                      {podeEditarCliente && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditRegId(r.id)}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar dados
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {clienteAlterado && termoPendente && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-3">
+                  <p className="text-sm flex-1">
+                    Dados alterados. O termo pendente continua com os dados antigos.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleCancelarEGerar}
+                    disabled={cancelarTermo.isPending}
+                  >
+                    <FileSignature className="h-3.5 w-3.5 mr-1" /> Cancelar termo e gerar novo
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label>Detalhes da Proposta</Label>
+              <Textarea
+                value={details}
+                onChange={e => setDetails(e.target.value)}
+                rows={3}
+                disabled={!!termoAssinado}
+              />
+            </div>
+            <div>
+              <Label>Origem do Lead</Label>
+              <Input
+                type="text"
+                value={origemLead}
+                onChange={e => setOrigemLead(e.target.value)}
+                placeholder="Ex: Indicação, Instagram, Parceiro João..."
+                disabled={!!termoAssinado}
+              />
+            </div>
           </div>
-          <div>
-            <Label>Origem do Lead</Label>
-            <Input
-              type="text"
-              value={origemLead}
-              onChange={e => setOrigemLead(e.target.value)}
-              placeholder="Ex: Indicação, Instagram, Parceiro João..."
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={editar.isPending}>
-            {editar.isPending ? 'Salvando...' : 'Salvar alterações'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {termoAssinado ? 'Fechar' : 'Cancelar'}
+            </Button>
+            {!termoAssinado && (
+              <Button onClick={handleSubmit} disabled={editar.isPending}>
+                {editar.isPending ? 'Salvando...' : 'Salvar alterações'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reuso do formulário completo (etapa 4): nenhum campo novo. */}
+      {editRegId && (
+        <OpenCotaModal
+          open={!!editRegId}
+          onOpenChange={o => !o && setEditRegId(null)}
+          registrationId={editRegId}
+          mode="edit"
+          startEditing
+          onSaved={() => {
+            setEditRegId(null);
+            setClienteAlterado(true);
+          }}
+        />
+      )}
+
+      {/* Geração do novo termo: sempre por clique, nunca disparo automático. */}
+      {gerarNovoTermo && (
+        <GerarTermoModal
+          open={gerarNovoTermo}
+          onOpenChange={o => !o && setGerarNovoTermo(false)}
+          proposalId={proposalId}
+        />
+      )}
+    </>
   );
 }
