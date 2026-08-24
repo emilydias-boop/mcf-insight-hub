@@ -235,13 +235,13 @@ export function ResiduoDetalheModal(props: Props) {
                 <TableRow>
                   {kind === "cota" ? (
                     <>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Grupo/Cota</TableHead>
-                      <TableHead>Data de contratação</TableHead>
-                      <TableHead className="text-right">Valor do crédito</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead>Motivo</TableHead>
-                      {temAcaoCota && <TableHead className="text-right">Ação</TableHead>}
+                      <TableHead className="whitespace-nowrap">Cliente</TableHead>
+                      <TableHead className="whitespace-nowrap">Grupo/Cota</TableHead>
+                      <TableHead className="whitespace-nowrap">Data de contratação</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Valor do crédito</TableHead>
+                      <TableHead className="whitespace-nowrap">Vendedor</TableHead>
+                      <TableHead className="min-w-[280px]">Motivo</TableHead>
+                      {temAcaoCota && <TableHead className="text-right whitespace-nowrap">Ação</TableHead>}
                     </>
                   ) : (
                     <>
@@ -259,7 +259,7 @@ export function ResiduoDetalheModal(props: Props) {
                 {kind === "cota"
                   ? (items as CotaResiduoItem[]).map((i, idx) => (
                       <TableRow key={`${i.cardId}-${idx}`}>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-sm whitespace-nowrap">
                           <a
                             href={`/consorcio/crm/venda-consorcio?tab=cotas&qCo=${encodeURIComponent(i.cliente)}`}
                             target="_blank"
@@ -271,15 +271,15 @@ export function ResiduoDetalheModal(props: Props) {
                             <ExternalLink className="h-3 w-3 text-muted-foreground" />
                           </a>
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs whitespace-nowrap">
                           {[i.grupo, i.cota].filter(Boolean).join("/") || "—"}
                         </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{fmtDate(i.dataContratacao)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-xs">
+                        <TableCell className="text-right tabular-nums text-xs whitespace-nowrap">
                           {i.valorCredito != null ? formatCurrency(i.valorCredito) : "—"}
                         </TableCell>
-                        <TableCell className="text-xs">{i.vendedorName || <span className="italic text-muted-foreground">vazio</span>}</TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs whitespace-nowrap">{i.vendedorName || <span className="italic text-muted-foreground">vazio</span>}</TableCell>
+                        <TableCell className="text-xs min-w-[280px] align-top">
                           <span className="inline-flex items-center gap-2">
                             {i.motivo}
                             {i.atribuidoA && (
@@ -294,7 +294,7 @@ export function ResiduoDetalheModal(props: Props) {
                           </span>
                         </TableCell>
                         {temAcaoCota && (
-                          <TableCell className="text-right">
+                          <TableCell className="text-right whitespace-nowrap align-top">
                             {permitirCorrigirVinculo ? (
                               permitirForaFunil && i.semSaidaPorVinculo ? (
                                 // Nenhum lead deste cliente tem R1 de Consórcio:
