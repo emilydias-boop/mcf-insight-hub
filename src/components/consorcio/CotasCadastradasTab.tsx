@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { CheckCircle2, FileBadge, Loader2, Search } from 'lucide-react';
+import { CheckCircle2, FileBadge, Loader2, Search, Undo2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -21,6 +22,16 @@ import {
   PRAZO_PARCELA_INICIAL_DIAS,
   type CotaCadastrada,
 } from '@/hooks/useCotasCadastradas';
+import {
+  useReversaoStatus,
+  useReverterEtapa5Para4,
+  useDesfazerParcelaInicial,
+  motivoBloqueio,
+  MOTIVO_MIN,
+} from '@/hooks/useConsorcioReversaoEtapa';
+
+type Reversao = { cota: CotaCadastrada; modo: '5-4' | '6-5' };
+
 
 const fmtData = (d?: string | null) =>
   d ? format(new Date(d.length <= 10 ? `${d}T00:00:00` : d), 'dd/MM/yyyy') : '—';
