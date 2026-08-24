@@ -14,7 +14,7 @@ import { ArrowLeft, BadgeCheck, Briefcase, Calendar } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -203,6 +203,7 @@ function CotasTable({ itens, isLoading }: { itens: CotaDetalheItem[]; isLoading:
 function FaturamentoTab({
   itens,
   producaoCredito,
+  producaoCartas,
   efetivadoCredito,
   cotas,
   isLoading,
@@ -210,6 +211,7 @@ function FaturamentoTab({
 }: {
   itens: ProducaoGeradaItem[];
   producaoCredito: number;
+  producaoCartas: number;
   efetivadoCredito: number;
   cotas: number;
   isLoading: boolean;
@@ -224,7 +226,12 @@ function FaturamentoTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard titulo="Produção Gerada" valor={moeda(producaoCredito)} detalhe={`${itens.length} registros`} isLoading={isLoading} />
+        <KpiCard
+          titulo="Produção Gerada"
+          valor={moeda(producaoCredito)}
+          detalhe={`${itens.length} registros · ${producaoCartas} cartas`}
+          isLoading={isLoading}
+        />
         <KpiCard titulo="Consórcio Efetivado" valor={moeda(efetivadoCredito)} detalhe={`${cotas} cotas contratadas`} isLoading={isLoading} />
         <KpiCard
           titulo="A efetivar"
@@ -233,6 +240,7 @@ function FaturamentoTab({
           isLoading={isLoading}
         />
       </div>
+
 
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -413,12 +421,11 @@ export default function CloserDetalheConsorcio() {
         </div>
       </div>
 
-      {/* Cards — as mesmas colunas do Painel Comercial */}
+      {/* Cards — mesma ordem das abas: volume de reunião, depois venda, depois dinheiro */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard titulo="Reuniões Agendadas" valor={String(reunioes.agendadas.length)} isLoading={reunioes.isLoading} />
         <KpiCard titulo="Reuniões Realizadas" valor={String(reunioes.realizadas.length)} isLoading={reunioes.isLoading} />
         <KpiCard titulo="No-Show" valor={String(reunioes.noShows.length)} isLoading={reunioes.isLoading} />
-        <KpiCard titulo="Contrato Pago (agenda)" valor={String(reunioes.contratoPago.length)} isLoading={reunioes.isLoading} />
         <KpiCard
           titulo="Vendas Realizadas"
           valor={String(cotas?.vendas ?? 0)}
@@ -434,7 +441,7 @@ export default function CloserDetalheConsorcio() {
         <KpiCard
           titulo="Produção Gerada"
           valor={moeda(linhaProducao?.credito ?? 0)}
-          detalhe={`${linhaProducao?.vendas ?? 0} vendas · ${linhaProducao?.cartas ?? 0} registros`}
+          detalhe={`${itensProducao.length} registros · ${linhaProducao?.cartas ?? 0} cartas`}
           isLoading={loadingProducao}
         />
         <KpiCard
@@ -446,15 +453,23 @@ export default function CloserDetalheConsorcio() {
         />
       </div>
 
-      <Tabs defaultValue="realizadas" className="space-y-4">
+
+      <Tabs defaultValue="agendadas" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="agendadas">Agendadas ({reunioes.agendadas.length})</TabsTrigger>
           <TabsTrigger value="realizadas">Reuniões Realizadas ({reunioes.realizadas.length})</TabsTrigger>
           <TabsTrigger value="noshows">No-Shows ({reunioes.noShows.length})</TabsTrigger>
-          <TabsTrigger value="agendadas">Agendadas ({reunioes.agendadas.length})</TabsTrigger>
-          <TabsTrigger value="contrato">Contrato Pago ({reunioes.contratoPago.length})</TabsTrigger>
           <TabsTrigger value="vendas">Vendas Realizadas ({cotas?.vendas ?? 0})</TabsTrigger>
           <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="agendadas">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <ReunioesTable itens={reunioes.agendadas} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="realizadas">
           <Card className="bg-card border-border">
@@ -468,27 +483,6 @@ export default function CloserDetalheConsorcio() {
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <ReunioesTable itens={reunioes.noShows} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="agendadas">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              <ReunioesTable itens={reunioes.agendadas} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="contrato">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Reuniões marcadas como contrato pago na agenda — não são a métrica de venda.
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <ReunioesTable itens={reunioes.contratoPago} isLoading={reunioes.isLoading} onAbrirLead={abrirLead} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -510,11 +504,13 @@ export default function CloserDetalheConsorcio() {
           <FaturamentoTab
             itens={itensProducao}
             producaoCredito={linhaProducao?.credito ?? 0}
+            producaoCartas={linhaProducao?.cartas ?? 0}
             efetivadoCredito={cotas?.credito ?? 0}
             cotas={cotas?.cotas ?? 0}
             isLoading={loadingProducao || loadingCotas}
             onAbrirLead={abrirLead}
           />
+
         </TabsContent>
       </Tabs>
 
