@@ -104,7 +104,9 @@ export function EditProposalModal({
   // A RLS de `consorcio_pending_registrations` só permite UPDATE para
   // admin/manager/coordenador. Sem o papel, o bloco fica em LEITURA — nunca um
   // botão que promete e falha no banco.
-  const podeEditarCliente = hasAnyRole('admin', 'manager', 'coordenador') && !termoAssinado;
+  // Espelha exatamente a policy de UPDATE de consorcio_pending_registrations.
+  const podeEditarCliente =
+    hasAnyRole('admin', 'manager', 'coordenador', 'closer', 'cobranca_consorcio') && !termoAssinado;
 
   /** Uma linha por PESSOA (documento), não por carta. */
   const grupos = useMemo(() => agruparPorPessoa(cadastros as any[]), [cadastros]);
