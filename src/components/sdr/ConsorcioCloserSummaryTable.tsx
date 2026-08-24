@@ -247,7 +247,14 @@ export function ConsorcioCloserSummaryTable({
                       {clientes}
                     </Badge>
                   </TableCell>
+                  <TableCell
+                    className="text-center whitespace-nowrap"
+                    title={producao ? `${producao.vendas} venda(s) · ${producao.cartas} carta(s)` : undefined}
+                  >
+                    {producao && producao.credito > 0 ? brl(producao.credito) : "—"}
+                  </TableCell>
                   <TableCell className="text-center">
+
                     <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
                       {cotas}
                     </Badge>
