@@ -1,79 +1,80 @@
-# Diagnóstico: "Cotas com cadastro a ajustar" não sai da lista após "Trocar lead"
+# Investigação: cadastro de produto AUTO trava em `prazos_disponiveis`
 
-Sua leitura está **correta**. O alerta não pede lead vinculado — pede **reunião conduzida por closer da BU Consórcio**. "Trocar lead" grava o vínculo, mas nas 4 linhas atuais **nenhum** lead candidato tem reunião de consórcio, então a condição de saída não pode ser satisfeita por esse botão. O dono clicaria para sempre.
+Sua suspeita está certa. O NOT NULL é só o primeiro obstáculo; o formulário e a cadeia de cálculo são **imóvel-only por construção (200/220/240)**.
 
-## A. Condição exata de entrada e de saída
+## A. O que é `prazos_disponiveis`
 
-Monta a lista: `src/hooks/useConsorcioCotasContratadas.ts` (100% leitura, sem RPC).
+- Coluna `integer[]` (`udt_name = _int4`), `NOT NULL`, **sem default** — criada assim em `supabase/migrations/20260116142212_...sql:11` (`prazos_disponiveis INTEGER[] NOT NULL`).
+- Semântica de uso hoje: é apenas a **lista de prazos que o seletor de prazo oferece** (`src/components/consorcio/DadosPlanoFields.tsx:104-106`). Não entra em nenhum cálculo de parcela.
+- Os 7 produtos existentes (todos `ativo = true`), com objetivo e conteúdo da coluna:
 
-- Universo: `consortium_cards` com `tipo_registro = 'contratacao'` e `data_contratacao` no período (linhas 181-188).
-- A linha entra no resíduo quando o **CLIENTE** (CPF/CNPJ, senão nome normalizado) não tem SDR atribuído: `clienteSdr.get(pessoa)` vazio (linhas 500-508, 555-566).
-- `clienteSdr` só é preenchido a partir de `dealBooker`, que exige, para algum deal de alguma cota do cliente, um `meeting_slot_attendees` que satisfaça **todas** estas condições (linhas 283-334):
-  1. `meeting_slot_id` → `meeting_slots.closer_id` pertencente a `closers` com `bu = 'consorcio'` (linhas 283-286);
-  2. `status NOT IN ('cancelled','invited')` (linha 290);
-  3. `booked_by NOT NULL` (linha 304);
-  4. `profiles.email` do `booked_by` preenchido (linhas 310-317, 328).
+| Código | Nome | Objetivo | `prazos_disponiveis` | `prazo_maximo_venda` | adm 200/220/240 | Faixa |
+|---|---|---|---|---|---|---|
+| TP | Tabela Parcelinha | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
+| EI1 | Estendido 1% | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
+| PSE | Plano Select Estendido | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
+| TEP | Tabela Estendido Prime | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 600k–1,2M |
+| SEP | Select Estendido Prime | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 600k–1,2M |
+| TEP_ALTO | TEP Alto Valor | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 1,0M–2,0M |
+| SEP_ALTO | SEP Alto Valor | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 1,0M–2,0M |
 
-Predicado de saída, literal: existe attendee de qualquer cota do mesmo cliente com slot de closer de BU consórcio, status ≠ cancelled/invited, `booked_by` não nulo e e-mail de perfil presente. Nada além disso tira a linha.
+**Os 7 têm exatamente o mesmo valor: `{200,220,240}`.** Todos Imóvel. `prazo_maximo_venda` é null em todos os 7 (o campo é mais novo que o seed).
 
-O motivo exibido vem do diagnóstico em cascata `diagnosticarCota` (linhas 402-462); `sem_reuniao_bu` é o ramo da linha 430-437, disparado por `!dealTemReuniaoBU.has(dealId)`.
+## B. Por que o formulário não manda
 
-## B. O selo `ajustado`
+- Estado do formulário: `src/components/consorcio/ConsorcioConfigModal.tsx:509-527`. As chaves são `codigo, nome, objetivo_option_id, faixa_credito_min/max, taxa_antecipada_percentual, taxa_antecipada_tipo, taxa_adm_200/220/240, fundo_reserva, seguro_vida_percentual, prazo_maximo_venda, comissao_base, comissao_schedule`. **`prazos_disponiveis` não existe no estado.**
+- `submit()` (linhas 559-568) faz `onSave({ ...form, comissao_schedule })` — ou seja, manda literalmente o `form`, nada mais.
+- `useCreateConsorcioProduto` (`src/hooks/useConsorcioProdutos.ts:62-72`) faz `insert(input as any)` sem completar nada.
+- Logo: **a coluna não está no payload**. Postgres tenta o default, não há default, e o NOT NULL estoura. Não é "vai null explícito" — é ausência.
+- Detalhe: na **leitura** o código já mascara isso com `item.prazos_disponiveis || [200, 220, 240]` (`useConsorcioProdutos.ts:20`) e `consorcioParcelaOficial.ts:104` — por isso ninguém percebeu a lacuna antes.
 
-É **estado gravado**, e é **ortogonal ao alerta**. Colunas `deal_vinculo_ajustado_por` / `deal_vinculo_ajustado_em` / `deal_vinculo_anterior` em `consorcio_pending_registrations`, lidas em `useConsorcioCotasContratadas.ts` linhas 195-199 e montadas em `ajuste` (linhas 379-385). Renderizado por `SeloAutoria` em `src/components/sdr/ResiduoDetalheModal.tsx` (linhas 83-100).
+## C. Outras colunas NOT NULL sem default
 
-Ele registra apenas **quem mexeu no vínculo e quando** — trilha de autoria. Não participa do predicado de saída em nenhum ponto. Não é a lista "ignorando o selo": é decisão de desenho — o selo documenta a intervenção, a saída depende da reunião. O efeito prático, porém, é o que o dono viu: selo verde de "ajustado" convivendo com linha pendente. O modal já tenta ser honesto nisso (aviso âmbar "Vínculo salvo, mas o caso continua na lista: …", linhas ~196-215 do modal), mas o botão continua sendo oferecido.
+Colunas `NOT NULL` de `consorcio_produtos` e se o formulário envia:
 
-## C. O que "Trocar lead" faz
+| Coluna | Default | Formulário envia? |
+|---|---|---|
+| `id` | `gen_random_uuid()` | n/a |
+| `codigo` | — | **sim** |
+| `nome` | — | **sim** |
+| `faixa_credito_min` | — | **sim** |
+| `faixa_credito_max` | — | **sim** |
+| `taxa_antecipada_percentual` | — | **sim** |
+| `taxa_antecipada_tipo` | — | **sim** |
+| `prazos_disponiveis` | — | **NÃO ← o erro atual** |
+| `comissao_base` | `'valor_credito'` | sim (redundante) |
 
-`CorrigirVinculoCotaModal` → RPC `consorcio_corrigir_vinculo_cota` (SECURITY DEFINER, auditada). Ela grava **um único campo funcional**: `consorcio_pending_registrations.deal_id` (+ `updated_at`), mais a trilha de autoria e um `audit_logs` de impacto. Não cria reunião, não toca `meeting_slots`, `meeting_slot_attendees` nem `booked_by`.
+**`prazos_disponiveis` é a única NOT NULL sem default que falta.** Todo o resto que é NOT NULL ou tem default ou já vai no payload. Antony não bate numa segunda parede de NOT NULL. (Tudo o mais — `taxa_adm_*`, `fundo_reserva`, `seguro_vida_percentual`, `grupo_padrao`, `objetivo_option_id`, `prazo_maximo_venda`, `comissao_schedule`, `created_by`, `updated_by` — é nullable ou tem default.)
 
-**Com todas as letras: trocar o lead só satisfaz a condição de saída se o lead novo (ou outra cota do mesmo cliente) já tiver R1 de Consórcio elegível com agendador.** Quando nenhum lead do cliente tem essa reunião, a ação é inócua para o alerta — grava o vínculo e a linha permanece.
+## D. O formulário representa auto? Não.
 
-## D. Os quatro casos reais (consulta ao banco)
+- As únicas colunas de taxa adm são `taxa_adm_200`, `taxa_adm_220`, `taxa_adm_240`. **Não existe onde guardar taxa adm de 100 meses** como campo próprio. O que aconteceria com um auto de 100 meses: `getTaxaAdm` (`src/lib/consorcioCalculos.ts:6-15`) faz `if (prazo < 210) return taxa_adm_200` — ou seja, **prazo 100 lê a coluna rotulada "200m"**. Como o Antony pôs 20,80 nos três campos, o número sairia certo por acidente, mas o rótulo mente: o campo diz 200 meses e está guardando a taxa de um produto de 100.
+- `prazos_disponiveis` para esse produto deveria conter `{100}` (ou a grade real de auto), não `{200,220,240}`. É exatamente o campo que hoje ninguém preenche.
+- **Não existe nenhum produto de Auto nem de Pesado entre os 7.** As opções de objetivo `auto` e `pesado` existem em `consorcio_objetivo_options` (ambas `is_active = true`), mas nunca foram usadas em produto. **Auto nunca foi cadastrado nesse sistema.**
 
-| Cliente | Grupo/Cota | card_id | Deal vinculado hoje | Attendees do deal |
-|---|---|---|---|---|
-| RODRIGO MOREIRA ROBERTO (CPF 385.446.388-05) | 7274/57 | df8071bb… | `a28592fa-afca-4ecb-bcde-944a17c608b1` — "Rodrigo Moreira Roberto" (origem `00 - GERENTES DE RELACIONAMENTO`) | **zero** |
-| RODRIGO MOREIRA ROBERTO | 7274/678 | cd5bd31c… | mesmo deal `a28592fa…` | **zero** |
-| ROSANGELA MARIA DOS PASSOS FERREIRA (CPF 039.138.426-08) | 7272/2682 | d13d2931… | `6858e59a-b37e-4957-b928-5373825f893f` — "Rosângela Maria dos Passos Ferreira - Efeito Alavanca" | **zero** |
-| ROSANGELA MARIA DOS PASSOS FERREIRA | 7272/4549 | 1abd6a9f… | mesmo deal `6858e59a…` | **zero** |
+## E. Quem consome os prazos — o sistema é 200/220/240 por construção
 
-`select … from meeting_slot_attendees where deal_id in (a28592fa…, 6858e59a…)` retorna **conjunto vazio** — não é "reunião de outra BU", não é "sem agendador": não existe reunião nenhuma para esses leads.
+Confirmado, e é mais duro do que só a constante:
 
-Busca por telefone (sufixo 9 dígitos: `983647601`, `981087575`) sobre `crm_deals`/`crm_contacts` encontra **exatamente esses dois deals** e nenhum outro; ambos com `att_total = 0` e `r1_cons = 0`. Varredura por nome também não achou outro deal desses titulares com R1 de consórcio.
+- `consorcio_creditos` tem **colunas fixas por prazo**: `parcela_1a_12a_{conv,50,25}_{200,220,240}` e `parcela_demais_...` — 18 colunas, nenhuma para outro prazo. Não há coluna `prazo`; o prazo está no *nome* da coluna.
+- `PRAZOS_TABELADOS = [200, 220, 240]` (`src/hooks/useConsorcioPlanosCarta.ts:15`) e `filtrarPlanosCarta` devolve `prazoForaDaTabela: true` e **lista vazia** para qualquer outro prazo (linhas 106-113). Com prazo 100, **o seletor de plano da carta não oferece nada**.
+- `resolverParcelaOficial` (`src/lib/consorcioParcelaOficial.ts:80-142`): monta o nome da coluna via `getValoresTabelados`; sem coluna para 100, `usandoTabelaOficial` fica `false` e cai em `calcularParcela`, que usa a taxa adm da coluna "200m". Ou seja: **não quebra, mas sai do regime de tabela oficial e passa a calcular** — o oposto da regra "a tabela é a fonte de verdade".
+- `DadosPlanoFields.tsx:107` (`prazoSemTabela`) e `lerValoresTabela` (linha ~113) também rejeitam qualquer prazo fora de `[200,220,240]`.
 
-Conclusão por linha: **falta uma reunião de consórcio que não existe** — não falta vínculo, não falta agendador. Os dois selos `ajustado` do Rodrigo (21/08, 19:23 e 19:56) apenas registram que o vínculo foi (re)apontado para o mesmo deal sem reunião.
+Um agravante que apareceu no caminho e que vale para qualquer produto de auto: **a resolução de produto ignora o objetivo.** `resolverParcelaOficial` filtra só por `taxa_antecipada_tipo` + faixa de crédito, com `limit(1)` (linhas 89-98), e `produtosElegiveisParaCarta` faz o mesmo. A faixa do auto (45k–180k) **se sobrepõe** à faixa dos imóveis Parcelinha (120k–600k). Entre 120k e 180k, com "Parcelinha", o sistema poderia casar um crédito de imóvel com um produto de auto (ou vice-versa) sem nada distinguir. Isso é independente do NOT NULL e vale registrar.
 
-Contexto dos cadastros: ambos sem `proposal_id` (venda lançada direto), `aceite_date` 20/08 e 10/08, status `cota_aberta` / `vinculada`.
+## F. Saídas possíveis — sem escolha feita
 
-## E. Existe caminho de saída hoje?
+**1. Campo explícito `prazos_disponiveis` no formulário.** Antony digita os prazos (ex.: `100`) e o insert passa.
+Prós: uma tela, sem migração, nada de default chutado; o dado gravado é o que o operador afirmou. Contras: o produto de auto fica **meio cadastrado** — existe, aparece nas listas, mas nenhuma carta de 100 meses acha plano e a parcela sai calculada, não tabelada. E a taxa adm dele continua guardada num campo chamado "200m".
 
-**Não pela tela.** É esse o caso: vendas que entraram por fora do funil de R1 (Rodrigo via Gerentes de Relacionamento, Rosângela via Efeito Alavanca + Clube). Sem R1 de Consórcio, o alerta é **permanente por construção**.
+**2. `DEFAULT '{200,220,240}'` na coluna.** Destrava sem mexer na UI.
+Prós: menor mudança possível. Contras: **é exatamente o risco que você nomeou** — o produto de auto nasce afirmando prazos de imóvel, e essa mentira fica no banco decidindo o dropdown de prazo. Você pediu para não dar default sem autorizar; registro como opção, não como recomendação.
 
-"Informar quem agendou" existe (`InformarAgendadorModal`, disparado quando `problema === 'sem_agendador'`, modal linhas ~297-306) e resolve **outro** caso: reunião elegível que existe mas está sem `booked_by`. Ela não aparece nessas 4 linhas porque o diagnóstico parou antes — `sem_reuniao_bu` — e o hook só popula `agendamento` quando há attendee de consórcio (linhas 293-301). Não há attendee: não há o que informar.
+**3. Suporte real a auto (prazos livres).** Obra maior: `consorcio_creditos` deixaria de ter prazo no nome da coluna (linhas por prazo, ou colunas genéricas), `PRAZOS_TABELADOS` deixa de ser constante, `getTaxaAdm` passa a ler uma grade de taxa por prazo em vez de três colunas fixas, e a resolução de produto passa a considerar objetivo para não colidir faixas. Prós: auto e pesado passam a funcionar de verdade, com tabela oficial. Contras: toca o núcleo do cálculo de parcela, que é o lugar mais sensível do sistema.
 
-## F. O texto do aviso
+**4. Auto na prática também roda em 200/220/240, e "prazo máximo de venda 100" significa outra coisa.** Não posso confirmar nem derrubar isso pelo código — `prazo_maximo_venda` é null nos 7 produtos, então **nunca foi usado**, e não há nada no código que o leia além da exibição em `ConsorcioConfigModal.tsx:470`. Comercialmente, consórcio de automóvel Embracon costuma ter grade própria (tipicamente até 100 meses), o que torna improvável que auto use 200/220/240. Mas essa é a pergunta a levar ao dono: **a tabela de auto que o Antony tem na mão traz colunas de parcela para quais prazos?** A resposta decide entre 1 e 3.
 
-`src/components/sdr/CadastroSemLeadAlerta.tsx` linhas 82-85 e 103 descrevem dois casos: (1) reunião existe sem agendador; (2) cota aponta para lead sem reunião. As 4 linhas são o **caso 2** — mas o conselho do caso 2 ("troque para o lead que teve a R1") pressupõe que exista, em outro lugar, um lead **com** R1 de consórcio. Para esses dois clientes não existe. **Confirmado: o conselho é impossível de seguir nessas 4 linhas.**
+## Nada foi tocado
 
-## G. Impacto no número (R$ 540.000)
-
-**Dentro dos dois números — o alerta não mexe em dinheiro.**
-
-- **Consórcio Efetivado**: ancorado em `consortium_cards.tipo_registro='contratacao'` + `data_contratacao`. As 4 cotas têm contratação em 20/08 e 10/08/2026 e estão nesse universo — são, inclusive, as mesmas linhas que o hook do alerta leu (linhas 181-188). A ausência de SDR não remove a cota do total; ela cai na linha residual "Sem agendamento de consórcio", que soma no Total (linhas 525-528: `total++` e `totalCredito += credito` acontecem antes de qualquer diagnóstico).
-- **Produção Gerada**: os cadastros têm `aceite_date` em agosto (20/08 e 10/08) e entram pela perna de cadastros sem proposta, com atribuição por `created_by`/vendedor — que está preenchido em todos (André Duarte, João Pedro).
-
-Ou seja: o texto "o crédito da venda não está perdido" **está certo**, e agora por query. O que se perde é a **atribuição de SDR** — os R$ 540.000 aparecem sem SDR, não fora do total.
-
-## Saídas possíveis (sem escolha minha)
-
-1. **Esconder o botão quando ele não pode resolver.** Quando nenhum deal candidato do cliente tem R1 de consórcio, trocar "Trocar lead" por texto ("nenhum lead deste cliente tem R1 de Consórcio"). Prós: nenhuma migração, elimina o clique infinito. Contras: a linha continua na lista para sempre; não dá desfecho.
-2. **Marcar como "venda fora do funil" (reconhecimento explícito).** Uma coluna/tabela de exceção que remove a linha do alerta mantendo trilha de quem reconheceu. Prós: dá desfecho e some do painel. Contras: exige migração e regra de quem pode marcar; risco de virar tapa-buraco para cadastro realmente ruim.
-3. **Separar em duas caixas: "corrigível" vs "sem R1 nesta BU".** Mantém tudo visível, mas em blocos com ação diferente (segundo bloco sem botão, só CSV). Prós: só UI, honesto. Contras: continua acumulando linhas; não resolve o incômodo do dono.
-4. **Permitir informar o agendador mesmo sem reunião** (atribuir o SDR manualmente à venda). Prós: fecha o caso e dá SDR à venda. Contras: cria atribuição sem reunião de lastro, o que fura a regra "SDR = quem agendou a R1" e pode contaminar métricas de agendamento; exige migração e auditoria forte.
-5. **Excluir do alerta as origens que não passam por R1** (ex.: Gerentes de Relacionamento, Efeito Alavanca) por configuração. Prós: silencia a classe inteira sem tocar dado. Contras: esconde também casos legítimos dessas origens; depende de manter a lista de origens.
-
-## Restrições respeitadas nesta rodada
-
-Nenhum código, nenhuma migração, nenhum dado tocado. Todas as consultas foram `SELECT`.
+Somente leitura: `information_schema`, `SELECT` em `consorcio_produtos`, `consorcio_creditos` e `consorcio_objetivo_options`, e leitura de arquivos. Nenhum INSERT/UPDATE/DELETE, nenhuma migração, nenhum arquivo de código alterado. Os 7 produtos estão como estavam.
