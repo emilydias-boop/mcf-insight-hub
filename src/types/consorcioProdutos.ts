@@ -19,6 +19,8 @@ export interface ConsorcioProduto {
   prazo_maximo_venda?: number | null;
   comissao_schedule?: ComissaoScheduleItem[] | null;
   comissao_base?: ComissaoBase;
+  created_by?: string | null;
+  updated_by?: string | null;
   created_at: string;
   updated_at: string;
 }
