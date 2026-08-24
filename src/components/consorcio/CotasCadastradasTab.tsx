@@ -149,7 +149,8 @@ export function CotasCadastradasTab({ range }: { range: { startDate?: Date; endD
         {linhas.map((c) => {
           const paga = !!c.parcela_inicial_paga_em;
           const st = statusPorRegistro[c.id];
-          const bloqueio = motivoBloqueio(st);
+          const bloqueio = motivoBloqueio(st, paga ? '6-5' : '5-4');
+
           return (
             <TableRow key={c.id}>
               <TableCell className="font-medium">
