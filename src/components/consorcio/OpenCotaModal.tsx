@@ -176,7 +176,8 @@ interface OpenCotaModalProps {
   /** Rola até o bloco "Dados da Cota" ao abrir. */
   focusPlano?: boolean;
   /** Chamado após salvar no modo `edit` (usado para voltar ao modal de origem). */
-  onSaved?: () => void;
+  /** Recebe o patch efetivamente gravado (vazio quando nada mudou). */
+  onSaved?: (patch: Record<string, unknown>) => void;
 }
 
 export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open', startEditing = false, focusPlano = false, onSaved }: OpenCotaModalProps) {
@@ -675,7 +676,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       toast.info('Nenhuma alteração para salvar.');
       if (editOnly) {
         onOpenChange(false);
-        onSaved?.();
+        onSaved?.({});
       } else setIsEditing(false);
       return;
     }
@@ -685,7 +686,7 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
     snapshotPatch.current = completo;
     if (editOnly) {
       onOpenChange(false);
-      onSaved?.();
+      onSaved?.(patch as Record<string, unknown>);
     } else setIsEditing(false);
   };
 

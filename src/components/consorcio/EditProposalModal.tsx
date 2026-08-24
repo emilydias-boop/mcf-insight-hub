@@ -19,6 +19,9 @@ import { GerarTermoModal } from './GerarTermoModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCadastrosDaVenda } from '@/hooks/useConsorcioCadastrosDaVenda';
 import { useCancelTermo, type ConsorcioTermo } from '@/hooks/useConsorcioTermos';
+import { usePropagarDadosCliente } from '@/hooks/useConsorcioCadastrosDaVenda';
+import { agruparPorPessoa, filtrarCamposCliente } from '@/lib/consorcioCamposCliente';
+import { toast } from 'sonner';
 import {
   PropostaCarta, PropostaCartaDraft, cartaDraftValida, draftsParaInput, novaCartaDraft,
   normalizarParcelasMcf,
@@ -73,9 +76,6 @@ function cartasParaDrafts(
   }));
 }
 
-const fmtBRL = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
 const fmtData = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
 
@@ -106,7 +106,14 @@ export function EditProposalModal({
   // botão que promete e falha no banco.
   const podeEditarCliente = hasAnyRole('admin', 'manager', 'coordenador') && !termoAssinado;
 
-  const [editRegId, setEditRegId] = useState<string | null>(null);
+  /** Uma linha por PESSOA (documento), não por carta. */
+  const grupos = useMemo(() => agruparPorPessoa(cadastros as any[]), [cadastros]);
+  const [editandoGrupo, setEditandoGrupo] = useState<string | null>(null);
+  const grupoEmEdicao = useMemo(
+    () => grupos.find(g => g.chave === editandoGrupo) || null,
+    [grupos, editandoGrupo],
+  );
+  const propagar = usePropagarDadosCliente();
   const [clienteAlterado, setClienteAlterado] = useState(false);
   const [gerarNovoTermo, setGerarNovoTermo] = useState(false);
 
@@ -119,7 +126,7 @@ export function EditProposalModal({
       setOrigemLead(initialOrigemLead || '');
       setMostrarErros(false);
       setClienteAlterado(false);
-      setEditRegId(null);
+      setEditandoGrupo(null);
       setGerarNovoTermo(false);
     }
   }, [open, initialCartas, initialValorCredito, initialPrazoMeses, initialTipoProduto, initialDetails, initialOrigemLead]);
@@ -205,8 +212,8 @@ export function EditProposalModal({
             <div className="rounded-lg border p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold">Dados do cliente</h4>
-                {cadastros.length > 1 && (
-                  <Badge variant="outline">{cadastros.length} cadastros nesta venda</Badge>
+                {grupos.length > 1 && (
+                  <Badge variant="outline">{grupos.length} clientes nesta venda</Badge>
                 )}
               </div>
 
@@ -234,34 +241,36 @@ export function EditProposalModal({
                 </Alert>
               )}
 
-              {cadastros.length === 0 ? (
+              {grupos.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Esta venda ainda não tem cadastro de cliente.
                 </p>
               ) : (
                 <div className="divide-y rounded-md border">
-                  {cadastros.map((r: any, i) => (
-                    <div key={r.id} className="p-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          Carta {i + 1} — {nomeCadastro(r)}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {r.tipo_pessoa === 'pj' ? 'CNPJ' : 'CPF'} {docCadastro(r)}
-                          {r.valor_credito ? ` · ${fmtBRL(Number(r.valor_credito))}` : ''}
-                        </p>
+                  {grupos.map((g) => {
+                    const primeiro: any = g.cadastros[0];
+                    return (
+                      <div key={g.chave} className="p-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{nomeCadastro(primeiro)}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {primeiro.tipo_pessoa === 'pj' ? 'CNPJ' : 'CPF'} {docCadastro(primeiro)}
+                            {' · '}
+                            {g.cadastros.length === 1 ? '1 carta' : `${g.cadastros.length} cartas`}
+                          </p>
+                        </div>
+                        {podeEditarCliente && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditandoGrupo(g.chave)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" /> Editar dados
+                          </Button>
+                        )}
                       </div>
-                      {podeEditarCliente && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setEditRegId(r.id)}
-                        >
-                          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar dados
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -316,16 +325,24 @@ export function EditProposalModal({
       </Dialog>
 
       {/* Reuso do formulário completo (etapa 4): nenhum campo novo. */}
-      {editRegId && (
+      {grupoEmEdicao && (
         <OpenCotaModal
-          open={!!editRegId}
-          onOpenChange={o => !o && setEditRegId(null)}
-          registrationId={editRegId}
+          open={!!grupoEmEdicao}
+          onOpenChange={o => !o && setEditandoGrupo(null)}
+          registrationId={grupoEmEdicao.cadastros[0].id}
           mode="edit"
           startEditing
-          onSaved={() => {
-            setEditRegId(null);
+          onSaved={async (patch) => {
+            const grupo = grupoEmEdicao;
+            setEditandoGrupo(null);
+            const campos = filtrarCamposCliente(patch);
+            if (Object.keys(campos).length === 0) return;
             setClienteAlterado(true);
+            const irmaos = grupo.cadastros.slice(1).map((r) => r.id);
+            if (irmaos.length === 0) return;
+            // Propaga SÓ campos da pessoa; nada da carta (crédito, plano, grupo, cota...).
+            await propagar.mutateAsync({ ids: irmaos, patch: campos });
+            toast.success(`Dados atualizados nas ${grupo.cadastros.length} cartas deste cliente.`);
           }}
         />
       )}
