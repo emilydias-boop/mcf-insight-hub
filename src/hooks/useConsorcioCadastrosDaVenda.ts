@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { filtrarCamposCliente } from '@/lib/consorcioCamposCliente';
 import { supabase } from '@/integrations/supabase/client';
 import type { PendingRegistration } from '@/hooks/useConsorcioPendingRegistrations';
 
@@ -43,5 +45,31 @@ export function useCadastrosDaVenda(proposalId: string | null) {
         .sort((a, b) => a.k - b.k)
         .map((x) => x.r);
     },
+  });
+}
+
+/**
+ * Propaga SÓ os campos da pessoa (lista fechada em `consorcioCamposCliente.ts`)
+ * para os outros cadastros do mesmo cliente na mesma venda. O cadastro já salvo
+ * pelo formulário fica de fora — não se regrava o que acabou de gravar.
+ */
+export function usePropagarDadosCliente() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { ids: string[]; patch: Record<string, unknown> }) => {
+      const campos = filtrarCamposCliente(params.patch);
+      if (params.ids.length === 0 || Object.keys(campos).length === 0) return 0;
+      const { error } = await supabase
+        .from('consorcio_pending_registrations')
+        .update(campos as never)
+        .in('id', params.ids);
+      if (error) throw error;
+      return params.ids.length;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consorcio-pending-registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cadastros-da-venda'] });
+    },
+    onError: (e: Error) => toast.error('Erro ao propagar dados do cliente: ' + e.message),
   });
 }
