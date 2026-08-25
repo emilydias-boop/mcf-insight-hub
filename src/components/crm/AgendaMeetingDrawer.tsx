@@ -4,7 +4,8 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2, MessageSquareReply
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2, MessageSquareReply,
+  Loader2, PlayCircle, Minus, Sparkles
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
@@ -80,6 +81,13 @@ import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { AgendadorEditor } from '@/components/crm/AgendadorEditor';
 import { QualificationHistorySection } from './qualification/QualificationHistorySection';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { useMeetingRecording, type MeetingAiReviewEtapa, type TranscriptLine } from '@/hooks/useMeetingRecording';
 
 const FOLLOWUP_CLOSER_STAGE_ID = 'c2d1b8f3-ae5a-4b2d-9f4c-3a6e7b9d0e02';
 
@@ -1285,6 +1293,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Gravação MeetGeek + Avaliação de aderência ao script */}
+            <MeetingRecordingSection meetingSlotId={activeMeeting?.id || null} />
+
+
+
             {/* No-Show Confirmation Dialog */}
             {requiresEvidence ? (
               <NoShowEvidenceDialog
@@ -1497,5 +1510,295 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         />
       )}
     </Sheet>
+  );
+}
+
+// ============================================================
+// Seção de gravação MeetGeek + avaliação de aderência ao script
+// ============================================================
+
+const scoreClass = (valor: number | null | undefined, limites: [number, number]) => {
+  if (valor === null || valor === undefined) return 'text-muted-foreground';
+  if (valor < limites[0]) return 'text-destructive';
+  if (valor <= limites[1]) return 'text-yellow-600 dark:text-yellow-500';
+  return 'text-green-600 dark:text-green-500';
+};
+
+function EtapaStatusIcon({ cumpriu }: { cumpriu?: string }) {
+  if (cumpriu === 'sim') return <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />;
+  if (cumpriu === 'nao') return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
+  return <Minus className="h-4 w-4 text-muted-foreground shrink-0" />;
+}
+
+function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | null }) {
+  const { data, isLoading } = useMeetingRecording(meetingSlotId);
+  const [loadingLink, setLoadingLink] = useState(false);
+
+  const recording = data?.recording || null;
+  const review = data?.review || null;
+
+  const etapas: MeetingAiReviewEtapa[] = useMemo(() => {
+    const raw = Array.isArray(review?.etapas) ? (review!.etapas as MeetingAiReviewEtapa[]) : [];
+    return [...raw].sort((a, b) => (a?.ordem ?? 0) - (b?.ordem ?? 0));
+  }, [review]);
+
+  const falas: TranscriptLine[] = useMemo(
+    () => (Array.isArray(recording?.transcript) ? (recording!.transcript as TranscriptLine[]) : []),
+    [recording],
+  );
+
+  const pontosFortes: string[] = Array.isArray(review?.pontos_fortes) ? (review!.pontos_fortes as string[]) : [];
+  const pontosMelhoria: string[] = Array.isArray(review?.pontos_melhoria) ? (review!.pontos_melhoria as string[]) : [];
+
+  const resumoTexto = useMemo(() => {
+    const s: any = recording?.summary;
+    if (!s) return null;
+    if (typeof s === 'string') return s;
+    if (typeof s?.summary === 'string') return s.summary;
+    if (Array.isArray(s)) return s.filter((x) => typeof x === 'string').join('\n');
+    return null;
+  }, [recording]);
+
+  const highlights: string[] = useMemo(() => {
+    const h: any = recording?.highlights;
+    if (!Array.isArray(h)) return [];
+    return h
+      .map((item) => (typeof item === 'string' ? item : item?.text || item?.highlight || item?.summary))
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+  }, [recording]);
+
+  const handleAssistir = async () => {
+    if (!recording?.id) return;
+    setLoadingLink(true);
+    try {
+      const { data: resp, error } = await supabase.functions.invoke('meetgeek-gravacao', {
+        body: { recording_id: recording.id },
+      });
+
+      if (error) {
+        const status = (error as any)?.context?.status ?? (error as any)?.status;
+        let corpo: any = null;
+        try {
+          corpo = await (error as any)?.context?.json?.();
+        } catch {
+          corpo = null;
+        }
+        const codigo = corpo?.erro;
+
+        if (status === 410 || codigo === 'gravacao_expirada') {
+          toast.error('Esta gravação não está mais disponível no MeetGeek');
+        } else if (status === 429 || codigo === 'limite') {
+          toast.error('Limite atingido, tente novamente em alguns minutos');
+        } else if (status === 403) {
+          toast.error('Você não tem permissão para ver esta gravação');
+        } else {
+          toast.error('Não foi possível abrir a gravação. Tente novamente.');
+        }
+        return;
+      }
+
+      const link = (resp as any)?.link;
+      if (!link) {
+        toast.error('Não foi possível abrir a gravação. Tente novamente.');
+        return;
+      }
+      window.open(link, '_blank');
+    } catch {
+      toast.error('Não foi possível abrir a gravação. Tente novamente.');
+    } finally {
+      setLoadingLink(false);
+    }
+  };
+
+  if (!meetingSlotId) return null;
+
+  if (isLoading) {
+    return (
+      <>
+        <Separator />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Carregando gravação...
+        </div>
+      </>
+    );
+  }
+
+  if (!recording) {
+    return (
+      <>
+        <Separator />
+        <p className="text-xs text-muted-foreground">Sem gravação vinculada</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Separator />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+            <Video className="h-4 w-4" />
+            Gravação e avaliação
+          </h4>
+          {recording.duration_minutes ? (
+            <span className="text-xs text-muted-foreground">{recording.duration_minutes} min</span>
+          ) : null}
+        </div>
+
+        {recording.ingest_status === 'pendente' && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/40 p-3">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Gravação em processamento
+          </div>
+        )}
+
+        {recording.ingest_status === 'sem_transcricao' && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/40 p-3">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Reunião sem transcrição disponível
+          </div>
+        )}
+
+        <Button size="sm" variant="outline" className="w-full" onClick={handleAssistir} disabled={loadingLink}>
+          {loadingLink ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <PlayCircle className="h-4 w-4 mr-2" />
+          )}
+          {loadingLink ? 'Abrindo...' : 'Assistir gravação'}
+        </Button>
+
+        {!review && recording.ingest_status === 'ingerido' && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/40 p-3">
+            <Sparkles className="h-3.5 w-3.5" />
+            Avaliação em andamento
+          </div>
+        )}
+
+        {review && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border p-3 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Nota</p>
+                <p className={cn('text-3xl font-bold', scoreClass(Number(review.nota_geral), [5, 7]))}>
+                  {review.nota_geral !== null && review.nota_geral !== undefined
+                    ? Number(review.nota_geral).toFixed(1)
+                    : '—'}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Aderência</p>
+                <p className={cn('text-3xl font-bold', scoreClass(Number(review.aderencia_pct), [50, 75]))}>
+                  {review.aderencia_pct !== null && review.aderencia_pct !== undefined
+                    ? `${Math.round(Number(review.aderencia_pct))}%`
+                    : '—'}
+                </p>
+              </div>
+            </div>
+
+            {review.resumo && (
+              <p className="text-sm text-foreground/90 whitespace-pre-line">{review.resumo}</p>
+            )}
+
+            {etapas.length > 0 && (
+              <div className="space-y-2">
+                <h5 className="text-xs font-medium text-muted-foreground">Etapas do script</h5>
+                <Accordion type="multiple" className="border rounded-md divide-y">
+                  {etapas.map((etapa, idx) => (
+                    <AccordionItem key={`${etapa.ordem ?? idx}-${etapa.etapa ?? idx}`} value={`etapa-${idx}`} className="border-b-0">
+                      <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                        <div className="flex items-center gap-2 w-full text-left">
+                          <EtapaStatusIcon cumpriu={etapa.cumpriu} />
+                          <span className="text-sm flex-1">{etapa.etapa || `Etapa ${idx + 1}`}</span>
+                          <span className={cn('text-sm font-semibold', scoreClass(etapa.nota ?? null, [5, 7]))}>
+                            {etapa.nota !== undefined && etapa.nota !== null ? Number(etapa.nota).toFixed(1) : '—'}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-3 pb-3 space-y-2">
+                        {etapa.comentario && <p className="text-sm text-muted-foreground">{etapa.comentario}</p>}
+                        {etapa.evidencia && (
+                          <blockquote className="border-l-2 border-primary/50 pl-3 text-sm italic text-foreground/80">
+                            {etapa.evidencia}
+                          </blockquote>
+                        )}
+                        {!etapa.comentario && !etapa.evidencia && (
+                          <p className="text-xs text-muted-foreground">Sem detalhes registrados.</p>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </div>
+            )}
+
+            {(pontosFortes.length > 0 || pontosMelhoria.length > 0) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <h5 className="text-xs font-medium text-green-600 dark:text-green-500">Pontos fortes</h5>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+                    {pontosFortes.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="space-y-1">
+                  <h5 className="text-xs font-medium text-yellow-600 dark:text-yellow-500">Pontos de melhoria</h5>
+                  <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+                    {pontosMelhoria.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(resumoTexto || highlights.length > 0 || falas.length > 0) && (
+          <Accordion type="multiple" className="border rounded-md divide-y">
+            {resumoTexto && (
+              <AccordionItem value="resumo-meetgeek" className="border-b-0">
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Resumo da reunião</AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">{resumoTexto}</p>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {highlights.length > 0 && (
+              <AccordionItem value="highlights-meetgeek" className="border-b-0">
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Destaques</AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {highlights.map((h, i) => (
+                      <li key={i}>{h}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {falas.length > 0 && (
+              <AccordionItem value="transcricao-meetgeek" className="border-b-0">
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
+                  Transcrição {recording.transcript_chars ? `(${recording.transcript_chars.toLocaleString('pt-BR')} caracteres)` : ''}
+                </AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <div className="max-h-72 overflow-y-auto space-y-2 pr-2">
+                    {falas.map((fala, i) => (
+                      <p key={i} className="text-xs leading-relaxed">
+                        <span className="font-semibold">{fala.speaker || 'Participante'}:</span>{' '}
+                        <span className="text-muted-foreground">{fala.transcript}</span>
+                      </p>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+          </Accordion>
+        )}
+      </div>
+    </>
   );
 }
