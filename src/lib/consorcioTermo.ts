@@ -362,11 +362,14 @@ export function montarDadosTermoMulti(
     dia_vencimento: unicoOuVerTabela(
       regs.map(r => (Number(r.dia_vencimento) ? String(r.dia_vencimento) : 'A definir')),
     ),
+    dia_vencimento_texto: textoDiaVencimento(regs.map(r => r.dia_vencimento)),
     qtd_cartas: String(regs.length),
     cartas_tabela: montarTabelaCartas(regs),
     parcelas_mcf_qtd: String(mcf.qtd),
     parcelas_mcf_lista: mcf.tabela,
     parcelas_mcf_total: formatCurrency(mcf.total),
+    clausula_mcf: montarClausulaMcf(mcf.qtd, mcf.total, mcf.tabela),
+
     tipo_contrato: unicoOuVerTabela(
       regs.map(r => TIPO_CONTRATO_LABELS[String(r.tipo_contrato)] || 'Normal'),
     ),
