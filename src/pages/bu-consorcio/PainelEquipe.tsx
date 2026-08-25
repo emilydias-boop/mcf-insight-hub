@@ -88,7 +88,19 @@ export default function ConsorcioPainelEquipe() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  // Funil selecionado vive na URL (?pipeline=<group_id>) para que o detalhe do
+  // SDR receba o MESMO filtro e o "voltar" devolva o painel filtrado.
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(
+    searchParams.get("pipeline") || null,
+  );
+
+  const handleSelectPipeline = (id: string | null) => {
+    setSelectedPipelineId(id);
+    const params = new URLSearchParams(searchParams);
+    if (id) params.set("pipeline", id);
+    else params.delete("pipeline");
+    setSearchParams(params, { replace: true });
+  };
 
   // BU pipeline mapping for Consórcio
   const { data: buMapping } = useBUPipelineMap('consorcio');
