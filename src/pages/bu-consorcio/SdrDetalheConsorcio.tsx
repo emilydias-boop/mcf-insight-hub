@@ -396,6 +396,8 @@ export default function SdrDetalheConsorcio() {
     const end = searchParams.get("end");
     if (start) params.set("start", start);
     if (end) params.set("end", end);
+    // Devolve o painel com o MESMO funil selecionado.
+    if (pipelineParam) params.set("pipeline", pipelineParam);
     navigate(`/consorcio/painel-equipe?${params.toString()}`);
   };
 
