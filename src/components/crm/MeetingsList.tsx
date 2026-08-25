@@ -62,15 +62,15 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
-/** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B'). */
-type LeadSegment = 'Lead A' | 'Lead B' | null;
+/** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B' | 'C'). */
+type LeadSegment = string | null;
 
 function resolveLeadSegment(icpSegment: unknown): LeadSegment {
   const v = (icpSegment ?? '').toString().trim().toUpperCase();
-  if (v === 'A') return 'Lead A';
-  if (v === 'B') return 'Lead B';
+  if (v === 'A' || v === 'B' || v === 'C') return v;
   return null;
 }
+
 
 /**
  * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
