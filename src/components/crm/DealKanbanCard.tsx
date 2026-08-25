@@ -28,6 +28,7 @@ import { useDialerEngine } from "@/hooks/useDialerEngine";
 import { useSonaxClickToCall } from "@/hooks/useSonaxClickToCall";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
+import { LeadSegmentBadge } from "@/components/crm/LeadSegmentBadge";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
