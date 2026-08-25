@@ -28,6 +28,7 @@ import { useDialerEngine } from "@/hooks/useDialerEngine";
 import { useSonaxClickToCall } from "@/hooks/useSonaxClickToCall";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
+import { LeadSegmentBadge } from "@/components/crm/LeadSegmentBadge";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -398,23 +399,7 @@ export const DealKanbanCard = ({
                 {typeof tag === "string" ? tag : tag.name}
               </Badge>
             ))}
-          {(() => {
-            const icp = (deal.icp_segment || '').toString().trim().toUpperCase();
-            if (icp !== 'A' && icp !== 'B') return null;
-            const segment = icp === 'A' ? 'Lead A' : 'Lead B';
-            return (
-              <Badge
-                className={`text-[10px] px-1.5 py-0 border-0 text-white ${
-                  icp === 'A'
-                    ? 'bg-green-600 hover:bg-green-600'
-                    : 'bg-amber-500 hover:bg-amber-500'
-                }`}
-                title={icp === 'A' ? 'Dentro do ICP' : 'Fora do ICP'}
-              >
-                {segment}
-              </Badge>
-            );
-          })()}
+          <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
           {outsideInfo?.isOutside && (
             <Tooltip>
               <TooltipTrigger asChild>

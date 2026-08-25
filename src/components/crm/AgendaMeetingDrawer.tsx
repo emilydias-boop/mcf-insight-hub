@@ -69,6 +69,7 @@ import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModa
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 import { NoShowReasonPicker } from './NoShowReasonPicker';
 import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -552,7 +553,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || attendeeMeeting.booked_by_profile,
         parentAttendeeId: att.parent_attendee_id,
         parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
+        icpSegment: (att.deal as any)?.icp_segment ?? (attendeeMeeting.deal as any)?.icp_segment ?? null,
         slotId: attendeeMeeting.id, // Track which slot this attendee belongs to
+
       };
     });
   };
@@ -697,7 +700,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
+                          <LeadSegmentBadge segment={p.icpSegment} />
                           {p.isPartner && (
+
                             <Badge variant="outline" className="text-xs">
                               {p.parentAttendeeName ? `Sócio de ${p.parentAttendeeName.split(' ')[0]}` : 'Sócio'}
                             </Badge>

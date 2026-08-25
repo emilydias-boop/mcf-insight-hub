@@ -3,6 +3,7 @@ import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfM
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { Badge } from '@/components/ui/badge';
 import { UserPlus, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -935,23 +936,11 @@ export function AgendaCalendar({
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                             <span className="text-sm">{att.attendee_name || att.contact?.name || att.deal?.name || 'Lead'}</span>
-                                            {(() => {
-                                              const seg = String(att.deal?.icp_segment ?? meeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                              if (seg !== "A" && seg !== "B") return null;
-                                              return (
-                                                <Badge
-                                                  variant="outline"
-                                                  className={cn(
-                                                    "text-[9px] px-1 py-0 gap-0.5",
-                                                    seg === "A"
-                                                      ? "bg-green-100 text-green-700 border-green-300"
-                                                      : "bg-amber-100 text-amber-700 border-amber-300",
-                                                  )}
-                                                >
-                                                  Lead {seg}
-                                                </Badge>
-                                              );
-                                            })()}
+                                            <LeadSegmentBadge
+                                              segment={att.deal?.icp_segment ?? meeting.deal?.icp_segment}
+                                              size="sm"
+                                            />
+
                                             {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
                                           </div>
                                           <div>
@@ -1356,18 +1345,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                   <span className="truncate flex-1">
                                                     {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                   </span>
-                                                  {(() => {
-                                                    const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                                    if (seg !== "A" && seg !== "B") return null;
-                                                    return (
-                                                      <span className={cn(
-                                                        "text-[9px] font-bold",
-                                                        seg === "A" ? "text-green-500" : "text-amber-500",
-                                                      )}>
-                                                        {seg}
-                                                      </span>
-                                                    );
-                                                  })()}
+                                                  <LeadSegmentBadge
+                                                    segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
+                                                    size="sm"
+                                                  />
+
                                                   {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                     <span className={cn(
                                                       "text-[9px] font-bold",
@@ -1706,18 +1688,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="truncate flex-1">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
-                                                        {(() => {
-                                                          const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                                          if (seg !== "A" && seg !== "B") return null;
-                                                          return (
-                                                            <span className={cn(
-                                                              "text-[9px] font-bold",
-                                                              seg === "A" ? "text-green-500" : "text-amber-500",
-                                                            )}>
-                                                              {seg}
-                                                            </span>
-                                                          );
-                                                        })()}
+                                                        <LeadSegmentBadge
+                                                          segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
+                                                          size="sm"
+                                                        />
+
                                                         {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                           <span className={cn(
                                                             "text-[9px] font-bold",
@@ -1774,18 +1749,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                     </span>
-                                                    {(() => {
-                                                      const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                                      if (seg !== "A" && seg !== "B") return null;
-                                                      return (
-                                                        <span className={cn(
-                                                          "text-[9px] font-bold",
-                                                          seg === "A" ? "text-green-500" : "text-amber-500",
-                                                        )}>
-                                                          {seg}
-                                                        </span>
-                                                      );
-                                                    })()}
+                                                    <LeadSegmentBadge
+                                                      segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
+                                                      size="sm"
+                                                    />
+
                                                     {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                       <span className={cn(
                                                         "text-[9px] font-bold",

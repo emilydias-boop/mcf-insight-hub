@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Package, ShoppingBag, Tv, DollarSign } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
+
 
 interface SdrCompactHeaderProps {
   deal: any;
@@ -46,7 +48,10 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
       
       {/* Linha 3: Chips de contexto (Canal, Origem, Produto, Compras A010) */}
       <div className="flex flex-wrap gap-2">
+        <LeadSegmentBadge segment={deal?.icp_segment} />
+
         {/* Badge de Canal de Venda (A010 vs LIVE) - baseado em compra real */}
+
         <Badge 
           variant="outline" 
           className={`text-xs ${

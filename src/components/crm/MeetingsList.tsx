@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 import { MeetingSlot, useUpdateAttendeeAndSlotStatus, useCancelMeeting } from '@/hooks/useAgendaData';
 import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useMemo, useState } from 'react';
 
@@ -62,15 +63,15 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
-/** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B'). */
-type LeadSegment = 'Lead A' | 'Lead B' | null;
+/** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B' | 'C'). */
+type LeadSegment = string | null;
 
 function resolveLeadSegment(icpSegment: unknown): LeadSegment {
   const v = (icpSegment ?? '').toString().trim().toUpperCase();
-  if (v === 'A') return 'Lead A';
-  if (v === 'B') return 'Lead B';
+  if (v === 'A' || v === 'B' || v === 'C') return v;
   return null;
 }
+
 
 /**
  * Hierarquia de atribuição do SDR (igual ao padrão dos relatórios):
@@ -343,20 +344,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                 </TableCell>
                 <TableCell>
                   {row.segment ? (
-                    <Badge
-                      className={cn(
-                        'text-[11px] border-0 text-white',
-                        row.segment === 'Lead A'
-                          ? 'bg-green-600 hover:bg-green-600'
-                          : 'bg-amber-500 hover:bg-amber-500'
-                      )}
-                    >
-                      {row.segment}
-                    </Badge>
+                    <LeadSegmentBadge segment={row.segment} />
                   ) : (
                     <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
+
                 <TableCell>
                   <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
                     {row.sdrName || '-'}
