@@ -132,6 +132,8 @@ const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/Fecham
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
 const ConsorcioPainelEquipe = lazy(() => import("./pages/bu-consorcio/PainelEquipe"));
 const ConsorcioCloserDetalhe = lazy(() => import("./pages/bu-consorcio/CloserDetalheConsorcio"));
+const ConsorcioSdrDetalhe = lazy(() => import("./pages/bu-consorcio/SdrDetalheConsorcio"));
+
 
 const ConsorcioAuditoriaVinculos = lazy(() => import("./pages/bu-consorcio/AuditoriaVinculos"));
 const ConsorcioPagamentos = lazy(() => import("./pages/bu-consorcio/Pagamentos"));
