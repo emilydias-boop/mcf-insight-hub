@@ -66,7 +66,7 @@ const EMPTY_FATOS: ConsorcioFatoRow[] = [];
 type DatePreset = "today" | "week" | "month" | "custom";
 
 export default function ConsorcioPainelEquipe() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const navigate = useNavigate();
   const isRestrictedRole = role === 'sdr' || role === 'closer';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -663,7 +663,25 @@ export default function ConsorcioPainelEquipe() {
               <ConsorcioSdrSummaryTable
                 data={filteredBySDR}
                 isLoading={fatosLoading}
-                disableNavigation={isRestrictedRole}
+                onSdrClick={(sdrEmail: string) => {
+                  const params = new URLSearchParams();
+                  params.set("preset", datePreset);
+                  if (datePreset === "month") {
+                    params.set("month", format(selectedMonth, "yyyy-MM"));
+                  } else if (datePreset === "custom" && customStartDate && customEndDate) {
+                    params.set("start", format(customStartDate, "yyyy-MM-dd"));
+                    params.set("end", format(customEndDate, "yyyy-MM-dd"));
+                  }
+                  navigate(`/consorcio/painel-equipe/sdr/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
+                }}
+                canOpenSdr={(sdrEmail: string) => {
+                  // Closer não abre detalhe de SDR; SDR abre apenas o seu.
+                  if (role === 'closer') return false;
+                  if (role === 'sdr') {
+                    return (user?.email || '').trim().toLowerCase() === sdrEmail.trim().toLowerCase();
+                  }
+                  return true;
+                }}
                 sdrMetaMap={sdrMetaMap}
                 diasUteisNoPeriodo={diasUteisNoPeriodo}
                 sdrDiasUteisMap={sdrDiasUteisMap}

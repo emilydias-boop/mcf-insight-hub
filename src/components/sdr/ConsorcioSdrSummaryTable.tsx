@@ -15,6 +15,13 @@ interface ConsorcioSdrSummaryTableProps {
   data: SdrSummaryRow[];
   isLoading?: boolean;
   disableNavigation?: boolean;
+  /**
+   * Quando informado, substitui a navegação legada (/crm/reunioes-equipe) —
+   * usado pela BU Consórcio para abrir o detalhe próprio do SDR.
+   */
+  onSdrClick?: (sdrEmail: string) => void;
+  /** Quais linhas são clicáveis. Sem isso, todas são (respeitando disableNavigation). */
+  canOpenSdr?: (sdrEmail: string) => boolean;
   sdrMetaMap?: Map<string, number>;
   diasUteisNoPeriodo?: number;
   sdrDiasUteisMap?: Map<string, number>;
@@ -48,6 +55,8 @@ export function ConsorcioSdrSummaryTable({
   data,
   isLoading,
   disableNavigation = false,
+  onSdrClick,
+  canOpenSdr,
   sdrMetaMap,
   diasUteisNoPeriodo,
   sdrDiasUteisMap,
@@ -132,9 +141,21 @@ export function ConsorcioSdrSummaryTable({
     : 0;
 
   const handleRowClick = (sdrEmail: string) => {
+    if (onSdrClick) {
+      onSdrClick(sdrEmail);
+      return;
+    }
     const params = new URLSearchParams(searchParams);
     navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
   };
+
+  /** Linha clicável? Com `onSdrClick`, quem decide é `canOpenSdr`. */
+  const podeAbrir = (sdrEmail: string) => {
+    if (onSdrClick) return canOpenSdr ? canOpenSdr(sdrEmail) : true;
+    return !disableNavigation;
+  };
+  /** A coluna do chevron existe se qualquer linha puder ser aberta. */
+  const mostrarColunaChevron = onSdrClick ? data.some((r) => podeAbrir(r.sdrEmail)) : !disableNavigation;
 
   if (isLoading) {
     return (
@@ -196,7 +217,7 @@ export function ConsorcioSdrSummaryTable({
               >
                 {CONSORCIO_LABELS.convVendasReuniao}
               </TableHead>
-              {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
+              {mostrarColunaChevron && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -236,8 +257,8 @@ export function ConsorcioSdrSummaryTable({
               return (
                 <TableRow
                   key={row.sdrEmail}
-                  className={disableNavigation ? "transition-colors" : "cursor-pointer transition-colors hover:bg-muted/30"}
-                  onClick={disableNavigation ? undefined : () => handleRowClick(row.sdrEmail)}
+                  className={podeAbrir(row.sdrEmail) ? "cursor-pointer transition-colors hover:bg-muted/30" : "transition-colors"}
+                  onClick={podeAbrir(row.sdrEmail) ? () => handleRowClick(row.sdrEmail) : undefined}
                 >
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
@@ -299,9 +320,9 @@ export function ConsorcioSdrSummaryTable({
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaVendaColor}`}>{taxaVenda.toFixed(1)}%</span>
                   </TableCell>
-                  {!disableNavigation && (
+                  {mostrarColunaChevron && (
                     <TableCell>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      {podeAbrir(row.sdrEmail) && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </TableCell>
                   )}
                 </TableRow>
@@ -337,7 +358,7 @@ export function ConsorcioSdrSummaryTable({
                     : "—"}
                 </TableCell>
                 <TableCell className="text-center">—</TableCell>
-                {!disableNavigation && <TableCell />}
+                {mostrarColunaChevron && <TableCell />}
               </TableRow>
             ))}
 
@@ -368,7 +389,7 @@ export function ConsorcioSdrSummaryTable({
                   {clientesSemVinculo > 0 ? brl(creditoSemVinculo / clientesSemVinculo) : "—"}
                 </TableCell>
                 <TableCell className="text-center">—</TableCell>
-                {!disableNavigation && <TableCell />}
+                {mostrarColunaChevron && <TableCell />}
               </TableRow>
             )}
 
@@ -394,7 +415,7 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                {!disableNavigation && <TableCell />}
+                {mostrarColunaChevron && <TableCell />}
               </TableRow>
             )}
 
@@ -442,7 +463,7 @@ export function ConsorcioSdrSummaryTable({
               <TableCell className="text-center">
                 <span className={`font-medium ${totalTaxaVendaColor}`}>{totalTaxaVenda.toFixed(1)}%</span>
               </TableCell>
-              {!disableNavigation && <TableCell />}
+              {mostrarColunaChevron && <TableCell />}
             </TableRow>
           </TableBody>
         </Table>
