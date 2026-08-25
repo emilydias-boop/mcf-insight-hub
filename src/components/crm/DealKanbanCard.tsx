@@ -399,10 +399,6 @@ export const DealKanbanCard = ({
               </Badge>
             ))}
           <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
-          {(() => {
-            return null;
-
-          })()}
           {outsideInfo?.isOutside && (
             <Tooltip>
               <TooltipTrigger asChild>
