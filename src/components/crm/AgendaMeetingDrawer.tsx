@@ -699,7 +699,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
+                          <LeadSegmentBadge segment={p.icpSegment} />
                           {p.isPartner && (
+
                             <Badge variant="outline" className="text-xs">
                               {p.parentAttendeeName ? `Sócio de ${p.parentAttendeeName.split(' ')[0]}` : 'Sócio'}
                             </Badge>
