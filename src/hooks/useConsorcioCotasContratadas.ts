@@ -60,6 +60,33 @@ export interface CotaResiduoItem {
   } | null;
 }
 
+/**
+ * Uma CARTA contratada atribuída a um SDR. Sai do MESMO laço que incrementa
+ * `bySdr`/`creditoBySdr` — nenhuma consulta a mais, nenhuma regra reimplementada.
+ */
+export interface CotaVendaSdrItem {
+  cardId: string;
+  cliente: string;
+  /** Identidade do titular (doc: ou nome:) — é a unidade de "Vendas Realizadas". */
+  pessoaKey: string;
+  grupo: string | null;
+  cota: string | null;
+  dataContratacao: string | null;
+  credito: number;
+  closerName: string | null;
+  dealId: string | null;
+}
+
+/** Um CLIENTE atribuído a um SDR — agrega as cartas dele. */
+export interface ClienteVendaSdrItem {
+  pessoaKey: string;
+  cliente: string;
+  cotas: number;
+  credito: number;
+  /** Data de contratação mais recente entre as cotas do cliente. */
+  dataContratacao: string | null;
+  closerNames: string[];
+}
 
 export interface ConsorcioCotasContratadas {
   /** Total de cotas contratadas no período (após filtro de funil). */
@@ -76,6 +103,11 @@ export interface ConsorcioCotasContratadas {
   creditoByCloser: Map<string, number>;
   /** Soma de valor_credito por e-mail de SDR. */
   creditoBySdr: Map<string, number>;
+  /** Lista itemizada por SDR — uma linha por CARTA (mesma fonte de `bySdr`). */
+  itensBySdr: Map<string, CotaVendaSdrItem[]>;
+  /** Lista itemizada por SDR — uma linha por CLIENTE (mesma fonte de `clientesBySdr`). */
+  clientesItensBySdr: Map<string, ClienteVendaSdrItem[]>;
+
   /** Clientes distintos / crédito das linhas residuais. */
   clientesSemVinculo: number;
   creditoSemVinculo: number;
@@ -120,6 +152,9 @@ const EMPTY: ConsorcioCotasContratadas = {
   clientesBySdr: new Map(),
   creditoByCloser: new Map(),
   creditoBySdr: new Map(),
+  itensBySdr: new Map(),
+  clientesItensBySdr: new Map(),
+
   clientesSemVinculo: 0,
   creditoSemVinculo: 0,
   clientesSemCloser: 0,
@@ -393,6 +428,8 @@ export function useConsorcioCotasContratadas(
       const bySdr = new Map<string, number>();
       const creditoByCloser = new Map<string, number>();
       const creditoBySdr = new Map<string, number>();
+      const itensBySdr = new Map<string, CotaVendaSdrItem[]>();
+
       const clientesCloserSets = new Map<string, Set<string>>();
       const clientesSdrSets = new Map<string, Set<string>>();
       const clientesTotal = new Set<string>();
@@ -630,7 +667,23 @@ export function useConsorcioCotasContratadas(
           creditoBySdr.set(sdrEmail, (creditoBySdr.get(sdrEmail) || 0) + credito);
           if (!clientesSdrSets.has(sdrEmail)) clientesSdrSets.set(sdrEmail, new Set());
           clientesSdrSets.get(sdrEmail)!.add(pessoa);
+          // Mesma linha que somou o contador, agora também itemizada (auditoria).
+          if (!itensBySdr.has(sdrEmail)) itensBySdr.set(sdrEmail, []);
+          itensBySdr.get(sdrEmail)!.push({
+            cardId: card.id,
+            cliente: card.nome_completo || "—",
+            pessoaKey: pessoa,
+            grupo: card.grupo ?? null,
+            cota: card.cota ?? null,
+            dataContratacao: card.data_contratacao ?? null,
+            credito,
+            closerName: closerId
+              ? closerNameById.get(closerId) ?? card.vendedor_name ?? null
+              : card.vendedor_name ?? null,
+            dealId: dealId ?? null,
+          });
         } else {
+
           semVinculo++;
           creditoSemVinculo += credito;
           clientesSemVinculoSet.add(pessoa);
@@ -699,6 +752,46 @@ export function useConsorcioCotasContratadas(
       foraFunilItems.sort(porData);
       semCloserItems.sort(porData);
 
+      // Lista por CLIENTE: agrupa as cartas já atribuídas (não reconta nada).
+      // A quantidade de linhas aqui é, por construção, `clientesBySdr`.
+      const clientesItensBySdr = new Map<string, ClienteVendaSdrItem[]>();
+      itensBySdr.forEach((itens, email) => {
+        itens.sort((a, b) =>
+          String(b.dataContratacao || "").localeCompare(String(a.dataContratacao || "")),
+        );
+        const porPessoa = new Map<string, ClienteVendaSdrItem>();
+        itens.forEach((i) => {
+          const atual = porPessoa.get(i.pessoaKey);
+          if (!atual) {
+            porPessoa.set(i.pessoaKey, {
+              pessoaKey: i.pessoaKey,
+              cliente: i.cliente,
+              cotas: 1,
+              credito: i.credito,
+              dataContratacao: i.dataContratacao,
+              closerNames: i.closerName ? [i.closerName] : [],
+            });
+            return;
+          }
+          atual.cotas += 1;
+          atual.credito += i.credito;
+          if (
+            String(i.dataContratacao || "").localeCompare(String(atual.dataContratacao || "")) > 0
+          ) {
+            atual.dataContratacao = i.dataContratacao;
+          }
+          if (i.closerName && !atual.closerNames.includes(i.closerName)) {
+            atual.closerNames.push(i.closerName);
+          }
+        });
+        clientesItensBySdr.set(
+          email,
+          Array.from(porPessoa.values()).sort((a, b) =>
+            String(b.dataContratacao || "").localeCompare(String(a.dataContratacao || "")),
+          ),
+        );
+      });
+
       return {
         total, byCloser, bySdr, sdrNames, semVinculo, semCloser,
         semVinculoItems, semCloserItems,
@@ -713,6 +806,9 @@ export function useConsorcioCotasContratadas(
         ),
         creditoByCloser,
         creditoBySdr,
+        itensBySdr,
+        clientesItensBySdr,
+
         clientesSemVinculo: clientesSemVinculoSet.size,
         creditoSemVinculo,
         clientesSemCloser: clientesSemCloserSet.size,
