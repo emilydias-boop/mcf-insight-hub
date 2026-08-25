@@ -520,6 +520,9 @@ function ProdutoForm({
     fundo_reserva: initial?.fundo_reserva ?? 2,
     seguro_vida_percentual: initial?.seguro_vida_percentual ?? 0.0610,
     prazo_maximo_venda: initial?.prazo_maximo_venda ?? 240,
+    // Digitado pelo operador. Sem default no banco e sem chute aqui: no produto
+    // novo o campo nasce vazio e o salvamento exige que a pessoa afirme os prazos.
+    prazos_disponiveis: (initial?.prazos_disponiveis ?? []).join(', '),
     comissao_base: (initial?.comissao_base ?? 'valor_credito') as ComissaoBase,
     comissao_schedule: (initial?.comissao_schedule ?? []) as ComissaoScheduleItem[],
   });
@@ -556,12 +559,25 @@ function ProdutoForm({
     });
   };
 
+  /** "200, 220, 240" → [200,220,240]. Ignora lixo, mantém a ordem digitada e não duplica. */
+  const prazosParseados = useMemo(() => {
+    const nums = String(form.prazos_disponiveis)
+      .split(/[^0-9]+/)
+      .map((s) => Number(s))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return Array.from(new Set(nums));
+  }, [form.prazos_disponiveis]);
+
+  const podeSalvar =
+    !!form.codigo.trim() && !!form.nome.trim() && !!form.objetivo_option_id && prazosParseados.length > 0;
+
   const submit = () => {
-    if (!form.codigo.trim() || !form.nome.trim() || !form.objetivo_option_id) return;
+    if (!podeSalvar) return;
     // Normaliza schedule: ordena e remove zeros vazios
     const schedule = sortedSchedule.filter((s) => s.parcela > 0);
     onSave({
       ...form,
+      prazos_disponiveis: prazosParseados,
       comissao_schedule: schedule.length > 0 ? schedule : null,
     });
   };
