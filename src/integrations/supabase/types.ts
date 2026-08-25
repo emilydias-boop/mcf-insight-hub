@@ -16738,6 +16738,7 @@ export type Database = {
           transaction_id: string
         }[]
       }
+      parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       phone_key_br: { Args: { _raw: string }; Returns: string }
       recalc_automation_queue_for_deal: {
