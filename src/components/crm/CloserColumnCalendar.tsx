@@ -5,6 +5,7 @@ import { Settings, Plus, ArrowRightLeft, DollarSign, UserCircle, UserPlus, Lock 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from "@/lib/utils";
 import { useCloserDaySlots } from "@/hooks/useCloserMeetingLinks";
 import { useOutsideDetectionBatch } from "@/hooks/useOutsideDetection";
