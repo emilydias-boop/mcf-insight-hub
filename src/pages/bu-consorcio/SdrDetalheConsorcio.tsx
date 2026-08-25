@@ -268,6 +268,7 @@ export default function SdrDetalheConsorcio() {
 
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
+  const pipelineParam = searchParams.get("pipeline");
 
   const { startDate, endDate } = useMemo(() => {
     const hoje = new Date();
@@ -287,15 +288,45 @@ export default function SdrDetalheConsorcio() {
     return { startDate: startOfMonth(base), endDate: endOfMonth(base) };
   }, [preset, monthParam, searchParams, wso]);
 
+  // Funil selecionado no painel: reconstruído EXATAMENTE como em PainelEquipe
+  // (Set de nomes e display_names de origem em minúsculas; null = sem filtro).
+  const { data: pipelineOrigins } = useCRMOriginsByPipeline(pipelineParam);
+  const allowedOriginNames = useMemo(() => {
+    if (!pipelineParam || !pipelineOrigins) return null;
+    const names = new Set<string>();
+    if (Array.isArray(pipelineOrigins)) {
+      pipelineOrigins.forEach((item: any) => {
+        if (item.children) {
+          item.children.forEach((child: any) => {
+            if (child.name) names.add(String(child.name).toLowerCase());
+            if (child.display_name) names.add(String(child.display_name).toLowerCase());
+          });
+        } else {
+          if (item.name) names.add(String(item.name).toLowerCase());
+          if (item.display_name) names.add(String(item.display_name).toLowerCase());
+        }
+      });
+    }
+    return names.size > 0 ? names : null;
+  }, [pipelineParam, pipelineOrigins]);
+
+  // Nome do funil para o cabeçalho.
+  const { data: pipelines } = useCRMPipelines(true);
+  const funilNome = useMemo(() => {
+    if (!pipelineParam) return null;
+    const p = (pipelines || []).find((x: any) => x.id === pipelineParam);
+    return (p as any)?.display_name || (p as any)?.name || "Funil selecionado";
+  }, [pipelines, pipelineParam]);
+
   const isPrivilegedViewer = role === "admin" || role === "manager" || role === "coordenador";
   const accessDenied =
     !isPrivilegedViewer && (user?.email || "").trim().toLowerCase() !== sdrEmail;
 
-  const reunioes = useConsorcioSdrReunioes(sdrEmail || undefined, startDate, endDate);
+  const reunioes = useConsorcioSdrReunioes(sdrEmail || undefined, startDate, endDate, allowedOriginNames);
   const { data: cotasContratadas, isLoading: loadingCotas } = useConsorcioCotasContratadas(
     startDate,
     endDate,
-    null,
+    allowedOriginNames,
     BU,
   );
 
