@@ -9,7 +9,7 @@ export function useConsorcioProdutos() {
     queryFn: async (): Promise<ConsorcioProduto[]> => {
       const { data, error } = await supabase
         .from('consorcio_produtos')
-        .select('*')
+        .select('*, consorcio_objetivo_options(name, label)')
         .eq('ativo', true)
         .order('faixa_credito_min', { ascending: true });
 
@@ -22,6 +22,9 @@ export function useConsorcioProdutos() {
         seguro_vida_percentual: item.seguro_vida_percentual || 0.0610,
         comissao_schedule: (item as any).comissao_schedule ?? null,
         comissao_base: (item as any).comissao_base ?? 'valor_credito',
+        // `name` da opção de objetivo — usado para afunilar a resolução do produto.
+        objetivo_nome: (item as any).consorcio_objetivo_options?.name ?? null,
+        objetivo_label: (item as any).consorcio_objetivo_options?.label ?? null,
       })) as unknown as ConsorcioProduto[];
     },
   });
