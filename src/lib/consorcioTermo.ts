@@ -28,6 +28,7 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas pagas pela MCF' },
   { key: 'parcelas_mcf_lista', label: 'Tabela das parcelas da MCF' },
   { key: 'parcelas_mcf_total', label: 'Total pago pela MCF' },
+  { key: 'clausula_mcf', label: 'Cláusula do compromisso da MCF (seção 3)' },
   { key: 'tipo_contrato', label: 'Tipo de contrato' },
   { key: 'data_emissao', label: 'Data de emissão' },
 ] as const;
