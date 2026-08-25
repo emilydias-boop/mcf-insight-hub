@@ -22,6 +22,7 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'parcela_1a_12a', label: 'Parcela 1ª à 12ª' },
   { key: 'parcela_demais', label: 'Demais parcelas' },
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
+  { key: 'dia_vencimento_texto', label: 'Dia de vencimento (texto)' },
   { key: 'qtd_cartas', label: 'Quantidade de cartas' },
   { key: 'cartas_tabela', label: 'Tabela das cartas da venda' },
   { key: 'parcelas_mcf_qtd', label: 'Qtd. de parcelas pagas pela MCF' },
