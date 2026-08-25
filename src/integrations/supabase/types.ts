@@ -16641,6 +16641,7 @@ export type Database = {
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
       mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
       mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
+      meetgeek_checar_fila: { Args: never; Returns: Json }
       meetgeek_destravar_presos: { Args: never; Returns: Json }
       meetgeek_parear_gravacao: {
         Args: { _recording_id: string }
