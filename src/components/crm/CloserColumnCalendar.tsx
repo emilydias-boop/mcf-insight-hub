@@ -436,21 +436,11 @@ export function CloserColumnCalendar({
                                           )}
                                         </div>
                                         <div className="flex items-center gap-1 flex-shrink-0">
-                                          {(() => {
-                                            const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                            if (seg !== "A" && seg !== "B") return null;
-                                            return (
-                                              <Badge
-                                                variant="outline"
-                                                className={cn(
-                                                  "text-[9px] px-1 py-0 border-white/30",
-                                                  seg === "A" ? "bg-green-600/80" : "bg-amber-600/80",
-                                                )}
-                                              >
-                                                {seg}
-                                              </Badge>
-                                            );
-                                          })()}
+                                          <LeadSegmentBadge
+                                            segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
+                                            size="sm"
+                                          />
+
                                           <Badge
                                             variant="outline"
                                             className={cn(
