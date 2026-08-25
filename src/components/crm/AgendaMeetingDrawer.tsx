@@ -81,6 +81,13 @@ import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { AgendadorEditor } from '@/components/crm/AgendadorEditor';
 import { QualificationHistorySection } from './qualification/QualificationHistorySection';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { useMeetingRecording, type MeetingAiReviewEtapa, type TranscriptLine } from '@/hooks/useMeetingRecording';
 
 const FOLLOWUP_CLOSER_STAGE_ID = 'c2d1b8f3-ae5a-4b2d-9f4c-3a6e7b9d0e02';
 
