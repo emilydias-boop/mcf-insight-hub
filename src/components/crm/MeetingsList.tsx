@@ -343,20 +343,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                 </TableCell>
                 <TableCell>
                   {row.segment ? (
-                    <Badge
-                      className={cn(
-                        'text-[11px] border-0 text-white',
-                        row.segment === 'Lead A'
-                          ? 'bg-green-600 hover:bg-green-600'
-                          : 'bg-amber-500 hover:bg-amber-500'
-                      )}
-                    >
-                      {row.segment}
-                    </Badge>
+                    <LeadSegmentBadge segment={row.segment} />
                   ) : (
                     <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
+
                 <TableCell>
                   <span className={cn('text-sm', !row.sdrName && 'text-muted-foreground')}>
                     {row.sdrName || '-'}
