@@ -10,7 +10,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Calendar, Users } from "lucide-react";
+import { ArrowLeft, Calendar, Filter, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,8 @@ import {
   type ClienteVendaSdrItem,
   type CotaVendaSdrItem,
 } from "@/hooks/useConsorcioCotasContratadas";
+import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
+import { useCRMPipelines } from "@/components/crm/PipelineSelector";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { DealDetailsDrawer } from "@/components/crm/DealDetailsDrawer";
 
@@ -134,7 +136,7 @@ function ReunioesTable({
               <TableHead>Closer</TableHead>
               <TableHead>Origem</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Lead</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -268,6 +270,7 @@ export default function SdrDetalheConsorcio() {
 
   const preset = searchParams.get("preset") || "month";
   const monthParam = searchParams.get("month");
+  const pipelineParam = searchParams.get("pipeline");
 
   const { startDate, endDate } = useMemo(() => {
     const hoje = new Date();
@@ -287,15 +290,45 @@ export default function SdrDetalheConsorcio() {
     return { startDate: startOfMonth(base), endDate: endOfMonth(base) };
   }, [preset, monthParam, searchParams, wso]);
 
+  // Funil selecionado no painel: reconstruído EXATAMENTE como em PainelEquipe
+  // (Set de nomes e display_names de origem em minúsculas; null = sem filtro).
+  const { data: pipelineOrigins } = useCRMOriginsByPipeline(pipelineParam);
+  const allowedOriginNames = useMemo(() => {
+    if (!pipelineParam || !pipelineOrigins) return null;
+    const names = new Set<string>();
+    if (Array.isArray(pipelineOrigins)) {
+      pipelineOrigins.forEach((item: any) => {
+        if (item.children) {
+          item.children.forEach((child: any) => {
+            if (child.name) names.add(String(child.name).toLowerCase());
+            if (child.display_name) names.add(String(child.display_name).toLowerCase());
+          });
+        } else {
+          if (item.name) names.add(String(item.name).toLowerCase());
+          if (item.display_name) names.add(String(item.display_name).toLowerCase());
+        }
+      });
+    }
+    return names.size > 0 ? names : null;
+  }, [pipelineParam, pipelineOrigins]);
+
+  // Nome do funil para o cabeçalho.
+  const { data: pipelines } = useCRMPipelines(true);
+  const funilNome = useMemo(() => {
+    if (!pipelineParam) return null;
+    const p = (pipelines || []).find((x: any) => x.id === pipelineParam);
+    return (p as any)?.display_name || (p as any)?.name || "Funil selecionado";
+  }, [pipelines, pipelineParam]);
+
   const isPrivilegedViewer = role === "admin" || role === "manager" || role === "coordenador";
   const accessDenied =
     !isPrivilegedViewer && (user?.email || "").trim().toLowerCase() !== sdrEmail;
 
-  const reunioes = useConsorcioSdrReunioes(sdrEmail || undefined, startDate, endDate);
+  const reunioes = useConsorcioSdrReunioes(sdrEmail || undefined, startDate, endDate, allowedOriginNames);
   const { data: cotasContratadas, isLoading: loadingCotas } = useConsorcioCotasContratadas(
     startDate,
     endDate,
-    null,
+    allowedOriginNames,
     BU,
   );
 
@@ -363,6 +396,8 @@ export default function SdrDetalheConsorcio() {
     const end = searchParams.get("end");
     if (start) params.set("start", start);
     if (end) params.set("end", end);
+    // Devolve o painel com o MESMO funil selecionado.
+    if (pipelineParam) params.set("pipeline", pipelineParam);
     navigate(`/consorcio/painel-equipe?${params.toString()}`);
   };
 
@@ -413,9 +448,17 @@ export default function SdrDetalheConsorcio() {
             <p className="text-sm text-muted-foreground">{sdrEmail}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-          <Calendar className="h-4 w-4" />
-          <span>{periodo}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+            <Calendar className="h-4 w-4" />
+            <span>{periodo}</span>
+          </div>
+          {funilNome && (
+            <div className="flex items-center gap-2 text-sm bg-primary/10 text-primary rounded-lg px-3 py-2">
+              <Filter className="h-4 w-4" />
+              <span>Funil: {funilNome}</span>
+            </div>
+          )}
         </div>
       </div>
 
