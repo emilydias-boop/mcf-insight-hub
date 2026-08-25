@@ -476,8 +476,6 @@ function ProdutosTab() {
                   Prazos fora da tabela oficial: a parcela será calculada, não tabelada.
                 </div>
               )}
-              <div className="text-xs text-muted-foreground">
-              </div>
               <div className="text-[11px] text-muted-foreground/80 mt-0.5">
                 {p.created_by
                   ? `Criado por ${autores[p.created_by] ?? 'usuário não identificado'} em ${fmtData(p.created_at)}`
