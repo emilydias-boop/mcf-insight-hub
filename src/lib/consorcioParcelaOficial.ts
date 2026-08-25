@@ -28,6 +28,8 @@ export interface ParcelaOficialParams {
   tipoProduto: string;
   condicaoPagamento?: string | null;
   incluiSeguro?: boolean;
+  /** Objetivo da carta/cota ('imovel' | 'auto' | 'pesado' ou o id da opção). */
+  objetivo?: string | null;
 }
 
 function normalizarCondicao(c?: string | null): CondicaoPagamento {
