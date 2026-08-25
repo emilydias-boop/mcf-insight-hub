@@ -134,7 +134,7 @@ function ReunioesTable({
               <TableHead>Closer</TableHead>
               <TableHead>Origem</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Lead</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
