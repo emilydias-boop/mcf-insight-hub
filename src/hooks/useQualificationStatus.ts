@@ -59,10 +59,17 @@ export function useQualificationStatus(dealId?: string) {
         if (a.activity_type !== 'qualification_note') return false;
         const md = (a.metadata || {}) as Record<string, any>;
         if (md.channel !== 'whatsapp' && md.channel !== 'call') return false;
-        const answers = md.answers || {};
-        const keys = ['tempo_mcf', 'profissao', 'socio', 'renda', 'constroi_venda', 'terreno_imovel'];
-        return keys.every((k) => ((answers[k] || '') as string).trim().length >= 15);
+        const answers = (md.answers || {}) as Record<string, string>;
+        // Mesma regra de validateAnswers: escolha única só precisa estar preenchida;
+        // resposta livre continua exigindo MIN_ANSWER_LENGTH. Perguntas de escolha
+        // ausentes em notas antigas (anteriores à pergunta) não invalidam o histórico.
+        return QUALIFICATION_QUESTIONS.every((q) => {
+          const v = ((answers[q.key] || '') as string).trim();
+          if (q.type === 'choice') return !(q.key in answers) || v.length > 0;
+          return v.length >= MIN_ANSWER_LENGTH;
+        });
       });
+
 
       if (manualNote) {
         const md = (manualNote.metadata || {}) as Record<string, any>;
