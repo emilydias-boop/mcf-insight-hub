@@ -239,6 +239,8 @@ const App = () => (
               <Route path="consorcio/fechamento/:payoutId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamentoDetail /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<ResourceGuard resource="crm"><ConsorcioPainelEquipe /></ResourceGuard>} />
               <Route path="consorcio/painel-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><ConsorcioCloserDetalhe /></BUProvider></RoleGuard>} />
+              <Route path="consorcio/painel-equipe/sdr/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer_sombra']}><BUProvider bu="consorcio" basePath="/consorcio/crm"><ConsorcioSdrDetalhe /></BUProvider></RoleGuard>} />
+
               <Route path="consorcio/pagamentos" element={<ResourceGuard resource="crm"><ConsorcioPagamentos /></ResourceGuard>} />
               <Route path="consorcio/auditoria-vinculos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioAuditoriaVinculos /></RoleGuard>} />
               
