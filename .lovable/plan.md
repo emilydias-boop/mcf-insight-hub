@@ -1,70 +1,68 @@
-# Assinatura do termo com código de uso único por e-mail — levantamento e desenho
+# Laudo: "Novo Contato" devolvendo 409 em silêncio
 
-Veredito curto: **é viável**. O canal de e-mail existe, está em uso todos os dias e o e-mail do cliente está preenchido em ~90% dos cadastros. Há dois pontos que exigem decisão sua e um risco concreto de vazamento do código em log que precisa ser fechado no desenho.
+Resumo: **não é o `clint_id`, e o botão não está quebrado para todo mundo.** O 409 vem da trava de duplicidade por telefone — os dois números que você usou já existem no banco. O que **está** errado é a interface: nesta tela o erro não é traduzido nem exibido de forma que o operador entenda, e o modal fica exatamente como estava.
 
-## A. O e-mail chega
+## A. A causa exata do 409 — sua suspeita cai
 
-**1. Existe envio hoje — de fato.** Duas rotas:
-- `supabase/functions/brevo-send/index.ts` — Brevo (`BREVO_API_KEY`, linha 42), remetente `marketing@minhacasafinanciada.com` (linha 19). É a rota principal.
-- `supabase/functions/send-document-email/index.ts` — Resend (`RESEND_API_KEY`, linha 69), remetente `notificacoes@mcfgestao.com.br`. Usada só para notificação de documentos de RH.
+O 409 **não é** violação de índice único de coluna. `crm_contacts` tem apenas duas constraints únicas: `crm_contacts_pkey` (`id`) e `crm_contacts_clint_id_key` (`clint_id`) — e o `clint_id` enviado é único por construção (ver B).
 
-**2. Está em uso e funcionando, não parado.** `automation_logs` com `channel='email'`: **1.511 registros, todos com status `sent`**, o último em 2026-08-25 00:13 UTC. Nos últimos 30 dias: 1.463 envios, **1.443 para destinatários externos** (clientes) e 20 internos. Ou seja: enviar e-mail para o cliente já é rotina.
-- Observação: `src/lib/consorcioBoasVindasEmail.ts` monta um e-mail de boas-vindas de Consórcio que **nenhum arquivo chama** — é código morto, não conte com ele.
+O 409 é levantado pelo **trigger** `prevent_duplicate_crm_contact` (BEFORE INSERT, `SECURITY DEFINER`), que faz `RAISE EXCEPTION 'duplicate_contact:phone:%:%' USING ERRCODE = 'unique_violation'`. PostgREST traduz `unique_violation` (23505) em **HTTP 409**. Definição criada em `supabase/migrations/20260427183320_bb6da08f-b7dc-41bb-a7de-6178df70cc20.sql`.
 
-**3. E-mail do cliente preenchido — números reais de `consorcio_pending_registrations`:**
+A regra: e-mail normalizado, e **os últimos 9 dígitos do telefone**, comparados contra qualquer contato ativo (`is_archived` falso e `merged_into_contact_id` nulo).
 
-| Recorte | Total | Com e-mail válido (`@`) | % |
+Os dois telefones que você usou já pertencem a contatos ativos:
+
+| Telefone digitado | Já existe em | Criado em |
+|---|---|---|
+| `11900000000` | `Igor` — thalissoanh@gmail.com — `1310fb8e-6d1b-454b-9d8e-bf7f1f3ecd4e` | 2025-11-21 |
+| `11987654321` | `Marcos Helias` — marcos.helias@gmail.com — `adde7ad0-ea2f-462d-a875-dbae0fc0b624` | 2025-11-21 |
+
+Ou seja: você trocou o telefone, mas trocou por outro número igualmente "de teste" que também já estava lá (há ainda um terceiro, `21900000000`, da Márcia Monteiro, batendo nos mesmos 9 dígitos do primeiro). O e-mail era inédito; **o telefone é que colidiu, nas três tentativas.** A mensagem exata que o banco devolveu foi `duplicate_contact:phone:900000000:1310fb8e-…` (e depois `…:987654321:adde7ad0-…`).
+
+## B. O componente e o `clint_id`
+
+- `src/components/crm/ContactFormDialog.tsx:36-43` monta o payload e chama `createContact.mutateAsync`.
+- `clint_id` entra na linha **37**: `` clint_id: `local-${Date.now()}` ``. Não é vazio nem nulo — é `local-<timestamp em ms>`, sintético. Existe porque a coluna veio da sincronização com o Clint e é `NOT NULL`/única; contato criado à mão recebe um identificador próprio com prefixo `local-`. É exatamente esse prefixo que permite medir o item D.
+- O insert de verdade está em `src/hooks/useCRMData.ts:322-344` (`useCreateCRMContact`).
+
+## C. Por que o erro não aparece na tela
+
+Duas coisas somadas:
+
+1. **O `onError` existe** — `src/hooks/useCRMData.ts:340-342`: `toast.error(\`Erro ao criar contato: ${error.message}\`)`. O `toast` vem do `sonner` (linha 3) e o `<Sonner />` está montado em `src/App.tsx:179`. Então há um toast previsto, e a mensagem que ele mostraria é o texto cru do banco: `Erro ao criar contato: duplicate_contact:phone:900000000:1310fb8e-...`. Isso é ilegível para o operador — se apareceu e passou, não comunicou nada; **por que você não o viu é o único ponto que ainda não consigo afirmar por leitura de código** (a hipótese honesta é toast curto com texto que não parece erro de negócio). Isso se confirma reproduzindo na tela com o console aberto, e é o primeiro passo se você mandar consertar.
+2. **O modal não trata nada.** `ContactFormDialog.tsx:36` faz `await createContact.mutateAsync(...)` **sem `try/catch`**. A promessa rejeita, as linhas 45-46 (limpar campos e fechar) nunca rodam, e o componente **não tem estado de erro nenhum** — nenhuma mensagem inline, nenhum destaque no campo Telefone. Resultado exato do que você viu: modal aberto, campos preenchidos, nada explicado. O `console.log` também não existe aqui — por isso o console ficou limpo.
+3. **O tradutor da mensagem existe e não foi usado aqui.** `src/lib/duplicateContactError.ts` converte `duplicate_contact:phone:...` em *"Este telefone já está cadastrado em outro lead: Igor (11900000000)."* — e é usado em `src/components/crm/R2MeetingDetailDrawer.tsx:195` e `src/components/crm/SdrSummaryBlock.tsx:69`, **mas não em `ContactFormDialog` nem em `useCreateCRMContact`.** É a lacuna concreta.
+
+## D. Não está quebrado para todo mundo — e não está quebrado há meses
+
+Contagem por origem do `clint_id` em `crm_contacts`:
+
+| Origem | Contatos | Primeiro | Último |
 |---|---|---|---|
-| Todos os cadastros | 452 | 403 | **89,2%** |
-| Criados nos últimos 60 dias | 312 | 283 | **90,7%** |
-| Termos gerados (`consorcio_termos`) | 31 | 31 com `cliente_email` no snapshot | **100%** |
+| Sincronização Clint (UUID) | 112.952 | 2025-11-19 | 2026-04-24 |
+| Outros (webhooks/Hubla/integrações) | 89.545 | 2025-11-26 | **2026-08-25 03:05** |
+| Importação de planilha | 1.282 | 2026-03-03 | 2026-08-21 |
+| **Manual pela tela (`local-`)** | **562** | 2026-01-20 | **2026-08-24 15:12** |
 
-O percentual **não é baixo** — não derruba a solução. Mas 1 em cada 10 cadastros não tem e-mail, então o desenho precisa de um caminho para esse caso (ver item 11).
+Manuais nos **últimos 90 dias: 99**. Nos **últimos 7 dias: 13**. O último foi ontem. Conclusão: a tela cria contato normalmente quando o telefone e o e-mail são realmente inéditos. O que quebra em silêncio é **o caso de duplicidade** — e esse caso é frequente numa base com 200 mil contatos e histórico de duplicados.
 
-**4. Destinatário do código.** O snapshot já guarda `cliente_email`: **31 de 31 termos têm a chave preenchida com `@`**. Conferi contra `profiles`: **zero** snapshots com e-mail de gente da casa. O snapshot é gravado em `useCreateTermo` (`src/hooks/useConsorcioTermos.ts:194`) a partir dos dados do cadastro do cliente, não do closer. Ainda assim o desenho deve **bloquear no servidor** e-mail que exista em `profiles`/`employees` — hoje isso é verdade por sorte, não por regra.
+## E. Como seguir a auditoria agora (sem conserto)
 
-## B. Como o link chega hoje
+Pela própria tela, funciona: use um telefone inédito de verdade, não `1190000-0000` nem `1198765-4321`. Sugestão de par inédito: nome `ZZ TESTE AUDITORIA FUNIL - NAO USAR`, e-mail `teste.auditoria.funil@exemplo.invalido` (já verificado como inexistente) e telefone com 9 dígitos finais improváveis, por exemplo `11 94422-7731` — se der 409 de novo, o toast/`duplicate_contact:phone:` indica qual contato tomou o número.
 
-**5. Link copiado à mão e mandado por fora (WhatsApp).** `GerarTermoModal.tsx:117` e `TermoPanelDialog.tsx:43` fazem `navigator.clipboard.writeText(termoPublicUrl(token))`; o campo aparece só-leitura ao lado de um botão "Copiar". **Não existe nenhum envio automático do termo por e-mail.** Consequência prática: o código por e-mail **muda o processo do time** — o closer continua mandando o link por WhatsApp, mas o cliente passa a depender de um e-mail que hoje ninguém envia nem confere. Isso é o principal custo operacional da mudança, não o técnico.
+Caminhos alternativos que criam o contato sem passar por essa tela:
+- **Negócios → novo negócio**: `src/components/crm/DealFormDialog.tsx:224-238` procura contato por e-mail/telefone e cria se não achar, já vinculando o deal — é o caminho mais útil para auditar o funil, porque entrega contato **e** lead num passo. Sujeito ao mesmo trigger, mas com aviso melhor: linha 216 já mostra "Este lead já existe nesta pipeline".
+- **Bloco do SDR / drawer da R2** (`SdrSummaryBlock.tsx:54`, `R2MeetingDetailDrawer.tsx:195`): criam contato **com a mensagem amigável de duplicidade** — são hoje os únicos lugares que explicam o 409.
+- **Importação de planilha** (`supabase/functions/import-spreadsheet-leads/index.ts`): reaproveita contato existente por e-mail/telefone; bom para volume, exagerado para um lead.
 
-## C. Onde encaixar
+## F. "Falha em silêncio" é caso isolado ou padrão?
 
-**6. Fluxo atual de `supabase/functions/termo-assinatura/index.ts`** (roda com `service_role`, ignora RLS):
-- `GET ?token=` → busca por `access_token`; expira se `pendente` e vencido; na primeira abertura grava `visualizado_em`/`visualizado_ip` (linhas 111-120); devolve `publicPayload` (conteúdo, nome/documento mascarados, certificado se assinado).
-- `POST {token, nome, cpf}` → recusa `comprovante_cadastro`, `assinado`, `cancelado`, expirado; compara CPF só-dígitos e nome normalizado contra `dados_snapshot`; grava `status='assinado'`, `assinado_em`, `assinante_nome/cpf/ip/user_agent` com `UPDATE ... eq('status','pendente')` (idempotente).
+O `clint_id` sintético **não é o problema** e aparece em vários lugares legítimos (`useCreatePipeline.ts`, `useBulkCreateDeals.ts:44`, `useLimboLeads.ts:418`, `AddCartaModal.tsx:253`, `OutsideDistributionButton.tsx:133`, `DealFormDialog.tsx:227`, `SdrSummaryBlock.tsx:57`) — todos com valor único por timestamp/prefixo.
 
-Encaixe do código, sem tocar no que já funciona:
-- Duas ações novas no POST (`action: 'request_code'` e `action: 'sign'`), mantendo o corpo atual como caminho legado durante a virada.
-- `already_signed`, `cancelled`, `expired`, `not_signable` continuam iguais e vêm **antes** de qualquer lógica de código. Termo já assinado não muda em nada.
+O padrão que **é** preocupante é outro: `await mutation.mutateAsync(...)` sem `try/catch` em componentes que dependem do sucesso para fechar/limpar. Há ~20 ocorrências só em `src/components/crm/` (`EditLeadDialog.tsx:75,104`, `MoveToPipelineModal.tsx:85,91`, `BulkTransferDialog.tsx:62`, `CreateTaskDialog.tsx:126,160`, `R2RescheduleModal.tsx:158`, `QuickScheduleModal.tsx:635`, entre outras). Na maioria o hook tem `onError` com toast, então o usuário recebe *algo* — o problema é que o texto é a mensagem crua do Postgres, que para erros de negócio (como este trigger) não diz nada ao operador. Portanto: **não é um botão isolado; é uma lacuna de tradução de erro de negócio no CRM**, com o caso mais visível sendo a duplicidade de contato.
 
-**7. Onde fica o código.** Tabela nova `consorcio_termo_codigos`:
-- `termo_id`, `codigo_hash` (SHA-256 de código + salt de servidor — nunca texto puro), `email_destino`, `expires_at` (10 min), `tentativas` (int), `consumido_em`, `criado_em`, `criado_ip`.
-- Verificação = hash do que o cliente digitou comparado ao hash guardado. Defendo hash em vez de texto puro porque a tabela é lida por `service_role` e qualquer consulta de suporte veria o valor; com hash, nem o banco sabe o código.
-- 6 dígitos numéricos, expiração de 10 minutos, máximo 5 tentativas, pedido novo invalida o anterior.
+## Se você mandar consertar (fora desta rodada)
 
-**8. O código não pode ser visível para ninguém da casa.** Regras do desenho:
-- Sem policy de `SELECT` para nenhum papel — apenas a edge function com `service_role`. O código em claro existe só na memória da função e no corpo do e-mail.
-- **Risco real hoje:** `brevo-send` grava o HTML inteiro do e-mail em `automation_logs.content_sent` (linhas 63-76) e `automation_logs` é legível no CRM. Se o e-mail do código passar por `brevo-send` como está, **o código fica visível para gente da casa** e a trava perde valor. Solução: chamar a API do Brevo **direto de dentro de `termo-assinatura`**, sem passar por `brevo-send` e sem gravar `content_sent`; registrar apenas "código enviado para e‑mail mascarado, às HH:MM".
-- Nenhum `console.log` com o código (a função hoje só loga erro, linha 196 — manter assim).
-- A resposta da API devolve só o e-mail mascarado, nunca o código.
-
-## D. Registro de contexto
-
-**9. O que já se enxerga sem esforço:** IP (`x-forwarded-for`, linha 168) e user agent (linha 180) — ambos já gravados hoje. Horário é `now()` no servidor, autoritativo. **Localização exige permissão do navegador** (`navigator.geolocation`) e, quando o cliente **nega**, não vem nada: a assinatura precisa concluir normalmente e o registro fica com localização nula. Localização é opcional por natureza; nunca condição para assinar. Como complemento sem permissão, dá para guardar o fuso horário do navegador e uma geolocalização aproximada por IP (país/cidade), rotulada como *aproximada*.
-
-**10. Onde gravar o contexto.** Tabela nova `consorcio_termo_assinatura_contexto`, com a mesma disciplina da trilha de fora do funil: **INSERT apenas pela função; nenhum UPDATE, nenhum DELETE para ninguém**. Campos: `termo_id`, `evento` (`codigo_solicitado` | `codigo_recusado` | `assinado`), `ocorrido_em`, `ip`, `user_agent`, `plataforma`, `timezone`, `geo_lat`/`geo_lng`/`geo_precisao` (nulos permitidos), `geo_origem` (`navegador` | `ip` | `ausente`). Leitura: `admin`, `manager`, `coordenador` e `cobranca_consorcio` — os mesmos que já veem dados do cliente.
-
-## E. Riscos e custo
-
-**11. O que quebra.** Existem **5 termos `pendente`** agora (2 deles de teste com validade até 2028). Se a exigência entrar ligada para todos, um pendente cujo cadastro esteja sem e-mail **fica travado**. Virada proposta: exigência só para termos **gerados depois** da mudança (coluna `exige_codigo` no termo, default `true` para novos, `false` nos 5 atuais), e o botão de gerar termo passa a **exigir e-mail do cliente** no cadastro. Assim ninguém fica no meio do caminho e os ~10% sem e-mail são resolvidos no momento da geração, não na hora da assinatura.
-
-**12. Rate limit e abuso.** Pedido de código: no máximo 1 por minuto e 5 por dia por termo, contados na própria tabela de códigos (o token do termo é o escopo — não é endpoint aberto para qualquer e-mail, o destinatário vem do snapshot, o cliente não escolhe). Força bruta: 6 dígitos + 5 tentativas + 10 minutos + invalidação ao errar o limite dá probabilidade desprezível; após o limite, só um novo pedido resolve, e o pedido tem seu próprio teto.
-
-**13. Opinião honesta.** Viável, e **mais viável que a foto do documento** neste sistema. Razões: o canal de e-mail já roda 1.400+ envios externos por mês e não precisa de infraestrutura nova; o e-mail do cliente já está em 90% dos cadastros e em 100% dos termos gerados; a foto do documento exigiria storage novo, política de retenção de dado sensível, e alguém da casa conferindo a foto — o que reintroduz exatamente o problema que a trava quer resolver (gente da casa no meio da assinatura). Não recomendo voltar ao dono. Os dois obstáculos reais são operacionais, não técnicos: (a) o time hoje entrega o link por WhatsApp e vai precisar orientar o cliente a buscar o e-mail; (b) o log do `brevo-send` vazaria o código se o envio não for isolado — está tratado no item 8.
-
-## Se você aprovar, a implementação seria
-
-1. Migração: `consorcio_termo_codigos`, `consorcio_termo_assinatura_contexto` (insert-only), `consorcio_termos.exige_codigo`, grants e policies.
-2. `termo-assinatura`: ações `request_code` e `sign`, envio direto ao Brevo sem log de conteúdo, rate limit, gravação de contexto.
-3. Página pública do termo: passo do código, campo de 6 dígitos, "reenviar" com contador, pedido opcional de localização com fallback silencioso.
-4. Geração do termo: exigir e-mail do cliente; mostrar o e-mail mascarado que receberá o código.
+1. `ContactFormDialog`: `try/catch`, mensagem inline no campo Telefone/E-mail, e uso de `describeDuplicatePhoneError` (mais um equivalente para e-mail) em vez do texto cru.
+2. Oferecer no próprio erro o atalho "abrir o contato existente" com o id que o trigger já devolve.
+3. Reproduzir o caso com console aberto para fechar o único ponto não confirmado: se o toast do `onError` está aparecendo e sendo ignorado, ou não está aparecendo.
