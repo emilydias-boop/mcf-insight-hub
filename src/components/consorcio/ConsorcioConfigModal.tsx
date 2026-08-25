@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -619,6 +619,20 @@ function ProdutoForm({
         </Field>
         <Field label="Prazo máximo de venda (meses)">
           <Input type="number" value={form.prazo_maximo_venda} onChange={(e) => set('prazo_maximo_venda', Number(e.target.value))} />
+        </Field>
+        <Field label="Prazos disponíveis (meses)">
+          <Input
+            placeholder="ex.: 200, 220, 240"
+            value={form.prazos_disponiveis}
+            onChange={(e) => set('prazos_disponiveis', e.target.value)}
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {prazosParseados.length === 0
+              ? 'Obrigatório. Separe por vírgula.'
+              : prazosForaDaTabela(prazosParseados)
+                ? 'Prazos fora da tabela oficial: a parcela será calculada, não tabelada.'
+                : `Prazos: ${prazosParseados.join(', ')}.`}
+          </p>
         </Field>
         <Field label="Taxa adm 200m (%)">
           <Input type="number" step="0.01" value={form.taxa_adm_200} onChange={(e) => set('taxa_adm_200', Number(e.target.value))} />
