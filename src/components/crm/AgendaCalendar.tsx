@@ -1859,23 +1859,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       <div className="flex items-center gap-1.5">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                                         <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
-                                                        {(() => {
-                                                          const seg = String(att.icpSegment ?? "").trim().toUpperCase();
-                                                          if (seg !== "A" && seg !== "B") return null;
-                                                          return (
-                                                            <Badge
-                                                              variant="outline"
-                                                              className={cn(
-                                                                "text-[8px] px-1 py-0 gap-0.5",
-                                                                seg === "A"
-                                                                  ? "bg-green-100 text-green-700 border-green-300"
-                                                                  : "bg-amber-100 text-amber-700 border-amber-300",
-                                                              )}
-                                                            >
-                                                              Lead {seg}
-                                                            </Badge>
-                                                          );
-                                                        })()}
+                                                        <LeadSegmentBadge segment={att.icpSegment} size="sm" />
                                                         {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
                                                         {att.already_builds === true && (
                                                           <Badge className="text-[8px] px-1 py-0 bg-blue-600">Constrói</Badge>

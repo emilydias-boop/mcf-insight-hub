@@ -34,7 +34,7 @@ export function QualificationQuestionnaire({ answers, onChange, disabled }: Prop
       <div className="space-y-1">
         <div className="flex justify-between text-xs">
           <span className="text-muted-foreground">
-            Questionário obrigatório · cada resposta com no mínimo {MIN_ANSWER_LENGTH} caracteres
+            Questionário obrigatório · responda todas as perguntas antes de salvar
           </span>
           <span className="font-medium">{completed}/{total}</span>
         </div>
