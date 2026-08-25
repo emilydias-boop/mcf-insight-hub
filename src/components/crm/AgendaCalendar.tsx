@@ -1344,18 +1344,11 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                   <span className="truncate flex-1">
                                                     {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                   </span>
-                                                  {(() => {
-                                                    const seg = String(att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment ?? "").trim().toUpperCase();
-                                                    if (seg !== "A" && seg !== "B") return null;
-                                                    return (
-                                                      <span className={cn(
-                                                        "text-[9px] font-bold",
-                                                        seg === "A" ? "text-green-500" : "text-amber-500",
-                                                      )}>
-                                                        {seg}
-                                                      </span>
-                                                    );
-                                                  })()}
+                                                  <LeadSegmentBadge
+                                                    segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
+                                                    size="sm"
+                                                  />
+
                                                   {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
                                                     <span className={cn(
                                                       "text-[9px] font-bold",
