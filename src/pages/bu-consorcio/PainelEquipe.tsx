@@ -593,7 +593,7 @@ export default function ConsorcioPainelEquipe() {
 
             <PipelineSelector
               selectedPipelineId={selectedPipelineId}
-              onSelectPipeline={setSelectedPipelineId}
+              onSelectPipeline={handleSelectPipeline}
               allowedGroupIds={allowedGroupIds}
             />
 
