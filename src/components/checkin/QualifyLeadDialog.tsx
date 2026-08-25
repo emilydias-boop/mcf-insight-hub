@@ -46,7 +46,7 @@ export function QualifyLeadDialog({ dealId, conversationId, open, onOpenChange }
 
   const handleSave = () => {
     if (!valid) {
-      toast.error('Responda todas as perguntas com pelo menos 15 caracteres.');
+      toast.error('Responda todas as perguntas antes de salvar.');
       return;
     }
     const summary = answersToSummary(answers, sdrName ?? undefined, 'whatsapp');
