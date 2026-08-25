@@ -552,7 +552,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || attendeeMeeting.booked_by_profile,
         parentAttendeeId: att.parent_attendee_id,
         parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
+        icpSegment: (att.deal as any)?.icp_segment ?? (attendeeMeeting.deal as any)?.icp_segment ?? null,
         slotId: attendeeMeeting.id, // Track which slot this attendee belongs to
+
       };
     });
   };
