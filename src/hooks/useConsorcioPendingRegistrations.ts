@@ -1290,6 +1290,7 @@ export function useOpenCota() {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-origem-funil'] });
     },
     onError: (e: any) => toast.error('Erro ao abrir cota: ' + e.message),
   });
