@@ -13,8 +13,12 @@ const LOTE_PADRAO = 10;
 const LOTE_MAX = 30;             // teto: o endpoint não pode virar torneira de quota
 const MAX_TENTATIVAS = 3;
 const PAGINA_TRANSCRICAO = 500;  // máximo permitido pela API
+const PAGINA_DESCOBRIR = 100;    // reunioes por pagina ao varrer um time
+const PAGINAS_DESCOBRIR_PADRAO = 3;
+const PAGINAS_DESCOBRIR_MAX = 20;
 
 type Sentence = { id?: number; speaker?: string; timestamp?: string; transcript?: string };
+type Time = { id: number; name?: string };
 
 function jsonResp(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -37,6 +41,48 @@ async function mgFetch(path: string, token: string): Promise<Response> {
   });
   if (res.status === 429) throw new QuotaError("quota limit reached");
   return res;
+}
+
+// Times que a chave enxerga. view_access = pode LER as reunioes do time,
+// que e exatamente o que precisamos para avaliar closer.
+async function buscarTimes(token: string): Promise<{ view: Time[]; share: Time[] }> {
+  const res = await mgFetch(`/v1/teams`, token);
+  if (!res.ok) throw new Error(`teams ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const d = await res.json();
+  return {
+    view: Array.isArray(d?.view_access) ? d.view_access : [],
+    share: Array.isArray(d?.share_access) ? d.share_access : [],
+  };
+}
+
+// Varre as reunioes de UM time, paginando. So coleta ids: puxar transcricao
+// aqui dentro faria a descoberta custar 4x mais requisicoes por reuniao.
+async function idsDoTime(token: string, teamId: number, maxPaginas: number) {
+  const ids: string[] = [];
+  const cursoresVistos = new Set<string>();
+  let cursor: string | null = null;
+  let paginas = 0;
+
+  do {
+    const qs = new URLSearchParams({ limit: String(PAGINA_DESCOBRIR) });
+    if (cursor) qs.set("cursor", cursor);
+
+    const res = await mgFetch(`/v1/teams/${teamId}/meetings?${qs}`, token);
+    if (!res.ok) throw new Error(`team ${teamId} meetings ${res.status}`);
+
+    const d = await res.json();
+    paginas++;
+    const lista = Array.isArray(d?.meetings) ? d.meetings : [];
+    for (const m of lista) if (m?.meeting_id) ids.push(m.meeting_id);
+
+    cursor = d?.pagination?.next_cursor || null;
+    if (cursor) {
+      if (cursoresVistos.has(cursor)) break;  // cursor repetido = loop infinito
+      cursoresVistos.add(cursor);
+    }
+  } while (cursor && paginas < maxPaginas);
+
+  return { ids, paginas, temMais: !!cursor };
 }
 
 async function buscarTranscricao(token: string, meetingId: string) {
@@ -96,49 +142,104 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   let lote = clamp(url.searchParams.get("lote"), LOTE_PADRAO, LOTE_MAX);
   let modo = url.searchParams.get("modo") || "fila";
+  let teamIdParam: number | null = null;
+  let maxPaginas = PAGINAS_DESCOBRIR_PADRAO;
 
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (body?.lote !== undefined) lote = clamp(body.lote, LOTE_PADRAO, LOTE_MAX);
     if (typeof body?.modo === "string") modo = body.modo;
+    if (body?.team_id !== undefined && Number.isFinite(Number(body.team_id))) {
+      teamIdParam = Number(body.team_id);
+    }
+    if (body?.paginas !== undefined) {
+      maxPaginas = clamp(body.paginas, PAGINAS_DESCOBRIR_PADRAO, PAGINAS_DESCOBRIR_MAX);
+    }
   }
 
   const iniciado = Date.now();
 
   // ---------------------------------------------------------------
-  // MODO DESCOBRIR: rede de segurança caso um webhook se perca.
+  // MODO TIMES: diagnostico barato (1 requisicao). Mostra quais times
+  // a chave enxerga, para saber de quem conseguimos ler reunioes.
+  // ---------------------------------------------------------------
+  if (modo === "times") {
+    try {
+      const { view, share } = await buscarTimes(token);
+      return jsonResp({ modo, view_access: view, share_access: share });
+    } catch (e) {
+      const quota = e instanceof QuotaError;
+      return jsonResp({ modo, error: String(e) }, quota ? 429 : 500);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // MODO DESCOBRIR: varre as reunioes dos TIMES (que e onde estao as
+  // reunioes dos closers). Cai para /v1/meetings so se nao houver time,
+  // porque aquele endpoint so devolve as reunioes do dono da chave.
   // ---------------------------------------------------------------
   if (modo === "descobrir") {
     try {
-      const res = await mgFetch(`/v1/meetings?limit=100`, token);
-      if (!res.ok) return jsonResp({ error: `meetings ${res.status}` }, 502);
-      const data = await res.json();
-
-      const lista = Array.isArray(data?.meetings) ? data.meetings : [];
-      const ids: string[] = lista
-        .map((m: { meeting_id?: string }) => m?.meeting_id)
-        .filter(Boolean);
-
-      // Se o formato da resposta mudar, isso viraria {novos:0} silencioso e
-      // pareceria saudável enquanto não faz nada. Melhor gritar.
-      if (ids.length === 0) {
-        console.warn("[meetgeek-ingest] descobrir nao achou meeting_id. chaves da resposta:",
-          Object.keys(data ?? {}));
+      let times: Time[];
+      if (teamIdParam !== null) {
+        times = [{ id: teamIdParam }];
+      } else {
+        const { view } = await buscarTimes(token);
+        times = view;
       }
 
-      if (ids.length === 0) return jsonResp({ modo, vistos: 0, novos: 0, alerta: "resposta sem meeting_id" });
+      const porTime: Array<Record<string, unknown>> = [];
+      const todosIds = new Set<string>();
+      let quotaEstourou = false;
 
-      const { data: existentes } = await supabase
-        .from("meeting_recordings")
-        .select("meetgeek_meeting_id")
-        .in("meetgeek_meeting_id", ids);
+      for (const t of times) {
+        try {
+          const { ids, paginas, temMais } = await idsDoTime(token, t.id, maxPaginas);
+          ids.forEach((i) => todosIds.add(i));
+          porTime.push({ time_id: t.id, nome: t.name ?? null, vistos: ids.length, paginas, tem_mais: temMais });
+        } catch (e) {
+          if (e instanceof QuotaError) { quotaEstourou = true; break; }
+          porTime.push({ time_id: t.id, nome: t.name ?? null, erro: String(e).slice(0, 200) });
+        }
+      }
 
-      const conhecidos = new Set((existentes ?? []).map((r) => r.meetgeek_meeting_id));
+      // Sem nenhum time visivel: volta ao endpoint pessoal para nao ficar cego.
+      let usouFallbackPessoal = false;
+      if (times.length === 0) {
+        usouFallbackPessoal = true;
+        const res = await mgFetch(`/v1/meetings?limit=100`, token);
+        if (res.ok) {
+          const data = await res.json();
+          const lista = Array.isArray(data?.meetings) ? data.meetings : [];
+          for (const m of lista) if (m?.meeting_id) todosIds.add(m.meeting_id);
+        }
+      }
+
+      const ids = [...todosIds];
+      if (ids.length === 0) {
+        return jsonResp({
+          modo, times: porTime, usou_fallback_pessoal: usouFallbackPessoal,
+          vistos: 0, novos: 0, quota: quotaEstourou,
+          alerta: "nenhuma reuniao encontrada",
+        });
+      }
+
+      // .in() com milhares de ids estoura o tamanho da URL: consulta em blocos.
+      const conhecidos = new Set<string>();
+      for (let i = 0; i < ids.length; i += 200) {
+        const bloco = ids.slice(i, i + 200);
+        const { data: existentes } = await supabase
+          .from("meeting_recordings")
+          .select("meetgeek_meeting_id")
+          .in("meetgeek_meeting_id", bloco);
+        (existentes ?? []).forEach((r) => conhecidos.add(r.meetgeek_meeting_id));
+      }
+
       const novos = ids.filter((id) => !conhecidos.has(id));
 
-      if (novos.length > 0) {
+      for (let i = 0; i < novos.length; i += 500) {
         await supabase.from("meeting_recordings").upsert(
-          novos.map((id) => ({ meetgeek_meeting_id: id, ingest_status: "pendente" })),
+          novos.slice(i, i + 500).map((id) => ({ meetgeek_meeting_id: id, ingest_status: "pendente" })),
           { onConflict: "meetgeek_meeting_id", ignoreDuplicates: true },
         );
       }
@@ -147,8 +248,13 @@ Deno.serve(async (req) => {
       await supabase.from("meetgeek_sync_state")
         .upsert({ id: true, last_synced_at: agora, updated_at: agora }, { onConflict: "id" });
 
-      console.log("[meetgeek-ingest] descobrir:", { vistos: ids.length, novos: novos.length });
-      return jsonResp({ modo, vistos: ids.length, novos: novos.length });
+      const saida = {
+        modo, times: porTime, usou_fallback_pessoal: usouFallbackPessoal,
+        vistos: ids.length, novos: novos.length, quota: quotaEstourou,
+        duracao_ms: Date.now() - iniciado,
+      };
+      console.log("[meetgeek-ingest] descobrir:", saida);
+      return jsonResp(saida);
     } catch (e) {
       const quota = e instanceof QuotaError;
       return jsonResp({ modo, error: String(e) }, quota ? 429 : 500);
