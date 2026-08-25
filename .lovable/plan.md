@@ -1,80 +1,70 @@
-# Investigação: cadastro de produto AUTO trava em `prazos_disponiveis`
+# Assinatura do termo com código de uso único por e-mail — levantamento e desenho
 
-Sua suspeita está certa. O NOT NULL é só o primeiro obstáculo; o formulário e a cadeia de cálculo são **imóvel-only por construção (200/220/240)**.
+Veredito curto: **é viável**. O canal de e-mail existe, está em uso todos os dias e o e-mail do cliente está preenchido em ~90% dos cadastros. Há dois pontos que exigem decisão sua e um risco concreto de vazamento do código em log que precisa ser fechado no desenho.
 
-## A. O que é `prazos_disponiveis`
+## A. O e-mail chega
 
-- Coluna `integer[]` (`udt_name = _int4`), `NOT NULL`, **sem default** — criada assim em `supabase/migrations/20260116142212_...sql:11` (`prazos_disponiveis INTEGER[] NOT NULL`).
-- Semântica de uso hoje: é apenas a **lista de prazos que o seletor de prazo oferece** (`src/components/consorcio/DadosPlanoFields.tsx:104-106`). Não entra em nenhum cálculo de parcela.
-- Os 7 produtos existentes (todos `ativo = true`), com objetivo e conteúdo da coluna:
+**1. Existe envio hoje — de fato.** Duas rotas:
+- `supabase/functions/brevo-send/index.ts` — Brevo (`BREVO_API_KEY`, linha 42), remetente `marketing@minhacasafinanciada.com` (linha 19). É a rota principal.
+- `supabase/functions/send-document-email/index.ts` — Resend (`RESEND_API_KEY`, linha 69), remetente `notificacoes@mcfgestao.com.br`. Usada só para notificação de documentos de RH.
 
-| Código | Nome | Objetivo | `prazos_disponiveis` | `prazo_maximo_venda` | adm 200/220/240 | Faixa |
-|---|---|---|---|---|---|---|
-| TP | Tabela Parcelinha | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
-| EI1 | Estendido 1% | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
-| PSE | Plano Select Estendido | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 120k–600k |
-| TEP | Tabela Estendido Prime | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 600k–1,2M |
-| SEP | Select Estendido Prime | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 600k–1,2M |
-| TEP_ALTO | TEP Alto Valor | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 1,0M–2,0M |
-| SEP_ALTO | SEP Alto Valor | Imóvel | `{200,220,240}` | null | 20 / 22 / 25 | 1,0M–2,0M |
+**2. Está em uso e funcionando, não parado.** `automation_logs` com `channel='email'`: **1.511 registros, todos com status `sent`**, o último em 2026-08-25 00:13 UTC. Nos últimos 30 dias: 1.463 envios, **1.443 para destinatários externos** (clientes) e 20 internos. Ou seja: enviar e-mail para o cliente já é rotina.
+- Observação: `src/lib/consorcioBoasVindasEmail.ts` monta um e-mail de boas-vindas de Consórcio que **nenhum arquivo chama** — é código morto, não conte com ele.
 
-**Os 7 têm exatamente o mesmo valor: `{200,220,240}`.** Todos Imóvel. `prazo_maximo_venda` é null em todos os 7 (o campo é mais novo que o seed).
+**3. E-mail do cliente preenchido — números reais de `consorcio_pending_registrations`:**
 
-## B. Por que o formulário não manda
+| Recorte | Total | Com e-mail válido (`@`) | % |
+|---|---|---|---|
+| Todos os cadastros | 452 | 403 | **89,2%** |
+| Criados nos últimos 60 dias | 312 | 283 | **90,7%** |
+| Termos gerados (`consorcio_termos`) | 31 | 31 com `cliente_email` no snapshot | **100%** |
 
-- Estado do formulário: `src/components/consorcio/ConsorcioConfigModal.tsx:509-527`. As chaves são `codigo, nome, objetivo_option_id, faixa_credito_min/max, taxa_antecipada_percentual, taxa_antecipada_tipo, taxa_adm_200/220/240, fundo_reserva, seguro_vida_percentual, prazo_maximo_venda, comissao_base, comissao_schedule`. **`prazos_disponiveis` não existe no estado.**
-- `submit()` (linhas 559-568) faz `onSave({ ...form, comissao_schedule })` — ou seja, manda literalmente o `form`, nada mais.
-- `useCreateConsorcioProduto` (`src/hooks/useConsorcioProdutos.ts:62-72`) faz `insert(input as any)` sem completar nada.
-- Logo: **a coluna não está no payload**. Postgres tenta o default, não há default, e o NOT NULL estoura. Não é "vai null explícito" — é ausência.
-- Detalhe: na **leitura** o código já mascara isso com `item.prazos_disponiveis || [200, 220, 240]` (`useConsorcioProdutos.ts:20`) e `consorcioParcelaOficial.ts:104` — por isso ninguém percebeu a lacuna antes.
+O percentual **não é baixo** — não derruba a solução. Mas 1 em cada 10 cadastros não tem e-mail, então o desenho precisa de um caminho para esse caso (ver item 11).
 
-## C. Outras colunas NOT NULL sem default
+**4. Destinatário do código.** O snapshot já guarda `cliente_email`: **31 de 31 termos têm a chave preenchida com `@`**. Conferi contra `profiles`: **zero** snapshots com e-mail de gente da casa. O snapshot é gravado em `useCreateTermo` (`src/hooks/useConsorcioTermos.ts:194`) a partir dos dados do cadastro do cliente, não do closer. Ainda assim o desenho deve **bloquear no servidor** e-mail que exista em `profiles`/`employees` — hoje isso é verdade por sorte, não por regra.
 
-Colunas `NOT NULL` de `consorcio_produtos` e se o formulário envia:
+## B. Como o link chega hoje
 
-| Coluna | Default | Formulário envia? |
-|---|---|---|
-| `id` | `gen_random_uuid()` | n/a |
-| `codigo` | — | **sim** |
-| `nome` | — | **sim** |
-| `faixa_credito_min` | — | **sim** |
-| `faixa_credito_max` | — | **sim** |
-| `taxa_antecipada_percentual` | — | **sim** |
-| `taxa_antecipada_tipo` | — | **sim** |
-| `prazos_disponiveis` | — | **NÃO ← o erro atual** |
-| `comissao_base` | `'valor_credito'` | sim (redundante) |
+**5. Link copiado à mão e mandado por fora (WhatsApp).** `GerarTermoModal.tsx:117` e `TermoPanelDialog.tsx:43` fazem `navigator.clipboard.writeText(termoPublicUrl(token))`; o campo aparece só-leitura ao lado de um botão "Copiar". **Não existe nenhum envio automático do termo por e-mail.** Consequência prática: o código por e-mail **muda o processo do time** — o closer continua mandando o link por WhatsApp, mas o cliente passa a depender de um e-mail que hoje ninguém envia nem confere. Isso é o principal custo operacional da mudança, não o técnico.
 
-**`prazos_disponiveis` é a única NOT NULL sem default que falta.** Todo o resto que é NOT NULL ou tem default ou já vai no payload. Antony não bate numa segunda parede de NOT NULL. (Tudo o mais — `taxa_adm_*`, `fundo_reserva`, `seguro_vida_percentual`, `grupo_padrao`, `objetivo_option_id`, `prazo_maximo_venda`, `comissao_schedule`, `created_by`, `updated_by` — é nullable ou tem default.)
+## C. Onde encaixar
 
-## D. O formulário representa auto? Não.
+**6. Fluxo atual de `supabase/functions/termo-assinatura/index.ts`** (roda com `service_role`, ignora RLS):
+- `GET ?token=` → busca por `access_token`; expira se `pendente` e vencido; na primeira abertura grava `visualizado_em`/`visualizado_ip` (linhas 111-120); devolve `publicPayload` (conteúdo, nome/documento mascarados, certificado se assinado).
+- `POST {token, nome, cpf}` → recusa `comprovante_cadastro`, `assinado`, `cancelado`, expirado; compara CPF só-dígitos e nome normalizado contra `dados_snapshot`; grava `status='assinado'`, `assinado_em`, `assinante_nome/cpf/ip/user_agent` com `UPDATE ... eq('status','pendente')` (idempotente).
 
-- As únicas colunas de taxa adm são `taxa_adm_200`, `taxa_adm_220`, `taxa_adm_240`. **Não existe onde guardar taxa adm de 100 meses** como campo próprio. O que aconteceria com um auto de 100 meses: `getTaxaAdm` (`src/lib/consorcioCalculos.ts:6-15`) faz `if (prazo < 210) return taxa_adm_200` — ou seja, **prazo 100 lê a coluna rotulada "200m"**. Como o Antony pôs 20,80 nos três campos, o número sairia certo por acidente, mas o rótulo mente: o campo diz 200 meses e está guardando a taxa de um produto de 100.
-- `prazos_disponiveis` para esse produto deveria conter `{100}` (ou a grade real de auto), não `{200,220,240}`. É exatamente o campo que hoje ninguém preenche.
-- **Não existe nenhum produto de Auto nem de Pesado entre os 7.** As opções de objetivo `auto` e `pesado` existem em `consorcio_objetivo_options` (ambas `is_active = true`), mas nunca foram usadas em produto. **Auto nunca foi cadastrado nesse sistema.**
+Encaixe do código, sem tocar no que já funciona:
+- Duas ações novas no POST (`action: 'request_code'` e `action: 'sign'`), mantendo o corpo atual como caminho legado durante a virada.
+- `already_signed`, `cancelled`, `expired`, `not_signable` continuam iguais e vêm **antes** de qualquer lógica de código. Termo já assinado não muda em nada.
 
-## E. Quem consome os prazos — o sistema é 200/220/240 por construção
+**7. Onde fica o código.** Tabela nova `consorcio_termo_codigos`:
+- `termo_id`, `codigo_hash` (SHA-256 de código + salt de servidor — nunca texto puro), `email_destino`, `expires_at` (10 min), `tentativas` (int), `consumido_em`, `criado_em`, `criado_ip`.
+- Verificação = hash do que o cliente digitou comparado ao hash guardado. Defendo hash em vez de texto puro porque a tabela é lida por `service_role` e qualquer consulta de suporte veria o valor; com hash, nem o banco sabe o código.
+- 6 dígitos numéricos, expiração de 10 minutos, máximo 5 tentativas, pedido novo invalida o anterior.
 
-Confirmado, e é mais duro do que só a constante:
+**8. O código não pode ser visível para ninguém da casa.** Regras do desenho:
+- Sem policy de `SELECT` para nenhum papel — apenas a edge function com `service_role`. O código em claro existe só na memória da função e no corpo do e-mail.
+- **Risco real hoje:** `brevo-send` grava o HTML inteiro do e-mail em `automation_logs.content_sent` (linhas 63-76) e `automation_logs` é legível no CRM. Se o e-mail do código passar por `brevo-send` como está, **o código fica visível para gente da casa** e a trava perde valor. Solução: chamar a API do Brevo **direto de dentro de `termo-assinatura`**, sem passar por `brevo-send` e sem gravar `content_sent`; registrar apenas "código enviado para e‑mail mascarado, às HH:MM".
+- Nenhum `console.log` com o código (a função hoje só loga erro, linha 196 — manter assim).
+- A resposta da API devolve só o e-mail mascarado, nunca o código.
 
-- `consorcio_creditos` tem **colunas fixas por prazo**: `parcela_1a_12a_{conv,50,25}_{200,220,240}` e `parcela_demais_...` — 18 colunas, nenhuma para outro prazo. Não há coluna `prazo`; o prazo está no *nome* da coluna.
-- `PRAZOS_TABELADOS = [200, 220, 240]` (`src/hooks/useConsorcioPlanosCarta.ts:15`) e `filtrarPlanosCarta` devolve `prazoForaDaTabela: true` e **lista vazia** para qualquer outro prazo (linhas 106-113). Com prazo 100, **o seletor de plano da carta não oferece nada**.
-- `resolverParcelaOficial` (`src/lib/consorcioParcelaOficial.ts:80-142`): monta o nome da coluna via `getValoresTabelados`; sem coluna para 100, `usandoTabelaOficial` fica `false` e cai em `calcularParcela`, que usa a taxa adm da coluna "200m". Ou seja: **não quebra, mas sai do regime de tabela oficial e passa a calcular** — o oposto da regra "a tabela é a fonte de verdade".
-- `DadosPlanoFields.tsx:107` (`prazoSemTabela`) e `lerValoresTabela` (linha ~113) também rejeitam qualquer prazo fora de `[200,220,240]`.
+## D. Registro de contexto
 
-Um agravante que apareceu no caminho e que vale para qualquer produto de auto: **a resolução de produto ignora o objetivo.** `resolverParcelaOficial` filtra só por `taxa_antecipada_tipo` + faixa de crédito, com `limit(1)` (linhas 89-98), e `produtosElegiveisParaCarta` faz o mesmo. A faixa do auto (45k–180k) **se sobrepõe** à faixa dos imóveis Parcelinha (120k–600k). Entre 120k e 180k, com "Parcelinha", o sistema poderia casar um crédito de imóvel com um produto de auto (ou vice-versa) sem nada distinguir. Isso é independente do NOT NULL e vale registrar.
+**9. O que já se enxerga sem esforço:** IP (`x-forwarded-for`, linha 168) e user agent (linha 180) — ambos já gravados hoje. Horário é `now()` no servidor, autoritativo. **Localização exige permissão do navegador** (`navigator.geolocation`) e, quando o cliente **nega**, não vem nada: a assinatura precisa concluir normalmente e o registro fica com localização nula. Localização é opcional por natureza; nunca condição para assinar. Como complemento sem permissão, dá para guardar o fuso horário do navegador e uma geolocalização aproximada por IP (país/cidade), rotulada como *aproximada*.
 
-## F. Saídas possíveis — sem escolha feita
+**10. Onde gravar o contexto.** Tabela nova `consorcio_termo_assinatura_contexto`, com a mesma disciplina da trilha de fora do funil: **INSERT apenas pela função; nenhum UPDATE, nenhum DELETE para ninguém**. Campos: `termo_id`, `evento` (`codigo_solicitado` | `codigo_recusado` | `assinado`), `ocorrido_em`, `ip`, `user_agent`, `plataforma`, `timezone`, `geo_lat`/`geo_lng`/`geo_precisao` (nulos permitidos), `geo_origem` (`navegador` | `ip` | `ausente`). Leitura: `admin`, `manager`, `coordenador` e `cobranca_consorcio` — os mesmos que já veem dados do cliente.
 
-**1. Campo explícito `prazos_disponiveis` no formulário.** Antony digita os prazos (ex.: `100`) e o insert passa.
-Prós: uma tela, sem migração, nada de default chutado; o dado gravado é o que o operador afirmou. Contras: o produto de auto fica **meio cadastrado** — existe, aparece nas listas, mas nenhuma carta de 100 meses acha plano e a parcela sai calculada, não tabelada. E a taxa adm dele continua guardada num campo chamado "200m".
+## E. Riscos e custo
 
-**2. `DEFAULT '{200,220,240}'` na coluna.** Destrava sem mexer na UI.
-Prós: menor mudança possível. Contras: **é exatamente o risco que você nomeou** — o produto de auto nasce afirmando prazos de imóvel, e essa mentira fica no banco decidindo o dropdown de prazo. Você pediu para não dar default sem autorizar; registro como opção, não como recomendação.
+**11. O que quebra.** Existem **5 termos `pendente`** agora (2 deles de teste com validade até 2028). Se a exigência entrar ligada para todos, um pendente cujo cadastro esteja sem e-mail **fica travado**. Virada proposta: exigência só para termos **gerados depois** da mudança (coluna `exige_codigo` no termo, default `true` para novos, `false` nos 5 atuais), e o botão de gerar termo passa a **exigir e-mail do cliente** no cadastro. Assim ninguém fica no meio do caminho e os ~10% sem e-mail são resolvidos no momento da geração, não na hora da assinatura.
 
-**3. Suporte real a auto (prazos livres).** Obra maior: `consorcio_creditos` deixaria de ter prazo no nome da coluna (linhas por prazo, ou colunas genéricas), `PRAZOS_TABELADOS` deixa de ser constante, `getTaxaAdm` passa a ler uma grade de taxa por prazo em vez de três colunas fixas, e a resolução de produto passa a considerar objetivo para não colidir faixas. Prós: auto e pesado passam a funcionar de verdade, com tabela oficial. Contras: toca o núcleo do cálculo de parcela, que é o lugar mais sensível do sistema.
+**12. Rate limit e abuso.** Pedido de código: no máximo 1 por minuto e 5 por dia por termo, contados na própria tabela de códigos (o token do termo é o escopo — não é endpoint aberto para qualquer e-mail, o destinatário vem do snapshot, o cliente não escolhe). Força bruta: 6 dígitos + 5 tentativas + 10 minutos + invalidação ao errar o limite dá probabilidade desprezível; após o limite, só um novo pedido resolve, e o pedido tem seu próprio teto.
 
-**4. Auto na prática também roda em 200/220/240, e "prazo máximo de venda 100" significa outra coisa.** Não posso confirmar nem derrubar isso pelo código — `prazo_maximo_venda` é null nos 7 produtos, então **nunca foi usado**, e não há nada no código que o leia além da exibição em `ConsorcioConfigModal.tsx:470`. Comercialmente, consórcio de automóvel Embracon costuma ter grade própria (tipicamente até 100 meses), o que torna improvável que auto use 200/220/240. Mas essa é a pergunta a levar ao dono: **a tabela de auto que o Antony tem na mão traz colunas de parcela para quais prazos?** A resposta decide entre 1 e 3.
+**13. Opinião honesta.** Viável, e **mais viável que a foto do documento** neste sistema. Razões: o canal de e-mail já roda 1.400+ envios externos por mês e não precisa de infraestrutura nova; o e-mail do cliente já está em 90% dos cadastros e em 100% dos termos gerados; a foto do documento exigiria storage novo, política de retenção de dado sensível, e alguém da casa conferindo a foto — o que reintroduz exatamente o problema que a trava quer resolver (gente da casa no meio da assinatura). Não recomendo voltar ao dono. Os dois obstáculos reais são operacionais, não técnicos: (a) o time hoje entrega o link por WhatsApp e vai precisar orientar o cliente a buscar o e-mail; (b) o log do `brevo-send` vazaria o código se o envio não for isolado — está tratado no item 8.
 
-## Nada foi tocado
+## Se você aprovar, a implementação seria
 
-Somente leitura: `information_schema`, `SELECT` em `consorcio_produtos`, `consorcio_creditos` e `consorcio_objetivo_options`, e leitura de arquivos. Nenhum INSERT/UPDATE/DELETE, nenhuma migração, nenhum arquivo de código alterado. Os 7 produtos estão como estavam.
+1. Migração: `consorcio_termo_codigos`, `consorcio_termo_assinatura_contexto` (insert-only), `consorcio_termos.exige_codigo`, grants e policies.
+2. `termo-assinatura`: ações `request_code` e `sign`, envio direto ao Brevo sem log de conteúdo, rate limit, gravação de contexto.
+3. Página pública do termo: passo do código, campo de 6 dígitos, "reenviar" com contador, pedido opcional de localização com fallback silencioso.
+4. Geração do termo: exigir e-mail do cliente; mostrar o e-mail mascarado que receberá o código.
