@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 import { MeetingSlot, useUpdateAttendeeAndSlotStatus, useCancelMeeting } from '@/hooks/useAgendaData';
 import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useMemo, useState } from 'react';
 
