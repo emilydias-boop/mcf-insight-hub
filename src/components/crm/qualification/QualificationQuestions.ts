@@ -42,6 +42,16 @@ export const QUALIFICATION_QUESTIONS: QualificationQuestion[] = [
     label: 'O lead possui terreno ou imóvel (casa ou apartamento)?',
     placeholder: 'Ex: Possui um terreno de 300m² em SP e uma casa própria...',
   },
+  {
+    key: 'finalidade_obra',
+    label: 'Qual a finalidade da obra?',
+    type: 'choice',
+    options: [
+      'Construir para morar',
+      'Construir para vender ou investir',
+      'Ainda não decidiu',
+    ],
+  },
 ];
 
 export type QualificationAnswers = Record<string, string>;
@@ -50,10 +60,15 @@ export function validateAnswers(answers: QualificationAnswers): { valid: boolean
   const missing: string[] = [];
   for (const q of QUALIFICATION_QUESTIONS) {
     const v = (answers[q.key] || '').trim();
-    if (v.length < MIN_ANSWER_LENGTH) missing.push(q.key);
+    if (q.type === 'choice') {
+      if (!v) missing.push(q.key);
+    } else if (v.length < MIN_ANSWER_LENGTH) {
+      missing.push(q.key);
+    }
   }
   return { valid: missing.length === 0, missing };
 }
+
 
 export function answersToSummary(
   answers: QualificationAnswers,
