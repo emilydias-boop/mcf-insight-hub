@@ -1,77 +1,106 @@
-# Levantamento — 4 frentes (investigação, nada alterado)
+# Levantamento — modelo do termo, sessão e conferências
 
-## 1) Termo de adesão — cláusula das parcelas pagas pela MCF
+## A) Modelo ativo `d51977ff-0c3e-4b16-a0a7-16b9392371f6` — campo `conteudo` cru
 
-**Onde a frase é montada.** Ela NÃO está em código: está no corpo do modelo, na tabela `consorcio_termo_modelos`. Modelo ativo de adesão: `d51977ff-0c3e-4b16-a0a7-16b9392371f6`, versão 2 (versão 1, `6dd7d540-…`, inativa). Texto literal do modelo ativo, seção 3:
+```markdown
+# TERMO DE ADESÃO E COMPROMISSO — CONSÓRCIO
 
-```
+Emitido em {{data_emissao}}
+
+## 1. IDENTIFICAÇÃO DO CONSORCIADO
+
+**Nome / Razão Social:** {{cliente_nome}}
+**CPF / CNPJ:** {{cliente_documento}}
+**Telefone:** {{cliente_telefone}}
+**E-mail:** {{cliente_email}}
+**Endereço:** {{cliente_endereco}}
+
+## 2. OBJETO DA CONTRATAÇÃO
+
+O consorciado acima identificado declara ter contratado, junto à administradora **{{administradora}}**, cota de consórcio com as seguintes características:
+
+**Produto:** {{produto}}
+**Objetivo do crédito:** {{objetivo}}
+**Valor do crédito contratado:** {{valor_credito}}
+**Prazo:** {{prazo}} meses
+**Condição de pagamento:** {{condicao_pagamento}}
+**Valor da parcela (1ª à 12ª):** {{parcela_1a_12a}}
+**Valor das demais parcelas:** {{parcela_demais}}
+**Dia de vencimento:** dia {{dia_vencimento}}
+**Tipo de contrato:** {{tipo_contrato}}
+
+## 3. COMPROMISSO DA MCF CAPITAL
+
 A **MCF Capital** assume, de forma irrevogável, o compromisso de efetuar o pagamento de **{{parcelas_mcf_qtd}}** parcelas da cota acima descrita, conforme a tabela abaixo, totalizando **{{parcelas_mcf_total}}**:
 
 {{parcelas_mcf_lista}}
+
+O pagamento será realizado diretamente à administradora, nas datas de vencimento das respectivas parcelas. As demais parcelas do plano são de responsabilidade exclusiva do consorciado.
+
+## 4. DECLARAÇÕES DO CONSORCIADO
+
+O consorciado declara, expressamente, que:
+
+1. Compreende que **consórcio não é investimento nem financiamento**, tratando-se de sistema de autofinanciamento em grupo regido pela Lei 11.795/2008;
+2. Compreende que **não há garantia de contemplação** em prazo determinado, ocorrendo a contemplação exclusivamente por sorteio ou lance, conforme regulamento do grupo;
+3. Está ciente de que **as parcelas não cobertas pelo compromisso da MCF Capital são de sua inteira responsabilidade**, e que a inadimplência pode implicar exclusão do grupo e demais consequências previstas em contrato;
+4. **Leu e concorda** com as condições gerais do contrato de participação em grupo de consórcio da administradora, bem como com os valores, prazos e encargos aqui descritos;
+5. Recebeu todas as informações necessárias e as presta de forma livre, consciente e de boa-fé.
+
+## 5. ASSINATURA ELETRÔNICA
+
+Este termo é assinado eletronicamente. A assinatura eletrônica aqui coletada tem validade jurídica nos termos da **Medida Provisória nº 2.200-2/2001** e da **Lei nº 14.063/2020**, ficando registrados nome, documento, data, hora, endereço IP e o resumo criptográfico (hash SHA-256) do conteúdo lido pelo signatário.
 ```
 
-Cópias históricas do mesmo texto existem em migrações (só como seed, não são lidas em runtime):
-- `supabase/migrations/20260817021422_…sql:103` (versão antiga, "conforme discriminado abaixo")
-- `supabase/migrations/20260817160010_…sql:38` (texto atual)
+- **Numeração:** escrita à mão no texto (`## 1.` … `## 5.`, e a lista `1..5` da seção 4). Nada é gerado. Remover a seção 3 exige renumerar 4→3 e 5→4 no próprio texto.
+- **Tabela da cláusula:** vem do placeholder `{{parcelas_mcf_lista}}`, montado por `montarTabelaParcelasMcfConsolidada(regs)` — é markdown pronto, separado do texto da cláusula. Quantidade e total vêm de `parcelas_mcf_qtd` / `parcelas_mcf_total` (`src/lib/consorcioTermo.ts`, retorno de `montarDadosTermoMulti`, linhas ~330-333).
+- **`renderTermo` (`src/lib/consorcioTermo.ts:338-340`) — função inteira:**
 
-Único ponto que substitui os placeholders: `renderTermo` em `src/lib/consorcioTermo.ts:338-340`. Ele é chamado uma única vez por geração, em `src/components/consorcio/GerarTermoModal.tsx:109-112` (`preview`), e esse MESMO `preview` é o que vai para o banco em `GerarTermoModal.tsx:133` (`conteudoRenderizado: preview`). **Não há duplicação de template entre tela e conteúdo gravado** — a tela renderiza `preview` (`GerarTermoModal.tsx:221` → `<TermoMarkdown content={preview} />`) e o banco grava o mesmo string.
+```ts
+export function renderTermo(template: string, dados: TermoDados): string {
+  return template.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_m, key: string) => dados[key] ?? `{{${key}}}`);
+}
+```
 
-**Quem determina a quantidade e o total.**
-- 1 carta: `montarDadosTermo` (`consorcioTermo.ts:141-169`) → `parcelas_mcf_qtd = String(parcelas.length)` (linha 163) e `parcelas_mcf_total = formatCurrency(total)` (165), onde `parcelas` vem de `parcelasMcfComValoresDigitados` (88-102) → `getParcelasEmpresa` (`src/lib/consorcioParcelasEmpresa.ts`), alimentado por `prazo_meses`, `parcelas_pagas_empresa`, `tipo_contrato`, `valor_credito`, `empresa_paga_parcelas` do cadastro.
-- N cartas: `montarDadosTermoMulti` (290-336) usa `montarTabelaParcelasMcfConsolidada` (255-284), que devolve `{tabela, qtd, total}`; `qtd = itens.length`, `total = soma`.
-- Quando não há parcela da MCF, `qtd` é `0`, `total` é `R$ 0,00` e a tabela vira o texto `'Nenhuma parcela sob responsabilidade da MCF Capital.'` (`consorcioTermo.ts:119` no caminho single, `:275` no consolidado). Ou seja: a frase da cláusula continua impressa com 0 e R$ 0,00; só o corpo da tabela troca de forma.
+  Só substituição. **Não existe bloco condicional, loop, if, nem seção opcional.**
+- Placeholder no modelo sem chave em `dados`: o texto literal `{{chave}}` fica impresso no documento. Chave em `dados` que não existe no modelo: simplesmente ignorada (nenhum erro).
+- **Snapshot:** confirmado — nenhum caminho re-renderiza termo existente. `renderTermo`/`sha256Hex` só são chamados na criação (`useCreateTermo`) e no preview do editor de modelo; a página pública e a edge function `termo-assinatura` leem `conteudo_renderizado` e `dados_snapshot` do banco (`supabase/functions/termo-assinatura/index.ts:50, 79`). Mudar o modelo **não afeta** termos antigos.
+- Termos **assinados** com `parcelas_mcf_qtd = '0'`: **0** (contagem via SELECT).
 
-**A tabela é do mesmo trecho?** Não é do mesmo trecho da frase: a frase está no modelo (banco) e a tabela vem do placeholder `{{parcelas_mcf_lista}}`, montada por `montarTabelaParcelasMcf` (`consorcioTermo.ts:114-128`) ou `montarTabelaParcelasMcfConsolidada` (`:255-284`).
+## B) Sessão expirando
 
-**Snapshot — prova no código.**
-- Gravação única no insert: `src/hooks/useConsorcioTermos.ts:183-201` — `hash = await sha256Hex(input.conteudoRenderizado)` (183), `dados_snapshot` (194), `conteudo_renderizado` (195), `conteudo_hash` (196).
-- Não existe nenhum `update` de `conteudo_renderizado`/`conteudo_hash`/`dados_snapshot` em lugar nenhum: os únicos `.update()` sobre `consorcio_termos` são `useCancelTermo` (`useConsorcioTermos.ts:223-232`: status/cancelado_*) e, na edge function, status/assinatura/visualização (`supabase/functions/termo-assinatura/index.ts:109`, `116-119`, `172-185`). Nenhum recalcula hash.
-- Leitura sempre serve o gravado: `TermoPanelDialog.tsx:49` (`conteudo: t.conteudo_renderizado`), edge function `index.ts:79` (`conteudo: t.conteudo_renderizado`) e página pública `src/pages/public/TermoAssinatura.tsx:129` (`<TermoMarkdown content={termo.conteudo} />`).
-- Conclusão: **mudar o modelo não afeta termos já emitidos.** Só documentos novos (mesma nota já registrada em `consorcioTermo.ts:110-113`).
+- **Configuração de expiração do projeto Supabase (access token TTL, refresh rotativo):** não determinei. Não é legível por SQL nem está em `supabase/config.toml` (o arquivo só tem `project_id` e blocos `[functions.*]`; não há bloco `[auth]`).
+- **Cliente (`src/integrations/supabase/client.ts:19-25`):**
 
-**Termos com 0 parcelas / R$ 0,00:** zero. Contagem em `consorcio_termos` (tipo adesão): 25 assinados, 2 pendentes, 1 cancelado; `dados_snapshot->>'parcelas_mcf_qtd' = '0'` → 0 linhas; `conteudo_renderizado like '%pagamento de **0**%'` ou `'%totalizando **R$ 0,00**%'` → 0 linhas; `'Nenhuma parcela sob responsabilidade%'` → 0 linhas.
+```ts
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storage: brokeredPreviewStorage(),
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
+```
 
-## 2) Termo — endereço e dia de vencimento
+  `brokeredPreviewStorage()` (`src/integrations/supabase/previewAuthStorage.ts`) devolve `localStorage` fora de preview; dentro de preview enquadrado, faz broker por postMessage com o editor.
+- **Ocorrências de `signOut` (projeto inteiro):**
+  - `src/contexts/AuthContext.tsx:41` — tipo do contexto.
+  - `src/contexts/AuthContext.tsx:90` — `checkUserBlockedInBackground`: desloga se `profiles.access_status` = bloqueado/desativado ou `blocked_until` futuro. **Roda a cada `handleSession`** (login, INITIAL_SESSION, restauração de aba).
+  - `src/contexts/AuthContext.tsx:279` — dentro do `signIn`, mesma checagem de bloqueio.
+  - `src/contexts/AuthContext.tsx:349-366` — `signOut` do contexto (botão sair).
+  - `src/contexts/AuthContext.tsx:373` — `handleInactivityLogout` chama `void signOut()`.
+  - `src/pages/ResetPassword.tsx:100` — após trocar a senha.
+  - `src/components/layout/AppSidebar.tsx:866` — item de menu "Sair".
+  - `src/lib/supabase-utils.ts:12` — `resetSupabaseSession()`, que também apaga todas as chaves `sb-*` do localStorage. Chamado em `src/components/auth/ConnectivityCheck.tsx:84` e `src/components/auth/ProtectedRoute.tsx:40` — **ambos só por clique do usuário** ("Limpar sessão e reiniciar", exibido após 8 s de loading).
+  - Nenhum `onError`/interceptor de query chama `signOut`.
+- **Timer de inatividade: existe.** `src/hooks/useInactivityLogout.ts`, ativado em `AuthContext.tsx:376-381` com `timeoutMs = 3h` e aviso 5 min antes. O timer reinicia com mouse/teclado/scroll/click e sincroniza entre abas via `localStorage['mcf:lastActivity']`. **Não explica logout em menos de uma hora.**
+- Suspeitos compatíveis com o sintoma, sem confirmação: (a) `handleSession` com `newSession = null` quando `getSession()` estoura o timeout de 5 s (`AUTH_TIMEOUT_MS`, linha 27) — mas isso zera só o estado React, não a sessão no storage; (b) storage brokerado do preview perdendo a sessão entre superfícies. Qual dos dois ocorreu no seu teste: **não determinei** — precisaria dos logs `[Auth] onAuthStateChange: …` do console na hora da queda.
 
-**Endereço.** Placeholder `{{cliente_endereco}}` (modelo, seção 1), preenchido em `consorcioTermo.ts:152` (single) e `:310` (multi):
-`(isPj ? reg.endereco_comercial : reg.endereco_completo) || reg.endereco_completo || '—'`.
-Vazio ⇒ imprime literalmente `—`. Hoje, nos termos existentes, `dados_snapshot->>'cliente_endereco' = '—'` → **0 linhas** (nenhum termo emitido saiu sem endereço).
+## C) Conferências
 
-**Dia de vencimento.** Modelo imprime `**Dia de vencimento:** dia {{dia_vencimento}}` — daí sair "dia A definir". Origem do valor: `consorcioTermo.ts:162` `Number(reg.dia_vencimento) ? String(reg.dia_vencimento) : 'A definir'`; no multi, `:323-325` com `unicoOuVerTabela`. A tabela de parcelas também usa `'A definir'` (`:120` e `:269`). Campo real: `consortium_cards.dia_vencimento` / `consorcio_pending_registrations.dia_vencimento`, nulo permitido — quem define é a Embracon depois da abertura; a confirmação da contratação (`ConfirmarContratacaoModal`) exige o dia 1–31. Termos com `dia_vencimento = 'A definir'` no snapshot: **7** (5 assinados, 1 pendente, 1 cancelado).
+- **`src/lib/duplicateContactError.ts` (arquivo inteiro):** já está em contexto — `describeDuplicatePhoneError(error)` extrai `duplicate_contact:phone:<sufixo>:<uuid>` por regex, **faz um SELECT em `crm_contacts` e devolve frase pronta com nome e telefone do dono** ("Este telefone já está cadastrado em outro lead: X (tel)."), ou a frase genérica se o SELECT falhar; devolve `null` quando o erro não é esse. Só cobre **phone** — o trigger também emite `duplicate_contact:email:…`, que hoje o parser ignora.
+- **`ContactFormDialog`:** `handleSubmit` está dentro de `<form onSubmit={handleSubmit}>` (linha 56) e chama `await createContact.mutateAsync(...)` sem `try/catch` (linhas 36-43). A rejeição vira **unhandled promise rejection** no handler do form — não é capturada por nenhum ErrorBoundary (boundary de React não pega erro assíncrono), então o que se perde é o resto do handler: `setFormData` e `onOpenChange(false)` não rodam, o modal fica aberto. O `onError` da mutation (`src/hooks/useCRMData.ts:339-341`) **dispara um toast** `Erro ao criar contato: <message>` — se você não viu nada, o toast provavelmente apareceu e sumiu, ou ficou fora de vista; **não determinei** por que não foi percebido.
+- **Espaço para alerta fixo:** sim. O `DialogContent` é `sm:max-w-md` com `<form className="space-y-4">`; cabe um bloco de alerta entre o `DialogHeader` e o primeiro campo, sem mexer em layout.
+- O diálogo é usado em **um único lugar**: `src/pages/crm/Contatos.tsx:553`. A mutation `useCreateCRMContact` — verificar outros consumidores ficou fora deste levantamento; se quiser, listo na próxima rodada.
 
-**Validação antes de gerar.** Existe e é bloqueante:
-- `validarDadosTermoMulti` (`consorcioTermo.ts:193-209`) exige nome, documento, e por carta: `valor_credito`, `prazo_meses`, `parcela_1a_12a`, `parcela_demais`. **Endereço e dia de vencimento NÃO são exigidos.**
-- `divergenciasIdentidade` (`:182-190`) bloqueia CPF/nome divergentes entre cadastros.
-- UI: alerta destrutivo "Dados obrigatórios faltando" com `rotuloFaltando` em `GerarTermoModal.tsx:204-219`, botão "Completar cadastro" (`:233-237`) e `bloqueado` em `:114`. Esse é o padrão a seguir para novos avisos (aviso amarelo/não bloqueante seria variante nova).
-
-## 3) Criar contato — 409 silencioso
-
-- Componente: `src/components/crm/ContactFormDialog.tsx` — submit em `:31-47`, `await createContact.mutateAsync({...})` em `:36-43`, sem `try/catch`.
-- Mutation: `useCreateCRMContact` em `src/hooks/useCRMData.ts:322-344`; insert em `:327-331`, `if (error) throw error` (`:333`).
-- Tratamento hoje: **existe** `onError` em `useCRMData.ts:340-342` → `toast.error(\`Erro ao criar contato: ${error.message}\`)`, e o `Sonner` está montado (`src/App.tsx:179`). O que o código explica com certeza é que o modal **não fecha** e o formulário não é limpo (linhas 45-46 nunca executam, porque `mutateAsync` rejeita e a rejeição fica sem tratamento no `handleSubmit`). Já a ausência total de toast **não determinei** pelo código — o `onError` deveria disparar; se na prática nada aparece, falta reproduzir com console aberto.
-- Mensagem do trigger (`pg_proc.prosrc` de `prevent_duplicate_crm_contact`), literal:
-  - `RAISE EXCEPTION 'duplicate_contact:email:%:%', v_email_norm, v_existing_id USING ERRCODE = 'unique_violation';`
-  - `RAISE EXCEPTION 'duplicate_contact:phone:%:%', v_phone9, v_existing_id USING ERRCODE = 'unique_violation';`
-  - Chave de telefone: `right(regexp_replace(phone,'\D','','g'), 9)`, só quando tem 9 dígitos; só contatos ativos (`is_archived=false` e `merged_into_contact_id IS NULL`).
-  - No cliente: `error.code = '23505'` (unique_violation, HTTP 409) e `error.message` contendo `duplicate_contact:phone:<9dígitos>:<uuid>`. Já existe parser pronto para isso em `src/lib/duplicateContactError.ts:11` (regex `duplicate_contact:phone:([0-9]+):([0-9a-f-]{36})`) — hoje não usado por este formulário.
-- Reuso: `ContactFormDialog` é usado só em `src/pages/crm/Contatos.tsx:553`. A mutation `useCreateCRMContact` também é usada em `src/components/crm/SdrSummaryBlock.tsx:20`.
-
-## 4) Cache funil × externa
-
-- A key `['consorcio-cotas-origem-funil']` aparece **uma única vez em todo o projeto**: `src/hooks/useConsorcioCotasOrigem.ts:15`. `rg -n "consorcio-cotas-origem" src` retorna só essa linha — **nunca** é invalidada nem tem `setQueryData`. Confirmado.
-- Config do hook: `staleTime: 5 * 60 * 1000` (`:16`); **`gcTime` não é definido** (fica no default do React Query, 5 min).
-- `useOpenCota` (`src/hooks/useConsorcioPendingRegistrations.ts:1012`), invalidações no `onSuccess` (`:1287-1292`), nesta ordem:
-  1. `['consorcio-pending-registrations']`
-  2. `['consortium-cards']`
-  3. `['consortium-summary']`
-  4. `['consorcio-proposals']`
-- Consumidores da classificação: `FunilConsorcioTimeline.tsx`, `CotasTab.tsx`, `CotasReservadasTab.tsx`, `ConfirmarContratacaoModal.tsx`.
-- Outros pontos que mudam o vínculo `consortium_card_id` (logo, a origem) e que também ficam servindo cache velho:
-  - `useVincularCarta` — `src/hooks/useConsorcioPostMeeting.ts:918-921` (grava `consorcio_proposals.consortium_card_id`); invalida só `['consorcio-proposals']` (`:936`).
-  - `useOpenCota` — `useConsorcioPendingRegistrations.ts:1278` (grava `consorcio_pending_registrations.consortium_card_id`).
-  - `useDeleteConsorcioCard` — `src/hooks/useConsorcio.ts:624-680` (deleta o card; vínculo cai por `ON DELETE SET NULL`); invalida `['consortium-cards']`, `['consortium-summary']`, `['consorcio-proposals']`.
-  - `useCreateConsorcioCard` — `src/hooks/useConsorcio.ts:336` (cota avulsa, nasce "externa").
-  - Reversões — `src/hooks/useConsorcioReversaoEtapa.ts:80-91` (`invalidarFunil`) invalida 7 keys: `consorcio-cotas-cadastradas`, `consortium-cards`, `consorcio-cotas-reservadas`, `consorcio-reservas-aguardando`, `consorcio-pending-registrations`, `consorcio-reversao-status`, `consorcio-funil-r1` — **nenhuma delas é a de origem**.
-  - Fora do funil — `src/hooks/useConsorcioForaFunil.ts:54` e `:70` invalidam só `['consorcio-cotas-contratadas']`.
-
-Nenhum arquivo foi alterado, nenhuma migração rodada, nenhum dado tocado.
+Nada foi editado, nenhuma migração rodada, nenhum dado alterado.
