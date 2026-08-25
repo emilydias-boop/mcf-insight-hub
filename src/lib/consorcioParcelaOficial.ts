@@ -157,15 +157,28 @@ export async function resolverParcelaOficial(
   const taxaAntecipadaTipo = taxaAntecipadaTipoDeProduto(p.tipoProduto);
 
 
-  const { data: produtoRow } = await supabase
+  // Sem `limit(1)`: traz todos os elegíveis por (ativo + taxa antecipada + faixa)
+  // e deixa o afunilamento por objetivo e o desempate por especificidade para
+  // `produtosElegiveisParaCarta` — determinístico, e o mesmo critério da tela.
+  const { data: produtoRows } = await supabase
     .from('consorcio_produtos')
-    .select('*')
+    .select('*, consorcio_objetivo_options(name)')
     .eq('ativo', true)
     .eq('taxa_antecipada_tipo', taxaAntecipadaTipo)
     .lte('faixa_credito_min', valorCredito)
-    .gte('faixa_credito_max', valorCredito)
-    .limit(1)
-    .maybeSingle();
+    .gte('faixa_credito_max', valorCredito);
+
+  const candidatos = (produtoRows || []).map((row: any) => ({
+    ...row,
+    objetivo_nome: row.consorcio_objetivo_options?.name ?? null,
+  }));
+
+  const produtoRow = produtosElegiveisParaCarta(
+    candidatos,
+    valorCredito,
+    p.tipoProduto,
+    p.objetivo,
+  )[0];
 
   if (!produtoRow) return undefined;
 
