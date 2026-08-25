@@ -10071,6 +10071,8 @@ export type Database = {
           calendar_event_id: string | null
           closer_id: string | null
           created_at: string
+          download_expires_at: string | null
+          download_link: string | null
           duration_minutes: number | null
           ended_at: string | null
           highlights: Json | null
@@ -10102,6 +10104,8 @@ export type Database = {
           calendar_event_id?: string | null
           closer_id?: string | null
           created_at?: string
+          download_expires_at?: string | null
+          download_link?: string | null
           duration_minutes?: number | null
           ended_at?: string | null
           highlights?: Json | null
@@ -10133,6 +10137,8 @@ export type Database = {
           calendar_event_id?: string | null
           closer_id?: string | null
           created_at?: string
+          download_expires_at?: string | null
+          download_link?: string | null
           duration_minutes?: number | null
           ended_at?: string | null
           highlights?: Json | null
