@@ -4,7 +4,12 @@ export interface QualificationQuestion {
   key: string;
   label: string;
   placeholder?: string;
+  /** Ausente = 'text' (resposta livre com mínimo de caracteres). */
+  type?: 'text' | 'choice';
+  /** Opções da resposta quando type === 'choice'. */
+  options?: string[];
 }
+
 
 export const QUALIFICATION_QUESTIONS: QualificationQuestion[] = [
   {
