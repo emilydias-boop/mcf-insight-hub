@@ -236,6 +236,7 @@ export function validarDadosTermoMulti(regs: TermoSourceRegistration[]): TermoFa
   const primeiro = regs[0];
   if (!termoNomeCliente(primeiro)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente', carta: 0, totalCartas: total });
   if (!termoDocumentoCliente(primeiro)) faltando.push({ campo: 'documento', label: 'CPF / CNPJ do cliente', carta: 0, totalCartas: total });
+  if (!termoEnderecoCliente(primeiro)) faltando.push({ campo: 'endereco', label: 'Endereço', carta: 0, totalCartas: total });
   regs.forEach((reg, i) => {
     const carta = i + 1;
     const push = (campo: string, label: string) => faltando.push({ campo: `${campo}_${carta}`, label, carta, totalCartas: total });
