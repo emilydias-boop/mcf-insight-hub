@@ -46,7 +46,10 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
       
       {/* Linha 3: Chips de contexto (Canal, Origem, Produto, Compras A010) */}
       <div className="flex flex-wrap gap-2">
+        <LeadSegmentBadge segment={deal?.icp_segment} />
+
         {/* Badge de Canal de Venda (A010 vs LIVE) - baseado em compra real */}
+
         <Badge 
           variant="outline" 
           className={`text-xs ${
