@@ -127,6 +127,34 @@ export function montarTabelaParcelasMcf(
   return linhas.join('\n');
 }
 
+/** Texto do dia de vencimento — nunca imprime "dia A definir". */
+export function textoDiaVencimento(dias: (number | null | undefined)[]): string {
+  const validos = [...new Set(
+    dias.map(d => Number(d)).filter(d => Number.isInteger(d) && d >= 1 && d <= 31),
+  )];
+  if (validos.length === 1) return `dia ${validos[0]}`;
+  if (validos.length > 1) return 'conforme a tabela de cada cota';
+  return 'a ser definido pela administradora após a abertura da cota';
+}
+
+/**
+ * Corpo da seção 3 do termo. Com parcelas da MCF, reproduz o texto histórico
+ * (cláusula + tabela + parágrafo final). Sem parcelas, diz isso com clareza —
+ * nunca "0 parcelas" nem "R$ 0,00".
+ */
+export function montarClausulaMcf(qtd: number, total: number, tabela: string): string {
+  if (!qtd) {
+    return 'Nesta contratação **não há parcelas sob responsabilidade da MCF Capital**. Todas as parcelas do plano são de responsabilidade exclusiva do consorciado.';
+  }
+  return [
+    `A **MCF Capital** assume, de forma irrevogável, o compromisso de efetuar o pagamento de **${qtd}** parcelas da cota acima descrita, conforme a tabela abaixo, totalizando **${formatCurrency(total)}**:`,
+    '',
+    tabela,
+    '',
+    'O pagamento será realizado diretamente à administradora, nas datas de vencimento das respectivas parcelas. As demais parcelas do plano são de responsabilidade exclusiva do consorciado.',
+  ].join('\n');
+}
+
 export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[] {
   const faltando: TermoFaltando[] = [];
   if (!termoNomeCliente(reg)) faltando.push({ campo: 'nome', label: 'Nome / razão social do cliente' });
@@ -136,6 +164,14 @@ export function validarDadosTermo(reg: TermoSourceRegistration): TermoFaltando[]
   if (!Number(reg.parcela_1a_12a)) faltando.push({ campo: 'parcela_1a_12a', label: 'Valor da parcela (1ª à 12ª)' });
   if (!Number(reg.parcela_demais)) faltando.push({ campo: 'parcela_demais', label: 'Valor das demais parcelas' });
   return faltando;
+}
+
+/** Endereço do cadastro (comercial para PJ), já sem espaços em branco. */
+export function termoEnderecoCliente(reg: TermoSourceRegistration): string {
+  const bruto = reg.tipo_pessoa === 'pj'
+    ? (reg.endereco_comercial || reg.endereco_completo)
+    : (reg.endereco_completo || reg.endereco_comercial);
+  return (bruto || '').trim();
 }
 
 export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Date()): TermoDados {
@@ -160,13 +196,16 @@ export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Dat
     parcela_demais: formatCurrency(Number(reg.parcela_demais || 0)),
     // O dia é definido pela Embracon depois da abertura da cota.
     dia_vencimento: Number(reg.dia_vencimento) ? String(reg.dia_vencimento) : 'A definir',
+    dia_vencimento_texto: textoDiaVencimento([reg.dia_vencimento]),
     parcelas_mcf_qtd: String(parcelas.length),
     parcelas_mcf_lista: lista,
     parcelas_mcf_total: formatCurrency(total),
+    clausula_mcf: montarClausulaMcf(parcelas.length, total, lista),
     tipo_contrato: TIPO_CONTRATO_LABELS[String(reg.tipo_contrato)] || 'Normal',
     data_emissao: emissao.toLocaleDateString('pt-BR'),
   };
 }
+
 
 // ── Termo por VENDA (1 termo cobrindo N cartas) ───────────────────────────
 // Regra do dono: o termo é da proposta, não do cadastro. Onde as cartas
