@@ -338,7 +338,8 @@ export const useCreateCRMContact = () => {
       toast.success('Contato criado com sucesso');
     },
     onError: (error: any) => {
-      toast.error(`Erro ao criar contato: ${error.message}`);
+      const humana = mensagemDuplicateContact(String(error?.message || ''));
+      toast.error(humana || `Erro ao criar contato: ${error.message}`);
     },
   });
 };
