@@ -3,6 +3,7 @@ import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfM
 import { ptBR } from 'date-fns/locale';
 import { getWeekStartsOn } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { Badge } from '@/components/ui/badge';
 import { UserPlus, Lock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
