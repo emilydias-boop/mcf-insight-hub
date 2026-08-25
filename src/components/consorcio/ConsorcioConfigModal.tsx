@@ -42,6 +42,7 @@ import {
 } from '@/hooks/useConsorcioProdutos';
 import { ConsorcioProduto, ComissaoScheduleItem, ComissaoBase, COMISSAO_BASE_OPTIONS } from '@/types/consorcioProdutos';
 import { PlanosTab } from '@/components/consorcio/PlanosTab';
+import { prazosForaDaTabela } from '@/hooks/useConsorcioPlanosCarta';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
@@ -467,7 +468,15 @@ function ProdutosTab() {
                 Objetivo: <strong>{objetivoLabel(p.objetivo_option_id)}</strong> ·
                 Faixa: R$ {p.faixa_credito_min.toLocaleString('pt-BR')} – R$ {p.faixa_credito_max.toLocaleString('pt-BR')} ·
                 Taxa antecipada: {p.taxa_antecipada_percentual}% ({p.taxa_antecipada_tipo === 'dividida_12' ? 'dividida em 12' : '1ª parcela'}) ·
-                Prazo máx: {p.prazo_maximo_venda ?? '—'}
+                Prazo máx: {p.prazo_maximo_venda ?? '—'} ·
+                Prazos: {(p.prazos_disponiveis || []).join(', ') || '—'}
+              </div>
+              {prazosForaDaTabela(p.prazos_disponiveis) && (
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Prazos fora da tabela oficial: a parcela será calculada, não tabelada.
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground">
               </div>
               <div className="text-[11px] text-muted-foreground/80 mt-0.5">
                 {p.created_by
@@ -726,7 +735,7 @@ function ProdutoForm({
 
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-        <Button size="sm" onClick={submit} disabled={isPending}>
+        <Button size="sm" onClick={submit} disabled={isPending || !podeSalvar}>
           {initial ? 'Salvar alterações' : 'Criar produto'}
         </Button>
       </div>
