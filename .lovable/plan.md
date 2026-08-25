@@ -1,106 +1,162 @@
-# Levantamento — modelo do termo, sessão e conferências
+# Retrato fiel do funil de Consórcio — Etapas 1, 2 e 3
 
-## A) Modelo ativo `d51977ff-0c3e-4b16-a0a7-16b9392371f6` — campo `conteudo` cru
+Levantamento de leitura de código (nada foi alterado). Rótulos entre "aspas" são copiados da tela. Onde não foi possível confirmar, está escrito "não determinei".
 
-```markdown
-# TERMO DE ADESÃO E COMPROMISSO — CONSÓRCIO
+---
 
-Emitido em {{data_emissao}}
+## ETAPA 1 — R1 Agendada (na tela: "Reuniões Agendadas")
 
-## 1. IDENTIFICAÇÃO DO CONSORCIADO
+### 1. Onde fica
+- Menu: **"Venda Consórcio"** (CRM Consórcio).
+- Rota: `/consorcio/crm/venda-consorcio` (alias antigo `/consorcio/crm/pos-reuniao`).
+- Aba: primeira aba da tela (aba padrão ao abrir), lista com o título **"Reuniões Agendadas (N)"**.
+- A lista é partida em duas seções: **"Pendentes — reunião passou sem desfecho (N)"** (aberta) e **"Tratadas — realizada, no-show ou remarcada (N)"** (recolhida).
 
-**Nome / Razão Social:** {{cliente_nome}}
-**CPF / CNPJ:** {{cliente_documento}}
-**Telefone:** {{cliente_telefone}}
-**E-mail:** {{cliente_email}}
-**Endereço:** {{cliente_endereco}}
+### 2. Quem vê
+- A rota exige permissão no recurso `crm`; admin sempre passa. `sdr`, `closer` e `closer_sombra` são liberados explicitamente nesta aba (é onde eles dão o desfecho da reunião).
+- **Cada pessoa vê tudo**: a consulta traz todas as reuniões da BU Consórcio no período. Não há filtro por closer/SDR da sessão. Não determinei se existe RLS no banco restringindo além disso.
 
-## 2. OBJETO DA CONTRATAÇÃO
+### 3. O que a lista mostra
+| Rótulo na tela | De onde vem |
+|---|---|
+| "Lead" | nome do participante da reunião; se vazio, nome do contato; se vazio, nome do negócio |
+| "Telefone" | telefone do participante ou do contato (com botão de ligar) |
+| "Data / Hora" | horário do slot da agenda, formato `dd/MM/aaaa às HH:mm` |
+| "Closer" | closer dono do slot |
+| "Status" | status do participante, abreviado: `Ag`, `OK`, `NS`, `RE`; badge extra "sem desfecho" |
+| "Motivo" | motivo do desfecho (tooltip mostra a observação) |
+| "Nota do Closer" | nota do closer / notas do participante |
+| "Ações" | botões (só nesta aba) |
+- Ao lado do nome, nas pendentes, aparece o selo **"N dias parado"** (calculado na hora a partir da data da reunião — não é campo salvo). Âmbar de 2 a 5 dias, vermelho a partir de 6.
+- Clicar na linha abre o detalhe do negócio (só se houver negócio vinculado).
 
-O consorciado acima identificado declara ter contratado, junto à administradora **{{administradora}}**, cota de consórcio com as seguintes características:
+### 4. Botões e ações
+- **"Realizada"** — marca o participante como realizado, sincroniza o slot e move o negócio no CRM para "Reunião 01 Realizada". **Sem confirmação.** O tooltip avisa: *"Marcar como Realizada muda o estágio do negócio no CRM e transfere a titularidade do negócio para o closer."* Fica desabilitado se já está realizada. Qualquer papel com acesso à aba pode clicar.
+- **"No-Show"** (vira **"No-Show ✓"** quando já marcado) — abre a lista de motivos com o título **"Motivo do No-Show (obrigatório)"**. Para papel **SDR**, escolher o motivo **não grava ainda**: abre o diálogo de evidência/IA, e só depois de confirmar ali é que grava. Para os demais papéis grava direto. Grava status, motivo, observação, quem marcou e quando; move o negócio para o estágio de No-Show.
+- **"Voltar p/ Agendada"** — só aparece quando o status não é "agendada". Devolve o participante para agendada.
+- Clique na linha: abre o detalhe do negócio (leitura).
 
-**Produto:** {{produto}}
-**Objetivo do crédito:** {{objetivo}}
-**Valor do crédito contratado:** {{valor_credito}}
-**Prazo:** {{prazo}} meses
-**Condição de pagamento:** {{condicao_pagamento}}
-**Valor da parcela (1ª à 12ª):** {{parcela_1a_12a}}
-**Valor das demais parcelas:** {{parcela_demais}}
-**Dia de vencimento:** dia {{dia_vencimento}}
-**Tipo de contrato:** {{tipo_contrato}}
+### 5. Obrigatório vs opcional
+- Motivo do No-Show: **obrigatório** (é a própria escolha na lista).
+- Observação livre: **obrigatória apenas no motivo "Outro"**, mínimo 3 caracteres (botão "Confirmar" fica inativo antes disso). Nos outros motivos é opcional.
+- Diálogo de evidência (só SDR): não determinei a lista completa de campos obrigatórios.
 
-## 3. COMPROMISSO DA MCF CAPITAL
+### 6. Como se sai para a etapa 2
+Clicar em **"Realizada"**. No banco: status do participante = `completed`; status do slot = `completed` (quando aplicável); estágio do negócio passa a "Reunião 01 Realizada"; **o dono do negócio passa a ser o closer**. Há proteção anti-regressão: o negócio nunca volta para trás no funil.
 
-A **MCF Capital** assume, de forma irrevogável, o compromisso de efetuar o pagamento de **{{parcelas_mcf_qtd}}** parcelas da cota acima descrita, conforme a tabela abaixo, totalizando **{{parcelas_mcf_total}}**:
+### 7. O que trava
+- Mês fechado: **"Mês fechado: as reuniões deste mês estão travadas para alteração de status. Peça a reabertura em Administração → Travas de Mês."**
+- Erro genérico: **"Erro ao atualizar status: …"**. Sucesso: **"Status atualizado"**.
+- No-Show sem motivo: a interface não permite aplicar.
 
-{{parcelas_mcf_lista}}
+### 8. Armadilhas
+- "Realizada" **troca o dono do negócio** — parece só uma marcação de status.
+- **"Voltar p/ Agendada" não desfaz tudo**: o status do participante volta, mas o estágio do negócio e a titularidade já transferida **não são revertidos**.
+- A fila **não é "minha fila"** — é de toda a BU.
+- Ordenar por coluna **não reordena a seção "Pendentes"** (ela é sempre ordenada do mais parado para o mais recente): parece que o clique não fez nada.
+- SDR que escolhe o motivo do No-Show e fecha a tela **não gravou nada** — falta confirmar a evidência.
 
-O pagamento será realizado diretamente à administradora, nas datas de vencimento das respectivas parcelas. As demais parcelas do plano são de responsabilidade exclusiva do consorciado.
+---
 
-## 4. DECLARAÇÕES DO CONSORCIADO
+## ETAPA 2 — R1 Realizada (na tela: "Reuniões Realizadas")
 
-O consorciado declara, expressamente, que:
+### 1. Onde fica
+Mesma tela e rota da etapa 1, aba seguinte, card **"Reuniões Realizadas (N)"**. Duas seções: **"Pendentes — sem desfecho comercial (N)"** e **"Tratadas — venda lançada ou sem sucesso (N)"**. Vazio das pendentes: *"Toda reunião realizada do período já teve desfecho comercial."*
 
-1. Compreende que **consórcio não é investimento nem financiamento**, tratando-se de sistema de autofinanciamento em grupo regido pela Lei 11.795/2008;
-2. Compreende que **não há garantia de contemplação** em prazo determinado, ocorrendo a contemplação exclusivamente por sorteio ou lance, conforme regulamento do grupo;
-3. Está ciente de que **as parcelas não cobertas pelo compromisso da MCF Capital são de sua inteira responsabilidade**, e que a inadimplência pode implicar exclusão do grupo e demais consequências previstas em contrato;
-4. **Leu e concorda** com as condições gerais do contrato de participação em grupo de consórcio da administradora, bem como com os valores, prazos e encargos aqui descritos;
-5. Recebeu todas as informações necessárias e as presta de forma livre, consciente e de boa-fé.
+O **lançamento da venda** vive aqui (modal). O **aceite da proposta** e a **edição da proposta** **não vivem aqui** — vivem na aba "Propostas" (etapa 3).
 
-## 5. ASSINATURA ELETRÔNICA
+### 2. Quem vê
+Mesmo guard da etapa 1 (recurso `crm`). Também **sem filtro por dono**: todos veem todas as reuniões realizadas do período. Os dois botões de desfecho aparecem para qualquer papel com acesso à aba.
 
-Este termo é assinado eletronicamente. A assinatura eletrônica aqui coletada tem validade jurídica nos termos da **Medida Provisória nº 2.200-2/2001** e da **Lei nº 14.063/2020**, ficando registrados nome, documento, data, hora, endereço IP e o resumo criptográfico (hash SHA-256) do conteúdo lido pelo signatário.
-```
+### 3. O que a lista mostra
+Mesmas colunas da etapa 1 ("Lead", "Telefone", "Data / Hora", "Closer", "Status", "Motivo", "Nota do Closer", "Ações"). O selo de dias parados aqui tem o texto: *"Dias desde a reunião realizada sem desfecho comercial (nem venda lançada, nem 'sem sucesso'). Âmbar de 2 a 5 dias, vermelho a partir de 6."*
 
-- **Numeração:** escrita à mão no texto (`## 1.` … `## 5.`, e a lista `1..5` da seção 4). Nada é gerado. Remover a seção 3 exige renumerar 4→3 e 5→4 no próprio texto.
-- **Tabela da cláusula:** vem do placeholder `{{parcelas_mcf_lista}}`, montado por `montarTabelaParcelasMcfConsolidada(regs)` — é markdown pronto, separado do texto da cláusula. Quantidade e total vêm de `parcelas_mcf_qtd` / `parcelas_mcf_total` (`src/lib/consorcioTermo.ts`, retorno de `montarDadosTermoMulti`, linhas ~330-333).
-- **`renderTermo` (`src/lib/consorcioTermo.ts:338-340`) — função inteira:**
+Uma reunião é "pendente" nesta etapa enquanto o negócio não tiver proposta lançada nem estiver marcado como sem sucesso.
 
-```ts
-export function renderTermo(template: string, dados: TermoDados): string {
-  return template.replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (_m, key: string) => dados[key] ?? `{{${key}}}`);
-}
-```
+### 4. Botões e ações
+- **"Lançar Venda"** — abre o formulário da venda. Fica **desabilitado quando o negócio já tem carta/proposta**. Se a reunião não tiver negócio vinculado, aparece o texto "sem negócio vinculado" em vez do botão.
+- **"Sem Sucesso"** (botão vermelho) — abre o modal de motivo; confirmação pelo botão **"Confirmar Sem Sucesso"**, inativo sem motivo. Grava o estágio de "Sem Sucesso" no negócio e, se houver proposta ligada, marca a proposta como `recusada`. **Não determinei botão de reverter** o "sem sucesso" nesta tela.
+- Dentro do formulário de venda: botão final **"Lançar Venda"** (mostra "Lançando..." enquanto grava) e **"Cancelar"**. Nenhum dos dois pede confirmação; "Cancelar" descarta tudo o que foi digitado sem avisar.
 
-  Só substituição. **Não existe bloco condicional, loop, if, nem seção opcional.**
-- Placeholder no modelo sem chave em `dados`: o texto literal `{{chave}}` fica impresso no documento. Chave em `dados` que não existe no modelo: simplesmente ignorada (nenhum erro).
-- **Snapshot:** confirmado — nenhum caminho re-renderiza termo existente. `renderTermo`/`sha256Hex` só são chamados na criação (`useCreateTermo`) e no preview do editor de modelo; a página pública e a edge function `termo-assinatura` leem `conteudo_renderizado` e `dados_snapshot` do banco (`supabase/functions/termo-assinatura/index.ts:50, 79`). Mudar o modelo **não afeta** termos antigos.
-- Termos **assinados** com `parcelas_mcf_qtd = '0'`: **0** (contagem via SELECT).
+### 5. Obrigatório vs opcional (formulário "Lançar Venda")
+- **Bloco "1. Dados da venda" — obrigatório**: ao menos uma carta válida (crédito, prazo e tipo de produto). Detalhes da proposta e origem do lead não têm validação — na prática, opcionais. Não determinei a lista completa de campos que tornam uma carta "válida".
+- **Bloco "2. Dados cadastrais do cliente (opcional)"** — recolhido, com o texto: *"A venda entra em Termos de Adesão Pendentes. Depois do termo assinado ela vai para Cotas a Fazer, e o que ficar em branco aqui aparece lá como pendência de cadastro, com selo de dias parados."* Preenchido, mesmo parcialmente, já cria o cadastro pendente (um por carta).
 
-## B) Sessão expirando
+### 6. Como se sai para a etapa 3
+Lançar a venda. No banco: insere a proposta e uma linha por carta; se o bloco 2 foi preenchido, cria também os cadastros pendentes. A partir daí a reunião sai das "Pendentes" desta etapa e a venda aparece na aba "Propostas" (etapa 3). "Sem Sucesso" também tira da fila, mas é desfecho terminal — não avança.
 
-- **Configuração de expiração do projeto Supabase (access token TTL, refresh rotativo):** não determinei. Não é legível por SQL nem está em `supabase/config.toml` (o arquivo só tem `project_id` e blocos `[functions.*]`; não há bloco `[auth]`).
-- **Cliente (`src/integrations/supabase/client.ts:19-25`):**
+### 7. O que trava
+- **"Informe ao menos uma carta com crédito, prazo e produto."**
+- **"Todas as cartas precisam de prazo e tipo de produto."**
+- Falha parcial: **"A venda pode ter sido criada, mas o cadastro da cota FALHOU: … Confira a venda em Termos de Adesão Pendentes e use 'Inserir Dados' para concluir o cadastro."**
+- "Sem Sucesso": botão inativo sem motivo, sem mensagem.
 
-```ts
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    storage: brokeredPreviewStorage(),
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
-```
+### 8. Armadilhas
+- **Bug provável (leitura estática, não testado em execução):** ao abrir "Lançar Venda" e "Sem Sucesso" **a partir desta aba**, a origem do lead é passada vazia. Consequência: o estágio do negócio no CRM **não é atualizado** ao lançar a venda por aqui, e o "Sem Sucesso" cai sempre no ramo de Efeito Alavanca, independentemente da origem real. A venda é criada normalmente — só o estágio do CRM fica para trás.
+- "Lançar Venda"/"Sem Sucesso" bloqueiam por checagem feita na tela; com duas abas abertas, o duplo lançamento não está descartado (não determinei se há restrição única no banco).
+- Aceite/edição da proposta **não estão aqui** — quem procura o aceite nesta aba não encontra.
+- Cancelar o formulário perde tudo, sem confirmação.
 
-  `brokeredPreviewStorage()` (`src/integrations/supabase/previewAuthStorage.ts`) devolve `localStorage` fora de preview; dentro de preview enquadrado, faz broker por postMessage com o editor.
-- **Ocorrências de `signOut` (projeto inteiro):**
-  - `src/contexts/AuthContext.tsx:41` — tipo do contexto.
-  - `src/contexts/AuthContext.tsx:90` — `checkUserBlockedInBackground`: desloga se `profiles.access_status` = bloqueado/desativado ou `blocked_until` futuro. **Roda a cada `handleSession`** (login, INITIAL_SESSION, restauração de aba).
-  - `src/contexts/AuthContext.tsx:279` — dentro do `signIn`, mesma checagem de bloqueio.
-  - `src/contexts/AuthContext.tsx:349-366` — `signOut` do contexto (botão sair).
-  - `src/contexts/AuthContext.tsx:373` — `handleInactivityLogout` chama `void signOut()`.
-  - `src/pages/ResetPassword.tsx:100` — após trocar a senha.
-  - `src/components/layout/AppSidebar.tsx:866` — item de menu "Sair".
-  - `src/lib/supabase-utils.ts:12` — `resetSupabaseSession()`, que também apaga todas as chaves `sb-*` do localStorage. Chamado em `src/components/auth/ConnectivityCheck.tsx:84` e `src/components/auth/ProtectedRoute.tsx:40` — **ambos só por clique do usuário** ("Limpar sessão e reiniciar", exibido após 8 s de loading).
-  - Nenhum `onError`/interceptor de query chama `signOut`.
-- **Timer de inatividade: existe.** `src/hooks/useInactivityLogout.ts`, ativado em `AuthContext.tsx:376-381` com `timeoutMs = 3h` e aviso 5 min antes. O timer reinicia com mouse/teclado/scroll/click e sincroniza entre abas via `localStorage['mcf:lastActivity']`. **Não explica logout em menos de uma hora.**
-- Suspeitos compatíveis com o sintoma, sem confirmação: (a) `handleSession` com `newSession = null` quando `getSession()` estoura o timeout de 5 s (`AUTH_TIMEOUT_MS`, linha 27) — mas isso zera só o estado React, não a sessão no storage; (b) storage brokerado do preview perdendo a sessão entre superfícies. Qual dos dois ocorreu no seu teste: **não determinei** — precisaria dos logs `[Auth] onAuthStateChange: …` do console na hora da queda.
+---
 
-## C) Conferências
+## ETAPA 3 — Termo de Adesão Pendente (na tela: "Termos de Adesão Pendentes")
 
-- **`src/lib/duplicateContactError.ts` (arquivo inteiro):** já está em contexto — `describeDuplicatePhoneError(error)` extrai `duplicate_contact:phone:<sufixo>:<uuid>` por regex, **faz um SELECT em `crm_contacts` e devolve frase pronta com nome e telefone do dono** ("Este telefone já está cadastrado em outro lead: X (tel)."), ou a frase genérica se o SELECT falhar; devolve `null` quando o erro não é esse. Só cobre **phone** — o trigger também emite `duplicate_contact:email:…`, que hoje o parser ignora.
-- **`ContactFormDialog`:** `handleSubmit` está dentro de `<form onSubmit={handleSubmit}>` (linha 56) e chama `await createContact.mutateAsync(...)` sem `try/catch` (linhas 36-43). A rejeição vira **unhandled promise rejection** no handler do form — não é capturada por nenhum ErrorBoundary (boundary de React não pega erro assíncrono), então o que se perde é o resto do handler: `setFormData` e `onOpenChange(false)` não rodam, o modal fica aberto. O `onError` da mutation (`src/hooks/useCRMData.ts:339-341`) **dispara um toast** `Erro ao criar contato: <message>` — se você não viu nada, o toast provavelmente apareceu e sumiu, ou ficou fora de vista; **não determinei** por que não foi percebido.
-- **Espaço para alerta fixo:** sim. O `DialogContent` é `sm:max-w-md` com `<form className="space-y-4">`; cabe um bloco de alerta entre o `DialogHeader` e o primeiro campo, sem mexer em layout.
-- O diálogo é usado em **um único lugar**: `src/pages/crm/Contatos.tsx:553`. A mutation `useCreateCRMContact` — verificar outros consumidores ficou fora deste levantamento; se quiser, listo na próxima rodada.
+### 1. Onde fica
+Mesma tela e rota, aba **"Propostas"**, card **"Termos de Adesão Pendentes (N)"**. Duas seções: **"Pendentes — termo de adesão não assinado"** e **"Tratados — termo assinado ou desistência da carta"**.
+Rota pública do cliente: **`/termo/:token`** — fora de login, servida pela função `termo-assinatura`; o acesso é só pelo token.
 
-Nada foi editado, nenhuma migração rodada, nenhum dado alterado.
+### 2. Quem vê
+- A aba segue o guard do recurso `crm`; não há restrição de papel para gerar termo, cancelar termo ou "Adicionar Carta" no código lido. Não determinei as políticas RLS de `consorcio_termos`.
+- Editar os **dados do cliente** dentro da proposta exige `admin`, `manager`, `coordenador`, `closer` ou `cobranca_consorcio` **e** termo não assinado; sem isso, o bloco aparece em leitura.
+- O cliente, sem login, vê o termo com nome e documento mascarados até assinar.
+
+### 3. O que a lista mostra
+Cabeçalhos: **"Contato"**, **"Data Proposta"**, **"Data Reunião"**, **"Valor Crédito"**, **"Prazo"**, **"Produto"**, **"Status"**, **"Closer"**, **"Ações"**.
+- "Contato": nome do contato ou do negócio; ícone de nota quando há nota do closer.
+- "Data Proposta": data de criação da proposta, mais o selo de dias parados (enquanto o termo não estiver assinado) e um contador vermelho piscante `Nd` quando há documento pendente.
+- "Prazo": "N meses". "Produto": badge.
+- "Status": pilha de selos — proposta sem valor (âmbar); "Cadastrada" (quando aceita) ou o próprio status; **"Documento pendente"** (vermelho, clicável); selo do termo: **"Termo aguardando assinatura"**, **"Termo assinado · dd/mm/aaaa"**, **"Termo cancelado"** ou **"Termo expirado"**; e **"Desistência da Carta"** com o motivo em itálico.
+
+### 4. Botões e ações
+- **"Gerar Termo de Adesão"** — aparece quando a carta não foi desistida e ainda não existe termo. Fica **desabilitado se a venda não tem cadastro de cota**, com o aviso: *"O termo é montado a partir do cadastro da cota. Lance a venda (Inserir Dados) antes de gerar o termo."* Abre o modal de geração.
+- No modal: **"Gerar termo e link"** — sem confirmação; cria o termo com o texto e os dados **congelados** (snapshot + hash). Toast **"Termo de adesão gerado"**. Depois aparece o link e o botão **"Copiar"**, com o texto *"Envie este link ao cliente por WhatsApp, e-mail ou qualquer outro canal. Ele vale por 30 dias."* Fechar não desfaz o termo. Botões **"Cancelar"/"Fechar"** e, quando faltam dados, **"Completar cadastro"**.
+- **"Ver / reenviar termo"** — aparece quando já existe termo (tooltip: *"Ver, copiar o link ou reenviar o termo de adesão"*). Dentro dele: **"Copiar"** (só com termo pendente; toast "Link copiado"), **"Imprimir / Salvar PDF"** (sempre), **"Cancelar termo"** (só pendente) e **"Gerar novo termo"** (só quando todos os termos estão cancelados/expirados).
+- **"Cancelar termo"** — abre um bloco com **"Motivo do cancelamento *"** (obrigatório), com **"Voltar"** (não grava) e **"Confirmar cancelamento"**. Grava status `cancelado` + data, autor e motivo, **só se ainda estiver pendente**. Depois de confirmado não há volta — só gerar novo.
+- **"Cancelar termo e gerar novo"** — dentro da edição da proposta, só quando os dados do cliente foram alterados e o termo está pendente. Cancela com o motivo fixo *"Dados do cliente corrigidos antes da assinatura"* e reabre a geração.
+- **"Adicionar Carta"** — no cabeçalho da aba, sempre visível. Cria a venda inteira de fora do funil: proposta já `aceita`, uma carta e um cadastro por carta, com documento replicado. Descrição: *"Venda de consórcio que não passou pelo funil (parceiro, indicação, collab, sócio). A carta criada aqui nasce na etapa Termos de Adesão Pendentes e só chega em Cotas a Fazer depois do termo assinado."*
+- **"Assinar termo"** (lado do cliente, `/termo/:token`) — inativo enquanto faltar nome, documento com 11 ou 14 dígitos, ou o aceite. Grava status `assinado`, data, nome, CPF, IP e navegador. Não tem volta.
+- Ainda na linha, fora do fluxo do termo: **"Cadastrar"**, **"Recusar"**, **"Inserir Dados"**, **"Ver Dados"**, **"Documentos"/"Anexar Documentos"**, ícone de lápis (editar venda) e ícone de lixeira (desistência, com o diálogo **"Registrar Desistência da Carta?"**, motivo obrigatório e botão **"Registrar desistência"**).
+
+### 5. Obrigatório vs opcional
+- **Geração do termo**: o operador não digita nada — tudo vem do cadastro. Obrigatórios por venda: nome/razão social, CPF/CNPJ e **endereço**. Obrigatórios por carta: valor do crédito, prazo, parcela 1ª–12ª e parcela das demais.
+- **Cancelamento**: motivo obrigatório.
+- **"Adicionar Carta"**: lead vinculado, origem da venda, closer responsável e, por carta, crédito, prazo e produto. Nome de lead novo com no mínimo 3 letras.
+- **Assinatura do cliente**: nome completo, CPF/CNPJ (11 ou 14 dígitos) e o aceite (declaração de validade jurídica com registro de nome, documento, data, hora e IP) — os três obrigatórios.
+
+### 6. Como se sai para a etapa 4
+A **assinatura do cliente**: o termo passa a `assinado`. A etapa 4 lê esse status — cadastro sem termo assinado fica travado fora da fila liberada. Não há campo novo gravado no cadastro; a trava é a leitura do termo. Exceções isentas da trava: cadastros sem proposta vinculada e cadastros anteriores a **19/08/2026** (data-corte fixa no código).
+
+### 7. O que trava
+- Geração: **"Cadastros da venda não são da mesma pessoa"** + *"Corrija os cadastros antes de emitir o termo — um único documento não pode cobrir pessoas diferentes."*; **"Dados obrigatórios faltando"** + *"Abra o cadastro em Cotas a Fazer → ⋮ → Ver detalhes → Editar, ou use o botão abaixo."*; **"Nenhum modelo ativo"** + *"Cadastre o texto do termo em Configurações do CRM → Termo de Adesão."*
+- Assinatura: **"Este termo já foi assinado."**, **"Este termo foi cancelado."**, **"O prazo para assinatura deste termo expirou."**, **"O CPF/CNPJ informado não corresponde ao do termo."**, **"O nome informado não corresponde ao do termo."**, **"Informe nome completo e CPF."**, **"Este documento é apenas um comprovante e não requer assinatura."**
+- Telas do cliente: **"Documento não encontrado"**, **"Documento cancelado"** (*"…não é mais válido. Fale com o seu consultor para receber um novo."*), **"Prazo expirado"**.
+- Com termo assinado, salvar a edição da proposta é **bloqueado sem nenhuma mensagem** — a tela apenas fica em leitura.
+
+### 8. Armadilhas
+- **Corrigir o cadastro depois de gerar o termo não atualiza o termo enviado.** A assinatura confere nome e CPF contra o snapshot antigo — a assinatura correta do cliente passa a ser recusada. É preciso cancelar e gerar novo, manualmente.
+- **O termo é um por VENDA**, não por carta; o vínculo confiável é a proposta.
+- Termo assinado **não pode ser cancelado**.
+- "Gerar Termo de Adesão" desabilitado por falta de cadastro parece defeito da tela.
+- Carta criada por "Adicionar Carta" **não aparece em Cotas a Fazer** até o termo ser assinado.
+- A expiração só é aplicada quando alguém abre o link ou tenta assinar — o termo pode continuar "pendente" no banco após a data.
+- O texto "vale por 30 dias" está na tela, mas o prazo real vem do padrão da tabela — **não determinei** esse valor.
+- A data-corte 19/08/2026 isenta cadastros antigos da trava de assinatura — confunde auditoria.
+
+---
+
+## Pontos que não determinei
+- Políticas RLS reais de `meeting_slots`, `meeting_slot_attendees`, `crm_deals`, `consorcio_termos` e `consorcio_pending_registrations`.
+- Quais papéis exatamente passam no guard do recurso `crm`.
+- Campos obrigatórios completos do diálogo de evidência de No-Show e da validação de cada carta.
+- Prazo real de expiração do termo (padrão da coluna no banco).
+- O efeito do provável bug de origem vazia na etapa 2 não foi confirmado em execução.
