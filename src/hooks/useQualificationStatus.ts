@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBUContext } from '@/contexts/BUContext';
+import {
+  QUALIFICATION_QUESTIONS,
+  MIN_ANSWER_LENGTH,
+} from '@/components/crm/qualification/QualificationQuestions';
+
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
