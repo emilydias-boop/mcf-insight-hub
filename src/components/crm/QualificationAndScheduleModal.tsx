@@ -168,7 +168,7 @@ export function QualificationAndScheduleModal({
       const { valid, missing } = validateAnswers(answers);
       if (!valid) {
         toast.error(
-          `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas com no mínimo 15 caracteres (faltam ${missing.length}).`
+          `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas antes de salvar (faltam ${missing.length}).`
         );
         return;
       }
