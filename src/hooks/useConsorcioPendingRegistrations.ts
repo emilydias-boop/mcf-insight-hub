@@ -1214,6 +1214,7 @@ export function useOpenCota() {
           parcelasEmpresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
           inicioSegundaParcela: cotaData.inicio_segunda_parcela || 'automatico',
           condicaoPagamento: (cotaData as any).condicao_pagamento,
+          objetivo: (cotaData as any).objetivo,
           incluiSeguro: !!(cotaData as any).inclui_seguro_vida,
           isReserva,
 

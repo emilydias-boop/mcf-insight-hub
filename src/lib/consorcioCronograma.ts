@@ -69,6 +69,7 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
     prazoMeses: p.prazoMeses,
     tipoProduto: p.tipoProduto,
     condicaoPagamento: p.condicaoPagamento,
+    objetivo: p.objetivo,
     incluiSeguro: p.incluiSeguro,
   });
 

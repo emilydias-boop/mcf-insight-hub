@@ -91,8 +91,8 @@ export function useDadosPlano(controlled?: DadosPlanoControlled, opcoes?: DadosP
   /** Produtos elegíveis para (tipo de produto + faixa de crédito) — pode ser mais de um. */
   const produtosElegiveis = useMemo(() => {
     if (!tipoProdutoCarta || valorCreditoNum <= 0) return [];
-    return produtosElegiveisParaCarta(produtos as any[], valorCreditoNum, tipoProdutoCarta);
-  }, [produtos, tipoProdutoCarta, valorCreditoNum]);
+    return produtosElegiveisParaCarta(produtos as any[], valorCreditoNum, tipoProdutoCarta, objetivo);
+  }, [produtos, tipoProdutoCarta, valorCreditoNum, objetivo]);
   const filtroProdutoAtivo = !!tipoProdutoCarta && valorCreditoNum > 0;
   /** Lista que o seletor mostra: filtrada quando há produto resolvido, completa quando não há. */
   const planosVisiveis = useMemo(() => {
