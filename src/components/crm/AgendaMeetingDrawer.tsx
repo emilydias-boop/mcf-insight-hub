@@ -1293,6 +1293,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Gravação MeetGeek + Avaliação de aderência ao script */}
+            <MeetingRecordingSection meetingSlotId={activeMeeting?.id || null} />
+
+
+
             {/* No-Show Confirmation Dialog */}
             {requiresEvidence ? (
               <NoShowEvidenceDialog
