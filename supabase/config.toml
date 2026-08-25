@@ -281,3 +281,6 @@ verify_jwt = false
 
 [functions.termo-assinatura]
 verify_jwt = false
+
+[functions.meetgeek-webhook]
+verify_jwt = false
