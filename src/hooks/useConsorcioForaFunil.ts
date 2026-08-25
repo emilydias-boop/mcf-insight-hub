@@ -52,6 +52,7 @@ export function useReconhecerForaFunil() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcio-cotas-contratadas"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-cotas-origem-funil"] });
       toast.success("Venda reconhecida como fora do funil — a cota saiu das pendências.");
     },
     onError: (e: any) =>
@@ -68,6 +69,7 @@ export function useDesfazerForaFunil() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consorcio-cotas-contratadas"] });
+      qc.invalidateQueries({ queryKey: ["consorcio-cotas-origem-funil"] });
       toast.success("Reconhecimento desfeito — a cota volta às pendências (trilha preservada).");
     },
     onError: (e: any) =>

@@ -934,6 +934,7 @@ export function useVincularCarta() {
     onSuccess: () => {
       toast.success('Cota cadastrada e deal atualizado!');
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-origem-funil'] });
     },
     onError: (e: any) => toast.error('Erro: ' + e.message),
   });

@@ -86,6 +86,7 @@ const invalidarFunil = (qc: ReturnType<typeof useQueryClient>) => {
     'consorcio-pending-registrations',
     'consorcio-reversao-status',
     'consorcio-funil-r1',
+    'consorcio-cotas-origem-funil',
   ]) {
     qc.invalidateQueries({ queryKey: [key] });
   }

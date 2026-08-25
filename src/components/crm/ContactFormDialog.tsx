@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCreateCRMContact } from '@/hooks/useCRMData';
-import { Loader2 } from 'lucide-react';
+import { describeDuplicateContactError } from '@/lib/duplicateContactError';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface ContactFormDialogProps {
   open: boolean;
@@ -25,24 +27,37 @@ export const ContactFormDialog = ({ open, onOpenChange }: ContactFormDialogProps
     organization_name: '',
     notes: '',
   });
-  
+  const [erro, setErro] = useState<string | null>(null);
+
   const createContact = useCreateCRMContact();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name.trim()) return;
 
-    await createContact.mutateAsync({
-      clint_id: `local-${Date.now()}`,
-      name: formData.name.trim(),
-      email: formData.email.trim() || null,
-      phone: formData.phone.trim() || null,
-      organization_name: formData.organization_name.trim() || null,
-      notes: formData.notes.trim() || null,
-    });
+    if (!formData.name.trim()) return;
+    setErro(null);
+
+    try {
+      await createContact.mutateAsync({
+        clint_id: `local-${Date.now()}`,
+        name: formData.name.trim(),
+        email: formData.email.trim() || null,
+        phone: formData.phone.trim() || null,
+        organization_name: formData.organization_name.trim() || null,
+        notes: formData.notes.trim() || null,
+      });
+    } catch (err) {
+      const duplicado = await describeDuplicateContactError(err);
+      setErro(
+        duplicado
+          ? `${duplicado} Busque o lead existente em vez de criar um novo.`
+          : (err as any)?.message || 'Não foi possível criar o contato. Tente novamente.',
+      );
+      return;
+    }
 
     setFormData({ name: '', email: '', phone: '', organization_name: '', notes: '' });
+    setErro(null);
     onOpenChange(false);
   };
 
@@ -52,7 +67,14 @@ export const ContactFormDialog = ({ open, onOpenChange }: ContactFormDialogProps
         <DialogHeader>
           <DialogTitle>Novo Contato</DialogTitle>
         </DialogHeader>
-        
+
+        {erro && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{erro}</AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>
@@ -71,7 +93,10 @@ export const ContactFormDialog = ({ open, onOpenChange }: ContactFormDialogProps
               id="email"
               type="email"
               value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              onChange={(e) => {
+                setErro(null);
+                setFormData(prev => ({ ...prev, email: e.target.value }));
+              }}
               placeholder="email@exemplo.com"
             />
           </div>
@@ -81,7 +106,10 @@ export const ContactFormDialog = ({ open, onOpenChange }: ContactFormDialogProps
             <Input
               id="phone"
               value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              onChange={(e) => {
+                setErro(null);
+                setFormData(prev => ({ ...prev, phone: e.target.value }));
+              }}
               placeholder="(11) 99999-9999"
             />
           </div>

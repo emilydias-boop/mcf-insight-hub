@@ -493,6 +493,7 @@ export function useCreateConsorcioCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-origem-funil'] });
       toast.success('Carta de consórcio criada com sucesso!');
     },
     onError: (error: any) => {
@@ -672,6 +673,7 @@ export function useDeleteConsorcioCard() {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
       queryClient.invalidateQueries({ queryKey: ['consorcio-proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-cotas-origem-funil'] });
       toast.success('Carta excluída com sucesso!');
     },
     onError: (error: any) => {
