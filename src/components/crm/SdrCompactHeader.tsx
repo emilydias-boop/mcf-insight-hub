@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Package, ShoppingBag, Tv, DollarSign } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
+
 
 interface SdrCompactHeaderProps {
   deal: any;
