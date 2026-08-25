@@ -16,6 +16,9 @@ export interface ConsorcioProduto {
   grupo_padrao?: string;
   ativo: boolean;
   objetivo_option_id?: string | null;
+  /** `name`/`label` da opção de objetivo, quando carregados junto. */
+  objetivo_nome?: string | null;
+  objetivo_label?: string | null;
   prazo_maximo_venda?: number | null;
   comissao_schedule?: ComissaoScheduleItem[] | null;
   comissao_base?: ComissaoBase;

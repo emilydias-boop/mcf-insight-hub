@@ -28,6 +28,8 @@ export interface ParamsCronograma {
   inicioSegundaParcela?: string | null;
   /** Condição de pagamento da cota — define a coluna da tabela Embracon. */
   condicaoPagamento?: string | null;
+  /** Objetivo da cota — afunila a resolução do produto (imóvel × auto × pesado). */
+  objetivo?: string | null;
   /** Seguro de vida compõe a parcela quando não há linha tabelada. */
   incluiSeguro?: boolean;
   /** Reserva → parcelas nascem como 'previsto'. */
@@ -67,6 +69,7 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
     prazoMeses: p.prazoMeses,
     tipoProduto: p.tipoProduto,
     condicaoPagamento: p.condicaoPagamento,
+    objetivo: p.objetivo,
     incluiSeguro: p.incluiSeguro,
   });
 
