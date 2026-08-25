@@ -69,6 +69,7 @@ import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModa
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 import { NoShowReasonPicker } from './NoShowReasonPicker';
 import { LeadNoShowEvidenceHistory } from './LeadNoShowEvidenceHistory';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
