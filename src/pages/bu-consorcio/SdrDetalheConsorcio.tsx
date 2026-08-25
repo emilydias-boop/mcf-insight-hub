@@ -448,9 +448,17 @@ export default function SdrDetalheConsorcio() {
             <p className="text-sm text-muted-foreground">{sdrEmail}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-          <Calendar className="h-4 w-4" />
-          <span>{periodo}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+            <Calendar className="h-4 w-4" />
+            <span>{periodo}</span>
+          </div>
+          {funilNome && (
+            <div className="flex items-center gap-2 text-sm bg-primary/10 text-primary rounded-lg px-3 py-2">
+              <Filter className="h-4 w-4" />
+              <span>Funil: {funilNome}</span>
+            </div>
+          )}
         </div>
       </div>
 
