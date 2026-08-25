@@ -14,6 +14,16 @@ import { taxaAntecipadaTipoDeProduto } from '@/lib/consorcioParcelaOficial';
 /** Prazos que a tabela `consorcio_creditos` tem colunas para. */
 export const PRAZOS_TABELADOS = [200, 220, 240] as const;
 
+/**
+ * O produto tem prazo que a tabela oficial não cobre? Nesse caso a parcela dele
+ * sai CALCULADA (composição do produto), não tabelada — informação, não erro.
+ */
+export function prazosForaDaTabela(prazos?: number[] | null): boolean {
+  const lista = (prazos || []).map(Number).filter((n) => n > 0);
+  if (lista.length === 0) return false;
+  return lista.some((p) => !(PRAZOS_TABELADOS as readonly number[]).includes(p));
+}
+
 /** Sufixo de coluna por condição de pagamento. */
 function condicaoKey(condicao?: string | null): 'conv' | '50' | '25' | null {
   if (!condicao) return null;
