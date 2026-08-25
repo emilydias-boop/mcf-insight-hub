@@ -684,6 +684,8 @@ export default function ConsorcioPainelEquipe() {
                     params.set("start", format(customStartDate, "yyyy-MM-dd"));
                     params.set("end", format(customEndDate, "yyyy-MM-dd"));
                   }
+                  // Leva o funil selecionado para o detalhe ler o MESMO filtro.
+                  if (selectedPipelineId) params.set("pipeline", selectedPipelineId);
                   navigate(`/consorcio/painel-equipe/sdr/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
                 }}
                 canOpenSdr={(sdrEmail: string) => {
