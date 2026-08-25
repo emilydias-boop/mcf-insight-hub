@@ -43,6 +43,8 @@ import {
   type ClienteVendaSdrItem,
   type CotaVendaSdrItem,
 } from "@/hooks/useConsorcioCotasContratadas";
+import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
+import { useCRMPipelines } from "@/components/crm/PipelineSelector";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { DealDetailsDrawer } from "@/components/crm/DealDetailsDrawer";
 
