@@ -323,6 +323,7 @@ export interface TemaIA {
   reunioes: number;
   total_reunioes: number;
   pct: number;
+  exemplos: string[];
 }
 
 export interface ResumoIAResposta {
