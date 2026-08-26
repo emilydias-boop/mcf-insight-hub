@@ -329,10 +329,13 @@ export interface ResumoIAResposta {
   ok?: boolean;
   vazio?: boolean;
   do_cache?: boolean;
+  resumo: string | null;
   reunioes: number;
+  reunioes_usadas: number;
   temas_melhoria: TemaIA[];
   temas_fortes: TemaIA[];
   frases_total?: number;
+  frases_usadas: number;
   frases_sem_tema?: number;
   gerado_em?: string;
 }
@@ -366,10 +369,13 @@ export function useResumoIA(
         ok: r.ok,
         vazio: r.vazio,
         do_cache: r.do_cache,
+        resumo: typeof r.resumo === 'string' && r.resumo.trim() ? r.resumo : null,
         reunioes: Number(r.reunioes ?? 0),
+        reunioes_usadas: Number(r.reunioes_usadas ?? 0),
         temas_melhoria: Array.isArray(r.temas_melhoria) ? r.temas_melhoria : [],
         temas_fortes: Array.isArray(r.temas_fortes) ? r.temas_fortes : [],
         frases_total: Number(r.frases_total ?? 0),
+        frases_usadas: Number(r.frases_usadas ?? 0),
         frases_sem_tema: Number(r.frases_sem_tema ?? 0),
         gerado_em: r.gerado_em,
       };
