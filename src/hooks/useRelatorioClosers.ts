@@ -366,6 +366,16 @@ export function useResumoIA(
       if (error) throw error;
       const r = (data ?? {}) as Partial<ResumoIAResposta> & { erro?: string };
       if (r.erro) throw new Error(r.erro);
+      const normTemas = (arr: unknown): TemaIA[] =>
+        Array.isArray(arr)
+          ? arr.map((t: any) => ({
+              tema: String(t?.tema ?? '').trim(),
+              reunioes: Number(t?.reunioes ?? 0),
+              total_reunioes: Number(t?.total_reunioes ?? 0),
+              pct: Number(t?.pct ?? 0),
+              exemplos: Array.isArray(t?.exemplos) ? t.exemplos.filter((x: unknown) => typeof x === 'string' && x.trim()) : [],
+            }))
+          : [];
       return {
         ok: r.ok,
         vazio: r.vazio,
@@ -373,8 +383,8 @@ export function useResumoIA(
         resumo: typeof r.resumo === 'string' && r.resumo.trim() ? r.resumo : null,
         reunioes: Number(r.reunioes ?? 0),
         reunioes_usadas: Number(r.reunioes_usadas ?? 0),
-        temas_melhoria: Array.isArray(r.temas_melhoria) ? r.temas_melhoria : [],
-        temas_fortes: Array.isArray(r.temas_fortes) ? r.temas_fortes : [],
+        temas_melhoria: normTemas(r.temas_melhoria),
+        temas_fortes: normTemas(r.temas_fortes),
         frases_total: Number(r.frases_total ?? 0),
         frases_usadas: Number(r.frases_usadas ?? 0),
         frases_sem_tema: Number(r.frases_sem_tema ?? 0),
