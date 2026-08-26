@@ -755,6 +755,7 @@ function ListaTemas({
   tom: 'sucesso' | 'alerta';
 }) {
   if (temas.length === 0) return null;
+  const corBarra = tom === 'sucesso' ? 'border-success' : 'border-destructive';
   return (
     <div>
       <p
@@ -765,13 +766,21 @@ function ListaTemas({
       >
         {titulo}
       </p>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 space-y-4">
         {temas.map((t, i) => (
-          <div key={`${titulo}-${i}`}>
-            <p className="text-[13px]">{t.tema}</p>
+          <div key={`${titulo}-${i}`} className="space-y-1.5">
+            <p className="text-[13px] font-medium leading-snug">{t.tema}</p>
             <p className="text-[11px] text-muted-foreground">
               {n0(t.reunioes)} de {n0(t.total_reunioes)} reuniões · {n1(t.pct)}%
             </p>
+            {t.exemplos.map((ex, j) => (
+              <blockquote
+                key={`${titulo}-${i}-ex-${j}`}
+                className={cn('border-l-2 pl-3 text-[12px] italic leading-relaxed text-muted-foreground', corBarra)}
+              >
+                {ex}
+              </blockquote>
+            ))}
           </div>
         ))}
       </div>
