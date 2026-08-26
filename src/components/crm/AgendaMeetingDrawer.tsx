@@ -1758,13 +1758,21 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
           </div>
         )}
 
-        {(resumoTexto || highlights.length > 0 || falas.length > 0) && (
+        {(resumoHtml || insightsHtml || highlights.length > 0 || falas.length > 0) && (
           <Accordion type="multiple" className="border rounded-md divide-y">
-            {resumoTexto && (
+            {resumoHtml && (
               <AccordionItem value="resumo-meetgeek" className="border-b-0">
                 <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Resumo da reunião</AccordionTrigger>
                 <AccordionContent className="px-3 pb-3">
-                  <p className="text-sm text-muted-foreground whitespace-pre-line">{resumoTexto}</p>
+                  <div className="mg-resumo" dangerouslySetInnerHTML={{ __html: resumoHtml }} />
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {insightsHtml && (
+              <AccordionItem value="insights-meetgeek" className="border-b-0">
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Percepções do MeetGeek</AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <div className="mg-resumo" dangerouslySetInnerHTML={{ __html: insightsHtml }} />
                 </AccordionContent>
               </AccordionItem>
             )}
@@ -1772,11 +1780,14 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
               <AccordionItem value="highlights-meetgeek" className="border-b-0">
                 <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Destaques</AccordionTrigger>
                 <AccordionContent className="px-3 pb-3">
-                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <div className="space-y-3">
                     {highlights.map((h, i) => (
-                      <li key={i}>{h}</li>
+                      <div key={i} className="space-y-0.5">
+                        <p className="mg-destaque-label">{h.label}</p>
+                        <p className="mg-destaque-texto">{h.highlightText}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </AccordionContent>
               </AccordionItem>
             )}
