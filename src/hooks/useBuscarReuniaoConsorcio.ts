@@ -50,7 +50,10 @@ function digits(v?: string | null): string {
 }
 
 function semAcento(v: string): string {
-  return v.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  // Faixa de combinantes U+0300–U+036F escrita como escape — caractere literal
+  // solto no fonte é frágil (editor/pipeline que normaliza o arquivo o come e
+  // a função vira no-op sem erro de build).
+  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 /** "RODRIGO MOREIRA ROBERTO" → "Rodrigo Moreira" — o casamento que faltava. */
