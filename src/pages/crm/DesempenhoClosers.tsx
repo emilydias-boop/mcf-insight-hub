@@ -70,7 +70,7 @@ const n0 = (v: number) => Math.round(v || 0).toLocaleString('pt-BR');
 const n1 = (v: number | null | undefined) =>
   v === null || v === undefined || Number.isNaN(v) ? '—' : (Math.round(v * 10) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-type SortKey = 'closer' | 'reunioes' | 'vendas' | 'conversao' | 'nota' | 'cobertura';
+type SortKey = 'closer' | 'reunioes' | 'participantes' | 'contratos' | 'conversao' | 'nota' | 'cobertura';
 
 function nomeCurto(email: string, nome?: string | null) {
   if (nome) return nome.split(' ').slice(0, 2).join(' ');
@@ -85,7 +85,7 @@ function DesempenhoClosersContent() {
   const [segmento, setSegmento] = useState<SegmentoFiltro>('todos');
   const [metricaNota, setMetricaNota] = useState<'nota' | 'aderencia'>('nota');
   const [isolado, setIsolado] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('vendas');
+  const [sortKey, setSortKey] = useState<SortKey>('contratos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerCloser, setDrawerCloser] = useState<{ id: string; email: string; nome: string } | null>(null);
 
@@ -102,7 +102,7 @@ function DesempenhoClosersContent() {
 
   const vendasPorSlot = useMemo(() => {
     const m = new Map<string, boolean>();
-    slots.forEach((s) => m.set(s.id, s.venda));
+    slots.forEach((s) => m.set(s.id, s.teveContrato));
     return m;
   }, [slots]);
 
@@ -112,7 +112,7 @@ function DesempenhoClosersContent() {
   const porCloser = useMemo(() => {
     const map = new Map<
       string,
-      { email: string; nome: string; ativo: boolean; reunioes: number; vendas: number }
+      { email: string; nome: string; ativo: boolean; reunioes: number; contratos: number; participantes: number }
     >();
     slots.forEach((s) => {
       const cur =
@@ -121,10 +121,12 @@ function DesempenhoClosersContent() {
           nome: nomeCurto(s.closer_email, s.closer_name),
           ativo: s.closer_ativo,
           reunioes: 0,
-          vendas: 0,
+          contratos: 0,
+          participantes: 0,
         };
       cur.reunioes += 1;
-      if (s.venda) cur.vendas += 1;
+      cur.contratos += s.contratos;
+      cur.participantes += s.participantes;
       cur.ativo = s.closer_ativo;
       map.set(s.closer_email, cur);
     });
