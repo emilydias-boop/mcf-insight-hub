@@ -1531,6 +1531,42 @@ function EtapaStatusIcon({ cumpriu }: { cumpriu?: string }) {
   return <Minus className="h-4 w-4 text-muted-foreground shrink-0" />;
 }
 
+interface MeetGeekHighlight {
+  label: string;
+  highlightText: string;
+}
+
+// Links do MeetGeek abrem a transcricao no timestamp exato: forcamos nova aba.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.nodeName === 'A') {
+    (node as Element).setAttribute('target', '_blank');
+    (node as Element).setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+function sanitizarHtmlMeetGeek(bruto: string | null | undefined): string | null {
+  if (!bruto || !bruto.trim()) return null;
+  const limpo = DOMPurify.sanitize(bruto, {
+    ALLOWED_TAGS: ['strong', 'b', 'em', 'i', 'u', 'p', 'br', 'ul', 'ol', 'li', 'a', 'span'],
+    ALLOWED_ATTR: ['href', 'title', 'style'],
+  });
+  return limpo.trim().length > 0 ? limpo : null;
+}
+
+const MG_RESUMO_CSS = `
+.mg-resumo { font-size: 13px; line-height: 1.6; color: var(--text-primary, inherit); }
+.mg-resumo p { margin: 4px 0; }
+.mg-resumo ul, .mg-resumo ol { padding-left: 18px; margin: 4px 0; }
+.mg-resumo ul { list-style: disc; }
+.mg-resumo ol { list-style: decimal; }
+.mg-resumo li { margin: 4px 0; }
+.mg-resumo strong, .mg-resumo b { font-weight: 500; }
+.mg-resumo a { color: var(--text-accent, hsl(var(--primary))); text-decoration: underline; }
+.mg-destaque-label { font-size: 12px; font-weight: 500; }
+.mg-destaque-texto { font-size: 13px; line-height: 1.6; color: var(--text-secondary, hsl(var(--muted-foreground))); }
+`;
+
+
 function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | null }) {
   const { data, isLoading } = useMeetingRecording(meetingSlotId);
   const [loadingLink, setLoadingLink] = useState(false);
