@@ -1,52 +1,29 @@
-# SEM_ATRIBUICAO em agosto/2026 — rodada parcial (só leitura)
+# SEM_ATRIBUICAO agosto/2026 — checagem 1 feita, sua hipótese não se confirma
 
-Nada foi alterado. Confirmo a sua leitura da regra (pernas A/B/C e o `nameKey` primeiro|último sem acento) — não achei erro nela. Abaixo o que consegui apurar nesta rodada; o restante fica explicitamente pendente.
+Só SELECT, nada alterado.
 
-## (C) Closers da BU consórcio — lista crua
+## 1) Dedup dos candidatos — resultado cru
 
-| id | name | email | is_active |
-|---|---|---|---|
-| `1472d772-a48b-4c88-ba07-398898532df4` | `Andre dos Santos Duarte` | andre.duarte@minhacasafinanciada.com | true |
-| `4e3eabf5-149f-4130-ad8b-72fa929671f6` | `João Pedro Martins Vieira ` (espaço no fim) | joao.pedro@minhacasafinanciada.com | true |
-| `ff13afd2-48b5-402f-bd14-9c2f047dc0ef` | `Luis Felipe de Souza Oliveira Ramos` | luis.felipe@minhacasafinanciada.com | true |
-| `ce55f000-5bbb-4cc2-ae12-26368aff541f` | `Thobson` | thobson.motta@minhacasafinanciada.com | true |
-| `e0b28a7d-b740-49a2-9005-80f72ee6bd9f` | `André de Castro França Nucci` | andre.nucci@minhacasafinanciada.com | false |
-| `7eb4cbd8-e5dc-48b2-bc9c-7d8d23570be5` | `Jean\tCarlos Gonçalves Santos` (TAB no meio do nome) | jean.santos@minhacasafinanciada.com | false |
-| `412f87de-3869-423e-9703-71125c29ea1c` | `Victoria Paz` | victoria.paz@minhacasafinanciada.com | false |
+Rodei os quatro caminhos de exclusão da perna B para os 11 cadastros (a busca por nome trouxe 17 linhas: 4 Daniel + 1 Thiago + 12 do Naufel, em duas grafias do nome). Resultado idêntico para **todas** as linhas:
 
-`nameKey` possíveis: `andre|duarte`, `joao|vieira`, `luis|ramos`, `thobson|thobson`, `andre|nucci`, `jean|santos` (o TAB pode alterar o split do primeiro nome), `victoria|paz`.
+- `proposal_id` preenchido (caminho 4): **true** em todas
+- `consorcio_proposal_cartas.pending_registration_id` = id do cadastro (caminho 2): **true** em todas
+- caminho 1 (`consorcio_proposals.consortium_card_id`): true só em `4fd447b2…` (Daniel); false nas demais
+- caminho 3 (`consorcio_proposal_cartas.consortium_card_id`): false em todas
 
-Dois pontos frágeis já visíveis: `Thobson` tem nome único (gera `thobson|thobson`) e `João Pedro Martins Vieira ` tem espaço final — a chave depende de o código dar `trim()` antes do split.
+Ou seja: **os 6 do Naufel também são EXCLUÍDOS da perna B**, pelos caminhos 4 e 2 — não sobrevive nenhum dos 11. Então o R$ 720.000 da tela **não vem da perna B**. A coincidência 6 × 120.000 = 720.000 é real, mas esses registros entram por **perna A** (têm proposta aceita), e é lá que a cascata de closer precisa estar falhando — provavelmente porque o vendedor "Diego Carielo" não é closer da BU e a cascata A não usa nome, usa `created_by`/`owner_id`/reunião.
 
-## (A) parcial — perna B, cadastros de agosto que não casam com nenhum closer
+Isso invalida a parte da hipótese sobre a perna B, mas mantém em pé a sua leitura de que o balde é o Naufel — só que pela perna A.
 
-Rodei a comparação de `nameKey` da perna B (âncora `aceite_date` em agosto, cadastros não excluídos). Registros que falham:
+## 2) e 3) — não determinei nesta rodada
 
-| perna | id | cliente | âncora | crédito | vendedor (campo) | nameKey do vendedor | deal_id | por que falhou |
-|---|---|---|---|---|---|---|---|---|
-| B | `ce86896d…` | Daniel Alves Martins | 22/08 | 150.000 | **nulo** (`vendedor_name` e `vendedor_name_cota` vazios) | — | `a644c6c8…` | vendedor não gravado: não há string para comparar |
-| B | `6cf100c7…` | Daniel Alves Martins | 22/08 | 150.000 | nulo | — | `a644c6c8…` | idem |
-| B | `21dda284…` | Daniel Alves Martins | 22/08 | 150.000 | nulo | — | `a644c6c8…` | idem |
-| B | `4fd447b2…` | Daniel Alves Martins | 22/08 | 150.000 | nulo | — | `a644c6c8…` | idem |
-| B | `808473fd…` | THIAGO FELIPE FAUSTINO | 22/08 | 150.000 | nulo | — | `d77e2eb3…` | idem |
-| B | `b093e7dd…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` (`vendedor_name_cota`) | `diego\|carielo` | `6b8f182a…` | não existe closer na BU consórcio com esse nameKey (comparado contra os 7 da tabela acima) |
-| B | `4c889b3d…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` | `diego\|carielo` | `6b8f182a…` | idem |
-| B | `d926fbfb…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` | `diego\|carielo` | `6b8f182a…` | idem |
-| B | `8e50aaff…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` | `diego\|carielo` | `6b8f182a…` | idem |
-| B | `99c7f1cf…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` | `diego\|carielo` | `6b8f182a…` | idem |
-| B | `9ddc05e4…` | NAUFEL RACHED MOHAMOUD ALI | 25/08 | 120.000 | `Diego Carielo` | `diego\|carielo` | `6b8f182a…` | idem |
+Não rodei a cascata da perna A (`created_by → profiles.email → closers.email` → `crm_deals.owner_id` → closer da última reunião) nem a perna C, então não tenho o número do balde por perna nem o total consolidado. Não vou estimar: com a perna B agora zerada, qualquer soma que eu desse seria chute.
 
-Soma desta fatia: 5 × 150.000 + 6 × 120.000 = **R$ 1.470.000** em 11 registros — mas **isto não é o número da tela**: minha consulta não aplicou a precedência das pernas (registros com proposta aceita pertencem à perna A e podem estar resolvidos por lá) nem o corte de duplicidade que o hook faz. Tratar como candidatos da perna B, não como o balde final.
+## Próximo passo proposto (ainda só SELECT)
 
-## (D) caminho de correção, por caso
+1. Rodar a cascata completa da perna A para agosto/2026 e listar quem cai em `SEM_ATRIBUICAO`, dizendo em qual dos três elos cada registro quebra — confirmando se os 6 do Naufel (R$ 720.000) são exatamente esse conjunto.
+2. Rodar a perna C (`tipo_registro='contratacao'` em agosto, sem cadastro e sem proposta, `nameKey(vendedor_name)` sem closer).
+3. Fechar o total do balde com a precedência A > B > C e verificar se as 8 religações do Rodrigo mexeram nele (esperado: não, porque nem a perna A nem a B resolvem closer por `deal_id`; a perna A só usa `owner_id` do deal como 2º elo — este é o único ponto em que a religação poderia mudar algo, e vou testar exatamente isso).
+4. Bônus: procurar `Diego Carielo` em `profiles` e em `closers` de qualquer BU, com e-mail e BU.
 
-- **Daniel Alves Martins (4 cadastros) e THIAGO FELIPE FAUSTINO (1)** — vendedor em branco: não há tela que peça "vendedor" nesse resíduo; a correção é no dado do cadastro/cota no Controle Consórcio, gravando o vendedor. "Trocar lead" não resolve, porque a perna B não olha o deal.
-- **NAUFEL RACHED MOHAMOUD ALI (6 cadastros, vendedor "Diego Carielo")** — o vendedor existe como pessoa, mas não como closer da BU consórcio. Duas saídas, ambas no dado: cadastrar/ativar Diego Carielo em `closers` com `bu='consorcio'` e e-mail, ou corrigir o vendedor da cota para o closer que realmente conduziu. Não existe tela que atribua closer nesse resíduo.
-
-## Pendente (não determinei)
-
-- Perna A: não rodei a cascata `created_by → profiles.email → closers.email` → `crm_deals.owner_id` → closer da reunião, então não sei quais registros de proposta aceita caem no balde nem qual elo quebra em cada um.
-- Perna C: não rodei os cards sem cadastro e sem proposta.
-- (B): o total novo do balde depois das 8 religações do Rodrigo. Sem as pernas A e C e sem a precedência entre pernas, qualquer número que eu desse aqui seria errado. O antigo que você viu na tela era R$ 720.000.
-
-Quer que eu siga daqui rodando perna A e perna C com a precedência correta, para fechar (A) e (B)?
+Confirma que eu sigo com esses quatro SELECTs?
