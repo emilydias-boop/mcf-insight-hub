@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -1530,6 +1531,42 @@ function EtapaStatusIcon({ cumpriu }: { cumpriu?: string }) {
   return <Minus className="h-4 w-4 text-muted-foreground shrink-0" />;
 }
 
+interface MeetGeekHighlight {
+  label: string;
+  highlightText: string;
+}
+
+// Links do MeetGeek abrem a transcricao no timestamp exato: forcamos nova aba.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.nodeName === 'A') {
+    (node as Element).setAttribute('target', '_blank');
+    (node as Element).setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+function sanitizarHtmlMeetGeek(bruto: string | null | undefined): string | null {
+  if (!bruto || !bruto.trim()) return null;
+  const limpo = DOMPurify.sanitize(bruto, {
+    ALLOWED_TAGS: ['strong', 'b', 'em', 'i', 'u', 'p', 'br', 'ul', 'ol', 'li', 'a', 'span'],
+    ALLOWED_ATTR: ['href', 'title', 'style'],
+  });
+  return limpo.trim().length > 0 ? limpo : null;
+}
+
+const MG_RESUMO_CSS = `
+.mg-resumo { font-size: 13px; line-height: 1.6; color: var(--text-primary, inherit); }
+.mg-resumo p { margin: 4px 0; }
+.mg-resumo ul, .mg-resumo ol { padding-left: 18px; margin: 4px 0; }
+.mg-resumo ul { list-style: disc; }
+.mg-resumo ol { list-style: decimal; }
+.mg-resumo li { margin: 4px 0; }
+.mg-resumo strong, .mg-resumo b { font-weight: 500; }
+.mg-resumo a { color: var(--text-accent, hsl(var(--primary))); text-decoration: underline; }
+.mg-destaque-label { font-size: 12px; font-weight: 500; }
+.mg-destaque-texto { font-size: 13px; line-height: 1.6; color: var(--text-secondary, hsl(var(--muted-foreground))); }
+`;
+
+
 function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | null }) {
   const { data, isLoading } = useMeetingRecording(meetingSlotId);
   const [loadingLink, setLoadingLink] = useState(false);
@@ -1550,22 +1587,28 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   const pontosFortes: string[] = Array.isArray(review?.pontos_fortes) ? (review!.pontos_fortes as string[]) : [];
   const pontosMelhoria: string[] = Array.isArray(review?.pontos_melhoria) ? (review!.pontos_melhoria as string[]) : [];
 
-  const resumoTexto = useMemo(() => {
+  const resumoHtml = useMemo(() => {
     const s: any = recording?.summary;
-    if (!s) return null;
-    if (typeof s === 'string') return s;
-    if (typeof s?.summary === 'string') return s.summary;
-    if (Array.isArray(s)) return s.filter((x) => typeof x === 'string').join('\n');
-    return null;
+    const bruto = typeof s === 'string' ? s : typeof s?.summary === 'string' ? s.summary : null;
+    return sanitizarHtmlMeetGeek(bruto);
   }, [recording]);
 
-  const highlights: string[] = useMemo(() => {
-    const h: any = recording?.highlights;
-    if (!Array.isArray(h)) return [];
-    return h
-      .map((item) => (typeof item === 'string' ? item : item?.text || item?.highlight || item?.summary))
-      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+  const insightsHtml = useMemo(() => {
+    const s: any = recording?.summary;
+    return sanitizarHtmlMeetGeek(typeof s?.ai_insights === 'string' ? s.ai_insights : null);
   }, [recording]);
+
+  const highlights: MeetGeekHighlight[] = useMemo(() => {
+    const h: any = recording?.highlights;
+    const lista = Array.isArray(h?.highlights) ? h.highlights : Array.isArray(h) ? h : [];
+    return lista
+      .map((item: any) => ({
+        label: typeof item?.label === 'string' ? item.label : '',
+        highlightText: typeof item?.highlightText === 'string' ? item.highlightText : '',
+      }))
+      .filter((item: MeetGeekHighlight) => item.label.trim().length > 0 || item.highlightText.trim().length > 0);
+  }, [recording]);
+
 
   const handleAssistir = async () => {
     if (!recording?.id) return;
@@ -1636,6 +1679,7 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   return (
     <>
       <Separator />
+      <style>{MG_RESUMO_CSS}</style>
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
@@ -1757,13 +1801,21 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
           </div>
         )}
 
-        {(resumoTexto || highlights.length > 0 || falas.length > 0) && (
+        {(resumoHtml || insightsHtml || highlights.length > 0 || falas.length > 0) && (
           <Accordion type="multiple" className="border rounded-md divide-y">
-            {resumoTexto && (
+            {resumoHtml && (
               <AccordionItem value="resumo-meetgeek" className="border-b-0">
                 <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Resumo da reunião</AccordionTrigger>
                 <AccordionContent className="px-3 pb-3">
-                  <p className="text-sm text-muted-foreground whitespace-pre-line">{resumoTexto}</p>
+                  <div className="mg-resumo" dangerouslySetInnerHTML={{ __html: resumoHtml }} />
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {insightsHtml && (
+              <AccordionItem value="insights-meetgeek" className="border-b-0">
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Percepções do MeetGeek</AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <div className="mg-resumo" dangerouslySetInnerHTML={{ __html: insightsHtml }} />
                 </AccordionContent>
               </AccordionItem>
             )}
@@ -1771,11 +1823,14 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
               <AccordionItem value="highlights-meetgeek" className="border-b-0">
                 <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">Destaques</AccordionTrigger>
                 <AccordionContent className="px-3 pb-3">
-                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <div className="space-y-3">
                     {highlights.map((h, i) => (
-                      <li key={i}>{h}</li>
+                      <div key={i} className="space-y-0.5">
+                        <p className="mg-destaque-label">{h.label}</p>
+                        <p className="mg-destaque-texto">{h.highlightText}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </AccordionContent>
               </AccordionItem>
             )}
