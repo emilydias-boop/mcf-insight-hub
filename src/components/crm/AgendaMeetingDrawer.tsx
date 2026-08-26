@@ -1679,6 +1679,7 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   return (
     <>
       <Separator />
+      <style>{MG_RESUMO_CSS}</style>
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
