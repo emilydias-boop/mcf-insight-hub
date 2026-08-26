@@ -70,7 +70,7 @@ const n0 = (v: number) => Math.round(v || 0).toLocaleString('pt-BR');
 const n1 = (v: number | null | undefined) =>
   v === null || v === undefined || Number.isNaN(v) ? '—' : (Math.round(v * 10) / 10).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-type SortKey = 'closer' | 'reunioes' | 'vendas' | 'conversao' | 'nota' | 'cobertura';
+type SortKey = 'closer' | 'reunioes' | 'participantes' | 'contratos' | 'conversao' | 'nota' | 'cobertura';
 
 function nomeCurto(email: string, nome?: string | null) {
   if (nome) return nome.split(' ').slice(0, 2).join(' ');
@@ -85,7 +85,7 @@ function DesempenhoClosersContent() {
   const [segmento, setSegmento] = useState<SegmentoFiltro>('todos');
   const [metricaNota, setMetricaNota] = useState<'nota' | 'aderencia'>('nota');
   const [isolado, setIsolado] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('vendas');
+  const [sortKey, setSortKey] = useState<SortKey>('contratos');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [drawerCloser, setDrawerCloser] = useState<{ id: string; email: string; nome: string } | null>(null);
 
@@ -102,7 +102,7 @@ function DesempenhoClosersContent() {
 
   const vendasPorSlot = useMemo(() => {
     const m = new Map<string, boolean>();
-    slots.forEach((s) => m.set(s.id, s.venda));
+    slots.forEach((s) => m.set(s.id, s.teveContrato));
     return m;
   }, [slots]);
 
@@ -112,7 +112,7 @@ function DesempenhoClosersContent() {
   const porCloser = useMemo(() => {
     const map = new Map<
       string,
-      { email: string; nome: string; ativo: boolean; reunioes: number; vendas: number }
+      { email: string; nome: string; ativo: boolean; reunioes: number; contratos: number; participantes: number }
     >();
     slots.forEach((s) => {
       const cur =
@@ -121,10 +121,12 @@ function DesempenhoClosersContent() {
           nome: nomeCurto(s.closer_email, s.closer_name),
           ativo: s.closer_ativo,
           reunioes: 0,
-          vendas: 0,
+          contratos: 0,
+          participantes: 0,
         };
       cur.reunioes += 1;
-      if (s.venda) cur.vendas += 1;
+      cur.contratos += s.contratos;
+      cur.participantes += s.participantes;
       cur.ativo = s.closer_ativo;
       map.set(s.closer_email, cur);
     });
@@ -143,21 +145,21 @@ function DesempenhoClosersContent() {
 
     const emails = new Set<string>([...map.keys(), ...aval.keys()]);
     return Array.from(emails).map((email) => {
-      const base = map.get(email) ?? { email, nome: nomeCurto(email), ativo: true, reunioes: 0, vendas: 0 };
+      const base = map.get(email) ?? { email, nome: nomeCurto(email), ativo: true, reunioes: 0, contratos: 0, participantes: 0 };
       const a = aval.get(email);
       return {
         ...base,
         closerId: a?.id ?? null,
         avaliadas: a?.avaliadas ?? 0,
         nota: a && a.nNota > 0 ? a.somaNota / a.nNota : null,
-        conversao: base.reunioes > 0 ? (base.vendas / base.reunioes) * 100 : 0,
+        conversao: base.participantes > 0 ? (base.contratos / base.participantes) * 100 : 0,
         cobertura: base.reunioes > 0 ? ((a?.avaliadas ?? 0) / base.reunioes) * 100 : 0,
       };
     });
   }, [slots, serie]);
 
   const corPorCloser = useMemo(() => {
-    const ordenados = [...porCloser].sort((a, b) => b.vendas - a.vendas).map((c) => c.email);
+    const ordenados = [...porCloser].sort((a, b) => b.contratos - a.contratos).map((c) => c.email);
     const m: Record<string, string> = {};
     ordenados.forEach((e, i) => (m[e] = CORES[i % CORES.length]));
     return m;
@@ -165,26 +167,28 @@ function DesempenhoClosersContent() {
 
   const resumo = useMemo(() => {
     const reunioes = slots.length;
-    const vendas = slots.filter((s) => s.venda).length;
+    const contratos = slots.reduce((acc, s) => acc + s.contratos, 0);
+    const participantes = slots.reduce((acc, s) => acc + s.participantes, 0);
     const avaliadas = serie.reduce((acc, r) => acc + r.reunioes, 0);
     const somaNota = serie.reduce((acc, r) => acc + (r.nota_media ?? 0) * r.reunioes, 0);
     const nNota = serie.reduce((acc, r) => acc + (r.nota_media !== null ? r.reunioes : 0), 0);
     return {
       reunioes,
-      vendas,
-      conversao: reunioes > 0 ? (vendas / reunioes) * 100 : 0,
+      contratos,
+      participantes,
+      conversao: participantes > 0 ? (contratos / participantes) * 100 : 0,
       nota: nNota > 0 ? somaNota / nNota : null,
       cobertura: reunioes > 0 ? (avaliadas / reunioes) * 100 : 0,
     };
   }, [slots, serie]);
 
   // ---- Séries dos gráficos ----
-  const dadosVendas = useMemo(() => {
+  const dadosContratos = useMemo(() => {
     const map = new Map<string, Record<string, number | string>>();
     slots.forEach((s) => {
       const b = bucketDate(s.ymd, gran);
       const row = map.get(b) ?? { periodo: b };
-      row[s.closer_email] = ((row[s.closer_email] as number) ?? 0) + (s.venda ? 1 : 0);
+      row[s.closer_email] = ((row[s.closer_email] as number) ?? 0) + s.contratos;
       map.set(b, row);
     });
     return Array.from(map.values()).sort((a, b) => String(a.periodo).localeCompare(String(b.periodo)));
@@ -212,6 +216,8 @@ function DesempenhoClosersContent() {
           return a.nome.localeCompare(b.nome) * dir;
         case 'reunioes':
           return (a.reunioes - b.reunioes) * dir;
+        case 'participantes':
+          return (a.participantes - b.participantes) * dir;
         case 'conversao':
           return (a.conversao - b.conversao) * dir;
         case 'nota':
@@ -219,7 +225,7 @@ function DesempenhoClosersContent() {
         case 'cobertura':
           return (a.cobertura - b.cobertura) * dir;
         default:
-          return (a.vendas - b.vendas) * dir;
+          return (a.contratos - b.contratos) * dir;
       }
     });
   }, [porCloser, sortKey, sortDir]);
@@ -377,7 +383,8 @@ function DesempenhoClosersContent() {
       <Alert className="print-block">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Venda é contabilizada por contrato pago do participante, não pelo estágio do CRM.
+          Cada participante não-sócio com contrato pago conta como um contrato — reunião coletiva com
+          três pagantes são três contratos. A conversão é contratos dividido por participantes.
         </AlertDescription>
       </Alert>
 
@@ -392,10 +399,11 @@ function DesempenhoClosersContent() {
       )}
 
       {/* Cartões */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-5 print-block">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-6 print-block">
         {[
           { label: 'Reuniões', valor: n0(resumo.reunioes) },
-          { label: 'Vendas', valor: n0(resumo.vendas) },
+          { label: 'Participantes', valor: n0(resumo.participantes) },
+          { label: 'Contratos', valor: n0(resumo.contratos) },
           { label: 'Conversão', valor: `${n1(resumo.conversao)}%` },
           { label: 'Nota média', valor: n1(resumo.nota) },
           { label: 'Cobertura', valor: `${n1(resumo.cobertura)}%` },
@@ -411,15 +419,15 @@ function DesempenhoClosersContent() {
         ))}
       </div>
 
-      {/* Gráfico 1 — Vendas */}
+      {/* Gráfico 1 — Contratos */}
       <Card className="print-block">
         <CardHeader>
-          <CardTitle className="text-base">Vendas por período</CardTitle>
+          <CardTitle className="text-base">Contratos por período</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[380px] print-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dadosVendas}>
+              <LineChart data={dadosContratos}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -490,17 +498,17 @@ function DesempenhoClosersContent() {
             </ResponsiveContainer>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            Nota alta não garante venda. Use os dois gráficos juntos, nunca isolados.
+            Nota alta não garante contrato. Use os dois gráficos juntos, nunca isolados.
           </p>
         </CardContent>
       </Card>
 
-      {/* O que separou quem vendeu */}
+      {/* O que separou as reuniões com contrato */}
       <Card className="print-block">
         <CardHeader>
-          <CardTitle className="text-base">O que separou quem vendeu</CardTitle>
+          <CardTitle className="text-base">O que separou as reuniões com contrato</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Taxa de cumprimento de cada etapa em reuniões que venderam versus as que não venderam.
+            Taxa de cumprimento de cada etapa em reuniões com contrato versus as sem contrato.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -525,7 +533,7 @@ function DesempenhoClosersContent() {
                 </span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Vendeu: {n1(d.pctVendeu)}% ({n0(d.nVendeu)} reuniões) · Não vendeu: {n1(d.pctNaoVendeu)}% (
+                Com contrato: {n1(d.pctVendeu)}% ({n0(d.nVendeu)} reuniões) · Sem contrato: {n1(d.pctNaoVendeu)}% (
                 {n0(d.nNaoVendeu)} reuniões)
               </div>
               <Progress
@@ -548,7 +556,8 @@ function DesempenhoClosersContent() {
               <TableRow>
                 <SortHead k="closer">Closer</SortHead>
                 <SortHead k="reunioes" className="text-right">Reuniões</SortHead>
-                <SortHead k="vendas" className="text-right">Vendas</SortHead>
+                <SortHead k="participantes" className="text-right">Participantes</SortHead>
+                <SortHead k="contratos" className="text-right">Contratos</SortHead>
                 <SortHead k="conversao" className="text-right">Conversão</SortHead>
                 <SortHead k="nota" className="text-right">Nota</SortHead>
                 <SortHead k="cobertura" className="text-right">Cobertura</SortHead>
@@ -574,7 +583,8 @@ function DesempenhoClosersContent() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">{n0(c.reunioes)}</TableCell>
-                  <TableCell className="text-right font-semibold">{n0(c.vendas)}</TableCell>
+                  <TableCell className="text-right">{n0(c.participantes)}</TableCell>
+                  <TableCell className="text-right font-semibold">{n0(c.contratos)}</TableCell>
                   <TableCell className="text-right">{n1(c.conversao)}%</TableCell>
                   <TableCell className="text-right">{n1(c.nota)}</TableCell>
                   <TableCell className="text-right">
@@ -596,7 +606,7 @@ function DesempenhoClosersContent() {
               ))}
               {!loading && rankingOrdenado.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
                     Nenhuma reunião R1 encontrada no período.
                   </TableCell>
                 </TableRow>
