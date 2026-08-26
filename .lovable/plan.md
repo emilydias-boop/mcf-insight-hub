@@ -1,39 +1,55 @@
-# SEM_ATRIBUICAO agosto/2026 — entrega parcial, com o que ficou de fora
+# Diagnóstico somente leitura — Naufel R$ 720.000 em "Produção sem atribuição"
 
-Só SELECT. Nada foi alterado. Aviso primeiro: **fechei apenas os passos 1 e a leitura de colunas**. Os itens 1 a 5 do seu "resultado mínimo" não foram entregues nesta rodada — a sessão foi encerrada antes. Abaixo o que ficou provado e o SQL pronto para a próxima rodada rodar direto, sem tentativa e erro.
+Nenhuma escrita proposta nesta rodada; apenas o mapa do caminho normal da tela.
 
-## Provado: a dedup derruba a hipótese da perna B
+## 1) O que precisa mudar para o número sair do balde
 
-Os quatro caminhos de exclusão da perna B nos cadastros de agosto (17 linhas: 4 Daniel + 1 Thiago + 12 Naufel em duas grafias):
+**Resposta em uma frase: é obrigatório mudar o `deal_id` da PROPOSTA (`consorcio_proposals`); mudar só o `deal_id` dos 6 cadastros não move um centavo.**
 
-| caminho | resultado |
-|---|---|
-| 4 — `proposal_id` preenchido | true em todas as 17 |
-| 2 — `consorcio_proposal_cartas.pending_registration_id` = id do cadastro | true em todas as 17 |
-| 1 — card em `consorcio_proposals.consortium_card_id` | true só em `4fd447b2…` (Daniel) |
-| 3 — card em `consorcio_proposal_cartas.consortium_card_id` | false em todas |
+Prova:
+- Perna A lê a proposta: `src/hooks/useConsorcioProducaoGerada.ts:290-293` — `.from("consorcio_proposals").select("id, deal_id, created_by, ...")`.
+- A atribuição usa **somente** `p.deal_id` da proposta: linhas 389-390 (`dealParaCloser.get(p.deal_id)` e `dealParaCloserReuniao.get(p.deal_id)`), caindo em `SEM_ATRIBUICAO` na linha 391.
+- Os 6 cadastros nem entram na perna B: linha 514-515 — `regsAvulsos = regs.filter(r => { if (r.proposal_id) return false; ... })` (caminho 4). Como todos têm `proposal_id` preenchido, são excluídos da perna B independentemente do `deal_id` deles.
 
-**Nenhum dos 11 sobrevive à perna B** — inclusive os 6 do Naufel. Então o R$ 720.000 da tela não sai da perna B; a igualdade 6 × 120.000 é coincidência. Esses registros entram pela **perna A**, e é a cascata `created_by → owner_id → closer da reunião` que precisa estar quebrando. Como a perna A não lê `vendedor_name`, o "Diego Carielo" é sintoma, não causa.
+Com `deal_id = 9f74d159…` na proposta: elo 1 (created_by Antony, não é closer) falha → elo 2 pega `owner_id` = andre.duarte → closer André Duarte (linhas 342-347). O SDR (Cleiton) vem do `booked_by` da reunião de 24/08 no lead `9f74d159`, pela lógica de agenda já existente — não por este hook.
 
-## Colunas confirmadas (fim do chute)
+## 2) Tela que troca o lead de uma PROPOSTA
 
-- `consorcio_proposal_cartas`: `id, proposal_id, ordem, valor_credito, prazo_meses, tipo_produto, pending_registration_id, consortium_card_id, created_at, created_by, parcelas_mcf, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, declinada_at, motivo_declinio, declinada_by` — **não existe nome de titular**, confirmando sua instrução (b): usar `crm_deals.name`.
-- `consorcio_proposals`: tem `deal_id, created_by, proposal_date, aceite_date, aceite_by, status, valor_credito, consortium_card_id, qtd_cartas, deleted_at, carta_excluida`. Atenção para a próxima rodada: filtrar `deleted_at is null` e considerar `carta_excluida`, que eu não tinha previsto.
+**Não existe.** Varredura em todo o `src/`: nenhum `.update()` em `consorcio_proposals` fora de tipos; `EditProposalModal.tsx` e `CartasProposalEditor.tsx` não têm campo `deal_id` (busca por `deal_id|dealId` retornou 0 ocorrências nos dois arquivos). O único fluxo de "Trocar lead" é o de **cota contratada** (`ResiduoDetalheModal.tsx:321,339` → `CorrigirVinculoCotaModal`), que opera sobre `consortium_cards`, não sobre propostas.
 
-## Ficou de fora (todos os 5 itens do mínimo)
+## 3) A RPC `consorcio_corrigir_vinculo_cota` mexe em proposta?
 
-1. Lista da perna A com o elo quebrado — não determinei.
-2. Total do balde com precedência A > B > C — não determinei.
-3. Se o conjunto é os 6 do Naufel / R$ 720.000 — não determinei (mas já sei que não é via perna B).
-4. `Diego Carielo` em `profiles`/`closers` — não determinei.
-5. Perna C — não determinei.
+Corpo lido via `pg_proc`. Ela escreve em exatamente duas tabelas:
+- `consorcio_pending_registrations` — UPDATE de `deal_id` (linhas 80-82 e 93-95 do corpo) ou INSERT de cadastro novo (linhas 99-115);
+- `audit_logs` — INSERT de auditoria `cota_vinculo_impacto` (linhas 120-137).
 
-## Próxima rodada: SQL a executar, nesta ordem
+**Não toca em `consorcio_proposals`.** E é inaplicável aqui: o primeiro passo é `SELECT * FROM consortium_cards WHERE id = p_card_id` com exceção "Cota não encontrada" se não existir (linhas 27-30). Os 6 cadastros do Naufel estão em `aguardando_abertura` **sem** `consortium_card_id` (caminho 3 falso na checagem anterior) — não há `p_card_id` válido para chamá-la.
 
-1. **Perna A**: propostas com `status='aceita'`, `deleted_at is null`, âncora `coalesce(aceite_date, proposal_date)` em agosto/2026; juntar cartas por `proposal_id` (soma `valor_credito`, contagem) e `crm_deals` por `deal_id` para o nome. Para cada uma resolver, em ordem: (i) `created_by → profiles.email → closers.email` com `bu='consorcio'`; (ii) `crm_deals.owner_id` cru contra `closers.email`; (iii) closer da última reunião via `meeting_slot_attendees → meeting_slots → closers`. Filtrar as que falham nos três e imprimir o motivo de cada elo.
-2. **Item 3**: somar essa lista e comparar com 6 / R$ 720.000.
-3. **Diego Carielo**: `profiles` por nome, e `closers` em qualquer BU, retornando e-mail e `bu`.
-4. **Perna C**: cards `tipo_registro='contratacao'` em agosto sem cadastro e sem proposta, com `nameKey(vendedor_name)` sem closer da BU.
-5. **Total** com precedência A > B > C, e checar se as 8 religações do Rodrigo mexem no número (só poderiam pelo elo (ii), `owner_id`).
+## 4) Os 6 cadastros aparecem em algum alerta da tela?
 
-Aprove para eu rodar esses cinco de uma vez.
+**Confirmado: não aparecem em nenhum alerta com botão de correção.**
+- `useConsorcioCotasContratadas.ts:250-254` lê apenas `consortium_cards` com `tipo_registro='contratacao'` — sem card, sem linha no alerta.
+- `CadastroSemLeadAlerta.tsx` e `ResiduoDetalheModal.tsx` (botão "Trocar lead") consomem somente itens dessa fonte (`CotaResiduoItem`).
+- Os cadastros aparecem apenas como linhas operacionais na lista de cadastros pendentes (`PendingRegistrationsList.tsx`, páginas Pós-Reunião e Consultas), que **não** tem ação de trocar lead (busca por `deal` no arquivo: 0 ocorrências de edição de vínculo).
+
+## 5) Campo Vendedor
+
+**Confirmado:** quando contratadas, as 6 cotas caem em "Sem vendedor identificado". Perna B/cotas atribuem por `nomeParaCloser.get(nameKey(vendedor_name_cota || vendedor_name))` (`useConsorcioProducaoGerada.ts:531` e `:657`); "Diego Carielo" não casa com nenhum closer da BU → `SEM_ATRIBUICAO`, exibido como "Sem vendedor identificado" (`ConsorcioCloserSummaryTable.tsx:356,519`). O próprio formulário avisa isso (`ConsorcioCardForm.tsx:357-377`).
+
+**Existe tela para editar o Vendedor do cadastro:** `OpenCotaModal.tsx` (campo Vendedor, linhas 1332-1351; grava `vendedor_id` + `vendedor_name_cota` via `useUpdatePendingRegistration`, allow-list em `useConsorcioPendingRegistrations.ts:931+` inclui `vendedor_id` e `vendedor_name_cota`). Caminho: CRM → Pós-Reunião (`/crm/pos-reuniao`) ou Consultas → lista de cadastros pendentes → abrir cadastro → Editar → campo Vendedor. Observação: as opções vêm de `consorcio_vendedor_options`; para cair no André, a opção precisa existir com nome casando (`nameKey`) com o closer — hoje existe a opção "Andre dos Santos Duarte" (o 1 cadastro dele já a usa).
+
+## 6) Conserto pelo fluxo normal — sequência de cliques HOJE
+
+1. Admin abre `/crm/pos-reuniao` → aba Cadastros → localiza os 6 cadastros do Naufel.
+2. Para trocar o lead do cadastro: **não existe tela para este passo** (a RPC da cota exige card; a lista de cadastros não edita `deal_id`).
+3. Para trocar o lead da proposta `89a6f11b…` (o que efetivamente move os R$ 720.000 no painel): **não existe tela para este passo** — nenhum componente, hook, RPC ou edge function faz update em `consorcio_proposals.deal_id`.
+4. Editar o Vendedor de cada cadastro para "Andre dos Santos Duarte": existe tela (passo do item 5 acima), mas isso só afeta a perna B/cotas contratadas futuras — **não** tira os R$ 720.000 da perna A do balde.
+
+**Conclusão, com todas as letras: para mover a PRODUÇÃO GERADA de agosto (perna A) para o André Duarte, só dá para consertar por escrita direta no banco (migration/SQL) — `UPDATE consorcio_proposals SET deal_id='9f74d159-…' WHERE id='89a6f11b-…'` — mais, por higiene, o mesmo `deal_id` nos 6 cadastros e o Vendedor corrigido. Nenhuma dessas três escritas tem caminho 100% pela interface hoje; a de vendedor tem.**
+
+## Detalhes técnicos
+
+- Hook central: `src/hooks/useConsorcioProducaoGerada.ts` (perna A linhas 289-411; dedup perna B linhas 514-519).
+- RPC: `consorcio_corrigir_vinculo_cota` (SECURITY DEFINER; escreve `consorcio_pending_registrations` + `audit_logs`; exige card existente).
+- Trava de mês fechado na RPC (linhas 36-41): se agosto/2026 estiver em `meeting_status_locks` ativo, a RPC recusaria — não verificado nesta rodada, e irrelevante por ela ser inaplicável.
+- Qualquer escrita futura exige aprovação explícita do dono e será feita via ferramenta de migration com auditoria.
