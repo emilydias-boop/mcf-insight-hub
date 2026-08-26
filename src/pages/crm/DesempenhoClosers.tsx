@@ -742,3 +742,104 @@ export default function DesempenhoClosers() {
     </RoleGuard>
   );
 }
+
+function ListaTemas({
+  titulo,
+  temas,
+  tom,
+}: {
+  titulo: string;
+  temas: TemaIA[];
+  tom: 'sucesso' | 'alerta';
+}) {
+  if (temas.length === 0) return null;
+  return (
+    <div>
+      <p
+        className={cn(
+          'text-xs font-medium',
+          tom === 'sucesso' ? 'text-success' : 'text-destructive',
+        )}
+      >
+        {titulo}
+      </p>
+      <div className="mt-2 space-y-2">
+        {temas.map((t, i) => (
+          <div key={`${titulo}-${i}`}>
+            <p className="text-sm">{t.tema}</p>
+            <Progress
+              value={Math.max(0, Math.min(100, t.pct))}
+              className="mt-1 h-1.5"
+              indicatorClassName={tom === 'sucesso' ? 'bg-success' : 'bg-destructive'}
+            />
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {n0(t.reunioes)} de {n0(t.total_reunioes)} reuniões · {n1(t.pct)}%
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TemasIACloser({
+  closerId,
+  de,
+  ate,
+  segmento,
+}: {
+  closerId: string;
+  de: string;
+  ate: string;
+  segmento: SegmentoFiltro;
+}) {
+  const q = useResumoIA(closerId, de, ate, segmento);
+  const d = q.data;
+  const semTema = d?.frases_sem_tema ?? 0;
+  const vazio =
+    !!d && (d.vazio === true || (d.temas_fortes.length === 0 && d.temas_melhoria.length === 0));
+
+  return (
+    <>
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Temas recorrentes nas reuniões avaliadas
+      </p>
+
+      {q.isLoading && (
+        <div className="mt-1 grid gap-3 md:grid-cols-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
+
+      {q.isError && (
+        <div className="mt-1 flex items-center gap-2">
+          <p className="text-xs text-muted-foreground">Não foi possível gerar os temas agora.</p>
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => q.refetch()}>
+            Tentar de novo
+          </Button>
+        </div>
+      )}
+
+      {!q.isLoading && !q.isError && vazio && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sem observações suficientes para identificar temas.
+        </p>
+      )}
+
+      {!q.isLoading && !q.isError && d && !vazio && (
+        <>
+          <div className="mt-1 grid gap-3 md:grid-cols-2">
+            <ListaTemas titulo="Pontos fortes" temas={d.temas_fortes} tom="sucesso" />
+            <ListaTemas titulo="A melhorar" temas={d.temas_melhoria} tom="alerta" />
+          </div>
+          {semTema > 0 && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              {n0(semTema)} observações não se encaixaram em nenhum tema.
+            </p>
+          )}
+        </>
+      )}
+    </>
+  );
+}
