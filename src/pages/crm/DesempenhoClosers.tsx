@@ -801,21 +801,31 @@ function TemasIACloser({
   const vazio =
     !!d && (d.vazio === true || (d.temas_fortes.length === 0 && d.temas_melhoria.length === 0));
 
+  const temResumo = !!d && !!d.resumo && d.resumo.trim().length > 0;
+  const reunioesUsadas = d?.reunioes_usadas ?? 0;
+  const rotuloResumo =
+    reunioesUsadas > 0 && reunioesUsadas < (d?.reunioes ?? 0)
+      ? `Resumo da IA · baseado em ${n0(reunioesUsadas)} de ${n0(d?.reunioes ?? 0)} reuniões avaliadas`
+      : `Resumo da IA · baseado em ${n0(reunioesUsadas)} reuniões avaliadas`;
+
   return (
     <>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Temas recorrentes nas reuniões avaliadas
-      </p>
-
       {q.isLoading && (
-        <div className="mt-1 grid gap-3 md:grid-cols-2">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
+        <>
+          <div className="mt-3 space-y-1.5">
+            <Skeleton className="h-3.5 w-2/3" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-11/12" />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </>
       )}
 
       {q.isError && (
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
           <p className="text-xs text-muted-foreground">Não foi possível gerar os temas agora.</p>
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => q.refetch()}>
             Tentar de novo
@@ -824,13 +834,25 @@ function TemasIACloser({
       )}
 
       {!q.isLoading && !q.isError && vazio && (
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           Sem observações suficientes para identificar temas.
         </p>
       )}
 
       {!q.isLoading && !q.isError && d && !vazio && (
         <>
+          {temResumo && (
+            <div className="mt-3">
+              <p className="text-[11px] text-muted-foreground">{rotuloResumo}</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-foreground whitespace-pre-line">
+                {d.resumo}
+              </p>
+            </div>
+          )}
+
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Temas recorrentes nas reuniões avaliadas
+          </p>
           <div className="mt-1 grid gap-3 md:grid-cols-2">
             <ListaTemas titulo="Pontos fortes" temas={d.temas_fortes} tom="sucesso" />
             <ListaTemas titulo="A melhorar" temas={d.temas_melhoria} tom="alerta" />
