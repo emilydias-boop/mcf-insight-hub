@@ -47,11 +47,13 @@ import {
   bucketDate,
   Granularidade,
   SegmentoFiltro,
+  TemaIA,
   useClosersSlots,
   useEtapasVendaVsNaoVenda,
   useRelatorioCloserEtapas,
   useRelatorioCloserResumo,
   useRelatorioClosersSerie,
+  useResumoIA,
 } from '@/hooks/useRelatorioClosers';
 
 const CORES = [
