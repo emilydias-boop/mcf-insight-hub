@@ -438,10 +438,22 @@ export default function ScriptVendas() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Publicar nova versão do script?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Isso cria uma versão nova do script de {meetingType.toUpperCase()} e desativa a
-              anterior. As avaliações antigas continuam guardadas com a versão em que foram feitas.
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Isso cria uma versão nova do script de {meetingType.toUpperCase()} em{' '}
+                <strong>{SEGMENT_LABEL[segmento]}</strong> e desativa a anterior dessa mesma
+                combinação. As avaliações antigas continuam guardadas com a versão em que foram
+                feitas.
+              </span>
+              {herdaPadrao && (
+                <span className="block">
+                  A partir desta publicação, {SEGMENT_LABEL[segmento]} deixa de seguir o script
+                  padrão e passa a ter régua própria, o que afeta as próximas avaliações desse
+                  segmento.
+                </span>
+              )}
             </AlertDialogDescription>
+
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
