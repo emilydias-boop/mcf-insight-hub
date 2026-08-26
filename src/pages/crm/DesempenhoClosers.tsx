@@ -278,6 +278,7 @@ function DesempenhoClosersContent() {
           }
           .print-only { display: block !important; }
           .print-block { break-inside: avoid; page-break-inside: avoid; }
+          .print-card-resumo { break-inside: avoid; page-break-inside: avoid; }
           .print-chart { width: 700px !important; height: 300px !important; }
           .recharts-wrapper, .recharts-surface { width: 700px !important; }
           table { break-inside: avoid; page-break-inside: avoid; }
