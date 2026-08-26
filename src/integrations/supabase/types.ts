@@ -16847,6 +16847,30 @@ export type Database = {
           pct_falha: number
         }[]
       }
+      relatorio_closer_resumo: {
+        Args: {
+          _ate?: string
+          _bu?: string
+          _de?: string
+          _icp_segment?: string
+          _meeting_type?: string
+        }
+        Returns: {
+          aderencia_media: number
+          closer_email: string
+          closer_id: string
+          melhor_etapa: string
+          melhor_etapa_pct: number
+          nota_media: number
+          pior_etapa: string
+          pior_etapa_pct: number
+          pontos_fortes: string[]
+          pontos_melhoria: string[]
+          reunioes_avaliadas: number
+          segunda_pior_etapa: string
+          segunda_pior_pct: number
+        }[]
+      }
       relatorio_closer_serie: {
         Args: {
           _ate?: string

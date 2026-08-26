@@ -50,6 +50,7 @@ import {
   useClosersSlots,
   useEtapasVendaVsNaoVenda,
   useRelatorioCloserEtapas,
+  useRelatorioCloserResumo,
   useRelatorioClosersSerie,
 } from '@/hooks/useRelatorioClosers';
 
@@ -239,6 +240,12 @@ function DesempenhoClosersContent() {
   };
 
   const etapasQ = useRelatorioCloserEtapas(drawerCloser?.id ?? null, de, ate, segmento);
+  const resumoQ = useRelatorioCloserResumo(de, ate, segmento);
+  const nomePorEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    porCloser.forEach((c) => m.set(c.email, c.nome));
+    return m;
+  }, [porCloser]);
   const etapasOrdenadas = useMemo(
     () => [...(etapasQ.data ?? [])].sort((a, b) => b.pct_falha - a.pct_falha),
     [etapasQ.data],
@@ -271,6 +278,7 @@ function DesempenhoClosersContent() {
           }
           .print-only { display: block !important; }
           .print-block { break-inside: avoid; page-break-inside: avoid; }
+          .print-card-resumo { break-inside: avoid; page-break-inside: avoid; }
           .print-chart { width: 700px !important; height: 300px !important; }
           .recharts-wrapper, .recharts-surface { width: 700px !important; }
           table { break-inside: avoid; page-break-inside: avoid; }
@@ -615,6 +623,106 @@ function DesempenhoClosersContent() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Por que cada nota está onde está */}
+      <Card className="print-block">
+        <CardHeader>
+          <CardTitle className="text-base">Por que cada nota está onde está</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Leitura das etapas que mais falham e das observações registradas nas reuniões avaliadas.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {resumoQ.isLoading && <Skeleton className="h-40 w-full" />}
+          {!resumoQ.isLoading && (resumoQ.data ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              O resumo só aparece quando existem reuniões avaliadas no período selecionado. Ajuste o
+              período ou o segmento para ver a explicação das notas.
+            </p>
+          )}
+          {(resumoQ.data ?? []).map((r) => (
+            <div
+              key={r.closer_id ?? r.closer_email}
+              className="print-card-resumo rounded-lg border border-border p-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-medium">
+                    {nomePorEmail.get(r.closer_email) ?? r.closer_email}
+                  </span>
+                  <span className="text-2xl font-bold">{n1(r.nota_media)}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {n0(r.reunioes_avaliadas)} reuniões avaliadas
+                  {r.aderencia_media !== null && ` · aderência ${n1(r.aderencia_media)}%`}
+                </span>
+              </div>
+
+              {r.reunioes_avaliadas < 10 && (
+                <p className="mt-1 text-xs text-warning">
+                  Poucas reuniões avaliadas — leia com cautela.
+                </p>
+              )}
+
+              {(r.pior_etapa || r.melhor_etapa) && (
+                <p className="mt-2 text-sm">
+                  {r.pior_etapa && (
+                    <>
+                      Perde nota principalmente em <strong>{r.pior_etapa}</strong>
+                      {r.pior_etapa_pct !== null && ` (${n1(r.pior_etapa_pct)}% de falha)`}
+                      {r.segunda_pior_etapa && (
+                        <>
+                          {' '}e <strong>{r.segunda_pior_etapa}</strong>
+                          {r.segunda_pior_pct !== null && ` (${n1(r.segunda_pior_pct)}%)`}
+                        </>
+                      )}
+                      {'. '}
+                    </>
+                  )}
+                  {r.melhor_etapa && (
+                    <>
+                      Melhor execução em <strong>{r.melhor_etapa}</strong>
+                      {r.melhor_etapa_pct !== null && ` (${n1(r.melhor_etapa_pct)}% de falha)`}.
+                    </>
+                  )}
+                </p>
+              )}
+
+              {((r.pontos_fortes ?? []).length > 0 || (r.pontos_melhoria ?? []).length > 0) && (
+                <>
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    Observações da IA nas reuniões avaliadas
+                  </p>
+                  <div className="mt-1 grid gap-3 md:grid-cols-2">
+                    {(r.pontos_fortes ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-success">Pontos fortes</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                          {(r.pontos_fortes ?? []).map((p, i) => (
+                            <li key={`f-${i}`}>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {(r.pontos_melhoria ?? []).length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-destructive">A melhorar</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                          {(r.pontos_melhoria ?? []).map((p, i) => (
+                            <li key={`m-${i}`}>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+
 
       {/* Drawer de etapas */}
       <Sheet open={!!drawerCloser} onOpenChange={(o) => !o && setDrawerCloser(null)}>
