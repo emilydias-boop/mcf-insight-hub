@@ -688,35 +688,13 @@ function DesempenhoClosersContent() {
                 </p>
               )}
 
-              {((r.pontos_fortes ?? []).length > 0 || (r.pontos_melhoria ?? []).length > 0) && (
-                <>
-                  <p className="mt-3 text-[11px] text-muted-foreground">
-                    Observações da IA nas reuniões avaliadas
-                  </p>
-                  <div className="mt-1 grid gap-3 md:grid-cols-2">
-                    {(r.pontos_fortes ?? []).length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-success">Pontos fortes</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                          {(r.pontos_fortes ?? []).map((p, i) => (
-                            <li key={`f-${i}`}>{p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {(r.pontos_melhoria ?? []).length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-destructive">A melhorar</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                          {(r.pontos_melhoria ?? []).map((p, i) => (
-                            <li key={`m-${i}`}>{p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+              <TemasIACloser
+                closerId={r.closer_id}
+                de={de}
+                ate={ate}
+                segmento={segmento}
+              />
+
             </div>
           ))}
         </CardContent>
