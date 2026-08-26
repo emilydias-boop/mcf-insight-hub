@@ -16826,128 +16826,49 @@ export type Database = {
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
-      relatorio_closer_etapas:
-        | {
-            Args: {
-              _ate?: string
-              _closer_id?: string
-              _de?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              avaliacoes: number
-              closer_email: string
-              closer_id: string
-              cumpriu: number
-              etapa: string
-              falhou: number
-              nota_media_etapa: number
-              ordem: number
-              pct_falha: number
-            }[]
-          }
-        | {
-            Args: {
-              _ate?: string
-              _bu?: string
-              _closer_id?: string
-              _de?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              avaliacoes: number
-              closer_email: string
-              closer_id: string
-              cumpriu: number
-              etapa: string
-              falhou: number
-              nota_media_etapa: number
-              ordem: number
-              pct_falha: number
-            }[]
-          }
-        | {
-            Args: {
-              _ate?: string
-              _bu?: string
-              _closer_id?: string
-              _de?: string
-              _icp_segment?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              avaliacoes: number
-              closer_email: string
-              closer_id: string
-              cumpriu: number
-              etapa: string
-              falhou: number
-              nota_media_etapa: number
-              ordem: number
-              pct_falha: number
-            }[]
-          }
-      relatorio_closer_serie:
-        | {
-            Args: {
-              _ate?: string
-              _de?: string
-              _gran?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              aderencia_media: number
-              closer_email: string
-              closer_id: string
-              nota_media: number
-              periodo: string
-              reunioes: number
-              taxa_conversao: number
-              vendas: number
-            }[]
-          }
-        | {
-            Args: {
-              _ate?: string
-              _bu?: string
-              _de?: string
-              _gran?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              aderencia_media: number
-              bu: string
-              closer_email: string
-              closer_id: string
-              nota_media: number
-              periodo: string
-              reunioes: number
-              taxa_conversao: number
-              vendas: number
-            }[]
-          }
-        | {
-            Args: {
-              _ate?: string
-              _bu?: string
-              _de?: string
-              _gran?: string
-              _icp_segment?: string
-              _meeting_type?: string
-            }
-            Returns: {
-              aderencia_media: number
-              bu: string
-              closer_email: string
-              closer_id: string
-              icp_segment: string
-              nota_media: number
-              periodo: string
-              reunioes: number
-              taxa_conversao: number
-              vendas: number
-            }[]
-          }
+      relatorio_closer_etapas: {
+        Args: {
+          _ate?: string
+          _bu?: string
+          _closer_id?: string
+          _de?: string
+          _icp_segment?: string
+          _meeting_type?: string
+        }
+        Returns: {
+          avaliacoes: number
+          closer_email: string
+          closer_id: string
+          cumpriu: number
+          etapa: string
+          falhou: number
+          nota_media_etapa: number
+          ordem: number
+          pct_falha: number
+        }[]
+      }
+      relatorio_closer_serie: {
+        Args: {
+          _ate?: string
+          _bu?: string
+          _de?: string
+          _gran?: string
+          _icp_segment?: string
+          _meeting_type?: string
+        }
+        Returns: {
+          aderencia_media: number
+          bu: string
+          closer_email: string
+          closer_id: string
+          icp_segment: string
+          nota_media: number
+          periodo: string
+          reunioes: number
+          taxa_conversao: number
+          vendas: number
+        }[]
+      }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
