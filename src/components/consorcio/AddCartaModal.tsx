@@ -49,7 +49,7 @@ import { nameKey } from '@/hooks/useConsorcioCotasContratadas';
 async function emailDoCloserPorNome(nome: string): Promise<string | null> {
   const alvo = nameKey(nome);
   if (!alvo) return null;
-  const { data } = await supabase.from('closers').select('name, email').eq('bu', CONSORCIO_BU_REF);
+  const { data } = await supabase.from('closers').select('name, email').eq('bu', CONSORCIO_BU);
   const found = (data || []).find((c: any) => nameKey(c.name) === alvo);
   return (found as any)?.email || null;
 }
