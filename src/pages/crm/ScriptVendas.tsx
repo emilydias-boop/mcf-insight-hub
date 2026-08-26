@@ -218,19 +218,38 @@ export default function ScriptVendas() {
         </div>
       </div>
 
-      <Tabs value={meetingType} onValueChange={(v) => setMeetingType(v as MeetingType)}>
-        <TabsList>
-          <TabsTrigger value="r1">R1</TabsTrigger>
-          <TabsTrigger value="r2">R2</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs value={meetingType} onValueChange={(v) => setMeetingType(v as MeetingType)}>
+          <TabsList>
+            <TabsTrigger value="r1">R1</TabsTrigger>
+            <TabsTrigger value="r2">R2</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Tabs value={segmento} onValueChange={(v) => setSegmento(v as SegmentValue)}>
+          <TabsList>
+            <TabsTrigger value="default">Padrão</TabsTrigger>
+            <TabsTrigger value="A">Segmento A</TabsTrigger>
+            <TabsTrigger value="B">Segmento B</TabsTrigger>
+            <TabsTrigger value="C">Segmento C</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              {versaoAtual ? `Versão ${versaoAtual}` : 'Sem versão ativa'} · {draft.length} etapa(s)
-            </Badge>
+            {herdaPadrao ? (
+              <Badge variant="outline" className="border-dashed text-muted-foreground">
+                {SEGMENT_LABEL[segmento]} · usando o script padrão (versão{' '}
+                {versaoHerdada ?? '—'}, {etapasResolvidas.length} etapas)
+              </Badge>
+            ) : (
+              <Badge variant="secondary">
+                {SEGMENT_LABEL[segmento]} ·{' '}
+                {versaoAtual ? `versão ${versaoAtual}` : 'sem versão ativa'} · {draft.length}{' '}
+                etapa(s)
+              </Badge>
+            )}
             <Badge variant="outline">Peso total: {pesoTotal.toLocaleString('pt-BR')}</Badge>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -239,6 +258,27 @@ export default function ScriptVendas() {
           </p>
         </CardContent>
       </Card>
+
+      {herdaPadrao && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Sem script próprio</AlertTitle>
+          <AlertDescription className="space-y-2 text-sm">
+            <p>
+              Este segmento não tem script próprio e está usando o script padrão. Publicar aqui cria
+              uma régua específica para ele.
+            </p>
+            <Button variant="outline" size="sm" onClick={partirDoPadrao}>
+              <CopyPlus className="mr-2 h-4 w-4" />
+              Partir do script padrão
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              O botão apenas preenche o formulário com as etapas do padrão — nada é salvo até você
+              publicar. Você também pode começar do zero em “Adicionar etapa”.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Alert>
         <Info className="h-4 w-4" />
@@ -263,13 +303,15 @@ export default function ScriptVendas() {
         </div>
       ) : (
         <div className="space-y-3">
-          {draft.length === 0 && (
+          {draft.length === 0 && !herdaPadrao && (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                Nenhuma etapa cadastrada para {meetingType.toUpperCase()}.
+                Nenhuma etapa cadastrada para {meetingType.toUpperCase()} ·{' '}
+                {SEGMENT_LABEL[segmento]}.
               </CardContent>
             </Card>
           )}
+
 
           {draft.map((etapa, index) => {
             const erro = erros[etapa.key];
