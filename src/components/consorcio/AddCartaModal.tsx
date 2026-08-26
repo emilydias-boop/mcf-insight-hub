@@ -41,6 +41,25 @@ import {
   PropostaCartaDraft, cartaDraftValida, draftsParaInput, novaCartaDraft, derivarParcelasEmpresa,
 } from '@/types/consorcioCartas';
 import { CONSORCIO_LABELS } from '@/lib/consorcioLabels';
+import { fetchR1ConsorcioDetalhePorDeal, R1ConsorcioInfo } from '@/hooks/useCorrigirVinculoCota';
+import { useBuscarReuniaoConsorcio, ReuniaoConsorcioCandidato } from '@/hooks/useBuscarReuniaoConsorcio';
+import { nameKey } from '@/hooks/useConsorcioCotasContratadas';
+
+/** E-mail do closer da BU Consórcio que casa (nameKey) com o vendedor escolhido — vira owner do lead novo. */
+async function emailDoCloserPorNome(nome: string): Promise<string | null> {
+  const alvo = nameKey(nome);
+  if (!alvo) return null;
+  const { data } = await supabase.from('closers').select('name, email').eq('bu', CONSORCIO_BU);
+  const found = (data || []).find((c: any) => nameKey(c.name) === alvo);
+  return (found as any)?.email || null;
+}
+
+const fmtDiaCurto = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+const fmtDiaHora = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
 
 interface Props {
   open: boolean;
@@ -78,42 +97,116 @@ interface DealMatch {
   contact_phone: string | null;
   origin_label: string | null;
   stage_name: string | null;
+  /** Selo de R1 de consórcio — null quando o lead não tem reunião elegível. */
+  r1: R1ConsorcioInfo | null;
 }
 
-function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boolean) {
+/**
+ * Busca de lead do "Adicionar Carta".
+ * Casa por contato (nome/e-mail/telefone), pelo NOME DO DEAL e por CPF/CNPJ
+ * via cadastros de consórcio. Um lead com R1 de consórcio elegível entra no
+ * resultado venha de qual origem vier — é ele que credita SDR e closer.
+ */
+function useConsorcioLeadSearch(
+  query: string,
+  originIds: string[],
+  docs: { cpf?: string; cnpj?: string },
+  enabled: boolean,
+) {
   const term = query.trim();
+  const cpfDigits = (docs.cpf || '').replace(/\D/g, '');
+  const cnpjDigits = (docs.cnpj || '').replace(/\D/g, '');
   return useQuery({
-    queryKey: ['consorcio-lead-search', term.toLowerCase(), originIds.length],
-    enabled: enabled && term.length >= 2 && originIds.length > 0,
+    queryKey: ['consorcio-lead-search', term.toLowerCase(), cpfDigits, cnpjDigits, originIds.length],
+    enabled: enabled && (term.length >= 2 || cpfDigits.length >= 11 || cnpjDigits.length >= 11) && originIds.length > 0,
     staleTime: 15_000,
     queryFn: async (): Promise<DealMatch[]> => {
       const like = `%${term}%`;
       const digits = term.replace(/\D/g, '');
 
-      let cq = supabase
-        .from('crm_contacts')
-        .select('id, name, email, phone')
-        .eq('is_archived', false)
-        .limit(30);
-      cq = digits.length >= 4
-        ? cq.or(`name.ilike.${like},email.ilike.${like},phone.ilike.%${digits}%`)
-        : cq.or(`name.ilike.${like},email.ilike.${like}`);
-      const { data: contacts } = await cq;
-      const contactIds = (contacts || []).map((c: any) => c.id);
-      if (!contactIds.length) return [];
-
       const contactById = new Map<string, any>();
-      (contacts || []).forEach((c: any) => contactById.set(c.id, c));
+      const dealsPorId = new Map<string, any>();
 
-      const { data: deals } = await supabase
-        .from('crm_deals')
-        .select('id, contact_id, stage_id, origin_id, created_at')
-        .in('contact_id', contactIds)
-        .in('origin_id', originIds)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (!deals || deals.length === 0) return [];
+      if (term.length >= 2) {
+        // 1) contatos que casam por nome/e-mail/telefone
+        let cq = supabase
+          .from('crm_contacts')
+          .select('id, name, email, phone')
+          .eq('is_archived', false)
+          .limit(30);
+        cq = digits.length >= 4
+          ? cq.or(`name.ilike.${like},email.ilike.${like},phone.ilike.%${digits}%`)
+          : cq.or(`name.ilike.${like},email.ilike.${like}`);
+        const { data: contacts } = await cq;
+        (contacts || []).forEach((c: any) => contactById.set(c.id, c));
+        const contactIds = (contacts || []).map((c: any) => c.id);
+        if (contactIds.length) {
+          const { data: deals } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id, stage_id, origin_id, created_at')
+            .in('contact_id', contactIds)
+            .eq('is_archived', false)
+            .order('created_at', { ascending: false })
+            .limit(30);
+          (deals || []).forEach((d: any) => dealsPorId.set(d.id, d));
+        }
+
+        // 2) nome do DEAL — muitos leads de consórcio não têm contato com nome
+        const { data: dealsNome } = await supabase
+          .from('crm_deals')
+          .select('id, contact_id, stage_id, origin_id, created_at')
+          .ilike('name', like)
+          .eq('is_archived', false)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        (dealsNome || []).forEach((d: any) => {
+          if (!dealsPorId.has(d.id)) dealsPorId.set(d.id, d);
+        });
+      }
+
+      // 3) reforço por CPF/CNPJ: deals de cadastros de consórcio do mesmo documento
+      const pares: Array<['cpf' | 'cnpj', string]> = [];
+      if (cpfDigits.length >= 11 && docs.cpf?.trim()) pares.push(['cpf', docs.cpf.trim()]);
+      if (cnpjDigits.length >= 11 && docs.cnpj?.trim()) pares.push(['cnpj', docs.cnpj.trim()]);
+      for (const [col, valor] of pares) {
+        const { data: regs } = await supabase
+          .from('consorcio_pending_registrations')
+          .select('deal_id')
+          .eq(col, valor)
+          .not('deal_id', 'is', null)
+          .limit(20);
+        const faltam = [...new Set((regs || []).map((r: any) => r.deal_id).filter(Boolean))].filter(
+          (id) => !dealsPorId.has(id as string),
+        ) as string[];
+        if (faltam.length) {
+          const { data: extraDeals } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id, stage_id, origin_id, created_at')
+            .in('id', faltam);
+          (extraDeals || []).forEach((d: any) => dealsPorId.set(d.id, d));
+        }
+      }
+
+      let deals = [...dealsPorId.values()];
+      if (deals.length === 0) return [];
+
+      // Contatos dos deals achados pelo nome do deal ou pelo documento
+      const contatosFaltantes = [
+        ...new Set(deals.map((d: any) => d.contact_id).filter(Boolean)),
+      ].filter((id) => !contactById.has(id as string)) as string[];
+      if (contatosFaltantes.length) {
+        const { data: cs } = await supabase
+          .from('crm_contacts')
+          .select('id, name, email, phone')
+          .in('id', contatosFaltantes);
+        (cs || []).forEach((c: any) => contactById.set(c.id, c));
+      }
+
+      // Selo de R1 ANTES do filtro de origem: lead com R1 de consórcio é
+      // relevante por definição, venha de onde vier.
+      const r1Map = await fetchR1ConsorcioDetalhePorDeal(deals.map((d: any) => String(d.id)));
+      deals = deals.filter((d: any) => originIds.includes(d.origin_id) || r1Map.has(String(d.id)));
+      if (deals.length === 0) return [];
 
       const originIdsUsed = Array.from(new Set(deals.map((d: any) => d.origin_id).filter(Boolean)));
       const stageIdsUsed = Array.from(new Set(deals.map((d: any) => d.stage_id).filter(Boolean)));
@@ -133,19 +226,25 @@ function useConsorcioLeadSearch(query: string, originIds: string[], enabled: boo
       const seen = new Set<string>();
       const out: DealMatch[] = [];
       for (const d of deals as any[]) {
-        if (seen.has(d.contact_id)) continue;
-        seen.add(d.contact_id);
+        if (d.contact_id) {
+          if (seen.has(d.contact_id)) continue;
+          seen.add(d.contact_id);
+        }
         const c = contactById.get(d.contact_id) || {};
+        const r1 = r1Map.get(String(d.id));
         out.push({
           deal_id: d.id,
           origin_id: d.origin_id,
-          contact_name: c.name || null,
+          contact_name: c.name || d.name || null,
           contact_email: c.email || null,
           contact_phone: c.phone || null,
           origin_label: originById.get(d.origin_id) || null,
           stage_name: stageById.get(d.stage_id) || null,
+          r1: r1 ? { dia: r1.dia, closerName: r1.closerName, temAgendador: r1.temAgendador } : null,
         });
       }
+      // Quem tem R1 de consórcio vem primeiro — foi a ordenação que faltou no caso Rodrigo.
+      out.sort((a, b) => Number(!!b.r1) - Number(!!a.r1));
       return out;
     },
   });
@@ -177,11 +276,19 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   const [mostrarErros, setMostrarErros] = useState(false);
   const [cadastroAberto, setCadastroAberto] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  /** Lead criado por ESTE modal — único contato/deal que o submit pode complementar. */
+  const [leadCriadoAqui, setLeadCriadoAqui] = useState<{ dealId: string; contactId: string } | null>(null);
+  /** Candidatos com R1 de consórcio encontrados na verificação do submit — abre o diálogo de atrito. */
+  const [candidatosReuniao, setCandidatosReuniao] = useState<ReuniaoConsorcioCandidato[] | null>(null);
+  const [motivoSemR1, setMotivoSemR1] = useState('');
 
   const cliente = useDadosCliente({ nomeInicial: lead?.contact_name || '' });
+  const buscarReuniao = useBuscarReuniaoConsorcio();
+  const cpfBusca = (cliente.form.watch('cpf') as string) || '';
+  const cnpjBusca = (cliente.form.watch('cnpj') as string) || '';
   const { data: originIds = [] } = useConsorcioOriginIds();
   const { data: leadMatches = [], isFetching: isSearching } = useConsorcioLeadSearch(
-    leadSearch, originIds, leadOpen,
+    leadSearch, originIds, { cpf: cpfBusca, cnpj: cnpjBusca }, leadOpen,
   );
 
   const closerNome = (() => {
@@ -214,11 +321,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     setNovoLeadAberto(false); setNovoLeadNome('');
     setCloserId(''); setAceiteDate(new Date().toISOString().split('T')[0]);
     setObs(''); setCartas([novaCartaDraft()]); setMostrarErros(false);
+    setLeadCriadoAqui(null); setCandidatosReuniao(null); setMotivoSemR1('');
     cliente.form.reset();
   };
 
   const selecionarLead = (m: DealMatch) => {
     setLead(m);
+    setLeadCriadoAqui(null);
     cliente.form.setValue('nome_completo', m.contact_name || '');
     if (m.contact_phone) cliente.form.setValue('telefone', m.contact_phone);
     if (m.contact_email) cliente.form.setValue('email', m.contact_email);
@@ -247,16 +356,28 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
     setCriandoLead(true);
     try {
+      // O lead novo não nasce mais cego: telefone/e-mail/documento do bloco 3
+      // (quando já preenchidos) entram no contato, e o closer vira dono do deal.
+      const vals = cliente.form.getValues();
+      const tel = String(vals.telefone || vals.telefone_comercial || '').trim();
+      const mail = String(vals.email || vals.email_comercial || '').trim();
+      const docDigits = String(vals.cpf || vals.cnpj || '').replace(/\D/g, '');
+      const contatoInsert: Record<string, unknown> = { name: nome, clint_id: `local-${Date.now()}` };
+      if (tel) contatoInsert.phone = tel;
+      if (mail) contatoInsert.email = mail;
+      if (docDigits.length >= 11) contatoInsert.custom_fields = { documento: docDigits };
+
       console.log('[AddCartaModal] inserindo crm_contacts...', nome);
       const { data: contato, error: cErr } = await supabase
         .from('crm_contacts')
-        .insert({ name: nome, clint_id: `local-${Date.now()}` } as any)
+        .insert(contatoInsert as any)
         .select('id, name')
         .single();
       console.log('[AddCartaModal] resposta crm_contacts', { contato, cErr });
       if (cErr) throw cErr;
       if (!contato?.id) throw new Error('Contato criado sem ID retornado.');
 
+      const ownerEmail = closerNome ? await emailDoCloserPorNome(closerNome) : null;
       const { data: deal, error: dErr } = await supabase
         .from('crm_deals')
         .insert({
@@ -265,6 +386,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           origin_id: EA_ORIGIN_ID,
           stage_id: EA_ENTRADA_STAGE_ID,
           clint_id: `manual_${Date.now()}_${String(contato.id).slice(0, 8)}`,
+          ...(ownerEmail ? { owner_id: ownerEmail } : {}),
         } as any)
         .select('id')
         .single();
@@ -276,11 +398,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         deal_id: deal.id,
         origin_id: EA_ORIGIN_ID,
         contact_name: nome,
-        contact_email: null,
-        contact_phone: null,
+        contact_email: mail || null,
+        contact_phone: tel || null,
         origin_label: 'Efeito Alavanca + Clube',
         stage_name: 'Parceiros',
+        r1: null,
       });
+      setLeadCriadoAqui({ dealId: deal.id, contactId: contato.id });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       setNovoLeadNome('');
       toast.success('Lead criado no CRM do consórcio.');
@@ -311,13 +435,71 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     }
     if (!lead) return;
 
+    // Trava anti-órbita: lead sem R1 de consórcio pode ser um lead novo criado
+    // enquanto a R1 verdadeira está em outro lead (casos Rodrigo/Naufel).
+    // A verificação é de atrito, não de proibição — parceiro/indicação seguem
+    // com "Criar assim mesmo" + motivo.
+    if (!lead.r1) {
+      setSalvando(true);
+      try {
+        const vals = cliente.form.getValues();
+        const candidatos = await buscarReuniao.mutateAsync({
+          nome: vals.nome_completo || vals.razao_social || lead.contact_name,
+          cpf: vals.cpf,
+          cnpj: vals.cnpj,
+          telefone: vals.telefone || vals.telefone_comercial || lead.contact_phone,
+          email: vals.email || vals.email_comercial || lead.contact_email,
+          closerNome,
+          dataReferencia: aceiteDate,
+          excluirDealId: lead.deal_id,
+        });
+        if (candidatos.length > 0) {
+          setCandidatosReuniao(candidatos);
+          setMotivoSemR1('');
+          return; // o diálogo bloqueante decide o caminho
+        }
+      } catch {
+        // Falha na verificação não pode impedir um lançamento legítimo.
+      } finally {
+        setSalvando(false);
+      }
+    }
+    await executarSubmit(lead, obs);
+  };
 
+  /** Troca o lead vinculado pelo lead da reunião encontrada e segue o submit. */
+  const usarLeadDaReuniao = (c: ReuniaoConsorcioCandidato) => {
+    const novoLead: DealMatch = {
+      deal_id: c.dealId,
+      origin_id: c.originId || EA_ORIGIN_ID,
+      contact_name: c.contactName,
+      contact_email: c.contactEmail,
+      contact_phone: c.contactPhone,
+      origin_label: null,
+      stage_name: null,
+      r1: { dia: c.dia, closerName: c.closerName, temAgendador: !!c.agendadoPor },
+    };
+    selecionarLead(novoLead);
+    setCandidatosReuniao(null);
+    void executarSubmit(novoLead, obs);
+  };
+
+  /** Caminho legítimo (parceiro/indicação): exige motivo e registra na proposta. */
+  const criarAssimMesmo = () => {
+    const motivo = motivoSemR1.trim();
+    if (motivo.length < 10 || !lead) return;
+    const obsFinal = `[lead novo sem R1] ${motivo}` + (obs.trim() ? `\n${obs.trim()}` : '');
+    setCandidatosReuniao(null);
+    void executarSubmit(lead, obsFinal);
+  };
+
+  const executarSubmit = async (leadFinal: DealMatch, obsFinal: string) => {
     setSalvando(true);
     try {
       const resultado = await enviarProposta.mutateAsync({
-        deal_id: lead.deal_id,
-        origin_id: lead.origin_id,
-        proposal_details: obs,
+        deal_id: leadFinal.deal_id,
+        origin_id: leadFinal.origin_id,
+        proposal_details: obsFinal,
         cartas: draftsParaInput(cartas),
         origem_lead: origem,
       });
@@ -333,6 +515,28 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         } as any)
         .eq('id', resultado.proposal_id);
 
+      // Complemento do lead criado por ESTE modal: se o bloco 3 foi preenchido
+      // depois da criação, o contato/deal criados aqui recebem os dados agora.
+      if (leadCriadoAqui && leadCriadoAqui.dealId === leadFinal.deal_id) {
+        const vals = cliente.form.getValues();
+        const tel = String(vals.telefone || vals.telefone_comercial || '').trim();
+        const mail = String(vals.email || vals.email_comercial || '').trim();
+        const docDigits = String(vals.cpf || vals.cnpj || '').replace(/\D/g, '');
+        const patchContato: Record<string, unknown> = {};
+        if (tel) patchContato.phone = tel;
+        if (mail) patchContato.email = mail;
+        if (docDigits.length >= 11) patchContato.custom_fields = { documento: docDigits };
+        if (Object.keys(patchContato).length > 0) {
+          await supabase.from('crm_contacts').update(patchContato as any).eq('id', leadCriadoAqui.contactId);
+        }
+        if (closerNome) {
+          const ownerEmail = await emailDoCloserPorNome(closerNome);
+          if (ownerEmail) {
+            await supabase.from('crm_deals').update({ owner_id: ownerEmail } as any).eq('id', leadCriadoAqui.dealId);
+          }
+        }
+      }
+
       const dados = cliente.dadosLimpos(cliente.form.getValues());
       const docs = cliente.documentos();
 
@@ -342,7 +546,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         await createRegistration.mutateAsync({
           carta_id: carta.id,
           proposal_id: resultado.proposal_id,
-          deal_id: lead.deal_id,
+          deal_id: leadFinal.deal_id,
           tipo_pessoa: cliente.tipoPessoa,
           vendedor_name: closerNome,
           documents: idx === 0 ? docs : [],
@@ -362,7 +566,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           aceite_date: aceiteDate,
           vendedor_id: closerId || undefined,
           vendedor_name_cota: closerNome || undefined,
-          observacoes: obs.trim() || undefined,
+          observacoes: obsFinal.trim() || undefined,
           ...dados,
         } as any);
       }
@@ -382,6 +586,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetar(); onOpenChange(o); }}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -451,6 +656,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                               <span className="text-xs text-muted-foreground">
                                 {[m.contact_phone, m.origin_label, m.stage_name].filter(Boolean).join(' · ')}
                               </span>
+                              {m.r1 ? (
+                                <span className="text-xs font-medium text-primary">
+                                  tem R1 de consórcio · {fmtDiaCurto(m.r1.dia)}{m.r1.closerName ? ` · ${m.r1.closerName}` : ''}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/70">sem R1 de consórcio</span>
+                              )}
                             </div>
                           </CommandItem>
                         ))}
@@ -614,5 +826,69 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
       </DialogContent>
     </Dialog>
+
+    {/* ===== Diálogo de atrito: possível R1 de consórcio em outro lead ===== */}
+    <Dialog open={!!candidatosReuniao} onOpenChange={(o) => { if (!o && !salvando) setCandidatosReuniao(null); }}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Este cliente pode já ter passado por uma R1 de consórcio</DialogTitle>
+          <DialogDescription>
+            Vincular à reunião certa é o que credita o SDR. Se nenhuma destas for o cliente,
+            você pode criar assim mesmo — com um motivo registrado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[300px] space-y-2 overflow-y-auto">
+          {(candidatosReuniao || []).map((c) => (
+            <div key={c.dealId} className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{c.contactName || 'Lead sem nome'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {fmtDiaHora(c.dia)}{c.closerName ? ` · ${c.closerName}` : ''}
+                  {c.agendadoPor ? ` · agendado por ${c.agendadoPor}` : ''}
+                </p>
+                {c.faixa === 2 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    reunião deste closer no período — confira se é este cliente
+                  </p>
+                )}
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => usarLeadDaReuniao(c)} disabled={salvando}>
+                {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Usar este lead
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2 border-t pt-3">
+          <Label htmlFor="motivo-sem-r1" className="text-xs">
+            Motivo para criar sem vincular à reunião (mínimo 10 caracteres)
+          </Label>
+          <Textarea
+            id="motivo-sem-r1"
+            rows={2}
+            value={motivoSemR1}
+            onChange={(e) => setMotivoSemR1(e.target.value)}
+            placeholder="Ex.: venda de parceiro, cliente nunca passou por reunião..."
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCandidatosReuniao(null)} disabled={salvando}>
+            Voltar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={criarAssimMesmo}
+            disabled={salvando || motivoSemR1.trim().length < 10}
+          >
+            {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Criar assim mesmo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
