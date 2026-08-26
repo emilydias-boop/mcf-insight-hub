@@ -3352,6 +3352,62 @@ export type Database = {
           },
         ]
       }
+      closer_resumo_ia: {
+        Row: {
+          closer_id: string
+          frases_sem_tema: number
+          frases_total: number
+          gerado_em: string
+          icp_segment: string | null
+          id: string
+          meeting_type: string
+          modelo: string | null
+          periodo_ate: string
+          periodo_de: string
+          reunioes: number
+          temas_fortes: Json
+          temas_melhoria: Json
+        }
+        Insert: {
+          closer_id: string
+          frases_sem_tema?: number
+          frases_total?: number
+          gerado_em?: string
+          icp_segment?: string | null
+          id?: string
+          meeting_type?: string
+          modelo?: string | null
+          periodo_ate: string
+          periodo_de: string
+          reunioes: number
+          temas_fortes?: Json
+          temas_melhoria?: Json
+        }
+        Update: {
+          closer_id?: string
+          frases_sem_tema?: number
+          frases_total?: number
+          gerado_em?: string
+          icp_segment?: string | null
+          id?: string
+          meeting_type?: string
+          modelo?: string | null
+          periodo_ate?: string
+          periodo_de?: string
+          reunioes?: number
+          temas_fortes?: Json
+          temas_melhoria?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_resumo_ia_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closers: {
         Row: {
           bu: string | null
@@ -15851,6 +15907,20 @@ export type Database = {
         Returns: string
       }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
+      closer_frases_avaliacao: {
+        Args: {
+          _ate: string
+          _closer_id: string
+          _de: string
+          _icp_segment?: string
+          _meeting_type?: string
+        }
+        Returns: {
+          frase: string
+          review_id: string
+          tipo: string
+        }[]
+      }
       closers_do_usuario: { Args: never; Returns: string[] }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
       consorcio_corrigir_vinculo_cota: {
