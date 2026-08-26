@@ -1551,22 +1551,28 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   const pontosFortes: string[] = Array.isArray(review?.pontos_fortes) ? (review!.pontos_fortes as string[]) : [];
   const pontosMelhoria: string[] = Array.isArray(review?.pontos_melhoria) ? (review!.pontos_melhoria as string[]) : [];
 
-  const resumoTexto = useMemo(() => {
+  const resumoHtml = useMemo(() => {
     const s: any = recording?.summary;
-    if (!s) return null;
-    if (typeof s === 'string') return s;
-    if (typeof s?.summary === 'string') return s.summary;
-    if (Array.isArray(s)) return s.filter((x) => typeof x === 'string').join('\n');
-    return null;
+    const bruto = typeof s === 'string' ? s : typeof s?.summary === 'string' ? s.summary : null;
+    return sanitizarHtmlMeetGeek(bruto);
   }, [recording]);
 
-  const highlights: string[] = useMemo(() => {
-    const h: any = recording?.highlights;
-    if (!Array.isArray(h)) return [];
-    return h
-      .map((item) => (typeof item === 'string' ? item : item?.text || item?.highlight || item?.summary))
-      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+  const insightsHtml = useMemo(() => {
+    const s: any = recording?.summary;
+    return sanitizarHtmlMeetGeek(typeof s?.ai_insights === 'string' ? s.ai_insights : null);
   }, [recording]);
+
+  const highlights: MeetGeekHighlight[] = useMemo(() => {
+    const h: any = recording?.highlights;
+    const lista = Array.isArray(h?.highlights) ? h.highlights : Array.isArray(h) ? h : [];
+    return lista
+      .map((item: any) => ({
+        label: typeof item?.label === 'string' ? item.label : '',
+        highlightText: typeof item?.highlightText === 'string' ? item.highlightText : '',
+      }))
+      .filter((item: MeetGeekHighlight) => item.label.trim().length > 0 || item.highlightText.trim().length > 0);
+  }, [recording]);
+
 
   const handleAssistir = async () => {
     if (!recording?.id) return;
