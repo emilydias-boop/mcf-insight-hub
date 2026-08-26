@@ -428,6 +428,9 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
 
   const handleSubmit = async () => {
+    // Reentrada: se o diálogo de atrito já está aberto, um novo clique no
+    // "Lançar carta" não refaz a verificação nem reempilha diálogo.
+    if (candidatosReuniao) return;
     if (pendencias.length > 0) {
       setMostrarErros(true);
       toast.error(`Falta preencher: ${pendencias.join(' ')}`);
@@ -525,7 +528,17 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         const patchContato: Record<string, unknown> = {};
         if (tel) patchContato.phone = tel;
         if (mail) patchContato.email = mail;
-        if (docDigits.length >= 11) patchContato.custom_fields = { documento: docDigits };
+        if (docDigits.length >= 11) {
+          // Merge — nunca sobrescreve custom_fields existentes: lê o atual e
+          // espalha o documento por cima. Trata nulo/ausente como {}.
+          const { data: contatoAtual } = await supabase
+            .from('crm_contacts')
+            .select('custom_fields')
+            .eq('id', leadCriadoAqui.contactId)
+            .maybeSingle();
+          const atual = (contatoAtual as any)?.custom_fields ?? {};
+          patchContato.custom_fields = { ...atual, documento: docDigits };
+        }
         if (Object.keys(patchContato).length > 0) {
           await supabase.from('crm_contacts').update(patchContato as any).eq('id', leadCriadoAqui.contactId);
         }
@@ -817,7 +830,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={salvando}>
+            <Button onClick={handleSubmit} disabled={salvando || !!candidatosReuniao}>
               {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {salvando ? 'Lançando...' : 'Lançar carta'}
             </Button>
