@@ -857,10 +857,16 @@ function TemasIACloser({
           <p className="mt-3 text-[11px] text-muted-foreground">
             Temas recorrentes nas reuniões avaliadas
           </p>
-          <div className="mt-1 grid gap-3 md:grid-cols-2">
-            <ListaTemas titulo="Pontos fortes" temas={d.temas_fortes} tom="sucesso" />
-            <ListaTemas titulo="A melhorar" temas={d.temas_melhoria} tom="alerta" />
-          </div>
+          {(() => {
+            const temExemplos =
+              [...d.temas_fortes, ...d.temas_melhoria].some((t) => t.exemplos.length > 0);
+            return (
+              <div className={cn('mt-1 grid gap-3', temExemplos ? 'grid-cols-1' : 'md:grid-cols-2')}>
+                <ListaTemas titulo="Pontos fortes" temas={d.temas_fortes} tom="sucesso" />
+                <ListaTemas titulo="A melhorar" temas={d.temas_melhoria} tom="alerta" />
+              </div>
+            );
+          })()}
           {semTema > 0 && (
             <p className="mt-2 text-[11px] text-muted-foreground">
               {n0(semTema)} observações não se encaixaram em nenhum tema.
