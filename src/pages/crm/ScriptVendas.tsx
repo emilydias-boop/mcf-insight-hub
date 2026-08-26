@@ -20,8 +20,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowDown, ArrowUp, ClipboardList, Info, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
-import { useSalesScript, type MeetingType, type ScriptStepInput } from '@/hooks/useSalesScript';
+import { ArrowDown, ArrowUp, ClipboardList, Info, Plus, RefreshCw, Trash2, Upload, CopyPlus } from 'lucide-react';
+import {
+  useSalesScript,
+  type MeetingType,
+  type IcpSegment,
+  type ScriptStepInput,
+} from '@/hooks/useSalesScript';
 
 interface DraftStep extends ScriptStepInput {
   key: string;
@@ -30,9 +35,22 @@ interface DraftStep extends ScriptStepInput {
 let keyCounter = 0;
 const novaKey = () => `etapa-${Date.now()}-${keyCounter++}`;
 
+type SegmentValue = 'default' | 'A' | 'B' | 'C';
+const SEGMENT_LABEL: Record<SegmentValue, string> = {
+  default: 'Padrão',
+  A: 'Segmento A',
+  B: 'Segmento B',
+  C: 'Segmento C',
+};
+
 export default function ScriptVendas() {
   const [meetingType, setMeetingType] = useState<MeetingType>('r1');
-  const { data: etapasAtivas, isLoading, publicar, reavaliar } = useSalesScript(meetingType);
+  const [segmento, setSegmento] = useState<SegmentValue>('default');
+  const icpSegment: IcpSegment = segmento === 'default' ? null : segmento;
+  const { data: etapasAtivas, isLoading, resolvido, publicar, reavaliar } = useSalesScript(
+    meetingType,
+    icpSegment,
+  );
 
   const [draft, setDraft] = useState<DraftStep[]>([]);
   const [erros, setErros] = useState<Record<string, { etapa?: boolean; criterio?: boolean }>>({});
@@ -55,11 +73,37 @@ export default function ScriptVendas() {
     setErros({});
   }, [etapasAtivas]);
 
+  const temScriptProprio = (etapasAtivas?.length ?? 0) > 0;
+  const herdaPadrao = !isLoading && !temScriptProprio && icpSegment !== null;
+  const etapasResolvidas = resolvido.data ?? [];
+  const versaoHerdada = etapasResolvidas[0]?.versao ?? null;
+
   const versaoAtual = etapasAtivas?.[0]?.versao ?? null;
   const pesoTotal = useMemo(
     () => draft.reduce((acc, e) => acc + (Number(e.peso) || 0), 0),
     [draft],
   );
+
+  const partirDoPadrao = () => {
+    if (etapasResolvidas.length === 0) {
+      toast.error('Não há script padrão para copiar.');
+      return;
+    }
+    setDraft(
+      etapasResolvidas.map((e, i) => ({
+        key: novaKey(),
+        ordem: i + 1,
+        etapa: e.etapa,
+        descricao: e.descricao ?? '',
+        criterio: e.criterio,
+        peso: Number(e.peso) || 1,
+        obrigatoria: e.obrigatoria,
+      })),
+    );
+    setErros({});
+    toast.info('Etapas do script padrão carregadas no formulário. Nada foi salvo ainda.');
+  };
+
 
   const atualizar = (key: string, patch: Partial<DraftStep>) => {
     setDraft((prev) => prev.map((e) => (e.key === key ? { ...e, ...patch } : e)));
