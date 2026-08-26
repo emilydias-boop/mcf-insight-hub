@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
   Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2, MessageSquareReply,
-  Loader2, PlayCircle, Minus, Sparkles
+  Loader2, PlayCircle, Download, Minus, Sparkles
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
@@ -1705,14 +1705,22 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
           </div>
         )}
 
-        <Button size="sm" variant="outline" className="w-full" onClick={handleAssistir} disabled={loadingLink}>
-          {loadingLink ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <PlayCircle className="h-4 w-4 mr-2" />
+        <div style={{ display: 'flex', gap: 8 }}>
+          {recording.meetgeek_meeting_id && (
+            <Button size="sm" variant="outline" style={{ flex: 1 }} onClick={() => window.open(`https://app.meetgeek.ai/meeting/${recording.meetgeek_meeting_id}`, '_blank', 'noopener,noreferrer')}>
+              <PlayCircle className="h-4 w-4 mr-2" />
+              Assistir no MeetGeek
+            </Button>
           )}
-          {loadingLink ? 'Abrindo...' : 'Assistir gravação'}
-        </Button>
+          <Button size="sm" variant="ghost" onClick={handleAssistir} disabled={loadingLink} title="Baixar áudio" aria-label="Baixar áudio">
+            {loadingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary, hsl(var(--muted-foreground)))' }}>Requer acesso ao MeetGeek</p>
 
         {!review && recording.ingest_status === 'ingerido' && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/40 p-3">
