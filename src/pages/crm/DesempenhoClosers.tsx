@@ -145,21 +145,21 @@ function DesempenhoClosersContent() {
 
     const emails = new Set<string>([...map.keys(), ...aval.keys()]);
     return Array.from(emails).map((email) => {
-      const base = map.get(email) ?? { email, nome: nomeCurto(email), ativo: true, reunioes: 0, vendas: 0 };
+      const base = map.get(email) ?? { email, nome: nomeCurto(email), ativo: true, reunioes: 0, contratos: 0, participantes: 0 };
       const a = aval.get(email);
       return {
         ...base,
         closerId: a?.id ?? null,
         avaliadas: a?.avaliadas ?? 0,
         nota: a && a.nNota > 0 ? a.somaNota / a.nNota : null,
-        conversao: base.reunioes > 0 ? (base.vendas / base.reunioes) * 100 : 0,
+        conversao: base.participantes > 0 ? (base.contratos / base.participantes) * 100 : 0,
         cobertura: base.reunioes > 0 ? ((a?.avaliadas ?? 0) / base.reunioes) * 100 : 0,
       };
     });
   }, [slots, serie]);
 
   const corPorCloser = useMemo(() => {
-    const ordenados = [...porCloser].sort((a, b) => b.vendas - a.vendas).map((c) => c.email);
+    const ordenados = [...porCloser].sort((a, b) => b.contratos - a.contratos).map((c) => c.email);
     const m: Record<string, string> = {};
     ordenados.forEach((e, i) => (m[e] = CORES[i % CORES.length]));
     return m;
@@ -167,26 +167,28 @@ function DesempenhoClosersContent() {
 
   const resumo = useMemo(() => {
     const reunioes = slots.length;
-    const vendas = slots.filter((s) => s.venda).length;
+    const contratos = slots.reduce((acc, s) => acc + s.contratos, 0);
+    const participantes = slots.reduce((acc, s) => acc + s.participantes, 0);
     const avaliadas = serie.reduce((acc, r) => acc + r.reunioes, 0);
     const somaNota = serie.reduce((acc, r) => acc + (r.nota_media ?? 0) * r.reunioes, 0);
     const nNota = serie.reduce((acc, r) => acc + (r.nota_media !== null ? r.reunioes : 0), 0);
     return {
       reunioes,
-      vendas,
-      conversao: reunioes > 0 ? (vendas / reunioes) * 100 : 0,
+      contratos,
+      participantes,
+      conversao: participantes > 0 ? (contratos / participantes) * 100 : 0,
       nota: nNota > 0 ? somaNota / nNota : null,
       cobertura: reunioes > 0 ? (avaliadas / reunioes) * 100 : 0,
     };
   }, [slots, serie]);
 
   // ---- Séries dos gráficos ----
-  const dadosVendas = useMemo(() => {
+  const dadosContratos = useMemo(() => {
     const map = new Map<string, Record<string, number | string>>();
     slots.forEach((s) => {
       const b = bucketDate(s.ymd, gran);
       const row = map.get(b) ?? { periodo: b };
-      row[s.closer_email] = ((row[s.closer_email] as number) ?? 0) + (s.venda ? 1 : 0);
+      row[s.closer_email] = ((row[s.closer_email] as number) ?? 0) + s.contratos;
       map.set(b, row);
     });
     return Array.from(map.values()).sort((a, b) => String(a.periodo).localeCompare(String(b.periodo)));
