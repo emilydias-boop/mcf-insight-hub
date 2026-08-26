@@ -317,3 +317,62 @@ export function useRelatorioCloserResumo(de: string, ate: string, segmento: Segm
     },
   });
 }
+
+export interface TemaIA {
+  tema: string;
+  reunioes: number;
+  total_reunioes: number;
+  pct: number;
+}
+
+export interface ResumoIAResposta {
+  ok?: boolean;
+  vazio?: boolean;
+  do_cache?: boolean;
+  reunioes: number;
+  temas_melhoria: TemaIA[];
+  temas_fortes: TemaIA[];
+  frases_total?: number;
+  frases_sem_tema?: number;
+  gerado_em?: string;
+}
+
+/** Edge function — agrupa as observações da IA em temas recorrentes por closer */
+export function useResumoIA(
+  closerId: string | null | undefined,
+  de: string,
+  ate: string,
+  segmento: SegmentoFiltro,
+) {
+  return useQuery({
+    queryKey: ['relatorio-resumo-ia', closerId, de, ate, segmento],
+    enabled: !!closerId,
+    staleTime: 12 * 60 * 60 * 1000,
+    retry: false,
+    queryFn: async (): Promise<ResumoIAResposta> => {
+      const { data, error } = await supabase.functions.invoke('relatorio-resumo-ia', {
+        body: {
+          closer_id: closerId,
+          de,
+          ate,
+          meeting_type: 'r1',
+          icp_segment: segmento === 'todos' ? null : segmento,
+        },
+      });
+      if (error) throw error;
+      const r = (data ?? {}) as Partial<ResumoIAResposta> & { erro?: string };
+      if (r.erro) throw new Error(r.erro);
+      return {
+        ok: r.ok,
+        vazio: r.vazio,
+        do_cache: r.do_cache,
+        reunioes: Number(r.reunioes ?? 0),
+        temas_melhoria: Array.isArray(r.temas_melhoria) ? r.temas_melhoria : [],
+        temas_fortes: Array.isArray(r.temas_fortes) ? r.temas_fortes : [],
+        frases_total: Number(r.frases_total ?? 0),
+        frases_sem_tema: Number(r.frases_sem_tema ?? 0),
+        gerado_em: r.gerado_em,
+      };
+    },
+  });
+}
