@@ -9986,6 +9986,7 @@ export type Database = {
           closer_id: string | null
           created_at: string
           etapas: Json
+          icp_segment: string | null
           id: string
           meeting_slot_id: string | null
           meeting_type: string | null
@@ -10003,6 +10004,7 @@ export type Database = {
           closer_id?: string | null
           created_at?: string
           etapas?: Json
+          icp_segment?: string | null
           id?: string
           meeting_slot_id?: string | null
           meeting_type?: string | null
@@ -10020,6 +10022,7 @@ export type Database = {
           closer_id?: string | null
           created_at?: string
           etapas?: Json
+          icp_segment?: string | null
           id?: string
           meeting_slot_id?: string | null
           meeting_type?: string | null
@@ -12564,6 +12567,7 @@ export type Database = {
           criterio: string
           descricao: string | null
           etapa: string
+          icp_segment: string | null
           id: string
           is_active: boolean
           meeting_type: string
@@ -12579,6 +12583,7 @@ export type Database = {
           criterio: string
           descricao?: string | null
           etapa: string
+          icp_segment?: string | null
           id?: string
           is_active?: boolean
           meeting_type?: string
@@ -12594,6 +12599,7 @@ export type Database = {
           criterio?: string
           descricao?: string | null
           etapa?: string
+          icp_segment?: string | null
           id?: string
           is_active?: boolean
           meeting_type?: string
@@ -15622,6 +15628,65 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_closer_reuniao_avaliada: {
+        Row: {
+          aderencia_pct: number | null
+          bu: string | null
+          closer_email: string | null
+          closer_id: string | null
+          closer_nome: string | null
+          contract_paid_at: string | null
+          deal_id: string | null
+          dia: string | null
+          etapas: Json | null
+          meeting_slot_id: string | null
+          meeting_type: string | null
+          nota_geral: number | null
+          recording_id: string | null
+          reembolsado: boolean | null
+          review_id: string | null
+          scheduled_at: string | null
+          script_versao: number | null
+          vendeu: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_ai_reviews_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_ai_reviews_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_ai_reviews_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_ai_reviews_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_recordings_lista"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wa_templates: {
         Row: {
           body_preview: string | null
@@ -16659,6 +16724,7 @@ export type Database = {
         Returns: {
           analysis_attempts: number
           closer_id: string
+          icp_segment: string
           id: string
           meeting_slot_id: string
           meeting_type: string
@@ -16759,6 +16825,85 @@ export type Database = {
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
+      relatorio_closer_etapas:
+        | {
+            Args: {
+              _ate?: string
+              _closer_id?: string
+              _de?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              avaliacoes: number
+              closer_email: string
+              closer_id: string
+              cumpriu: number
+              etapa: string
+              falhou: number
+              nota_media_etapa: number
+              ordem: number
+              pct_falha: number
+            }[]
+          }
+        | {
+            Args: {
+              _ate?: string
+              _bu?: string
+              _closer_id?: string
+              _de?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              avaliacoes: number
+              closer_email: string
+              closer_id: string
+              cumpriu: number
+              etapa: string
+              falhou: number
+              nota_media_etapa: number
+              ordem: number
+              pct_falha: number
+            }[]
+          }
+      relatorio_closer_serie:
+        | {
+            Args: {
+              _ate?: string
+              _de?: string
+              _gran?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              aderencia_media: number
+              closer_email: string
+              closer_id: string
+              nota_media: number
+              periodo: string
+              reunioes: number
+              taxa_conversao: number
+              vendas: number
+            }[]
+          }
+        | {
+            Args: {
+              _ate?: string
+              _bu?: string
+              _de?: string
+              _gran?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              aderencia_media: number
+              bu: string
+              closer_email: string
+              closer_id: string
+              nota_media: number
+              periodo: string
+              reunioes: number
+              taxa_conversao: number
+              vendas: number
+            }[]
+          }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
@@ -16778,10 +16923,23 @@ export type Database = {
       resolve_owner_label: { Args: { _owner: string }; Returns: string }
       resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
       script_publicar_versao: {
-        Args: { _etapas: Json; _meeting_type: string }
+        Args: { _etapas: Json; _icp_segment?: string; _meeting_type: string }
         Returns: Json
       }
       script_reavaliar: { Args: { _meeting_type?: string }; Returns: Json }
+      script_resolver: {
+        Args: { _icp_segment?: string; _meeting_type: string }
+        Returns: {
+          criterio: string
+          descricao: string
+          etapa: string
+          icp_segment: string
+          obrigatoria: boolean
+          ordem: number
+          peso: number
+          versao: number
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sonax_duration_seconds: { Args: { raw: string }; Returns: number }
