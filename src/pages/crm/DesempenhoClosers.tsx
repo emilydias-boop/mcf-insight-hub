@@ -50,6 +50,7 @@ import {
   useClosersSlots,
   useEtapasVendaVsNaoVenda,
   useRelatorioCloserEtapas,
+  useRelatorioCloserResumo,
   useRelatorioClosersSerie,
 } from '@/hooks/useRelatorioClosers';
 
