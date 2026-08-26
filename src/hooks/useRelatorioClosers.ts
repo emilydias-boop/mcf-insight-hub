@@ -271,3 +271,49 @@ export function useEtapasVendaVsNaoVenda(
     },
   });
 }
+
+export interface CloserResumoRow {
+  closer_id: string;
+  closer_email: string;
+  reunioes_avaliadas: number;
+  nota_media: number | null;
+  aderencia_media: number | null;
+  pior_etapa: string | null;
+  pior_etapa_pct: number | null;
+  segunda_pior_etapa: string | null;
+  segunda_pior_pct: number | null;
+  melhor_etapa: string | null;
+  melhor_etapa_pct: number | null;
+  pontos_fortes: string[] | null;
+  pontos_melhoria: string[] | null;
+}
+
+const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+/** RPC 3 — resumo textual do motivo da nota por closer */
+export function useRelatorioCloserResumo(de: string, ate: string, segmento: SegmentoFiltro) {
+  return useQuery({
+    queryKey: ['relatorio-closer-resumo', de, ate, segmento],
+    queryFn: async (): Promise<CloserResumoRow[]> => {
+      const { data, error } = await supabase.rpc('relatorio_closer_resumo', {
+        _de: de,
+        _ate: ate,
+        _meeting_type: 'r1',
+        _bu: 'incorporador',
+        _icp_segment: segmento === 'todos' ? undefined : segmento,
+      } as never);
+      if (error) throw error;
+      return ((data ?? []) as unknown as CloserResumoRow[]).map((r) => ({
+        ...r,
+        reunioes_avaliadas: Number(r.reunioes_avaliadas ?? 0),
+        nota_media: num(r.nota_media),
+        aderencia_media: num(r.aderencia_media),
+        pior_etapa_pct: num(r.pior_etapa_pct),
+        segunda_pior_pct: num(r.segunda_pior_pct),
+        melhor_etapa_pct: num(r.melhor_etapa_pct),
+        pontos_fortes: Array.isArray(r.pontos_fortes) ? r.pontos_fortes : [],
+        pontos_melhoria: Array.isArray(r.pontos_melhoria) ? r.pontos_melhoria : [],
+      }));
+    },
+  });
+}
