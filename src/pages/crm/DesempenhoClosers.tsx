@@ -240,6 +240,12 @@ function DesempenhoClosersContent() {
   };
 
   const etapasQ = useRelatorioCloserEtapas(drawerCloser?.id ?? null, de, ate, segmento);
+  const resumoQ = useRelatorioCloserResumo(de, ate, segmento);
+  const nomePorEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    porCloser.forEach((c) => m.set(c.email, c.nome));
+    return m;
+  }, [porCloser]);
   const etapasOrdenadas = useMemo(
     () => [...(etapasQ.data ?? [])].sort((a, b) => b.pct_falha - a.pct_falha),
     [etapasQ.data],
