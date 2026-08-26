@@ -60,7 +60,9 @@ export interface SlotRow {
   closer_bu: string | null;
   closer_ativo: boolean;
   icp_segment: string | null;
-  venda: boolean;
+  contratos: number;
+  participantes: number;
+  teveContrato: boolean;
 }
 
 export interface EtapaRow {
@@ -133,7 +135,8 @@ export function useClosersSlots(de: string, ate: string, segmento: SegmentoFiltr
 
       const rows: SlotRow[] = (data ?? []).map((s: any) => {
         const attendees = Array.isArray(s.meeting_slot_attendees) ? s.meeting_slot_attendees : [];
-        const venda = attendees.some((a: any) => !a.is_partner && !!a.contract_paid_at);
+        const naoSocios = attendees.filter((a: any) => !a.is_partner);
+        const contratos = naoSocios.filter((a: any) => !!a.contract_paid_at).length;
         const closer = Array.isArray(s.closers) ? s.closers[0] : s.closers;
         const deal = Array.isArray(s.crm_deals) ? s.crm_deals[0] : s.crm_deals;
         return {
@@ -144,7 +147,9 @@ export function useClosersSlots(de: string, ate: string, segmento: SegmentoFiltr
           closer_bu: closer?.bu ?? null,
           closer_ativo: closer?.is_active !== false,
           icp_segment: deal?.icp_segment ?? null,
-          venda,
+          contratos,
+          participantes: naoSocios.length,
+          teveContrato: contratos > 0,
         };
       });
 
