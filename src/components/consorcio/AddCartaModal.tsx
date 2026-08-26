@@ -165,7 +165,7 @@ function useConsorcioLeadSearch(
       }
 
       // 3) reforço por CPF/CNPJ: deals de cadastros de consórcio do mesmo documento
-      const pares: Array<[string, string]> = [];
+      const pares: Array<['cpf' | 'cnpj', string]> = [];
       if (cpfDigits.length >= 11 && docs.cpf?.trim()) pares.push(['cpf', docs.cpf.trim()]);
       if (cnpjDigits.length >= 11 && docs.cnpj?.trim()) pares.push(['cnpj', docs.cnpj.trim()]);
       for (const [col, valor] of pares) {
