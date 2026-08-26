@@ -383,7 +383,8 @@ function DesempenhoClosersContent() {
       <Alert className="print-block">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Contrato é contabilizado por contrato pago do participante, não pelo estágio do CRM.
+          Cada participante não-sócio com contrato pago conta como um contrato — reunião coletiva com
+          três pagantes são três contratos. A conversão é contratos dividido por participantes.
         </AlertDescription>
       </Alert>
 
@@ -502,12 +503,12 @@ function DesempenhoClosersContent() {
         </CardContent>
       </Card>
 
-      {/* O que separou quem vendeu */}
+      {/* O que separou as reuniões com contrato */}
       <Card className="print-block">
         <CardHeader>
-          <CardTitle className="text-base">O que separou quem vendeu</CardTitle>
+          <CardTitle className="text-base">O que separou as reuniões com contrato</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Taxa de cumprimento de cada etapa em reuniões que venderam versus as que não venderam.
+            Taxa de cumprimento de cada etapa em reuniões com contrato versus as sem contrato.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -532,7 +533,7 @@ function DesempenhoClosersContent() {
                 </span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Vendeu: {n1(d.pctVendeu)}% ({n0(d.nVendeu)} reuniões) · Não vendeu: {n1(d.pctNaoVendeu)}% (
+                Com contrato: {n1(d.pctVendeu)}% ({n0(d.nVendeu)} reuniões) · Sem contrato: {n1(d.pctNaoVendeu)}% (
                 {n0(d.nNaoVendeu)} reuniões)
               </div>
               <Progress
@@ -555,7 +556,8 @@ function DesempenhoClosersContent() {
               <TableRow>
                 <SortHead k="closer">Closer</SortHead>
                 <SortHead k="reunioes" className="text-right">Reuniões</SortHead>
-                <SortHead k="vendas" className="text-right">Vendas</SortHead>
+                <SortHead k="participantes" className="text-right">Participantes</SortHead>
+                <SortHead k="contratos" className="text-right">Contratos</SortHead>
                 <SortHead k="conversao" className="text-right">Conversão</SortHead>
                 <SortHead k="nota" className="text-right">Nota</SortHead>
                 <SortHead k="cobertura" className="text-right">Cobertura</SortHead>
@@ -581,7 +583,8 @@ function DesempenhoClosersContent() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">{n0(c.reunioes)}</TableCell>
-                  <TableCell className="text-right font-semibold">{n0(c.vendas)}</TableCell>
+                  <TableCell className="text-right">{n0(c.participantes)}</TableCell>
+                  <TableCell className="text-right font-semibold">{n0(c.contratos)}</TableCell>
                   <TableCell className="text-right">{n1(c.conversao)}%</TableCell>
                   <TableCell className="text-right">{n1(c.nota)}</TableCell>
                   <TableCell className="text-right">
@@ -603,7 +606,7 @@ function DesempenhoClosersContent() {
               ))}
               {!loading && rankingOrdenado.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
                     Nenhuma reunião R1 encontrada no período.
                   </TableCell>
                 </TableRow>
