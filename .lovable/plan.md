@@ -1,78 +1,80 @@
-# A reunião do Rodrigo existe. O dono está certo.
+# Varredura de candidatos — cotas de agosto/2026 sem agendador (só leitura)
 
-Só SELECT. Nada alterado.
+Nenhum dado foi alterado. Nenhuma migration, nenhum UPDATE.
 
-## Achado central
+## 1) O universo do alerta
 
-Existe uma R1 de consórcio do Rodrigo, conduzida pelo André, e ela está presa a **outro negócio**:
+Cotas contratadas em agosto/2026 cujo deal vinculado não tem nenhum attendee de closer da BU Consórcio com `booked_by` preenchido e status não cancelado/convidado:
 
-| campo | valor |
+**10 cotas · R$ 1.260.000** — exatamente o que aparece na tela.
+
+- 8 cotas de **RODRIGO MOREIRA ROBERTO** (grupo 7274, cotas 57/140/678/2210/3051/3272/3308/3397, R$ 120.000 cada = R$ 960.000), contratação 20/08/2026, vendedor **André Duarte**, deal atual `a28592fa…` com **0 attendees**.
+- 2 cotas de **ROSANGELA MARIA DOS PASSOS FERREIRA** (grupo/cota conforme cadastro, R$ 150.000 cada = R$ 300.000), contratação 10/08/2026, vendedor **Joao Pedro Martins Vieira**, deal atual `6858e59a…` sem reunião de consórcio.
+
+## 2) Candidatos encontrados
+
+Sinal aplicado: attendee de closer da BU Consórcio, `booked_by` preenchido, status não cancelado/convidado, reunião entre 45 dias antes e 7 dias depois da contratação, cliente casando por CPF, telefone (9 dígitos), e-mail ou duas primeiras palavras do nome.
+
+### Rodrigo — 8 cotas, candidato único
+
+| item | valor |
 |---|---|
-| data | 2026-08-20 16:00 UTC |
-| closer | Andre dos Santos Duarte (`closers.id` 1472d772…, bu `consorcio`, ativo, `meeting_type` r1) |
-| attendee | "Rodrigo Moreira " — status `completed` |
-| agendado por (`booked_by`) | ithaline clara dos santos (411e4b5d…), `booked_at` 2026-08-20 13:02 |
-| observação do agendamento | "Led parceiro antigo / Disparo recente" |
-| deal do attendee | `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6`, nome "Consórcio ", origem Efeito Alavanca + Clube, dono andre.duarte, estágio **R1 Realizada** |
-| contato do attendee | `06d12b2e…` "Rodrigo Moreira " — **sem telefone e sem e-mail** |
+| deal candidato | `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6` — "Consórcio" |
+| origem | Efeito Alavanca + Clube |
+| estágio | R1 Realizada |
+| reunião | 20/08/2026 16:00 |
+| closer | Andre dos Santos Duarte (BU consorcio) |
+| status attendee | completed |
+| quem agendou | **Ithaline Clara dos Santos** |
+| nome do attendee | "Rodrigo Moreira" |
+| critério | nome (duas primeiras palavras) |
+| candidatos | **1** para cada uma das 8 cotas |
 
-Foi por isso que a busca anterior não achou: o contato da reunião é um registro genérico ("Consórcio "), criado no disparo, sem telefone, sem e-mail e sem CPF, e com o sobrenome cortado ("Rodrigo Moreira", não "Rodrigo Moreira Roberto"). Nenhum critério de identidade tinha como casar.
+Por que o deal atual falha: `a28592fa…` (origem GR) tem zero attendees — nunca houve reunião nele.
 
-Cronologia que fecha o caso: reunião marcada 20/08 13:02, realizada 20/08 16:00, e as **7 cotas nasceram 20/08 19:11** (origem `reverter`), no mesmo dia, poucas horas depois.
+### Rosangela — 2 cotas, nenhum candidato
 
-## 1) Negócios do Rodrigo
+Nenhuma reunião casou por CPF, telefone, e-mail ou nome dentro da janela. As duas correspondências de sobrenome vistas antes são de **Leandro Passos Ferreira**, outra pessoa, outro CPF — e ficaram fora porque não casam pelas duas primeiras palavras do nome.
 
-Existem exatamente dois negócios que casam por identidade — e o certo é um terceiro, que só casa por nome parcial:
+## 3) Classificação de confiança
 
-| deal | nome | origem | estágio hoje | dono | attendees | contato (tel / e-mail) |
-|---|---|---|---|---|---|---|
-| `a28592fa…` | Rodrigo Moreira Roberto | 00 - GERENTES DE RELACIONAMENTO | **Em contato** | william.ferreira | **0** | 11983647601 / rodrigomoreira@**harpiapecas.com.br** |
-| `5d988c40…` | Consórcio | Efeito Alavanca + Clube | **R1 Realizada** | andre.duarte | **1 (completed, com André)** | sem telefone / sem e-mail |
-| `6c55d1a4…` | Rodrigo Cézare Moreira Araujo | Inside Sales Viver de Aluguel | CONTRATO PAGO | thayna.tavares | 0 | outra pessoa |
+- **ALTA** — 8 cotas · R$ 960.000. Casou por nome, o vendedor da cota (André Duarte) é o closer da reunião, a reunião caiu no mesmo dia da contratação (20/08) e o candidato é único. Crédito de agendamento iria para **Ithaline Clara dos Santos**.
+- **MÉDIA** — 0 cotas · R$ 0.
+- **BAIXA / NENHUM** — 2 cotas · R$ 300.000 (Rosangela). Nenhum SDR seria creditado; permanece decisão de negócio (reconhecer fora do funil ou apontar o lead certo manualmente).
 
-Correção de um dado da rodada anterior: o e-mail é `@harpiapecas.com.br` (harpia), não `@harplapecas.com`. Buscar por "Harpla" não retorna nada por isso.
+## 4) Fora de agosto — não determinei um número comparável
 
-As 9 linhas de `consorcio_pending_registrations` do Rodrigo (8 cotas de R$ 120.000 + 1 sem deal) estão todas apontando para `a28592fa…` — o negócio **sem reunião**. Nenhuma aponta para `5d988c40…`, o negócio **com a R1**.
+A mesma consulta fora de agosto devolve 1.570 cotas "sem agendador", mas **1.566 delas não têm nenhum cadastro/deal vinculado** (base histórica anterior ao funil, de 04/2025 a 07/2026) — não são o mesmo padrão e não aparecem no alerta. Só **4 cotas** fora de agosto têm deal vinculado sem reunião de consórcio. O número de 618 cotas / R$ 106 M que a heurística de candidato produz vem quase todo da base histórica sem vínculo e **não deve ser lido como fila de correção**. Dimensionar isso exige antes definir se cota histórica sem cadastro entra ou não no escopo.
 
-## 2) O estágio conta uma história — mas não a que se esperava
+## 5) Como a correção é feita hoje
 
-`a28592fa…` está em **"Em contato"** hoje, com 0 attendees. Não é estágio pós-reunião, então esse negócio isolado não prova reunião nenhuma.
+Botão "Trocar lead" → `src/hooks/useCorrigirVinculoCota.ts:334-366` → RPC:
 
-A única trilha de estágio existente (`deal_activities`, 1 linha) é de 2026-03-16 14:24: automação `move-partners-to-venda-realizada` moveu de "Em contato" para "Venda Realizada" por detectar parceiro. Hoje está de volta em "Em contato" e **não há registro de quem trouxe de volta** — não existe tabela de histórico de estágio completa nesta base (só `deal_activities`, `attendee_movement_logs`, `audit_logs`). Não determinei quem fez o retorno.
+```
+consorcio_corrigir_vinculo_cota(
+  p_card_id uuid,
+  p_deal_id uuid,
+  p_registration_id uuid default null,
+  p_confirmar_duplicado boolean default false
+) returns jsonb
+```
 
-A prova da reunião não vem do estágio de `a28592fa…`; vem do attendee `completed` em `5d988c40…`.
+`SECURITY DEFINER`, `search_path = public`. O que faz:
 
-## 3) O lado do André
+- `v_actor := auth.uid()`; se nulo, aborta com "Usuário não autenticado.".
+- Exige papel admin, manager, coordenador, sdr, closer ou closer_sombra.
+- Valida cota e deal, bloqueio do mês e duplicidade (`p_confirmar_duplicado`).
+- Se existe cadastro: `UPDATE consorcio_pending_registrations SET deal_id = p_deal_id, updated_at = now()`.
+- Se não existe: insere cadastro completo a partir da cota, com `vinculada_at = now()`, `vinculada_by = v_actor`, `created_by = v_actor`, status `vinculada`, `aceite_date` = data de contratação.
+- Grava `audit_logs` com ação `cota_vinculo_impacto`, incluindo cotas e crédito arrastados.
+- Retorna `{status, acao, registration_id, outras_cotas, cotas_arrastadas, credito_arrastado}`.
 
-Andre dos Santos Duarte existe em `closers`: `1472d772-a48b-4c88-ba07-398898532df4`, bu `consorcio`, ativo, r1. Em julho e agosto de 2026 tem **275 attendees**, todos com `booked_by` preenchido (zero nulos).
+Os campos `deal_vinculo_anterior`, `deal_vinculo_ajustado_por` e `deal_vinculo_ajustado_em` **não** são escritos pela RPC: quem escreve é o trigger `trg_audit_pending_deal_link` (`tg_audit_pending_deal_link`), que também usa `auth.uid()` e registra `pending_deal_link_changed` em `audit_logs`.
 
-Com "Rodrigo" no nome, nesse período, aparecem três:
+### O ponto que decide a aplicação
 
-| data | attendee | status | agendado por | deal |
-|---|---|---|---|---|
-| 2026-07-03 18:00 | Rodrigo Costa | completed | ithaline clara | Rodrigo Costa (outra pessoa) |
-| **2026-08-20 16:00** | **Rodrigo Moreira** | **completed** | **ithaline clara** | **Consórcio (`5d988c40…`)** |
-| 2026-08-27 16:00 | Evandro Rodrigo da Silva Gomes | invited | Cleiton Anacleto | outra pessoa |
+**Sim: tanto a RPC quanto o trigger usam `auth.uid()`.** Executada por fora de uma sessão autenticada, a RPC nem roda (aborta em "Usuário não autenticado."), e o trigger gravaria autoria nula. Portanto a correção das 8 cotas do Rodrigo tem que sair **do clique do Grimaldo na tela** (ou de uma sessão autenticada dele) para que a autoria fique registrada. Não há caminho de escrita fora da sessão que preserve autoria.
 
-Ninguém com e-mail contendo "harp" — coerente com o contato da reunião não ter e-mail.
+## Próximo passo sugerido (nada executado)
 
-## 4) Quando o closer marca a própria reunião, o que fica em `booked_by`
-
-Fica o **perfil de quem está logado**, sempre. Dois pontos gravam:
-
-- `src/hooks/useCloserScheduling.ts:200` — cria o `meeting_slot` com `booked_by: user.id`.
-- `src/hooks/useAgendaData.ts:1741` — insere attendee com `booked_by: currentUserId` (usuário logado).
-
-Nunca é nulo por esse caminho. Logo, se um closer agenda para si, ele aparece como agendador. Isso acontece na prática: João Pedro Martins Vieira tem 14 reuniões entre julho e agosto em que é simultaneamente closer e `booked_by`.
-
-## 5) Contraprova
-
-**Zero.** Não existe nenhum attendee em agosto/2026 com `booked_by` = perfil do André (`1cb9287f…`). O padrão "closer agenda para si" existe na base, mas o André não o usa. As reuniões dele vêm de SDR — Ithaline, Cleiton, Ygor.
-
-## Conclusão
-
-Não é caso de "reconhecer fora do funil". A R1 existe, é de consórcio, é do André, e o agendador é a **Ithaline Clara dos Santos**. O que está errado é o vínculo: as 8 cotas estão penduradas no deal de Gerente de Relacionamento (`a28592fa…`, sem reunião) em vez do deal da reunião (`5d988c40…`).
-
-Desfecho correto, quando o dono autorizar: trocar o vínculo das cotas do Rodrigo para `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6`, o que credita a Ithaline como agendadora e tira as 8 cotas (R$ 960.000) do alerta. As 2 cotas da Rosangela continuam em aberto — nada novo nesta rodada sobre elas.
-
-Efeito colateral a decidir junto: o deal da reunião é um "Consórcio " genérico, com contato sem telefone/e-mail. Vale renomear o contato para o nome completo e preencher telefone/e-mail para que buscas futuras encontrem — mas isso é UPDATE e não foi feito.
+Grimaldo abre o alerta e usa "Trocar lead" em uma das 8 cotas do Rodrigo apontando para `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6`; o arraste por documento cobre as demais. As 2 cotas da Rosangela ficam para decisão dele.
