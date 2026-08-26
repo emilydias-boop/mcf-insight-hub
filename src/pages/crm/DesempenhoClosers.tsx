@@ -498,7 +498,7 @@ function DesempenhoClosersContent() {
             </ResponsiveContainer>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            Nota alta não garante venda. Use os dois gráficos juntos, nunca isolados.
+            Nota alta não garante contrato. Use os dois gráficos juntos, nunca isolados.
           </p>
         </CardContent>
       </Card>

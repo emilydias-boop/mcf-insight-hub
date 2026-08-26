@@ -191,8 +191,8 @@ export function useRelatorioCloserEtapas(
 }
 
 /**
- * "O que separou quem vendeu": cruza as etapas avaliadas (meeting_ai_reviews)
- * com o resultado de venda do slot.
+ * "O que separou as reuniões com contrato": cruza as etapas avaliadas (meeting_ai_reviews)
+ * com o resultado de contrato do slot (teveContrato = ao menos 1 participante não-sócio pagante).
  */
 export function useEtapasVendaVsNaoVenda(
   de: string,
