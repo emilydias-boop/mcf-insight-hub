@@ -435,13 +435,71 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     }
     if (!lead) return;
 
+    // Trava anti-órbita: lead sem R1 de consórcio pode ser um lead novo criado
+    // enquanto a R1 verdadeira está em outro lead (casos Rodrigo/Naufel).
+    // A verificação é de atrito, não de proibição — parceiro/indicação seguem
+    // com "Criar assim mesmo" + motivo.
+    if (!lead.r1) {
+      setSalvando(true);
+      try {
+        const vals = cliente.form.getValues();
+        const candidatos = await buscarReuniao.mutateAsync({
+          nome: vals.nome_completo || vals.razao_social || lead.contact_name,
+          cpf: vals.cpf,
+          cnpj: vals.cnpj,
+          telefone: vals.telefone || vals.telefone_comercial || lead.contact_phone,
+          email: vals.email || vals.email_comercial || lead.contact_email,
+          closerNome,
+          dataReferencia: aceiteDate,
+          excluirDealId: lead.deal_id,
+        });
+        if (candidatos.length > 0) {
+          setCandidatosReuniao(candidatos);
+          setMotivoSemR1('');
+          return; // o diálogo bloqueante decide o caminho
+        }
+      } catch {
+        // Falha na verificação não pode impedir um lançamento legítimo.
+      } finally {
+        setSalvando(false);
+      }
+    }
+    await executarSubmit(lead, obs);
+  };
 
+  /** Troca o lead vinculado pelo lead da reunião encontrada e segue o submit. */
+  const usarLeadDaReuniao = (c: ReuniaoConsorcioCandidato) => {
+    const novoLead: DealMatch = {
+      deal_id: c.dealId,
+      origin_id: c.originId || EA_ORIGIN_ID,
+      contact_name: c.contactName,
+      contact_email: c.contactEmail,
+      contact_phone: c.contactPhone,
+      origin_label: null,
+      stage_name: null,
+      r1: { dia: c.dia, closerName: c.closerName, temAgendador: !!c.agendadoPor },
+    };
+    selecionarLead(novoLead);
+    setCandidatosReuniao(null);
+    void executarSubmit(novoLead, obs);
+  };
+
+  /** Caminho legítimo (parceiro/indicação): exige motivo e registra na proposta. */
+  const criarAssimMesmo = () => {
+    const motivo = motivoSemR1.trim();
+    if (motivo.length < 10 || !lead) return;
+    const obsFinal = `[lead novo sem R1] ${motivo}` + (obs.trim() ? `\n${obs.trim()}` : '');
+    setCandidatosReuniao(null);
+    void executarSubmit(lead, obsFinal);
+  };
+
+  const executarSubmit = async (leadFinal: DealMatch, obsFinal: string) => {
     setSalvando(true);
     try {
       const resultado = await enviarProposta.mutateAsync({
-        deal_id: lead.deal_id,
-        origin_id: lead.origin_id,
-        proposal_details: obs,
+        deal_id: leadFinal.deal_id,
+        origin_id: leadFinal.origin_id,
+        proposal_details: obsFinal,
         cartas: draftsParaInput(cartas),
         origem_lead: origem,
       });
@@ -457,6 +515,28 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         } as any)
         .eq('id', resultado.proposal_id);
 
+      // Complemento do lead criado por ESTE modal: se o bloco 3 foi preenchido
+      // depois da criação, o contato/deal criados aqui recebem os dados agora.
+      if (leadCriadoAqui && leadCriadoAqui.dealId === leadFinal.deal_id) {
+        const vals = cliente.form.getValues();
+        const tel = String(vals.telefone || vals.telefone_comercial || '').trim();
+        const mail = String(vals.email || vals.email_comercial || '').trim();
+        const docDigits = String(vals.cpf || vals.cnpj || '').replace(/\D/g, '');
+        const patchContato: Record<string, unknown> = {};
+        if (tel) patchContato.phone = tel;
+        if (mail) patchContato.email = mail;
+        if (docDigits.length >= 11) patchContato.custom_fields = { documento: docDigits };
+        if (Object.keys(patchContato).length > 0) {
+          await supabase.from('crm_contacts').update(patchContato as any).eq('id', leadCriadoAqui.contactId);
+        }
+        if (closerNome) {
+          const ownerEmail = await emailDoCloserPorNome(closerNome);
+          if (ownerEmail) {
+            await supabase.from('crm_deals').update({ owner_id: ownerEmail } as any).eq('id', leadCriadoAqui.dealId);
+          }
+        }
+      }
+
       const dados = cliente.dadosLimpos(cliente.form.getValues());
       const docs = cliente.documentos();
 
@@ -466,7 +546,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         await createRegistration.mutateAsync({
           carta_id: carta.id,
           proposal_id: resultado.proposal_id,
-          deal_id: lead.deal_id,
+          deal_id: leadFinal.deal_id,
           tipo_pessoa: cliente.tipoPessoa,
           vendedor_name: closerNome,
           documents: idx === 0 ? docs : [],
@@ -486,7 +566,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           aceite_date: aceiteDate,
           vendedor_id: closerId || undefined,
           vendedor_name_cota: closerNome || undefined,
-          observacoes: obs.trim() || undefined,
+          observacoes: obsFinal.trim() || undefined,
           ...dados,
         } as any);
       }
