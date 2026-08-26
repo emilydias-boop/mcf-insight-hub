@@ -60,6 +60,77 @@ export interface R1ConsorcioInfo {
   temAgendador: boolean;
 }
 
+/** Versão rica do selo de R1 — inclui ids para cruzamentos (janela, closer, agendador). */
+export interface R1ConsorcioDetalhe extends R1ConsorcioInfo {
+  closerId: string | null;
+  bookedBy: string | null;
+}
+
+/**
+ * Núcleo da busca de R1 de consórcio, reutilizável fora de React Query
+ * (ex.: verificação imperativa no submit do AddCartaModal).
+ * Para cada lead: tem reunião elegível conduzida por closer da BU Consórcio?
+ */
+export async function fetchR1ConsorcioDetalhePorDeal(
+  dealIds: string[],
+): Promise<Map<string, R1ConsorcioDetalhe>> {
+  const ids = [...new Set(dealIds)];
+  const out = new Map<string, R1ConsorcioDetalhe>();
+  if (ids.length === 0) return out;
+
+  const { data: closers, error: closersError } = await supabase
+    .from("closers")
+    .select("id, name")
+    .eq("bu", "consorcio");
+  if (closersError) throw closersError;
+  const closerName = new Map<string, string>();
+  (closers || []).forEach((c: any) => closerName.set(String(c.id), c.name || ""));
+
+  const { data: attendees, error: attError } = await supabase
+    .from("meeting_slot_attendees")
+    .select("deal_id, status, booked_by, meeting_slot_id")
+    .in("deal_id", ids);
+  if (attError) throw attError;
+  const elegiveis = (attendees || []).filter(
+    (a: any) => a.status !== "cancelled" && a.status !== "invited" && a.meeting_slot_id,
+  );
+  if (elegiveis.length === 0) return out;
+
+  const slotIds = [...new Set(elegiveis.map((a: any) => String(a.meeting_slot_id)))];
+  const { data: slots, error: slotsError } = await supabase
+    .from("meeting_slots")
+    .select("id, closer_id, scheduled_at")
+    .in("id", slotIds);
+  if (slotsError) throw slotsError;
+  const slotInfo = new Map<string, { closerId: string; at: string | null }>();
+  (slots || []).forEach((s: any) =>
+    slotInfo.set(String(s.id), { closerId: String(s.closer_id), at: s.scheduled_at ?? null }),
+  );
+
+  elegiveis.forEach((a: any) => {
+    const si = slotInfo.get(String(a.meeting_slot_id));
+    if (!si || !closerName.has(si.closerId)) return;
+    const atual = out.get(String(a.deal_id));
+    const candidato: R1ConsorcioDetalhe = {
+      dia: si.at,
+      closerName: closerName.get(si.closerId) || null,
+      temAgendador: !!a.booked_by,
+      closerId: si.closerId,
+      bookedBy: a.booked_by ? String(a.booked_by) : null,
+    };
+    // Mantém a mais recente e preserva "tem agendador" quando qualquer uma tiver.
+    if (!atual || String(candidato.dia || "").localeCompare(String(atual.dia || "")) > 0) {
+      out.set(String(a.deal_id), {
+        ...candidato,
+        temAgendador: candidato.temAgendador || !!atual?.temAgendador,
+      });
+    } else if (candidato.temAgendador) {
+      out.set(String(a.deal_id), { ...atual, temAgendador: true });
+    }
+  });
+  return out;
+}
+
 /**
  * Para cada lead da lista: tem reunião elegível conduzida por closer da BU
  * Consórcio? Sem isso, vincular a cota a esse lead NÃO credita a venda — e pode
@@ -72,57 +143,11 @@ export function useR1ConsorcioPorDeal(dealIds: string[], enabled: boolean) {
     enabled: enabled && ids.length > 0,
     staleTime: 30_000,
     queryFn: async (): Promise<Map<string, R1ConsorcioInfo>> => {
+      const detalhe = await fetchR1ConsorcioDetalhePorDeal(ids);
       const out = new Map<string, R1ConsorcioInfo>();
-      if (ids.length === 0) return out;
-
-      const { data: closers, error: closersError } = await supabase
-        .from("closers")
-        .select("id, name")
-        .eq("bu", "consorcio");
-      if (closersError) throw closersError;
-      const closerName = new Map<string, string>();
-      (closers || []).forEach((c: any) => closerName.set(String(c.id), c.name || ""));
-
-      const { data: attendees, error: attError } = await supabase
-        .from("meeting_slot_attendees")
-        .select("deal_id, status, booked_by, meeting_slot_id")
-        .in("deal_id", ids);
-      if (attError) throw attError;
-      const elegiveis = (attendees || []).filter(
-        (a: any) => a.status !== "cancelled" && a.status !== "invited" && a.meeting_slot_id,
+      detalhe.forEach((v, k) =>
+        out.set(k, { dia: v.dia, closerName: v.closerName, temAgendador: v.temAgendador }),
       );
-      if (elegiveis.length === 0) return out;
-
-      const slotIds = [...new Set(elegiveis.map((a: any) => String(a.meeting_slot_id)))];
-      const { data: slots, error: slotsError } = await supabase
-        .from("meeting_slots")
-        .select("id, closer_id, scheduled_at")
-        .in("id", slotIds);
-      if (slotsError) throw slotsError;
-      const slotInfo = new Map<string, { closerId: string; at: string | null }>();
-      (slots || []).forEach((s: any) =>
-        slotInfo.set(String(s.id), { closerId: String(s.closer_id), at: s.scheduled_at ?? null }),
-      );
-
-      elegiveis.forEach((a: any) => {
-        const si = slotInfo.get(String(a.meeting_slot_id));
-        if (!si || !closerName.has(si.closerId)) return;
-        const atual = out.get(String(a.deal_id));
-        const candidato: R1ConsorcioInfo = {
-          dia: si.at,
-          closerName: closerName.get(si.closerId) || null,
-          temAgendador: !!a.booked_by,
-        };
-        // Mantém a mais recente e preserva "tem agendador" quando qualquer uma tiver.
-        if (!atual || String(candidato.dia || "").localeCompare(String(atual.dia || "")) > 0) {
-          out.set(String(a.deal_id), {
-            ...candidato,
-            temAgendador: candidato.temAgendador || !!atual?.temAgendador,
-          });
-        } else if (candidato.temAgendador) {
-          out.set(String(a.deal_id), { ...atual, temAgendador: true });
-        }
-      });
       return out;
     },
   });
