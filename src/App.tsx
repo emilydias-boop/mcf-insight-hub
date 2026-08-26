@@ -115,6 +115,7 @@ const Webhooks = lazy(() => import("./pages/crm/Webhooks"));
 const WebhookAnalytics = lazy(() => import("./pages/crm/WebhookAnalytics"));
 const KiwifyReconcile = lazy(() => import("./pages/crm/KiwifyReconcile"));
 const ScriptVendas = lazy(() => import("./pages/crm/ScriptVendas"));
+const DesempenhoClosers = lazy(() => import("./pages/crm/DesempenhoClosers"));
 const AdminPermissoes = lazy(() => import("./pages/admin/Permissoes"));
 const AdminRoles = lazy(() => import("./pages/admin/Roles"));
 const ConfiguracaoProdutos = lazy(() => import("./pages/admin/ConfiguracaoProdutos"));
@@ -358,6 +359,7 @@ const App = () => (
                 <Route path="ligacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><Ligacoes /></RoleGuard>} />
                 <Route path="webhook-analytics" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><WebhookAnalytics /></RoleGuard>} />
                 <Route path="script-vendas" element={<RoleGuard allowedRoles={['admin', 'manager']}><ScriptVendas /></RoleGuard>} />
+                <Route path="desempenho-closers" element={<RoleGuard allowedRoles={['admin', 'manager']}><DesempenhoClosers /></RoleGuard>} />
                 <Route path="kiwify-reconcile" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><KiwifyReconcile /></RoleGuard>} />
                 <Route path="configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfiguracoesCRM /></RoleGuard>} />
               </Route>

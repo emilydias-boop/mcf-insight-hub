@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3, Phone, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3, Phone, ClipboardList, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 import { BUProvider } from '@/contexts/BUContext';
@@ -57,7 +57,10 @@ const CRM = () => {
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/webhook-analytics', label: 'Análise Webhooks', icon: BarChart3 },
     ...(role === 'admin' || role === 'manager'
-      ? [{ to: '/crm/script-vendas', label: 'Script de Vendas', icon: ClipboardList }]
+      ? [
+          { to: '/crm/script-vendas', label: 'Script de Vendas', icon: ClipboardList },
+          { to: '/crm/desempenho-closers', label: 'Desempenho Closers', icon: TrendingUp },
+        ]
       : []),
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];
