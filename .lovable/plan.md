@@ -1,78 +1,68 @@
-# Retrato atual — Painel Comercial Consórcio, aba SDRs
+# Resíduos de atribuição — Consórcio: o que resta depois do "Trocar lead"
 
-Levantamento apenas (nada foi alterado). Rótulos e rotas copiados do código.
+## 1) A regra, no código
 
-## 1) O que a seta `›` faz hoje
+**Onde o texto nasce:** `src/hooks/useConsorcioCotasContratadas.ts:526-533`, dentro de `diagnosticarCota`:
 
-- Componente da linha e da seta: `src/components/sdr/ConsorcioSdrSummaryTable.tsx`
-  - cabeçalhos das colunas: linhas 163-198 (`SDR`, `Meta`, `Agendamento`, `Reuniões Agendadas`, `Reuniões Realizadas`, `No-show`, `Vendas Realizadas`, `Cotas Contratadas`, `Consórcio Efetivado`, `Ticket Médio`, `Conv. Vendas / Reunião` — os três últimos rótulos vêm de `CONSORCIO_LABELS`)
-  - seta: linhas 302-306 (`ChevronRight`, só renderiza quando `!disableNavigation`)
-  - clique na linha: linhas 237-241
-- Renderizada em `src/pages/bu-consorcio/PainelEquipe.tsx:663-683`.
-- Navegação (linhas 134-137): `navigate(/crm/reunioes-equipe/{sdrEmail}?{params})` — leva os filtros de período na query.
-- Rota de destino: `src/App.tsx:326` → `SdrMeetingsDetailPage`, com `RoleGuard allowedRoles={['admin','manager','coordenador','sdr','closer_sombra']}`. Observação: `closer` **não** está nessa lista (na rota do closer de consórcio, `App.tsx:239`, está).
-- Desabilitada por papel: sim. `PainelEquipe.tsx:71` — `const isRestrictedRole = role === 'sdr' || role === 'closer';` e `PainelEquipe.tsx:666` — `disableNavigation={isRestrictedRole}`. Confirmado: para `sdr` e `closer` a linha não é clicável e a seta não aparece.
+```
+if (!dealTemReuniaoBU.has(dealId)) {
+  return { problema: "sem_reuniao_bu",
+    motivo: "Lead vinculado, mas sem nenhuma reunião conduzida por closer da BU Consórcio — a venda não passou por R1 desta BU.",
+    agendamento: null };
+}
+```
 
-## 2) A tela de destino (`src/pages/crm/SdrMeetingsDetailPage.tsx`)
+`dealTemReuniaoBU` é preenchido em `:373-379`: attendees do deal cujo `meeting_slot.closer_id` pertence a um closer com `bu = 'consorcio'` (qualquer status).
 
-- Compartilhada com Incorporador: **sim**. Não é específica de Consórcio.
-- Parâmetro de BU: não existe na URL. A BU vem de `useActiveBU()` (linhas 8 e 35). `src/hooks/useActiveBU.ts:14-27` usa (1) `BUContext.activeBU`, (2) fallback `useMyBU()[0]`. A rota `crm/reunioes-equipe/:sdrEmail` **não** está envolvida em `BUProvider`, então o valor efetivo é a BU do perfil de quem está logado — não a BU da tela de origem. Valor padrão portanto: BU do usuário, ou `null`.
-- Conteúdo (rótulos exatos), linhas 186-189: abas `Visão Geral` e `Reuniões ({allMeetings.length})`.
-  - `Visão Geral` (194-210): `SdrDetailKPICards`, `SdrProjectionCard`, `PersonalRefundsCard`.
-  - `Reuniões` (218-222): `SdrLeadsTable`.
-- Hooks: `useSdrPerformanceData` (98-106) e `useSdrMeetingsFromAgenda` (109-114). **Nenhum dos dois recebe `buFilter` nessa página** — compare com `PainelEquipe.tsx:196-202`, que passa `buFilter: BU_SQUAD`. Ou seja, os dados aqui não estão comprovadamente filtrados por Consórcio.
-- "Voltar": `handleBack` (136-141) navega para `/crm/reunioes-equipe` — o painel genérico, não `/consorcio/painel-equipe`. Esse painel genérico é misto de BU (renderiza `IncorporadorMetricsCard`, `ReunioesEquipe.tsx:840`).
+**Predicado que tira a cota do alerta** (`:704-705`):
 
-Conclusão desta parte: hoje o SDR de Consórcio cai numa tela genérica, sem BU garantida, e o Voltar o tira do contexto de Consórcio.
+```
+const temBookerProprio = !!(dealId && dealBooker.get(dealId));
+if (!temBookerProprio) { ...entra no alerta... }
+```
 
-## 3) Molde do closer — `src/pages/bu-consorcio/CloserDetalheConsorcio.tsx`
+`dealBooker` (`:393-424`) só recebe attendees que cumprem, ao mesmo tempo: closer da BU Consórcio, `booked_by IS NOT NULL`, `status NOT IN ('cancelled','invited')` e o `booked_by` tem `email` em `profiles`. Vence o mais recente por `booked_at`/`created_at`.
 
-Abas na ordem (linhas 457-464), com hook de cada uma:
+**Confirmação:** correto. O vínculo cota↔lead, por si só, nunca credita SDR. O crédito vem do `dealBooker` — quem agendou a última reunião de consórcio daquele deal. A atribuição do painel é por **cliente** (`clienteSdr`, `:596-604`): basta uma cota do cliente ter `dealBooker` para todas serem creditadas.
 
-| # | Rótulo | Hook / fonte |
-|---|---|---|
-| 1 | `Agendadas ({n})` | `useConsorcioCloserReunioes` → `.agendadas` (linha 356), tabela `ReunioesTable` |
-| 2 | `Reuniões Realizadas ({n})` | mesmo hook → `.realizadas` |
-| 3 | `No-Shows ({n})` | mesmo hook → `.noShows` |
-| 4 | `Vendas Realizadas ({cotas?.vendas ?? 0})` | `useConsorcioCloserCotas` (357), tabela `CotasTable` |
-| 5 | `Faturamento` | `useConsorcioProducaoGerada` (358), `FaturamentoTab` |
+## 2) Os 10 casos de agosto/2026
 
-Os dois primeiros hooks estão em `src/hooks/useConsorcioCloserDetalhe.ts` e são documentados (linhas 8-19) como lendo **as mesmas fontes do Painel Comercial**: RPC `get_agenda_fatos_consorcio` filtrada por `closer_id`, e `consortium_cards` com `tipo_registro='contratacao'` casado por `nameKey`.
+Só dois clientes, dois deals, e **nenhum dos dois deals tem qualquer attendee** (`meeting_slot_attendees` = 0 linhas).
 
-## 4) De onde viria cada aba do SDR
+| Cliente | Grupo/Cota | Crédito | Contratação | Vendedor | deal_id (lead) | Reunião? | Agendador |
+|---|---|---|---|---|---|---|---|
+| RODRIGO MOREIRA ROBERTO (CPF 38544638805) | 7274/57, 678, 140, 3397, 3308, 3051, 3272, 2210 (8 cotas) | R$ 120.000 cada = R$ 960.000 | 2026-08-20 | André Duarte | `a28592fa…` — "Rodrigo Moreira Roberto", origem **00 - GERENTES DE RELACIONAMENTO**, criado 06/02/2026 | **sem reunião** (0 attendees) | n/a |
+| ROSANGELA MARIA DOS PASSOS FERREIRA (CPF 03913842608) | 7272/4549 e 7272/2682 (2 cotas) | R$ 150.000 cada = R$ 300.000 | 2026-08-10 | Joao Pedro Martins Vieira | `6858e59a…` — "Rosângela Maria dos Passos Ferreira - Efeito Alavanca", origem **Efeito Alavanca + Clube**, criado 07/08/2026 | **sem reunião** (0 attendees) | n/a |
 
-A tabela de SDRs é alimentada por `fatos.bySdr` (`useConsorcioAgendaDerived` sobre `useConsorcioAgendaFatos`, `PainelEquipe.tsx:214-235`), que chama a RPC `get_agenda_fatos_consorcio`.
+Total: 10 cotas · R$ 1.260.000 — bate com a tela.
 
-| Coluna | Número vem de | Lista por lead já existe? |
-|---|---|---|
-| Agendamento | `fato==='agendamento'` (`useConsorcioAgendaFatos.ts:43`) | Sim, as linhas cruas da RPC (`ConsorcioFatoRow`, 14-24): `deal_id`, `meeting_day`, `attendee_status`, `sdr_email/name`, `closer_id/name`, `origin_name`. **Falta** nome do lead, telefone e crédito |
-| Reuniões Agendadas | `fato==='agendada'` (:44) | idem |
-| Reuniões Realizadas | `fato==='realizada'` (:45) | idem |
-| No-show | `fato==='no_show'` (:46) | idem |
-| Vendas Realizadas | `cotasContratadas.clientesBySdr` (`PainelEquipe.tsx:317,671-672`) | **Não** — só `Map<email, número>` |
-| Cotas Contratadas | `cotasContratadas.bySdr` | **Não** — só `Map<email, número>` |
+Trilha do "Trocar lead": 6 das 8 cotas do Rodrigo têm `deal_vinculo_ajustado_em` por Grimaldo (2 em 21/08, 4 em 26/08 12:17), `deal_vinculo_anterior` nulo em todas (antes não havia vínculo). As 2 cotas da Rosângela nunca foram ajustadas — já vinham vinculadas.
 
-O que faltaria:
-- Para as 4 colunas de agenda: juntar nome/telefone do lead a partir de `deal_id` (o closer faz isso com um lookup de `crm_deals.name`, `useConsorcioCloserDetalhe.ts:70-88`); telefone ainda não é buscado em lugar nenhum desse caminho.
-- Para Vendas Realizadas e Cotas Contratadas: `useConsorcioCotasContratadas` só itemiza os buckets de resíduo (`semVinculoItems`, `cadastroSemLeadItems`, `foraFunilItems`, `semCloserItems`, tipo `CotaResiduoItem`, linhas 23-61). Não existe lista itemizada por SDR no caminho normal — seria o equivalente de `useConsorcioCloserCotas`, mas agrupado por SDR.
-- `useSdrMetricsFromAgenda` / RPC `get_sdr_metrics_from_agenda_consorcio` existe e é consciente de Consórcio, mas **não** é a fonte desta tabela (a fonte única é `useConsorcioAgendaFatos`, comentário nas linhas 50-56). Usar essa RPC como base da tela de detalhe reintroduziria divergência com o painel.
-- `useTeamMeetingsData` (chamado em `PainelEquipe.tsx:188-193`) tem `allMeetings` com `contact_name`, `contact_email`, `contact_phone`, `origin_name`, `closer`, `status_atual` — hoje usado só na aba "Leads Detalhados" do Excel (`PainelEquipe.tsx:520-533`). É um caminho paralelo; não há garantia de bater 1:1 com os números da tabela.
+## 3) Classificação
 
-## 5) A regra de atribuição
+- **A — nunca teve reunião de consórcio: 10 cotas · R$ 1.260.000** (os dois clientes). Desfecho previsto: "Reconhecer fora do funil".
+- **B — reunião com closer de outra BU: 0 cotas · R$ 0.** Não existe reunião alguma, de nenhuma BU.
+- **C — reunião de consórcio sem agendador: 0 cotas · R$ 0.**
 
-Confirmada no código. Rodapé em `ConsorcioSdrSummaryTable.tsx:451-455`; implementação em `src/hooks/useConsorcioCotasContratadas.ts`:
-- Venda = pessoa: `clienteKey()` linhas 166-176 (CPF/CNPJ primeiro, `doc:`; fallback nome normalizado, `nome:`).
-- Cota = carta: cada linha de `consortium_cards` com `tipo_registro='contratacao'` conta 1 (linhas 212-219; âncora de data `data_contratacao`, docstring 178-193).
-- SDR = **último** agendamento de consórcio do cliente: linhas 374-389, ordenação ascendente por `booked_at`/`created_at` e `dealBooker.set` sobrescrevendo, então o último vence.
+**O caso que não cabe redondo em A — Rosângela.** Existe no CRM o deal `aeac4310…` "Leandro Passos Ferreira" (origem Efeito Alavanca + Clube) com duas R1 de consórcio **completed** com o closer João Pedro Martins Vieira, agendadas por Cleiton Anacleto Lima (10/03) e Ithaline Clara dos Santos (16/03), e duas cotas contratadas em março no nome do Leandro (CPF 201.862.868-21). Rosângela é CPF diferente — logo, cliente diferente para a atribuição. Se as cotas de agosto forem do mesmo núcleo familiar/mesma negociação, "Trocar lead" para o deal do Leandro creditaria Ithaline; se são venda nova sem R1 própria, é fora do funil. Não determinei qual é o caso — é decisão de negócio, não de dado.
 
-Explicitamente: a aba "Vendas Realizadas" seria uma lista **por cliente** (uma linha por pessoa, podendo agregar N cotas); "Cotas Contratadas" seria **por cota** (uma linha por carta). São granularidades diferentes e a soma de cotas de uma aba não é a contagem da outra.
+Rodrigo é A sem ambiguidade: o único deal dele veio da origem GR, criado em fevereiro, sem nenhuma reunião no histórico.
 
-## 6) As duas linhas especiais
+## 4) O que a tela mostra hoje depois do vínculo
 
-- `"Ygor Fereira — sem atividade no período"`: `ConsorcioSdrSummaryTable.tsx:312-342`, a partir de `extraSdrs` (linhas 75-78) = SDRs presentes em `cotasBySdr` (têm cota atribuída no período) mas ausentes dos fatos de agenda do período (`emailsNaTabela`, :74). Representa SDR com venda creditada cujo agendamento caiu fora da janela filtrada — injetada para o total fechar com o card de KPI.
-- `"Sem agendamento de consórcio"` (itálico, com lupa): linhas 345-373, exibida quando `cotasSemVinculo > 0`, valor de `cotasContratadas.semVinculo` (`PainelEquipe.tsx:675`). Clique abre `ResiduoDetalheModal` com `semVinculoItems`. Representa cotas de clientes que **não têm nenhum** agendamento de consórcio em nenhuma das suas cotas — logo não há SDR a quem creditar. Distinta da linha `"Não atribuído"` (375-399, de `fatos.sdrUnassigned`), que é fato de agenda com reunião mas sem agendador identificável.
+Conferido em `src/components/sdr/ResiduoDetalheModal.tsx:296-358`. A prioridade do botão é `permitirForaFunil && i.semSaidaPorVinculo`, e `semSaidaPorVinculo` (hook `:626-630, 708`) é verdadeiro quando **nenhuma** cota do cliente tem lead com reunião de consórcio elegível — exatamente o estado dos 10 casos. Portanto, em cada uma das 10 linhas aparece:
 
-## Aberto / não determinei
+- botão **em destaque**: "Reconhecer fora do funil";
+- abaixo, link discreto (ghost): "Trocar lead".
 
-- Se `useSdrPerformanceData` filtra BU internamente (só a assinatura foi lida, `src/hooks/useSdrPerformanceData.ts:134`).
-- Valor de runtime de `useActiveBU()` para um usuário de Consórcio nessa rota — depende do perfil, não verificável estaticamente.
+Ou seja, a hierarquia já está invertida a favor do desfecho correto. O que continua ruim é o resto da moldura: o título da caixa ("cotas apontando para o lead sem reunião — alerta de cadastro"), o texto do banner verde/âmbar ("Vínculo salvo, mas o caso continua na lista…") e a coluna "Motivo" seguem falando a língua de "cadastro a ajustar", quando o caso já virou "venda que não passou pelo funil". Os dois estados moram na mesma lista com o mesmo título — é a mistura que o dono percebeu, não o botão.
+
+## Proposta (se quiser que eu implemente depois)
+
+Separar a caixa `semAgendador` em duas, por `semSaidaPorVinculo`:
+1. "cotas com reunião a ajustar" — `sem_agendador`, `reuniao_nao_elegivel`, `perfil_sem_email`: ação principal "Informar agendador".
+2. "vendas sem R1 de Consórcio" — `sem_reuniao_bu` com `semSaidaPorVinculo`: ação principal "Reconhecer fora do funil", texto dizendo que não há SDR a creditar e que trocar o lead só faz sentido se outro lead do mesmo cliente teve a R1.
+
+E trocar a mensagem pós-ação: quando o vínculo salvo leva a `sem_reuniao_bu` com `semSaidaPorVinculo`, dizer "vínculo salvo — o cadastro está correto; esta venda não passou por R1 de Consórcio, o desfecho é reconhecer fora do funil" em vez do texto atual de pendência.
+
+Só frontend: nenhuma migration, nenhuma função SQL, nenhum UPDATE.
