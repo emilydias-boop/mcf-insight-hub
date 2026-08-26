@@ -216,6 +216,8 @@ function DesempenhoClosersContent() {
           return a.nome.localeCompare(b.nome) * dir;
         case 'reunioes':
           return (a.reunioes - b.reunioes) * dir;
+        case 'participantes':
+          return (a.participantes - b.participantes) * dir;
         case 'conversao':
           return (a.conversao - b.conversao) * dir;
         case 'nota':
@@ -223,7 +225,7 @@ function DesempenhoClosersContent() {
         case 'cobertura':
           return (a.cobertura - b.cobertura) * dir;
         default:
-          return (a.vendas - b.vendas) * dir;
+          return (a.contratos - b.contratos) * dir;
       }
     });
   }, [porCloser, sortKey, sortDir]);
@@ -381,7 +383,7 @@ function DesempenhoClosersContent() {
       <Alert className="print-block">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Venda é contabilizada por contrato pago do participante, não pelo estágio do CRM.
+          Contrato é contabilizado por contrato pago do participante, não pelo estágio do CRM.
         </AlertDescription>
       </Alert>
 
@@ -396,10 +398,11 @@ function DesempenhoClosersContent() {
       )}
 
       {/* Cartões */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-5 print-block">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-6 print-block">
         {[
           { label: 'Reuniões', valor: n0(resumo.reunioes) },
-          { label: 'Vendas', valor: n0(resumo.vendas) },
+          { label: 'Participantes', valor: n0(resumo.participantes) },
+          { label: 'Contratos', valor: n0(resumo.contratos) },
           { label: 'Conversão', valor: `${n1(resumo.conversao)}%` },
           { label: 'Nota média', valor: n1(resumo.nota) },
           { label: 'Cobertura', valor: `${n1(resumo.cobertura)}%` },
@@ -415,15 +418,15 @@ function DesempenhoClosersContent() {
         ))}
       </div>
 
-      {/* Gráfico 1 — Vendas */}
+      {/* Gráfico 1 — Contratos */}
       <Card className="print-block">
         <CardHeader>
-          <CardTitle className="text-base">Vendas por período</CardTitle>
+          <CardTitle className="text-base">Contratos por período</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[380px] print-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dadosVendas}>
+              <LineChart data={dadosContratos}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
