@@ -3357,6 +3357,7 @@ export type Database = {
           closer_id: string
           frases_sem_tema: number
           frases_total: number
+          frases_usadas: number | null
           gerado_em: string
           icp_segment: string | null
           id: string
@@ -3364,7 +3365,9 @@ export type Database = {
           modelo: string | null
           periodo_ate: string
           periodo_de: string
+          resumo: string | null
           reunioes: number
+          reunioes_usadas: number | null
           temas_fortes: Json
           temas_melhoria: Json
         }
@@ -3372,6 +3375,7 @@ export type Database = {
           closer_id: string
           frases_sem_tema?: number
           frases_total?: number
+          frases_usadas?: number | null
           gerado_em?: string
           icp_segment?: string | null
           id?: string
@@ -3379,7 +3383,9 @@ export type Database = {
           modelo?: string | null
           periodo_ate: string
           periodo_de: string
+          resumo?: string | null
           reunioes: number
+          reunioes_usadas?: number | null
           temas_fortes?: Json
           temas_melhoria?: Json
         }
@@ -3387,6 +3393,7 @@ export type Database = {
           closer_id?: string
           frases_sem_tema?: number
           frases_total?: number
+          frases_usadas?: number | null
           gerado_em?: string
           icp_segment?: string | null
           id?: string
@@ -3394,7 +3401,9 @@ export type Database = {
           modelo?: string | null
           periodo_ate?: string
           periodo_de?: string
+          resumo?: string | null
           reunioes?: number
+          reunioes_usadas?: number | null
           temas_fortes?: Json
           temas_melhoria?: Json
         }
