@@ -586,6 +586,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetar(); onOpenChange(o); }}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -655,6 +656,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
                               <span className="text-xs text-muted-foreground">
                                 {[m.contact_phone, m.origin_label, m.stage_name].filter(Boolean).join(' · ')}
                               </span>
+                              {m.r1 ? (
+                                <span className="text-xs font-medium text-primary">
+                                  tem R1 de consórcio · {fmtDiaCurto(m.r1.dia)}{m.r1.closerName ? ` · ${m.r1.closerName}` : ''}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/70">sem R1 de consórcio</span>
+                              )}
                             </div>
                           </CommandItem>
                         ))}
@@ -818,5 +826,69 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
       </DialogContent>
     </Dialog>
+
+    {/* ===== Diálogo de atrito: possível R1 de consórcio em outro lead ===== */}
+    <Dialog open={!!candidatosReuniao} onOpenChange={(o) => { if (!o && !salvando) setCandidatosReuniao(null); }}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Este cliente pode já ter passado por uma R1 de consórcio</DialogTitle>
+          <DialogDescription>
+            Vincular à reunião certa é o que credita o SDR. Se nenhuma destas for o cliente,
+            você pode criar assim mesmo — com um motivo registrado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[300px] space-y-2 overflow-y-auto">
+          {(candidatosReuniao || []).map((c) => (
+            <div key={c.dealId} className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{c.contactName || 'Lead sem nome'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {fmtDiaHora(c.dia)}{c.closerName ? ` · ${c.closerName}` : ''}
+                  {c.agendadoPor ? ` · agendado por ${c.agendadoPor}` : ''}
+                </p>
+                {c.faixa === 2 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    reunião deste closer no período — confira se é este cliente
+                  </p>
+                )}
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => usarLeadDaReuniao(c)} disabled={salvando}>
+                {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Usar este lead
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2 border-t pt-3">
+          <Label htmlFor="motivo-sem-r1" className="text-xs">
+            Motivo para criar sem vincular à reunião (mínimo 10 caracteres)
+          </Label>
+          <Textarea
+            id="motivo-sem-r1"
+            rows={2}
+            value={motivoSemR1}
+            onChange={(e) => setMotivoSemR1(e.target.value)}
+            placeholder="Ex.: venda de parceiro, cliente nunca passou por reunião..."
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCandidatosReuniao(null)} disabled={salvando}>
+            Voltar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={criarAssimMesmo}
+            disabled={salvando || motivoSemR1.trim().length < 10}
+          >
+            {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Criar assim mesmo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
