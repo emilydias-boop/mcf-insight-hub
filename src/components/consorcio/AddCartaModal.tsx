@@ -276,11 +276,19 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
   const [mostrarErros, setMostrarErros] = useState(false);
   const [cadastroAberto, setCadastroAberto] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  /** Lead criado por ESTE modal — único contato/deal que o submit pode complementar. */
+  const [leadCriadoAqui, setLeadCriadoAqui] = useState<{ dealId: string; contactId: string } | null>(null);
+  /** Candidatos com R1 de consórcio encontrados na verificação do submit — abre o diálogo de atrito. */
+  const [candidatosReuniao, setCandidatosReuniao] = useState<ReuniaoConsorcioCandidato[] | null>(null);
+  const [motivoSemR1, setMotivoSemR1] = useState('');
 
   const cliente = useDadosCliente({ nomeInicial: lead?.contact_name || '' });
+  const buscarReuniao = useBuscarReuniaoConsorcio();
+  const cpfBusca = (cliente.form.watch('cpf') as string) || '';
+  const cnpjBusca = (cliente.form.watch('cnpj') as string) || '';
   const { data: originIds = [] } = useConsorcioOriginIds();
   const { data: leadMatches = [], isFetching: isSearching } = useConsorcioLeadSearch(
-    leadSearch, originIds, leadOpen,
+    leadSearch, originIds, { cpf: cpfBusca, cnpj: cnpjBusca }, leadOpen,
   );
 
   const closerNome = (() => {
@@ -313,11 +321,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
     setNovoLeadAberto(false); setNovoLeadNome('');
     setCloserId(''); setAceiteDate(new Date().toISOString().split('T')[0]);
     setObs(''); setCartas([novaCartaDraft()]); setMostrarErros(false);
+    setLeadCriadoAqui(null); setCandidatosReuniao(null); setMotivoSemR1('');
     cliente.form.reset();
   };
 
   const selecionarLead = (m: DealMatch) => {
     setLead(m);
+    setLeadCriadoAqui(null);
     cliente.form.setValue('nome_completo', m.contact_name || '');
     if (m.contact_phone) cliente.form.setValue('telefone', m.contact_phone);
     if (m.contact_email) cliente.form.setValue('email', m.contact_email);
