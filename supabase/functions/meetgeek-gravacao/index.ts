@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       return jsonResp({
         link: rec.download_link,
         expira_em: rec.download_expires_at,
-        do_cache: do_cache: true,
+        do_cache: true,
       });
     }
   }
