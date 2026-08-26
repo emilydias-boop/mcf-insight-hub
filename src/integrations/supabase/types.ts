@@ -16777,6 +16777,11 @@ export type Database = {
       }
       resolve_owner_label: { Args: { _owner: string }; Returns: string }
       resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
+      script_publicar_versao: {
+        Args: { _etapas: Json; _meeting_type: string }
+        Returns: Json
+      }
+      script_reavaliar: { Args: { _meeting_type?: string }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sonax_duration_seconds: { Args: { raw: string }; Returns: number }
