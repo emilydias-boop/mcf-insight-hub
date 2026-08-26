@@ -356,16 +356,28 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
 
     setCriandoLead(true);
     try {
+      // O lead novo não nasce mais cego: telefone/e-mail/documento do bloco 3
+      // (quando já preenchidos) entram no contato, e o closer vira dono do deal.
+      const vals = cliente.form.getValues();
+      const tel = String(vals.telefone || vals.telefone_comercial || '').trim();
+      const mail = String(vals.email || vals.email_comercial || '').trim();
+      const docDigits = String(vals.cpf || vals.cnpj || '').replace(/\D/g, '');
+      const contatoInsert: Record<string, unknown> = { name: nome, clint_id: `local-${Date.now()}` };
+      if (tel) contatoInsert.phone = tel;
+      if (mail) contatoInsert.email = mail;
+      if (docDigits.length >= 11) contatoInsert.custom_fields = { documento: docDigits };
+
       console.log('[AddCartaModal] inserindo crm_contacts...', nome);
       const { data: contato, error: cErr } = await supabase
         .from('crm_contacts')
-        .insert({ name: nome, clint_id: `local-${Date.now()}` } as any)
+        .insert(contatoInsert as any)
         .select('id, name')
         .single();
       console.log('[AddCartaModal] resposta crm_contacts', { contato, cErr });
       if (cErr) throw cErr;
       if (!contato?.id) throw new Error('Contato criado sem ID retornado.');
 
+      const ownerEmail = closerNome ? await emailDoCloserPorNome(closerNome) : null;
       const { data: deal, error: dErr } = await supabase
         .from('crm_deals')
         .insert({
@@ -374,6 +386,7 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
           origin_id: EA_ORIGIN_ID,
           stage_id: EA_ENTRADA_STAGE_ID,
           clint_id: `manual_${Date.now()}_${String(contato.id).slice(0, 8)}`,
+          ...(ownerEmail ? { owner_id: ownerEmail } : {}),
         } as any)
         .select('id')
         .single();
@@ -385,11 +398,13 @@ export function AddCartaModal({ open, onOpenChange }: Props) {
         deal_id: deal.id,
         origin_id: EA_ORIGIN_ID,
         contact_name: nome,
-        contact_email: null,
-        contact_phone: null,
+        contact_email: mail || null,
+        contact_phone: tel || null,
         origin_label: 'Efeito Alavanca + Clube',
         stage_name: 'Parceiros',
+        r1: null,
       });
+      setLeadCriadoAqui({ dealId: deal.id, contactId: contato.id });
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       setNovoLeadNome('');
       toast.success('Lead criado no CRM do consórcio.');
