@@ -23,6 +23,7 @@ export interface MeetingRecording {
   ingest_status: string | null;
   analysis_status: string | null;
   match_method: string | null;
+  meetgeek_meeting_id: string | null;
 }
 
 export interface MeetingAiReviewEtapa {
@@ -63,7 +64,7 @@ export function useMeetingRecording(meetingSlotId: string | null | undefined) {
       const { data: recData, error: recError } = await supabase
         .from('meeting_recordings')
         .select(
-          'id, meeting_slot_id, closer_id, title, host_email, started_at, ended_at, duration_minutes, summary, highlights, transcript, transcript_chars, ingest_status, analysis_status, match_method',
+          'id, meeting_slot_id, closer_id, title, host_email, started_at, ended_at, duration_minutes, summary, highlights, transcript, transcript_chars, ingest_status, analysis_status, match_method, meetgeek_meeting_id',
         )
         .eq('meeting_slot_id', meetingSlotId as string)
         .order('started_at', { ascending: false })
