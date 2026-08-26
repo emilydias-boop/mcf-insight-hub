@@ -15639,6 +15639,7 @@ export type Database = {
           deal_id: string | null
           dia: string | null
           etapas: Json | null
+          icp_segment: string | null
           meeting_slot_id: string | null
           meeting_type: string | null
           nota_geral: number | null
@@ -16865,6 +16866,27 @@ export type Database = {
               pct_falha: number
             }[]
           }
+        | {
+            Args: {
+              _ate?: string
+              _bu?: string
+              _closer_id?: string
+              _de?: string
+              _icp_segment?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              avaliacoes: number
+              closer_email: string
+              closer_id: string
+              cumpriu: number
+              etapa: string
+              falhou: number
+              nota_media_etapa: number
+              ordem: number
+              pct_falha: number
+            }[]
+          }
       relatorio_closer_serie:
         | {
             Args: {
@@ -16897,6 +16919,28 @@ export type Database = {
               bu: string
               closer_email: string
               closer_id: string
+              nota_media: number
+              periodo: string
+              reunioes: number
+              taxa_conversao: number
+              vendas: number
+            }[]
+          }
+        | {
+            Args: {
+              _ate?: string
+              _bu?: string
+              _de?: string
+              _gran?: string
+              _icp_segment?: string
+              _meeting_type?: string
+            }
+            Returns: {
+              aderencia_media: number
+              bu: string
+              closer_email: string
+              closer_id: string
+              icp_segment: string
               nota_media: number
               periodo: string
               reunioes: number

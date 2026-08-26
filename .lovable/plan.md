@@ -1,50 +1,78 @@
-# Auditoria: as 10 cotas residuais (Rodrigo e Rosangela) — só leitura
+# A reunião do Rodrigo existe. O dono está certo.
 
-## 1) Busca ampla por reunião, ignorando o vínculo atual
+Só SELECT. Nada alterado.
 
-Critérios aplicados sobre `meeting_slot_attendees` + `meeting_slots`, sem filtro de BU nem de status: CPF (dígitos), telefone pelos **últimos 9 dígitos** (attendee, contato do deal), e-mail exato em minúsculo, nome normalizado e busca parcial por sobrenome.
+## Achado central
 
-**RODRIGO MOREIRA ROBERTO** — CPF 38544638805, telefone 983647601, e-mail rodrigomoreira@harplapecas.com:
-**nenhuma reunião encontrada por nenhum dos critérios.** Zero linhas. Não existe reunião na agenda para essa pessoa, presa a outro lead ou não.
+Existe uma R1 de consórcio do Rodrigo, conduzida pelo André, e ela está presa a **outro negócio**:
 
-**ROSANGELA MARIA DOS PASSOS FERREIRA** — CPF 03913842608, telefone 981087575, e-mail rosangelapassos7800@gmail.com:
-nenhuma reunião casou por CPF, telefone ou e-mail. Casaram **apenas por sobrenome parcial** (`PASSOS FERREIRA`) duas reuniões que são de **outra pessoa**:
+| campo | valor |
+|---|---|
+| data | 2026-08-20 16:00 UTC |
+| closer | Andre dos Santos Duarte (`closers.id` 1472d772…, bu `consorcio`, ativo, `meeting_type` r1) |
+| attendee | "Rodrigo Moreira " — status `completed` |
+| agendado por (`booked_by`) | ithaline clara dos santos (411e4b5d…), `booked_at` 2026-08-20 13:02 |
+| observação do agendamento | "Led parceiro antigo / Disparo recente" |
+| deal do attendee | `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6`, nome "Consórcio ", origem Efeito Alavanca + Clube, dono andre.duarte, estágio **R1 Realizada** |
+| contato do attendee | `06d12b2e…` "Rodrigo Moreira " — **sem telefone e sem e-mail** |
 
-| data | closer | BU do closer | status | agendador | deal | lead | telefone/e-mail do lead | casou por |
-|---|---|---|---|---|---|---|---|---|
-| 2026-03-10 13:45 | João Pedro Martins Vieira | consorcio | completed | Cleiton Anacleto Lima | aeac4310… | Leandro Passos Ferreira | 62981161850 / leandropassos110@gmail.com | nome (sobrenome) |
-| 2026-03-16 13:00 | João Pedro Martins Vieira | consorcio | completed | Ithaline Clara dos Santos | aeac4310… | Leandro Passos Ferreira | 62981161850 / leandropassos110@gmail.com | nome (sobrenome) |
+Foi por isso que a busca anterior não achou: o contato da reunião é um registro genérico ("Consórcio "), criado no disparo, sem telefone, sem e-mail e sem CPF, e com o sobrenome cortado ("Rodrigo Moreira", não "Rodrigo Moreira Roberto"). Nenhum critério de identidade tinha como casar.
 
-Telefone, e-mail e CPF são diferentes dos da Rosangela. Tratar essas reuniões como dela seria atribuir a venda a uma R1 de outra pessoa — decisão de negócio, não de dado.
+Cronologia que fecha o caso: reunião marcada 20/08 13:02, realizada 20/08 16:00, e as **7 cotas nasceram 20/08 19:11** (origem `reverter`), no mesmo dia, poucas horas depois.
 
-## 2) Como essas cotas nasceram — a hipótese do "Adicionar Carta" não se sustenta
+## 1) Negócios do Rodrigo
 
-Os 11 cadastros dessas duas pessoas (`consorcio_pending_registrations`) têm **`proposal_id` nulo em todos**. O caminho "Adicionar Carta" **sempre** cria uma `consorcio_proposals`, marca `status = 'aceita'` com `aceite_date`, e passa esse `proposal_id` para cada cadastro. Sem proposta nenhuma, esses cadastros não vieram de lá.
+Existem exatamente dois negócios que casam por identidade — e o certo é um terceiro, que só casa por nome parcial:
 
-O que os dados mostram:
+| deal | nome | origem | estágio hoje | dono | attendees | contato (tel / e-mail) |
+|---|---|---|---|---|---|---|
+| `a28592fa…` | Rodrigo Moreira Roberto | 00 - GERENTES DE RELACIONAMENTO | **Em contato** | william.ferreira | **0** | 11983647601 / rodrigomoreira@**harpiapecas.com.br** |
+| `5d988c40…` | Consórcio | Efeito Alavanca + Clube | **R1 Realizada** | andre.duarte | **1 (completed, com André)** | sem telefone / sem e-mail |
+| `6c55d1a4…` | Rodrigo Cézare Moreira Araujo | Inside Sales Viver de Aluguel | CONTRATO PAGO | thayna.tavares | 0 | outra pessoa |
 
-| criado em | origem | quem criou | status | deal vinculado |
+Correção de um dado da rodada anterior: o e-mail é `@harpiapecas.com.br` (harpia), não `@harplapecas.com`. Buscar por "Harpla" não retorna nada por isso.
+
+As 9 linhas de `consorcio_pending_registrations` do Rodrigo (8 cotas de R$ 120.000 + 1 sem deal) estão todas apontando para `a28592fa…` — o negócio **sem reunião**. Nenhuma aponta para `5d988c40…`, o negócio **com a R1**.
+
+## 2) O estágio conta uma história — mas não a que se esperava
+
+`a28592fa…` está em **"Em contato"** hoje, com 0 attendees. Não é estágio pós-reunião, então esse negócio isolado não prova reunião nenhuma.
+
+A única trilha de estágio existente (`deal_activities`, 1 linha) é de 2026-03-16 14:24: automação `move-partners-to-venda-realizada` moveu de "Em contato" para "Venda Realizada" por detectar parceiro. Hoje está de volta em "Em contato" e **não há registro de quem trouxe de volta** — não existe tabela de histórico de estágio completa nesta base (só `deal_activities`, `attendee_movement_logs`, `audit_logs`). Não determinei quem fez o retorno.
+
+A prova da reunião não vem do estágio de `a28592fa…`; vem do attendee `completed` em `5d988c40…`.
+
+## 3) O lado do André
+
+Andre dos Santos Duarte existe em `closers`: `1472d772-a48b-4c88-ba07-398898532df4`, bu `consorcio`, ativo, r1. Em julho e agosto de 2026 tem **275 attendees**, todos com `booked_by` preenchido (zero nulos).
+
+Com "Rodrigo" no nome, nesse período, aparecem três:
+
+| data | attendee | status | agendado por | deal |
 |---|---|---|---|---|
-| 2026-08-20 19:11:31–32 (7 linhas, mesmo segundo) | `reverter` | Antony Nicolas Gomes Rosa | cota_aberta | a28592fa (Rodrigo) em 6; 1 sem deal |
-| 2026-08-21 19:23 (2 linhas) | `collab_diego_oliveira` | Grimaldo de Oliveira Melo Neto | vinculada | 6858e59a (Rosangela) |
-| 2026-08-26 12:17 (2 linhas) | `reverter` | Grimaldo de Oliveira Melo Neto | vinculada (vinculada_by Grimaldo) | a28592fa (Rodrigo) |
+| 2026-07-03 18:00 | Rodrigo Costa | completed | ithaline clara | Rodrigo Costa (outra pessoa) |
+| **2026-08-20 16:00** | **Rodrigo Moreira** | **completed** | **ithaline clara** | **Consórcio (`5d988c40…`)** |
+| 2026-08-27 16:00 | Evandro Rodrigo da Silva Gomes | invited | Cleiton Anacleto | outra pessoa |
 
-Ou seja: nasceram por **reversão de etapa / recriação de cadastro** e por lançamento marcado como **collab (Diego Oliveira)** — este último é exatamente a marca de venda por fora do funil.
+Ninguém com e-mail contendo "harp" — coerente com o contato da reunião não ter e-mail.
 
-Única proposta existente entre os deals envolvidos: `7dc08195…`, do deal do **Leandro**, criada por João Pedro em 2026-03-11, status **pendente**, sem `aceite_date`. Não pertence a nenhuma dessas cotas.
+## 4) Quando o closer marca a própria reunião, o que fica em `booked_by`
 
-Não determinei: a ordem exata de cota → termo (não consultei `consorcio_termos` nem `consortium_cards.created_at` nesta rodada), e o ponto de código que grava `origem = 'reverter'` — não aparece no frontend, é escrito por RPC do banco.
+Fica o **perfil de quem está logado**, sempre. Dois pontos gravam:
 
-## 3) Classificação
+- `src/hooks/useCloserScheduling.ts:200` — cria o `meeting_slot` com `booked_by: user.id`.
+- `src/hooks/useAgendaData.ts:1741` — insere attendee com `booked_by: currentUserId` (usuário logado).
 
-- **A — nunca teve reunião de consórcio: 10 cotas, R$ 1.260.000.** Rodrigo 8 × R$ 120.000 = R$ 960.000; Rosangela 2 × R$ 150.000 = R$ 300.000. Desfecho previsto: **Reconhecer fora do funil**.
-- **B — reunião com closer de outra BU: 0 cotas, R$ 0.**
-- **C — reunião de consórcio sem agendador: 0 cotas, R$ 0.**
+Nunca é nulo por esse caminho. Logo, se um closer agenda para si, ele aparece como agendador. Isso acontece na prática: João Pedro Martins Vieira tem 14 reuniões entre julho e agosto em que é simultaneamente closer e `booked_by`.
 
-Caso que não cabe limpo em A/B/C: as **2 cotas da Rosangela**. Existe reunião de consórcio, com closer da BU e com agendador (Cleiton e Ithaline), no deal do **Leandro Passos Ferreira** — mesmo sobrenome, outro CPF/telefone/e-mail. Se for a mesma família e a negociação foi conduzida na R1 do Leandro, o desfecho correto é trocar o vínculo para aquele deal e creditar o SDR; se for coincidência de sobrenome, é A. O dado sozinho não decide isso.
+## 5) Contraprova
 
-## 4) O "Adicionar Carta" é cego por construção
+**Zero.** Não existe nenhum attendee em agosto/2026 com `booked_by` = perfil do André (`1cb9287f…`). O padrão "closer agenda para si" existe na base, mas o André não o usa. As reuniões dele vêm de SDR — Ithaline, Cleiton, Ygor.
 
-Confirmado: em `src/components/consorcio/AddCartaModal.tsx` não existe **nenhuma** consulta a `meeting_slots` ou `meeting_slot_attendees`. A busca de lead consulta apenas `crm_contacts` e `crm_deals` restritos às origens da BU Consórcio; se nada casa, o fluxo cria contato e deal novos direto no pipeline Efeito Alavanca + Clube. Em nenhum momento a tela olha a agenda nem avisa "esse cliente tem R1 marcada — vincule ao lead da reunião".
+## Conclusão
 
-Então: a tela deixa lançar por fora sem avisar. Só que, neste caso específico, não foi o "Adicionar Carta" — os cadastros nasceram por reversão e por lançamento collab.
+Não é caso de "reconhecer fora do funil". A R1 existe, é de consórcio, é do André, e o agendador é a **Ithaline Clara dos Santos**. O que está errado é o vínculo: as 8 cotas estão penduradas no deal de Gerente de Relacionamento (`a28592fa…`, sem reunião) em vez do deal da reunião (`5d988c40…`).
+
+Desfecho correto, quando o dono autorizar: trocar o vínculo das cotas do Rodrigo para `5d988c40-a6a0-41b4-93f3-8878d5a8f9e6`, o que credita a Ithaline como agendadora e tira as 8 cotas (R$ 960.000) do alerta. As 2 cotas da Rosangela continuam em aberto — nada novo nesta rodada sobre elas.
+
+Efeito colateral a decidir junto: o deal da reunião é um "Consórcio " genérico, com contato sem telefone/e-mail. Vale renomear o contato para o nome completo e preencher telefone/e-mail para que buscas futuras encontrem — mas isso é UPDATE e não foi feito.
