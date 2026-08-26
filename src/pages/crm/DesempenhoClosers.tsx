@@ -768,13 +768,8 @@ function ListaTemas({
       <div className="mt-2 space-y-2">
         {temas.map((t, i) => (
           <div key={`${titulo}-${i}`}>
-            <p className="text-sm">{t.tema}</p>
-            <Progress
-              value={Math.max(0, Math.min(100, t.pct))}
-              className="mt-1 h-1.5"
-              indicatorClassName={tom === 'sucesso' ? 'bg-success' : 'bg-destructive'}
-            />
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="text-[13px]">{t.tema}</p>
+            <p className="text-[11px] text-muted-foreground">
               {n0(t.reunioes)} de {n0(t.total_reunioes)} reuniões · {n1(t.pct)}%
             </p>
           </div>
