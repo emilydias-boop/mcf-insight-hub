@@ -257,7 +257,6 @@ function valoresDaCarta(c: any): Partial<FormData> {
     empresa_paga_parcelas: (Number(c.parcelas_pagas_empresa) > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
     // Só abre no modo preciso a cota que REALMENTE tem a lista gravada. Cota sem
     // lista não recebe grade derivada: seria dar cara de escolha ao que ninguém escolheu.
-    modo_parcelas_mcf: (normalizarParcelasMcf(c.parcelas_mcf_numeros).length > 0 ? 'lista' : 'padrao') as 'padrao' | 'lista',
     parcelas_mcf_numeros: normalizarParcelasMcf(c.parcelas_mcf_numeros),
     tipo_contrato: (c.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar') || undefined,
     parcelas_pagas_empresa: Number(c.parcelas_pagas_empresa) || 0,
@@ -500,7 +499,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
-      modo_parcelas_mcf: (normalizarParcelasMcf((card as any).parcelas_mcf_numeros).length > 0 ? 'lista' : 'padrao') as 'padrao' | 'lista',
       parcelas_mcf_numeros: normalizarParcelasMcf((card as any).parcelas_mcf_numeros),
       tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
       parcelas_pagas_empresa: card.parcelas_pagas_empresa,
@@ -566,7 +564,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       tipo_registro: 'contratacao',
       tipo_produto: 'select',
       empresa_paga_parcelas: 'nao',
-      modo_parcelas_mcf: 'padrao',
       parcelas_mcf_numeros: [],
       tipo_contrato: undefined,
       parcelas_pagas_empresa: 0,
@@ -595,7 +592,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const estadoCivil = form.watch('estado_civil');
   const profissao = form.watch('profissao');
   const empresaPagaParcelas = form.watch('empresa_paga_parcelas');
-  const modoParcelasMcf = form.watch('modo_parcelas_mcf') || 'padrao';
   const parcelasMcfNumeros = form.watch('parcelas_mcf_numeros') || [];
   const tipoContrato = form.watch('tipo_contrato');
   const valorCredito = form.watch('valor_credito') || 0;
@@ -935,7 +931,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       categoria: 'inside',
       tipo_produto: 'select',
       empresa_paga_parcelas: 'nao',
-      modo_parcelas_mcf: 'padrao',
       parcelas_mcf_numeros: [],
       tipo_contrato: undefined,
       parcelas_pagas_empresa: 0,
@@ -1257,9 +1252,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         tipo_produto: ['tipo_produto', 'produto_codigo'],
         parcela_1a_12a: camposDoPlanoParaAuditoria,
         parcela_demais: camposDoPlanoParaAuditoria,
-        tipo_contrato: ['tipo_contrato', 'empresa_paga_parcelas', 'modo_parcelas_mcf', 'parcelas_mcf_numeros'],
-        parcelas_pagas_empresa: ['parcelas_pagas_empresa', 'empresa_paga_parcelas', 'modo_parcelas_mcf', 'parcelas_mcf_numeros'],
-        parcelas_mcf_numeros: ['parcelas_mcf_numeros', 'modo_parcelas_mcf', 'empresa_paga_parcelas'],
+        tipo_contrato: ['tipo_contrato', 'empresa_paga_parcelas', 'parcelas_mcf_numeros'],
+        parcelas_pagas_empresa: ['parcelas_pagas_empresa', 'empresa_paga_parcelas', 'parcelas_mcf_numeros'],
+        parcelas_mcf_numeros: ['parcelas_mcf_numeros', 'empresa_paga_parcelas'],
       };
       const chavesDoDiff = Object.keys(alterado);
       const naoTocadas = chavesDoDiff.filter(
