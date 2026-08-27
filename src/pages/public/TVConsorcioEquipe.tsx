@@ -44,6 +44,11 @@ interface Payload {
   snapshot_em?: string;
   snapshot_atrasado?: boolean;
   meta_credito_mes?: number | null;
+  meta_agendamento?: {
+    dia: number | null;
+    mes: number | null;
+    dias_uteis: number;
+  } | null;
   contratos?: { dia?: ContratosBloco; mes?: ContratosBloco };
   agenda?: { dia?: AgendaBloco; mes?: AgendaBloco };
   ranking_closer?: RankingCloser[];
@@ -437,8 +442,31 @@ export default function TVConsorcioEquipe() {
         <DiaMesBlocoCard
           titulo="Agendamento"
           accent={ACCENT}
-          hoje={{ valor: num(aDia.agendamentos) }}
-          mes={{ valor: num(aMes.agendamentos) }}
+          hoje={{
+            valor: (
+              <Fracao
+                numerador={Number(aDia.agendamentos || 0)}
+                denominador={Number(data.meta_agendamento?.dia ?? 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aDia.agendamentos)} de ${num(data.meta_agendamento?.dia ?? 0)} na meta do dia`,
+          }}
+          mes={{
+            valor: (
+              <Fracao
+                numerador={Number(aMes.agendamentos || 0)}
+                denominador={Number(data.meta_agendamento?.mes ?? 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aMes.agendamentos)} de ${num(data.meta_agendamento?.mes ?? 0)} na meta do mês`,
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {pctTexto(Number(aMes.agendamentos || 0), Number(data.meta_agendamento?.mes ?? 0))} da meta
+              </div>
+            ),
+          }}
         />
         <DiaMesBlocoCard
           titulo="R1 realizadas"
