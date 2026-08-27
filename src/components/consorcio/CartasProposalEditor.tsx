@@ -505,7 +505,7 @@ export function CartasProposalEditor({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
+                      <Label className="text-xs">{rotulos.diferenciada}</Label>
                       {/* Segue opcional: sem `required` não aparece linha de vazio. */}
                       <CurrencyInput
                         value={c.parcela1a12Str}
@@ -516,7 +516,7 @@ export function CartasProposalEditor({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Demais parcelas (R$)</Label>
+                      <Label className="text-xs">{rotulos.demais}</Label>
                       <CurrencyInput
                         value={c.parcelaDemaisStr}
                         onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
@@ -526,6 +526,13 @@ export function CartasProposalEditor({
                       />
                     </div>
                   </div>
+
+                  {estrutura === 'primeira_parcela' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Neste produto só a 1ª parcela é diferente; da 2ª em diante todas são iguais.
+                    </p>
+                  )}
+
 
                   {!manual && (
                     <Button
