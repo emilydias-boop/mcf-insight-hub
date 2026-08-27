@@ -998,16 +998,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   }, [open, card, detalheCarta, duplicateFrom]);
 
 
-  // Auto-set default parcelas when changing to intercalado (only for NEW cards)
-  useEffect(() => {
-    // Skip auto-set when editing an existing card
-    if (card) return;
-    
-    if (tipoContrato === 'intercalado' && prazoMeses > 0) {
-      const parcelasPares = Math.floor(prazoMeses / 2);
-      form.setValue('parcelas_pagas_empresa', parcelasPares);
-    }
-  }, [tipoContrato, prazoMeses, form, card]);
+  // Sem auto-preenchimento por tipo_contrato: a quantidade não é mais entrada —
+  // ela sai da lista de parcelas marcadas (derivarParcelasEmpresa no submit).
 
   // Handle CEP lookup for PF
   const handleCepBlur = async (cep: string) => {
