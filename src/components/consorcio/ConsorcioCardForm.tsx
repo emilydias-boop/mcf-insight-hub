@@ -1259,8 +1259,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
         tipo_produto: ['tipo_produto', 'produto_codigo'],
         parcela_1a_12a: camposDoPlanoParaAuditoria,
         parcela_demais: camposDoPlanoParaAuditoria,
-        tipo_contrato: ['tipo_contrato', 'empresa_paga_parcelas'],
-        parcelas_pagas_empresa: ['parcelas_pagas_empresa', 'empresa_paga_parcelas'],
+        tipo_contrato: ['tipo_contrato', 'empresa_paga_parcelas', 'modo_parcelas_mcf', 'parcelas_mcf_numeros'],
+        parcelas_pagas_empresa: ['parcelas_pagas_empresa', 'empresa_paga_parcelas', 'modo_parcelas_mcf', 'parcelas_mcf_numeros'],
+        parcelas_mcf_numeros: ['parcelas_mcf_numeros', 'modo_parcelas_mcf', 'empresa_paga_parcelas'],
       };
       const chavesDoDiff = Object.keys(alterado);
       const naoTocadas = chavesDoDiff.filter(
