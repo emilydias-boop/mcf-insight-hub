@@ -593,6 +593,24 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const profissao = form.watch('profissao');
   const empresaPagaParcelas = form.watch('empresa_paga_parcelas');
   const parcelasMcfNumeros = form.watch('parcelas_mcf_numeros') || [];
+  /** Lista marcada (única entrada) e os campos antigos derivados dela (saída). */
+  const listaMcfSelecionada = normalizarParcelasMcf(parcelasMcfNumeros);
+  const derivadoMcf = derivarParcelasEmpresa(listaMcfSelecionada);
+  /**
+   * Desenho antigo de um registro criado antes do controle por parcela: existe
+   * quantidade gravada e nenhuma lista. Serve só para AVISAR — nunca para
+   * pré-marcar a grade (seria fingir que alguém escolheu).
+   */
+  const desenhoLegado = useMemo(() => {
+    if (!card) return null;
+    if (normalizarParcelasMcf((card as any).parcelas_mcf_numeros).length > 0) return null;
+    const qtd = Number(card.parcelas_pagas_empresa) || 0;
+    if (qtd <= 0) return null;
+    return {
+      tipo_contrato: (card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar') || 'normal',
+      parcelas_pagas_empresa: qtd,
+    };
+  }, [card]);
   const tipoContrato = form.watch('tipo_contrato');
   const valorCredito = form.watch('valor_credito') || 0;
   const prazoMeses = form.watch('prazo_meses') || 240;
