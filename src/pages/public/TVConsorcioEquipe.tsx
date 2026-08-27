@@ -128,7 +128,7 @@ function CreditoSemanasCard({
         Crédito efetivado
       </div>
       <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
-        <span className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
+        <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT }}>
           {abreviarBRL(creditoMes)}
         </span>
         <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
@@ -136,8 +136,25 @@ function CreditoSemanasCard({
         </span>
       </div>
 
+      {/* Barra do mês — largura total, três marcas em 25/50/75%. */}
+      <div
+        className="relative w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
+        style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
+      >
+        {pct > 0 ? (
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: ACCENT }}
+          />
+        ) : null}
+        {/* Marcas verticais — cortam o preenchimento em 25/50/75. */}
+        <div className="absolute top-0 bottom-0" style={{ left: "25%", width: 2, backgroundColor: "#050505" }} />
+        <div className="absolute top-0 bottom-0" style={{ left: "50%", width: 2, backgroundColor: "#050505" }} />
+        <div className="absolute top-0 bottom-0" style={{ left: "75%", width: 2, backgroundColor: "#050505" }} />
+      </div>
+
       {/* Corpo — 4 colunas, uma por semana. */}
-      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-2 xl:mt-3">
+      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-1">
         {semanas.map((s) => {
           const semanaMeta = s.meta ?? 0;
           const semanaPct = semanaMeta > 0 ? Math.min((Number(s.credito || 0) / semanaMeta) * 100, 100) : 0;
