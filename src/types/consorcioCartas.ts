@@ -163,3 +163,17 @@ export function derivarParcelasEmpresa(parcelas: number[] | null | undefined): P
         : 'normal';
   return { empresa_paga_parcelas: 'sim', tipo_contrato, parcelas_pagas_empresa: uniq.length };
 }
+
+/** Rótulo humano do `tipo_contrato` derivado — usado nos textos de "equivale a". */
+export function rotuloTipoContrato(
+  tipo: 'normal' | 'intercalado' | 'intercalado_impar' | string | null | undefined,
+): string {
+  switch (tipo) {
+    case 'intercalado':
+      return 'intercalado (pares)';
+    case 'intercalado_impar':
+      return 'intercalado (ímpares)';
+    default:
+      return 'normal';
+  }
+}

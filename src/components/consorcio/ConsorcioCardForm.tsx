@@ -47,7 +47,7 @@ import { useCreateConsorcioCard, useUpdateConsorcioCard, useConsorcioCardDetails
 import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
 import { estruturaParcela, limiteParcelaDiferenciada } from '@/lib/consorcioParcelaOficial';
 import { ParcelasMcfPicker } from '@/components/consorcio/ParcelasMcfPicker';
-import { derivarParcelasEmpresa, normalizarParcelasMcf } from '@/types/consorcioCartas';
+import { derivarParcelasEmpresa, normalizarParcelasMcf, rotuloTipoContrato } from '@/types/consorcioCartas';
 
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
