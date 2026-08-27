@@ -47,6 +47,77 @@ export function taxaAntecipadaTipoDeProduto(
   return tipoProduto === 'select' ? 'primeira_parcela' : 'dividida_12';
 }
 
+/**
+ * Estrutura da parcela de uma carta/cota:
+ * - `primeira_parcela` (Select): só a 1ª é diferente; da 2ª em diante todas iguais.
+ * - `dividida_12` (Parcelinha): as 12 primeiras iguais; da 13ª em diante outro valor.
+ *
+ * ÚNICO lugar que decide isso. Nada de `if (tipo === 'select')` espalhado.
+ */
+export type EstruturaParcela = 'primeira_parcela' | 'dividida_12';
+
+/** Códigos de produto da tabela oficial cuja taxa antecipada cai na 1ª parcela. */
+const CODIGOS_PRIMEIRA_PARCELA = new Set(['EI1', 'PSE', 'SEP', 'SEP_ALTO']);
+/** Códigos cuja taxa antecipada é dividida nas 12 primeiras (Parcelinha). */
+const CODIGOS_DIVIDIDA_12 = new Set(['TEP', 'TEP_ALTO', 'TP', 'TPA']);
+
+/**
+ * Estrutura da parcela. Com `produtoCodigo` (plano veio da tabela oficial) o
+ * código manda — é a fonte mais precisa. Sem ele, cai no `tipo_produto` da
+ * carta. Default `dividida_12`.
+ */
+export function estruturaParcela(
+  tipoProduto?: string | null,
+  produtoCodigo?: string | null,
+): EstruturaParcela {
+  const cod = String(produtoCodigo ?? '').trim().toUpperCase();
+  if (cod) {
+    if (CODIGOS_PRIMEIRA_PARCELA.has(cod)) return 'primeira_parcela';
+    if (CODIGOS_DIVIDIDA_12.has(cod)) return 'dividida_12';
+  }
+  return taxaAntecipadaTipoDeProduto(tipoProduto);
+}
+
+/**
+ * Última parcela que usa o valor diferenciado (`parcela_1a_12a`).
+ * Select → 1 · Parcelinha → 12. Quem precisa da faixa chama aqui.
+ */
+export function limiteParcelaDiferenciada(estrutura: EstruturaParcela): number {
+  return estrutura === 'primeira_parcela' ? 1 : 12;
+}
+
+/** Rótulos dos dois campos de parcela, por estrutura. */
+export function rotulosParcela(estrutura: EstruturaParcela): {
+  diferenciada: string;
+  demais: string;
+} {
+  return estrutura === 'primeira_parcela'
+    ? { diferenciada: '1ª parcela (R$)', demais: 'Demais parcelas — 2ª em diante (R$)' }
+    : { diferenciada: 'Parcela 1ª à 12ª (R$)', demais: 'Demais parcelas (R$)' };
+}
+
+/** Rótulos usados no Termo de Adesão (sem o "(R$)"). */
+export function rotulosParcelaTermo(estrutura: EstruturaParcela): {
+  diferenciada: string;
+  demais: string;
+} {
+  return estrutura === 'primeira_parcela'
+    ? {
+        diferenciada: 'Valor da 1ª parcela',
+        demais: 'Valor das demais parcelas (2ª em diante)',
+      }
+    : {
+        diferenciada: 'Valor da parcela (1ª à 12ª)',
+        demais: 'Valor das demais parcelas',
+      };
+}
+
+/** Faixa curta para marcar o valor numa tabela: "1ª" ou "1ª–12ª". */
+export function faixaParcelaCurta(estrutura: EstruturaParcela): string {
+  return estrutura === 'primeira_parcela' ? '1ª' : '1ª–12ª';
+}
+
+
 /** Forma mínima de produto que a resolução por faixa precisa. */
 export interface ProdutoElegivelShape {
   codigo?: string | null;
