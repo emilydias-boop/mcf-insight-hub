@@ -1,152 +1,113 @@
-# Mapa — lista de parcelas escolhidas no cadastro manual de cota
+# Auditoria: a lista marcada na proposta é a única verdade
 
-Somente leitura. Nenhum arquivo de código foi tocado.
+Resposta às três perguntas, com trechos reais e dados crus. Nada foi alterado.
 
-## 1) Como o formulário manual pergunta hoje
+---
 
-`src/components/consorcio/ConsorcioCardForm.tsx` — não existe seletor de números. São três campos: um radio `empresa_paga_parcelas` (sim/não), um select `tipo_contrato` e um input numérico de quantidade.
+## 1) Caminho de EDIÇÃO da proposta — ele NÃO propaga as parcelas marcadas
 
-Schema (linhas 129-130):
+`src/components/consorcio/EditProposalModal.tsx` não trata parcelas: só passa os drafts adiante (`handleSubmit`, linha ~140) para `useEditarProposta`. Cartas já vinculadas a cadastro/cota aparecem como `travada` (linha 76), mas isso trava remoção — não o desenho das parcelas.
 
+Quem grava é `useEditarProposta` em `src/hooks/useConsorcioPostMeeting.ts:1214`. Ele **atualiza os cadastros existentes** (não recria, não ignora), e grava `parcelas_mcf` na carta:
+
+`src/hooks/useConsorcioPostMeeting.ts:1304-1319` — carta:
 ```ts
-tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
-parcelas_pagas_empresa: z.number().min(0).optional(),
-```
-
-UI (linhas 1684-1730):
-
-```tsx
-{empresaPagaParcelas === 'sim' && (
+.from('consorcio_proposal_cartas')
+.update({
+  ordem,
+  valor_credito: c.valor_credito,
+  prazo_meses: c.prazo_meses,
+  tipo_produto: c.tipo_produto,
+  parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
+  parcela_1a_12a: c.parcela_1a_12a ?? null,
   ...
-  <FormField name="tipo_contrato" ... >
-    <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
-    <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
-    <SelectItem value="intercalado_impar">Intercalado (parcelas ímpares)</SelectItem>
-  ...
-  <FormField name="parcelas_pagas_empresa" ... >
-    <Input type="number" min={0}
-      max={tipoContrato === 'intercalado' ? Math.floor(prazoMeses / 2) : prazoMeses}
+})
+.eq('id', c.id);
 ```
 
-Texto de apoio derivado da quantidade (linhas 1737-1740):
-
-```tsx
-{tipoContrato === 'intercalado'
-  ? `Intercalado: empresa paga as parcelas 2, 4, 6...${parcelasPagasEmpresa * 2} (${parcelasPagasEmpresa} parcelas pares)`
-  : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`}
-```
-
-Ou seja: hoje a tela manual só sabe **quantas** e **em que padrão**, nunca **quais**.
-
-O payload de save (linhas 1050-1061) grava exatamente isso, e não envia `parcelas_mcf_numeros`:
-
+`src/hooks/useConsorcioPostMeeting.ts:1356-1369` — propagação para o cadastro:
 ```ts
-const calculatedParcelas = data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0;
-...
-tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
-parcelas_pagas_empresa: calculatedParcelas,
+.from('consorcio_pending_registrations')
+.update({
+  valor_credito: c.valor_credito,
+  prazo_meses: c.prazo_meses,
+  tipo_produto: c.tipo_produto,
+  parcela_1a_12a: c.parcela_1a_12a ?? null,
+  parcela_demais: c.parcela_demais ?? null,
+  condicao_pagamento: c.condicao_pagamento ?? null,
+  objetivo: c.objetivo ?? null,
+  categoria: c.categoria ?? null,
+} as any)
+.eq('id', r.id);
 ```
 
-Há também um efeito que sobrescreve a quantidade quando o tipo vira `intercalado` — só para cota nova (linhas 947-955):
+Conclusão dura: **a lista marcada morre na carta.** Não há `parcelas_mcf_numeros`, nem `tipo_contrato`, nem `parcelas_pagas_empresa`, nem `empresa_paga_parcelas` nesse update. Pior: o gatilho da propagação é a lista de diferenças montada em `1331-1355`, que também não compara parcelas — então mudar SÓ as parcelas marcadas produz `difs.length === 0` e **nenhum** update no cadastro. O termo reemitido sai com as parcelas antigas. Este é exatamente o caminho que o dono está usando.
 
-```ts
-if (card) return;
-if (tipoContrato === 'intercalado' && prazoMeses > 0) {
-  const parcelasPares = Math.floor(prazoMeses / 2);
-  form.setValue('parcelas_pagas_empresa', parcelasPares);
-}
+---
+
+## 2) Portas que editam parcelas do cadastro depois de criado
+
+UPDATE em `consorcio_pending_registrations` tocando `parcelas_pagas_empresa` / `tipo_contrato` / `empresa_paga_parcelas`:
+
+| # | Arquivo:linha | O que faz |
+|---|---|---|
+| 1 | `src/hooks/useConsorcioPendingRegistrations.ts:1011-1017` (`useUpdatePendingRegistration`) | patch genérico; o tipo do patch aceita `empresa_paga_parcelas`, `tipo_contrato`, `parcelas_pagas_empresa` (linhas 967-969) e **não** aceita `parcelas_mcf_numeros` |
+| 2 | `src/hooks/useConsorcioPendingRegistrations.ts:1277-1299` (abertura de cota) | reescreve `empresa_paga_parcelas` / `tipo_contrato` / `parcelas_pagas_empresa` no cadastro a partir do formulário de abertura; a lista **não** é regravada aqui (só vai para o card, linhas 1141-1142) |
+| 3 | `src/components/consorcio/OpenCotaModal.tsx:75-77` + `:672-684` | monta o patch (`montarPatchCadastro`) com `tipo_contrato` + quantidade e chama a porta 1 |
+| 4 | `src/components/consorcio/OpenCotaModal.tsx:1216-1246` | UI que permite trocar "Tipo Contrato" e "Qtd Parcelas" à mão, já depois da proposta |
+| 5 | `src/hooks/useConsorcioPostMeeting.ts:1356-1369` | edição da proposta (item 1) — atualiza o cadastro, mas ignora parcelas |
+
+Ou seja: **duas portas gravam parcelas no cadastro por tipo+quantidade (2 e 3/4), uma porta ignora parcelas (5), e nenhuma delas grava `parcelas_mcf_numeros`.** Só a criação inicial (`AddCartaModal`, `AcceptProposalModal`, `ProposalModal`) leva a lista.
+
+---
+
+## 3) Peso real do "intercalado" — dados crus
+
+Agrupamento:
+```
+ t       | tipo_contrato     | qtd | min_q | max_q | acima_de_12
+---------+-------------------+-----+-------+-------+------------
+ cards   | intercalado       | 320 |     1 |   120 |     3
+ cards   | intercalado_impar | 126 |     1 |    20 |     1
+ cards   | normal            | 851 |     1 |     6 |     0
+ pending | intercalado       |  23 |     2 |     5 |     0
+ pending | intercalado_impar |  10 |     2 |     3 |     0
+ pending | normal            | 340 |     1 |     5 |     0
 ```
 
-## 2) O componente do seletor de números
-
-Está **embutido** no editor de cartas, sem componente próprio: `src/components/consorcio/CartasProposalEditor.tsx:606-653`.
-
-```tsx
-<Label className="text-xs">Parcelas que a MCF paga (intenção)</Label>
-<span className="text-xs font-medium">MCF paga {c.parcelasMcf.length} de {PARCELAS_MARCAVEIS}</span>
-...
-{Array.from({ length: PARCELAS_MARCAVEIS }, (_, k) => k + 1).map(n => {
-  const mcf = c.parcelasMcf.includes(n);
-  return (
-    <Button ... variant={mcf ? 'default' : 'outline'} aria-pressed={mcf}
-      onClick={() => patch(c.key, {
-        parcelasMcf: mcf ? c.parcelasMcf.filter(p => p !== n)
-                         : [...c.parcelasMcf, n].sort((a, b) => a - b),
-      })}
-    >{n}</Button>
-  );
-})}
+Cronograma:
+```
+cotas_com_cronograma_empresa_acima_12 = 431 linhas de parcela
+cotas_distintas_empresa_acima_12      = 47 cotas
+cards_qtd_acima_12                    = 4
+cards_com_lista (parcelas_mcf_numeros not null)   = 0
+pending_com_lista (parcelas_mcf_numeros not null) = 0
+cartas_com_lista (parcelas_mcf not null)          = 46
+max_marcadas (maior lista marcada na proposta)    = 4
 ```
 
-`PARCELAS_MARCAVEIS = 12` vive em `src/types/consorcioCartas.ts:68`.
-
-O que precisaria ser extraído para reuso: um componente controlado puro (`value: number[]`, `onChange`, `max`) contendo a grade de botões + o rótulo "MCF paga N de M" + a linha "Selecionadas: 2, 3, 5, 7". A lógica de toggle depende só de `value`/`onChange`; o acoplamento atual é apenas ao `patch(c.key, …)` do editor.
-
-## 3) Criar × editar
-
-O mesmo componente serve para os dois, e também para duplicar:
-
-- `src/components/consorcio/CotasTab.tsx:1106-1118` — `card={editingCard}` e `duplicateFrom={duplicatingCard}`; com `editingCard = null` é criação.
-- `src/components/consorcio/ConsorcioCardDrawer.tsx:893` — `<ConsorcioCardForm open={editFormOpen} ... card={card} />` (edição a partir do drawer da cota).
-
-Ao abrir cota existente, a hidratação (linhas 462-464) carrega:
-
-```ts
-empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao'),
-tipo_contrato: card.tipo_contrato as ...,
-parcelas_pagas_empresa: card.parcelas_pagas_empresa,
+Os 4 casos acima de 12, nominalmente:
+```
+grupo 7272 / cota 4839 — intercalado, qtd 120, prazo 240, empresa até a parcela 240 (114 acima de 12)
+grupo 7269 / cota  913 — intercalado, qtd 120, prazo 240, empresa até a parcela 240 (114 acima de 12)
+grupo 7270 / cota 4290 — intercalado, qtd 119, prazo 239, empresa até a parcela 238 (113 acima de 12)
+grupo 7271 / cota  937 — intercalado, qtd  12, prazo 240, empresa até a parcela  24 (  6 acima de 12)
 ```
 
-Nada de `parcelas_mcf_numeros` — a lista exata não é lida nem exibida aqui hoje.
+Leitura dos números:
 
-Submit bifurca em `ConsorcioCardForm.tsx:1235` (`updateCard.mutateAsync({ id: card.id, ...alterado })`, só campos alterados) e `:1240` (`createCard.mutateAsync(input)`).
+- **Nenhum vendedor nunca marcou mais de 4 parcelas** na proposta (`max_marcadas = 4`). A capacidade "quantidade alta" nunca foi usada pela boca de entrada real.
+- **Nenhuma proposta pendente passa de 5.** Todo `> 12` está apenas em cotas, e três desses quatro são exatamente o padrão "todas as pares de 240" (qtd 119/120) — que é a regra que o dono acabou de negar. É artefato, não uso.
+- Os **47 cards com parcela de empresa além da 12ª** vêm em quase todos os casos do deslocamento do intercalado (qtd 8 → parcelas 2,4,…,16), não de quantidade alta.
+- A coluna nova `parcelas_mcf_numeros` está **vazia nos dois lados** (0 e 0): hoje nada em produção depende dela — a janela para tratá-la como fonte única ainda está aberta.
 
-## 4) Cronograma de cota que já existe
+Veredito: `intercalado` + quantidade **não é capacidade em uso — é a porta por onde o erro entra.** A grade marcada nunca passou de 4 parcelas; o modelo derivado gerou cotas com a MCF pagando até a parcela 240.
 
-Salvar edição **não** regenera `consortium_installments`. O único gatilho no update é `gerarCronogramaSeFaltando`, e ele é idempotente por contagem.
+---
 
-`src/hooks/useConsorcio.ts:583-586`:
+## Encaminhamento sugerido (para decidir, nada implementado)
 
-```ts
-// 2.1 Dia de vencimento acabou de ser informado ("A definir" → dia real):
-if (cardData.dia_vencimento) {
-  await gerarCronogramaSeFaltando(id);
-}
-```
-
-`src/lib/consorcioCronograma.ts:166-171` — a trava:
-
-```ts
-const { count, error: countErr } = await supabase
-  .from('consortium_installments')
-  .select('id', { count: 'exact', head: true })
-  .eq('card_id', cardId);
-if (countErr) throw countErr;
-if ((count || 0) > 0) return 0;
-```
-
-Também retorna 0 sem `dia_vencimento`/`prazo_meses`/`valor_credito` (`:164`) e sem data base (`:175`).
-
-Conclusão: abrir e salvar cota antiga **não** reescreve cronograma já gerado. O único efeito sobre parcelas existentes no update é recálculo de comissão quando `tipo_produto` ou `valor_credito` mudam (`useConsorcio.ts:596-608`) — atualiza somente `valor_comissao`, nunca quem paga nem datas nem valores.
-
-Consequência direta para a sua decisão: se a lista de números entrar na tela manual, em cota já cadastrada ela **não** se propaga sozinha para o cronograma existente — vira apenas dado gravado em `consortium_cards.parcelas_mcf_numeros`. Fazer o cronograma refletir a nova lista exigiria um caminho explícito de reaplicação, que hoje não existe.
-
-## 5) Parcela já marcada como paga
-
-Não existe trava. Mudar `tipo_contrato` / `parcelas_pagas_empresa` em cota com pagamento registrado é permitido:
-
-- O update apenas limpa `undefined` e grava (`useConsorcio.ts:540-552`), sem consultar pagamentos.
-- Nenhuma checagem de `parcela_inicial_paga_em` no fluxo de edição: as referências ao campo estão só em `src/hooks/useCotasCadastradas.ts` (`:46` `if (c.parcela_inicial_paga_em) return false;`, `:121` gravação) e em `src/components/consorcio/CotasCadastradasTab.tsx:95-186`, todas na aba Cotas Cadastradas — nada em `ConsorcioCardForm` nem em `useUpdateConsorcioCard`.
-- Não há verificação de `consortium_installments.status = 'pago'` / `data_pagamento` antes do update.
-
-Hoje o desalinhamento é silencioso: a cota passa a declarar um desenho de parcelas diferente do cronograma e dos pagamentos já lançados, sem aviso e sem log específico.
-
-## 6) Quem usa a tela
-
-- Rota: `/consorcio/crm/venda-consorcio` (e o alias `/consorcio/crm/pos-reuniao`) — `src/App.tsx:257-258`, ambas renderizando `PosReuniao`.
-- `CotasTab` é a aba "cotas" dentro dessa página: `src/pages/crm/PosReuniao.tsx:51` e `:180-184`.
-- Guarda: o layout pai em `src/App.tsx:249` — `<Route path="consorcio/crm" element={<ResourceGuard resource="crm">…}` — sem `RoleGuard` de papel específico. Quem tem permissão no recurso `crm` da BU Consórcio enxerga a aba e os botões de criar/editar/duplicar cota.
-
-## Pergunta que o mapa deixa aberta para você decidir
-
-Substituir os campos atuais pela lista, ou colocar a lista ao lado deles, muda o que acontece com as cotas já cadastradas (item 4) e com as que têm pagamento lançado (item 5). Assim que decidir, monto o plano de implementação.
+1. Fechar a porta 5: fazer a edição da proposta comparar e propagar `parcelas_mcf`/`parcelas_mcf_numeros` para o cadastro pendente ainda sem cota (e incluir parcelas no gatilho de `difs`).
+2. Fechar as portas 3/4: `OpenCotaModal` passa a exibir e gravar a lista marcada, com `tipo_contrato`/quantidade derivados dela — nunca digitados.
+3. Manter `tipo_contrato` + quantidade apenas como campos derivados/legados de leitura, não como entrada.
+4. Nada de backfill nesta etapa; os 4 casos nominais acima ficam para tratamento separado, caso a caso.
