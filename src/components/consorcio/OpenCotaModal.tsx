@@ -177,6 +177,8 @@ import { CATEGORIA_OPTIONS, ORIGEM_OPTIONS } from '@/types/consorcio';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
+import { ParcelasMcfPicker } from '@/components/consorcio/ParcelasMcfPicker';
+import { derivarParcelasEmpresa, normalizarParcelasMcf, rotuloTipoContrato } from '@/types/consorcioCartas';
 import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
 
 interface OpenCotaModalProps {
@@ -316,6 +318,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       empresa_paga_parcelas: 'nao',
       tipo_contrato: 'normal',
       parcelas_pagas_empresa: 0,
+      // Lista exata das parcelas da MCF — única entrada; os dois campos acima
+      // passam a ser derivados dela no save.
+      parcelas_mcf_numeros: [] as number[],
       dia_vencimento: null as number | null,
       inicio_segunda_parcela: 'automatico',
       data_contratacao: new Date().toISOString().split('T')[0],
@@ -398,6 +403,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       setCota('inclui_seguro', registration.inclui_seguro != null ? !!registration.inclui_seguro : null, false);
       setCota('empresa_paga_parcelas', registration.empresa_paga_parcelas, '');
       setCota('tipo_contrato', registration.tipo_contrato, '');
+      // Só hidrata a grade quando existe lista GRAVADA. Registro legado abre
+      // vazio (não se pré-marca a partir da derivação).
+      form.setValue(
+        'parcelas_mcf_numeros' as any,
+        normalizarParcelasMcf((registration as any).parcelas_mcf_numeros),
+      );
       setCota('parcelas_pagas_empresa', registration.parcelas_pagas_empresa != null ? Number(registration.parcelas_pagas_empresa) : null, 0);
       setCota('dia_vencimento', registration.dia_vencimento != null ? Number(registration.dia_vencimento) : null, null);
       setCota('inicio_segunda_parcela', registration.inicio_segunda_parcela, '');
